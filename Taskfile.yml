@@ -39,6 +39,12 @@ tasks:
       - dotnet test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live"
       - dotnet test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live"
 
+  test:e2e:
+    desc: Run mocked MCP end-to-end tests
+    deps: [build]
+    cmds:
+      - dotnet test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj --configuration {{.CONFIGURATION}} --no-build --filter "Category=E2E"
+
   test:live:
     desc: Run opt-in live tests against a throwaway Archidekt deck
     cmds:
@@ -72,6 +78,13 @@ tasks:
     desc: Build with analyzers
     cmds:
       - dotnet build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror
+
+  ci:
+    desc: Run the CI validation suite
+    cmds:
+      - task: lint
+      - task: test
+      - task: smoke:mcp
 
   smoke:mcp:
     desc: Build the MCP host and verify service registration
