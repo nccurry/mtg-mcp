@@ -1,0 +1,106 @@
+version: '3'
+
+vars:
+  SOLUTION: mtg-mcp.slnx
+  CONFIGURATION: Release
+  RUNTIME: win-x64
+
+tasks:
+  setup:
+    desc: Restore tools and packages
+    cmds:
+      - dotnet restore {{.SOLUTION}}
+
+  restore:
+    desc: Restore NuGet packages
+    cmds:
+      - dotnet restore {{.SOLUTION}}
+
+  build:
+    desc: Build the solution
+    deps: [restore]
+    cmds:
+      - dotnet build {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-restore
+
+  test:
+    desc: Run all non-live tests
+    deps: [build]
+    cmds:
+      - dotnet test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build --filter "Category!=Live"
+
+  test:unit:
+    desc: Run unit tests
+    cmds:
+      - dotnet test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live"
+
+  test:integration:
+    desc: Run fixture-based adapter tests
+    cmds:
+      - dotnet test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live"
+      - dotnet test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live"
+
+  test:live:
+    desc: Run opt-in live tests against a throwaway Archidekt deck
+    cmds:
+      - dotnet test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"
+
+  coverage:
+    desc: Run tests with coverage collection and an 85 percent line threshold
+    deps: [coverage:core, coverage:scryfall, coverage:archidekt]
+
+  coverage:core:
+    desc: Enforce 85 percent line coverage for core deck services
+    cmds:
+      - dotnet test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live" /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Include="[MtgMcp.Core]*" /p:ExcludeByFile="**/obj/**%2c**/Models.cs%2c**/Options.cs" /p:Threshold=85 /p:ThresholdType=line /p:ThresholdStat=total
+
+  coverage:scryfall:
+    desc: Enforce 85 percent line coverage for the Scryfall client
+    cmds:
+      - dotnet test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live" /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Include="[MtgMcp.Scryfall]*" /p:ExcludeByFile="**/obj/**%2c**/ScryfallOptions.cs%2c**/ScryfallServiceCollectionExtensions.cs" /p:Threshold=85 /p:ThresholdType=line /p:ThresholdStat=total
+
+  coverage:archidekt:
+    desc: Enforce 85 percent line coverage for the Archidekt client
+    cmds:
+      - dotnet test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} --filter "Category!=Live" /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Include="[MtgMcp.Archidekt]*" /p:ExcludeByFile="**/obj/**%2c**/ArchidektOptions.cs%2c**/ArchidektServiceCollectionExtensions.cs" /p:Threshold=85 /p:ThresholdType=line /p:ThresholdStat=total
+
+  format:
+    desc: Format source
+    cmds:
+      - dotnet format {{.SOLUTION}}
+
+  lint:
+    desc: Build with analyzers
+    cmds:
+      - dotnet build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror
+
+  smoke:mcp:
+    desc: Build the MCP host and verify service registration
+    cmds:
+      - dotnet run --project src/MtgMcp.App/MtgMcp.App.csproj -- --smoke
+
+  publish:
+    desc: Publish a single self-contained binary for the current runtime
+    cmds:
+      - dotnet publish src/MtgMcp.App/MtgMcp.App.csproj --configuration {{.CONFIGURATION}} --runtime {{.RUNTIME}} --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
+
+  publish:all:
+    desc: Publish common desktop runtimes
+    cmds:
+      - dotnet publish src/MtgMcp.App/MtgMcp.App.csproj --configuration {{.CONFIGURATION}} --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
+      - dotnet publish src/MtgMcp.App/MtgMcp.App.csproj --configuration {{.CONFIGURATION}} --runtime linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
+      - dotnet publish src/MtgMcp.App/MtgMcp.App.csproj --configuration {{.CONFIGURATION}} --runtime osx-arm64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
+
+  deps:check:
+    desc: List outdated NuGet packages
+    cmds:
+      - dotnet list {{.SOLUTION}} package --outdated
+
+  deps:update:
+    desc: Restore after editing Directory.Packages.props
+    cmds:
+      - dotnet restore {{.SOLUTION}}
+
+  clean:
+    desc: Remove build outputs
+    cmds:
+      - dotnet clean {{.SOLUTION}}
