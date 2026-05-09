@@ -2,8 +2,15 @@ version: '3'
 
 vars:
   SOLUTION: mtg-mcp.slnx
+  APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
   CONFIGURATION: Release
   RUNTIME: win-x64
+  VERSION: 0.0.0-dev
+  PACKAGE_ID: Nccurry.MtgMcp
+  ARTIFACTS_DIR: artifacts
+  PACKAGE_DIR: '{{.ARTIFACTS_DIR}}/packages'
+  DIST_DIR: '{{.ARTIFACTS_DIR}}/dist'
+  PUBLISH_DIR: '{{.ARTIFACTS_DIR}}/publish'
 
 tasks:
   setup:
@@ -132,43 +139,98 @@ tasks:
   smoke:mcp:
     desc: Build the MCP host and verify service registration
     cmds:
-      - dotnet run --project src/MtgMcp.App/MtgMcp.App.csproj -- --smoke
+      - dotnet run --project {{.APP_PROJECT}} -- --smoke
+
+  pack:
+    desc: Pack the MCP host as a NuGet dotnet tool
+    deps: [restore]
+    cmds:
+      - >
+        dotnet pack {{.APP_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --output {{.PACKAGE_DIR}}
+        -p:Version={{.VERSION}}
+        -p:PackageVersion={{.VERSION}}
+        -p:ContinuousIntegrationBuild=true
+        -p:IncludeSymbols=true
+        -p:SymbolPackageFormat=snupkg
 
   publish:
     desc: Publish a single self-contained binary for the current runtime
     cmds:
+      - task: publish:runtime
+
+  publish:runtime:
+    desc: Publish a single self-contained binary for RUNTIME
+    cmds:
       - >
-        dotnet publish src/MtgMcp.App/MtgMcp.App.csproj
+        dotnet publish {{.APP_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --runtime {{.RUNTIME}}
         --self-contained true
+        --output {{.PUBLISH_DIR}}/{{.RUNTIME}}
+        -p:Version={{.VERSION}}
         -p:PublishSingleFile=true
         -p:PublishTrimmed=false
 
   publish:all:
     desc: Publish common desktop runtimes
     cmds:
-      - >
-        dotnet publish src/MtgMcp.App/MtgMcp.App.csproj
-        --configuration {{.CONFIGURATION}}
-        --runtime win-x64
-        --self-contained true
-        -p:PublishSingleFile=true
-        -p:PublishTrimmed=false
-      - >
-        dotnet publish src/MtgMcp.App/MtgMcp.App.csproj
-        --configuration {{.CONFIGURATION}}
-        --runtime linux-x64
-        --self-contained true
-        -p:PublishSingleFile=true
-        -p:PublishTrimmed=false
-      - >
-        dotnet publish src/MtgMcp.App/MtgMcp.App.csproj
-        --configuration {{.CONFIGURATION}}
-        --runtime osx-arm64
-        --self-contained true
-        -p:PublishSingleFile=true
-        -p:PublishTrimmed=false
+      - task: publish:runtime
+        vars:
+          RUNTIME: win-x64
+      - task: publish:runtime
+        vars:
+          RUNTIME: linux-x64
+      - task: publish:runtime
+        vars:
+          RUNTIME: osx-arm64
+
+  release:clean:
+    desc: Remove release artifacts
+    cmds:
+      - pwsh -NoProfile -File scripts/release.ps1 Clean -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -DistDir "{{.DIST_DIR}}" -PublishDir "{{.PUBLISH_DIR}}"
+
+  release:validate-version:
+    desc: Validate VERSION as a stable release tag
+    cmds:
+      - pwsh -NoProfile -File scripts/release.ps1 ValidateVersion -Version "{{.VERSION}}"
+
+  release:archives:
+    desc: Publish and archive all release runtimes
+    cmds:
+      - task: publish:runtime
+        vars:
+          RUNTIME: win-x64
+      - pwsh -NoProfile -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime win-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"
+      - task: publish:runtime
+        vars:
+          RUNTIME: linux-x64
+      - pwsh -NoProfile -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime linux-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"
+      - task: publish:runtime
+        vars:
+          RUNTIME: osx-arm64
+      - pwsh -NoProfile -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime osx-arm64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"
+
+  release:checksums:
+    desc: Generate SHA256 checksums for release archives
+    cmds:
+      - pwsh -NoProfile -File scripts/release.ps1 Checksums -DistDir "{{.DIST_DIR}}"
+
+  release:tool-smoke:
+    desc: Install the local NuGet tool package and smoke-run it
+    cmds:
+      - pwsh -NoProfile -File scripts/release.ps1 ToolSmoke -Version "{{.VERSION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"
+
+  release:verify:
+    desc: Run CI, package, archive, checksum, and smoke-install checks
+    cmds:
+      - task: ci
+      - task: release:clean
+      - task: pack
+      - task: release:archives
+      - task: release:checksums
+      - task: release:tool-smoke
 
   deps:check:
     desc: List outdated NuGet packages

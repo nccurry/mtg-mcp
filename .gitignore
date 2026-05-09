@@ -4,6 +4,7 @@ obj/
 .idea/
 .vscode/
 TestResults/
+artifacts/
 coverage/
 coverage.cobertura.xml
 coverage.json

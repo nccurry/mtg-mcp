@@ -20,5 +20,5 @@ jobs:
       - name: Set up Task
         uses: go-task/setup-task@v1
 
-      - name: Run CI
-        run: task ci
+      - name: Run CI and packaging verification
+        run: task release:verify VERSION=0.0.0-ci

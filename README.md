@@ -1,4 +1,5 @@
 # mtg-mcp
+<!-- mcp-name: io.github.nccurry/mtg-mcp -->
 
 `mtg-mcp` is a self-contained C#/.NET MCP server for building Magic: The Gathering
 decks with Scryfall card data and Archidekt deck writeback.
@@ -23,6 +24,15 @@ Moxfield support is intentionally out of scope for v1 because there is no suppor
 
 ## Quick Start
 
+Install the packaged tool:
+
+```powershell
+dotnet tool install --global Nccurry.MtgMcp
+mtg-mcp
+```
+
+Or run from source:
+
 ```powershell
 dotnet run --project src/MtgMcp.App/MtgMcp.App.csproj
 ```
@@ -33,7 +43,8 @@ For a single-file binary:
 task publish
 ```
 
-Configure an MCP client to run the published `MtgMcp.App` binary or the `dotnet run` command above.
+Configure an MCP client to run `mtg-mcp`, a release archive binary, or the
+`dotnet run` command above.
 
 ## Configuration
 
@@ -93,3 +104,19 @@ task smoke:mcp
 ```
 
 Live Archidekt write tests are opt-in and require explicit environment variables plus a throwaway deck ID.
+
+## Releases
+
+Releases are created from plain SemVer tags such as `0.1.0`; tags prefixed with
+`v` are rejected by the release workflow.
+
+```powershell
+task release:verify VERSION=0.1.0
+git tag 0.1.0
+git push origin 0.1.0
+```
+
+The release workflow publishes the `Nccurry.MtgMcp` NuGet tool package, attaches
+self-contained `win-x64`, `linux-x64`, and `osx-arm64` archives to the GitHub
+Release, and publishes `server.json` metadata to the MCP Registry. Publishing to
+NuGet requires a repository secret named `NUGET_API_KEY`.

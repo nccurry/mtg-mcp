@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          ./scripts/release.ps1 ValidateVersion -Version "${env:GITHUB_REF_NAME}"
+          "VERSION=${env:GITHUB_REF_NAME}" >> "${env:GITHUB_ENV}"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Set up Task
+        uses: go-task/setup-task@v1
+
+      - name: Verify release artifacts
+        run: task release:verify VERSION="${VERSION}"
+
+      - name: Publish NuGet package
+        shell: bash
+        run: |
+          for package in artifacts/packages/*.nupkg; do
+            dotnet nuget push "${package}" --api-key "${NUGET_API_KEY}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+          done
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+      - name: Wait for NuGet package availability
+        shell: bash
+        run: |
+          package_url="https://api.nuget.org/v3-flatcontainer/nccurry.mtgmcp/${VERSION}/nccurry.mtgmcp.${VERSION}.nupkg"
+          for attempt in {1..20}; do
+            if curl --fail --silent --head "${package_url}" > /dev/null; then
+              exit 0
+            fi
+
+            echo "NuGet package is not visible yet; waiting..."
+            sleep 15
+          done
+
+          echo "::error::NuGet package did not become available: ${package_url}"
+          exit 1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          make_latest: true
+          fail_on_unmatched_files: false
+          files: |
+            artifacts/dist/*
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+
+      - name: Update MCP Registry metadata version
+        shell: bash
+        run: |
+          jq --arg version "${VERSION}" \
+            '.version = $version | .packages[0].version = $version' \
+            server.json > server.tmp
+          mv server.tmp server.json
+
+      - name: Install mcp-publisher
+        shell: bash
+        run: |
+          publisher_archive="mcp-publisher.tar.gz"
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" -o "${publisher_archive}"
+          tar -xzf "${publisher_archive}" mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

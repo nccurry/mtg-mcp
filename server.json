@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.nccurry/mtg-mcp",
+  "title": "MTG MCP",
+  "description": "A C#/.NET MCP server for building Magic: The Gathering decks with Scryfall card data and Archidekt deck writeback.",
+  "version": "0.0.0",
+  "repository": {
+    "url": "https://github.com/nccurry/mtg-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "nuget",
+      "identifier": "Nccurry.MtgMcp",
+      "version": "0.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

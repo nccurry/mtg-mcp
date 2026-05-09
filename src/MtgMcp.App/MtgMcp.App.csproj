@@ -17,6 +17,23 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <IsPackable>false</IsPackable>
+        <IsPackable>true</IsPackable>
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>mtg-mcp</ToolCommandName>
+        <PackageId>Nccurry.MtgMcp</PackageId>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <Authors>Nick Curry</Authors>
+        <Company>Nick Curry</Company>
+        <Description>A C#/.NET MCP server for building Magic: The Gathering decks with Scryfall card data and Archidekt deck writeback.</Description>
+        <PackageTags>mcp;model-context-protocol;magic-the-gathering;mtg;scryfall;archidekt</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/nccurry/mtg-mcp</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/nccurry/mtg-mcp</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
 </Project>
