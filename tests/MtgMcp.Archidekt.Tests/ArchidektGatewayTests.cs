@@ -70,9 +70,9 @@ public sealed class ArchidektGatewayTests
     public async Task ListDecks_MapsResultsAndUsesConfiguredJwt()
     {
         RecordingHandler handler = new();
-        handler.Get("api/decks/", """
+        handler.Get("api/users/278245/decks/", """
         {
-          "results": [
+          "decks": [
             { "id": 123, "name": "Deck", "deckFormat": "commander", "updatedAt": "2026-05-01T00:00:00Z" }
           ]
         }
@@ -86,6 +86,7 @@ public sealed class ArchidektGatewayTests
         decks[0].Format.Should().Be("commander");
         decks[0].UpdatedAt.Should().NotBeNull();
         handler.Requests.Single().Authorization.Should().Be("JWT test-jwt");
+        handler.Requests.Single().Path.Should().Be("api/users/278245/decks/");
     }
 
     [Fact]
@@ -299,8 +300,8 @@ public sealed class ArchidektGatewayTests
     public async Task UsernamePasswordLogin_IsFallbackCredentialSource()
     {
         RecordingHandler handler = new();
-        handler.Post("api/rest-auth/login/", """{ "key": "login-jwt", "refresh": "refresh-token" }""");
-        handler.Get("api/decks/", """[]""");
+        handler.Post("api/rest-auth/login/", """{ "key": "login-jwt", "refresh_token": "refresh-token", "user": { "id": 42 } }""");
+        handler.Get("api/users/42/decks/", """{ "decks": [] }""");
 
         ArchidektGateway gateway = CreateGateway(handler, new ArchidektOptions
         {
@@ -313,6 +314,30 @@ public sealed class ArchidektGatewayTests
         await gateway.ListDecksAsync(TestContext.Current.CancellationToken);
 
         handler.Requests[0].Body.Should().Contain("\"username\":\"user\"");
+        handler.Requests[1].Path.Should().Be("api/users/42/decks/");
+        handler.Requests[1].Authorization.Should().Be("JWT login-jwt");
+    }
+
+    [Fact]
+    public async Task EmailPasswordLogin_UsesArchidektBrowserPayloadShape()
+    {
+        RecordingHandler handler = new();
+        handler.Post("api/rest-auth/login/", """{ "token": "login-jwt", "refresh_token": "refresh-token", "user": { "id": 42 } }""");
+        handler.Get("api/users/42/decks/", """{ "decks": [] }""");
+
+        ArchidektGateway gateway = CreateGateway(handler, new ArchidektOptions
+        {
+            BaseAddress = new Uri("https://archidekt.test/"),
+            Email = "user@example.test",
+            Password = "pass",
+            EnableUsernamePasswordLogin = true
+        });
+
+        await gateway.ListDecksAsync(TestContext.Current.CancellationToken);
+
+        handler.Requests[0].Body.Should().Contain("\"email\":\"user@example.test\"");
+        handler.Requests[0].Body.Should().NotContain("\"username\"");
+        handler.Requests[1].Path.Should().Be("api/users/42/decks/");
         handler.Requests[1].Authorization.Should().Be("JWT login-jwt");
     }
 
@@ -325,6 +350,7 @@ public sealed class ArchidektGatewayTests
         {
           "jwt": "file-jwt",
           "refreshToken": "file-refresh",
+          "email": "file@example.test",
           "username": "file-user",
           "password": "file-pass"
         }
@@ -343,9 +369,89 @@ public sealed class ArchidektGatewayTests
 
             status.HasJwt.Should().BeTrue();
             status.HasRefreshToken.Should().BeTrue();
+            status.HasEmailPassword.Should().BeTrue();
             status.HasUsernamePassword.Should().BeTrue();
+            status.HasLoginPassword.Should().BeTrue();
             status.HasCredentialsFile.Should().BeTrue();
             status.Mode.Should().Be("jwt");
+        }
+        finally
+        {
+            if (File.Exists(credentialsFile))
+            {
+                File.Delete(credentialsFile);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UsernamePasswordCredentialFile_AllowsKeyValuePasswordsWithoutJsonEscaping()
+    {
+        string credentialsFile = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", $"{Guid.NewGuid():N}.credentials");
+        Directory.CreateDirectory(Path.GetDirectoryName(credentialsFile)!);
+        const string password = "pa\\ss\"word=with#chars!";
+        await File.WriteAllTextAsync(
+            credentialsFile,
+            $"username=file-user{Environment.NewLine}password={password}{Environment.NewLine}",
+            TestContext.Current.CancellationToken);
+
+        try
+        {
+            RecordingHandler handler = new();
+            handler.Post("api/rest-auth/login/", """{ "key": "login-jwt", "refresh_token": "refresh-token", "user": { "id": 42 } }""");
+            handler.Get("api/users/42/decks/", """{ "decks": [] }""");
+
+            ArchidektGateway gateway = CreateGateway(handler, new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                CredentialsFile = credentialsFile,
+                EnableUsernamePasswordLogin = true
+            });
+
+            await gateway.ListDecksAsync(TestContext.Current.CancellationToken);
+
+            using JsonDocument loginBody = JsonDocument.Parse(handler.Requests[0].Body);
+            loginBody.RootElement.GetProperty("username").GetString().Should().Be("file-user");
+            loginBody.RootElement.GetProperty("password").GetString().Should().Be(password);
+            handler.Requests[1].Path.Should().Be("api/users/42/decks/");
+            handler.Requests[1].Authorization.Should().Be("JWT login-jwt");
+        }
+        finally
+        {
+            if (File.Exists(credentialsFile))
+            {
+                File.Delete(credentialsFile);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AuthStatus_ReportsMalformedCredentialFileWithoutLeakingSecrets()
+    {
+        string credentialsFile = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", $"{Guid.NewGuid():N}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(credentialsFile)!);
+        await File.WriteAllTextAsync(
+            credentialsFile,
+            "{ 'username': 'file-user', 'password': 'super-secret' }",
+            TestContext.Current.CancellationToken);
+
+        try
+        {
+            RecordingHandler handler = new();
+            ArchidektGateway gateway = CreateGateway(handler, new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                CredentialsFile = credentialsFile
+            });
+
+            AuthStatus status = await gateway.GetAuthStatusAsync(TestContext.Current.CancellationToken);
+
+            status.HasCredentialsFile.Should().BeTrue();
+            status.HasLoginPassword.Should().BeFalse();
+            status.HasCredentialsFileError.Should().BeTrue();
+            status.CredentialsFileError.Should().Contain("JSON requires double quotes");
+            status.CredentialsFileError.Should().NotContain("super-secret");
+            status.Mode.Should().Be("credentials-file-error");
         }
         finally
         {
@@ -360,7 +466,7 @@ public sealed class ArchidektGatewayTests
     public async Task FailedRequests_RedactSecretResponseBodies()
     {
         RecordingHandler handler = new();
-        handler.Get("api/decks/", """{ "token": "secret-token" }""", HttpStatusCode.BadRequest);
+        handler.Get("api/users/278245/decks/", """{ "token": "secret-token" }""", HttpStatusCode.BadRequest);
         ArchidektGateway gateway = CreateGateway(handler);
 
         Func<Task> act = () => gateway.ListDecksAsync(TestContext.Current.CancellationToken);
@@ -374,7 +480,8 @@ public sealed class ArchidektGatewayTests
         return CreateGateway(handler, new ArchidektOptions
         {
             BaseAddress = new Uri("https://archidekt.test/"),
-            Jwt = "test-jwt"
+            Jwt = "test-jwt",
+            UserId = "278245"
         });
     }
 

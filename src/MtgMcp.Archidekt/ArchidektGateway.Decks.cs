@@ -8,7 +8,8 @@ public sealed partial class ArchidektGateway
     public async Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(CancellationToken cancellationToken)
     {
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
-        using JsonDocument document = await GetJsonAsync("api/decks/", cancellationToken).ConfigureAwait(false);
+        string path = GetDeckListPath();
+        using JsonDocument document = await GetJsonAsync(path, cancellationToken).ConfigureAwait(false);
         List<ArchidektDeckSummary> decks = [];
         foreach (JsonElement item in EnumerateCollection(document.RootElement))
         {
@@ -44,5 +45,13 @@ public sealed partial class ArchidektGateway
 
         workspace.Cards = ParseCards(root, workspace.Categories);
         return workspace;
+    }
+
+    private string GetDeckListPath()
+    {
+        ArchidektCredentials loaded = LoadCredentials();
+        return !string.IsNullOrWhiteSpace(loaded.UserId)
+            ? $"api/users/{loaded.UserId}/decks/"
+            : "api/decks/";
     }
 }

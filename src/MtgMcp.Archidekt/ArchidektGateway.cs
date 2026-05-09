@@ -13,6 +13,7 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     private readonly ArchidektOptions options;
     private readonly SemaphoreSlim authLock = new(1, 1);
     private ArchidektCredentials? credentials;
+    private string? credentialsFileError;
 
     public ArchidektGateway(HttpClient httpClient, IOptions<ArchidektOptions> options)
     {

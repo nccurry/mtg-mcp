@@ -127,9 +127,16 @@ public sealed class AuthStatus
 {
     public bool HasJwt { get; set; }
     public bool HasRefreshToken { get; set; }
+    public bool HasUserId { get; set; }
+    public bool HasEmailPassword { get; set; }
     public bool HasUsernamePassword { get; set; }
+    public bool HasLoginPassword => HasEmailPassword || HasUsernamePassword;
     public bool HasCredentialsFile { get; set; }
-    public string Mode => HasJwt ? "jwt" : HasUsernamePassword ? "username-password" : "anonymous";
+    public string? CredentialsFileError { get; set; }
+    public bool HasCredentialsFileError => !string.IsNullOrWhiteSpace(CredentialsFileError);
+    public string Mode => HasCredentialsFileError
+        ? "credentials-file-error"
+        : HasJwt ? "jwt" : HasLoginPassword ? "username-password" : "anonymous";
 }
 
 public sealed class ParsedDecklist

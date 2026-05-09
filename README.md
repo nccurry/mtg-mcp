@@ -42,6 +42,8 @@ $env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
 $env:MTGMCP__OPERATION_MODE="apply"
 $env:MTGMCP__ARCHIDEKT__JWT="..."
 $env:MTGMCP__ARCHIDEKT__REFRESH_TOKEN="..."
+$env:MTGMCP__ARCHIDEKT__USER_ID="..."
+$env:MTGMCP__ARCHIDEKT__EMAIL="..."
 $env:MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.json"
 ```
 
@@ -57,12 +59,22 @@ Credential files can contain:
 {
   "jwt": "optional-jwt",
   "refreshToken": "optional-refresh-token",
+  "userId": "optional-archidekt-user-id",
+  "email": "fallback-email",
   "username": "fallback-username",
   "password": "fallback-password"
 }
 ```
 
-JWT/refresh token auth is preferred. Username/password login is only a fallback, and secrets are redacted from MCP resources and logs.
+For passwords with quotes, backslashes, or other punctuation, a simpler `key=value` file is also supported and avoids JSON escaping:
+
+```text
+userId=optional-archidekt-user-id
+email=archidekt-user@example.com
+password=pa\ss"word=with#punctuation!
+```
+
+JWT/refresh token auth is preferred. Email or username plus password login is only a fallback, and secrets are redacted from MCP resources and logs.
 
 ## Development
 
