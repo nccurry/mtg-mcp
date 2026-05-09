@@ -80,6 +80,22 @@ public sealed class DeckIntelligenceTests
             "Whenever an opponent discards a card, you draw a card."));
         tinybones.PrimaryRole.Should().Be(DeckRoles.Draw);
         tinybones.Tags.Should().Contain(DeckTags.Discard);
+
+        DeckRoleClassifier.Classify(Card(
+                "Aclazotz, Deepest Betrayal // Temple of the Dead",
+                "Legendary Creature — Bat God // Land",
+                "Whenever Aclazotz attacks, each opponent discards a card. For each opponent who can't, you draw a card."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Draw);
+
+        DeckRoleClassifier.Classify(Card(
+                "Malakir Rebirth // Malakir Mire",
+                "Instant // Land",
+                "Choose target creature. You lose 2 life. Until end of turn, that creature gains when this creature dies, return it to the battlefield tapped."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Utility);
     }
 
     /// <summary>

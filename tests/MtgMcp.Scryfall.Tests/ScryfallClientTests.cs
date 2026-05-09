@@ -115,6 +115,63 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that get cards by names resolves multi-face cards by face aliases.
+    /// </summary>
+    [Fact]
+    public async Task GetCardsByNames_ResolvesMultiFaceCardsByAliases()
+    {
+        const string expectedRequest =
+            """
+            {"identifiers":[{"name":"Murderous Rider // Swift End"},{"name":"Murderous Rider"},{"name":"Swift End"}]}
+            """;
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .WithContent(expectedRequest)
+            .Respond(
+                "application/json",
+                """
+                {
+                  "not_found": [
+                    { "name": "Murderous Rider // Swift End" }
+                  ],
+                  "data": [
+                    {
+                      "id": "murderous-rider",
+                      "name": "Murderous Rider // Swift End",
+                      "type_line": "Creature — Zombie Knight // Instant — Adventure",
+                      "card_faces": [
+                        {
+                          "name": "Murderous Rider",
+                          "oracle_text": "Lifelink"
+                        },
+                        {
+                          "name": "Swift End",
+                          "oracle_text": "Destroy target creature or planeswalker. You lose 2 life."
+                        }
+                      ],
+                      "prices": { "usd": "0.41" }
+                    }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyDictionary<string, CardInfo> cards = await client.GetCardsByNamesAsync(
+            ["Murderous Rider // Swift End"],
+            TestContext.Current.CancellationToken
+        );
+
+        cards.Should().ContainKey("Murderous Rider // Swift End");
+        CardInfo card = cards["Murderous Rider // Swift End"];
+        card.Name.Should().Be("Murderous Rider // Swift End");
+        card.OracleText.Should().Contain("Lifelink");
+        card.OracleText.Should().Contain("Destroy target creature");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that search cards respects limit.
     /// </summary>
     [Fact]

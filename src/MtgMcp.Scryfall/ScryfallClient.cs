@@ -139,8 +139,25 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
             .Select(name => name.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        Dictionary<string, List<string>> aliasesByName = new(StringComparer.OrdinalIgnoreCase);
+        List<string> identifiers = [];
+        HashSet<string> identifierSet = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string[] chunk in distinctNames.Chunk(75))
+        foreach (string name in distinctNames)
+        {
+            List<string> aliases = BuildNameAliases(name);
+            aliasesByName[name] = aliases;
+            foreach (string alias in aliases)
+            {
+                if (identifierSet.Add(alias))
+                {
+                    identifiers.Add(alias);
+                }
+            }
+        }
+
+        Dictionary<string, CardInfo> returnedCards = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string[] chunk in identifiers.Chunk(75))
         {
             object body = new
             {
@@ -158,7 +175,6 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
                 continue;
             }
 
-            Dictionary<string, CardInfo> returnedCards = new(StringComparer.OrdinalIgnoreCase);
             foreach (JsonElement item in data.EnumerateArray())
             {
                 CardInfo card = MapCard(item);
@@ -167,21 +183,18 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
                     returnedCards[card.Name] = card;
                 }
             }
+        }
 
-            foreach (string requestedName in chunk)
+        foreach (string requestedName in distinctNames)
+        {
+            CardInfo? match = FindReturnedCard(
+                requestedName,
+                aliasesByName[requestedName],
+                returnedCards
+            );
+            if (match is not null)
             {
-                if (returnedCards.TryGetValue(requestedName, out CardInfo? exact))
-                {
-                    results[requestedName] = exact;
-                    continue;
-                }
-
-                CardInfo? fuzzy = returnedCards.Values.FirstOrDefault(card =>
-                    string.Equals(card.Name, requestedName, StringComparison.OrdinalIgnoreCase));
-                if (fuzzy is not null)
-                {
-                    results[requestedName] = fuzzy;
-                }
+                results[requestedName] = match;
             }
         }
 
@@ -441,7 +454,7 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
             ManaCost = GetString(element, "mana_cost") ?? GetFaceString(element, "mana_cost"),
             ManaValue = GetDouble(element, "cmc"),
             TypeLine = GetString(element, "type_line") ?? GetFaceString(element, "type_line"),
-            OracleText = GetString(element, "oracle_text") ?? GetFaceString(element, "oracle_text"),
+            OracleText = GetString(element, "oracle_text") ?? GetFaceText(element, "oracle_text"),
             Set = GetString(element, "set"),
             CollectorNumber = GetString(element, "collector_number"),
             Rarity = GetString(element, "rarity"),
@@ -539,6 +552,133 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Gets combined face text.
+    /// </summary>
+    private static string? GetFaceText(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty("card_faces", out JsonElement faces))
+        {
+            return null;
+        }
+
+        List<string> values = [];
+        foreach (JsonElement face in faces.EnumerateArray())
+        {
+            string? value = GetString(face, propertyName);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                values.Add(value);
+            }
+        }
+
+        return values.Count == 0 ? null : string.Join("\n\n", values);
+    }
+
+    /// <summary>
+    /// Builds lookup aliases for cards with multiple faces.
+    /// </summary>
+    private static List<string> BuildNameAliases(string name)
+    {
+        List<string> aliases = [];
+        AddAlias(aliases, name);
+
+        string[] faces = name.Split(
+            ["//"],
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+        );
+        if (faces.Length > 1)
+        {
+            AddAlias(aliases, string.Join(" // ", faces));
+            foreach (string face in faces)
+            {
+                AddAlias(aliases, face);
+            }
+        }
+
+        return aliases;
+    }
+
+    /// <summary>
+    /// Adds a unique alias.
+    /// </summary>
+    private static void AddAlias(List<string> aliases, string alias)
+    {
+        string normalized = alias.Trim();
+        if (
+            !string.IsNullOrWhiteSpace(normalized)
+            && !aliases.Any(value => value.Equals(normalized, StringComparison.OrdinalIgnoreCase))
+        )
+        {
+            aliases.Add(normalized);
+        }
+    }
+
+    /// <summary>
+    /// Finds a returned card for the requested aliases.
+    /// </summary>
+    private static CardInfo? FindReturnedCard(
+        string requestedName,
+        IReadOnlyList<string> aliases,
+        IReadOnlyDictionary<string, CardInfo> returnedCards
+    )
+    {
+        foreach (string alias in aliases)
+        {
+            if (returnedCards.TryGetValue(alias, out CardInfo? exact))
+            {
+                return exact;
+            }
+        }
+
+        foreach (CardInfo card in returnedCards.Values)
+        {
+            if (CardNameMatches(card.Name, requestedName) || CardNameMatchesAnyAlias(card.Name, aliases))
+            {
+                return card;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks whether a returned card name matches any alias.
+    /// </summary>
+    private static bool CardNameMatchesAnyAlias(string returnedName, IEnumerable<string> aliases)
+    {
+        foreach (string alias in aliases)
+        {
+            if (CardNameMatches(returnedName, alias))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a returned card name matches a requested name or face.
+    /// </summary>
+    private static bool CardNameMatches(string returnedName, string requestedName)
+    {
+        List<string> returnedAliases = BuildNameAliases(returnedName);
+        List<string> requestedAliases = BuildNameAliases(requestedName);
+        foreach (string returnedAlias in returnedAliases)
+        {
+            foreach (string requestedAlias in requestedAliases)
+            {
+                if (returnedAlias.Equals(requestedAlias, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

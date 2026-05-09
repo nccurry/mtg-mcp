@@ -13,6 +13,8 @@ public static class DeckRoleClassifier
         CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
         string categoryText = string.Join(' ', Categories(card).Append(card.PrimaryCategory ?? ""));
         string typeLine = Text(snapshot.TypeLine, card.Metadata, "typeLine");
+        string primaryTypeLine = PrimaryTypeLine(typeLine);
+        bool hasNonPrimaryLandFace = HasNonPrimaryLandFace(typeLine);
         string oracleText = Text(snapshot.OracleText, card.Metadata, "oracleText");
         string combined = $"{card.Name} {categoryText} {typeLine} {oracleText}";
 
@@ -28,14 +30,14 @@ public static class DeckRoleClassifier
             return Assignment(DeckRoles.Commander, tags, 0.95);
         }
 
-        if (ContainsAny(categoryText, DeckRoles.Lands) || ContainsAny(typeLine, "land"))
+        if (ContainsAny(categoryText, DeckRoles.Lands) || ContainsAny(primaryTypeLine, "land"))
         {
             return Assignment(DeckRoles.Lands, tags, 0.93);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Ramp)
-            || snapshot.ProducedMana.Count > 0
-            || ContainsAny(oracleText, "add {", "add one mana", "add two mana", "treasure token", "search your library for a basic land", "search your library for a land"))
+            || (snapshot.ProducedMana.Count > 0 && !hasNonPrimaryLandFace)
+            || ContainsRampText(oracleText, hasNonPrimaryLandFace))
         {
             AddTag(tags, DeckTags.ManaFixing, snapshot.ProducedMana.Count > 1 || ContainsAny(oracleText, "mana of any color", "any color"));
             return Assignment(DeckRoles.Ramp, tags, 0.85);
@@ -230,6 +232,61 @@ public static class DeckRoleClassifier
     private static IEnumerable<string> Categories(DeckCard card)
     {
         return card.Categories ?? [];
+    }
+
+    /// <summary>
+    /// Gets the primary type line for multi-face cards.
+    /// </summary>
+    private static string PrimaryTypeLine(string typeLine)
+    {
+        string[] faces = TypeLineFaces(typeLine);
+        return faces.FirstOrDefault() ?? typeLine;
+    }
+
+    /// <summary>
+    /// Checks whether a multi-face card has a land face behind a nonland primary face.
+    /// </summary>
+    private static bool HasNonPrimaryLandFace(string typeLine)
+    {
+        string[] faces = TypeLineFaces(typeLine);
+        if (faces.Length <= 1 || ContainsAny(faces[0], "land"))
+        {
+            return false;
+        }
+
+        for (int index = 1; index < faces.Length; index++)
+        {
+            if (ContainsAny(faces[index], "land"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Splits a multi-face type line.
+    /// </summary>
+    private static string[] TypeLineFaces(string typeLine)
+    {
+        return typeLine.Split(
+            ["//"],
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+        );
+    }
+
+    /// <summary>
+    /// Checks whether oracle text looks like ramp.
+    /// </summary>
+    private static bool ContainsRampText(string oracleText, bool hasNonPrimaryLandFace)
+    {
+        if (ContainsAny(oracleText, "treasure token", "search your library for a basic land", "search your library for a land"))
+        {
+            return true;
+        }
+
+        return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
     }
 
     /// <summary>
