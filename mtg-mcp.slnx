@@ -10,6 +10,7 @@
     <Project Path="tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj" />
     <Project Path="tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj" />
     <Project Path="tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj" />
+    <Project Path="tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj" />
     <Project Path="tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj" />
   </Folder>
 </Solution>

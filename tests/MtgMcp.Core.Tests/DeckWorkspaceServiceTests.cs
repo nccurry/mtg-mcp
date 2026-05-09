@@ -40,7 +40,7 @@ public sealed class DeckWorkspaceServiceTests
     /// Verifies that local mutations move cards and preserve categories.
     /// </summary>
     [Fact]
-    public async Task LocalMutations_MoveCardsAndPreserveCategories()
+    public async Task LocalMutations_MoveCardsAndReplacePrimaryCategory()
     {
         InMemoryRepository repository = new();
         DeckWorkspaceService service = new(repository, new FakeCardCatalog());
@@ -58,6 +58,12 @@ public sealed class DeckWorkspaceServiceTests
             DeckDefaults.Mainboard,
             TestContext.Current.CancellationToken
         );
+        await service.AddCardCategoryAsync(
+            deck.Id,
+            "Lightning Bolt",
+            "Testing",
+            TestContext.Current.CancellationToken
+        );
         DeckChangeResult result = await service.MoveCardAsync(
             deck.Id,
             "Lightning Bolt",
@@ -73,8 +79,9 @@ public sealed class DeckWorkspaceServiceTests
         result.Persistence.Should().Be(DeckPersistence.LocalOnly);
         opened.Cards.Should().ContainSingle();
         opened.Cards[0].PrimaryCategory.Should().Be(DeckDefaults.Maybeboard);
-        opened.Cards[0].Categories.Should().Contain(DeckDefaults.Mainboard);
+        opened.Cards[0].Categories.Should().NotContain(DeckDefaults.Mainboard);
         opened.Cards[0].Categories.Should().Contain(DeckDefaults.Maybeboard);
+        opened.Cards[0].Categories.Should().Contain("Testing");
         opened.Cards[0].Snapshot.TypeLine.Should().Be("Instant");
         opened.Cards[0].Snapshot.ColorIdentity.Should().BeEquivalentTo(["R"]);
         opened.Cards[0].Snapshot.Set.Should().Be("tst");

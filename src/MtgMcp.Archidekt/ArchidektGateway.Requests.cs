@@ -108,6 +108,10 @@ public sealed partial class ArchidektGateway
         {
             collection = data;
         }
+        else if (root.TryGetProperty("decks", out JsonElement decks) && decks.ValueKind == JsonValueKind.Array)
+        {
+            collection = decks;
+        }
         else
         {
             yield break;

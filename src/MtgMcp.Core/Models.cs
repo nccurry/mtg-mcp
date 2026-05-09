@@ -480,9 +480,24 @@ public sealed class AuthStatus
     public bool HasRefreshToken { get; set; }
 
     /// <summary>
+    /// Gets or sets whether a user id is configured.
+    /// </summary>
+    public bool HasUserId { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether an email and password are configured.
+    /// </summary>
+    public bool HasEmailPassword { get; set; }
+
+    /// <summary>
     /// Gets or sets the has username password.
     /// </summary>
     public bool HasUsernamePassword { get; set; }
+
+    /// <summary>
+    /// Gets whether any login password credentials are configured.
+    /// </summary>
+    public bool HasLoginPassword => HasEmailPassword || HasUsernamePassword;
 
     /// <summary>
     /// Gets or sets the has credentials file.
@@ -490,11 +505,22 @@ public sealed class AuthStatus
     public bool HasCredentialsFile { get; set; }
 
     /// <summary>
-    /// Stores the mode.
+    /// Gets or sets the credentials file error.
+    /// </summary>
+    public string? CredentialsFileError { get; set; }
+
+    /// <summary>
+    /// Gets whether credential file parsing failed.
+    /// </summary>
+    public bool HasCredentialsFileError => !string.IsNullOrWhiteSpace(CredentialsFileError);
+
+    /// <summary>
+    /// Gets the effective authentication mode.
     /// </summary>
     public string Mode =>
-        HasJwt ? "jwt"
-        : HasUsernamePassword ? "username-password"
+        HasCredentialsFileError ? "credentials-file-error"
+        : HasJwt ? "jwt"
+        : HasLoginPassword ? "username-password"
         : "anonymous";
 }
 
