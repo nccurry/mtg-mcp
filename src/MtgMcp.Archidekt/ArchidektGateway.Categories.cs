@@ -3,9 +3,19 @@ using MtgMcp.Core;
 
 namespace MtgMcp.Archidekt;
 
+/// <summary>
+/// Coordinates archidekt gateway HTTP operations.
+/// </summary>
 public sealed partial class ArchidektGateway
 {
-    public async Task PersistCategoryAsync(DeckWorkspace workspace, DeckCategory category, CancellationToken cancellationToken)
+    /// <summary>
+    /// Persists the category.
+    /// </summary>
+    public async Task PersistCategoryAsync(
+        DeckWorkspace workspace,
+        DeckCategory category,
+        CancellationToken cancellationToken
+    )
     {
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
         string deckId = RequireDeckId(workspace);
@@ -14,22 +24,39 @@ public sealed partial class ArchidektGateway
             name = category.Name,
             deck = ParseIntOrString(deckId),
             includedInDeck = category.IncludedInDeck,
-            includedInPrice = category.IncludedInPrice
+            includedInPrice = category.IncludedInPrice,
         };
 
         if (category.ArchidektCategoryId.HasValue)
         {
-            await SendJsonAsync(HttpMethod.Patch, $"api/decks/category/{category.ArchidektCategoryId.Value}/", payload, cancellationToken)
+            await SendJsonAsync(
+                    HttpMethod.Patch,
+                    $"api/decks/category/{category.ArchidektCategoryId.Value}/",
+                    payload,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
             return;
         }
 
-        using JsonDocument document = await SendJsonAsync(HttpMethod.Post, "api/decks/createCategory/", payload, cancellationToken)
+        using JsonDocument document = await SendJsonAsync(
+                HttpMethod.Post,
+                "api/decks/createCategory/",
+                payload,
+                cancellationToken
+            )
             .ConfigureAwait(false);
         category.ArchidektCategoryId = GetInt(document.RootElement, "id");
     }
 
-    public async Task DeleteCategoryAsync(DeckWorkspace workspace, DeckCategory category, CancellationToken cancellationToken)
+    /// <summary>
+    /// Deletes the category.
+    /// </summary>
+    public async Task DeleteCategoryAsync(
+        DeckWorkspace workspace,
+        DeckCategory category,
+        CancellationToken cancellationToken
+    )
     {
         if (!category.ArchidektCategoryId.HasValue)
         {
@@ -37,8 +64,13 @@ public sealed partial class ArchidektGateway
         }
 
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
-        using HttpRequestMessage request = new(HttpMethod.Delete, $"api/decks/category/{category.ArchidektCategoryId.Value}/");
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using HttpRequestMessage request = new(
+            HttpMethod.Delete,
+            $"api/decks/category/{category.ArchidektCategoryId.Value}/"
+        );
+        using HttpResponseMessage response = await httpClient
+            .SendAsync(request, cancellationToken)
+            .ConfigureAwait(false);
         await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
     }
 }

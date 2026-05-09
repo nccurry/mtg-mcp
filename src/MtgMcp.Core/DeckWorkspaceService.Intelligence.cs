@@ -1,7 +1,13 @@
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Provides deck intelligence workspace behavior.
+/// </summary>
 public sealed partial class DeckWorkspaceService
 {
+    /// <summary>
+    /// Normalizes deck card metadata.
+    /// </summary>
     public async Task<DeckNormalizationResult> NormalizeDeckCardsAsync(
         string workspaceId,
         string scope,
@@ -16,6 +22,9 @@ public sealed partial class DeckWorkspaceService
         return result;
     }
 
+    /// <summary>
+    /// Normalizes workspace cards.
+    /// </summary>
     private async Task<DeckNormalizationResult> NormalizeWorkspaceCardsAsync(
         DeckWorkspace workspace,
         string normalizedScope,
@@ -56,7 +65,13 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
-    public async Task<DeckPlanSummary> SummarizeDeckPlanAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Summarizes the deck plan.
+    /// </summary>
+    public async Task<DeckPlanSummary> SummarizeDeckPlanAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckPlanSummary summary = new()
@@ -96,6 +111,9 @@ public sealed partial class DeckWorkspaceService
         return summary;
     }
 
+    /// <summary>
+    /// Analyzes draw odds for deck targets.
+    /// </summary>
     public async Task<DeckOddsAnalysis> AnalyzeDrawOddsAsync(
         string workspaceId,
         string? targets,
@@ -116,7 +134,13 @@ public sealed partial class DeckWorkspaceService
             seed);
     }
 
-    public async Task<CategoryPlanResult> SuggestDeckCategoriesAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Suggests deck categories.
+    /// </summary>
+    public async Task<CategoryPlanResult> SuggestDeckCategoriesAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         List<CategorySuggestion> suggestions = [];
@@ -180,22 +204,40 @@ public sealed partial class DeckWorkspaceService
         return new CategoryPlanResult { Plan = plan, Suggestions = suggestions };
     }
 
-    public Task<IReadOnlyList<DeckEditPlan>> ListDeckPlansAsync(string? workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists deck edit plans.
+    /// </summary>
+    public Task<IReadOnlyList<DeckEditPlan>> ListDeckPlansAsync(
+        string? workspaceId,
+        CancellationToken cancellationToken
+    )
     {
         return RequirePlanRepository().ListAsync(workspaceId, cancellationToken);
     }
 
-    public async Task<DeckEditPlan> GetDeckPlanAsync(string planId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Gets a deck edit plan.
+    /// </summary>
+    public async Task<DeckEditPlan> GetDeckPlanAsync(
+        string planId,
+        CancellationToken cancellationToken
+    )
     {
         return await RequirePlanRepository().GetAsync(planId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Deck edit plan '{planId}' was not found.");
     }
 
+    /// <summary>
+    /// Deletes a deck edit plan.
+    /// </summary>
     public Task DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken)
     {
         return RequirePlanRepository().DeleteAsync(planId, cancellationToken);
     }
 
+    /// <summary>
+    /// Applies a deck edit plan.
+    /// </summary>
     public async Task<DeckEditPlanApplyResult> ApplyDeckPlanAsync(
         string planId,
         bool createCheckpoint,
@@ -256,6 +298,9 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Applies one deck edit step.
+    /// </summary>
     private async Task<DeckChangeResult?> ApplyOperationAsync(
         string workspaceId,
         DeckEditOperation operation,
@@ -328,6 +373,9 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Determines whether a card should be normalized.
+    /// </summary>
     private static bool ShouldNormalize(DeckCard card, DeckWorkspace workspace, string scope)
     {
         return scope switch
@@ -342,11 +390,17 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Enumerates included workspace cards.
+    /// </summary>
     private static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
     {
         return workspace.Cards.Where(card => IsIncluded(workspace, card));
     }
 
+    /// <summary>
+    /// Determines whether a card is included in the deck.
+    /// </summary>
     private static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
     {
         DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
@@ -354,6 +408,9 @@ public sealed partial class DeckWorkspaceService
         return category?.IncludedInDeck ?? true;
     }
 
+    /// <summary>
+    /// Parses draw odds targets.
+    /// </summary>
     private static List<string> ParseTargets(string? targets)
     {
         if (string.IsNullOrWhiteSpace(targets))
@@ -376,6 +433,9 @@ public sealed partial class DeckWorkspaceService
             .ToList();
     }
 
+    /// <summary>
+    /// Adds summary notes.
+    /// </summary>
     private static void AddSummaryNotes(DeckPlanSummary summary)
     {
         int lands = Count(summary.RoleCounts, DeckRoles.Lands);
@@ -419,6 +479,9 @@ public sealed partial class DeckWorkspaceService
         summary.NextSteps.Add("Run suggest_deck_categories before applying category changes.");
     }
 
+    /// <summary>
+    /// Suggests a role for a category.
+    /// </summary>
     private static string SuggestRoleForCategory(DeckWorkspace workspace, string category)
     {
         Dictionary<string, int> counts = new(StringComparer.OrdinalIgnoreCase);
@@ -431,6 +494,9 @@ public sealed partial class DeckWorkspaceService
         return counts.OrderByDescending(pair => pair.Value).FirstOrDefault().Key ?? DeckRoles.Utility;
     }
 
+    /// <summary>
+    /// Creates a deck edit plan.
+    /// </summary>
     private static DeckEditPlan CreatePlan(DeckWorkspace workspace, string name, string kind)
     {
         return new DeckEditPlan
@@ -442,21 +508,33 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Gets a card snapshot safely.
+    /// </summary>
     private static CardSnapshot GetSnapshot(DeckCard card)
     {
         return card.Snapshot ?? new CardSnapshot();
     }
 
+    /// <summary>
+    /// Adds a quantity to a count dictionary.
+    /// </summary>
     private static void AddCount(Dictionary<string, int> counts, string key, int quantity)
     {
         counts[key] = counts.GetValueOrDefault(key) + Math.Max(0, quantity);
     }
 
+    /// <summary>
+    /// Gets a count value.
+    /// </summary>
     private static int Count(Dictionary<string, int> counts, string key)
     {
         return counts.TryGetValue(key, out int count) ? count : 0;
     }
 
+    /// <summary>
+    /// Requires an operation value.
+    /// </summary>
     private static string Require(string? value, string name)
     {
         return !string.IsNullOrWhiteSpace(value)
@@ -464,6 +542,9 @@ public sealed partial class DeckWorkspaceService
             : throw new InvalidOperationException($"Deck edit operation is missing required field '{name}'.");
     }
 
+    /// <summary>
+    /// Requires the plan repository.
+    /// </summary>
     private IDeckPlanRepository RequirePlanRepository()
     {
         return planRepository ?? throw new InvalidOperationException("Deck edit plan persistence is not configured.");

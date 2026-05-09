@@ -3,8 +3,14 @@ using FluentAssertions;
 
 namespace MtgMcp.Architecture.Tests;
 
+/// <summary>
+/// Contains tests for project boundary.
+/// </summary>
 public sealed class ProjectBoundaryTests
 {
+    /// <summary>
+    /// Verifies that source projects respect reference boundaries.
+    /// </summary>
     [Fact]
     public void SourceProjects_RespectReferenceBoundaries()
     {
@@ -13,23 +19,34 @@ public sealed class ProjectBoundaryTests
         {
             ["src/MtgMcp.Core/MtgMcp.Core.csproj"] = [],
             ["src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj"] = ["src/MtgMcp.Core/MtgMcp.Core.csproj"],
-            ["src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj"] = ["src/MtgMcp.Core/MtgMcp.Core.csproj"],
+            ["src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj"] =
+            [
+                "src/MtgMcp.Core/MtgMcp.Core.csproj",
+            ],
             ["src/MtgMcp.App/MtgMcp.App.csproj"] =
             [
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
                 "src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj",
-                "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj"
-            ]
+                "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj",
+            ],
         };
 
         foreach (KeyValuePair<string, string[]> project in expectedReferences)
         {
             string projectPath = Path.Combine(root, project.Key);
             IReadOnlyList<string> references = ReadProjectReferences(root, projectPath);
-            references.Should().BeEquivalentTo(project.Value, because: $"{project.Key} should only reference its allowed dependencies");
+            references
+                .Should()
+                .BeEquivalentTo(
+                    project.Value,
+                    because: $"{project.Key} should only reference its allowed dependencies"
+                );
         }
     }
 
+    /// <summary>
+    /// Verifies that core project has no third party packages.
+    /// </summary>
     [Fact]
     public void CoreProject_HasNoThirdPartyPackages()
     {
@@ -40,6 +57,9 @@ public sealed class ProjectBoundaryTests
         document.Descendants("PackageReference").Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Verifies that read project references.
+    /// </summary>
     private static IReadOnlyList<string> ReadProjectReferences(string root, string projectPath)
     {
         XDocument document = XDocument.Load(projectPath);
@@ -57,6 +77,9 @@ public sealed class ProjectBoundaryTests
         return references;
     }
 
+    /// <summary>
+    /// Verifies that find repo root.
+    /// </summary>
     private static string FindRepoRoot()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);

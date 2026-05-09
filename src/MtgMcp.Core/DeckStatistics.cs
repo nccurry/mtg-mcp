@@ -1,7 +1,13 @@
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Calculates deck statistics and draw odds.
+/// </summary>
 public static class DeckStatistics
 {
+    /// <summary>
+    /// Analyzes draw odds for the requested targets.
+    /// </summary>
     public static DeckOddsAnalysis AnalyzeDrawOdds(
         DeckWorkspace workspace,
         IReadOnlyList<string> targets,
@@ -44,7 +50,15 @@ public static class DeckStatistics
         return analysis;
     }
 
-    public static double HypergeometricAtLeast(int populationSize, int successStates, int draws, int minimumSuccesses)
+    /// <summary>
+    /// Calculates hypergeometric odds of at least the requested successes.
+    /// </summary>
+    public static double HypergeometricAtLeast(
+        int populationSize,
+        int successStates,
+        int draws,
+        int minimumSuccesses
+    )
     {
         if (populationSize <= 0 || successStates <= 0 || draws <= 0)
         {
@@ -81,6 +95,9 @@ public static class DeckStatistics
         return Math.Clamp(probability, 0, 1);
     }
 
+    /// <summary>
+    /// Calculates at least one odds with Monte Carlo simulation.
+    /// </summary>
     private static double MonteCarloAtLeastOne(
         IReadOnlyList<DeckCard> includedCards,
         string target,
@@ -134,6 +151,9 @@ public static class DeckStatistics
         return hits / (double)simulations;
     }
 
+    /// <summary>
+    /// Calculates the log combination.
+    /// </summary>
     private static double LogCombination(int n, int k)
     {
         if (k < 0 || k > n)
@@ -151,6 +171,9 @@ public static class DeckStatistics
         return result;
     }
 
+    /// <summary>
+    /// Creates a stable random seed.
+    /// </summary>
     private static int StableSeed(int seed, string target)
     {
         unchecked
@@ -165,6 +188,9 @@ public static class DeckStatistics
         }
     }
 
+    /// <summary>
+    /// Enumerates included cards.
+    /// </summary>
     private static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
     {
         foreach (DeckCard card in workspace.Cards)

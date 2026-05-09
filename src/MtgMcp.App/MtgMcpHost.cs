@@ -10,13 +10,22 @@ using MtgMcp.Scryfall;
 
 namespace MtgMcp.App;
 
+/// <summary>
+/// Provides mtg mcp host behavior.
+/// </summary>
 public static class MtgMcpHost
 {
+    /// <summary>
+    /// Builds the args.
+    /// </summary>
     public static IHost Build(string[] args)
     {
         return CreateBuilder(args).Build();
     }
 
+    /// <summary>
+    /// Validates the services.
+    /// </summary>
     public static void ValidateServices(IServiceProvider services)
     {
         services.GetRequiredService<DeckWorkspaceService>();
@@ -25,18 +34,23 @@ public static class MtgMcpHost
         _ = services.GetRequiredService<OperationModeGuard>().EffectiveMode;
     }
 
+    /// <summary>
+    /// Creates the builder.
+    /// </summary>
     public static HostApplicationBuilder CreateBuilder(string[] args)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
-        builder.Configuration
-            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+        builder
+            .Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
             .AddJsonFile("mtg-mcp.json", optional: true, reloadOnChange: false)
             .AddEnvironmentVariables()
             .AddEnvironmentVariables(prefix: "MTGMCP__")
             .AddCommandLine(args);
 
-        builder.Configuration.AddInMemoryCollection(MtgMcpConfigurationAliases.Create(builder.Configuration));
+        builder.Configuration.AddInMemoryCollection(
+            MtgMcpConfigurationAliases.Create(builder.Configuration)
+        );
 
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
@@ -44,7 +58,9 @@ public static class MtgMcpHost
         builder.Services.Configure<MtgMcpOptions>(builder.Configuration.GetSection("MtgMcp"));
         builder.Services.AddSingleton<IDeckWorkspaceRepository>(serviceProvider =>
         {
-            MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
+            MtgMcpOptions options = serviceProvider
+                .GetRequiredService<IOptions<MtgMcpOptions>>()
+                .Value;
             return new JsonDeckWorkspaceRepository(options.DataDir);
         });
         builder.Services.AddSingleton<IDeckPlanRepository>(serviceProvider =>
@@ -57,8 +73,8 @@ public static class MtgMcpHost
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
 
-        builder.Services
-            .AddMcpServer()
+        builder
+            .Services.AddMcpServer()
             .WithStdioServerTransport()
             .WithToolsFromAssembly()
             .WithResourcesFromAssembly()

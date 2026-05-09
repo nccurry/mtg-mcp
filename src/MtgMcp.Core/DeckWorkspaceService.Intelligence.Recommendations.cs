@@ -1,7 +1,13 @@
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Provides deck recommendation workspace behavior.
+/// </summary>
 public sealed partial class DeckWorkspaceService
 {
+    /// <summary>
+    /// Finds budget replacements.
+    /// </summary>
     public async Task<RecommendationPlanResult> FindBudgetReplacementsAsync(
         string workspaceId,
         decimal maxPrice,
@@ -45,6 +51,9 @@ public sealed partial class DeckWorkspaceService
         return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
     }
 
+    /// <summary>
+    /// Finds card upgrades.
+    /// </summary>
     public async Task<RecommendationPlanResult> FindCardUpgradesAsync(
         string workspaceId,
         int limit,
@@ -86,6 +95,9 @@ public sealed partial class DeckWorkspaceService
         return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
     }
 
+    /// <summary>
+    /// Finds the best replacement for a card.
+    /// </summary>
     private async Task<ReplacementSuggestion?> FindReplacementAsync(
         DeckWorkspace workspace,
         DeckCard currentCard,
@@ -150,6 +162,9 @@ public sealed partial class DeckWorkspaceService
         return bestSuggestion;
     }
 
+    /// <summary>
+    /// Scores a replacement candidate.
+    /// </summary>
     private static ReplacementSuggestion? ScoreReplacement(
         DeckCard currentCard,
         CardInfo candidate,
@@ -194,6 +209,9 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Saves a replacement plan.
+    /// </summary>
     private async Task<DeckEditPlan> SaveReplacementPlanAsync(
         DeckWorkspace workspace,
         string name,
@@ -238,6 +256,9 @@ public sealed partial class DeckWorkspaceService
         return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Creates a candidate deck card.
+    /// </summary>
     private static DeckCard CreateCandidateCard(CardInfo candidate, string category)
     {
         DeckCard card = new()
@@ -253,6 +274,9 @@ public sealed partial class DeckWorkspaceService
         return card;
     }
 
+    /// <summary>
+    /// Normalizes replacement weights.
+    /// </summary>
     private static ReplacementWeights NormalizeWeights(ReplacementWeights? weights)
     {
         double role = Math.Max(0, weights?.Role ?? 0.45);
@@ -272,6 +296,9 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Calculates a candidate power score.
+    /// </summary>
     private static double PowerScore(CardInfo candidate, DeckCard currentCard, string format)
     {
         double rankScore = candidate.EdhrecRank switch
@@ -295,6 +322,9 @@ public sealed partial class DeckWorkspaceService
         return (rankScore * 0.55) + (efficiency * 0.25) + (legality * 0.20);
     }
 
+    /// <summary>
+    /// Calculates a candidate price score.
+    /// </summary>
     private static double PriceScore(decimal? currentPrice, decimal? candidatePrice, bool budgetMode)
     {
         if (!candidatePrice.HasValue)
@@ -316,6 +346,9 @@ public sealed partial class DeckWorkspaceService
         return candidatePrice.Value <= currentPrice.Value * 2 ? 0.8 : 0.45;
     }
 
+    /// <summary>
+    /// Reads a USD price from a snapshot.
+    /// </summary>
     private static decimal? ReadUsdPrice(CardSnapshot? snapshot)
     {
         if (snapshot is null)
@@ -328,6 +361,9 @@ public sealed partial class DeckWorkspaceService
             ?? TryReadDecimal(snapshot.Prices, "usd_foil");
     }
 
+    /// <summary>
+    /// Reads a USD price from card info.
+    /// </summary>
     private static decimal? ReadUsdPrice(CardInfo card)
     {
         return TryReadDecimal(card.Prices, "usd")
@@ -335,6 +371,9 @@ public sealed partial class DeckWorkspaceService
             ?? TryReadDecimal(card.Prices, "usd_foil");
     }
 
+    /// <summary>
+    /// Reads a decimal dictionary value.
+    /// </summary>
     private static decimal? TryReadDecimal(IReadOnlyDictionary<string, string> values, string key)
     {
         return values.TryGetValue(key, out string? value)
@@ -343,6 +382,9 @@ public sealed partial class DeckWorkspaceService
                 : null;
     }
 
+    /// <summary>
+    /// Checks whether the card is legal in a format.
+    /// </summary>
     private static bool IsLegalInFormat(CardInfo card, string format)
     {
         string legalityKey = NormalizeFormat(format);
@@ -350,6 +392,9 @@ public sealed partial class DeckWorkspaceService
             || legality.Equals("legal", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Normalizes a format name.
+    /// </summary>
     private static string NormalizeFormat(string? format)
     {
         string normalized = format?.Trim().ToLowerInvariant() ?? "";
@@ -361,6 +406,9 @@ public sealed partial class DeckWorkspaceService
         };
     }
 
+    /// <summary>
+    /// Gets the deck color identity.
+    /// </summary>
     private static (bool IsKnown, HashSet<string> Colors) GetDeckColorIdentity(DeckWorkspace workspace)
     {
         HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
@@ -390,18 +438,27 @@ public sealed partial class DeckWorkspaceService
         return (colors.Count > 0, colors);
     }
 
+    /// <summary>
+    /// Checks whether the card is a commander.
+    /// </summary>
     private static bool IsCommanderCard(DeckCard card)
     {
         return string.Equals(card.PrimaryCategory, DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
             || (card.Categories ?? []).Any(category => category.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Checks whether a candidate fits the deck color identity.
+    /// </summary>
     private static bool IsInDeckColorIdentity(CardInfo candidate, bool colorIdentityKnown, HashSet<string> deckColorIdentity)
     {
         return !colorIdentityKnown
             || candidate.ColorIdentity.All(color => deckColorIdentity.Contains(color));
     }
 
+    /// <summary>
+    /// Adds colors to a color set.
+    /// </summary>
     private static void AddColors(HashSet<string> colors, IEnumerable<string> colorIdentity)
     {
         foreach (string color in colorIdentity)

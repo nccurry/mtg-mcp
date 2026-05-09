@@ -1,7 +1,13 @@
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Classifies cards into deck roles and tags.
+/// </summary>
 public static class DeckRoleClassifier
 {
+    /// <summary>
+    /// Classifies the card.
+    /// </summary>
     public static CardRoleAssignment Classify(DeckCard card)
     {
         CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
@@ -92,6 +98,9 @@ public static class DeckRoleClassifier
         return Assignment(DeckRoles.Utility, tags, tags.Count > 0 ? 0.55 : 0.35);
     }
 
+    /// <summary>
+    /// Checks whether the card matches a role, tag, or category target.
+    /// </summary>
     public static bool MatchesTarget(DeckCard card, string target)
     {
         CardRoleAssignment assignment = Classify(card);
@@ -113,6 +122,9 @@ public static class DeckRoleClassifier
         return string.Equals(card.PrimaryCategory, target, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Builds a Scryfall search query for a role.
+    /// </summary>
     public static string QueryForRole(string role, string? format, decimal? maxPrice = null)
     {
         string legal = string.IsNullOrWhiteSpace(format) ? "" : $" legal:{format}";
@@ -136,6 +148,9 @@ public static class DeckRoleClassifier
             : $"{roleQuery}{legal}{price}".Trim();
     }
 
+    /// <summary>
+    /// Classifies secondary tags.
+    /// </summary>
     private static List<string> ClassifyTags(DeckCard card, string text)
     {
         CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
@@ -164,6 +179,9 @@ public static class DeckRoleClassifier
         return tags;
     }
 
+    /// <summary>
+    /// Creates a role assignment.
+    /// </summary>
     private static CardRoleAssignment Assignment(string primaryRole, List<string> tags, double confidence)
     {
         return new CardRoleAssignment
@@ -174,6 +192,9 @@ public static class DeckRoleClassifier
         };
     }
 
+    /// <summary>
+    /// Adds a tag when the condition matches.
+    /// </summary>
     private static void AddTag(List<string> tags, string tag, bool condition)
     {
         if (condition && !tags.Any(value => value.Equals(tag, StringComparison.OrdinalIgnoreCase)))
@@ -182,23 +203,39 @@ public static class DeckRoleClassifier
         }
     }
 
+    /// <summary>
+    /// Checks whether the card has a category.
+    /// </summary>
     private static bool HasCategory(DeckCard card, string category)
     {
         return Categories(card).Any(value => value.Equals(category, StringComparison.OrdinalIgnoreCase))
             || string.Equals(card.PrimaryCategory, category, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Gets card categories safely.
+    /// </summary>
     private static IEnumerable<string> Categories(DeckCard card)
     {
         return card.Categories ?? [];
     }
 
+    /// <summary>
+    /// Checks whether text contains any needles.
+    /// </summary>
     private static bool ContainsAny(string value, params string[] needles)
     {
         return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string Text(string? snapshotValue, IReadOnlyDictionary<string, string> metadata, string metadataKey)
+    /// <summary>
+    /// Gets snapshot text with legacy metadata fallback.
+    /// </summary>
+    private static string Text(
+        string? snapshotValue,
+        IReadOnlyDictionary<string, string> metadata,
+        string metadataKey
+    )
     {
         if (!string.IsNullOrWhiteSpace(snapshotValue))
         {

@@ -3,55 +3,76 @@ using ModelContextProtocol.Server;
 
 namespace MtgMcp.App;
 
+/// <summary>
+/// Provides mtg prompts behavior.
+/// </summary>
 [McpServerPromptType]
 public sealed class MtgPrompts
 {
+    /// <summary>
+    /// Handles brew commander deck.
+    /// </summary>
     [McpServerPrompt(Name = "brew_commander_deck")]
     [Description("Plan a Commander deck from a commander, theme, and constraints.")]
     public string BrewCommanderDeck(string commander, string theme = "", string budget = "")
     {
         return $"""
-        Brew a Commander deck for {commander}.
-        Theme: {theme}
-        Budget: {budget}
+            Brew a Commander deck for {commander}.
+            Theme: {theme}
+            Budget: {budget}
 
-        Use mtg-mcp tools to search Scryfall, create a local workspace, normalize card metadata, summarize the deck plan, validate color identity, and explain the key packages before finalizing.
-        """;
+            Use mtg-mcp tools to search Scryfall, validate color identity,
+            create a local workspace, normalize card metadata, summarize the deck plan,
+            add cards by role, and explain the key packages before finalizing.
+            """;
     }
 
+    /// <summary>
+    /// Handles tune existing deck.
+    /// </summary>
     [McpServerPrompt(Name = "tune_existing_deck")]
     [Description("Analyze and tune an existing local or Archidekt-bound workspace.")]
     public string TuneExistingDeck(string workspaceId, string goal = "")
     {
         return $"""
-        Tune deck workspace {workspaceId}.
-        Goal: {goal}
+            Tune deck workspace {workspaceId}.
+            Goal: {goal}
 
-        Normalize the deck first if needed. Then summarize the deck plan, analyze draw odds, identify weak roles or curve issues, create recommendation plans, and only use apply_deck_plan after the user approves the plan.
-        """;
+            Normalize the deck first if needed. Then summarize the deck plan, analyze draw odds,
+            identify weak roles or curve issues, create recommendation plans, and only use
+            apply_deck_plan after the user approves the plan.
+            """;
     }
 
+    /// <summary>
+    /// Finds the budget replacements.
+    /// </summary>
     [McpServerPrompt(Name = "find_budget_replacements")]
     [Description("Find cheaper card replacements for a deck workspace.")]
     public string FindBudgetReplacements(string workspaceId, string budgetTarget = "")
     {
         return $"""
-        Find budget replacements for deck workspace {workspaceId}.
-        Budget target: {budgetTarget}
+            Find budget replacements for deck workspace {workspaceId}.
+            Budget target: {budgetTarget}
 
-        Use normalize_deck_cards and find_budget_replacements. Preserve color identity, role, mana curve, and format legality. Return the persisted plan id and do not mutate the deck unless the user explicitly asks to apply the plan.
-        """;
+            Use normalize_deck_cards and find_budget_replacements. Preserve color identity,
+            role, mana curve, and format legality. Return the persisted plan id and do not
+            mutate the deck unless the user explicitly asks to apply the plan.
+            """;
     }
 
+    /// <summary>
+    /// Handles rules and rulings check.
+    /// </summary>
     [McpServerPrompt(Name = "rules_and_rulings_check")]
     [Description("Check rulings and legality for specific cards or deck interactions.")]
     public string RulesAndRulingsCheck(string cardsOrWorkspace, string question)
     {
         return $"""
-        Check Magic rules and card rulings for: {cardsOrWorkspace}
-        Question: {question}
+            Check Magic rules and card rulings for: {cardsOrWorkspace}
+            Question: {question}
 
-        Use get_card and get_rulings for the named cards. Separate official rulings from strategic interpretation.
-        """;
+            Use get_card and get_rulings for the named cards. Separate official rulings from strategic interpretation.
+            """;
     }
 }

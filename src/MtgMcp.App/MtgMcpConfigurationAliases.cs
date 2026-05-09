@@ -2,8 +2,14 @@ using Microsoft.Extensions.Configuration;
 
 namespace MtgMcp.App;
 
+/// <summary>
+/// Provides mtg mcp configuration aliases behavior.
+/// </summary>
 public static class MtgMcpConfigurationAliases
 {
+    /// <summary>
+    /// Handles readonly.
+    /// </summary>
     private static readonly (string Alias, string Canonical)[] Aliases =
     [
         ("DATA_DIR", "MtgMcp:DataDir"),
@@ -17,9 +23,12 @@ public static class MtgMcpConfigurationAliases
         ("ARCHIDEKT:PASSWORD", "MtgMcp:Archidekt:Password"),
         ("ARCHIDEKT:CREDENTIALS_FILE", "MtgMcp:Archidekt:CredentialsFile"),
         ("SCRYFALL:BASE_ADDRESS", "MtgMcp:Scryfall:BaseAddress"),
-        ("SCRYFALL:USER_AGENT", "MtgMcp:Scryfall:UserAgent")
+        ("SCRYFALL:USER_AGENT", "MtgMcp:Scryfall:UserAgent"),
     ];
 
+    /// <summary>
+    /// Creates the configuration.
+    /// </summary>
     public static IReadOnlyDictionary<string, string?> Create(IConfiguration configuration)
     {
         Dictionary<string, string?> values = new(StringComparer.OrdinalIgnoreCase);

@@ -2,18 +2,33 @@ using ModelContextProtocol.Client;
 
 namespace MtgMcp.E2E.Tests;
 
+/// <summary>
+/// Owns a running MCP stdio client and its temporary E2E data directory.
+/// </summary>
 internal sealed class McpProcessSession : IAsyncDisposable
 {
+    /// <summary>
+    /// Points to the isolated app data directory removed when the session ends.
+    /// </summary>
     private readonly string dataDirectory;
 
+    /// <summary>
+    /// Creates a session around an initialized MCP client.
+    /// </summary>
     private McpProcessSession(McpClient client, string dataDirectory)
     {
         Client = client;
         this.dataDirectory = dataDirectory;
     }
 
+    /// <summary>
+    /// Gets the MCP client connected to the app process.
+    /// </summary>
     public McpClient Client { get; }
 
+    /// <summary>
+    /// Starts the MCP app with fake HTTP endpoints and isolated data storage.
+    /// </summary>
     public static async Task<McpProcessSession> StartAsync(
         Uri scryfallBaseAddress,
         Uri archidektBaseAddress,
@@ -32,10 +47,15 @@ internal sealed class McpProcessSession : IAsyncDisposable
             operationMode);
 
         StdioClientTransport transport = new(options);
-        McpClient client = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken).ConfigureAwait(false);
+        McpClient client = await McpClient
+            .CreateAsync(transport, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         return new McpProcessSession(client, dataDirectory);
     }
 
+    /// <summary>
+    /// Builds stdio transport options that point the app at fake services.
+    /// </summary>
     private static StdioClientTransportOptions CreateTransportOptions(
         string repoRoot,
         Uri scryfallBaseAddress,
@@ -68,12 +88,18 @@ internal sealed class McpProcessSession : IAsyncDisposable
         };
     }
 
+    /// <summary>
+    /// Reads the build configuration from the current test output path.
+    /// </summary>
     private static string GetCurrentConfiguration()
     {
         DirectoryInfo outputDirectory = new(AppContext.BaseDirectory);
         return outputDirectory.Parent?.Name ?? "Release";
     }
 
+    /// <summary>
+    /// Locates the repository root so the E2E process can run the app project.
+    /// </summary>
     private static string FindRepoRoot()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);
@@ -90,6 +116,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
         throw new InvalidOperationException("Could not locate repository root.");
     }
 
+    /// <summary>
+    /// Disposes the MCP client and removes the temporary data directory.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         await Client.DisposeAsync().ConfigureAwait(false);

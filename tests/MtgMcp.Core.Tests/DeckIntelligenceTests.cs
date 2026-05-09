@@ -2,8 +2,14 @@ using FluentAssertions;
 
 namespace MtgMcp.Core.Tests;
 
+/// <summary>
+/// Contains tests for deck intelligence workflows.
+/// </summary>
 public sealed class DeckIntelligenceTests
 {
+    /// <summary>
+    /// Verifies that normalize deck cards populates extended snapshot.
+    /// </summary>
     [Fact]
     public async Task NormalizeDeckCards_PopulatesExtendedSnapshot()
     {
@@ -30,6 +36,9 @@ public sealed class DeckIntelligenceTests
         card.Snapshot.Legalities["commander"].Should().Be("legal");
     }
 
+    /// <summary>
+    /// Verifies that normalize deck cards handles legacy null snapshots.
+    /// </summary>
     [Fact]
     public async Task NormalizeDeckCards_HandlesLegacyNullSnapshots()
     {
@@ -50,6 +59,9 @@ public sealed class DeckIntelligenceTests
         result.Workspace.Cards.Single().Snapshot.Should().NotBeNull();
     }
 
+    /// <summary>
+    /// Verifies that role classifier classifies common deck roles and tags.
+    /// </summary>
     [Fact]
     public void RoleClassifier_ClassifiesCommonDeckRolesAndTags()
     {
@@ -70,6 +82,9 @@ public sealed class DeckIntelligenceTests
         tinybones.Tags.Should().Contain(DeckTags.Discard);
     }
 
+    /// <summary>
+    /// Verifies that analyze draw odds uses hypergeometric odds.
+    /// </summary>
     [Fact]
     public void AnalyzeDrawOdds_UsesHypergeometricOdds()
     {
@@ -94,6 +109,9 @@ public sealed class DeckIntelligenceTests
         analysis.Rows.Single().MonteCarloAtLeastOne.Should().BeApproximately(0.809, 0.001);
     }
 
+    /// <summary>
+    /// Verifies that summarize deck plan returns role counts and risks.
+    /// </summary>
     [Fact]
     public async Task SummarizeDeckPlan_ReturnsRoleCountsAndRisks()
     {
@@ -118,6 +136,9 @@ public sealed class DeckIntelligenceTests
         summary.Risks.Should().Contain(note => note.Contains("Land count", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Verifies that analyze draw odds uses default targets.
+    /// </summary>
     [Fact]
     public async Task AnalyzeDrawOddsAsync_UsesDefaultTargets()
     {
@@ -146,6 +167,9 @@ public sealed class DeckIntelligenceTests
         analysis.Rows.Single(row => row.Target == DeckRoles.Lands).SuccessesInDeck.Should().Be(36);
     }
 
+    /// <summary>
+    /// Verifies that find budget replacements creates persisted plan without mutating deck.
+    /// </summary>
     [Fact]
     public async Task FindBudgetReplacements_CreatesPersistedPlanWithoutMutatingDeck()
     {
@@ -174,6 +198,9 @@ public sealed class DeckIntelligenceTests
         (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
     }
 
+    /// <summary>
+    /// Verifies that find card upgrades creates persisted upgrade plan.
+    /// </summary>
     [Fact]
     public async Task FindCardUpgrades_CreatesPersistedUpgradePlan()
     {
@@ -212,6 +239,9 @@ public sealed class DeckIntelligenceTests
         result.Plan.Operations.Should().Contain(operation => operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Phyrexian Arena");
     }
 
+    /// <summary>
+    /// Verifies that find card upgrades rejects off color and wrong format candidates.
+    /// </summary>
     [Fact]
     public async Task FindCardUpgrades_RejectsOffColorAndWrongFormatCandidates()
     {
@@ -259,6 +289,9 @@ public sealed class DeckIntelligenceTests
             .NotContain(["Rhystic Study", "Necropotence"]);
     }
 
+    /// <summary>
+    /// Verifies that suggest deck categories persists move plan.
+    /// </summary>
     [Fact]
     public async Task SuggestDeckCategories_PersistsMovePlan()
     {
@@ -288,6 +321,9 @@ public sealed class DeckIntelligenceTests
             && operation.ToCategory == DeckRoles.Ramp);
     }
 
+    /// <summary>
+    /// Verifies that apply deck plan applies local mutations.
+    /// </summary>
     [Fact]
     public async Task ApplyDeckPlan_LocalPlan_AppliesThroughMutationPath()
     {
@@ -330,6 +366,9 @@ public sealed class DeckIntelligenceTests
             .WithMessage("*already been applied*");
     }
 
+    /// <summary>
+    /// Verifies that apply deck plan handles local category quantity and metadata operations.
+    /// </summary>
     [Fact]
     public async Task ApplyDeckPlan_LocalPlan_AppliesCategoryQuantityAndMetadataOperations()
     {
@@ -391,6 +430,9 @@ public sealed class DeckIntelligenceTests
         result.Workspace.Categories.Should().NotContain(category => category.Name == "Mana");
     }
 
+    /// <summary>
+    /// Verifies that Archidekt writeback plans require and create checkpoints.
+    /// </summary>
     [Fact]
     public async Task ApplyDeckPlan_ArchidektWritebackRequiresAndCreatesCheckpointForMultiEditPlans()
     {
@@ -435,6 +477,9 @@ public sealed class DeckIntelligenceTests
         archidekt.CreatedCheckpoints.Should().ContainSingle().Which.Should().Be("Before remote edits");
     }
 
+    /// <summary>
+    /// Verifies that json deck plan repository saves lists gets and deletes plans.
+    /// </summary>
     [Fact]
     public async Task JsonDeckPlanRepository_SavesListsGetsAndDeletesPlans()
     {
@@ -464,6 +509,9 @@ public sealed class DeckIntelligenceTests
         }
     }
 
+    /// <summary>
+    /// Creates a deck card fixture.
+    /// </summary>
     private static DeckCard Card(string name, string typeLine, string oracleText)
     {
         return new DeckCard
@@ -477,6 +525,9 @@ public sealed class DeckIntelligenceTests
         };
     }
 
+    /// <summary>
+    /// Creates an expensive ramp fixture.
+    /// </summary>
     private static DeckCard ExpensiveRamp()
     {
         return new DeckCard
@@ -499,8 +550,14 @@ public sealed class DeckIntelligenceTests
         };
     }
 
+    /// <summary>
+    /// Provides fake card catalog behavior.
+    /// </summary>
     private sealed class FakeCardCatalog : ICardCatalog
     {
+        /// <summary>
+        /// Searches fake cards.
+        /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
         {
             IReadOnlyList<CardSearchResult> results;
@@ -525,11 +582,17 @@ public sealed class DeckIntelligenceTests
             return Task.FromResult(results);
         }
 
+        /// <summary>
+        /// Gets a fake card.
+        /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
             return Task.FromResult<CardInfo?>(CreateCard(nameOrId));
         }
 
+        /// <summary>
+        /// Gets fake cards by names.
+        /// </summary>
         public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
             IReadOnlyList<string> names,
             CancellationToken cancellationToken)
@@ -543,21 +606,33 @@ public sealed class DeckIntelligenceTests
             return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(cards);
         }
 
+        /// <summary>
+        /// Gets fake rulings.
+        /// </summary>
         public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
         }
 
+        /// <summary>
+        /// Gets fake prints.
+        /// </summary>
         public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<CardInfo>>([]);
         }
 
+        /// <summary>
+        /// Suggests fake cards.
+        /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(string prompt, string? format, int limit, CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
         }
 
+        /// <summary>
+        /// Creates a fake card.
+        /// </summary>
         private static CardInfo CreateCard(string name)
         {
             return name switch
@@ -650,8 +725,14 @@ public sealed class DeckIntelligenceTests
         }
     }
 
+    /// <summary>
+    /// Provides fake Archidekt gateway behavior.
+    /// </summary>
     private sealed class FakeArchidektGateway : IArchidektGateway
     {
+        /// <summary>
+        /// Gets or sets the imported deck.
+        /// </summary>
         public DeckWorkspace ImportedDeck { get; set; } = new()
         {
             Mode = WorkspaceMode.Archidekt,
@@ -659,18 +740,30 @@ public sealed class DeckIntelligenceTests
             ArchidektDeckId = "123"
         };
 
+        /// <summary>
+        /// Gets created checkpoints.
+        /// </summary>
         public List<string> CreatedCheckpoints { get; } = [];
 
+        /// <summary>
+        /// Gets fake auth status.
+        /// </summary>
         public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(new AuthStatus { HasJwt = true });
         }
 
+        /// <summary>
+        /// Lists fake decks.
+        /// </summary>
         public Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([]);
         }
 
+        /// <summary>
+        /// Imports a fake deck.
+        /// </summary>
         public Task<DeckWorkspace> ImportDeckAsync(string deckIdOrUrl, bool writeBack, CancellationToken cancellationToken)
         {
             ImportedDeck.Mode = WorkspaceMode.Archidekt;
@@ -679,6 +772,9 @@ public sealed class DeckIntelligenceTests
             return Task.FromResult(ImportedDeck);
         }
 
+        /// <summary>
+        /// Persists fake card changes.
+        /// </summary>
         public Task PersistCardsAsync(
             DeckWorkspace workspace,
             IReadOnlyList<DeckCard> upsertedCards,
@@ -689,24 +785,36 @@ public sealed class DeckIntelligenceTests
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Persists a fake category.
+        /// </summary>
         public Task PersistCategoryAsync(DeckWorkspace workspace, DeckCategory category, CancellationToken cancellationToken)
         {
             ImportedDeck = workspace;
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Deletes a fake category.
+        /// </summary>
         public Task DeleteCategoryAsync(DeckWorkspace workspace, DeckCategory category, CancellationToken cancellationToken)
         {
             ImportedDeck = workspace;
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Persists fake metadata.
+        /// </summary>
         public Task PersistMetadataAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
         {
             ImportedDeck = workspace;
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Creates a fake checkpoint.
+        /// </summary>
         public Task<DeckCheckpoint> CreateCheckpointAsync(
             DeckWorkspace workspace,
             string name,
@@ -723,16 +831,25 @@ public sealed class DeckIntelligenceTests
             });
         }
 
+        /// <summary>
+        /// Lists fake checkpoints.
+        /// </summary>
         public Task<IReadOnlyList<DeckCheckpoint>> ListCheckpointsAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<DeckCheckpoint>>([]);
         }
 
+        /// <summary>
+        /// Gets a fake checkpoint.
+        /// </summary>
         public Task<DeckCheckpoint> GetCheckpointAsync(DeckWorkspace workspace, string checkpointId, CancellationToken cancellationToken)
         {
             return Task.FromResult(new DeckCheckpoint { Id = checkpointId, DeckId = workspace.ArchidektDeckId ?? "", Name = "Checkpoint" });
         }
 
+        /// <summary>
+        /// Renames a fake checkpoint.
+        /// </summary>
         public Task<DeckCheckpoint> RenameCheckpointAsync(
             DeckWorkspace workspace,
             string checkpointId,
@@ -743,50 +860,83 @@ public sealed class DeckIntelligenceTests
             return Task.FromResult(new DeckCheckpoint { Id = checkpointId, DeckId = workspace.ArchidektDeckId ?? "", Name = name, Description = description });
         }
 
+        /// <summary>
+        /// Deletes a fake checkpoint.
+        /// </summary>
         public Task DeleteCheckpointAsync(DeckWorkspace workspace, string checkpointId, CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }
     }
 
+    /// <summary>
+    /// Provides in-memory workspace repository behavior.
+    /// </summary>
     private sealed class InMemoryRepository : IDeckWorkspaceRepository
     {
+        /// <summary>
+        /// Gets workspaces.
+        /// </summary>
         public Dictionary<string, DeckWorkspace> Workspaces { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Saves a workspace.
+        /// </summary>
         public Task<DeckWorkspace> SaveAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
         {
             Workspaces[workspace.Id] = workspace;
             return Task.FromResult(workspace);
         }
 
+        /// <summary>
+        /// Gets a workspace.
+        /// </summary>
         public Task<DeckWorkspace?> GetAsync(string workspaceId, CancellationToken cancellationToken)
         {
             Workspaces.TryGetValue(workspaceId, out DeckWorkspace? workspace);
             return Task.FromResult(workspace);
         }
 
+        /// <summary>
+        /// Lists workspaces.
+        /// </summary>
         public Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<DeckWorkspace>>(Workspaces.Values.ToList());
         }
     }
 
+    /// <summary>
+    /// Provides in-memory plan repository behavior.
+    /// </summary>
     private sealed class InMemoryPlanRepository : IDeckPlanRepository
     {
+        /// <summary>
+        /// Stores plans.
+        /// </summary>
         private readonly Dictionary<string, DeckEditPlan> plans = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Saves a plan.
+        /// </summary>
         public Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken)
         {
             plans[plan.PlanId] = plan;
             return Task.FromResult(plan);
         }
 
+        /// <summary>
+        /// Gets a plan.
+        /// </summary>
         public Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken)
         {
             plans.TryGetValue(planId, out DeckEditPlan? plan);
             return Task.FromResult(plan);
         }
 
+        /// <summary>
+        /// Lists plans.
+        /// </summary>
         public Task<IReadOnlyList<DeckEditPlan>> ListAsync(string? workspaceId, CancellationToken cancellationToken)
         {
             IReadOnlyList<DeckEditPlan> result = plans.Values
@@ -796,6 +946,9 @@ public sealed class DeckIntelligenceTests
             return Task.FromResult(result);
         }
 
+        /// <summary>
+        /// Deletes a plan.
+        /// </summary>
         public Task DeleteAsync(string planId, CancellationToken cancellationToken)
         {
             plans.Remove(planId);

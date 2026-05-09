@@ -2,25 +2,47 @@ using System.Text.Json;
 
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Configures mtg mcp options settings.
+/// </summary>
 public sealed class MtgMcpOptions
 {
+    /// <summary>
+    /// Gets or sets the data dir.
+    /// </summary>
     public string DataDir { get; set; } = DefaultDataDir();
+
+    /// <summary>
+    /// Gets or sets the operation mode.
+    /// </summary>
     public string OperationMode { get; set; } = "apply";
 
+    /// <summary>
+    /// Handles default data dir.
+    /// </summary>
     private static string DefaultDataDir()
     {
         string root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(root))
         {
-            root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".mtg-mcp");
+            root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".mtg-mcp"
+            );
         }
 
         return Path.Combine(root, "mtg-mcp");
     }
 }
 
+/// <summary>
+/// Provides secret redactor behavior.
+/// </summary>
 public static class SecretRedactor
 {
+    /// <summary>
+    /// Stores the secret names.
+    /// </summary>
     private static readonly string[] SecretNames =
     [
         "jwt",
@@ -29,9 +51,12 @@ public static class SecretRedactor
         "password",
         "secret",
         "authorization",
-        "cookie"
+        "cookie",
     ];
 
+    /// <summary>
+    /// Handles redact.
+    /// </summary>
     public static string Redact(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -50,6 +75,9 @@ public static class SecretRedactor
         return value;
     }
 
+    /// <summary>
+    /// Handles redact.
+    /// </summary>
     public static Dictionary<string, object?> Redact(IDictionary<string, object?> values)
     {
         Dictionary<string, object?> redacted = new(StringComparer.OrdinalIgnoreCase);
@@ -61,6 +89,9 @@ public static class SecretRedactor
         return redacted;
     }
 
+    /// <summary>
+    /// Handles redact.
+    /// </summary>
     public static JsonDocument Redact(JsonDocument document)
     {
         object? value = RedactElement(document.RootElement, key: null);
@@ -68,6 +99,9 @@ public static class SecretRedactor
         return JsonDocument.Parse(json);
     }
 
+    /// <summary>
+    /// Handles redact element.
+    /// </summary>
     private static object? RedactElement(JsonElement element, string? key)
     {
         if (key is not null && IsSecretKey(key))
@@ -78,16 +112,24 @@ public static class SecretRedactor
         return element.ValueKind switch
         {
             JsonValueKind.Object => RedactObject(element),
-            JsonValueKind.Array => element.EnumerateArray().Select(item => RedactElement(item, key: null)).ToList(),
+            JsonValueKind.Array => element
+                .EnumerateArray()
+                .Select(item => RedactElement(item, key: null))
+                .ToList(),
             JsonValueKind.String => element.GetString(),
-            JsonValueKind.Number => element.TryGetInt64(out long longValue) ? longValue : element.GetDouble(),
+            JsonValueKind.Number => element.TryGetInt64(out long longValue)
+                ? longValue
+                : element.GetDouble(),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
             JsonValueKind.Null => null,
-            _ => element.GetRawText()
+            _ => element.GetRawText(),
         };
     }
 
+    /// <summary>
+    /// Handles redact object.
+    /// </summary>
     private static Dictionary<string, object?> RedactObject(JsonElement element)
     {
         Dictionary<string, object?> redacted = new(StringComparer.OrdinalIgnoreCase);
@@ -99,6 +141,9 @@ public static class SecretRedactor
         return redacted;
     }
 
+    /// <summary>
+    /// Determines whether secret key.
+    /// </summary>
     private static bool IsSecretKey(string key)
     {
         foreach (string secretName in SecretNames)

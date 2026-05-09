@@ -1,6 +1,7 @@
 # mtg-mcp
 
-`mtg-mcp` is a self-contained C#/.NET MCP server for building Magic: The Gathering decks with Scryfall card data and Archidekt deck writeback.
+`mtg-mcp` is a self-contained C#/.NET MCP server for building Magic: The Gathering
+decks with Scryfall card data and Archidekt deck writeback.
 
 ## Features
 
@@ -8,7 +9,8 @@
 - Local deck workspaces for offline brewing, listing, and import/export.
 - Archidekt-bound workspaces for immediate deck writeback.
 - Mutation results include explicit `local-only` or `archidekt-writeback` persistence markers.
-- `start_deck_workspace` and `mtg://usage/workspace-selection` guide LLMs to ask before ambiguous local versus Archidekt choices.
+- `start_deck_workspace` and `mtg://usage/workspace-selection` guide LLMs to ask
+  before ambiguous local versus Archidekt choices.
 - MCP tool annotations mark read-only, destructive, idempotent, and open-world behavior for compatible clients.
 - Server-side operation modes can block mutations for Ask/Plan style sessions.
 - Category-based organization for mainboard, sideboard, maybeboard, and custom Archidekt categories.
@@ -35,7 +37,8 @@ Configure an MCP client to run the published `MtgMcp.App` binary or the `dotnet 
 
 ## Configuration
 
-Configuration can come from CLI arguments, environment variables, or JSON files. Environment variables use `__` as the section separator.
+Configuration can come from CLI arguments, environment variables, or JSON files.
+Environment variables use `__` as the section separator.
 
 Common settings:
 
@@ -68,7 +71,8 @@ Credential files can contain:
 }
 ```
 
-For passwords with quotes, backslashes, or other punctuation, a simpler `key=value` file is also supported and avoids JSON escaping:
+For passwords with quotes, backslashes, or other punctuation, a simpler `key=value`
+file is also supported and avoids JSON escaping:
 
 ```text
 userId=optional-archidekt-user-id
@@ -76,7 +80,8 @@ email=archidekt-user@example.com
 password=pa\ss"word=with#punctuation!
 ```
 
-JWT/refresh token auth is preferred. Email or username plus password login is only a fallback, and secrets are redacted from MCP resources and logs.
+JWT/refresh token auth is preferred. Email or username plus password login is only
+a fallback, and secrets are redacted from MCP resources and logs.
 
 ## Development
 

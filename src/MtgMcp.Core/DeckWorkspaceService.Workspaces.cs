@@ -1,20 +1,32 @@
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Coordinates deck workspace service behavior.
+/// </summary>
 public sealed partial class DeckWorkspaceService
 {
-    public async Task<IReadOnlyList<DeckWorkspace>> ListLocalWorkspacesAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists the local workspaces.
+    /// </summary>
+    public async Task<IReadOnlyList<DeckWorkspace>> ListLocalWorkspacesAsync(
+        CancellationToken cancellationToken
+    )
     {
-        IReadOnlyList<DeckWorkspace> workspaces = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
-        return workspaces
-            .Where(workspace => workspace.Mode == WorkspaceMode.Local)
-            .ToList();
+        IReadOnlyList<DeckWorkspace> workspaces = await repository
+            .ListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return workspaces.Where(workspace => workspace.Mode == WorkspaceMode.Local).ToList();
     }
 
+    /// <summary>
+    /// Creates the local deck.
+    /// </summary>
     public async Task<DeckWorkspace> CreateLocalDeckAsync(
         string name,
         string format,
         string? description,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         DeckWorkspace workspace = new()
         {
@@ -22,12 +34,15 @@ public sealed partial class DeckWorkspaceService
             Format = string.IsNullOrWhiteSpace(format) ? "commander" : format.Trim(),
             Description = description,
             Mode = WorkspaceMode.Local,
-            WriteBack = false
+            WriteBack = false,
         };
 
         return await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Handles start deck workspace.
+    /// </summary>
     public async Task<DeckWorkspace> StartDeckWorkspaceAsync(
         string? mode,
         string? name,
@@ -36,93 +51,155 @@ public sealed partial class DeckWorkspaceService
         string? archidektDeckIdOrUrl,
         bool? writeBack,
         string? decklist,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         string normalizedMode = mode?.Trim().ToLowerInvariant() ?? "";
         if (string.IsNullOrWhiteSpace(normalizedMode))
         {
-            throw new InvalidOperationException("Workspace mode is ambiguous. Ask the user whether to use a local workspace or an Archidekt deck.");
+            throw new InvalidOperationException(
+                "Workspace mode is ambiguous. Ask the user whether to use a local workspace or an Archidekt deck."
+            );
         }
 
         if (normalizedMode is "local")
         {
             if (!string.IsNullOrWhiteSpace(archidektDeckIdOrUrl))
             {
-                throw new InvalidOperationException("Local workspace mode cannot use an Archidekt deck id or URL. Ask the user whether they meant Archidekt instead.");
+                throw new InvalidOperationException(
+                    "Local workspace mode cannot use an Archidekt deck id or URL. "
+                        + "Ask the user whether they meant Archidekt instead."
+                );
             }
 
             string deckName = string.IsNullOrWhiteSpace(name) ? "Untitled Deck" : name;
             if (!string.IsNullOrWhiteSpace(decklist))
             {
-                return await ImportDecklistAsync(decklist, deckName, format, cancellationToken).ConfigureAwait(false);
+                return await ImportDecklistAsync(decklist, deckName, format, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
-            return await CreateLocalDeckAsync(deckName, format, description, cancellationToken).ConfigureAwait(false);
+            return await CreateLocalDeckAsync(deckName, format, description, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         if (normalizedMode is "archidekt")
         {
             if (!string.IsNullOrWhiteSpace(decklist))
             {
-                throw new InvalidOperationException("Archidekt workspace mode cannot import pasted deck text directly. Ask whether to create a local import or open an Archidekt deck.");
+                throw new InvalidOperationException(
+                    "Archidekt workspace mode cannot import pasted deck text directly. "
+                        + "Ask whether to create a local import or open an Archidekt deck."
+                );
             }
 
             if (string.IsNullOrWhiteSpace(archidektDeckIdOrUrl))
             {
-                throw new InvalidOperationException("Archidekt workspace mode requires an Archidekt deck id or URL. Ask the user for the deck to open.");
+                throw new InvalidOperationException(
+                    "Archidekt workspace mode requires an Archidekt deck id or URL. Ask the user for the deck to open."
+                );
             }
 
             if (!writeBack.HasValue)
             {
-                throw new InvalidOperationException("Archidekt writeback intent is ambiguous. Ask the user whether edits should write back to Archidekt or stay local-only.");
+                throw new InvalidOperationException(
+                    "Archidekt writeback intent is ambiguous. "
+                        + "Ask the user whether edits should write back to Archidekt or stay local-only."
+                );
             }
 
-            return await OpenArchidektDeckAsync(archidektDeckIdOrUrl, writeBack.Value, cancellationToken).ConfigureAwait(false);
+            return await OpenArchidektDeckAsync(
+                    archidektDeckIdOrUrl,
+                    writeBack.Value,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
 
-        throw new InvalidOperationException("Workspace mode must be either 'local' or 'archidekt'. Ask the user which workspace mode to use.");
+        throw new InvalidOperationException(
+            "Workspace mode must be either 'local' or 'archidekt'. Ask the user which workspace mode to use."
+        );
     }
 
-    public async Task<DeckWorkspace> OpenLocalDeckAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Opens the local deck.
+    /// </summary>
+    public async Task<DeckWorkspace> OpenLocalDeckAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
-        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
         return workspace;
     }
 
+    /// <summary>
+    /// Opens the archidekt deck.
+    /// </summary>
     public async Task<DeckWorkspace> OpenArchidektDeckAsync(
         string deckIdOrUrl,
         bool writeBack,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         IArchidektGateway gateway = RequireArchidektGateway();
-        DeckWorkspace workspace = await gateway.ImportDeckAsync(deckIdOrUrl, writeBack, cancellationToken).ConfigureAwait(false);
-        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await gateway
+            .ImportDeckAsync(deckIdOrUrl, writeBack, cancellationToken)
+            .ConfigureAwait(false);
+        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
+            .ConfigureAwait(false);
+
         return await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<IReadOnlyList<ArchidektDeckSummary>> ListArchidektDecksAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists the archidekt decks.
+    /// </summary>
+    public Task<IReadOnlyList<ArchidektDeckSummary>> ListArchidektDecksAsync(
+        CancellationToken cancellationToken
+    )
     {
         return RequireArchidektGateway().ListDecksAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Parses the decklist.
+    /// </summary>
     public static ParsedDecklist ParseDecklist(string decklist)
     {
         return DeckParser.Parse(decklist);
     }
 
+    /// <summary>
+    /// Imports the decklist.
+    /// </summary>
     public async Task<DeckWorkspace> ImportDecklistAsync(
         string decklist,
         string name,
         string format,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         ParsedDecklist parsed = DeckParser.Parse(decklist);
-        DeckWorkspace workspace = await CreateLocalDeckAsync(name, format, description: null, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await CreateLocalDeckAsync(
+                name,
+                format,
+                description: null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         foreach (ParsedDecklistLine line in parsed.Cards)
         {
             EnsureCategory(workspace, line.Category);
-            DeckCard card = await CreateDeckCardAsync(line.Name, line.Quantity, line.Category, cancellationToken).ConfigureAwait(false);
+            DeckCard card = await CreateDeckCardAsync(
+                    line.Name,
+                    line.Quantity,
+                    line.Category,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
             workspace.Cards.Add(card);
         }
 
@@ -130,32 +207,58 @@ public sealed partial class DeckWorkspaceService
         return await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<string> ExportDeckAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Exports the deck.
+    /// </summary>
+    public async Task<string> ExportDeckAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
-        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
         return DeckExporter.Export(workspace);
     }
 
-    public async Task<DeckValidationResult> ValidateDeckAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Validates the deck.
+    /// </summary>
+    public async Task<DeckValidationResult> ValidateDeckAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
-        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
         return DeckValidator.Validate(workspace);
     }
 
-    public async Task<DeckAnalysis> AnalyzeDeckAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Analyzes the deck.
+    /// </summary>
+    public async Task<DeckAnalysis> AnalyzeDeckAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
-        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
         return DeckAnalyzer.Analyze(workspace);
     }
 
+    /// <summary>
+    /// Updates the deck metadata.
+    /// </summary>
     public async Task<DeckChangeResult> UpdateDeckMetadataAsync(
         string workspaceId,
         string? name,
         string? format,
         string? description,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(name))
         {
@@ -174,21 +277,36 @@ public sealed partial class DeckWorkspaceService
 
         if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack)
         {
-            await RequireArchidektGateway().PersistMetadataAsync(workspace, cancellationToken).ConfigureAwait(false);
+            await RequireArchidektGateway()
+                .PersistMetadataAsync(workspace, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
         return Change(workspace, DeckMutationKind.MetadataChanged, "Updated deck metadata.");
     }
 
-    public async Task<DeckWorkspace> GetDeckResourceAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Gets the deck resource.
+    /// </summary>
+    public async Task<DeckWorkspace> GetDeckResourceAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
         return await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<object> GetDeckSummaryAsync(string workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Gets the deck summary.
+    /// </summary>
+    public async Task<object> GetDeckSummaryAsync(
+        string workspaceId,
+        CancellationToken cancellationToken
+    )
     {
-        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
         DeckAnalysis deckAnalysis = DeckAnalyzer.Analyze(workspace);
         DeckValidationResult validation = DeckValidator.Validate(workspace);
         return new
@@ -204,7 +322,7 @@ public sealed partial class DeckWorkspaceService
             Categories = workspace.Categories.Select(category => category.Name).ToArray(),
             validation.IsValid,
             validation.Errors,
-            validation.Warnings
+            validation.Warnings,
         };
     }
 }

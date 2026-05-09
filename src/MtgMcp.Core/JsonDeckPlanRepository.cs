@@ -2,20 +2,35 @@ using System.Text.Json;
 
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Persists deck edit plans as json files.
+/// </summary>
 public sealed class JsonDeckPlanRepository : IDeckPlanRepository
 {
+    /// <summary>
+    /// Stores serializer options.
+    /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
     };
 
+    /// <summary>
+    /// Stores the plan directory.
+    /// </summary>
     private readonly string planDirectory;
 
+    /// <summary>
+    /// Handles json deck plan repository.
+    /// </summary>
     public JsonDeckPlanRepository(string dataDirectory)
     {
         planDirectory = Path.Combine(dataDirectory, "plans");
     }
 
+    /// <summary>
+    /// Saves the plan.
+    /// </summary>
     public async Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -45,6 +60,9 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
         return plan;
     }
 
+    /// <summary>
+    /// Gets the plan.
+    /// </summary>
     public async Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken)
     {
         string path = GetPlanPath(planId);
@@ -57,7 +75,13 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
         return await JsonSerializer.DeserializeAsync<DeckEditPlan>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<DeckEditPlan>> ListAsync(string? workspaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists the plans.
+    /// </summary>
+    public async Task<IReadOnlyList<DeckEditPlan>> ListAsync(
+        string? workspaceId,
+        CancellationToken cancellationToken
+    )
     {
         if (!Directory.Exists(planDirectory))
         {
@@ -88,6 +112,9 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
             .ToList();
     }
 
+    /// <summary>
+    /// Deletes the plan.
+    /// </summary>
     public Task DeleteAsync(string planId, CancellationToken cancellationToken)
     {
         string path = GetPlanPath(planId);
@@ -99,6 +126,9 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Gets the plan path.
+    /// </summary>
     private string GetPlanPath(string planId)
     {
         string safeId = string.Concat(planId.Where(char.IsLetterOrDigit));

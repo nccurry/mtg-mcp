@@ -5,8 +5,14 @@ using ModelContextProtocol.Protocol;
 
 namespace MtgMcp.E2E.Tests;
 
+/// <summary>
+/// Exercises the MCP server through stdio with fake Scryfall and Archidekt HTTP backends.
+/// </summary>
 public sealed class McpE2ETests
 {
+    /// <summary>
+    /// Verifies that the MCP server advertises card and workspace tool groups.
+    /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
     public async Task ToolDiscovery_ListsExpectedToolGroups()
@@ -19,7 +25,8 @@ public sealed class McpE2ETests
             operationMode: "apply",
             TestContext.Current.CancellationToken);
 
-        IList<McpClientTool> tools = await session.Client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
 
         tools.Select(tool => tool.Name).Should().Contain(
         [
@@ -30,6 +37,9 @@ public sealed class McpE2ETests
         ]);
     }
 
+    /// <summary>
+    /// Verifies that a local workspace can add, export, and analyze a Scryfall card without Archidekt calls.
+    /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
     public async Task LocalWorkspaceFlow_UsesScryfallWithoutArchidekt()
@@ -78,10 +88,15 @@ public sealed class McpE2ETests
         export.Should().Contain("2 Lightning Bolt");
         GetInt32(analysis, "totalCards").Should().Be(2);
         GetObject(analysis, "typeCounts").GetProperty("Instant").GetInt32().Should().Be(2);
-        scryfall.Requests.Should().ContainSingle(request => request.PathAndQuery == "cards/named?fuzzy=Lightning%20Bolt");
+        scryfall
+            .Requests.Should()
+            .ContainSingle(request => request.PathAndQuery == "cards/named?fuzzy=Lightning%20Bolt");
         archidekt.Requests.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Verifies that an Archidekt workspace writes card additions back to the fake deck API.
+    /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
     public async Task ArchidektWritebackFlow_PatchesFakeArchidektDeck()
@@ -147,6 +162,9 @@ public sealed class McpE2ETests
         card.GetProperty("modifications").GetProperty("quantity").GetInt32().Should().Be(1);
     }
 
+    /// <summary>
+    /// Verifies that read-only mode rejects Archidekt workspace mutation before any HTTP call.
+    /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
     public async Task ReadOnlyMode_BlocksArchidektWorkspaceBeforeHttp()
@@ -174,6 +192,9 @@ public sealed class McpE2ETests
         archidekt.Requests.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Calls a tool and parses the single text result as JSON.
+    /// </summary>
     private static async Task<JsonElement> CallJsonAsync(
         McpClient client,
         string toolName,
@@ -184,6 +205,9 @@ public sealed class McpE2ETests
         return document.RootElement.Clone();
     }
 
+    /// <summary>
+    /// Calls a tool and returns the single text result after asserting success.
+    /// </summary>
     private static async Task<string> CallTextAsync(
         McpClient client,
         string toolName,
@@ -198,27 +222,42 @@ public sealed class McpE2ETests
         return ReadText(result);
     }
 
+    /// <summary>
+    /// Reads the single text content block returned by a tool call.
+    /// </summary>
     private static string ReadText(CallToolResult result)
     {
         TextContentBlock block = result.Content.OfType<TextContentBlock>().Single();
         return block.Text;
     }
 
+    /// <summary>
+    /// Reads a JSON string property using camelCase or PascalCase naming.
+    /// </summary>
     private static string GetString(JsonElement element, string propertyName)
     {
         return GetProperty(element, propertyName).GetString() ?? "";
     }
 
+    /// <summary>
+    /// Reads a JSON integer property using camelCase or PascalCase naming.
+    /// </summary>
     private static int GetInt32(JsonElement element, string propertyName)
     {
         return GetProperty(element, propertyName).GetInt32();
     }
 
+    /// <summary>
+    /// Reads a JSON object property using camelCase or PascalCase naming.
+    /// </summary>
     private static JsonElement GetObject(JsonElement element, string propertyName)
     {
         return GetProperty(element, propertyName);
     }
 
+    /// <summary>
+    /// Finds a JSON property while tolerating serializer casing differences.
+    /// </summary>
     private static JsonElement GetProperty(JsonElement element, string propertyName)
     {
         if (element.TryGetProperty(propertyName, out JsonElement property))
@@ -235,6 +274,9 @@ public sealed class McpE2ETests
         throw new InvalidOperationException($"JSON property '{propertyName}' was not found in {element}.");
     }
 
+    /// <summary>
+    /// Provides a Scryfall card payload shared by E2E flows that add Lightning Bolt.
+    /// </summary>
     private const string LightningBoltJson = """
     {
       "id": "00000000-0000-0000-0000-000000000001",
