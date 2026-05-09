@@ -240,6 +240,21 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
+    /// Normalizes an Archidekt deck format value to Scryfall-compatible text.
+    /// </summary>
+    private static string NormalizeDeckFormat(string? format)
+    {
+        string normalized = format?.Trim().ToLowerInvariant() ?? "";
+        return normalized switch
+        {
+            "" => "commander",
+            "3" => "commander",
+            "edh" => "commander",
+            _ => normalized,
+        };
+    }
+
+    /// <summary>
     /// Parses the color identity.
     /// </summary>
     private static List<string> ParseColorIdentity(JsonElement cardElement)

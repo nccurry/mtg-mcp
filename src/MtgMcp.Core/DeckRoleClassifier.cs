@@ -60,13 +60,25 @@ public static class DeckRoleClassifier
         }
 
         if (ContainsAny(categoryText, DeckRoles.Interaction, "removal")
-            || ContainsAny(oracleText, "destroy target", "exile target", "counter target", "target creature gets", "fight target", "deals damage to target"))
+            || ContainsAny(
+                oracleText,
+                "destroy target",
+                "exile target",
+                "counter target",
+                "target creature gets",
+                "fight target",
+                "deals damage to target",
+                "each opponent sacrifices",
+                "target opponent sacrifices",
+                "sacrifices a creature",
+                "sacrifices an enchantment",
+                "sacrifices an artifact"))
         {
             return Assignment(DeckRoles.Interaction, tags, 0.78);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Protection)
-            || ContainsAny(oracleText, "hexproof", "indestructible", "protection from", "prevent all damage", "phase out"))
+            || ContainsAny(oracleText, "hexproof", "shroud", "indestructible", "protection from", "prevent all damage", "phase out"))
         {
             return Assignment(DeckRoles.Protection, tags, 0.78);
         }

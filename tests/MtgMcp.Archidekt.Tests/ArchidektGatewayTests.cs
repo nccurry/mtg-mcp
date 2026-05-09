@@ -26,7 +26,7 @@ public sealed class ArchidektGatewayTests
             {
               "id": 123,
               "name": "Deck",
-              "deckFormat": "commander",
+              "deckFormat": "3",
               "categories": [
                 { "id": 1, "name": "Mainboard", "includedInDeck": true, "includedInPrice": true },
                 { "id": 2, "name": "Maybeboard", "includedInDeck": false, "includedInPrice": true }
@@ -68,6 +68,7 @@ public sealed class ArchidektGatewayTests
 
         deck.Mode.Should().Be(WorkspaceMode.Archidekt);
         deck.ArchidektDeckId.Should().Be("123");
+        deck.Format.Should().Be("commander");
         deck.Categories.Should()
             .Contain(category => category.Name == "Maybeboard" && category.IncludedInDeck == false);
         deck.Cards.Should().ContainSingle();
@@ -98,7 +99,7 @@ public sealed class ArchidektGatewayTests
             """
             {
               "decks": [
-                { "id": 123, "name": "Deck", "deckFormat": "commander", "updatedAt": "2026-05-01T00:00:00Z" }
+                { "id": 123, "name": "Deck", "deckFormat": "3", "updatedAt": "2026-05-01T00:00:00Z" }
               ]
             }
             """

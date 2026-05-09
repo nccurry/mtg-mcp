@@ -290,6 +290,132 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that budget recommendations never replace the commander.
+    /// </summary>
+    [Fact]
+    public async Task FindBudgetReplacements_SkipsCommanderCards()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Commander Budget",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature",
+                        OracleText = "Whenever an opponent discards a card, that player loses 2 life.",
+                        ColorIdentity = ["B"],
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "25.00" }
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindBudgetReplacementsAsync(
+            workspace.Id,
+            maxPrice: 5,
+            minSavings: 1,
+            limit: 5,
+            weights: null,
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().BeEmpty();
+        result.Plan.Warnings.Should().ContainSingle().Which.Should().Contain("No replacements");
+    }
+
+    /// <summary>
+    /// Verifies that candidate cards are scored from their own text instead of inheriting the replaced card's category.
+    /// </summary>
+    [Fact]
+    public async Task FindCardUpgrades_ScoresCandidateRoleFromCandidateText()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Interaction Upgrade",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Weak Edict",
+                    PrimaryCategory = DeckRoles.Interaction,
+                    Categories = [DeckRoles.Interaction],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        OracleText = "Each opponent sacrifices a creature.",
+                        ManaValue = 5,
+                        ColorIdentity = ["B"],
+                        EdhrecRank = 20_000
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindCardUpgradesAsync(
+            workspace.Id,
+            limit: 3,
+            weights: null,
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().ContainSingle().Which.WithCard.Should().Be("Hero's Downfall");
+    }
+
+    /// <summary>
+    /// Verifies that generic utility cards do not produce broad staple upgrade suggestions.
+    /// </summary>
+    [Fact]
+    public async Task FindCardUpgrades_SkipsGenericUtilityCards()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Generic Utility",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Unclear Utility",
+                    PrimaryCategory = DeckRoles.Utility,
+                    Categories = [DeckRoles.Utility],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        OracleText = "This card has no useful role signal.",
+                        ManaValue = 4,
+                        ColorIdentity = [],
+                        EdhrecRank = 25_000
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindCardUpgradesAsync(
+            workspace.Id,
+            limit: 3,
+            weights: null,
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().BeEmpty();
+        result.Plan.Warnings.Should().ContainSingle().Which.Should().Contain("No replacements");
+    }
+
+    /// <summary>
     /// Verifies that suggest deck categories persists move plan.
     /// </summary>
     [Fact]
@@ -574,6 +700,18 @@ public sealed class DeckIntelligenceTests
                     new CardSearchResult { Name = "Phyrexian Arena" }
                 ];
             }
+            else if (query.Contains("destroy target", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Lightning Greaves" },
+                    new CardSearchResult { Name = "Hero's Downfall" }
+                ];
+            }
+            else if (query.Contains("legal:commander", StringComparison.OrdinalIgnoreCase))
+            {
+                results = [new CardSearchResult { Name = "Lightning Greaves" }];
+            }
             else
             {
                 results = [];
@@ -705,6 +843,34 @@ public sealed class DeckIntelligenceTests
                         ["modern"] = "not_legal"
                     },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "25.00" }
+                },
+                "Lightning Greaves" => new CardInfo
+                {
+                    Id = "lightning-greaves",
+                    OracleId = "oracle-lightning-greaves",
+                    Name = "Lightning Greaves",
+                    ManaCost = "{2}",
+                    ManaValue = 2,
+                    TypeLine = "Artifact — Equipment",
+                    OracleText = "Equipped creature has haste and shroud. Equip {0}.",
+                    ColorIdentity = [],
+                    EdhrecRank = 40,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "6.00" }
+                },
+                "Hero's Downfall" => new CardInfo
+                {
+                    Id = "heros-downfall",
+                    OracleId = "oracle-heros-downfall",
+                    Name = "Hero's Downfall",
+                    ManaCost = "{1}{B}{B}",
+                    ManaValue = 3,
+                    TypeLine = "Instant",
+                    OracleText = "Destroy target creature or planeswalker.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 3_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.25" }
                 },
                 _ => new CardInfo
                 {

@@ -27,7 +27,7 @@ public sealed partial class ArchidektGateway
                 {
                     Id = GetString(item, "id") ?? "",
                     Name = GetString(item, "name") ?? "",
-                    Format = GetString(item, "deckFormat") ?? GetString(item, "format"),
+                    Format = NormalizeDeckFormat(GetString(item, "deckFormat") ?? GetString(item, "format")),
                     UpdatedAt = TryDate(
                         GetString(item, "updatedAt") ?? GetString(item, "updated_at")
                     ),
@@ -56,7 +56,7 @@ public sealed partial class ArchidektGateway
         DeckWorkspace workspace = new()
         {
             Name = GetString(root, "name") ?? $"Archidekt Deck {deckId}",
-            Format = GetString(root, "deckFormat") ?? GetString(root, "format") ?? "commander",
+            Format = NormalizeDeckFormat(GetString(root, "deckFormat") ?? GetString(root, "format")),
             Description = GetString(root, "description"),
             Mode = WorkspaceMode.Archidekt,
             WriteBack = writeBack,

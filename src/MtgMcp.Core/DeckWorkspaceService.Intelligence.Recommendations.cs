@@ -21,6 +21,7 @@ public sealed partial class DeckWorkspaceService
         List<ReplacementSuggestion> suggestions = [];
 
         foreach (DeckCard card in IncludedCards(workspace)
+            .Where(card => !IsCommanderCard(card))
             .Where(card => ReadUsdPrice(GetSnapshot(card)) >= maxPrice + minSavings)
             .OrderByDescending(card => ReadUsdPrice(GetSnapshot(card)) ?? 0)
             .Take(Math.Clamp(limit, 1, 25)))
@@ -65,6 +66,7 @@ public sealed partial class DeckWorkspaceService
         List<ReplacementSuggestion> suggestions = [];
 
         foreach (DeckCard card in IncludedCards(workspace)
+            .Where(ShouldConsiderUpgrade)
             .OrderBy(card => DeckRoleClassifier.Classify(card).Confidence)
             .ThenByDescending(card => GetSnapshot(card).EdhrecRank ?? int.MaxValue)
             .Take(Math.Clamp(limit, 1, 25)))
@@ -108,6 +110,11 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken)
     {
         CardRoleAssignment currentRole = DeckRoleClassifier.Classify(currentCard);
+        if (currentRole.PrimaryRole.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         string query = DeckRoleClassifier.QueryForRole(currentRole.PrimaryRole, workspace.Format, maxPrice);
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -173,7 +180,7 @@ public sealed partial class DeckWorkspaceService
         bool budgetMode,
         string format)
     {
-        DeckCard candidateCard = CreateCandidateCard(candidate, currentCard.PrimaryCategory);
+        DeckCard candidateCard = CreateCandidateCard(candidate);
         CardRoleAssignment candidateRole = DeckRoleClassifier.Classify(candidateCard);
         decimal? currentPrice = ReadUsdPrice(GetSnapshot(currentCard));
         decimal? candidatePrice = ReadUsdPrice(candidate);
@@ -181,9 +188,12 @@ public sealed partial class DeckWorkspaceService
             ? currentPrice.Value - candidatePrice.Value
             : null;
 
-        double roleScore = candidateRole.PrimaryRole.Equals(currentRole.PrimaryRole, StringComparison.OrdinalIgnoreCase)
-            ? 1
-            : candidateRole.Tags.Intersect(currentRole.Tags, StringComparer.OrdinalIgnoreCase).Any() ? 0.7 : 0.2;
+        double roleScore = RoleScore(currentRole, candidateRole);
+        if (roleScore < 0.65)
+        {
+            return null;
+        }
+
         double powerScore = PowerScore(candidate, currentCard, format);
         double priceScore = PriceScore(currentPrice, candidatePrice, budgetMode);
         double score = (roleScore * weights.Role) + (powerScore * weights.Power) + (priceScore * weights.Price);
@@ -259,19 +269,55 @@ public sealed partial class DeckWorkspaceService
     /// <summary>
     /// Creates a candidate deck card.
     /// </summary>
-    private static DeckCard CreateCandidateCard(CardInfo candidate, string category)
+    private static DeckCard CreateCandidateCard(CardInfo candidate)
     {
         DeckCard card = new()
         {
             Name = candidate.Name,
             Quantity = 1,
-            PrimaryCategory = string.IsNullOrWhiteSpace(category) ? DeckDefaults.Mainboard : category,
-            Categories = [string.IsNullOrWhiteSpace(category) ? DeckDefaults.Mainboard : category],
+            PrimaryCategory = DeckDefaults.Mainboard,
+            Categories = [DeckDefaults.Mainboard],
             ScryfallId = candidate.Id,
             ScryfallOracleId = candidate.OracleId
         };
         ApplyCardSnapshot(card, candidate);
         return card;
+    }
+
+    /// <summary>
+    /// Checks whether a card has enough signal for upgrade suggestions.
+    /// </summary>
+    private static bool ShouldConsiderUpgrade(DeckCard card)
+    {
+        if (IsCommanderCard(card))
+        {
+            return false;
+        }
+
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        return !role.PrimaryRole.Equals(DeckRoles.Utility, StringComparison.OrdinalIgnoreCase)
+            || role.Tags.Count > 0
+            || role.Confidence >= 0.65;
+    }
+
+    /// <summary>
+    /// Scores how closely a candidate matches the card being replaced.
+    /// </summary>
+    private static double RoleScore(CardRoleAssignment currentRole, CardRoleAssignment candidateRole)
+    {
+        bool sharedTags = candidateRole.Tags.Intersect(currentRole.Tags, StringComparer.OrdinalIgnoreCase).Any();
+        if (currentRole.PrimaryRole.Equals(DeckRoles.Utility, StringComparison.OrdinalIgnoreCase)
+            && !sharedTags)
+        {
+            return 0.2;
+        }
+
+        if (candidateRole.PrimaryRole.Equals(currentRole.PrimaryRole, StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return sharedTags ? 0.7 : 0.2;
     }
 
     /// <summary>
