@@ -1,63 +1,173 @@
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Defines operations for card catalog.
+/// </summary>
 public interface ICardCatalog
 {
-    Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken);
+    /// <summary>
+    /// Searches the cards.
+    /// </summary>
+    Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken
+    );
 
+    /// <summary>
+    /// Gets the card.
+    /// </summary>
     Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Gets the rulings.
+    /// </summary>
+    Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
+        string nameOrId,
+        CancellationToken cancellationToken
+    );
 
-    Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Gets the prints.
+    /// </summary>
+    Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
+        string nameOrId,
+        CancellationToken cancellationToken
+    );
 
-    Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(string prompt, string? format, int limit, CancellationToken cancellationToken);
+    /// <summary>
+    /// Suggests the cards.
+    /// </summary>
+    Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
+        string prompt,
+        string? format,
+        int limit,
+        CancellationToken cancellationToken
+    );
 }
 
+/// <summary>
+/// Defines operations for deck workspace repository.
+/// </summary>
 public interface IDeckWorkspaceRepository
 {
+    /// <summary>
+    /// Saves the workspace.
+    /// </summary>
     Task<DeckWorkspace> SaveAsync(DeckWorkspace workspace, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Gets the workspace id.
+    /// </summary>
     Task<DeckWorkspace?> GetAsync(string workspaceId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Lists the cancellation token.
+    /// </summary>
     Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Defines operations for archidekt gateway.
+/// </summary>
 public interface IArchidektGateway
 {
+    /// <summary>
+    /// Gets the auth status.
+    /// </summary>
     Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Lists the decks.
+    /// </summary>
     Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(CancellationToken cancellationToken);
 
-    Task<DeckWorkspace> ImportDeckAsync(string deckIdOrUrl, bool writeBack, CancellationToken cancellationToken);
+    /// <summary>
+    /// Imports the deck.
+    /// </summary>
+    Task<DeckWorkspace> ImportDeckAsync(
+        string deckIdOrUrl,
+        bool writeBack,
+        CancellationToken cancellationToken
+    );
 
+    /// <summary>
+    /// Persists the cards.
+    /// </summary>
     Task PersistCardsAsync(
         DeckWorkspace workspace,
         IReadOnlyList<DeckCard> upsertedCards,
         IReadOnlyList<DeckCard> removedCards,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken
+    );
 
-    Task PersistCategoryAsync(DeckWorkspace workspace, DeckCategory category, CancellationToken cancellationToken);
+    /// <summary>
+    /// Persists the category.
+    /// </summary>
+    Task PersistCategoryAsync(
+        DeckWorkspace workspace,
+        DeckCategory category,
+        CancellationToken cancellationToken
+    );
 
-    Task DeleteCategoryAsync(DeckWorkspace workspace, DeckCategory category, CancellationToken cancellationToken);
+    /// <summary>
+    /// Deletes the category.
+    /// </summary>
+    Task DeleteCategoryAsync(
+        DeckWorkspace workspace,
+        DeckCategory category,
+        CancellationToken cancellationToken
+    );
 
+    /// <summary>
+    /// Persists the metadata.
+    /// </summary>
     Task PersistMetadataAsync(DeckWorkspace workspace, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Creates the checkpoint.
+    /// </summary>
     Task<DeckCheckpoint> CreateCheckpointAsync(
         DeckWorkspace workspace,
         string name,
         string? description,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken
+    );
 
-    Task<IReadOnlyList<DeckCheckpoint>> ListCheckpointsAsync(DeckWorkspace workspace, CancellationToken cancellationToken);
+    /// <summary>
+    /// Lists the checkpoints.
+    /// </summary>
+    Task<IReadOnlyList<DeckCheckpoint>> ListCheckpointsAsync(
+        DeckWorkspace workspace,
+        CancellationToken cancellationToken
+    );
 
-    Task<DeckCheckpoint> GetCheckpointAsync(DeckWorkspace workspace, string checkpointId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Gets the checkpoint.
+    /// </summary>
+    Task<DeckCheckpoint> GetCheckpointAsync(
+        DeckWorkspace workspace,
+        string checkpointId,
+        CancellationToken cancellationToken
+    );
 
+    /// <summary>
+    /// Renames the checkpoint.
+    /// </summary>
     Task<DeckCheckpoint> RenameCheckpointAsync(
         DeckWorkspace workspace,
         string checkpointId,
         string name,
         string? description,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken
+    );
 
-    Task DeleteCheckpointAsync(DeckWorkspace workspace, string checkpointId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Deletes the checkpoint.
+    /// </summary>
+    Task DeleteCheckpointAsync(
+        DeckWorkspace workspace,
+        string checkpointId,
+        CancellationToken cancellationToken
+    );
 }

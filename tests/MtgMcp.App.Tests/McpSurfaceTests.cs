@@ -9,17 +9,26 @@ using MtgMcp.Core;
 
 namespace MtgMcp.App.Tests;
 
+/// <summary>
+/// Contains tests for mcp surface.
+/// </summary>
 public sealed class McpSurfaceTests
 {
+    /// <summary>
+    /// Stores the tool types.
+    /// </summary>
     private static readonly Type[] ToolTypes =
     [
         typeof(CardTools),
         typeof(WorkspaceTools),
         typeof(DeckMutationTools),
         typeof(CategoryTools),
-        typeof(CheckpointTools)
+        typeof(CheckpointTools),
     ];
 
+    /// <summary>
+    /// Verifies that tool names cover planned surface.
+    /// </summary>
     [Fact]
     public void ToolNames_CoverPlannedSurface()
     {
@@ -56,14 +65,18 @@ public sealed class McpSurfaceTests
             "delete_deck_checkpoint",
             "parse_decklist",
             "validate_deck",
-            "analyze_deck"
+            "analyze_deck",
         ];
 
-        ToolTypes.SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
+        ToolTypes
+            .SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
             .Should()
             .BeEquivalentTo(expected);
     }
 
+    /// <summary>
+    /// Verifies that resource templates cover planned surface.
+    /// </summary>
     [Fact]
     public void ResourceTemplates_CoverPlannedSurface()
     {
@@ -76,7 +89,7 @@ public sealed class McpSurfaceTests
             "mtg://usage/workspace-selection",
             "mtg://usage/operation-modes",
             "mtg://config/effective",
-            "mtg://archidekt/auth-status"
+            "mtg://archidekt/auth-status",
         ];
 
         GetNamedAttributeValues(typeof(MtgResources), "McpServerResourceAttribute", "UriTemplate")
@@ -84,6 +97,9 @@ public sealed class McpSurfaceTests
             .BeEquivalentTo(expected);
     }
 
+    /// <summary>
+    /// Verifies that prompt names cover planned surface.
+    /// </summary>
     [Fact]
     public void PromptNames_CoverPlannedSurface()
     {
@@ -92,7 +108,7 @@ public sealed class McpSurfaceTests
             "brew_commander_deck",
             "tune_existing_deck",
             "find_budget_replacements",
-            "rules_and_rulings_check"
+            "rules_and_rulings_check",
         ];
 
         GetNamedAttributeValues(typeof(MtgPrompts), "McpServerPromptAttribute", "Name")
@@ -100,13 +116,16 @@ public sealed class McpSurfaceTests
             .BeEquivalentTo(expected);
     }
 
+    /// <summary>
+    /// Verifies that secret redactor redacts known secret keys.
+    /// </summary>
     [Fact]
     public void SecretRedactor_RedactsKnownSecretKeys()
     {
         Dictionary<string, object?> values = new(StringComparer.OrdinalIgnoreCase)
         {
             ["MtgMcp:Archidekt:Jwt"] = "secret",
-            ["MtgMcp:DataDir"] = "C:/data"
+            ["MtgMcp:DataDir"] = "C:/data",
         };
 
         Dictionary<string, object?> redacted = SecretRedactor.Redact(values);
@@ -115,12 +134,17 @@ public sealed class McpSurfaceTests
         redacted["MtgMcp:DataDir"].Should().Be("C:/data");
     }
 
+    /// <summary>
+    /// Verifies that tool annotations mark read only and mutating tools.
+    /// </summary>
     [Fact]
     public void ToolAnnotations_MarkReadOnlyAndMutatingTools()
     {
         CustomAttributeData searchCards = GetToolAttribute(nameof(CardTools.SearchCardsAsync));
         CustomAttributeData addCard = GetToolAttribute(nameof(DeckMutationTools.AddCardAsync));
-        CustomAttributeData removeCard = GetToolAttribute(nameof(DeckMutationTools.RemoveCardAsync));
+        CustomAttributeData removeCard = GetToolAttribute(
+            nameof(DeckMutationTools.RemoveCardAsync)
+        );
         CustomAttributeData openLocal = GetToolAttribute(nameof(WorkspaceTools.OpenLocalDeckAsync));
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
@@ -133,36 +157,49 @@ public sealed class McpSurfaceTests
         GetNamedBool(openLocal, "OpenWorld").Should().BeFalse();
     }
 
+    /// <summary>
+    /// Verifies that operation mode guard normalizes client mode names.
+    /// </summary>
     [Fact]
     public void OperationModeGuard_NormalizesClientModeNames()
     {
         new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "ask" }))
-            .EffectiveMode
-            .Should()
+            .EffectiveMode.Should()
             .Be(OperationModeGuard.ReadOnly);
         new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "plan" }))
-            .EffectiveMode
-            .Should()
+            .EffectiveMode.Should()
             .Be(OperationModeGuard.Plan);
         new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "act" }))
-            .EffectiveMode
-            .Should()
+            .EffectiveMode.Should()
             .Be(OperationModeGuard.Apply);
     }
 
+    /// <summary>
+    /// Verifies that operation mode guard blocks mutating tools when read only.
+    /// </summary>
     [Fact]
     public async Task OperationModeGuard_BlocksMutatingToolsWhenReadOnly()
     {
         DeckWorkspaceService deckService = new(new InMemoryRepository(), new EmptyCardCatalog());
-        OperationModeGuard operationMode = new(Options.Create(new MtgMcpOptions { OperationMode = "read-only" }));
+        OperationModeGuard operationMode = new(
+            Options.Create(new MtgMcpOptions { OperationMode = "read-only" })
+        );
         WorkspaceTools tools = new(deckService, operationMode);
 
-        Func<Task> act = () => tools.CreateLocalDeckAsync("Blocked", cancellationToken: TestContext.Current.CancellationToken);
+        Func<Task> act = () =>
+            tools.CreateLocalDeckAsync(
+                "Blocked",
+                cancellationToken: TestContext.Current.CancellationToken
+            );
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*create_local_deck*");
     }
 
+    /// <summary>
+    /// Verifies that configuration aliases map documented environment keys.
+    /// </summary>
     [Fact]
     public void ConfigurationAliases_MapDocumentedEnvironmentKeys()
     {
@@ -172,13 +209,15 @@ public sealed class McpSurfaceTests
             ["OPERATION_MODE"] = "plan",
             ["ARCHIDEKT:JWT"] = "jwt-token",
             ["ARCHIDEKT:REFRESH_TOKEN"] = "refresh-token",
-            ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json"
+            ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
         };
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(rawConfig)
             .Build();
 
-        IReadOnlyDictionary<string, string?> aliases = MtgMcpConfigurationAliases.Create(configuration);
+        IReadOnlyDictionary<string, string?> aliases = MtgMcpConfigurationAliases.Create(
+            configuration
+        );
 
         aliases["MtgMcp:DataDir"].Should().Be("C:/mtg-mcp");
         aliases["MtgMcp:OperationMode"].Should().Be("plan");
@@ -187,26 +226,49 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
     }
 
+    /// <summary>
+    /// Verifies that host build constructs registered services.
+    /// </summary>
     [Fact]
     public void HostBuild_ConstructsRegisteredServices()
     {
         using IHost host = MtgMcpHost.Build(["--smoke"]);
         MtgMcpHost.ValidateServices(host.Services);
 
-        DeckWorkspaceService firstWorkspaceService = host.Services.GetRequiredService<DeckWorkspaceService>();
-        DeckWorkspaceService secondWorkspaceService = host.Services.GetRequiredService<DeckWorkspaceService>();
+        DeckWorkspaceService firstWorkspaceService =
+            host.Services.GetRequiredService<DeckWorkspaceService>();
+        DeckWorkspaceService secondWorkspaceService =
+            host.Services.GetRequiredService<DeckWorkspaceService>();
 
         firstWorkspaceService.Should().NotBeNull();
-        secondWorkspaceService.Should().NotBeSameAs(firstWorkspaceService, because: "DeckWorkspaceService must not capture typed HttpClient dependencies as a singleton");
+        secondWorkspaceService
+            .Should()
+            .NotBeSameAs(
+                firstWorkspaceService,
+                because: "DeckWorkspaceService must not capture typed HttpClient dependencies as a singleton"
+            );
         host.Services.GetRequiredService<ICardCatalog>().Should().NotBeNull();
         host.Services.GetRequiredService<IArchidektGateway>().Should().NotBeNull();
-        host.Services.GetRequiredService<IOptions<MtgMcpOptions>>().Value.DataDir.Should().NotBeNullOrWhiteSpace();
+        host.Services.GetRequiredService<IOptions<MtgMcpOptions>>()
+            .Value.DataDir.Should()
+            .NotBeNullOrWhiteSpace();
     }
 
-    private static IReadOnlyList<string> GetNamedAttributeValues(Type type, string attributeName, string propertyName)
+    /// <summary>
+    /// Verifies that get named attribute values.
+    /// </summary>
+    private static IReadOnlyList<string> GetNamedAttributeValues(
+        Type type,
+        string attributeName,
+        string propertyName
+    )
     {
         List<string> values = [];
-        foreach (MethodInfo method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public))
+        foreach (
+            MethodInfo method in type.GetMethods(
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public
+            )
+        )
         {
             foreach (CustomAttributeData attribute in method.CustomAttributes)
             {
@@ -215,8 +277,10 @@ public sealed class McpSurfaceTests
                     continue;
                 }
 
-                CustomAttributeNamedArgument? namedArgument = attribute.NamedArguments
-                    .FirstOrDefault(argument => argument.MemberName.Equals(propertyName, StringComparison.Ordinal));
+                CustomAttributeNamedArgument? namedArgument =
+                    attribute.NamedArguments.FirstOrDefault(argument =>
+                        argument.MemberName.Equals(propertyName, StringComparison.Ordinal)
+                    );
                 if (namedArgument.HasValue && namedArgument.Value.TypedValue.Value is string value)
                 {
                     values.Add(value);
@@ -227,62 +291,123 @@ public sealed class McpSurfaceTests
         return values;
     }
 
+    /// <summary>
+    /// Verifies that get tool attribute.
+    /// </summary>
     private static CustomAttributeData GetToolAttribute(string methodName)
     {
-        MethodInfo method = ToolTypes
-            .Select(type => type.GetMethod(methodName))
-            .SingleOrDefault(method => method is not null)
+        MethodInfo method =
+            ToolTypes
+                .Select(type => type.GetMethod(methodName))
+                .SingleOrDefault(method => method is not null)
             ?? throw new InvalidOperationException($"Method {methodName} was not found.");
-        return method.CustomAttributes.Single(attribute => attribute.AttributeType.Name == "McpServerToolAttribute");
+        return method.CustomAttributes.Single(attribute =>
+            attribute.AttributeType.Name == "McpServerToolAttribute"
+        );
     }
 
+    /// <summary>
+    /// Verifies that get named bool.
+    /// </summary>
     private static bool? GetNamedBool(CustomAttributeData attribute, string propertyName)
     {
-        CustomAttributeNamedArgument? argument = attribute.NamedArguments
-            .FirstOrDefault(value => value.MemberName.Equals(propertyName, StringComparison.Ordinal));
+        CustomAttributeNamedArgument? argument = attribute.NamedArguments.FirstOrDefault(value =>
+            value.MemberName.Equals(propertyName, StringComparison.Ordinal)
+        );
         return argument.HasValue ? (bool?)argument.Value.TypedValue.Value : null;
     }
 
+    /// <summary>
+    /// Provides empty card catalog behavior.
+    /// </summary>
     private sealed class EmptyCardCatalog : ICardCatalog
     {
-        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
+        /// <summary>
+        /// Verifies that search cards.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken
+        )
         {
             return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
         }
 
+        /// <summary>
+        /// Verifies that get card.
+        /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
             return Task.FromResult<CardInfo?>(null);
         }
 
-        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)
+        /// <summary>
+        /// Verifies that get rulings.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken
+        )
         {
             return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
         }
 
-        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken)
+        /// <summary>
+        /// Verifies that get prints.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken
+        )
         {
             return Task.FromResult<IReadOnlyList<CardInfo>>([]);
         }
 
-        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(string prompt, string? format, int limit, CancellationToken cancellationToken)
+        /// <summary>
+        /// Verifies that suggest cards.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
+            string prompt,
+            string? format,
+            int limit,
+            CancellationToken cancellationToken
+        )
         {
             return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
         }
     }
 
+    /// <summary>
+    /// Provides in memory repository behavior.
+    /// </summary>
     private sealed class InMemoryRepository : IDeckWorkspaceRepository
     {
-        public Task<DeckWorkspace> SaveAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
+        /// <summary>
+        /// Saves a workspace in the fake repository.
+        /// </summary>
+        public Task<DeckWorkspace> SaveAsync(
+            DeckWorkspace workspace,
+            CancellationToken cancellationToken
+        )
         {
             return Task.FromResult(workspace);
         }
 
-        public Task<DeckWorkspace?> GetAsync(string workspaceId, CancellationToken cancellationToken)
+        /// <summary>
+        /// Gets a workspace from the fake repository.
+        /// </summary>
+        public Task<DeckWorkspace?> GetAsync(
+            string workspaceId,
+            CancellationToken cancellationToken
+        )
         {
             return Task.FromResult<DeckWorkspace?>(null);
         }
 
+        /// <summary>
+        /// Verifies that list.
+        /// </summary>
         public Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<DeckWorkspace>>([]);

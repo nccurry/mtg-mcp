@@ -3,32 +3,53 @@ using MtgMcp.Core;
 
 namespace MtgMcp.Archidekt;
 
+/// <summary>
+/// Coordinates archidekt gateway HTTP operations.
+/// </summary>
 public sealed partial class ArchidektGateway
 {
-    public async Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Lists the decks.
+    /// </summary>
+    public async Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(
+        CancellationToken cancellationToken
+    )
     {
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
-        using JsonDocument document = await GetJsonAsync("api/decks/", cancellationToken).ConfigureAwait(false);
+        using JsonDocument document = await GetJsonAsync("api/decks/", cancellationToken)
+            .ConfigureAwait(false);
         List<ArchidektDeckSummary> decks = [];
         foreach (JsonElement item in EnumerateCollection(document.RootElement))
         {
-            decks.Add(new ArchidektDeckSummary
-            {
-                Id = GetString(item, "id") ?? "",
-                Name = GetString(item, "name") ?? "",
-                Format = GetString(item, "deckFormat") ?? GetString(item, "format"),
-                UpdatedAt = TryDate(GetString(item, "updatedAt") ?? GetString(item, "updated_at"))
-            });
+            decks.Add(
+                new ArchidektDeckSummary
+                {
+                    Id = GetString(item, "id") ?? "",
+                    Name = GetString(item, "name") ?? "",
+                    Format = GetString(item, "deckFormat") ?? GetString(item, "format"),
+                    UpdatedAt = TryDate(
+                        GetString(item, "updatedAt") ?? GetString(item, "updated_at")
+                    ),
+                }
+            );
         }
 
         return decks;
     }
 
-    public async Task<DeckWorkspace> ImportDeckAsync(string deckIdOrUrl, bool writeBack, CancellationToken cancellationToken)
+    /// <summary>
+    /// Imports the deck.
+    /// </summary>
+    public async Task<DeckWorkspace> ImportDeckAsync(
+        string deckIdOrUrl,
+        bool writeBack,
+        CancellationToken cancellationToken
+    )
     {
         await EnsureAuthenticatedAsync(required: false, cancellationToken).ConfigureAwait(false);
         string deckId = ExtractDeckId(deckIdOrUrl);
-        using JsonDocument document = await GetJsonAsync($"api/decks/{deckId}/", cancellationToken).ConfigureAwait(false);
+        using JsonDocument document = await GetJsonAsync($"api/decks/{deckId}/", cancellationToken)
+            .ConfigureAwait(false);
         JsonElement root = document.RootElement;
 
         DeckWorkspace workspace = new()
@@ -39,7 +60,7 @@ public sealed partial class ArchidektGateway
             Mode = WorkspaceMode.Archidekt,
             WriteBack = writeBack,
             ArchidektDeckId = deckId,
-            Categories = ParseCategories(root)
+            Categories = ParseCategories(root),
         };
 
         workspace.Cards = ParseCards(root, workspace.Categories);

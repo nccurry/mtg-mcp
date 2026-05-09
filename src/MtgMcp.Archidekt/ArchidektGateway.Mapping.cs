@@ -4,12 +4,21 @@ using MtgMcp.Core;
 
 namespace MtgMcp.Archidekt;
 
+/// <summary>
+/// Coordinates archidekt gateway HTTP operations.
+/// </summary>
 public sealed partial class ArchidektGateway
 {
+    /// <summary>
+    /// Parses the categories.
+    /// </summary>
     private static List<DeckCategory> ParseCategories(JsonElement root)
     {
         List<DeckCategory> categories = [];
-        if (root.TryGetProperty("categories", out JsonElement categoryArray) && categoryArray.ValueKind == JsonValueKind.Array)
+        if (
+            root.TryGetProperty("categories", out JsonElement categoryArray)
+            && categoryArray.ValueKind == JsonValueKind.Array
+        )
         {
             foreach (JsonElement item in categoryArray.EnumerateArray())
             {
@@ -19,23 +28,34 @@ public sealed partial class ArchidektGateway
                     continue;
                 }
 
-                categories.Add(new DeckCategory
-                {
-                    Id = Guid.NewGuid().ToString("N"),
-                    Name = name,
-                    IncludedInDeck = GetBool(item, "includedInDeck", defaultValue: true),
-                    IncludedInPrice = GetBool(item, "includedInPrice", defaultValue: true),
-                    ArchidektCategoryId = GetInt(item, "id")
-                });
+                categories.Add(
+                    new DeckCategory
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Name = name,
+                        IncludedInDeck = GetBool(item, "includedInDeck", defaultValue: true),
+                        IncludedInPrice = GetBool(item, "includedInPrice", defaultValue: true),
+                        ArchidektCategoryId = GetInt(item, "id"),
+                    }
+                );
             }
         }
 
         return categories.Count == 0 ? DeckDefaults.CreateDefaultCategories() : categories;
     }
 
-    private static List<DeckCard> ParseCards(JsonElement root, IReadOnlyList<DeckCategory> categories)
+    /// <summary>
+    /// Parses the cards.
+    /// </summary>
+    private static List<DeckCard> ParseCards(
+        JsonElement root,
+        IReadOnlyList<DeckCategory> categories
+    )
     {
-        if (!root.TryGetProperty("cards", out JsonElement cardArray) || cardArray.ValueKind != JsonValueKind.Array)
+        if (
+            !root.TryGetProperty("cards", out JsonElement cardArray)
+            || cardArray.ValueKind != JsonValueKind.Array
+        )
         {
             return [];
         }
@@ -43,8 +63,13 @@ public sealed partial class ArchidektGateway
         List<DeckCard> cards = [];
         foreach (JsonElement relation in cardArray.EnumerateArray())
         {
-            JsonElement cardElement = relation.TryGetProperty("card", out JsonElement nestedCard) ? nestedCard : relation;
-            string name = GetNestedString(cardElement, "oracleCard", "name")
+            // Archidekt responses may put card facts on the relation itself or
+            // inside a nested "card" object, so mapping always checks both.
+            JsonElement cardElement = relation.TryGetProperty("card", out JsonElement nestedCard)
+                ? nestedCard
+                : relation;
+            string name =
+                GetNestedString(cardElement, "oracleCard", "name")
                 ?? GetString(cardElement, "name")
                 ?? GetString(relation, "name")
                 ?? "Unknown Card";
@@ -64,7 +89,7 @@ public sealed partial class ArchidektGateway
                 Modifier = GetString(relation, "modifier"),
                 Companion = GetBool(relation, "companion", defaultValue: false),
                 FlippedDefault = GetBool(relation, "flippedDefault", defaultValue: false),
-                Snapshot = CreateCardSnapshot(cardElement)
+                Snapshot = CreateCardSnapshot(cardElement),
             };
 
             cards.Add(card);
@@ -73,29 +98,48 @@ public sealed partial class ArchidektGateway
         return cards;
     }
 
+    /// <summary>
+    /// Creates the card snapshot.
+    /// </summary>
     private static CardSnapshot CreateCardSnapshot(JsonElement cardElement)
     {
+        // Archidekt has used both top-level and nested oracle fields over time;
+        // keep the mapper tolerant so cached workspaces survive response drift.
         return new CardSnapshot
         {
-            TypeLine = GetNestedString(cardElement, "oracleCard", "typeLine") ?? GetNestedString(cardElement, "oracleCard", "type"),
-            ManaValue = GetDouble(cardElement, "manaValue")
+            TypeLine =
+                GetNestedString(cardElement, "oracleCard", "typeLine")
+                ?? GetNestedString(cardElement, "oracleCard", "type"),
+            ManaValue =
+                GetDouble(cardElement, "manaValue")
                 ?? GetDouble(cardElement, "cmc")
                 ?? GetNestedDouble(cardElement, "oracleCard", "manaValue")
                 ?? GetNestedDouble(cardElement, "oracleCard", "cmc"),
             ColorIdentity = ParseColorIdentity(cardElement),
-            Set = GetString(cardElement, "edition")
+            Set =
+                GetString(cardElement, "edition")
                 ?? GetString(cardElement, "set")
                 ?? GetString(cardElement, "setCode"),
-            CollectorNumber = GetString(cardElement, "collectorNumber")
+            CollectorNumber =
+                GetString(cardElement, "collectorNumber")
                 ?? GetString(cardElement, "collector_number"),
-            ScryfallUri = GetString(cardElement, "scryfallUri")
-                ?? GetString(cardElement, "scryfall_uri")
+            ScryfallUri =
+                GetString(cardElement, "scryfallUri") ?? GetString(cardElement, "scryfall_uri"),
         };
     }
 
-    private static List<string> ParseCardCategories(JsonElement relation, IReadOnlyList<DeckCategory> categories)
+    /// <summary>
+    /// Parses the card categories.
+    /// </summary>
+    private static List<string> ParseCardCategories(
+        JsonElement relation,
+        IReadOnlyList<DeckCategory> categories
+    )
     {
-        if (!relation.TryGetProperty("categories", out JsonElement categoryArray) || categoryArray.ValueKind != JsonValueKind.Array)
+        if (
+            !relation.TryGetProperty("categories", out JsonElement categoryArray)
+            || categoryArray.ValueKind != JsonValueKind.Array
+        )
         {
             return [DeckDefaults.Mainboard];
         }
@@ -107,11 +151,15 @@ public sealed partial class ArchidektGateway
             {
                 JsonValueKind.String => item.GetString(),
                 JsonValueKind.Number => ResolveCategoryName(item.GetInt32(), categories),
-                JsonValueKind.Object => GetString(item, "name") ?? ResolveCategoryName(GetInt(item, "id"), categories),
-                _ => null
+                JsonValueKind.Object => GetString(item, "name")
+                    ?? ResolveCategoryName(GetInt(item, "id"), categories),
+                _ => null,
             };
 
-            if (!string.IsNullOrWhiteSpace(name) && !names.Any(value => value.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            if (
+                !string.IsNullOrWhiteSpace(name)
+                && !names.Any(value => value.Equals(name, StringComparison.OrdinalIgnoreCase))
+            )
             {
                 names.Add(name);
             }
@@ -120,16 +168,27 @@ public sealed partial class ArchidektGateway
         return names.Count == 0 ? [DeckDefaults.Mainboard] : names;
     }
 
-    private static string? ResolveCategoryName(int? categoryId, IReadOnlyList<DeckCategory> categories)
+    /// <summary>
+    /// Resolves the category name.
+    /// </summary>
+    private static string? ResolveCategoryName(
+        int? categoryId,
+        IReadOnlyList<DeckCategory> categories
+    )
     {
         if (!categoryId.HasValue)
         {
             return null;
         }
 
-        return categories.FirstOrDefault(category => category.ArchidektCategoryId == categoryId.Value)?.Name;
+        return categories
+            .FirstOrDefault(category => category.ArchidektCategoryId == categoryId.Value)
+            ?.Name;
     }
 
+    /// <summary>
+    /// Parses the checkpoint.
+    /// </summary>
     private static DeckCheckpoint ParseCheckpoint(JsonElement element, string deckId)
     {
         return new DeckCheckpoint
@@ -138,10 +197,15 @@ public sealed partial class ArchidektGateway
             DeckId = deckId,
             Name = GetString(element, "name") ?? "Unnamed checkpoint",
             Description = GetString(element, "description"),
-            CreatedAt = TryDate(GetString(element, "createdAt") ?? GetString(element, "created_at"))
+            CreatedAt = TryDate(
+                GetString(element, "createdAt") ?? GetString(element, "created_at")
+            ),
         };
     }
 
+    /// <summary>
+    /// Extracts the deck id.
+    /// </summary>
     private static string ExtractDeckId(string deckIdOrUrl)
     {
         Match urlMatch = DeckUrlIdRegex().Match(deckIdOrUrl);
@@ -153,18 +217,27 @@ public sealed partial class ArchidektGateway
         Match match = DeckIdRegex().Match(deckIdOrUrl);
         if (!match.Success)
         {
-            throw new ArgumentException("Archidekt deck id or URL did not contain a deck id.", nameof(deckIdOrUrl));
+            throw new ArgumentException(
+                "Archidekt deck id or URL did not contain a deck id.",
+                nameof(deckIdOrUrl)
+            );
         }
 
         return match.Groups["id"].Value;
     }
 
+    /// <summary>
+    /// Parses the color identity.
+    /// </summary>
     private static List<string> ParseColorIdentity(JsonElement cardElement)
     {
         List<string> colors = [];
         AddColors(colors, cardElement, "colorIdentity");
         AddColors(colors, cardElement, "color_identity");
-        if (cardElement.TryGetProperty("oracleCard", out JsonElement oracleCard) && oracleCard.ValueKind == JsonValueKind.Object)
+        if (
+            cardElement.TryGetProperty("oracleCard", out JsonElement oracleCard)
+            && oracleCard.ValueKind == JsonValueKind.Object
+        )
         {
             AddColors(colors, oracleCard, "colorIdentity");
             AddColors(colors, oracleCard, "color_identity");
@@ -173,6 +246,9 @@ public sealed partial class ArchidektGateway
         return colors;
     }
 
+    /// <summary>
+    /// Adds the colors.
+    /// </summary>
     private static void AddColors(List<string> colors, JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out JsonElement property))
@@ -183,7 +259,12 @@ public sealed partial class ArchidektGateway
         if (property.ValueKind == JsonValueKind.String)
         {
             string? value = property.GetString();
-            foreach (string color in value?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [])
+            foreach (
+                string color in value?.Split(
+                    ',',
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+                ) ?? []
+            )
             {
                 AddColor(colors, color);
             }
@@ -201,17 +282,32 @@ public sealed partial class ArchidektGateway
         }
     }
 
+    /// <summary>
+    /// Adds the color.
+    /// </summary>
     private static void AddColor(List<string> colors, string? color)
     {
-        if (!string.IsNullOrWhiteSpace(color) && !colors.Any(value => value.Equals(color, StringComparison.OrdinalIgnoreCase)))
+        if (
+            !string.IsNullOrWhiteSpace(color)
+            && !colors.Any(value => value.Equals(color, StringComparison.OrdinalIgnoreCase))
+        )
         {
             colors.Add(color);
         }
     }
 
+    /// <summary>
+    /// Handles deck id regex.
+    /// </summary>
     [GeneratedRegex(@"(?<id>\d+)(?:/)?$", RegexOptions.CultureInvariant)]
     private static partial Regex DeckIdRegex();
 
-    [GeneratedRegex(@"(?:^|/)decks/(?<id>\d+)(?:/|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// Handles deck url id regex.
+    /// </summary>
+    [GeneratedRegex(
+        @"(?:^|/)decks/(?<id>\d+)(?:/|$)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
     private static partial Regex DeckUrlIdRegex();
 }

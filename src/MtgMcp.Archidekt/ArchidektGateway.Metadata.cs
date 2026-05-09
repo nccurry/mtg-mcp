@@ -2,9 +2,18 @@ using MtgMcp.Core;
 
 namespace MtgMcp.Archidekt;
 
+/// <summary>
+/// Coordinates archidekt gateway HTTP operations.
+/// </summary>
 public sealed partial class ArchidektGateway
 {
-    public async Task PersistMetadataAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
+    /// <summary>
+    /// Persists the metadata.
+    /// </summary>
+    public async Task PersistMetadataAsync(
+        DeckWorkspace workspace,
+        CancellationToken cancellationToken
+    )
     {
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
         string deckId = RequireDeckId(workspace);
@@ -12,9 +21,15 @@ public sealed partial class ArchidektGateway
         {
             name = workspace.Name,
             deckFormat = workspace.Format,
-            description = workspace.Description
+            description = workspace.Description,
         };
 
-        await SendJsonAsync(HttpMethod.Patch, $"api/decks/{deckId}/update/", payload, cancellationToken).ConfigureAwait(false);
+        await SendJsonAsync(
+                HttpMethod.Patch,
+                $"api/decks/{deckId}/update/",
+                payload,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 }

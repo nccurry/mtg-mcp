@@ -2,15 +2,23 @@ using System.Text;
 
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Provides deck exporter behavior.
+/// </summary>
 public sealed class DeckExporter
 {
+    /// <summary>
+    /// Exports the workspace.
+    /// </summary>
     public static string Export(DeckWorkspace workspace)
     {
         StringBuilder builder = new();
         foreach (DeckCategory category in workspace.Categories)
         {
-            List<DeckCard> cards = workspace.Cards
-                .Where(card => card.PrimaryCategory.Equals(category.Name, StringComparison.OrdinalIgnoreCase))
+            List<DeckCard> cards = workspace
+                .Cards.Where(card =>
+                    card.PrimaryCategory.Equals(category.Name, StringComparison.OrdinalIgnoreCase)
+                )
                 .OrderBy(card => card.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 

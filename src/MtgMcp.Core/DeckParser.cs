@@ -2,8 +2,14 @@ using System.Text.RegularExpressions;
 
 namespace MtgMcp.Core;
 
+/// <summary>
+/// Provides deck parser behavior.
+/// </summary>
 public sealed partial class DeckParser
 {
+    /// <summary>
+    /// Parses the decklist.
+    /// </summary>
     public static ParsedDecklist Parse(string decklist)
     {
         ParsedDecklist parsed = new();
@@ -38,7 +44,10 @@ public sealed partial class DeckParser
                 continue;
             }
 
-            int quantity = int.Parse(match.Groups["quantity"].Value, System.Globalization.CultureInfo.InvariantCulture);
+            int quantity = int.Parse(
+                match.Groups["quantity"].Value,
+                System.Globalization.CultureInfo.InvariantCulture
+            );
             string name = CleanCardName(match.Groups["name"].Value);
             if (quantity < 1 || string.IsNullOrWhiteSpace(name))
             {
@@ -46,18 +55,23 @@ public sealed partial class DeckParser
                 continue;
             }
 
-            parsed.Cards.Add(new ParsedDecklistLine
-            {
-                Quantity = quantity,
-                Name = name,
-                Category = currentCategory,
-                LineNumber = index + 1
-            });
+            parsed.Cards.Add(
+                new ParsedDecklistLine
+                {
+                    Quantity = quantity,
+                    Name = name,
+                    Category = currentCategory,
+                    LineNumber = index + 1,
+                }
+            );
         }
 
         return parsed;
     }
 
+    /// <summary>
+    /// Determines whether likely heading.
+    /// </summary>
     private static bool IsLikelyHeading(string value)
     {
         return value.Equals(DeckDefaults.Mainboard, StringComparison.OrdinalIgnoreCase)
@@ -67,6 +81,9 @@ public sealed partial class DeckParser
             || value.EndsWith(':');
     }
 
+    /// <summary>
+    /// Normalizes the category.
+    /// </summary>
     private static string NormalizeCategory(string value, string fallback)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -84,15 +101,19 @@ public sealed partial class DeckParser
             return DeckDefaults.Sideboard;
         }
 
-        if (value.Equals("Maybeboard", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("Maybe", StringComparison.OrdinalIgnoreCase))
+        if (
+            value.Equals("Maybeboard", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Maybe", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return DeckDefaults.Maybeboard;
         }
 
-        if (value.Equals("Mainboard", StringComparison.OrdinalIgnoreCase)
+        if (
+            value.Equals("Mainboard", StringComparison.OrdinalIgnoreCase)
             || value.Equals("Main", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("Deck", StringComparison.OrdinalIgnoreCase))
+            || value.Equals("Deck", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return DeckDefaults.Mainboard;
         }
@@ -100,6 +121,9 @@ public sealed partial class DeckParser
         return value.Trim();
     }
 
+    /// <summary>
+    /// Cleans the card name.
+    /// </summary>
     private static string CleanCardName(string value)
     {
         int setMarker = value.IndexOf(" (", StringComparison.Ordinal);
@@ -111,6 +135,12 @@ public sealed partial class DeckParser
         return value.Trim();
     }
 
-    [GeneratedRegex(@"^(?<quantity>\d+)\s+x?\s*(?<name>.+?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// Handles deck line regex.
+    /// </summary>
+    [GeneratedRegex(
+        @"^(?<quantity>\d+)\s+x?\s*(?<name>.+?)\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
     private static partial Regex DeckLineRegex();
 }
