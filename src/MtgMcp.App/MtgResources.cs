@@ -89,6 +89,22 @@ public sealed class MtgResources
     }
 
     /// <summary>
+    /// Gets the deck intent.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://deck/{deckId}/intent", Name = "Deck Intent")]
+    [Description("Parsed MTG MCP Deck Intent stored in the workspace description.")]
+    public async Task<string> GetDeckIntentAsync(
+        string deckId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        DeckIntentResult intent = await decks
+            .GetDeckIntentAsync(deckId, cancellationToken)
+            .ConfigureAwait(false);
+        return JsonSerializer.Serialize(intent, JsonOptions);
+    }
+
+    /// <summary>
     /// Gets the scryfall syntax cheatsheet.
     /// </summary>
     [McpServerResource(
@@ -194,6 +210,29 @@ public sealed class MtgResources
             so compatible clients can ask for approval before risky calls.
             If a blocked mutating tool is needed, ask the user to restart or reconfigure
             the MCP server with MTGMCP__OPERATION_MODE=apply.
+            """;
+    }
+
+    /// <summary>
+    /// Gets deck intent guidance.
+    /// </summary>
+    [McpServerResource(
+        UriTemplate = "mtg://usage/deck-intent",
+        Name = "Deck Intent Guidance"
+    )]
+    [Description("How to read and write human-readable deck intent sections.")]
+    public string GetDeckIntentGuidance()
+    {
+        return """
+            Deck intent captures what the user is aiming for: archetype, budget,
+            role targets, cards/packages to protect, and things to avoid.
+            Store it in the deck description as a human-readable section titled
+            "MTG MCP Deck Intent" and ending with "End MTG MCP Deck Intent".
+            Use get_deck_intent before analysis and recommendations.
+            Use suggest_deck_intent to draft an intent section, then ask the user
+            before calling set_deck_intent.
+            set_deck_intent updates the workspace description and writes back to
+            Archidekt only when the workspace has writeBack=true.
             """;
     }
 

@@ -322,6 +322,16 @@ public sealed class DeckPlanSummary
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets or sets the parsed deck intent.
+    /// </summary>
+    public DeckIntent? Intent { get; set; }
+
+    /// <summary>
+    /// Gets or sets notes about how intent influenced the summary.
+    /// </summary>
+    public List<string> IntentNotes { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the strengths.
     /// </summary>
     public List<string> Strengths { get; set; } = [];

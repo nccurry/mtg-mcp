@@ -17,22 +17,26 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        ReplacementWeights normalizedWeights = NormalizeWeights(weights);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
+        decimal effectiveMaxPrice = EffectiveMaxPrice(maxPrice, intent);
+        ReplacementWeights normalizedWeights = NormalizeWeights(EffectiveWeights(weights, intent));
         List<ReplacementSuggestion> suggestions = [];
 
         foreach (DeckCard card in IncludedCards(workspace)
             .Where(card => !IsCommanderCard(card))
-            .Where(card => ReadUsdPrice(GetSnapshot(card)) >= maxPrice + minSavings)
+            .Where(card => !IsProtectedCard(card, intent))
+            .Where(card => ReadUsdPrice(GetSnapshot(card)) >= effectiveMaxPrice + minSavings)
             .OrderByDescending(card => ReadUsdPrice(GetSnapshot(card)) ?? 0)
             .Take(Math.Clamp(limit, 1, 25)))
         {
             ReplacementSuggestion? suggestion = await FindReplacementAsync(
                 workspace,
                 card,
-                maxPrice,
+                effectiveMaxPrice,
                 minSavings,
                 budgetMode: true,
                 normalizedWeights,
+                intent,
                 cancellationToken).ConfigureAwait(false);
 
             if (suggestion is not null)
@@ -47,6 +51,7 @@ public sealed partial class DeckWorkspaceService
             "budget-replacements",
             suggestions,
             normalizedWeights,
+            intent,
             cancellationToken).ConfigureAwait(false);
 
         return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
@@ -62,11 +67,13 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        ReplacementWeights normalizedWeights = NormalizeWeights(weights);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
+        ReplacementWeights normalizedWeights = NormalizeWeights(EffectiveWeights(weights, intent));
         List<ReplacementSuggestion> suggestions = [];
 
         foreach (DeckCard card in IncludedCards(workspace)
             .Where(ShouldConsiderUpgrade)
+            .Where(card => !IsProtectedCard(card, intent))
             .OrderBy(card => DeckRoleClassifier.Classify(card).Confidence)
             .ThenByDescending(card => GetSnapshot(card).EdhrecRank ?? int.MaxValue)
             .Take(Math.Clamp(limit, 1, 25)))
@@ -78,6 +85,7 @@ public sealed partial class DeckWorkspaceService
                 minSavings: 0,
                 budgetMode: false,
                 normalizedWeights,
+                intent,
                 cancellationToken).ConfigureAwait(false);
 
             if (suggestion is not null)
@@ -92,6 +100,7 @@ public sealed partial class DeckWorkspaceService
             "card-upgrades",
             suggestions,
             normalizedWeights,
+            intent,
             cancellationToken).ConfigureAwait(false);
 
         return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
@@ -107,6 +116,7 @@ public sealed partial class DeckWorkspaceService
         decimal minSavings,
         bool budgetMode,
         ReplacementWeights weights,
+        DeckIntent? intent,
         CancellationToken cancellationToken)
     {
         CardRoleAssignment currentRole = DeckRoleClassifier.Classify(currentCard);
@@ -143,7 +153,8 @@ public sealed partial class DeckWorkspaceService
             }
 
             if (!IsLegalInFormat(candidate, workspace.Format)
-                || !IsInDeckColorIdentity(candidate, colorIdentityKnown, deckColorIdentity))
+                || !IsInDeckColorIdentity(candidate, colorIdentityKnown, deckColorIdentity)
+                || IsAvoidedCandidate(candidate, intent))
             {
                 continue;
             }
@@ -228,10 +239,16 @@ public sealed partial class DeckWorkspaceService
         string kind,
         IReadOnlyList<ReplacementSuggestion> suggestions,
         ReplacementWeights weights,
+        DeckIntent? intent,
         CancellationToken cancellationToken)
     {
         DeckEditPlan plan = CreatePlan(workspace, name, kind);
         plan.Rationale = $"Weighted replacement plan using role={weights.Role:0.##}, power={weights.Power:0.##}, price={weights.Price:0.##}.";
+        if (intent is not null)
+        {
+            plan.Warnings.Add("This plan used the deck intent stored in the workspace description.");
+        }
+
         plan.Confidence = suggestions.Count == 0 ? 0 : suggestions.Average(suggestion => suggestion.Score);
         if (suggestions.Count == 0)
         {
@@ -340,6 +357,65 @@ public sealed partial class DeckWorkspaceService
             Power = power / total,
             Price = price / total
         };
+    }
+
+    /// <summary>
+    /// Uses intent weights when the request did not override defaults.
+    /// </summary>
+    private static ReplacementWeights? EffectiveWeights(ReplacementWeights? weights, DeckIntent? intent)
+    {
+        if (intent?.Priorities is null || weights is null)
+        {
+            return weights ?? intent?.Priorities;
+        }
+
+        bool requestUsesDefaults =
+            Math.Abs(weights.Role - 0.45) < 0.0001
+            && Math.Abs(weights.Power - 0.30) < 0.0001
+            && Math.Abs(weights.Price - 0.25) < 0.0001;
+        return requestUsesDefaults ? intent.Priorities : weights;
+    }
+
+    /// <summary>
+    /// Uses intent budget when the request did not override the default price.
+    /// </summary>
+    private static decimal EffectiveMaxPrice(decimal maxPrice, DeckIntent? intent)
+    {
+        return intent?.Budget.MaxCardPrice is { } intentPrice && maxPrice == 5
+            ? intentPrice
+            : maxPrice;
+    }
+
+    /// <summary>
+    /// Checks whether an existing card is protected by intent.
+    /// </summary>
+    private static bool IsProtectedCard(DeckCard card, DeckIntent? intent)
+    {
+        if (intent is null)
+        {
+            return false;
+        }
+
+        return intent.Protect.Any(value =>
+            value.Equals("commander", StringComparison.OrdinalIgnoreCase) && IsCommanderCard(card)
+            || card.Name.Equals(value, StringComparison.OrdinalIgnoreCase)
+            || card.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks whether a candidate conflicts with intent avoid guidance.
+    /// </summary>
+    private static bool IsAvoidedCandidate(CardInfo candidate, DeckIntent? intent)
+    {
+        if (intent is null)
+        {
+            return false;
+        }
+
+        string text = $"{candidate.Name} {candidate.TypeLine} {candidate.OracleText}";
+        return intent.Avoid.Any(value =>
+            !string.IsNullOrWhiteSpace(value)
+            && text.Contains(value, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

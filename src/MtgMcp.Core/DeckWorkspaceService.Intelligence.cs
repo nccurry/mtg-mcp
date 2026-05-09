@@ -74,11 +74,13 @@ public sealed partial class DeckWorkspaceService
     )
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         DeckPlanSummary summary = new()
         {
             WorkspaceId = workspace.Id,
             Name = workspace.Name,
             Format = workspace.Format,
+            Intent = intent,
             Persistence = DeckPersistence.For(workspace),
             IncludedCards = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
             MaybeboardCards = workspace.Cards
@@ -107,7 +109,7 @@ public sealed partial class DeckWorkspaceService
             summary.CategoryMap[category.Name] = suggestedRole;
         }
 
-        AddSummaryNotes(summary);
+        AddSummaryNotes(summary, intent);
         return summary;
     }
 
@@ -124,7 +126,8 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        List<string> requestedTargets = ParseTargets(targets);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
+        List<string> requestedTargets = ParseTargets(targets, intent);
         return DeckStatistics.AnalyzeDrawOdds(
             workspace,
             requestedTargets,
@@ -411,10 +414,19 @@ public sealed partial class DeckWorkspaceService
     /// <summary>
     /// Parses draw odds targets.
     /// </summary>
-    private static List<string> ParseTargets(string? targets)
+    private static List<string> ParseTargets(string? targets, DeckIntent? intent)
     {
         if (string.IsNullOrWhiteSpace(targets))
         {
+            if (intent?.Targets.Count > 0)
+            {
+                return intent.Targets.Keys
+                    .Where(target => DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase)
+                        || DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
             return
             [
                 DeckRoles.Lands,
@@ -436,14 +448,27 @@ public sealed partial class DeckWorkspaceService
     /// <summary>
     /// Adds summary notes.
     /// </summary>
-    private static void AddSummaryNotes(DeckPlanSummary summary)
+    private static void AddSummaryNotes(DeckPlanSummary summary, DeckIntent? intent)
     {
         int lands = Count(summary.RoleCounts, DeckRoles.Lands);
         int ramp = Count(summary.RoleCounts, DeckRoles.Ramp);
         int draw = Count(summary.RoleCounts, DeckRoles.Draw);
         int interaction = Count(summary.RoleCounts, DeckRoles.Interaction) + Count(summary.RoleCounts, DeckRoles.BoardWipes);
+        int landTarget = TargetMinimum(intent, DeckRoles.Lands, 35);
+        int rampTarget = TargetMinimum(intent, DeckRoles.Ramp, 8);
+        int drawTarget = TargetMinimum(intent, DeckRoles.Draw, 8);
+        int interactionTarget = TargetMinimum(intent, DeckRoles.Interaction, 8);
 
-        if (lands >= 35)
+        if (intent is not null)
+        {
+            summary.IntentNotes.Add("Summary thresholds are using the deck intent stored in the description.");
+            if (!string.IsNullOrWhiteSpace(intent.Archetype))
+            {
+                summary.IntentNotes.Add($"Intent archetype: {intent.Archetype}.");
+            }
+        }
+
+        if (lands >= landTarget)
         {
             summary.Strengths.Add("Land count looks healthy for Commander.");
         }
@@ -452,7 +477,7 @@ public sealed partial class DeckWorkspaceService
             summary.Risks.Add("Land count may be low for a Commander deck.");
         }
 
-        if (ramp >= 8)
+        if (ramp >= rampTarget)
         {
             summary.Strengths.Add("Ramp density is in a strong range.");
         }
@@ -461,7 +486,7 @@ public sealed partial class DeckWorkspaceService
             summary.Risks.Add("Ramp count may be light.");
         }
 
-        if (draw >= 8)
+        if (draw >= drawTarget)
         {
             summary.Strengths.Add("Card draw appears well represented.");
         }
@@ -470,13 +495,23 @@ public sealed partial class DeckWorkspaceService
             summary.Risks.Add("Card draw may need reinforcement.");
         }
 
-        if (interaction < 8)
+        if (interaction < interactionTarget)
         {
             summary.Risks.Add("Interaction and board wipe density may be low.");
         }
 
         summary.NextSteps.Add("Run analyze_draw_odds for lands, ramp, draw, discard, interaction, and board wipes.");
         summary.NextSteps.Add("Run suggest_deck_categories before applying category changes.");
+    }
+
+    /// <summary>
+    /// Reads the minimum target for a role.
+    /// </summary>
+    private static int TargetMinimum(DeckIntent? intent, string role, int fallback)
+    {
+        return intent?.Targets.TryGetValue(role, out DeckIntentTarget? target) == true
+            ? target.Minimum ?? fallback
+            : fallback;
     }
 
     /// <summary>
