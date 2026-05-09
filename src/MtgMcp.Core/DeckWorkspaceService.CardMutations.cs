@@ -101,8 +101,14 @@ public sealed partial class DeckWorkspaceService
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckCard card = FindRequiredCard(workspace, cardName, fromCategory);
         string normalizedCategory = NormalizeCategoryName(toCategory);
+        string previousCategory = card.PrimaryCategory;
         EnsureCategory(workspace, normalizedCategory);
         card.PrimaryCategory = normalizedCategory;
+        if (!previousCategory.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            card.Categories.RemoveAll(value => value.Equals(previousCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
         AddCategoryName(card, normalizedCategory);
 
         await PersistCardsAsync(workspace, [card], [], cancellationToken).ConfigureAwait(false);
