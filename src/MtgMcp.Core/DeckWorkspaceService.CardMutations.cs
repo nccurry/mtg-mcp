@@ -144,12 +144,21 @@ public sealed partial class DeckWorkspaceService
     {
         card.Snapshot = new CardSnapshot
         {
+            ManaCost = cardInfo.ManaCost,
             TypeLine = cardInfo.TypeLine,
             ManaValue = cardInfo.ManaValue,
+            OracleText = cardInfo.OracleText,
             ColorIdentity = cardInfo.ColorIdentity.ToList(),
             Set = cardInfo.Set,
             CollectorNumber = cardInfo.CollectorNumber,
-            ScryfallUri = cardInfo.ScryfallUri
+            Rarity = cardInfo.Rarity,
+            ScryfallUri = cardInfo.ScryfallUri,
+            EdhrecRank = cardInfo.EdhrecRank,
+            Keywords = cardInfo.Keywords.ToList(),
+            ProducedMana = cardInfo.ProducedMana.ToList(),
+            Legalities = new Dictionary<string, string>(cardInfo.Legalities, StringComparer.OrdinalIgnoreCase),
+            Prices = new Dictionary<string, string>(cardInfo.Prices, StringComparer.OrdinalIgnoreCase),
+            ImageUris = new Dictionary<string, string>(cardInfo.ImageUris, StringComparer.OrdinalIgnoreCase)
         };
     }
 

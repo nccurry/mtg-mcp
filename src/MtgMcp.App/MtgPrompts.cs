@@ -15,7 +15,7 @@ public sealed class MtgPrompts
         Theme: {theme}
         Budget: {budget}
 
-        Use mtg-mcp tools to search Scryfall, validate color identity, create a local workspace, add cards by role, and explain the key packages before finalizing.
+        Use mtg-mcp tools to search Scryfall, create a local workspace, normalize card metadata, summarize the deck plan, validate color identity, and explain the key packages before finalizing.
         """;
     }
 
@@ -27,7 +27,7 @@ public sealed class MtgPrompts
         Tune deck workspace {workspaceId}.
         Goal: {goal}
 
-        Analyze the deck, identify weak categories or curve issues, search for replacements, then use writeback tools when the deck is Archidekt-bound.
+        Normalize the deck first if needed. Then summarize the deck plan, analyze draw odds, identify weak roles or curve issues, create recommendation plans, and only use apply_deck_plan after the user approves the plan.
         """;
     }
 
@@ -39,7 +39,7 @@ public sealed class MtgPrompts
         Find budget replacements for deck workspace {workspaceId}.
         Budget target: {budgetTarget}
 
-        Use Scryfall price filters and deck analysis. Preserve color identity, role, mana curve, and format legality.
+        Use normalize_deck_cards and find_budget_replacements. Preserve color identity, role, mana curve, and format legality. Return the persisted plan id and do not mutate the deck unless the user explicitly asks to apply the plan.
         """;
     }
 

@@ -29,8 +29,11 @@ public sealed class CardInfo
     public string? CollectorNumber { get; set; }
     public string? Rarity { get; set; }
     public string? ScryfallUri { get; set; }
+    public int? EdhrecRank { get; set; }
     public List<string> Colors { get; set; } = [];
     public List<string> ColorIdentity { get; set; } = [];
+    public List<string> Keywords { get; set; } = [];
+    public List<string> ProducedMana { get; set; } = [];
     public Dictionary<string, string> Legalities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> Prices { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> ImageUris { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -83,12 +86,21 @@ public sealed class DeckCard
 
 public sealed class CardSnapshot
 {
+    public string? ManaCost { get; set; }
     public string? TypeLine { get; set; }
     public double? ManaValue { get; set; }
+    public string? OracleText { get; set; }
     public List<string> ColorIdentity { get; set; } = [];
     public string? Set { get; set; }
     public string? CollectorNumber { get; set; }
+    public string? Rarity { get; set; }
     public string? ScryfallUri { get; set; }
+    public int? EdhrecRank { get; set; }
+    public List<string> Keywords { get; set; } = [];
+    public List<string> ProducedMana { get; set; } = [];
+    public Dictionary<string, string> Legalities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> Prices { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ImageUris { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class DeckWorkspace
@@ -168,6 +180,8 @@ public sealed class DeckAnalysis
     public Dictionary<string, int> TypeCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, int> ColorIdentityCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, int> ManaCurve { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int> RoleCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int> TagCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> Notes { get; set; } = [];
 }
 

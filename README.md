@@ -13,6 +13,8 @@
 - Server-side operation modes can block mutations for Ask/Plan style sessions.
 - Category-based organization for mainboard, sideboard, maybeboard, and custom Archidekt categories.
 - Deck checkpoint tools backed by Archidekt snapshots.
+- Deck intelligence tools for Scryfall normalization, plan summaries, role/tag classification, draw odds, budget replacements, upgrades, and category cleanup plans.
+- Persisted `DeckEditPlan` workflows keep recommendations separate from mutations; `apply_deck_plan` is the only recommendation tool that changes deck contents.
 - MCP tools, resources, and prompts exposed over stdio.
 
 Moxfield support is intentionally out of scope for v1 because there is no supported public write API.
@@ -50,8 +52,8 @@ $env:MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.js
 `MTGMCP__OPERATION_MODE` accepts:
 
 - `apply` or `act`: read and write tools are allowed.
-- `plan`: read-only tools are allowed; mutating tools return an error asking for apply mode.
-- `read-only` or `ask`: read-only tools are allowed; mutating tools return an error asking for apply mode.
+- `plan`: read-only tools and non-mutating planning tools are allowed; deck-content changes return an error asking for apply mode.
+- `read-only` or `ask`: read-only tools are allowed; deck-content changes and planning-state writes return an error asking for plan or apply mode.
 
 Credential files can contain:
 

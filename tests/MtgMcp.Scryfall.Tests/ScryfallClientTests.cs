@@ -27,8 +27,11 @@ public sealed class ScryfallClientTests
               "collector_number": "141",
               "rarity": "common",
               "scryfall_uri": "https://scryfall.com/card/clu/141",
+              "edhrec_rank": 42,
               "colors": ["R"],
               "color_identity": ["R"],
+              "keywords": ["Flash"],
+              "produced_mana": ["R"],
               "legalities": { "commander": "legal" },
               "prices": { "usd": "0.25" },
               "image_uris": { "normal": "https://img.test/bolt.jpg" }
@@ -40,9 +43,54 @@ public sealed class ScryfallClientTests
 
         card.Should().NotBeNull();
         card!.Name.Should().Be("Lightning Bolt");
+        card.EdhrecRank.Should().Be(42);
+        card.Keywords.Should().Contain("Flash");
+        card.ProducedMana.Should().Contain("R");
         card.ColorIdentity.Should().ContainSingle().Which.Should().Be("R");
         card.Legalities["commander"].Should().Be("legal");
         card.ImageUris["normal"].Should().Contain("bolt");
+    }
+
+    [Fact]
+    public async Task GetCardsByNames_PostsCollectionAndMapsReturnedCards()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .WithContent("""{"identifiers":[{"name":"Sol Ring"},{"name":"Arcane Signet"}]}""")
+            .Respond("application/json", """
+            {
+              "data": [
+                {
+                  "id": "sol-ring",
+                  "name": "Sol Ring",
+                  "type_line": "Artifact",
+                  "oracle_text": "{T}: Add {C}{C}.",
+                  "edhrec_rank": 1,
+                  "produced_mana": ["C"],
+                  "prices": { "usd": "1.25" }
+                },
+                {
+                  "id": "arcane-signet",
+                  "name": "Arcane Signet",
+                  "type_line": "Artifact",
+                  "oracle_text": "{T}: Add one mana of any color.",
+                  "edhrec_rank": 5,
+                  "produced_mana": ["W", "U", "B", "R", "G"],
+                  "prices": { "usd": "1.00" }
+                }
+              ]
+            }
+            """);
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyDictionary<string, CardInfo> cards = await client.GetCardsByNamesAsync(
+            ["Sol Ring", "Arcane Signet"],
+            TestContext.Current.CancellationToken);
+
+        cards.Should().ContainKeys("Sol Ring", "Arcane Signet");
+        cards["Sol Ring"].EdhrecRank.Should().Be(1);
+        cards["Arcane Signet"].ProducedMana.Should().BeEquivalentTo(["W", "U", "B", "R", "G"]);
+        mockHttp.VerifyNoOutstandingExpectation();
     }
 
     [Fact]

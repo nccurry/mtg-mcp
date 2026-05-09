@@ -18,6 +18,12 @@ public sealed class DeckAnalyzer
         {
             analysis.TotalCards += card.Quantity;
             Increment(analysis.CategoryCounts, card.PrimaryCategory, card.Quantity);
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            Increment(analysis.RoleCounts, role.PrimaryRole, card.Quantity);
+            foreach (string tag in role.Tags)
+            {
+                Increment(analysis.TagCounts, tag, card.Quantity);
+            }
 
             if (includedCategories.Contains(card.PrimaryCategory))
             {

@@ -17,7 +17,8 @@ public sealed class McpSurfaceTests
         typeof(WorkspaceTools),
         typeof(DeckMutationTools),
         typeof(CategoryTools),
-        typeof(CheckpointTools)
+        typeof(CheckpointTools),
+        typeof(IntelligenceTools)
     ];
 
     [Fact]
@@ -56,7 +57,17 @@ public sealed class McpSurfaceTests
             "delete_deck_checkpoint",
             "parse_decklist",
             "validate_deck",
-            "analyze_deck"
+            "analyze_deck",
+            "normalize_deck_cards",
+            "summarize_deck_plan",
+            "analyze_draw_odds",
+            "find_budget_replacements",
+            "find_card_upgrades",
+            "suggest_deck_categories",
+            "list_deck_plans",
+            "get_deck_plan",
+            "delete_deck_plan",
+            "apply_deck_plan"
         ];
 
         ToolTypes.SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
@@ -151,6 +162,21 @@ public sealed class McpSurfaceTests
     }
 
     [Fact]
+    public void OperationModeGuard_AllowsPlanningStateInPlanModeOnly()
+    {
+        OperationModeGuard planMode = new(Options.Create(new MtgMcpOptions { OperationMode = "plan" }));
+        OperationModeGuard readOnlyMode = new(Options.Create(new MtgMcpOptions { OperationMode = "read-only" }));
+
+        planMode.Invoking(guard => guard.EnsureCanWritePlanningState("find_budget_replacements"))
+            .Should()
+            .NotThrow();
+        readOnlyMode.Invoking(guard => guard.EnsureCanWritePlanningState("find_budget_replacements"))
+            .Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*read-only mode*find_budget_replacements*");
+    }
+
+    [Fact]
     public async Task OperationModeGuard_BlocksMutatingToolsWhenReadOnly()
     {
         DeckWorkspaceService deckService = new(new InMemoryRepository(), new EmptyCardCatalog());
@@ -199,6 +225,7 @@ public sealed class McpSurfaceTests
         firstWorkspaceService.Should().NotBeNull();
         secondWorkspaceService.Should().NotBeSameAs(firstWorkspaceService, because: "DeckWorkspaceService must not capture typed HttpClient dependencies as a singleton");
         host.Services.GetRequiredService<ICardCatalog>().Should().NotBeNull();
+        host.Services.GetRequiredService<IDeckPlanRepository>().Should().NotBeNull();
         host.Services.GetRequiredService<IArchidektGateway>().Should().NotBeNull();
         host.Services.GetRequiredService<IOptions<MtgMcpOptions>>().Value.DataDir.Should().NotBeNullOrWhiteSpace();
     }
@@ -253,6 +280,13 @@ public sealed class McpSurfaceTests
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
             return Task.FromResult<CardInfo?>(null);
+        }
+
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase));
         }
 
         public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)

@@ -96,6 +96,7 @@ public sealed partial class DeckWorkspaceService
     {
         IArchidektGateway gateway = RequireArchidektGateway();
         DeckWorkspace workspace = await gateway.ImportDeckAsync(deckIdOrUrl, writeBack, cancellationToken).ConfigureAwait(false);
+        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken).ConfigureAwait(false);
         return await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 
@@ -125,6 +126,7 @@ public sealed partial class DeckWorkspaceService
             workspace.Cards.Add(card);
         }
 
+        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken).ConfigureAwait(false);
         return await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 

@@ -36,6 +36,18 @@ public sealed class OperationModeGuard
             $"mtg-mcp is running in read-only mode. Tool '{toolName}' would modify deck state. Ask the user to switch MTGMCP__OPERATION_MODE=apply before applying changes.");
     }
 
+    public void EnsureCanWritePlanningState(string toolName)
+    {
+        string mode = EffectiveMode;
+        if (mode is Apply or Plan)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"mtg-mcp is running in read-only mode. Tool '{toolName}' would write local planning state. Ask the user to switch MTGMCP__OPERATION_MODE=plan or apply before creating plans or refreshing local metadata.");
+    }
+
     public object GetStatus()
     {
         return new

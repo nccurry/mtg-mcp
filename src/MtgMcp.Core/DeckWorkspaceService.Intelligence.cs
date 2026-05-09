@@ -1,0 +1,471 @@
+namespace MtgMcp.Core;
+
+public sealed partial class DeckWorkspaceService
+{
+    public async Task<DeckNormalizationResult> NormalizeDeckCardsAsync(
+        string workspaceId,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        string normalizedScope = string.IsNullOrWhiteSpace(scope) ? "all" : scope.Trim().ToLowerInvariant();
+        DeckNormalizationResult result = await NormalizeWorkspaceCardsAsync(workspace, normalizedScope, cancellationToken)
+            .ConfigureAwait(false);
+
+        await repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    private async Task<DeckNormalizationResult> NormalizeWorkspaceCardsAsync(
+        DeckWorkspace workspace,
+        string normalizedScope,
+        CancellationToken cancellationToken)
+    {
+        List<DeckCard> targetCards = workspace.Cards
+            .Where(card => ShouldNormalize(card, workspace, normalizedScope))
+            .ToList();
+
+        IReadOnlyDictionary<string, CardInfo> cardsByName = await cardCatalog
+            .GetCardsByNamesAsync(targetCards.Select(card => card.Name).ToList(), cancellationToken)
+            .ConfigureAwait(false);
+
+        List<string> missingCards = [];
+        int updatedCards = 0;
+        foreach (DeckCard card in targetCards)
+        {
+            if (!cardsByName.TryGetValue(card.Name, out CardInfo? cardInfo))
+            {
+                missingCards.Add(card.Name);
+                continue;
+            }
+
+            card.ScryfallId = cardInfo.Id;
+            card.ScryfallOracleId = cardInfo.OracleId;
+            ApplyCardSnapshot(card, cardInfo);
+            updatedCards++;
+        }
+
+        return new DeckNormalizationResult
+        {
+            WorkspaceId = workspace.Id,
+            Scope = normalizedScope,
+            RequestedCards = targetCards.Count,
+            UpdatedCards = updatedCards,
+            MissingCards = missingCards,
+            Workspace = workspace
+        };
+    }
+
+    public async Task<DeckPlanSummary> SummarizeDeckPlanAsync(string workspaceId, CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckPlanSummary summary = new()
+        {
+            WorkspaceId = workspace.Id,
+            Name = workspace.Name,
+            Format = workspace.Format,
+            Persistence = DeckPersistence.For(workspace),
+            IncludedCards = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
+            MaybeboardCards = workspace.Cards
+                .Where(card => string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+                .Sum(card => Math.Max(0, card.Quantity))
+        };
+
+        foreach (DeckCard card in workspace.Cards)
+        {
+            CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
+            AddCount(summary.RoleCounts, assignment.PrimaryRole, card.Quantity);
+            foreach (string tag in assignment.Tags)
+            {
+                AddCount(summary.TagCounts, tag, card.Quantity);
+            }
+
+            if (assignment.PrimaryRole == DeckRoles.Commander)
+            {
+                summary.Commanders.Add(card.Name);
+            }
+        }
+
+        foreach (DeckCategory category in workspace.Categories)
+        {
+            string suggestedRole = SuggestRoleForCategory(workspace, category.Name);
+            summary.CategoryMap[category.Name] = suggestedRole;
+        }
+
+        AddSummaryNotes(summary);
+        return summary;
+    }
+
+    public async Task<DeckOddsAnalysis> AnalyzeDrawOddsAsync(
+        string workspaceId,
+        string? targets,
+        int turn,
+        int openingHandSize,
+        int simulations,
+        int seed,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        List<string> requestedTargets = ParseTargets(targets);
+        return DeckStatistics.AnalyzeDrawOdds(
+            workspace,
+            requestedTargets,
+            Math.Max(1, turn),
+            Math.Clamp(openingHandSize, 1, 20),
+            simulations,
+            seed);
+    }
+
+    public async Task<CategoryPlanResult> SuggestDeckCategoriesAsync(string workspaceId, CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        List<CategorySuggestion> suggestions = [];
+        DeckEditPlan plan = CreatePlan(workspace, "Category cleanup plan", "category-cleanup");
+        plan.Rationale = "Groups cards into the standard role taxonomy while preserving existing deck contents until the plan is applied.";
+
+        foreach (string role in DeckRoles.Primary)
+        {
+            if (role is DeckRoles.Commander or DeckRoles.Maybeboard)
+            {
+                continue;
+            }
+
+            if (!workspace.Categories.Any(category => category.Name.Equals(role, StringComparison.OrdinalIgnoreCase)))
+            {
+                plan.Operations.Add(new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.CreateCategory,
+                    Category = role,
+                    IncludedInDeck = true,
+                    IncludedInPrice = true,
+                    Rationale = $"Create standard role category {role}."
+                });
+            }
+        }
+
+        foreach (DeckCard card in workspace.Cards)
+        {
+            CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
+            suggestions.Add(new CategorySuggestion
+            {
+                CardName = card.Name,
+                CurrentPrimaryCategory = card.PrimaryCategory,
+                SuggestedPrimaryRole = assignment.PrimaryRole,
+                Tags = assignment.Tags,
+                Confidence = assignment.Confidence
+            });
+
+            if (assignment.PrimaryRole is DeckRoles.Commander or DeckRoles.Maybeboard)
+            {
+                continue;
+            }
+
+            if (!string.Equals(card.PrimaryCategory, assignment.PrimaryRole, StringComparison.OrdinalIgnoreCase)
+                && assignment.Confidence >= 0.55)
+            {
+                plan.Operations.Add(new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.MoveCard,
+                    CardName = card.Name,
+                    FromCategory = card.PrimaryCategory,
+                    ToCategory = assignment.PrimaryRole,
+                    Rationale = $"Classified as {assignment.PrimaryRole} with {assignment.Confidence:0.00} confidence."
+                });
+            }
+        }
+
+        plan.Confidence = suggestions.Count == 0 ? 0 : suggestions.Average(suggestion => suggestion.Confidence);
+        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+
+        return new CategoryPlanResult { Plan = plan, Suggestions = suggestions };
+    }
+
+    public Task<IReadOnlyList<DeckEditPlan>> ListDeckPlansAsync(string? workspaceId, CancellationToken cancellationToken)
+    {
+        return RequirePlanRepository().ListAsync(workspaceId, cancellationToken);
+    }
+
+    public async Task<DeckEditPlan> GetDeckPlanAsync(string planId, CancellationToken cancellationToken)
+    {
+        return await RequirePlanRepository().GetAsync(planId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Deck edit plan '{planId}' was not found.");
+    }
+
+    public Task DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken)
+    {
+        return RequirePlanRepository().DeleteAsync(planId, cancellationToken);
+    }
+
+    public async Task<DeckEditPlanApplyResult> ApplyDeckPlanAsync(
+        string planId,
+        bool createCheckpoint,
+        string? checkpointName,
+        CancellationToken cancellationToken)
+    {
+        IDeckPlanRepository plans = RequirePlanRepository();
+        DeckEditPlan plan = await GetDeckPlanAsync(planId, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(plan.Status)
+            && !plan.Status.Equals(DeckEditPlanStatus.Draft, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Deck edit plan '{plan.PlanId}' has already been applied.");
+        }
+
+        DeckWorkspace workspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
+        string? checkpointId = null;
+
+        if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack && plan.Operations.Count > 1)
+        {
+            if (!createCheckpoint)
+            {
+                throw new InvalidOperationException("Applying a multi-edit plan to an Archidekt writeback workspace requires a checkpoint.");
+            }
+
+            DeckCheckpoint checkpoint = await CheckpointDeckAsync(
+                workspace.Id,
+                string.IsNullOrWhiteSpace(checkpointName) ? $"Before {plan.Name}" : checkpointName,
+                $"Created before applying plan {plan.PlanId}.",
+                cancellationToken).ConfigureAwait(false);
+            checkpointId = checkpoint.Id;
+        }
+
+        List<string> messages = [];
+        foreach (DeckEditOperation operation in plan.Operations)
+        {
+            DeckChangeResult? result = await ApplyOperationAsync(plan.WorkspaceId, operation, cancellationToken).ConfigureAwait(false);
+            if (result is not null)
+            {
+                messages.Add(result.Message);
+            }
+        }
+
+        DeckWorkspace updatedWorkspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
+        plan.Status = DeckEditPlanStatus.Applied;
+        plan.AppliedAt = DateTimeOffset.UtcNow;
+        plan.CheckpointId = checkpointId;
+        await plans.SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+
+        return new DeckEditPlanApplyResult
+        {
+            PlanId = plan.PlanId,
+            WorkspaceId = plan.WorkspaceId,
+            Persistence = DeckPersistence.For(updatedWorkspace),
+            CheckpointId = checkpointId,
+            AppliedOperations = plan.Operations.Count,
+            Messages = messages,
+            Workspace = updatedWorkspace
+        };
+    }
+
+    private async Task<DeckChangeResult?> ApplyOperationAsync(
+        string workspaceId,
+        DeckEditOperation operation,
+        CancellationToken cancellationToken)
+    {
+        return operation.Operation switch
+        {
+            DeckEditOperations.AddCard => await AddCardAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                operation.Quantity ?? 1,
+                operation.Category ?? DeckDefaults.Mainboard,
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.RemoveCard => await RemoveCardAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                operation.Quantity ?? 1,
+                operation.Category,
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.SetCardQuantity => await SetCardQuantityAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                operation.Quantity ?? 1,
+                operation.Category,
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.MoveCard => await MoveCardAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                Require(operation.ToCategory, "toCategory"),
+                operation.FromCategory,
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.AddCardCategory => await AddCardCategoryAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                Require(operation.Category, "category"),
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.RemoveCardCategory => await RemoveCardCategoryAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                Require(operation.Category, "category"),
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.SetPrimaryCardCategory => await SetPrimaryCardCategoryAsync(
+                workspaceId,
+                Require(operation.CardName, "cardName"),
+                Require(operation.Category, "category"),
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.CreateCategory => await CreateCategoryAsync(
+                workspaceId,
+                Require(operation.Category, "category"),
+                operation.IncludedInDeck ?? true,
+                operation.IncludedInPrice ?? true,
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.RenameCategory => await RenameCategoryAsync(
+                workspaceId,
+                Require(operation.FromCategory, "fromCategory"),
+                Require(operation.ToCategory, "toCategory"),
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.DeleteCategory => await DeleteCategoryAsync(
+                workspaceId,
+                Require(operation.Category, "category"),
+                operation.ToCategory ?? DeckDefaults.Mainboard,
+                cancellationToken).ConfigureAwait(false),
+            DeckEditOperations.UpdateDeckMetadata => await UpdateDeckMetadataAsync(
+                workspaceId,
+                operation.Name,
+                operation.Format,
+                operation.Description,
+                cancellationToken).ConfigureAwait(false),
+            _ => throw new InvalidOperationException($"Unknown deck edit operation '{operation.Operation}'.")
+        };
+    }
+
+    private static bool ShouldNormalize(DeckCard card, DeckWorkspace workspace, string scope)
+    {
+        return scope switch
+        {
+            "all" => true,
+            "included" => IsIncluded(workspace, card),
+            "maybeboard" => string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase),
+            "missing" => string.IsNullOrWhiteSpace(GetSnapshot(card).TypeLine)
+                || string.IsNullOrWhiteSpace(GetSnapshot(card).OracleText)
+                || GetSnapshot(card).Prices.Count == 0,
+            _ => true
+        };
+    }
+
+    private static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
+    {
+        return workspace.Cards.Where(card => IsIncluded(workspace, card));
+    }
+
+    private static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
+    {
+        DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
+            string.Equals(value.Name, card.PrimaryCategory, StringComparison.OrdinalIgnoreCase));
+        return category?.IncludedInDeck ?? true;
+    }
+
+    private static List<string> ParseTargets(string? targets)
+    {
+        if (string.IsNullOrWhiteSpace(targets))
+        {
+            return
+            [
+                DeckRoles.Lands,
+                DeckRoles.Ramp,
+                DeckRoles.Draw,
+                DeckRoles.Interaction,
+                DeckRoles.BoardWipes,
+                DeckTags.Discard
+            ];
+        }
+
+        return targets
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(target => !string.IsNullOrWhiteSpace(target))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void AddSummaryNotes(DeckPlanSummary summary)
+    {
+        int lands = Count(summary.RoleCounts, DeckRoles.Lands);
+        int ramp = Count(summary.RoleCounts, DeckRoles.Ramp);
+        int draw = Count(summary.RoleCounts, DeckRoles.Draw);
+        int interaction = Count(summary.RoleCounts, DeckRoles.Interaction) + Count(summary.RoleCounts, DeckRoles.BoardWipes);
+
+        if (lands >= 35)
+        {
+            summary.Strengths.Add("Land count looks healthy for Commander.");
+        }
+        else
+        {
+            summary.Risks.Add("Land count may be low for a Commander deck.");
+        }
+
+        if (ramp >= 8)
+        {
+            summary.Strengths.Add("Ramp density is in a strong range.");
+        }
+        else
+        {
+            summary.Risks.Add("Ramp count may be light.");
+        }
+
+        if (draw >= 8)
+        {
+            summary.Strengths.Add("Card draw appears well represented.");
+        }
+        else
+        {
+            summary.Risks.Add("Card draw may need reinforcement.");
+        }
+
+        if (interaction < 8)
+        {
+            summary.Risks.Add("Interaction and board wipe density may be low.");
+        }
+
+        summary.NextSteps.Add("Run analyze_draw_odds for lands, ramp, draw, discard, interaction, and board wipes.");
+        summary.NextSteps.Add("Run suggest_deck_categories before applying category changes.");
+    }
+
+    private static string SuggestRoleForCategory(DeckWorkspace workspace, string category)
+    {
+        Dictionary<string, int> counts = new(StringComparer.OrdinalIgnoreCase);
+        foreach (DeckCard card in workspace.Cards.Where(card => (card.Categories ?? []).Any(value => value.Equals(category, StringComparison.OrdinalIgnoreCase))))
+        {
+            CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
+            AddCount(counts, assignment.PrimaryRole, card.Quantity);
+        }
+
+        return counts.OrderByDescending(pair => pair.Value).FirstOrDefault().Key ?? DeckRoles.Utility;
+    }
+
+    private static DeckEditPlan CreatePlan(DeckWorkspace workspace, string name, string kind)
+    {
+        return new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = name,
+            Kind = kind,
+            Persistence = DeckPersistence.For(workspace)
+        };
+    }
+
+    private static CardSnapshot GetSnapshot(DeckCard card)
+    {
+        return card.Snapshot ?? new CardSnapshot();
+    }
+
+    private static void AddCount(Dictionary<string, int> counts, string key, int quantity)
+    {
+        counts[key] = counts.GetValueOrDefault(key) + Math.Max(0, quantity);
+    }
+
+    private static int Count(Dictionary<string, int> counts, string key)
+    {
+        return counts.TryGetValue(key, out int count) ? count : 0;
+    }
+
+    private static string Require(string? value, string name)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new InvalidOperationException($"Deck edit operation is missing required field '{name}'.");
+    }
+
+    private IDeckPlanRepository RequirePlanRepository()
+    {
+        return planRepository ?? throw new InvalidOperationException("Deck edit plan persistence is not configured.");
+    }
+}

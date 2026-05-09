@@ -524,6 +524,23 @@ public sealed class DeckWorkspaceServiceTests
             return Task.FromResult<CardInfo?>(card);
         }
 
+        public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
+            foreach (string name in names)
+            {
+                CardInfo? card = await GetCardAsync(name, cancellationToken).ConfigureAwait(false);
+                if (card is not null)
+                {
+                    cards[name] = card;
+                }
+            }
+
+            return cards;
+        }
+
         private static string GetTypeLine(string name)
         {
             if (name.Contains("Island", StringComparison.OrdinalIgnoreCase))

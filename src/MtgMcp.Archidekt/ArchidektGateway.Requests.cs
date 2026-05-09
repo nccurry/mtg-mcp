@@ -132,6 +132,13 @@ public sealed partial class ArchidektGateway
                 : null;
     }
 
+    private static int? GetNestedInt(JsonElement element, string propertyName, string nestedPropertyName)
+    {
+        return element.TryGetProperty(propertyName, out JsonElement nested) && nested.ValueKind == JsonValueKind.Object
+            ? GetInt(nested, nestedPropertyName)
+            : null;
+    }
+
     private static double? GetDouble(JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out JsonElement property))

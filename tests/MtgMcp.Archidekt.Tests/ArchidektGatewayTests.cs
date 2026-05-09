@@ -33,12 +33,15 @@ public sealed class ArchidektGatewayTests
                 "uid": "scryfall-card",
                 "setCode": "lea",
                 "collectorNumber": "161",
+                "rarity": "common",
                 "scryfallUri": "https://scryfall.test/card",
                 "oracleCard": {
                   "uid": "oracle-card",
                   "name": "Lightning Bolt",
                   "typeLine": "Instant",
+                  "oracleText": "Lightning Bolt deals 3 damage to any target.",
                   "manaValue": 1,
+                  "edhrecRank": 42,
                   "colorIdentity": ["R"]
                 }
               }
@@ -59,10 +62,13 @@ public sealed class ArchidektGatewayTests
         deck.Cards[0].ArchidektCardId.Should().Be("99");
         deck.Cards[0].ArchidektDeckRelationId.Should().Be(44);
         deck.Cards[0].Snapshot.TypeLine.Should().Be("Instant");
+        deck.Cards[0].Snapshot.OracleText.Should().Contain("3 damage");
         deck.Cards[0].Snapshot.ManaValue.Should().Be(1);
+        deck.Cards[0].Snapshot.EdhrecRank.Should().Be(42);
         deck.Cards[0].Snapshot.ColorIdentity.Should().BeEquivalentTo(["R"]);
         deck.Cards[0].Snapshot.Set.Should().Be("lea");
         deck.Cards[0].Snapshot.CollectorNumber.Should().Be("161");
+        deck.Cards[0].Snapshot.Rarity.Should().Be("common");
         deck.Cards[0].Snapshot.ScryfallUri.Should().Be("https://scryfall.test/card");
     }
 

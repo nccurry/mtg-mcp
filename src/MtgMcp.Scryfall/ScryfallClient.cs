@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using MtgMcp.Core;
@@ -8,6 +9,8 @@ namespace MtgMcp.Scryfall;
 
 public sealed class ScryfallClient : ICardCatalog, IDisposable
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
     private readonly HttpClient httpClient;
     private readonly ScryfallOptions options;
     private readonly SemaphoreSlim requestLock = new(1, 1);
@@ -75,6 +78,60 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         {
             return MapCard(document.RootElement);
         }
+    }
+
+    public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+        IReadOnlyList<string> names,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<string, CardInfo> results = new(StringComparer.OrdinalIgnoreCase);
+        List<string> distinctNames = names
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (string[] chunk in distinctNames.Chunk(75))
+        {
+            object body = new
+            {
+                identifiers = chunk.Select(name => new { name }).ToArray()
+            };
+
+            using JsonDocument? document = await PostJsonAsync("cards/collection", body, cancellationToken).ConfigureAwait(false);
+            if (document is null || !document.RootElement.TryGetProperty("data", out JsonElement data))
+            {
+                continue;
+            }
+
+            Dictionary<string, CardInfo> returnedCards = new(StringComparer.OrdinalIgnoreCase);
+            foreach (JsonElement item in data.EnumerateArray())
+            {
+                CardInfo card = MapCard(item);
+                if (!string.IsNullOrWhiteSpace(card.Name))
+                {
+                    returnedCards[card.Name] = card;
+                }
+            }
+
+            foreach (string requestedName in chunk)
+            {
+                if (returnedCards.TryGetValue(requestedName, out CardInfo? exact))
+                {
+                    results[requestedName] = exact;
+                    continue;
+                }
+
+                CardInfo? fuzzy = returnedCards.Values.FirstOrDefault(card =>
+                    string.Equals(card.Name, requestedName, StringComparison.OrdinalIgnoreCase));
+                if (fuzzy is not null)
+                {
+                    results[requestedName] = fuzzy;
+                }
+            }
+        }
+
+        return results;
     }
 
     public async Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)
@@ -186,6 +243,23 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<JsonDocument?> PostJsonAsync(string relativeUri, object body, CancellationToken cancellationToken)
+    {
+        await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
+
+        string json = JsonSerializer.Serialize(body, SerializerOptions);
+        using StringContent content = new(json, Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = await httpClient.PostAsync(relativeUri, content, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            string responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            throw new HttpRequestException($"Scryfall request failed with {(int)response.StatusCode}: {responseBody}");
+        }
+
+        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task DelayIfNeededAsync(CancellationToken cancellationToken)
     {
         await requestLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -238,11 +312,14 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
             Set = GetString(element, "set"),
             CollectorNumber = GetString(element, "collector_number"),
             Rarity = GetString(element, "rarity"),
-            ScryfallUri = GetString(element, "scryfall_uri")
+            ScryfallUri = GetString(element, "scryfall_uri"),
+            EdhrecRank = GetInt(element, "edhrec_rank")
         };
 
         AddStringArray(element, "colors", card.Colors);
         AddStringArray(element, "color_identity", card.ColorIdentity);
+        AddStringArray(element, "keywords", card.Keywords);
+        AddStringArray(element, "produced_mana", card.ProducedMana);
         AddStringDictionary(element, "legalities", card.Legalities);
         AddStringDictionary(element, "prices", card.Prices);
         AddStringDictionary(element, "image_uris", card.ImageUris);
@@ -280,6 +357,16 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         }
 
         return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out double result) ? result : null;
+    }
+
+    private static int? GetInt(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out JsonElement value))
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int result) ? result : null;
     }
 
     private static string? GetFaceString(JsonElement element, string propertyName)

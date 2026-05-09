@@ -77,19 +77,32 @@ public sealed partial class ArchidektGateway
     {
         return new CardSnapshot
         {
+            ManaCost = GetString(cardElement, "manaCost")
+                ?? GetString(cardElement, "mana_cost")
+                ?? GetNestedString(cardElement, "oracleCard", "manaCost")
+                ?? GetNestedString(cardElement, "oracleCard", "mana_cost"),
             TypeLine = GetNestedString(cardElement, "oracleCard", "typeLine") ?? GetNestedString(cardElement, "oracleCard", "type"),
             ManaValue = GetDouble(cardElement, "manaValue")
                 ?? GetDouble(cardElement, "cmc")
                 ?? GetNestedDouble(cardElement, "oracleCard", "manaValue")
                 ?? GetNestedDouble(cardElement, "oracleCard", "cmc"),
+            OracleText = GetString(cardElement, "oracleText")
+                ?? GetString(cardElement, "oracle_text")
+                ?? GetNestedString(cardElement, "oracleCard", "oracleText")
+                ?? GetNestedString(cardElement, "oracleCard", "oracle_text"),
             ColorIdentity = ParseColorIdentity(cardElement),
             Set = GetString(cardElement, "edition")
                 ?? GetString(cardElement, "set")
                 ?? GetString(cardElement, "setCode"),
             CollectorNumber = GetString(cardElement, "collectorNumber")
                 ?? GetString(cardElement, "collector_number"),
+            Rarity = GetString(cardElement, "rarity"),
             ScryfallUri = GetString(cardElement, "scryfallUri")
-                ?? GetString(cardElement, "scryfall_uri")
+                ?? GetString(cardElement, "scryfall_uri"),
+            EdhrecRank = GetInt(cardElement, "edhrecRank")
+                ?? GetInt(cardElement, "edhrec_rank")
+                ?? GetNestedInt(cardElement, "oracleCard", "edhrecRank")
+                ?? GetNestedInt(cardElement, "oracleCard", "edhrec_rank")
         };
     }
 

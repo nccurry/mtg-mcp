@@ -47,6 +47,11 @@ public static class MtgMcpHost
             MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
             return new JsonDeckWorkspaceRepository(options.DataDir);
         });
+        builder.Services.AddSingleton<IDeckPlanRepository>(serviceProvider =>
+        {
+            MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
+            return new JsonDeckPlanRepository(options.DataDir);
+        });
         builder.Services.AddTransient<DeckWorkspaceService>();
         builder.Services.AddSingleton<OperationModeGuard>();
         builder.Services.AddScryfall(builder.Configuration);

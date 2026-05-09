@@ -102,8 +102,8 @@ public sealed class MtgResources
         {{statusJson}}
 
         apply or act: mutating tools are allowed, subject to each tool's arguments and Archidekt writeback checks.
-        plan: read-only tools are allowed, but all tools that create, cache, mutate, checkpoint, or write back are blocked.
-        read-only or ask: read-only tools are allowed, but all mutating tools are blocked.
+        plan: read-only tools and non-mutating planning tools are allowed; deck-content changes, checkpoints, and Archidekt writeback are blocked.
+        read-only or ask: read-only tools are allowed; deck-content changes, planning-state writes, checkpoints, and writeback are blocked.
 
         MCP tool annotations also mark tools as read-only/destructive/open-world so compatible clients can ask for approval before risky calls.
         If a blocked mutating tool is needed, ask the user to restart or reconfigure the MCP server with MTGMCP__OPERATION_MODE=apply.

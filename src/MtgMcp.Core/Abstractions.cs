@@ -6,6 +6,10 @@ public interface ICardCatalog
 
     Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken);
 
+    Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+        IReadOnlyList<string> names,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken);
@@ -20,6 +24,17 @@ public interface IDeckWorkspaceRepository
     Task<DeckWorkspace?> GetAsync(string workspaceId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken);
+}
+
+public interface IDeckPlanRepository
+{
+    Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken);
+
+    Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<DeckEditPlan>> ListAsync(string? workspaceId, CancellationToken cancellationToken);
+
+    Task DeleteAsync(string planId, CancellationToken cancellationToken);
 }
 
 public interface IArchidektGateway
