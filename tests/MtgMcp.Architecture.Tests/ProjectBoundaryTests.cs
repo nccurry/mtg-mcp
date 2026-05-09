@@ -68,7 +68,9 @@ public sealed class ProjectBoundaryTests
 
         foreach (XElement element in document.Descendants("ProjectReference"))
         {
-            string include = element.Attribute("Include")?.Value ?? "";
+            string include = (element.Attribute("Include")?.Value ?? "")
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
             string absolute = Path.GetFullPath(Path.Combine(projectDirectory, include));
             string relative = Path.GetRelativePath(root, absolute).Replace('\\', '/');
             references.Add(relative);

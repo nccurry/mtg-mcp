@@ -108,7 +108,7 @@ internal sealed class FakeHttpServer : IAsyncDisposable
         string json,
         HttpStatusCode statusCode = HttpStatusCode.OK)
     {
-        routes[(method.Method, NormalizePath(pathAndQuery))] = _ => FakeHttpResponse.Json(json, statusCode);
+        routes[(method.Method, NormalizeRouteKey(pathAndQuery))] = _ => FakeHttpResponse.Json(json, statusCode);
     }
 
     /// <summary>
@@ -183,11 +183,8 @@ internal sealed class FakeHttpServer : IAsyncDisposable
 
             string body = await ReadBodyAsync(stream, headers, cancellationToken).ConfigureAwait(false);
 
-            FakeHttpRequest request = new(
-                requestParts[0],
-                NormalizePath(requestParts[1]),
-                headers,
-                body);
+            string pathAndQuery = NormalizePath(requestParts[1]);
+            FakeHttpRequest request = new(requestParts[0], pathAndQuery, headers, body);
 
             lock (requestsLock)
             {
@@ -197,7 +194,7 @@ internal sealed class FakeHttpServer : IAsyncDisposable
             FakeHttpResponse response;
             if (
                 routes.TryGetValue(
-                    (request.Method, request.PathAndQuery),
+                    (request.Method, NormalizeRouteKey(request.PathAndQuery)),
                     out Func<FakeHttpRequest, FakeHttpResponse>? route
                 )
             )
@@ -410,6 +407,14 @@ internal sealed class FakeHttpServer : IAsyncDisposable
         }
 
         return value.TrimStart('/');
+    }
+
+    /// <summary>
+    /// Creates a stable route key across platform-specific query encoding differences.
+    /// </summary>
+    private static string NormalizeRouteKey(string pathAndQuery)
+    {
+        return WebUtility.UrlDecode(NormalizePath(pathAndQuery));
     }
 
     /// <summary>
