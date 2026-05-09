@@ -1,6 +1,17 @@
 # mtg-mcp
 <!-- mcp-name: io.github.nccurry/mtg-mcp -->
 
+[![CI](https://github.com/nccurry/mtg-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nccurry/mtg-mcp/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/Nccurry.MtgMcp?label=NuGet)](https://www.nuget.org/packages/Nccurry.MtgMcp)
+[![NuGet downloads](https://img.shields.io/nuget/dt/Nccurry.MtgMcp?label=downloads)](https://www.nuget.org/packages/Nccurry.MtgMcp)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.nccurry%2Fmtg--mcp-0f766e)](https://registry.modelcontextprotocol.io/?q=io.github.nccurry%2Fmtg-mcp)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+
+`mtg-mcp` is an unofficial community project. It is not produced by, endorsed by,
+supported by, or affiliated with Wizards of the Coast, Scryfall, or Archidekt.
+Magic: The Gathering and related materials are property of Wizards of the Coast LLC.
+
 `mtg-mcp` is a self-contained C#/.NET MCP server for building Magic: The Gathering
 decks with Scryfall card data and Archidekt deck writeback.
 
