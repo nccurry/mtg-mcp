@@ -88,6 +88,12 @@ function Assert-StableSemVer {
     }
 }
 
+function Assert-PackageSemVer {
+    if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+        throw "Package versions must use SemVer X.Y.Z or X.Y.Z-prerelease, such as 0.1.0 or 0.0.0-ci."
+    }
+}
+
 function New-CleanDirectory {
     param([Parameter(Mandatory = $true)][string] $Path)
 
@@ -229,7 +235,7 @@ function New-Checksums {
 }
 
 function New-WingetManifest {
-    Assert-StableSemVer
+    Assert-PackageSemVer
 
     $distPath = Resolve-RepoPath $DistDir
     $windowsArchiveName = "mtg-mcp-$Version-win-x64.zip"

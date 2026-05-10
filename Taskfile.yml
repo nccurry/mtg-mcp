@@ -80,10 +80,8 @@ tasks:
   coverage:
     desc: Run coverage gates and generate the Codecov report
     cmds:
-      - task: coverage:core
-      - task: coverage:scryfall
-      - task: coverage:archidekt
       - task: coverage:report
+      - task: coverage:gates
 
   coverage:report:
     desc: Generate a source-only Cobertura report for Codecov
@@ -100,50 +98,28 @@ tasks:
         --no-build
         --filter "Category!=Live"
 
-  coverage:core:
-    desc: Enforce 85 percent line coverage for core deck services
+  coverage:gates:
+    desc: Enforce 85 percent line coverage gates using the Codecov report
     cmds:
-      - >
-        dotnet test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-        /p:CollectCoverage=true
-        /p:CoverletOutputFormat=cobertura
-        /p:Include="[MtgMcp.Core]*"
-        /p:ExcludeByFile="**/obj/**%2c**/Models.cs%2c**/Options.cs"
-        /p:Threshold=85
-        /p:ThresholdType=line
-        /p:ThresholdStat=total
+      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85
+
+  coverage:core:
+    desc: Enforce 85 percent line coverage for core deck services using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Core
 
   coverage:scryfall:
-    desc: Enforce 85 percent line coverage for the Scryfall client
+    desc: Enforce 85 percent line coverage for the Scryfall client using the Codecov report
+    deps: [coverage:report]
     cmds:
-      - >
-        dotnet test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-        /p:CollectCoverage=true
-        /p:CoverletOutputFormat=cobertura
-        /p:Include="[MtgMcp.Scryfall]*"
-        /p:ExcludeByFile="**/obj/**%2c**/ScryfallOptions.cs%2c**/ScryfallServiceCollectionExtensions.cs"
-        /p:Threshold=85
-        /p:ThresholdType=line
-        /p:ThresholdStat=total
+      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Scryfall
 
   coverage:archidekt:
-    desc: Enforce 85 percent line coverage for the Archidekt client
+    desc: Enforce 85 percent line coverage for the Archidekt client using the Codecov report
+    deps: [coverage:report]
     cmds:
-      - >
-        dotnet test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-        /p:CollectCoverage=true
-        /p:CoverletOutputFormat=cobertura
-        /p:Include="[MtgMcp.Archidekt]*"
-        /p:ExcludeByFile="**/obj/**%2c**/ArchidektOptions.cs%2c**/ArchidektServiceCollectionExtensions.cs"
-        /p:Threshold=85
-        /p:ThresholdType=line
-        /p:ThresholdStat=total
+      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Archidekt
 
   format:
     desc: Format source
@@ -159,7 +135,8 @@ tasks:
     desc: Run the CI validation suite
     cmds:
       - task: lint
-      - task: test
+      - task: coverage:report
+      - task: coverage:gates
       - task: smoke:mcp
 
   smoke:mcp:
