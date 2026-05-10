@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using MtgMcp.Core;
 
 namespace MtgMcp.Scryfall.Tests;
@@ -123,6 +124,133 @@ public sealed class ScryfallProviderTests
     }
 
     /// <summary>
+    /// Verifies that corpus provider builds Scryfall queries and normalized card signals.
+    /// </summary>
+    [Fact]
+    public async Task CorpusSignalProvider_BuildsQueryAndSignals()
+    {
+        DateOnly recentRelease = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        DateOnly oldRelease = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2));
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults =
+            [
+                new CardSearchResult { Name = "Fresh Token Maker" },
+                new CardSearchResult { Name = "Old Token Maker" }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Fresh Token Maker"] = Card("Fresh Token Maker", "Enchantment", "Create two 1/1 creature tokens.", "2.50", 500, "abc", recentRelease),
+                ["Old Token Maker"] = Card("Old Token Maker", "Enchantment", "Create a creature token.", "1.00", 9_000, "old", oldRelease)
+            }
+        };
+        ScryfallCorpusSignalProvider provider = new(catalog, new NullCorpusCache(), Options.Create(new MtgMcpOptions()));
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("balanced");
+        budget.MaxCandidates = 6;
+        CorpusSignalQuery query = new()
+        {
+            Format = "edh",
+            Commander = "Jetmir, Nexus of Revels",
+            Theme = "tokens",
+            Goal = "token swarm",
+            MaxPrice = 5.25m
+        };
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            query,
+            budget,
+            TestContext.Current.CancellationToken);
+
+        catalog.SearchCalls.Should().Be(1);
+        catalog.LastSearchLimit.Should().Be(6);
+        catalog.LastSearchQuery.Should().Contain("legal:commander");
+        catalog.LastSearchQuery.Should().Contain("(o:create o:token)");
+        catalog.LastSearchQuery.Should().Contain("usd<=5.25");
+        report.Sources.Should().ContainSingle(source => source.Key == "scryfall-edhrec-rank");
+
+        CardCorpusSignal inclusion = report.Signals.Should()
+            .ContainSingle(signal =>
+                signal.CardName == "Fresh Token Maker"
+                && signal.SignalType == CorpusSignalTypes.Inclusion)
+            .Which;
+        inclusion.Price.Should().Be(2.50m);
+        inclusion.InclusionRate.Should().BeGreaterThan(0);
+        inclusion.Uri.Should().Contain("Fresh%20Token%20Maker");
+
+        report.Signals.Should().ContainSingle(signal =>
+            signal.CardName == "Fresh Token Maker"
+            && signal.SignalType == CorpusSignalTypes.Trend);
+        report.Signals.Should().NotContain(signal =>
+            signal.CardName == "Old Token Maker"
+            && signal.SignalType == CorpusSignalTypes.Trend);
+    }
+
+    /// <summary>
+    /// Verifies that corpus provider uses source-fact cache and honors refresh.
+    /// </summary>
+    [Fact]
+    public async Task CorpusSignalProvider_UsesCacheAndRefreshBypassesIt()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults = [new CardSearchResult { Name = "Cached Ramp" }],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Cached Ramp"] = Card("Cached Ramp", "Artifact", "{T}: Add one mana of any color.", "1.00", 100, "abc", null)
+            }
+        };
+        ScryfallCorpusSignalProvider provider = new(
+            catalog,
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(new MtgMcpOptions()));
+        CorpusSignalQuery query = new()
+        {
+            Format = "commander",
+            Goal = "ramp"
+        };
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("balanced");
+
+        await provider.GetSignalsAsync(query, budget, TestContext.Current.CancellationToken);
+        await provider.GetSignalsAsync(query, budget, TestContext.Current.CancellationToken);
+        query.Refresh = true;
+        await provider.GetSignalsAsync(query, budget, TestContext.Current.CancellationToken);
+
+        catalog.SearchCalls.Should().Be(2);
+    }
+
+    /// <summary>
+    /// Verifies that Scryfall corpus evidence can be disabled by source configuration.
+    /// </summary>
+    [Fact]
+    public async Task CorpusSignalProvider_ReturnsDisabledStatusWhenConfiguredOff()
+    {
+        FakeCardCatalog catalog = new();
+        MtgMcpOptions options = new()
+        {
+            Intelligence =
+            {
+                Sources =
+                {
+                    ["Scryfall"] = new MtgMcpCorpusSourceOptions { Enabled = false }
+                }
+            }
+        };
+        ScryfallCorpusSignalProvider provider = new(catalog, new NullCorpusCache(), Options.Create(options));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            new CorpusSignalQuery { Format = "commander", Goal = "draw" },
+            RecommendationAnalysisBudget.FromDepth("balanced"),
+            TestContext.Current.CancellationToken);
+
+        report.Signals.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "scryfall-edhrec-rank"
+            && !source.Enabled
+            && source.Status == CorpusSourceStatuses.Disabled);
+        catalog.SearchCalls.Should().Be(0);
+    }
+
+    /// <summary>
     /// Creates a card info fixture.
     /// </summary>
     private static CardInfo Card(
@@ -180,6 +308,11 @@ public sealed class ScryfallProviderTests
         public string LastSearchQuery { get; private set; } = "";
 
         /// <summary>
+        /// Gets the last search limit.
+        /// </summary>
+        public int LastSearchLimit { get; private set; }
+
+        /// <summary>
         /// Searches fake cards.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
@@ -189,6 +322,7 @@ public sealed class ScryfallProviderTests
         {
             SearchCalls++;
             LastSearchQuery = query;
+            LastSearchLimit = limit;
             return Task.FromResult<IReadOnlyList<CardSearchResult>>(SearchResults.Take(limit).ToList());
         }
 

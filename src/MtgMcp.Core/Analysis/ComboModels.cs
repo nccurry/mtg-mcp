@@ -19,6 +19,11 @@ public sealed class ComboCatalogQuery
     /// Gets or sets the deck format.
     /// </summary>
     public string Format { get; set; } = "commander";
+
+    /// <summary>
+    /// Gets or sets whether combo providers should bypass fresh cache entries.
+    /// </summary>
+    public bool Refresh { get; set; }
 }
 
 /// <summary>

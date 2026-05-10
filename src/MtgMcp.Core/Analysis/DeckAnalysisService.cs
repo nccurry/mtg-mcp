@@ -16,7 +16,8 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
     )
         : base(
             repository,
@@ -26,7 +27,8 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride)
+            currentDateOverride,
+            corpusSignalProviders)
     {
     }
 }

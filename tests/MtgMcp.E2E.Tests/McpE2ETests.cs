@@ -164,6 +164,356 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Verifies that local MCP deck mutations compose across cards, quantities, categories, and exports.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task LocalMutationFlow_ExercisesCardQuantityAndCategoryChanges()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        scryfall.GetJson("cards/named?fuzzy=Lightning%20Bolt", LightningBoltJson);
+        scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Mutations",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        await CallJsonAsync(
+            session.Client,
+            "create_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["category"] = "Removal",
+                ["includedInDeck"] = true,
+                ["includedInPrice"] = true
+            });
+        await CallJsonAsync(
+            session.Client,
+            "add_card",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Lightning Bolt",
+                ["quantity"] = 2,
+                ["category"] = "Removal"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "set_card_quantity",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Lightning Bolt",
+                ["quantity"] = 3,
+                ["category"] = "Removal"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "add_card_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Lightning Bolt",
+                ["category"] = "Tempo"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "set_primary_card_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Lightning Bolt",
+                ["category"] = "Tempo"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "remove_card_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Lightning Bolt",
+                ["category"] = "Removal"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "rename_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["oldName"] = "Tempo",
+                ["newName"] = "Interaction"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "add_card",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Arcane Signet",
+                ["quantity"] = 1,
+                ["category"] = "Ramp"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "move_card",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Arcane Signet",
+                ["fromCategory"] = "Ramp",
+                ["toCategory"] = "Artifacts"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "delete_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["category"] = "Artifacts",
+                ["replacementCategory"] = "Mainboard"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "remove_card",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Lightning Bolt",
+                ["quantity"] = 1,
+                ["category"] = "Interaction"
+            });
+        await CallJsonAsync(
+            session.Client,
+            "set_card_quantity",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Arcane Signet",
+                ["quantity"] = 0,
+                ["category"] = "Mainboard"
+            });
+
+        string export = await CallTextAsync(
+            session.Client,
+            "export_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement resource = await CallJsonAsync(
+            session.Client,
+            "open_local_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement analysis = await CallJsonAsync(
+            session.Client,
+            "analyze_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+
+        export.Should().Contain("Interaction");
+        export.Should().Contain("2 Lightning Bolt");
+        export.Should().NotContain("Arcane Signet");
+        GetObject(analysis, "typeCounts").GetProperty("Instant").GetInt32().Should().Be(2);
+        JsonElement card = GetProperty(resource, "cards").EnumerateArray().Should().ContainSingle().Subject;
+        GetString(card, "name").Should().Be("Lightning Bolt");
+        GetString(card, "primaryCategory").Should().Be("Interaction");
+        GetInt32(card, "quantity").Should().Be(2);
+        card.GetProperty("categories").EnumerateArray().Select(value => value.GetString())
+            .Should()
+            .BeEquivalentTo(["Interaction"]);
+        resource.GetProperty("categories").EnumerateArray()
+            .Select(value => GetString(value, "name"))
+            .Should()
+            .Contain(["Mainboard", "Removal", "Interaction", "Ramp"]);
+        resource.GetProperty("categories").EnumerateArray()
+            .Select(value => GetString(value, "name"))
+            .Should()
+            .NotContain("Artifacts");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that corpus budget replacement plans preview and apply through MCP.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task CorpusBudgetReplacementFlow_PreviewsAndAppliesLocalPlan()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        scryfall.GetJson("cards/named?fuzzy=Mana%20Crypt", ManaCryptJson);
+        scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("(o:add or o:treasure or o:\"search your library for a land\") legal:commander usd<=5"),
+            ArcaneSignetSearchJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("legal:commander usd<=5"),
+            ArcaneSignetSearchJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("legal:commander -t:basic"),
+            ArcaneSignetSearchJson);
+        scryfall.PostJson("cards/collection", ArcaneSignetCollectionJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Corpus Budget",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        await CallJsonAsync(
+            session.Client,
+            "add_card",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = "Mana Crypt",
+                ["quantity"] = 1,
+                ["category"] = "Ramp"
+            });
+        JsonElement replacement = await CallJsonAsync(
+            session.Client,
+            "find_corpus_budget_replacements",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["maxPrice"] = 5,
+                ["minSavings"] = 1,
+                ["limit"] = 1,
+                ["analysisDepth"] = "minimal"
+            });
+        string planId = GetString(GetObject(replacement, "plan"), "planId");
+        JsonElement recommendation = GetProperty(replacement, "recommendations").EnumerateArray()
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        GetString(recommendation, "cardName").Should().Be("Arcane Signet");
+        GetString(recommendation, "replaceCard").Should().Be("Mana Crypt");
+        GetProperty(recommendation, "evidence").GetArrayLength().Should().BeGreaterThan(0);
+
+        JsonElement preview = await CallJsonAsync(
+            session.Client,
+            "preview_deck_plan",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["resolveAddedCards"] = true
+            });
+        string beforeApplyExport = await CallTextAsync(
+            session.Client,
+            "export_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement apply = await CallJsonAsync(
+            session.Client,
+            "apply_deck_plan",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["createCheckpoint"] = false
+            });
+        string afterApplyExport = await CallTextAsync(
+            session.Client,
+            "export_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+
+        JsonElement beforeSnapshot = GetObject(preview, "before");
+        JsonElement afterSnapshot = GetObject(preview, "after");
+        GetInt32(GetObject(beforeSnapshot, "analysis"), "includedCards")
+            .Should()
+            .Be(1);
+        GetInt32(GetObject(afterSnapshot, "analysis"), "includedCards")
+            .Should()
+            .Be(1);
+        GetProperty(GetObject(beforeSnapshot, "cost"), "includedTotal").GetDecimal()
+            .Should()
+            .BeGreaterThan(GetProperty(GetObject(afterSnapshot, "cost"), "includedTotal").GetDecimal());
+        beforeApplyExport.Should().Contain("1 Mana Crypt");
+        beforeApplyExport.Should().NotContain("Arcane Signet");
+        GetInt32(apply, "appliedOperations").Should().Be(2);
+        afterApplyExport.Should().Contain("1 Arcane Signet");
+        afterApplyExport.Should().NotContain("Mana Crypt");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that corpus refresh bypasses cached source facts through MCP.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task CorpusRefreshFlow_UsesCacheAndRefreshesSourceFacts()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        string searchPath = ScryfallSearchPath("legal:commander o:discard usd<=5");
+        scryfall.GetJson(searchPath, HiddenGemSearchJson);
+        scryfall.PostJson("cards/collection", HiddenGemCollectionJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Corpus Refresh",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        Dictionary<string, object?> args = new()
+        {
+            ["workspaceId"] = workspaceId,
+            ["goal"] = "discard",
+            ["maxPrice"] = 5,
+            ["analysisDepth"] = "balanced"
+        };
+        JsonElement first = await CallJsonAsync(session.Client, "find_lesser_known_cards", args);
+        JsonElement second = await CallJsonAsync(session.Client, "find_lesser_known_cards", args);
+        args["refresh"] = true;
+        JsonElement refreshed = await CallJsonAsync(session.Client, "find_lesser_known_cards", args);
+
+        GetProperty(first, "recommendations").GetArrayLength().Should().Be(1);
+        GetProperty(second, "notes").EnumerateArray()
+            .Select(note => note.GetString())
+            .Should()
+            .Contain(note => note != null && note.Contains("cache", StringComparison.OrdinalIgnoreCase));
+        GetProperty(refreshed, "recommendations").GetArrayLength().Should().Be(1);
+        scryfall.Requests.Count(request =>
+                request.Method == "GET"
+                && request.PathAndQuery.Equals(searchPath, StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .Be(2);
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that the one-stop deckbuilding tools work through the MCP stdio surface.
     /// </summary>
     [Fact]
@@ -693,6 +1043,24 @@ public sealed class McpE2ETests
     """;
 
     /// <summary>
+    /// Provides a Scryfall card payload for corpus budget replacement E2E tests.
+    /// </summary>
+    private const string ManaCryptJson = """
+    {
+      "id": "mana-crypt",
+      "oracle_id": "oracle-mana-crypt",
+      "name": "Mana Crypt",
+      "mana_cost": "{0}",
+      "cmc": 0,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add two colorless mana.",
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "180.00" },
+      "edhrec_rank": 20
+    }
+    """;
+
+    /// <summary>
     /// Provides a Scryfall card payload for consistency workflow E2E tests.
     /// </summary>
     private const string ArcaneSignetJson = """
@@ -708,6 +1076,89 @@ public sealed class McpE2ETests
       "legalities": { "commander": "legal" },
       "prices": { "usd": "1.00" },
       "edhrec_rank": 5
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall search payload for Arcane Signet.
+    /// </summary>
+    private const string ArcaneSignetSearchJson = """
+    {
+      "has_more": false,
+      "data": [
+        {
+          "id": "arcane-signet",
+          "name": "Arcane Signet",
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+          "prices": { "usd": "1.00" },
+          "edhrec_rank": 5
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall collection payload for Arcane Signet.
+    /// </summary>
+    private const string ArcaneSignetCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "arcane-signet",
+          "oracle_id": "oracle-arcane-signet",
+          "name": "Arcane Signet",
+          "mana_cost": "{2}",
+          "cmc": 2,
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+          "produced_mana": ["W", "U", "B", "R", "G"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "1.00" },
+          "edhrec_rank": 5
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall search payload for corpus refresh E2E tests.
+    /// </summary>
+    private const string HiddenGemSearchJson = """
+    {
+      "has_more": false,
+      "data": [
+        {
+          "id": "hidden-gem",
+          "name": "Hidden Gem of Discard",
+          "type_line": "Enchantment",
+          "oracle_text": "Whenever an opponent discards a card, draw a card.",
+          "prices": { "usd": "0.50" },
+          "edhrec_rank": 15000
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall collection payload for corpus refresh E2E tests.
+    /// </summary>
+    private const string HiddenGemCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "hidden-gem",
+          "oracle_id": "oracle-hidden-gem",
+          "name": "Hidden Gem of Discard",
+          "mana_cost": "{2}{B}",
+          "cmc": 3,
+          "type_line": "Enchantment",
+          "oracle_text": "Whenever an opponent discards a card, draw a card.",
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "0.50" },
+          "edhrec_rank": 15000
+        }
+      ]
     }
     """;
 

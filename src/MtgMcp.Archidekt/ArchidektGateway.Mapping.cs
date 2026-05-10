@@ -85,7 +85,7 @@ public sealed partial class ArchidektGateway
                 ScryfallId = GetString(cardElement, "uid"),
                 ScryfallOracleId = GetNestedString(cardElement, "oracleCard", "uid"),
                 ArchidektCardId = GetString(cardElement, "id"),
-                ArchidektDeckRelationId = GetInt(relation, "id"),
+                ArchidektDeckRelationId = GetDeckRelationId(relation),
                 Modifier = GetString(relation, "modifier"),
                 Companion = GetBool(relation, "companion", defaultValue: false),
                 FlippedDefault = GetBool(relation, "flippedDefault", defaultValue: false),
@@ -96,6 +96,19 @@ public sealed partial class ArchidektGateway
         }
 
         return cards;
+    }
+
+    /// <summary>
+    /// Reads Archidekt's deck-card relation id from observed response variants.
+    /// </summary>
+    private static long? GetDeckRelationId(JsonElement relation)
+    {
+        return GetLong(relation, "id")
+            ?? GetLong(relation, "deckRelationId")
+            ?? GetLong(relation, "deckRelationID")
+            ?? GetLong(relation, "deck_relation_id")
+            ?? GetNestedLong(relation, "deckRelation", "id")
+            ?? GetNestedLong(relation, "deckCard", "id");
     }
 
     /// <summary>

@@ -19,7 +19,8 @@ public sealed partial class DeckIntelligenceTests
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null)
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
     {
         return new DeckWorkspaceService(
             repository,
@@ -29,7 +30,8 @@ public sealed partial class DeckIntelligenceTests
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride);
+            currentDateOverride,
+            corpusSignalProviders);
     }
 
     /// <summary>
@@ -43,7 +45,8 @@ public sealed partial class DeckIntelligenceTests
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null)
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
     {
         return new DeckAnalysisService(
             repository,
@@ -53,7 +56,8 @@ public sealed partial class DeckIntelligenceTests
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride);
+            currentDateOverride,
+            corpusSignalProviders);
     }
 
     /// <summary>
@@ -67,7 +71,8 @@ public sealed partial class DeckIntelligenceTests
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null)
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
     {
         return new DeckSimulationService(
             repository,
@@ -77,7 +82,8 @@ public sealed partial class DeckIntelligenceTests
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride);
+            currentDateOverride,
+            corpusSignalProviders);
     }
 
     /// <summary>
@@ -91,7 +97,8 @@ public sealed partial class DeckIntelligenceTests
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null)
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
     {
         DeckAnalysisService analysis = CreateAnalysisService(
             repository,
@@ -101,7 +108,8 @@ public sealed partial class DeckIntelligenceTests
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride);
+            currentDateOverride,
+            corpusSignalProviders);
         DeckSimulationService simulation = CreateSimulationService(
             repository,
             cardCatalog,
@@ -110,7 +118,8 @@ public sealed partial class DeckIntelligenceTests
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride);
+            currentDateOverride,
+            corpusSignalProviders);
 
         return new DeckRecommendationService(
             repository,
@@ -122,7 +131,8 @@ public sealed partial class DeckIntelligenceTests
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride);
+            currentDateOverride,
+            corpusSignalProviders);
     }
 
     /// <summary>

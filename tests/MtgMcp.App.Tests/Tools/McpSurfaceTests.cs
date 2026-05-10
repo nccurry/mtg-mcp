@@ -26,6 +26,7 @@ public sealed class McpSurfaceTests
         typeof(CheckpointTools),
         typeof(AnalysisTools),
         typeof(RecommendationTools),
+        typeof(CorpusTools),
         typeof(PlanTools),
         typeof(SimulationTools),
         typeof(IntentTools),
@@ -98,6 +99,12 @@ public sealed class McpSurfaceTests
             "project_board_state",
             "estimate_win_turn",
             "brainstorm_deck_improvements",
+            "analyze_commander_trends",
+            "find_lesser_known_cards",
+            "find_corpus_budget_replacements",
+            "find_top_exemplar_decks",
+            "explain_card_corpus_signal",
+            "list_corpus_sources",
             "list_deck_plans",
             "get_deck_plan",
             "delete_deck_plan",
@@ -207,6 +214,7 @@ public sealed class McpSurfaceTests
             "mtg://usage/operation-modes",
             "mtg://usage/deck-intent",
             "mtg://config/effective",
+            "mtg://corpus/sources",
             "mtg://archidekt/auth-status",
         ];
 
@@ -350,7 +358,34 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
-    /// Verifies that configuration aliases map documented environment keys.
+    /// Verifies that read-only mode blocks corpus tools that write local planning state.
+    /// </summary>
+    [Fact]
+    public async Task OperationModeGuard_BlocksCorpusBudgetPlanWhenReadOnly()
+    {
+        InMemoryRepository workspaces = new();
+        EmptyCardCatalog catalog = new();
+        DeckAnalysisService analysis = new(workspaces, catalog);
+        DeckSimulationService simulation = new(workspaces, catalog);
+        DeckRecommendationService recommendations = new(workspaces, catalog, analysis, simulation);
+        IOptions<MtgMcpOptions> options = Options.Create(new MtgMcpOptions
+        {
+            OperationMode = "read-only"
+        });
+        OperationModeGuard operationMode = new(options);
+        CorpusTools tools = new(recommendations, operationMode, options);
+
+        Func<Task> act = () => tools.FindCorpusBudgetReplacementsAsync(
+            "workspace-1",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*read-only mode*find_corpus_budget_replacements*");
+    }
+
+    /// <summary>
+    /// Verifies that configuration aliases map the single documented prefixed environment shape.
     /// </summary>
     [Fact]
     public void ConfigurationAliases_MapDocumentedEnvironmentKeys()
@@ -359,12 +394,21 @@ public sealed class McpSurfaceTests
         {
             ["DATA_DIR"] = "C:/mtg-mcp",
             ["OPERATION_MODE"] = "plan",
+            ["INTELLIGENCE:ANALYSIS_DEPTH"] = "best",
+            ["INTELLIGENCE:CACHE:MODE"] = "memory",
+            ["INTELLIGENCE:CACHE:MAX_BYTES"] = "1024",
+            ["INTELLIGENCE:CACHE:TTLS:SCRYFALL_SEARCH"] = "12h",
+            ["INTELLIGENCE:CACHE:TTLS:COMMANDERSPELLBOOK"] = "18h",
+            ["INTELLIGENCE:SOURCES:SCRYFALL:ENABLED"] = "false",
+            ["INTELLIGENCE:SOURCES:COMMANDERSPELLBOOK:ENABLED"] = "false",
+            ["INTELLIGENCE:SOURCES:TOPDECK:API_KEY"] = "topdeck-key",
+            ["INTELLIGENCE:SOURCES:TOPDECK:BASE_ADDRESS"] = "https://topdeck.test/api/",
             ["ARCHIDEKT:JWT"] = "jwt-token",
             ["ARCHIDEKT:REFRESH_TOKEN"] = "refresh-token",
             ["ARCHIDEKT:USER_ID"] = "278245",
             ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
-            ["COMMANDERSPELLBOOK:BASE_ADDRESS"] = "https://spellbook.test/",
+            ["SCRYFALL:USER_AGENT"] = "mtg-mcp-test",
         };
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(rawConfig)
@@ -376,22 +420,33 @@ public sealed class McpSurfaceTests
 
         aliases["MtgMcp:DataDir"].Should().Be("C:/mtg-mcp");
         aliases["MtgMcp:OperationMode"].Should().Be("plan");
+        aliases["MtgMcp:Intelligence:AnalysisDepth"].Should().Be("best");
+        aliases["MtgMcp:Intelligence:Cache:Mode"].Should().Be("memory");
+        aliases["MtgMcp:Intelligence:Cache:MaxBytes"].Should().Be("1024");
+        aliases["MtgMcp:Intelligence:Cache:Ttls:ScryfallSearch"].Should().Be("12h");
+        aliases["MtgMcp:Intelligence:Cache:Ttls:CommanderSpellbook"].Should().Be("18h");
+        aliases["MtgMcp:Intelligence:Sources:Scryfall:Enabled"].Should().Be("false");
+        aliases["MtgMcp:Intelligence:Sources:CommanderSpellbook:Enabled"].Should().Be("false");
+        aliases["MtgMcp:Intelligence:Sources:TopDeck:ApiKey"].Should().Be("topdeck-key");
+        aliases["MtgMcp:Intelligence:Sources:TopDeck:BaseAddress"].Should().Be("https://topdeck.test/api/");
         aliases["MtgMcp:Archidekt:Jwt"].Should().Be("jwt-token");
         aliases["MtgMcp:Archidekt:RefreshToken"].Should().Be("refresh-token");
         aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
         aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
-        aliases["MtgMcp:CommanderSpellbook:BaseAddress"].Should().Be("https://spellbook.test/");
+        aliases["MtgMcp:Scryfall:UserAgent"].Should().Be("mtg-mcp-test");
     }
 
     /// <summary>
-    /// Verifies that legacy Archidekt user id environment key maps to documented config.
+    /// Verifies that removed duplicate environment aliases no longer map to config.
     /// </summary>
     [Fact]
-    public void ConfigurationAliases_MapArchidektUserIdEnvironmentKey()
+    public void ConfigurationAliases_DoNotMapRemovedDuplicateEnvironmentKeys()
     {
         Dictionary<string, string?> rawConfig = new(StringComparer.OrdinalIgnoreCase)
         {
+            ["MODE"] = "plan",
+            ["ANALYSIS_DEPTH"] = "best",
             ["ARCHIDEKT_USER_ID"] = "278245",
         };
         IConfiguration configuration = new ConfigurationBuilder()
@@ -402,7 +457,39 @@ public sealed class McpSurfaceTests
             configuration
         );
 
-        aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
+        aliases.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that appsettings.json is not a supported mtg-mcp config file.
+    /// </summary>
+    [Fact]
+    public void HostConfiguration_LoadsMtgMcpJsonButNotAppsettingsJson()
+    {
+        string originalDirectory = Directory.GetCurrentDirectory();
+        string tempDirectory = Path.Combine(Path.GetTempPath(), $"mtg-mcp-config-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """{ "MtgMcp": { "DataDir": "from-appsettings" } }""");
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "mtg-mcp.json"),
+                """{ "MtgMcp": { "OperationMode": "plan" } }""");
+            Directory.SetCurrentDirectory(tempDirectory);
+
+            using IHost host = MtgMcpHost.Build([]);
+            MtgMcpOptions options = host.Services.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
+
+            options.DataDir.Should().NotBe("from-appsettings");
+            options.OperationMode.Should().Be("plan");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDirectory);
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     /// <summary>
@@ -429,6 +516,12 @@ public sealed class McpSurfaceTests
         host.Services.GetRequiredService<ICardCatalog>().Should().NotBeNull();
         host.Services.GetRequiredService<IDeckPlanRepository>().Should().NotBeNull();
         host.Services.GetRequiredService<IArchidektGateway>().Should().NotBeNull();
+        host.Services.GetRequiredService<ICorpusCache>().Should().NotBeNull();
+        host.Services.GetServices<ICorpusSignalProvider>().Should().NotBeEmpty();
+        host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
+            source.Key == "topdeck"
+            && source.Status == CorpusSourceStatuses.MissingConfig
+            && source.RequiresKey);
         host.Services.GetRequiredService<IOptions<MtgMcpOptions>>()
             .Value.DataDir.Should()
             .NotBeNullOrWhiteSpace();

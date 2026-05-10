@@ -41,6 +41,11 @@ public abstract partial class DeckServiceBase
     protected IComboCatalog? ComboCatalog { get; }
 
     /// <summary>
+    /// Supplies optional corpus-backed card and exemplar evidence for recommendations.
+    /// </summary>
+    protected IReadOnlyList<ICorpusSignalProvider> CorpusSignalProviders { get; }
+
+    /// <summary>
     /// Overrides today's date for deterministic release-radar tests.
     /// </summary>
     protected DateOnly? CurrentDateOverride { get; }
@@ -56,7 +61,8 @@ public abstract partial class DeckServiceBase
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
     )
     {
         Repository = repository;
@@ -67,5 +73,6 @@ public abstract partial class DeckServiceBase
         CardTrendProvider = cardTrendProvider;
         ComboCatalog = comboCatalog;
         CurrentDateOverride = currentDateOverride;
+        CorpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
     }
 }

@@ -26,6 +26,11 @@ public sealed class MtgResources
     private readonly DeckWorkspaceService decks;
 
     /// <summary>
+    /// Supplies corpus source status.
+    /// </summary>
+    private readonly DeckRecommendationService recommendations;
+
+    /// <summary>
     /// Stores the configuration.
     /// </summary>
     private readonly IConfiguration configuration;
@@ -45,12 +50,14 @@ public sealed class MtgResources
     /// </summary>
     public MtgResources(
         DeckWorkspaceService decks,
+        DeckRecommendationService recommendations,
         IConfiguration configuration,
         IArchidektGateway archidektGateway,
         OperationModeGuard operationMode
     )
     {
         this.decks = decks;
+        this.recommendations = recommendations;
         this.configuration = configuration;
         this.archidektGateway = archidektGateway;
         this.operationMode = operationMode;
@@ -262,6 +269,16 @@ public sealed class MtgResources
         }
 
         return JsonSerializer.Serialize(SecretRedactor.Redact(values), JsonOptions);
+    }
+
+    /// <summary>
+    /// Gets deck corpus source status.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://corpus/sources", Name = "Corpus Sources")]
+    [Description("Enabled and planned deck-corpus sources with stability, attribution, and permission notes.")]
+    public string GetCorpusSources()
+    {
+        return JsonSerializer.Serialize(recommendations.ListCorpusSources(), JsonOptions);
     }
 
     /// <summary>

@@ -18,6 +18,7 @@ public static class CommanderSpellbookServiceCollectionExtensions
     {
         services.Configure<CommanderSpellbookOptions>(configuration.GetSection("MtgMcp:CommanderSpellbook"));
         services.AddHttpClient<IComboCatalog, CommanderSpellbookComboCatalog>();
+        services.AddTransient<ICorpusSignalProvider, CommanderSpellbookCorpusSignalProvider>();
         return services;
     }
 }

@@ -22,7 +22,8 @@ public sealed partial class DeckPlanService : DeckServiceBase
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
     )
         : base(
             repository,
@@ -32,7 +33,8 @@ public sealed partial class DeckPlanService : DeckServiceBase
             commanderMetaProvider,
             cardTrendProvider,
             comboCatalog,
-            currentDateOverride)
+            currentDateOverride,
+            corpusSignalProviders)
     {
         this.workspaces = workspaces;
     }
