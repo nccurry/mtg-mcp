@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net;
 using FluentAssertions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -90,7 +91,8 @@ public sealed class McpE2ETests
         GetObject(analysis, "typeCounts").GetProperty("Instant").GetInt32().Should().Be(2);
         scryfall
             .Requests.Should()
-            .ContainSingle(request => request.PathAndQuery == "cards/named?fuzzy=Lightning%20Bolt");
+            .ContainSingle(request =>
+                WebUtility.UrlDecode(request.PathAndQuery) == "cards/named?fuzzy=Lightning Bolt");
         archidekt.Requests.Should().BeEmpty();
     }
 
