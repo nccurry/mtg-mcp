@@ -64,13 +64,11 @@ public sealed partial class ArchidektGateway
         }
 
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
-        using HttpRequestMessage request = new(
-            HttpMethod.Delete,
-            $"api/decks/category/{category.ArchidektCategoryId.Value}/"
-        );
-        using HttpResponseMessage response = await httpClient
-            .SendAsync(request, cancellationToken)
+        await SendAsync(
+                HttpMethod.Delete,
+                $"api/decks/category/{category.ArchidektCategoryId.Value}/",
+                cancellationToken
+            )
             .ConfigureAwait(false);
-        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
     }
 }

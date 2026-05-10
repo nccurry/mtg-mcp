@@ -550,6 +550,11 @@ public sealed partial class DeckIntelligenceTests
         public bool ThrowOnGameChangerSearch { get; init; }
 
         /// <summary>
+        /// Gets or sets whether single-card lookup throws.
+        /// </summary>
+        public bool ThrowOnGetCard { get; init; }
+
+        /// <summary>
         /// Searches fake cards.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
@@ -643,6 +648,11 @@ public sealed partial class DeckIntelligenceTests
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
+            if (ThrowOnGetCard)
+            {
+                throw new HttpRequestException("Scryfall unavailable.");
+            }
+
             return Task.FromResult<CardInfo?>(CreateCard(nameOrId));
         }
 

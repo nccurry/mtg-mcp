@@ -56,6 +56,87 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that preview deck plan degrades gracefully when Game Changer data is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_WarnsWhenGameChangersUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "No-op preview"
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGameChangerSearch = true },
+            archidektGateway: null,
+            plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Warnings.Should().Contain(warning =>
+            warning.Contains("Game Changer", StringComparison.OrdinalIgnoreCase));
+        preview.Before.Bracket.GameChangers.Should().BeEmpty();
+        preview.Before.Bracket.Notes.Should().Contain(note =>
+            note.Contains("unavailable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that preview deck plan warns when added-card metadata resolution is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_WarnsWhenAddedCardResolutionUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview Missing Metadata"
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add card",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGetCard = true },
+            archidektGateway: null,
+            plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Warnings.Should().Contain(warning =>
+            warning.Contains("Could not resolve added card", StringComparison.OrdinalIgnoreCase));
+        preview.After.Analysis.CategoryCounts[DeckRoles.Ramp].Should().Be(1);
+        preview.After.Analysis.Notes.Should().Contain(note =>
+            note.Contains("not been normalized", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that preview deck plan applies card-category operations on the clone.
     /// </summary>
     [Fact]
@@ -152,6 +233,48 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
         await reapply.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*already been applied*");
+    }
+
+    /// <summary>
+    /// Verifies that applying a local add-card plan continues when card metadata is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDeckPlan_LocalPlan_AddsCardWhenMetadataUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace { Name = "Apply" }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add card",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Sol Ring",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGetCard = true },
+            archidektGateway: null,
+            plans);
+
+        DeckEditPlanApplyResult result = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: true,
+            checkpointName: null,
+            TestContext.Current.CancellationToken);
+
+        DeckCard added = result.Workspace.Cards.Single();
+        added.Name.Should().Be("Sol Ring");
+        added.ScryfallId.Should().BeNull();
+        result.Messages.Should().ContainSingle(message => message.Contains("Added 1 Sol Ring", StringComparison.Ordinal));
     }
 
     /// <summary>

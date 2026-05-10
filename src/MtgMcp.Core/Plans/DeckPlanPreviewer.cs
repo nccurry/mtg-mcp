@@ -114,7 +114,7 @@ internal sealed class DeckPlanPreviewer
         }
 
         CardInfo? cardInfo = resolveAddedCards
-            ? await cardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false)
+            ? await TryGetCardForPreviewAsync(cardName, cancellationToken).ConfigureAwait(false)
             : null;
         DeckCard card = new()
         {
@@ -136,6 +136,23 @@ internal sealed class DeckPlanPreviewer
         }
 
         workspace.Cards.Add(card);
+    }
+
+    /// <summary>
+    /// Resolves optional card metadata while allowing preview metrics to continue during catalog outages.
+    /// </summary>
+    private async Task<CardInfo?> TryGetCardForPreviewAsync(
+        string cardName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await cardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

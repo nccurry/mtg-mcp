@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using MtgMcp.Core;
@@ -114,6 +116,126 @@ public sealed class DecklistCorpusProviderTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*HTML*");
+    }
+
+    /// <summary>
+    /// Verifies that malformed TopDeck JSON is surfaced as a contract failure.
+    /// </summary>
+    [Fact]
+    public async Task TopDeckProvider_ThrowsForMalformedJson()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Post, "https://topdeck.test/v2/tournaments")
+            .Respond("application/json", "{ nope");
+        TopDeckCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://topdeck.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("TopDeck", "key")));
+
+        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<JsonException>();
+    }
+
+    /// <summary>
+    /// Verifies that malformed Spicerack JSON is surfaced as a contract failure.
+    /// </summary>
+    [Fact]
+    public async Task SpicerackProvider_ThrowsForMalformedJson()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
+            .Respond("application/json", "{ nope");
+        SpicerackCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://spicerack.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Spicerack", "key")));
+
+        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<JsonException>();
+    }
+
+    /// <summary>
+    /// Verifies that TopDeck rate limits fail clearly instead of returning partial evidence.
+    /// </summary>
+    [Fact]
+    public async Task TopDeckProvider_ThrowsForRateLimitResponse()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Post, "https://topdeck.test/v2/tournaments")
+            .Respond(HttpStatusCode.TooManyRequests, "application/json", """{ "error": "rate limited" }""");
+        TopDeckCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://topdeck.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("TopDeck", "key")));
+
+        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<HttpRequestException>()
+            .Where(exception => exception.StatusCode == HttpStatusCode.TooManyRequests);
+    }
+
+    /// <summary>
+    /// Verifies that Spicerack auth failures fail clearly instead of returning partial evidence.
+    /// </summary>
+    [Fact]
+    public async Task SpicerackProvider_ThrowsForAuthFailure()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
+            .Respond(HttpStatusCode.Unauthorized, "application/json", """{ "error": "bad key" }""");
+        SpicerackCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://spicerack.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Spicerack", "key")));
+
+        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<HttpRequestException>()
+            .Where(exception => exception.StatusCode == HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>
+    /// Verifies that unsupported TopDeck envelopes produce no evidence without fabricating cards.
+    /// </summary>
+    [Fact]
+    public async Task TopDeckProvider_ReturnsEmptyReportForUnsupportedEnvelope()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Post, "https://topdeck.test/v2/tournaments")
+            .Respond("application/json", """{ "data": { "changed": true } }""");
+        TopDeckCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://topdeck.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("TopDeck", "key")));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        report.ExemplarDecks.Should().BeEmpty();
+        report.Signals.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source => source.Key == "topdeck" && source.Status == CorpusSourceStatuses.Available);
+    }
+
+    /// <summary>
+    /// Verifies that unsupported Spicerack envelopes produce no evidence without fabricating cards.
+    /// </summary>
+    [Fact]
+    public async Task SpicerackProvider_ReturnsEmptyReportForUnsupportedEnvelope()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
+            .Respond("application/json", """{ "records": [{ "decklist": "1 Waste Not" }] }""");
+        SpicerackCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://spicerack.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Spicerack", "key")));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        report.ExemplarDecks.Should().BeEmpty();
+        report.Signals.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source => source.Key == "spicerack" && source.Status == CorpusSourceStatuses.Available);
     }
 
     /// <summary>

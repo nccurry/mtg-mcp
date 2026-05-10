@@ -17,8 +17,19 @@ public sealed partial class DeckPlanService : DeckServiceBase
         DeckWorkspace workspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
         DeckPlanPreviewer previewer = new(CardCatalog);
         DeckWorkspace preview = previewer.CloneWorkspace(workspace);
-        IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
         List<string> warnings = [];
+        IReadOnlySet<string> gameChangers;
+        bool gameChangerDataAvailable = true;
+        try
+        {
+            gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception)
+        {
+            gameChangers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            gameChangerDataAvailable = false;
+            warnings.Add($"{exception.Message} Preview metrics exclude live Game Changer signals.");
+        }
 
         foreach (DeckEditOperation operation in plan.Operations)
         {
@@ -31,8 +42,8 @@ public sealed partial class DeckPlanService : DeckServiceBase
             PlanId = plan.PlanId,
             WorkspaceId = plan.WorkspaceId,
             ResolveAddedCards = resolveAddedCards,
-            Before = BuildMetricSnapshot(workspace, gameChangers),
-            After = BuildMetricSnapshot(preview, gameChangers),
+            Before = BuildMetricSnapshot(workspace, gameChangers, gameChangerDataAvailable),
+            After = BuildMetricSnapshot(preview, gameChangers, gameChangerDataAvailable),
             Warnings = warnings
         };
     }

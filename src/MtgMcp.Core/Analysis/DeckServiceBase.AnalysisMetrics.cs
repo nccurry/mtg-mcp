@@ -11,8 +11,17 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected DeckMetricSnapshot BuildMetricSnapshot(
         DeckWorkspace workspace,
-        IReadOnlySet<string> gameChangers)
+        IReadOnlySet<string> gameChangers,
+        bool gameChangerDataAvailable = true)
     {
+        CommanderBracketEstimate bracket = EstimateCommanderBracket(workspace, gameChangers);
+        if (!gameChangerDataAvailable)
+        {
+            bracket.Notes.RemoveAll(note =>
+                note.Contains("Game Changer data is fetched live", StringComparison.OrdinalIgnoreCase));
+            bracket.Notes.Add("Game Changer data was unavailable; this estimate excludes live Game Changer signals.");
+        }
+
         return new DeckMetricSnapshot
         {
             Cost = AnalyzeDeckCost(workspace),
@@ -20,7 +29,7 @@ public abstract partial class DeckServiceBase
             Analysis = DeckAnalyzer.Analyze(workspace),
             ManaBase = AnalyzeManaBase(workspace),
             Consistency = AnalyzeDeckConsistency(workspace),
-            Bracket = EstimateCommanderBracket(workspace, gameChangers)
+            Bracket = bracket
         };
     }
 

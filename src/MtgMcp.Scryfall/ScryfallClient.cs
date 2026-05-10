@@ -8,15 +8,21 @@ using MtgMcp.Core;
 namespace MtgMcp.Scryfall;
 
 /// <summary>
-/// Calls the scryfall client service.
+/// Allows source providers to bypass raw Scryfall cache reads for explicit refresh calls.
 /// </summary>
-public sealed class ScryfallClient : ICardCatalog, IDisposable
+internal interface IScryfallCacheBypass
 {
     /// <summary>
-    /// Stores the maximum rate limit retries.
+    /// Opens a scope where cached Scryfall responses are ignored but fresh responses may still update cache.
     /// </summary>
-    private const int MaxRateLimitRetries = 1;
+    IDisposable BypassCache();
+}
 
+/// <summary>
+/// Calls the scryfall client service.
+/// </summary>
+public sealed class ScryfallClient : ICardCatalog, IScryfallCacheBypass, IDisposable
+{
     /// <summary>
     /// Stores the default rate limit delay.
     /// </summary>
@@ -26,6 +32,11 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     /// Stores serializer options.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Identifies raw Scryfall response cache entries produced by this adapter.
+    /// </summary>
+    private const string CacheAdapterVersion = "scryfall-client-v1";
 
     /// <summary>
     /// Stores the http client.
@@ -38,6 +49,16 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     private readonly ScryfallOptions options;
 
     /// <summary>
+    /// Stores source-fact cache shared across agents using the same data directory.
+    /// </summary>
+    private readonly ICorpusCache cache;
+
+    /// <summary>
+    /// Stores root mtg-mcp options for cache TTLs.
+    /// </summary>
+    private readonly MtgMcpOptions mtgOptions;
+
+    /// <summary>
     /// Handles request lock shared by all Scryfall client instances.
     /// </summary>
     private static readonly SemaphoreSlim RequestLock = new(1, 1);
@@ -48,12 +69,23 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     private static DateTimeOffset lastRequestAt = DateTimeOffset.MinValue;
 
     /// <summary>
-    /// Handles scryfall client.
+    /// Tracks request-local cache bypass scopes for refresh operations.
     /// </summary>
-    public ScryfallClient(HttpClient httpClient, IOptions<ScryfallOptions> options)
+    private static readonly AsyncLocal<int> CacheBypassDepth = new();
+
+    /// <summary>
+    /// Creates a Scryfall client with shared source-fact caching.
+    /// </summary>
+    public ScryfallClient(
+        HttpClient httpClient,
+        IOptions<ScryfallOptions> options,
+        ICorpusCache? cache = null,
+        IOptions<MtgMcpOptions>? mtgOptions = null)
     {
         this.httpClient = httpClient;
         this.options = options.Value;
+        this.cache = cache ?? new NullCorpusCache();
+        this.mtgOptions = mtgOptions?.Value ?? new MtgMcpOptions();
 
         this.httpClient.BaseAddress ??= this.options.BaseAddress;
         this.httpClient.DefaultRequestHeaders.UserAgent.Clear();
@@ -352,14 +384,28 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         bool returnNullOnNotFound = false
     )
     {
-        for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
+        TimeSpan cacheTtl = GetCacheTtl(relativeUri);
+        string? cachedBody = await GetCachedResponseBodyAsync(
+                HttpMethod.Get.Method,
+                relativeUri,
+                requestBody: null,
+                cacheTtl,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (cachedBody is not null)
+        {
+            return JsonDocument.Parse(cachedBody);
+        }
+
+        int maxRetries = Math.Max(0, options.MaxRateLimitRetries);
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
         {
             await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
 
             using HttpResponseMessage response = await httpClient
                 .GetAsync(relativeUri, cancellationToken)
                 .ConfigureAwait(false);
-            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRateLimitRetries)
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < maxRetries)
             {
                 await DelayForRateLimitAsync(response, cancellationToken).ConfigureAwait(false);
                 continue;
@@ -372,20 +418,24 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
-                string body = await response
+                string errorBody = await response
                     .Content.ReadAsStringAsync(cancellationToken)
                     .ConfigureAwait(false);
                 throw new HttpRequestException(
-                    $"Scryfall request failed with {(int)response.StatusCode}: {body}"
+                    $"Scryfall request failed with {(int)response.StatusCode}: {errorBody}"
                 );
             }
 
-            await using Stream stream = await response
-                .Content.ReadAsStreamAsync(cancellationToken)
+            string successBody = await response.Content.ReadAsStringAsync(cancellationToken)
                 .ConfigureAwait(false);
-            return await JsonDocument
-                .ParseAsync(stream, cancellationToken: cancellationToken)
+            await SetCachedResponseBodyAsync(
+                    HttpMethod.Get.Method,
+                    relativeUri,
+                    requestBody: null,
+                    successBody,
+                    cancellationToken)
                 .ConfigureAwait(false);
+            return JsonDocument.Parse(successBody);
         }
 
         throw new HttpRequestException("Scryfall request failed after rate limit retry.");
@@ -400,16 +450,30 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         CancellationToken cancellationToken
     )
     {
-        for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
+        string json = JsonSerializer.Serialize(body, SerializerOptions);
+        TimeSpan cacheTtl = GetCacheTtl(relativeUri);
+        string? cachedBody = await GetCachedResponseBodyAsync(
+                HttpMethod.Post.Method,
+                relativeUri,
+                json,
+                cacheTtl,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (cachedBody is not null)
+        {
+            return JsonDocument.Parse(cachedBody);
+        }
+
+        int maxRetries = Math.Max(0, options.MaxRateLimitRetries);
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
         {
             await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
 
-            string json = JsonSerializer.Serialize(body, SerializerOptions);
             using StringContent content = new(json, Encoding.UTF8, "application/json");
             using HttpResponseMessage response = await httpClient
                 .PostAsync(relativeUri, content, cancellationToken)
                 .ConfigureAwait(false);
-            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRateLimitRetries)
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < maxRetries)
             {
                 await DelayForRateLimitAsync(response, cancellationToken).ConfigureAwait(false);
                 continue;
@@ -417,20 +481,24 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
-                string responseBody = await response
+                string errorBody = await response
                     .Content.ReadAsStringAsync(cancellationToken)
                     .ConfigureAwait(false);
                 throw new HttpRequestException(
-                    $"Scryfall request failed with {(int)response.StatusCode}: {responseBody}"
+                    $"Scryfall request failed with {(int)response.StatusCode}: {errorBody}"
                 );
             }
 
-            await using Stream stream = await response
-                .Content.ReadAsStreamAsync(cancellationToken)
+            string successBody = await response.Content.ReadAsStringAsync(cancellationToken)
                 .ConfigureAwait(false);
-            return await JsonDocument
-                .ParseAsync(stream, cancellationToken: cancellationToken)
+            await SetCachedResponseBodyAsync(
+                    HttpMethod.Post.Method,
+                    relativeUri,
+                    json,
+                    successBody,
+                    cancellationToken)
                 .ConfigureAwait(false);
+            return JsonDocument.Parse(successBody);
         }
 
         throw new HttpRequestException("Scryfall request failed after rate limit retry.");
@@ -445,6 +513,8 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     {
         TimeSpan delay = response.Headers.RetryAfter?.Delta
             ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow)
+            ?? await GetRateLimitDelayFromBodyAsync(response, cancellationToken)
+                .ConfigureAwait(false)
             ?? DefaultRateLimitDelay;
         if (delay < TimeSpan.Zero)
         {
@@ -452,6 +522,109 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         }
 
         await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads Scryfall error details for retry timing when headers are absent.
+    /// </summary>
+    private static async Task<TimeSpan?> GetRateLimitDelayFromBodyAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        string body = await response.Content.ReadAsStringAsync(cancellationToken)
+            .ConfigureAwait(false);
+        const string marker = "after ";
+        int start = body.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        start += marker.Length;
+        int end = start;
+        while (end < body.Length && char.IsDigit(body[end]))
+        {
+            end++;
+        }
+
+        if (end <= start || !int.TryParse(body.AsSpan(start, end - start), out int seconds))
+        {
+            return null;
+        }
+
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    /// <summary>
+    /// Reads a cached raw Scryfall JSON body.
+    /// </summary>
+    private async Task<string?> GetCachedResponseBodyAsync(
+        string method,
+        string relativeUri,
+        string? requestBody,
+        TimeSpan timeToLive,
+        CancellationToken cancellationToken)
+    {
+        if (CacheBypassDepth.Value > 0)
+        {
+            return null;
+        }
+
+        return await cache
+            .GetAsync<string>(
+                CreateCacheKey(method, relativeUri, requestBody),
+                timeToLive,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Stores a raw Scryfall JSON response body as a reusable source fact.
+    /// </summary>
+    private async Task SetCachedResponseBodyAsync(
+        string method,
+        string relativeUri,
+        string? requestBody,
+        string responseBody,
+        CancellationToken cancellationToken)
+    {
+        await cache
+            .SetAsync(
+                CreateCacheKey(method, relativeUri, requestBody),
+                responseBody,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates a stable cache key for a Scryfall API call.
+    /// </summary>
+    private static CorpusCacheKey CreateCacheKey(
+        string method,
+        string relativeUri,
+        string? requestBody)
+    {
+        return new CorpusCacheKey
+        {
+            Source = "scryfall",
+            Endpoint = method.ToUpperInvariant(),
+            Query = $"{relativeUri.Trim()}|{requestBody ?? ""}",
+            AdapterVersion = CacheAdapterVersion,
+            Budget = "source-fact"
+        };
+    }
+
+    /// <summary>
+    /// Gets the configured TTL for a Scryfall API call.
+    /// </summary>
+    private TimeSpan GetCacheTtl(string relativeUri)
+    {
+        bool isSearch = relativeUri.Contains("cards/search", StringComparison.OrdinalIgnoreCase);
+        return CorpusCacheFactory.ParseDuration(
+            isSearch
+                ? mtgOptions.Intelligence.Cache.Ttls.ScryfallSearch
+                : mtgOptions.Intelligence.Cache.Ttls.ScryfallCardMetadata,
+            isSearch ? TimeSpan.FromDays(1) : TimeSpan.FromDays(7));
     }
 
     /// <summary>
@@ -482,6 +655,29 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     /// </summary>
     public void Dispose()
     {
+    }
+
+    /// <summary>
+    /// Opens a scope where Scryfall response cache reads are bypassed.
+    /// </summary>
+    IDisposable IScryfallCacheBypass.BypassCache()
+    {
+        CacheBypassDepth.Value++;
+        return new CacheBypassScope();
+    }
+
+    /// <summary>
+    /// Restores the previous cache-bypass depth when a refresh call completes.
+    /// </summary>
+    private sealed class CacheBypassScope : IDisposable
+    {
+        /// <summary>
+        /// Closes this cache-bypass scope.
+        /// </summary>
+        public void Dispose()
+        {
+            CacheBypassDepth.Value = Math.Max(0, CacheBypassDepth.Value - 1);
+        }
     }
 
     /// <summary>

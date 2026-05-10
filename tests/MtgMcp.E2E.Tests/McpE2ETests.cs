@@ -98,6 +98,131 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Verifies that MCP analysis tools return accurate numeric payloads for a known local deck.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task LocalAnalysisFlow_ReturnsAccuratePayloadMetrics()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        scryfall.GetJson("cards/named?fuzzy=Tinybones%2C%20Trinket%20Thief", TinybonesJson);
+        scryfall.GetJson("cards/named?fuzzy=Swamp", SwampJson);
+        scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
+        scryfall.GetJson("cards/named?fuzzy=Phyrexian%20Arena", PhyrexianArenaJson);
+        scryfall.GetJson(ScryfallSearchPath("is:game-changer"), EmptySearchJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Analysis Metrics",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        await AddCardAsync(session.Client, workspaceId, "Tinybones, Trinket Thief", 1, "Commander");
+        await AddCardAsync(session.Client, workspaceId, "Swamp", 36, "Lands");
+        await AddCardAsync(session.Client, workspaceId, "Arcane Signet", 1, "Ramp");
+        await AddCardAsync(session.Client, workspaceId, "Phyrexian Arena", 1, "Draw");
+
+        JsonElement analysis = await CallJsonAsync(
+            session.Client,
+            "analyze_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement cost = await CallJsonAsync(
+            session.Client,
+            "analyze_deck_cost",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement mana = await CallJsonAsync(
+            session.Client,
+            "analyze_mana_base",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement consistency = await CallJsonAsync(
+            session.Client,
+            "analyze_deck_consistency",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement odds = await CallJsonAsync(
+            session.Client,
+            "analyze_draw_odds",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["targets"] = "Lands,Ramp,Draw",
+                ["turn"] = 3,
+                ["openingHandSize"] = 7,
+                ["simulations"] = 100,
+                ["seed"] = 42
+            });
+        JsonElement bracket = await CallJsonAsync(
+            session.Client,
+            "estimate_commander_bracket",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement goldfish = await CallJsonAsync(
+            session.Client,
+            "simulate_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["targetTurn"] = 3,
+                ["simulations"] = 50,
+                ["seed"] = 42
+            });
+
+        GetInt32(analysis, "totalCards").Should().Be(39);
+        GetInt32(analysis, "includedCards").Should().Be(39);
+        GetObject(analysis, "typeCounts").GetProperty("Land").GetInt32().Should().Be(36);
+        GetObject(analysis, "typeCounts").GetProperty("Artifact").GetInt32().Should().Be(1);
+        GetObject(analysis, "typeCounts").GetProperty("Enchantment").GetInt32().Should().Be(1);
+        GetObject(analysis, "typeCounts").GetProperty("Creature").GetInt32().Should().Be(1);
+
+        GetProperty(cost, "includedTotal").GetDecimal().Should().Be(10.80m);
+        GetInt32(cost, "pricedIncludedCards").Should().Be(4);
+        GetProperty(cost, "topCostDrivers").EnumerateArray()
+            .Select(driver => GetString(driver, "cardName"))
+            .Should()
+            .Equal(["Phyrexian Arena", "Tinybones, Trinket Thief", "Swamp", "Arcane Signet"]);
+
+        GetInt32(mana, "landCount").Should().Be(36);
+        GetInt32(mana, "untappedLandCount").Should().Be(36);
+        GetInt32(mana, "fixingCount").Should().Be(1);
+        GetInt32(mana, "rampFixingCount").Should().Be(1);
+        GetObject(mana, "colorSources").GetProperty("B").GetInt32().Should().Be(36);
+        GetObject(mana, "producedManaSources").GetProperty("B").GetInt32().Should().Be(37);
+
+        GetInt32(consistency, "deckSize").Should().Be(39);
+        GetInt32(consistency, "rampCount").Should().Be(1);
+        GetInt32(consistency, "drawCount").Should().Be(1);
+        GetInt32(consistency, "lowCurveNonlandCount").Should().Be(2);
+
+        GetInt32(odds, "deckSize").Should().Be(39);
+        GetInt32(odds, "cardsSeen").Should().Be(9);
+        JsonElement landRow = GetOddsRow(odds, "Lands");
+        JsonElement rampRow = GetOddsRow(odds, "Ramp");
+        GetInt32(landRow, "successesInDeck").Should().Be(36);
+        GetProperty(landRow, "hypergeometricAtLeastOne").GetDouble().Should().Be(1);
+        GetInt32(rampRow, "successesInDeck").Should().Be(1);
+        GetProperty(rampRow, "hypergeometricAtLeastOne").GetDouble().Should().BeApproximately(9.0 / 39.0, 0.000001);
+        GetProperty(rampRow, "hypergeometricAtLeastTwo").GetDouble().Should().Be(0);
+        GetInt32(GetOddsRow(odds, "Draw"), "successesInDeck").Should().Be(1);
+
+        GetInt32(bracket, "estimatedBracket").Should().Be(1);
+        GetInt32(bracket, "gameChangerCount").Should().Be(0);
+        GetInt32(goldfish, "targetTurn").Should().Be(3);
+        GetInt32(goldfish, "simulations").Should().Be(100);
+        GetProperty(goldfish, "turnSummaries").GetArrayLength().Should().Be(3);
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that deck intent tools preserve rich Quill descriptions through MCP stdio.
     /// </summary>
     [Fact]
@@ -876,6 +1001,28 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Adds a card to a workspace through the public MCP tool surface.
+    /// </summary>
+    private static async Task AddCardAsync(
+        McpClient client,
+        string workspaceId,
+        string cardName,
+        int quantity,
+        string category)
+    {
+        await CallJsonAsync(
+            client,
+            "add_card",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cardName"] = cardName,
+                ["quantity"] = quantity,
+                ["category"] = category
+            });
+    }
+
+    /// <summary>
     /// Reads the single text content block returned by a tool call.
     /// </summary>
     private static string ReadText(CallToolResult result)
@@ -906,6 +1053,16 @@ public sealed class McpE2ETests
     private static JsonElement GetObject(JsonElement element, string propertyName)
     {
         return GetProperty(element, propertyName);
+    }
+
+    /// <summary>
+    /// Reads one odds row by target name.
+    /// </summary>
+    private static JsonElement GetOddsRow(JsonElement odds, string target)
+    {
+        return GetProperty(odds, "rows")
+            .EnumerateArray()
+            .Single(row => string.Equals(GetString(row, "target"), target, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -956,6 +1113,43 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Provides a Scryfall commander payload for local analysis E2E tests.
+    /// </summary>
+    private const string TinybonesJson = """
+    {
+      "id": "tinybones",
+      "oracle_id": "oracle-tinybones",
+      "name": "Tinybones, Trinket Thief",
+      "mana_cost": "{1}{B}",
+      "cmc": 2,
+      "type_line": "Legendary Creature - Skeleton Rogue",
+      "oracle_text": "At the beginning of each end step, if an opponent discarded a card this turn, you draw a card and you lose 1 life.",
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "2.00" },
+      "color_identity": ["B"]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall basic land payload for local analysis E2E tests.
+    /// </summary>
+    private const string SwampJson = """
+    {
+      "id": "swamp",
+      "oracle_id": "oracle-swamp",
+      "name": "Swamp",
+      "mana_cost": "",
+      "cmc": 0,
+      "type_line": "Basic Land - Swamp",
+      "oracle_text": "{T}: Add {B}.",
+      "produced_mana": ["B"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.05" },
+      "color_identity": []
+    }
+    """;
+
+    /// <summary>
     /// Provides a Scryfall card payload shared by E2E flows that add Lightning Bolt.
     /// </summary>
     private const string LightningBoltJson = """
@@ -971,6 +1165,24 @@ public sealed class McpE2ETests
       "collector_number": "141",
       "scryfall_uri": "https://scryfall.example/card/clu/141",
       "color_identity": ["R"]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall card payload for local analysis E2E tests.
+    /// </summary>
+    private const string PhyrexianArenaJson = """
+    {
+      "id": "phyrexian-arena",
+      "oracle_id": "oracle-phyrexian-arena",
+      "name": "Phyrexian Arena",
+      "mana_cost": "{1}{B}{B}",
+      "cmc": 3,
+      "type_line": "Enchantment",
+      "oracle_text": "At the beginning of your upkeep, you draw a card and you lose 1 life.",
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "6.00" },
+      "color_identity": ["B"]
     }
     """;
 
