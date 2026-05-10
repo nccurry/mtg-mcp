@@ -18,5 +18,5 @@ public sealed class ScryfallOptions
     /// <summary>
     /// Gets or sets the minimum delay.
     /// </summary>
-    public TimeSpan MinimumDelay { get; set; } = TimeSpan.FromMilliseconds(75);
+    public TimeSpan MinimumDelay { get; set; } = TimeSpan.FromMilliseconds(125);
 }

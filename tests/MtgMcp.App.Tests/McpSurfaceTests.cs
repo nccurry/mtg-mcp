@@ -70,8 +70,18 @@ public sealed class McpSurfaceTests
             "normalize_deck_cards",
             "summarize_deck_plan",
             "analyze_draw_odds",
+            "analyze_deck_cost",
+            "preview_deck_plan",
+            "estimate_commander_bracket",
+            "analyze_mana_base",
+            "analyze_deck_consistency",
             "find_budget_replacements",
             "find_card_upgrades",
+            "find_power_upgrades",
+            "find_bracket_reduction_candidates",
+            "find_power_reduction_candidates",
+            "find_mana_base_improvements",
+            "find_consistency_improvements",
             "suggest_deck_categories",
             "list_deck_plans",
             "get_deck_plan",
@@ -83,6 +93,24 @@ public sealed class McpSurfaceTests
             .SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
             .Should()
             .BeEquivalentTo(expected);
+    }
+
+    /// <summary>
+    /// Verifies that power upgrade weights are true optional overrides.
+    /// </summary>
+    [Fact]
+    public void FindPowerUpgrades_UsesNullableWeightOverrides()
+    {
+        MethodInfo method = typeof(IntelligenceTools).GetMethod(nameof(IntelligenceTools.FindPowerUpgradesAsync))
+            ?? throw new InvalidOperationException("find_power_upgrades method not found.");
+
+        ParameterInfo[] parameters = method.GetParameters();
+        parameters.Single(parameter => parameter.Name == "roleWeight").ParameterType.Should().Be<double?>();
+        parameters.Single(parameter => parameter.Name == "roleWeight").DefaultValue.Should().BeNull();
+        parameters.Single(parameter => parameter.Name == "powerWeight").ParameterType.Should().Be<double?>();
+        parameters.Single(parameter => parameter.Name == "powerWeight").DefaultValue.Should().BeNull();
+        parameters.Single(parameter => parameter.Name == "priceWeight").ParameterType.Should().Be<double?>();
+        parameters.Single(parameter => parameter.Name == "priceWeight").DefaultValue.Should().BeNull();
     }
 
     /// <summary>
@@ -119,6 +147,12 @@ public sealed class McpSurfaceTests
             "brew_commander_deck",
             "tune_existing_deck",
             "find_budget_replacements",
+            "reduce_deck_cost",
+            "upgrade_deck_power",
+            "reduce_deck_power",
+            "lower_commander_bracket",
+            "optimize_mana_base",
+            "improve_deck_consistency",
             "rules_and_rulings_check",
         ];
 
@@ -157,6 +191,8 @@ public sealed class McpSurfaceTests
             nameof(DeckMutationTools.RemoveCardAsync)
         );
         CustomAttributeData openLocal = GetToolAttribute(nameof(WorkspaceTools.OpenLocalDeckAsync));
+        CustomAttributeData previewPlan = GetToolAttribute(nameof(IntelligenceTools.PreviewDeckPlanAsync));
+        CustomAttributeData bracket = GetToolAttribute(nameof(IntelligenceTools.EstimateCommanderBracketAsync));
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(searchCards, "OpenWorld").Should().BeTrue();
@@ -166,6 +202,10 @@ public sealed class McpSurfaceTests
         GetNamedBool(removeCard, "Destructive").Should().BeTrue();
         GetNamedBool(openLocal, "ReadOnly").Should().BeTrue();
         GetNamedBool(openLocal, "OpenWorld").Should().BeFalse();
+        GetNamedBool(previewPlan, "ReadOnly").Should().BeTrue();
+        GetNamedBool(previewPlan, "OpenWorld").Should().BeTrue();
+        GetNamedBool(bracket, "ReadOnly").Should().BeTrue();
+        GetNamedBool(bracket, "OpenWorld").Should().BeTrue();
     }
 
     /// <summary>

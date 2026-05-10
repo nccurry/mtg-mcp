@@ -88,6 +88,109 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that import deck tolerates Archidekt's live bracket-era card shape.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_MapsBracketEraCardShape()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/5850815/",
+            """
+            {
+              "id": 5850815,
+              "name": "Tinybones, Trinket Thief",
+              "deckFormat": 3,
+              "edhBracket": null,
+              "categories": [
+                { "id": 52958298, "name": "Maybeboard", "includedInDeck": false, "includedInPrice": false },
+                { "id": 52994821, "name": "Creature", "includedInDeck": true, "includedInPrice": true }
+              ],
+              "cards": [
+                {
+                  "id": 1521012334,
+                  "categories": ["Maybeboard", "Creature"],
+                  "modifier": "Normal",
+                  "quantity": 1,
+                  "card": {
+                    "id": 91694,
+                    "uid": "14dc88ee-bba9-4625-af0d-89f3762a0ead",
+                    "edition": {
+                      "editioncode": "khm",
+                      "editionname": "Kaldheim",
+                      "editiondate": "2021-02-05",
+                      "editiontype": "expansion",
+                      "mtgoCode": "khm"
+                    },
+                    "setCode": "khm",
+                    "collectorNumber": "112",
+                    "rarity": "rare",
+                    "prices": {
+                      "tcg": 17.65,
+                      "ck": 19.99
+                    },
+                    "oracleCard": {
+                      "uid": "8485cfaa-1dbf-432b-b5d0-92a6aa6a329b",
+                      "name": "Tergrid, God of Fright // Tergrid's Lantern",
+                      "cmc": 5,
+                      "manaCost": "",
+                      "text": "",
+                      "colorIdentity": ["Black"],
+                      "faces": [
+                        {
+                          "manaCost": "{3}{B}{B}",
+                          "text": "Menace\nWhenever an opponent sacrifices a nontoken permanent or discards a permanent card, you may put that card onto the battlefield.",
+                          "superTypes": "Legendary",
+                          "types": "Creature",
+                          "subTypes": "God"
+                        },
+                        {
+                          "manaCost": "{3}{B}",
+                          "text": "{T}: Target player loses 3 life unless they sacrifice a nonland permanent or discard a card.",
+                          "superTypes": "Legendary",
+                          "types": "Artifact",
+                          "subTypes": ""
+                        }
+                      ],
+                      "gameChanger": true,
+                      "extraTurns": false,
+                      "tutor": false,
+                      "massLandDenial": false,
+                      "power": "",
+                      "salt": 2.8
+                    }
+                  }
+                }
+              ]
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "https://archidekt.com/decks/5850815/tinybones_trinket_thief",
+            writeBack: true,
+            TestContext.Current.CancellationToken
+        );
+
+        deck.Format.Should().Be("commander");
+        deck.Categories.Should()
+            .Contain(category => category.Name == "Maybeboard" && category.IncludedInDeck == false);
+        DeckCard card = deck.Cards.Should().ContainSingle().Which;
+        card.Name.Should().Be("Tergrid, God of Fright // Tergrid's Lantern");
+        card.PrimaryCategory.Should().Be("Maybeboard");
+        card.Categories.Should().Equal("Maybeboard", "Creature");
+        card.Modifier.Should().Be("Normal");
+        card.Snapshot.ManaCost.Should().Be("{3}{B}{B}");
+        card.Snapshot.TypeLine.Should().Be("Legendary Creature - God");
+        card.Snapshot.Set.Should().Be("khm");
+        card.Snapshot.OracleText.Should().Contain("Whenever an opponent sacrifices");
+        card.Snapshot.OracleText.Should().Contain("Target player loses 3 life");
+        card.Snapshot.ColorIdentity.Should().ContainSingle().Which.Should().Be("B");
+        card.Snapshot.Prices["usd"].Should().Be("17.65");
+    }
+
+    /// <summary>
     /// Verifies that list decks maps results and uses configured jwt.
     /// </summary>
     [Fact]
@@ -163,6 +266,8 @@ public sealed class ArchidektGatewayTests
         firstCard.GetProperty("cardid").GetInt32().Should().Be(151147);
         firstCard.GetProperty("categories")[0].GetString().Should().Be(DeckDefaults.Mainboard);
         firstCard.GetProperty("modifications").GetProperty("quantity").GetInt32().Should().Be(2);
+        firstCard.TryGetProperty("deckRelationId", out _).Should().BeFalse();
+        firstCard.GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
         card.ArchidektCardId.Should().Be("151147");
     }
 
@@ -220,6 +325,7 @@ public sealed class ArchidektGatewayTests
             .Be("Foil");
         cards[1].GetProperty("action").GetString().Should().Be("remove");
         cards[1].GetProperty("modifications").GetProperty("quantity").GetInt32().Should().Be(0);
+        cards[1].GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
     }
 
     /// <summary>

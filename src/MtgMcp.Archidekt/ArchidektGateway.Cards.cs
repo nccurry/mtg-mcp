@@ -30,44 +30,15 @@ public sealed partial class ArchidektGateway
                     .ConfigureAwait(false);
             card.ArchidektCardId = archidektCardId;
 
-            cards.Add(
-                new
-                {
-                    action = card.ArchidektDeckRelationId.HasValue ? "modify" : "add",
-                    cardid = ParseIntOrString(archidektCardId),
-                    deckRelationId = card.ArchidektDeckRelationId,
-                    patchId = Guid.NewGuid().ToString("N"),
-                    categories = card.Categories,
-                    modifications = new
-                    {
-                        quantity = card.Quantity,
-                        modifier = card.Modifier,
-                        companion = card.Companion,
-                        flippedDefault = card.FlippedDefault,
-                    },
-                }
-            );
+            cards.Add(BuildCardMutationPayload(
+                card.ArchidektDeckRelationId.HasValue ? "modify" : "add",
+                archidektCardId,
+                card));
         }
 
         foreach (DeckCard card in removedCards)
         {
-            cards.Add(
-                new
-                {
-                    action = "remove",
-                    cardid = ParseIntOrString(card.ArchidektCardId),
-                    deckRelationId = card.ArchidektDeckRelationId,
-                    patchId = Guid.NewGuid().ToString("N"),
-                    categories = card.Categories,
-                    modifications = new
-                    {
-                        quantity = 0,
-                        modifier = card.Modifier,
-                        companion = card.Companion,
-                        flippedDefault = card.FlippedDefault,
-                    },
-                }
-            );
+            cards.Add(BuildCardMutationPayload("remove", card.ArchidektCardId, card, quantity: 0));
         }
 
         await SendJsonAsync(
@@ -77,6 +48,42 @@ public sealed partial class ArchidektGateway
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds a modifyCards payload item without null fields rejected by Archidekt.
+    /// </summary>
+    private static Dictionary<string, object?> BuildCardMutationPayload(
+        string action,
+        string? archidektCardId,
+        DeckCard card,
+        int? quantity = null)
+    {
+        Dictionary<string, object?> modifications = new(StringComparer.Ordinal)
+        {
+            ["quantity"] = quantity ?? card.Quantity,
+            ["companion"] = card.Companion,
+            ["flippedDefault"] = card.FlippedDefault,
+        };
+        if (!string.IsNullOrWhiteSpace(card.Modifier))
+        {
+            modifications["modifier"] = card.Modifier;
+        }
+
+        Dictionary<string, object?> payload = new(StringComparer.Ordinal)
+        {
+            ["action"] = action,
+            ["cardid"] = ParseIntOrString(archidektCardId),
+            ["patchId"] = Guid.NewGuid().ToString("N"),
+            ["categories"] = card.Categories,
+            ["modifications"] = modifications,
+        };
+        if (card.ArchidektDeckRelationId.HasValue)
+        {
+            payload["deckRelationId"] = card.ArchidektDeckRelationId.Value;
+        }
+
+        return payload;
     }
 
     /// <summary>

@@ -80,6 +80,67 @@ public sealed class IntelligenceTools
     }
 
     /// <summary>
+    /// Analyzes deck cost.
+    /// </summary>
+    [McpServerTool(Name = "analyze_deck_cost", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Analyze cached deck prices, included total, maybeboard total, missing prices, and top cost drivers.")]
+    public Task<DeckCostAnalysis> AnalyzeDeckCostAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.AnalyzeDeckCostAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Previews a deck plan.
+    /// </summary>
+    [McpServerTool(Name = "preview_deck_plan", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Preview a persisted deck edit plan without mutating local or Archidekt state. Returns before and after cost, validation, roles, mana, consistency, and bracket metrics.")]
+    public Task<DeckPlanPreviewResult> PreviewDeckPlanAsync(
+        string planId,
+        bool resolveAddedCards = true,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.PreviewDeckPlanAsync(planId, resolveAddedCards, cancellationToken);
+    }
+
+    /// <summary>
+    /// Estimates commander bracket.
+    /// </summary>
+    [McpServerTool(Name = "estimate_commander_bracket", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Estimate Commander bracket using live Scryfall Game Changer data plus fast mana, tutor, stax, combo, extra-turn, and mass-land-denial signals.")]
+    public Task<CommanderBracketEstimate> EstimateCommanderBracketAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.EstimateCommanderBracketAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Analyzes mana base.
+    /// </summary>
+    [McpServerTool(Name = "analyze_mana_base", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Analyze land count, color sources, produced mana, tapped-land pressure, fixing, and mana-base risks.")]
+    public Task<ManaBaseAnalysis> AnalyzeManaBaseAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.AnalyzeManaBaseAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Analyzes deck consistency.
+    /// </summary>
+    [McpServerTool(Name = "analyze_deck_consistency", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Analyze ramp, draw, tutor, card-selection, low-curve density, and key draw odds for consistency.")]
+    public Task<DeckConsistencyAnalysis> AnalyzeDeckConsistencyAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.AnalyzeDeckConsistencyAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
     /// Finds budget replacements.
     /// </summary>
     [McpServerTool(Name = "find_budget_replacements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
@@ -125,6 +186,98 @@ public sealed class IntelligenceTools
         };
         operationMode.EnsureCanWritePlanningState("find_card_upgrades");
         return decks.FindCardUpgradesAsync(workspaceId, limit, weights, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds power upgrades.
+    /// </summary>
+    [McpServerTool(Name = "find_power_upgrades", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan of targeted power upgrades using focus, price, and optional role/power/price weight overrides.")]
+    public Task<RecommendationPlanResult> FindPowerUpgradesAsync(
+        string workspaceId,
+        string focus = "balanced",
+        decimal? maxPrice = null,
+        int limit = 10,
+        double? roleWeight = null,
+        double? powerWeight = null,
+        double? priceWeight = null,
+        CancellationToken cancellationToken = default)
+    {
+        ReplacementWeights? weights = null;
+        if (roleWeight.HasValue || powerWeight.HasValue || priceWeight.HasValue)
+        {
+            ReplacementWeights defaults = new();
+            weights = new ReplacementWeights
+            {
+                Role = roleWeight ?? defaults.Role,
+                Power = powerWeight ?? defaults.Power,
+                Price = priceWeight ?? defaults.Price
+            };
+        }
+
+        operationMode.EnsureCanWritePlanningState("find_power_upgrades");
+        return decks.FindPowerUpgradesAsync(workspaceId, focus, maxPrice, limit, weights, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds bracket reduction candidates.
+    /// </summary>
+    [McpServerTool(Name = "find_bracket_reduction_candidates", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan to reduce Commander bracket pressure from Game Changers, fast mana, tutors, stax, combo, extra turns, and land denial.")]
+    public Task<RecommendationPlanResult> FindBracketReductionCandidatesAsync(
+        string workspaceId,
+        int targetBracket = 2,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_bracket_reduction_candidates");
+        return decks.FindBracketReductionCandidatesAsync(workspaceId, targetBracket, limit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds power reduction candidates.
+    /// </summary>
+    [McpServerTool(Name = "find_power_reduction_candidates", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan to soften fast mana, tutors, stax, combo, extra-turn, and highly efficient pressure.")]
+    public Task<RecommendationPlanResult> FindPowerReductionCandidatesAsync(
+        string workspaceId,
+        string targetPower = "casual",
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_power_reduction_candidates");
+        return decks.FindPowerReductionCandidatesAsync(workspaceId, targetPower, limit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds mana base improvements.
+    /// </summary>
+    [McpServerTool(Name = "find_mana_base_improvements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan for land count, fixing, color-source, and tapped-land improvements.")]
+    public Task<RecommendationPlanResult> FindManaBaseImprovementsAsync(
+        string workspaceId,
+        decimal maxPrice = 10,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_mana_base_improvements");
+        return decks.FindManaBaseImprovementsAsync(workspaceId, maxPrice, limit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds consistency improvements.
+    /// </summary>
+    [McpServerTool(Name = "find_consistency_improvements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan to improve ramp, draw, tutor, card-selection, or balanced consistency gaps.")]
+    public Task<RecommendationPlanResult> FindConsistencyImprovementsAsync(
+        string workspaceId,
+        string focus = "balanced",
+        decimal maxPrice = 10,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_consistency_improvements");
+        return decks.FindConsistencyImprovementsAsync(workspaceId, focus, maxPrice, limit, cancellationToken);
     }
 
     /// <summary>

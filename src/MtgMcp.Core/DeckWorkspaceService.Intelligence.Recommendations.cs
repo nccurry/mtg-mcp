@@ -19,6 +19,7 @@ public sealed partial class DeckWorkspaceService
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         ReplacementWeights normalizedWeights = NormalizeWeights(weights);
         List<ReplacementSuggestion> suggestions = [];
+        HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
 
         foreach (DeckCard card in IncludedCards(workspace)
             .Where(card => !IsCommanderCard(card))
@@ -33,11 +34,13 @@ public sealed partial class DeckWorkspaceService
                 minSavings,
                 budgetMode: true,
                 normalizedWeights,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                excludedCandidateNames: selectedReplacementNames).ConfigureAwait(false);
 
             if (suggestion is not null)
             {
                 suggestions.Add(suggestion);
+                selectedReplacementNames.Add(suggestion.WithCard);
             }
         }
 
@@ -61,9 +64,56 @@ public sealed partial class DeckWorkspaceService
         ReplacementWeights? weights,
         CancellationToken cancellationToken)
     {
+        return await FindPowerUpgradesCoreAsync(
+            workspaceId,
+            focus: "balanced",
+            maxPrice: null,
+            limit,
+            weights,
+            "Card upgrade plan",
+            "card-upgrades",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Finds power upgrades.
+    /// </summary>
+    public async Task<RecommendationPlanResult> FindPowerUpgradesAsync(
+        string workspaceId,
+        string focus,
+        decimal? maxPrice,
+        int limit,
+        ReplacementWeights? weights,
+        CancellationToken cancellationToken)
+    {
+        return await FindPowerUpgradesCoreAsync(
+            workspaceId,
+            focus,
+            maxPrice,
+            limit,
+            weights,
+            "Power upgrade plan",
+            "power-upgrades",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Finds power upgrades using the requested plan identity.
+    /// </summary>
+    private async Task<RecommendationPlanResult> FindPowerUpgradesCoreAsync(
+        string workspaceId,
+        string focus,
+        decimal? maxPrice,
+        int limit,
+        ReplacementWeights? weights,
+        string planName,
+        string planKind,
+        CancellationToken cancellationToken)
+    {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        ReplacementWeights normalizedWeights = NormalizeWeights(weights);
+        ReplacementWeights normalizedWeights = NormalizeWeights(weights ?? WeightsForFocus(focus));
         List<ReplacementSuggestion> suggestions = [];
+        HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
 
         foreach (DeckCard card in IncludedCards(workspace)
             .Where(ShouldConsiderUpgrade)
@@ -74,27 +124,240 @@ public sealed partial class DeckWorkspaceService
             ReplacementSuggestion? suggestion = await FindReplacementAsync(
                 workspace,
                 card,
-                maxPrice: null,
+                maxPrice,
                 minSavings: 0,
                 budgetMode: false,
                 normalizedWeights,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                excludedCandidateNames: selectedReplacementNames).ConfigureAwait(false);
 
             if (suggestion is not null)
             {
                 suggestions.Add(suggestion);
+                selectedReplacementNames.Add(suggestion.WithCard);
             }
         }
 
         DeckEditPlan plan = await SaveReplacementPlanAsync(
             workspace,
-            "Card upgrade plan",
-            "card-upgrades",
+            planName,
+            planKind,
             suggestions,
             normalizedWeights,
             cancellationToken).ConfigureAwait(false);
 
         return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
+    }
+
+    /// <summary>
+    /// Finds bracket reduction candidates.
+    /// </summary>
+    public async Task<RecommendationPlanResult> FindBracketReductionCandidatesAsync(
+        string workspaceId,
+        int targetBracket,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+        CommanderBracketEstimate estimate = EstimateCommanderBracket(workspace, gameChangers);
+        ReplacementWeights weights = NormalizeWeights(new ReplacementWeights { Role = 0.55, Power = 0.15, Price = 0.30 });
+        List<ReplacementSuggestion> suggestions = [];
+        HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
+        DeckEditPlan plan = CreatePlan(workspace, "Commander bracket reduction plan", "bracket-reduction");
+        plan.Rationale = $"Targets bracket {Math.Clamp(targetBracket, 1, 4)} by reducing Game Changer, fast mana, tutor, stax, combo, and extra-turn pressure.";
+
+        foreach (string cardName in estimate.Signals
+            .Where(signal => signal.SuggestedBracket > targetBracket && !string.IsNullOrWhiteSpace(signal.CardName))
+            .OrderByDescending(signal => signal.Severity)
+            .Select(signal => signal.CardName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Clamp(limit, 1, 25)))
+        {
+            DeckCard? card = workspace.Cards.FirstOrDefault(value => value.Name.Equals(cardName, StringComparison.OrdinalIgnoreCase));
+            if (card is null || IsCommanderCard(card))
+            {
+                continue;
+            }
+
+            ReplacementSuggestion? suggestion = await FindReplacementAsync(
+                workspace,
+                card,
+                maxPrice: 5,
+                minSavings: 0,
+                budgetMode: true,
+                weights,
+                cancellationToken,
+                excludedCandidateNames: selectedReplacementNames).ConfigureAwait(false);
+
+            if (suggestion is not null)
+            {
+                suggestions.Add(suggestion);
+                selectedReplacementNames.Add(suggestion.WithCard);
+                continue;
+            }
+
+            plan.Operations.Add(new DeckEditOperation
+            {
+                Operation = DeckEditOperations.RemoveCard,
+                CardName = card.Name,
+                Quantity = card.Quantity,
+                Category = card.PrimaryCategory,
+                Rationale = $"Remove {card.Name} to reduce bracket pressure."
+            });
+        }
+
+        AddReplacementOperations(plan, workspace, suggestions);
+        await SavePlanWithWarningsAsync(plan, suggestions.Count + plan.Operations.Count, cancellationToken).ConfigureAwait(false);
+        return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
+    }
+
+    /// <summary>
+    /// Finds power reduction candidates.
+    /// </summary>
+    public async Task<RecommendationPlanResult> FindPowerReductionCandidatesAsync(
+        string workspaceId,
+        string targetPower,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        ReplacementWeights weights = NormalizeWeights(new ReplacementWeights { Role = 0.55, Power = 0.10, Price = 0.35 });
+        List<ReplacementSuggestion> suggestions = [];
+        HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (DeckCard card in IncludedCards(workspace)
+            .Where(card => ShouldReducePower(card, targetPower))
+            .Take(Math.Clamp(limit, 1, 25)))
+        {
+            ReplacementSuggestion? suggestion = await FindReplacementAsync(
+                workspace,
+                card,
+                maxPrice: 5,
+                minSavings: 0,
+                budgetMode: true,
+                weights,
+                cancellationToken,
+                excludedCandidateNames: selectedReplacementNames).ConfigureAwait(false);
+
+            if (suggestion is not null)
+            {
+                suggestions.Add(suggestion);
+                selectedReplacementNames.Add(suggestion.WithCard);
+            }
+        }
+
+        DeckEditPlan plan = await SaveReplacementPlanAsync(
+            workspace,
+            "Power reduction plan",
+            "power-reduction",
+            suggestions,
+            weights,
+            cancellationToken).ConfigureAwait(false);
+        plan.Rationale = $"Softens the deck toward {NormalizeFocus(targetPower)} tables by replacing fast mana, tutors, stax, combo, and extra-turn pressure.";
+        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
+    }
+
+    /// <summary>
+    /// Finds mana base improvements.
+    /// </summary>
+    public async Task<RecommendationPlanResult> FindManaBaseImprovementsAsync(
+        string workspaceId,
+        decimal maxPrice,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        ReplacementWeights weights = NormalizeWeights(new ReplacementWeights { Role = 0.70, Power = 0.10, Price = 0.20 });
+        List<ReplacementSuggestion> suggestions = [];
+        HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
+        DeckEditPlan plan = CreatePlan(workspace, "Mana base improvement plan", "mana-base-improvements");
+        plan.Rationale = "Improves land count, fixing, and tapped-land pressure while preserving color identity.";
+
+        foreach (DeckCard card in IncludedCards(workspace)
+            .Where(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+            .Where(card => LooksTapped(GetSnapshot(card)))
+            .Take(Math.Clamp(limit, 1, 25)))
+        {
+            ReplacementSuggestion? suggestion = await FindReplacementAsync(
+                workspace,
+                card,
+                maxPrice,
+                minSavings: 0,
+                budgetMode: false,
+                weights,
+                cancellationToken,
+                excludedCandidateNames: selectedReplacementNames,
+                candidateFilter: candidate => IsManaBaseImprovement(card, candidate)).ConfigureAwait(false);
+            if (suggestion is not null)
+            {
+                suggestions.Add(suggestion);
+                selectedReplacementNames.Add(suggestion.WithCard);
+            }
+        }
+
+        ManaBaseAnalysis manaBase = AnalyzeManaBase(workspace);
+        if (manaBase.LandCount < 36 && plan.Operations.Count + (suggestions.Count * 2) < Math.Clamp(limit, 1, 25))
+        {
+            HashSet<string> replacementNames = suggestions
+                .Select(suggestion => suggestion.WithCard)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            CardInfo? land = await FindAddCandidateAsync(
+                    workspace,
+                    DeckRoles.Lands,
+                    maxPrice,
+                    cancellationToken,
+                    replacementNames,
+                    candidateFilter: IsUntappedLandCandidate)
+                .ConfigureAwait(false);
+            if (land is not null)
+            {
+                plan.Operations.Add(CreateAddOperation(land, DeckRoles.Lands, "Add an additional land to improve mana consistency."));
+            }
+        }
+
+        AddReplacementOperations(plan, workspace, suggestions);
+        await SavePlanWithWarningsAsync(plan, suggestions.Count + plan.Operations.Count, cancellationToken).ConfigureAwait(false);
+        return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
+    }
+
+    /// <summary>
+    /// Finds consistency improvements.
+    /// </summary>
+    public async Task<RecommendationPlanResult> FindConsistencyImprovementsAsync(
+        string workspaceId,
+        string focus,
+        decimal maxPrice,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckConsistencyAnalysis consistency = AnalyzeDeckConsistency(workspace);
+        DeckEditPlan plan = CreatePlan(workspace, "Consistency improvement plan", "consistency-improvements");
+        plan.Rationale = $"Improves {NormalizeFocus(focus)} consistency by filling ramp, draw, tutor, or card-selection gaps.";
+        HashSet<string> selectedAddNames = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string role in ConsistencyRolesToImprove(consistency, focus).Take(Math.Clamp(limit, 1, 25)))
+        {
+            CardInfo? candidate = await FindAddCandidateAsync(
+                    workspace,
+                    role,
+                    maxPrice,
+                    cancellationToken,
+                    selectedAddNames)
+                .ConfigureAwait(false);
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            plan.Operations.Add(CreateAddOperation(candidate, role, $"Add {candidate.Name} to improve {role} density."));
+            selectedAddNames.Add(candidate.Name);
+        }
+
+        await SavePlanWithWarningsAsync(plan, plan.Operations.Count, cancellationToken).ConfigureAwait(false);
+        return new RecommendationPlanResult { Plan = plan, Suggestions = [] };
     }
 
     /// <summary>
@@ -107,7 +370,9 @@ public sealed partial class DeckWorkspaceService
         decimal minSavings,
         bool budgetMode,
         ReplacementWeights weights,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlySet<string>? excludedCandidateNames = null,
+        Func<CardInfo, bool>? candidateFilter = null)
     {
         CardRoleAssignment currentRole = DeckRoleClassifier.Classify(currentCard);
         if (currentRole.PrimaryRole.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase))
@@ -137,6 +402,7 @@ public sealed partial class DeckWorkspaceService
         foreach (CardInfo candidate in candidatesByName.Values)
         {
             if (existingNames.Contains(candidate.Name)
+                || (excludedCandidateNames is not null && excludedCandidateNames.Contains(candidate.Name))
                 || candidate.Name.Equals(currentCard.Name, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -144,6 +410,11 @@ public sealed partial class DeckWorkspaceService
 
             if (!IsLegalInFormat(candidate, workspace.Format)
                 || !IsInDeckColorIdentity(candidate, colorIdentityKnown, deckColorIdentity))
+            {
+                continue;
+            }
+
+            if (candidateFilter is not null && !candidateFilter(candidate))
             {
                 continue;
             }
@@ -238,6 +509,36 @@ public sealed partial class DeckWorkspaceService
             plan.Warnings.Add("No replacements met the current filters.");
         }
 
+        AddReplacementOperations(plan, workspace, suggestions);
+
+        return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Saves the plan and adds a no-op warning when empty.
+    /// </summary>
+    private async Task SavePlanWithWarningsAsync(
+        DeckEditPlan plan,
+        int candidateCount,
+        CancellationToken cancellationToken)
+    {
+        if (candidateCount == 0 || plan.Operations.Count == 0)
+        {
+            plan.Warnings.Add("No candidates met the current filters.");
+        }
+
+        plan.Confidence = plan.Operations.Count == 0 ? 0 : 0.65;
+        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds replacement operations to a plan.
+    /// </summary>
+    private static void AddReplacementOperations(
+        DeckEditPlan plan,
+        DeckWorkspace workspace,
+        IReadOnlyList<ReplacementSuggestion> suggestions)
+    {
         foreach (ReplacementSuggestion suggestion in suggestions)
         {
             DeckCard? currentCard = workspace.Cards.FirstOrDefault(card =>
@@ -262,8 +563,177 @@ public sealed partial class DeckWorkspaceService
                 Rationale = suggestion.Rationale
             });
         }
+    }
 
-        return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+    /// <summary>
+    /// Finds a card to add for a role.
+    /// </summary>
+    private async Task<CardInfo?> FindAddCandidateAsync(
+        DeckWorkspace workspace,
+        string role,
+        decimal maxPrice,
+        CancellationToken cancellationToken,
+        IReadOnlySet<string>? excludedNames = null,
+        Func<CardInfo, bool>? candidateFilter = null)
+    {
+        string query = DeckRoleClassifier.QueryForRole(role, workspace.Format, maxPrice);
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            query = $"legal:{NormalizeFormat(workspace.Format)} usd<={maxPrice:0.##}";
+        }
+
+        IReadOnlyList<CardSearchResult> results = await cardCatalog
+            .SearchCardsAsync(query, limit: 12, cancellationToken)
+            .ConfigureAwait(false);
+        IReadOnlyDictionary<string, CardInfo> cardsByName = await cardCatalog
+            .GetCardsByNamesAsync(results.Select(result => result.Name).ToList(), cancellationToken)
+            .ConfigureAwait(false);
+        HashSet<string> existingNames = workspace.Cards.Select(card => card.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        (bool colorIdentityKnown, HashSet<string> deckColorIdentity) = GetDeckColorIdentity(workspace);
+
+        return cardsByName.Values
+            .Where(card => !existingNames.Contains(card.Name))
+            .Where(card => IsLegalInFormat(card, workspace.Format))
+            .Where(card => IsInDeckColorIdentity(card, colorIdentityKnown, deckColorIdentity))
+            .Where(card => excludedNames is null || !excludedNames.Contains(card.Name))
+            .Where(card => !ReadUsdPrice(card).HasValue || ReadUsdPrice(card) <= maxPrice)
+            .Where(card => CandidateMatchesRole(card, role))
+            .Where(card => candidateFilter is null || candidateFilter(card))
+            .OrderBy(card => card.EdhrecRank ?? int.MaxValue)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Checks whether an add candidate actually fills the requested role or tag.
+    /// </summary>
+    private static bool CandidateMatchesRole(CardInfo card, string role)
+    {
+        return DeckRoleClassifier.MatchesTarget(CreateCandidateCard(card), role);
+    }
+
+    /// <summary>
+    /// Checks whether a land replacement improves tapped-land pressure or fixing.
+    /// </summary>
+    private static bool IsManaBaseImprovement(DeckCard currentCard, CardInfo candidate)
+    {
+        DeckCard candidateCard = CreateCandidateCard(candidate);
+        CardRoleAssignment candidateRole = DeckRoleClassifier.Classify(candidateCard);
+        if (!candidateRole.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        CardSnapshot currentSnapshot = GetSnapshot(currentCard);
+        CardSnapshot candidateSnapshot = GetSnapshot(candidateCard);
+        if (LooksTapped(candidateSnapshot))
+        {
+            return false;
+        }
+
+        int currentColors = ReadProducedMana(currentCard).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        int candidateColors = ReadProducedMana(candidateCard).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        bool preservesSources = candidateColors >= currentColors || currentColors == 0;
+        return LooksTapped(currentSnapshot)
+            && (preservesSources || candidateRole.Tags.Contains(DeckTags.ManaFixing));
+    }
+
+    /// <summary>
+    /// Checks whether a land add candidate avoids tapped-land pressure.
+    /// </summary>
+    private static bool IsUntappedLandCandidate(CardInfo candidate)
+    {
+        DeckCard candidateCard = CreateCandidateCard(candidate);
+        return DeckRoleClassifier.Classify(candidateCard).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            && !LooksTapped(GetSnapshot(candidateCard));
+    }
+
+    /// <summary>
+    /// Builds a plan operation that adds a recommended role card.
+    /// </summary>
+    private static DeckEditOperation CreateAddOperation(CardInfo card, string role, string rationale)
+    {
+        return new DeckEditOperation
+        {
+            Operation = DeckEditOperations.AddCard,
+            CardName = card.Name,
+            Quantity = 1,
+            Category = role,
+            Rationale = rationale
+        };
+    }
+
+    /// <summary>
+    /// Returns focus-specific weights.
+    /// </summary>
+    private static ReplacementWeights WeightsForFocus(string focus)
+    {
+        return NormalizeFocus(focus) switch
+        {
+            "speed" => new ReplacementWeights { Role = 0.35, Power = 0.50, Price = 0.15 },
+            "budget" => new ReplacementWeights { Role = 0.45, Power = 0.20, Price = 0.35 },
+            "interaction" => new ReplacementWeights { Role = 0.55, Power = 0.30, Price = 0.15 },
+            _ => new ReplacementWeights()
+        };
+    }
+
+    /// <summary>
+    /// Checks whether a card is a power-pressure card.
+    /// </summary>
+    private static bool ShouldReducePower(DeckCard card, string targetPower)
+    {
+        if (IsCommanderCard(card))
+        {
+            return false;
+        }
+
+        CardSnapshot snapshot = GetSnapshot(card);
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = $"{card.Name} {snapshot.TypeLine} {snapshot.OracleText}";
+        bool casualTarget = NormalizeFocus(targetPower) is "casual" or "low" or "precon";
+        return IsFastMana(card)
+            || role.Tags.Contains(DeckTags.Stax)
+            || role.Tags.Contains(DeckTags.ComboPiece)
+            || ContainsAny(text, "extra turn", "destroy all lands")
+            || (casualTarget && role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Returns consistency roles that need more density.
+    /// </summary>
+    private static IEnumerable<string> ConsistencyRolesToImprove(
+        DeckConsistencyAnalysis consistency,
+        string focus)
+    {
+        string normalizedFocus = NormalizeFocus(focus);
+        if (normalizedFocus is "ramp" or "balanced" && consistency.RampCount < 10)
+        {
+            yield return DeckRoles.Ramp;
+        }
+
+        if (normalizedFocus is "draw" or "balanced" && consistency.DrawCount < 10)
+        {
+            yield return DeckRoles.Draw;
+        }
+
+        if (normalizedFocus is "tutors" or "speed" && consistency.TutorCount < 3)
+        {
+            yield return DeckRoles.Tutors;
+        }
+
+        if (normalizedFocus is "selection" or "balanced" && consistency.CardSelectionCount < 4)
+        {
+            yield return DeckTags.CardSelection;
+        }
+    }
+
+    /// <summary>
+    /// Normalizes a focus value.
+    /// </summary>
+    private static string NormalizeFocus(string? focus)
+    {
+        return string.IsNullOrWhiteSpace(focus)
+            ? "balanced"
+            : focus.Trim().ToLowerInvariant();
     }
 
     /// <summary>

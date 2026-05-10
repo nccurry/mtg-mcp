@@ -107,27 +107,36 @@ public sealed partial class ArchidektGateway
         // keep the mapper tolerant so cached workspaces survive response drift.
         return new CardSnapshot
         {
-            ManaCost = GetString(cardElement, "manaCost")
-                ?? GetString(cardElement, "mana_cost")
-                ?? GetNestedString(cardElement, "oracleCard", "manaCost")
-                ?? GetNestedString(cardElement, "oracleCard", "mana_cost"),
-            TypeLine =
-                GetNestedString(cardElement, "oracleCard", "typeLine")
-                ?? GetNestedString(cardElement, "oracleCard", "type"),
+            ManaCost = FirstNonEmpty(
+                GetString(cardElement, "manaCost"),
+                GetString(cardElement, "mana_cost"),
+                GetNestedString(cardElement, "oracleCard", "manaCost"),
+                GetNestedString(cardElement, "oracleCard", "mana_cost"),
+                GetNestedFaceString(cardElement, "manaCost"),
+                GetNestedFaceString(cardElement, "mana_cost")),
+            TypeLine = FirstNonEmpty(
+                GetNestedString(cardElement, "oracleCard", "typeLine"),
+                GetNestedString(cardElement, "oracleCard", "type"),
+                BuildNestedTypeLine(cardElement)),
             ManaValue =
                 GetDouble(cardElement, "manaValue")
                 ?? GetDouble(cardElement, "cmc")
                 ?? GetNestedDouble(cardElement, "oracleCard", "manaValue")
                 ?? GetNestedDouble(cardElement, "oracleCard", "cmc"),
-            OracleText = GetString(cardElement, "oracleText")
-                ?? GetString(cardElement, "oracle_text")
-                ?? GetNestedString(cardElement, "oracleCard", "oracleText")
-                ?? GetNestedString(cardElement, "oracleCard", "oracle_text"),
+            OracleText = FirstNonEmpty(
+                GetString(cardElement, "oracleText"),
+                GetString(cardElement, "oracle_text"),
+                GetNestedString(cardElement, "oracleCard", "oracleText"),
+                GetNestedString(cardElement, "oracleCard", "oracle_text"),
+                GetNestedString(cardElement, "oracleCard", "text"),
+                GetNestedFaceText(cardElement)),
             ColorIdentity = ParseColorIdentity(cardElement),
-            Set =
-                GetString(cardElement, "edition")
-                ?? GetString(cardElement, "set")
-                ?? GetString(cardElement, "setCode"),
+            Set = FirstNonEmpty(
+                GetNestedString(cardElement, "edition", "editioncode"),
+                GetNestedString(cardElement, "edition", "code"),
+                GetString(cardElement, "set"),
+                GetString(cardElement, "setCode"),
+                GetStringValue(cardElement, "edition")),
             CollectorNumber =
                 GetString(cardElement, "collectorNumber")
                 ?? GetString(cardElement, "collector_number"),
@@ -138,7 +147,173 @@ public sealed partial class ArchidektGateway
                 ?? GetNestedInt(cardElement, "oracleCard", "edhrec_rank"),
             ScryfallUri =
                 GetString(cardElement, "scryfallUri") ?? GetString(cardElement, "scryfall_uri"),
+            Prices = ParsePrices(cardElement),
         };
+    }
+
+    /// <summary>
+    /// Gets a text field from the first Archidekt face that defines it.
+    /// </summary>
+    private static string? GetNestedFaceString(JsonElement cardElement, string propertyName)
+    {
+        if (
+            !cardElement.TryGetProperty("oracleCard", out JsonElement oracleCard)
+            || oracleCard.ValueKind != JsonValueKind.Object
+            || !oracleCard.TryGetProperty("faces", out JsonElement faces)
+            || faces.ValueKind != JsonValueKind.Array
+        )
+        {
+            return null;
+        }
+
+        foreach (JsonElement face in faces.EnumerateArray())
+        {
+            string? value = GetString(face, propertyName);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Combines Archidekt face rules text when no flat oracle text is present.
+    /// </summary>
+    private static string? GetNestedFaceText(JsonElement cardElement)
+    {
+        if (
+            !cardElement.TryGetProperty("oracleCard", out JsonElement oracleCard)
+            || oracleCard.ValueKind != JsonValueKind.Object
+            || !oracleCard.TryGetProperty("faces", out JsonElement faces)
+            || faces.ValueKind != JsonValueKind.Array
+        )
+        {
+            return null;
+        }
+
+        List<string> values = [];
+        foreach (JsonElement face in faces.EnumerateArray())
+        {
+            string? value = FirstNonEmpty(
+                GetString(face, "oracleText"),
+                GetString(face, "oracle_text"),
+                GetString(face, "text"));
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                values.Add(value);
+            }
+        }
+
+        return values.Count == 0 ? null : string.Join("\n\n", values);
+    }
+
+    /// <summary>
+    /// Builds a Scryfall-style type line from Archidekt's split type fields.
+    /// </summary>
+    private static string? BuildNestedTypeLine(JsonElement cardElement)
+    {
+        if (
+            !cardElement.TryGetProperty("oracleCard", out JsonElement oracleCard)
+            || oracleCard.ValueKind != JsonValueKind.Object
+        )
+        {
+            return null;
+        }
+
+        JsonElement source = oracleCard;
+        if (
+            oracleCard.TryGetProperty("faces", out JsonElement faces)
+            && faces.ValueKind == JsonValueKind.Array
+        )
+        {
+            source = faces.EnumerateArray().FirstOrDefault();
+            if (source.ValueKind == JsonValueKind.Undefined)
+            {
+                source = oracleCard;
+            }
+        }
+
+        List<string> supertypes = ReadStringList(source, "superTypes");
+        List<string> types = ReadStringList(source, "types");
+        List<string> subtypes = ReadStringList(source, "subTypes");
+        string beforeDash = string.Join(' ', supertypes.Concat(types));
+        string afterDash = string.Join(' ', subtypes);
+
+        return string.IsNullOrWhiteSpace(afterDash)
+            ? FirstNonEmpty(beforeDash)
+            : $"{beforeDash} - {afterDash}";
+    }
+
+    /// <summary>
+    /// Reads Archidekt array-or-string fields into tokens.
+    /// </summary>
+    private static List<string> ReadStringList(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out JsonElement property))
+        {
+            return [];
+        }
+
+        if (property.ValueKind == JsonValueKind.Array)
+        {
+            return property
+                .EnumerateArray()
+                .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : null)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToList();
+        }
+
+        if (property.ValueKind == JsonValueKind.String)
+        {
+            return property
+                .GetString()
+                ?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList() ?? [];
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Reads a direct string value without converting object-valued fields to raw JSON.
+    /// </summary>
+    private static string? GetStringValue(JsonElement element, string propertyName)
+    {
+        return
+            element.TryGetProperty(propertyName, out JsonElement property)
+            && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    /// <summary>
+    /// Parses Archidekt's numeric price map into the shared USD snapshot key.
+    /// </summary>
+    private static Dictionary<string, string> ParsePrices(JsonElement cardElement)
+    {
+        Dictionary<string, string> prices = new(StringComparer.OrdinalIgnoreCase);
+        if (
+            !cardElement.TryGetProperty("prices", out JsonElement priceObject)
+            || priceObject.ValueKind != JsonValueKind.Object
+        )
+        {
+            return prices;
+        }
+
+        string? usd = GetString(priceObject, "usd")
+            ?? GetString(priceObject, "tcg")
+            ?? GetString(priceObject, "ck")
+            ?? GetString(priceObject, "mp")
+            ?? GetString(priceObject, "cardTrader");
+        if (!string.IsNullOrWhiteSpace(usd))
+        {
+            prices["usd"] = usd;
+        }
+
+        return prices;
     }
 
     /// <summary>
@@ -315,6 +490,7 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private static void AddColor(List<string> colors, string? color)
     {
+        color = NormalizeColor(color);
         if (
             !string.IsNullOrWhiteSpace(color)
             && !colors.Any(value => value.Equals(color, StringComparison.OrdinalIgnoreCase))
@@ -322,6 +498,24 @@ public sealed partial class ArchidektGateway
         {
             colors.Add(color);
         }
+    }
+
+    /// <summary>
+    /// Normalizes Archidekt color names to Scryfall color letters.
+    /// </summary>
+    private static string? NormalizeColor(string? color)
+    {
+        return color?.Trim().ToLowerInvariant() switch
+        {
+            "white" => "W",
+            "blue" => "U",
+            "black" => "B",
+            "red" => "R",
+            "green" => "G",
+            "colorless" => "C",
+            "" or null => null,
+            _ => color.Trim(),
+        };
     }
 
     /// <summary>

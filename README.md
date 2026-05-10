@@ -16,11 +16,18 @@ decks with Scryfall card data and Archidekt deck writeback.
 - Server-side operation modes can block mutations for Ask/Plan style sessions.
 - Category-based organization for mainboard, sideboard, maybeboard, and custom Archidekt categories.
 - Deck checkpoint tools backed by Archidekt snapshots.
-- Deck intelligence tools for Scryfall normalization, plan summaries, role/tag classification, draw odds, budget replacements, upgrades, and category cleanup plans.
+- Deck intelligence tools for Scryfall normalization, plan summaries, role/tag classification, draw odds, cost analysis, mana-base analysis, consistency analysis, budget replacements, upgrades, bracket reduction, power tuning, and category cleanup plans.
 - Persisted `DeckEditPlan` workflows keep recommendations separate from mutations; `apply_deck_plan` is the only recommendation tool that changes deck contents.
+- Plan preview tools show before/after cost, validation, role, mana, consistency, and Commander bracket estimates before any plan is applied.
 - MCP tools, resources, and prompts exposed over stdio.
 
 Moxfield support is intentionally out of scope for v1 because there is no supported public write API.
+
+Commander bracket tools use live Scryfall `is:game-changer` search results plus
+heuristics for fast mana, tutors, stax, combo, extra turns, and mass land denial.
+Bracket output is an advisory estimate for pregame discussion, not an official
+determination. The current public bracket context is Wizards' beta update:
+https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-february-9-2026.
 
 ## Quick Start
 

@@ -154,6 +154,7 @@ public static class DeckRoleClassifier
             "protection" => "(o:hexproof or o:indestructible or o:\"phase out\")",
             "recursion" => "(o:graveyard o:return)",
             "wincons" => "(o:\"win the game\" or o:\"each opponent loses\")",
+            "card selection" => "(o:scry or o:surveil or o:\"look at the top\" or o:\"reveal the top\")",
             _ => ""
         };
 

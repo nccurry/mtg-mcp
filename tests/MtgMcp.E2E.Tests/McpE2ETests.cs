@@ -160,6 +160,148 @@ public sealed class McpE2ETests
         card.GetProperty("cardid").GetInt32().Should().Be(151147);
         card.GetProperty("categories")[0].GetString().Should().Be("Mainboard");
         card.GetProperty("modifications").GetProperty("quantity").GetInt32().Should().Be(1);
+        card.TryGetProperty("deckRelationId", out _).Should().BeFalse();
+        card.GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that workflow primitives preview locally and only write to Archidekt when applied.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task ArchidektWorkflowPrimitiveFlow_PreviewsBeforeApplying()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        scryfall.GetJson(
+            ScryfallSearchPath(
+                "(o:add or o:treasure or o:\"search your library for a land\") legal:commander usd<=10"
+            ),
+            """
+            {
+              "has_more": false,
+              "data": [
+                { "id": "arcane-signet", "name": "Arcane Signet", "type_line": "Artifact" }
+              ]
+            }
+            """);
+        scryfall.GetJson(
+            ScryfallSearchPath("is:game-changer"),
+            """
+            {
+              "has_more": false,
+              "data": []
+            }
+            """);
+        scryfall.PostJson(
+            "cards/collection",
+            """
+            {
+              "data": [
+                {
+                  "id": "arcane-signet",
+                  "oracle_id": "oracle-arcane-signet",
+                  "name": "Arcane Signet",
+                  "mana_cost": "{2}",
+                  "cmc": 2,
+                  "type_line": "Artifact",
+                  "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+                  "produced_mana": ["W", "U", "B", "R", "G"],
+                  "legalities": { "commander": "legal" },
+                  "prices": { "usd": "1.00" },
+                  "edhrec_rank": 5
+                }
+              ]
+            }
+            """);
+        scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
+        archidekt.GetJson("api/decks/123/", RemoteSwampsDeckJson);
+        archidekt.GetJson(
+            "api/cards/v2/?name=Arcane%20Signet&pageSize=25",
+            """
+            {
+              "results": [
+                { "id": 555, "oracleCard": { "name": "Arcane Signet" } }
+              ]
+            }
+            """);
+        archidekt.PatchJson("api/decks/123/modifyCards/v2/", "{}");
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "archidekt",
+                ["archidektDeckIdOrUrl"] = "123",
+                ["writeBack"] = true
+            });
+        string workspaceId = GetString(workspace, "id");
+        string beforePreviewExport = await CallTextAsync(
+            session.Client,
+            "export_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+
+        JsonElement planResult = await CallJsonAsync(
+            session.Client,
+            "find_consistency_improvements",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["focus"] = "ramp",
+                ["maxPrice"] = 10,
+                ["limit"] = 1
+            });
+        string planId = GetString(GetObject(planResult, "plan"), "planId");
+        JsonElement preview = await CallJsonAsync(
+            session.Client,
+            "preview_deck_plan",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["resolveAddedCards"] = true
+            });
+        string afterPreviewExport = await CallTextAsync(
+            session.Client,
+            "export_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+
+        GetInt32(GetObject(GetObject(preview, "before"), "consistency"), "rampCount").Should().Be(0);
+        GetInt32(GetObject(GetObject(preview, "after"), "consistency"), "rampCount").Should().Be(1);
+        beforePreviewExport.Should().NotContain("Arcane Signet");
+        afterPreviewExport.Should().Be(beforePreviewExport);
+        archidekt.Requests.Should().NotContain(request => request.Method == "PATCH");
+
+        JsonElement apply = await CallJsonAsync(
+            session.Client,
+            "apply_deck_plan",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["createCheckpoint"] = false
+            });
+        string afterApplyExport = await CallTextAsync(
+            session.Client,
+            "export_deck",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+
+        GetInt32(apply, "appliedOperations").Should().Be(1);
+        afterApplyExport.Should().Contain("1 Arcane Signet");
+        FakeHttpRequest patch = archidekt.Requests.Single(request => request.Method == "PATCH");
+        patch.PathAndQuery.Should().Be("api/decks/123/modifyCards/v2/");
+        using JsonDocument payload = JsonDocument.Parse(patch.Body);
+        JsonElement card = payload.RootElement.GetProperty("cards")[0];
+        card.GetProperty("action").GetString().Should().Be("add");
+        card.GetProperty("cardid").GetInt32().Should().Be(555);
+        card.GetProperty("categories")[0].GetString().Should().Be("Ramp");
+        card.TryGetProperty("deckRelationId", out _).Should().BeFalse();
+        card.GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
     }
 
     /// <summary>
@@ -275,6 +417,14 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Builds the Scryfall search path for fake HTTP routes.
+    /// </summary>
+    private static string ScryfallSearchPath(string query)
+    {
+        return $"cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec";
+    }
+
+    /// <summary>
     /// Provides a Scryfall card payload shared by E2E flows that add Lightning Bolt.
     /// </summary>
     private const string LightningBoltJson = """
@@ -290,6 +440,60 @@ public sealed class McpE2ETests
       "collector_number": "141",
       "scryfall_uri": "https://scryfall.example/card/clu/141",
       "color_identity": ["R"]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall card payload for consistency workflow E2E tests.
+    /// </summary>
+    private const string ArcaneSignetJson = """
+    {
+      "id": "arcane-signet",
+      "oracle_id": "oracle-arcane-signet",
+      "name": "Arcane Signet",
+      "mana_cost": "{2}",
+      "cmc": 2,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+      "produced_mana": ["W", "U", "B", "R", "G"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "1.00" },
+      "edhrec_rank": 5
+    }
+    """;
+
+    /// <summary>
+    /// Provides an Archidekt deck payload with enough real shape to drive workflow primitive E2E tests.
+    /// </summary>
+    private const string RemoteSwampsDeckJson = """
+    {
+      "id": 123,
+      "name": "Remote Swamps",
+      "deckFormat": 3,
+      "edhBracket": null,
+      "categories": [
+        { "id": 1, "name": "Lands", "includedInDeck": true, "includedInPrice": true }
+      ],
+      "cards": [
+        {
+          "id": 44,
+          "quantity": 36,
+          "categories": ["Lands"],
+          "card": {
+            "id": 99,
+            "uid": "swamp-print",
+            "prices": { "tcg": 0.05 },
+            "oracleCard": {
+              "uid": "swamp-oracle",
+              "name": "Swamp",
+              "typeLine": "Basic Land - Swamp",
+              "manaValue": 0,
+              "colorIdentity": [],
+              "text": "{T}: Add {B}."
+            }
+          }
+        }
+      ]
     }
     """;
 }

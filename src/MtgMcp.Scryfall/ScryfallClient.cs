@@ -13,6 +13,16 @@ namespace MtgMcp.Scryfall;
 public sealed class ScryfallClient : ICardCatalog, IDisposable
 {
     /// <summary>
+    /// Stores the maximum rate limit retries.
+    /// </summary>
+    private const int MaxRateLimitRetries = 1;
+
+    /// <summary>
+    /// Stores the default rate limit delay.
+    /// </summary>
+    private static readonly TimeSpan DefaultRateLimitDelay = TimeSpan.FromSeconds(60);
+
+    /// <summary>
     /// Stores serializer options.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -28,14 +38,14 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     private readonly ScryfallOptions options;
 
     /// <summary>
-    /// Handles request lock.
+    /// Handles request lock shared by all Scryfall client instances.
     /// </summary>
-    private readonly SemaphoreSlim requestLock = new(1, 1);
+    private static readonly SemaphoreSlim RequestLock = new(1, 1);
 
     /// <summary>
-    /// Stores the last request at.
+    /// Stores the last request at across all Scryfall client instances.
     /// </summary>
-    private DateTimeOffset lastRequestAt = DateTimeOffset.MinValue;
+    private static DateTimeOffset lastRequestAt = DateTimeOffset.MinValue;
 
     /// <summary>
     /// Handles scryfall client.
@@ -62,37 +72,48 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         CancellationToken cancellationToken
     )
     {
-        string uri = $"cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec";
+        int safeLimit = Math.Max(1, limit);
+        string? uri = $"cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec";
         List<CardSearchResult> cards = [];
-        JsonDocument? document = await GetJsonAsync(
-                uri,
-                cancellationToken,
-                returnNullOnNotFound: true
-            )
-            .ConfigureAwait(false);
-        if (document is null)
-        {
-            return cards;
-        }
 
-        using (document)
+        while (!string.IsNullOrWhiteSpace(uri) && cards.Count < safeLimit)
         {
-            if (!document.RootElement.TryGetProperty("data", out JsonElement data))
+            JsonDocument? document = await GetJsonAsync(
+                    uri,
+                    cancellationToken,
+                    returnNullOnNotFound: true
+                )
+                .ConfigureAwait(false);
+            if (document is null)
             {
                 return cards;
             }
 
-            foreach (JsonElement item in data.EnumerateArray())
+            using (document)
             {
-                cards.Add(MapSearchResult(item));
-                if (cards.Count >= Math.Max(1, limit))
+                if (!document.RootElement.TryGetProperty("data", out JsonElement data))
                 {
-                    break;
+                    return cards;
                 }
-            }
 
-            return cards;
+                foreach (JsonElement item in data.EnumerateArray())
+                {
+                    cards.Add(MapSearchResult(item));
+                    if (cards.Count >= safeLimit)
+                    {
+                        break;
+                    }
+                }
+
+                bool hasMore = document.RootElement.TryGetProperty("has_more", out JsonElement hasMoreValue)
+                    && hasMoreValue.ValueKind == JsonValueKind.True;
+                uri = hasMore && cards.Count < safeLimit
+                    ? GetString(document.RootElement, "next_page")
+                    : null;
+            }
         }
+
+        return cards;
     }
 
     /// <summary>
@@ -331,32 +352,43 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         bool returnNullOnNotFound = false
     )
     {
-        await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
-
-        using HttpResponseMessage response = await httpClient
-            .GetAsync(relativeUri, cancellationToken)
-            .ConfigureAwait(false);
-        if (returnNullOnNotFound && response.StatusCode == HttpStatusCode.NotFound)
+        for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
         {
-            return null;
-        }
+            await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            string body = await response
-                .Content.ReadAsStringAsync(cancellationToken)
+            using HttpResponseMessage response = await httpClient
+                .GetAsync(relativeUri, cancellationToken)
                 .ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"Scryfall request failed with {(int)response.StatusCode}: {body}"
-            );
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRateLimitRetries)
+            {
+                await DelayForRateLimitAsync(response, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            if (returnNullOnNotFound && response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string body = await response
+                    .Content.ReadAsStringAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"Scryfall request failed with {(int)response.StatusCode}: {body}"
+                );
+            }
+
+            await using Stream stream = await response
+                .Content.ReadAsStreamAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return await JsonDocument
+                .ParseAsync(stream, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        await using Stream stream = await response
-            .Content.ReadAsStreamAsync(cancellationToken)
-            .ConfigureAwait(false);
-        return await JsonDocument
-            .ParseAsync(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        throw new HttpRequestException("Scryfall request failed after rate limit retry.");
     }
 
     /// <summary>
@@ -368,29 +400,58 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         CancellationToken cancellationToken
     )
     {
-        await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
-
-        string json = JsonSerializer.Serialize(body, SerializerOptions);
-        using StringContent content = new(json, Encoding.UTF8, "application/json");
-        using HttpResponseMessage response = await httpClient
-            .PostAsync(relativeUri, content, cancellationToken)
-            .ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
         {
-            string responseBody = await response
-                .Content.ReadAsStringAsync(cancellationToken)
+            await DelayIfNeededAsync(cancellationToken).ConfigureAwait(false);
+
+            string json = JsonSerializer.Serialize(body, SerializerOptions);
+            using StringContent content = new(json, Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await httpClient
+                .PostAsync(relativeUri, content, cancellationToken)
                 .ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"Scryfall request failed with {(int)response.StatusCode}: {responseBody}"
-            );
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRateLimitRetries)
+            {
+                await DelayForRateLimitAsync(response, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string responseBody = await response
+                    .Content.ReadAsStringAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"Scryfall request failed with {(int)response.StatusCode}: {responseBody}"
+                );
+            }
+
+            await using Stream stream = await response
+                .Content.ReadAsStreamAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return await JsonDocument
+                .ParseAsync(stream, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        await using Stream stream = await response
-            .Content.ReadAsStreamAsync(cancellationToken)
-            .ConfigureAwait(false);
-        return await JsonDocument
-            .ParseAsync(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        throw new HttpRequestException("Scryfall request failed after rate limit retry.");
+    }
+
+    /// <summary>
+    /// Delays according to Scryfall rate limit guidance.
+    /// </summary>
+    private static async Task DelayForRateLimitAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        TimeSpan delay = response.Headers.RetryAfter?.Delta
+            ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow)
+            ?? DefaultRateLimitDelay;
+        if (delay < TimeSpan.Zero)
+        {
+            delay = TimeSpan.Zero;
+        }
+
+        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -398,7 +459,7 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     /// </summary>
     private async Task DelayIfNeededAsync(CancellationToken cancellationToken)
     {
-        await requestLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await RequestLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             TimeSpan elapsed = DateTimeOffset.UtcNow - lastRequestAt;
@@ -412,7 +473,7 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         }
         finally
         {
-            requestLock.Release();
+            RequestLock.Release();
         }
     }
 
@@ -421,7 +482,6 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
     /// </summary>
     public void Dispose()
     {
-        requestLock.Dispose();
     }
 
     /// <summary>

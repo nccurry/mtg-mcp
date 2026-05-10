@@ -99,6 +99,19 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that card-selection recommendations use a specific search query.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_QueryForRole_CoversCardSelection()
+    {
+        string query = DeckRoleClassifier.QueryForRole(DeckTags.CardSelection, "commander", maxPrice: 2);
+
+        query.Should().Contain("scry");
+        query.Should().Contain("legal:commander");
+        query.Should().Contain("usd<=2");
+    }
+
+    /// <summary>
     /// Verifies that analyze draw odds uses hypergeometric odds.
     /// </summary>
     [Fact]
@@ -253,6 +266,50 @@ public sealed class DeckIntelligenceTests
 
         result.Suggestions.Should().ContainSingle().Which.WithCard.Should().Be("Phyrexian Arena");
         result.Plan.Operations.Should().Contain(operation => operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Phyrexian Arena");
+    }
+
+    /// <summary>
+    /// Verifies that power upgrade focus supplies default weights.
+    /// </summary>
+    [Fact]
+    public async Task FindPowerUpgrades_FocusSuppliesDefaultWeights()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Speed Upgrades",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Weak Draw",
+                    PrimaryCategory = DeckRoles.Draw,
+                    Categories = [DeckRoles.Draw],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Enchantment",
+                        OracleText = "At the beginning of your upkeep, you may draw a card.",
+                        ManaValue = 5,
+                        EdhrecRank = 20_000,
+                        ColorIdentity = ["B"]
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindPowerUpgradesAsync(
+            workspace.Id,
+            focus: "speed",
+            maxPrice: null,
+            limit: 3,
+            weights: null,
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Rationale.Should().Contain("role=0.35");
+        result.Plan.Rationale.Should().Contain("power=0.5");
+        result.Plan.Rationale.Should().Contain("price=0.15");
     }
 
     /// <summary>
@@ -461,6 +518,423 @@ public sealed class DeckIntelligenceTests
         result.Plan.Operations.Should().Contain(operation =>
             operation.Operation == DeckEditOperations.MoveCard
             && operation.ToCategory == DeckRoles.Ramp);
+    }
+
+    /// <summary>
+    /// Verifies that analyze deck cost returns totals and drivers from cached prices.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_ReturnsTotalsAndDrivers()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Cost",
+            Cards =
+            [
+                ExpensiveRamp(),
+                new DeckCard
+                {
+                    Name = "Maybe Draw",
+                    Quantity = 2,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard],
+                    Snapshot = new CardSnapshot
+                    {
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "3.00" }
+                    }
+                },
+                new DeckCard { Name = "Unknown Price", PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.IncludedTotal.Should().Be(180);
+        analysis.MaybeboardTotal.Should().Be(6);
+        analysis.MissingPriceCards.Should().Contain("Unknown Price");
+        analysis.TopCostDrivers.Should().ContainSingle().Which.CardName.Should().Be("Mana Crypt");
+    }
+
+    /// <summary>
+    /// Verifies that mana base and consistency analysis return useful signals.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBaseAndConsistency_ReturnSignals()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Signals",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 32,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                },
+                new DeckCard
+                {
+                    Name = "Temple of Deceit",
+                    Quantity = 4,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        OracleText = "Temple of Deceit enters the battlefield tapped.",
+                        ProducedMana = ["U", "B"]
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Arcane Signet",
+                    Quantity = 2,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        OracleText = "{T}: Add one mana of any color.",
+                        ProducedMana = ["W", "U", "B", "R", "G"],
+                        ManaValue = 2
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis manaBase = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+        DeckConsistencyAnalysis consistency = await service.AnalyzeDeckConsistencyAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        manaBase.LandCount.Should().Be(36);
+        manaBase.ColorSources["B"].Should().Be(36);
+        manaBase.TappedLandCount.Should().Be(4);
+        consistency.RampCount.Should().Be(2);
+        consistency.Risks.Should().Contain(note => note.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
+        consistency.KeyOdds.Rows.Should().Contain(row => row.Target == DeckRoles.Ramp);
+    }
+
+    /// <summary>
+    /// Verifies that commander bracket estimates use live Game Changer search results.
+    /// </summary>
+    [Fact]
+    public async Task EstimateCommanderBracket_UsesGameChangers()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Bracket",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        CommanderBracketEstimate estimate = await service.EstimateCommanderBracketAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        estimate.GameChangers.Should().Contain("Mana Crypt");
+        estimate.EstimatedBracket.Should().BeGreaterThanOrEqualTo(3);
+        estimate.Signals.Should().Contain(signal => signal.Signal == "game-changer");
+    }
+
+    /// <summary>
+    /// Verifies that unavailable Game Changer data fails clearly.
+    /// </summary>
+    [Fact]
+    public async Task EstimateCommanderBracket_FailsClearlyWhenGameChangersUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Bracket",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGameChangerSearch = true });
+
+        Func<Task> estimate = () => service.EstimateCommanderBracketAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        await estimate.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Unable to fetch live Commander Game Changer data from Scryfall.");
+    }
+
+    /// <summary>
+    /// Verifies that preview deck plan applies operations only to a clone.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_DoesNotMutateWorkspace()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Swap",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.RemoveCard,
+                    CardName = "Mana Crypt",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Before.Cost.IncludedTotal.Should().Be(180);
+        preview.After.Cost.IncludedTotal.Should().Be(1);
+        workspaces.Workspaces[workspace.Id].Cards.Should().ContainSingle().Which.Name.Should().Be("Mana Crypt");
+    }
+
+    /// <summary>
+    /// Verifies that preview deck plan applies card-category operations on the clone.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_AppliesCardCategoryOperations()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview Categories",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Move to maybeboard",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCardCategory,
+                    CardName = "Mana Crypt",
+                    Category = DeckDefaults.Maybeboard
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.SetPrimaryCardCategory,
+                    CardName = "Mana Crypt",
+                    Category = DeckDefaults.Maybeboard
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.RemoveCardCategory,
+                    CardName = "Mana Crypt",
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Warnings.Should().BeEmpty();
+        preview.After.Cost.IncludedTotal.Should().Be(0);
+        preview.After.Cost.MaybeboardTotal.Should().Be(180);
+        DeckCard original = workspaces.Workspaces[workspace.Id].Cards.Single();
+        original.PrimaryCategory.Should().Be(DeckRoles.Ramp);
+        original.Categories.Should().NotContain(DeckDefaults.Maybeboard);
+    }
+
+    /// <summary>
+    /// Verifies that bracket reduction creates a persisted non-mutating plan.
+    /// </summary>
+    [Fact]
+    public async Task FindBracketReductionCandidates_CreatesPersistedPlanWithoutMutatingDeck()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Bracket Plan",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindBracketReductionCandidatesAsync(
+            workspace.Id,
+            targetBracket: 2,
+            limit: 5,
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.RemoveCard && operation.CardName == "Mana Crypt");
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Arcane Signet");
+        workspaces.Workspaces[workspace.Id].Cards.Single().Name.Should().Be("Mana Crypt");
+        (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that consistency improvements create add-card plans.
+    /// </summary>
+    [Fact]
+    public async Task FindConsistencyImprovements_CreatesAddPlan()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Consistency",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 36,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindConsistencyImprovementsAsync(
+            workspace.Id,
+            focus: "balanced",
+            maxPrice: 10,
+            limit: 3,
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Arcane Signet");
+        workspaces.Workspaces[workspace.Id].Cards.Should().ContainSingle().Which.Name.Should().Be("Swamp");
+    }
+
+    /// <summary>
+    /// Verifies that card-selection consistency does not fall back to unrelated legal cards.
+    /// </summary>
+    [Fact]
+    public async Task FindConsistencyImprovements_CardSelectionAddsMatchingCard()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Selection",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 36,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        FakeCardCatalog catalog = new();
+        DeckWorkspaceService service = new(workspaces, catalog, archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindConsistencyImprovementsAsync(
+            workspace.Id,
+            focus: "selection",
+            maxPrice: 10,
+            limit: 3,
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Opt");
+        result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Lightning Greaves");
+        catalog.SearchQueries.Should().Contain(query => query.Contains("scry", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that mana base improvements can replace tapped lands.
+    /// </summary>
+    [Fact]
+    public async Task FindManaBaseImprovements_ReplacesTappedLands()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Mana Plan",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Temple of Deceit",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        OracleText = "Temple of Deceit enters the battlefield tapped.",
+                        ProducedMana = ["U", "B"],
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Barren Moor",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        OracleText = "Barren Moor enters the battlefield tapped.",
+                        ProducedMana = ["B"],
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.25" }
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindManaBaseImprovementsAsync(
+            workspace.Id,
+            maxPrice: 10,
+            limit: 3,
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Command Tower");
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.RemoveCard && operation.CardName == "Temple of Deceit");
+        result.Plan.Operations.Count(operation =>
+            operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Command Tower").Should().Be(1);
+        result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Temple of Silence");
     }
 
     /// <summary>
@@ -698,14 +1172,50 @@ public sealed class DeckIntelligenceTests
     private sealed class FakeCardCatalog : ICardCatalog
     {
         /// <summary>
+        /// Gets search queries sent to the fake catalog.
+        /// </summary>
+        public List<string> SearchQueries { get; } = [];
+
+        /// <summary>
+        /// Gets or sets whether Game Changer search throws.
+        /// </summary>
+        public bool ThrowOnGameChangerSearch { get; init; }
+
+        /// <summary>
         /// Searches fake cards.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
         {
+            SearchQueries.Add(query);
             IReadOnlyList<CardSearchResult> results;
-            if (query.Contains("add", StringComparison.OrdinalIgnoreCase))
+            if (query.Contains("is:game-changer", StringComparison.OrdinalIgnoreCase))
+            {
+                if (ThrowOnGameChangerSearch)
+                {
+                    throw new HttpRequestException("Scryfall unavailable.");
+                }
+
+                results = [new CardSearchResult { Name = "Mana Crypt" }];
+            }
+            else if (query.Contains("t:land", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Temple of Silence" },
+                    new CardSearchResult { Name = "Command Tower" }
+                ];
+            }
+            else if (query.Contains("add", StringComparison.OrdinalIgnoreCase))
             {
                 results = [new CardSearchResult { Name = "Arcane Signet" }];
+            }
+            else if (query.Contains("scry", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Lightning Greaves" },
+                    new CardSearchResult { Name = "Opt" }
+                ];
             }
             else if (query.Contains("draw", StringComparison.OrdinalIgnoreCase))
             {
@@ -887,6 +1397,46 @@ public sealed class DeckIntelligenceTests
                     EdhrecRank = 3_000,
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.25" }
+                },
+                "Command Tower" => new CardInfo
+                {
+                    Id = "command-tower",
+                    OracleId = "oracle-command-tower",
+                    Name = "Command Tower",
+                    TypeLine = "Land",
+                    OracleText = "{T}: Add one mana of any color in your commander's color identity.",
+                    ColorIdentity = [],
+                    ProducedMana = ["W", "U", "B", "R", "G"],
+                    EdhrecRank = 10,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.50" }
+                },
+                "Temple of Silence" => new CardInfo
+                {
+                    Id = "temple-of-silence",
+                    OracleId = "oracle-temple-of-silence",
+                    Name = "Temple of Silence",
+                    TypeLine = "Land",
+                    OracleText = "Temple of Silence enters the battlefield tapped. When it enters, scry 1. {T}: Add {W} or {B}.",
+                    ColorIdentity = [],
+                    ProducedMana = ["W", "B"],
+                    EdhrecRank = 1,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.20" }
+                },
+                "Opt" => new CardInfo
+                {
+                    Id = "opt",
+                    OracleId = "oracle-opt",
+                    Name = "Opt",
+                    ManaCost = "{U}",
+                    ManaValue = 1,
+                    TypeLine = "Instant",
+                    OracleText = "Scry 1. Draw a card.",
+                    ColorIdentity = ["U"],
+                    EdhrecRank = 100,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.10" }
                 },
                 _ => new CardInfo
                 {

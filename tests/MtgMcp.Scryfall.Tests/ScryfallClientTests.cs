@@ -204,6 +204,82 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that search cards follows pagination until the limit is reached.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_FollowsPagination()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search?q=o%3Adraw&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": true,
+                  "next_page": "https://api.scryfall.test/cards/search?page=2",
+                  "data": [
+                    { "id": "1", "name": "Card One", "type_line": "Instant" }
+                  ]
+                }
+                """
+            );
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search?page=2")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "2", "name": "Card Two", "type_line": "Instant" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            "o:draw",
+            2,
+            TestContext.Current.CancellationToken);
+
+        results.Select(result => result.Name).Should().Equal("Card One", "Card Two");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that Game Changer search uses Scryfall search syntax.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_UsesGameChangerQueryShape()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search?q=is%3Agame-changer&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "1", "name": "Mana Crypt", "type_line": "Artifact" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            "is:game-changer",
+            250,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Mana Crypt");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that get rulings fetches named card then rulings.
     /// </summary>
     [Fact]
@@ -459,6 +535,51 @@ public sealed class ScryfallClientTests
         );
 
         results.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that search cards retries once after Scryfall rate limiting.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_RetriesRateLimitOnce()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search*")
+            .Respond(
+                _ =>
+                {
+                    HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
+                    {
+                        Content = new StringContent(
+                            """{ "object": "error", "code": "rate_limited" }""",
+                            System.Text.Encoding.UTF8,
+                            "application/json")
+                    };
+                    response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.Zero);
+                    return response;
+                });
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search*")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "data": [
+                    { "id": "opt", "name": "Opt" }
+                  ],
+                  "has_more": false
+                }
+                """);
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            "o:scry",
+            10,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Opt");
+        mockHttp.VerifyNoOutstandingExpectation();
     }
 
     /// <summary>

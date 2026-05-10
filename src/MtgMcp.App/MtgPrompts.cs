@@ -62,6 +62,118 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
+    /// Handles reduce deck cost.
+    /// </summary>
+    [McpServerPrompt(Name = "reduce_deck_cost")]
+    [Description("Reduce deck cost while preserving roles, color identity, legality, and core functionality.")]
+    public string ReduceDeckCost(string workspaceId, string budgetTarget = "")
+    {
+        return $"""
+            Reduce the cost of deck workspace {workspaceId}.
+            Budget target: {budgetTarget}
+
+            Use normalize_deck_cards, analyze_deck_cost, summarize_deck_plan, find_budget_replacements,
+            and preview_deck_plan. Preserve color identity, role coverage, format legality, and the deck's
+            stated game plan. Return the plan id, preview deltas, and tradeoffs. Do not use apply_deck_plan
+            unless the user explicitly approves the preview.
+            """;
+    }
+
+    /// <summary>
+    /// Handles upgrade deck power.
+    /// </summary>
+    [McpServerPrompt(Name = "upgrade_deck_power")]
+    [Description("Increase deck power with targeted upgrades and plan preview.")]
+    public string UpgradeDeckPower(string workspaceId, string focus = "balanced", string maxPrice = "")
+    {
+        return $"""
+            Upgrade deck workspace {workspaceId}.
+            Focus: {focus}
+            Max price: {maxPrice}
+
+            Use normalize_deck_cards, summarize_deck_plan, analyze_deck_consistency,
+            find_power_upgrades, and preview_deck_plan. Preserve color identity and legality.
+            Return the plan id and before/after metrics. Do not use apply_deck_plan unless the user
+            explicitly approves the preview.
+            """;
+    }
+
+    /// <summary>
+    /// Handles reduce deck power.
+    /// </summary>
+    [McpServerPrompt(Name = "reduce_deck_power")]
+    [Description("Reduce deck power or salt while keeping the deck functional.")]
+    public string ReduceDeckPower(string workspaceId, string targetPower = "casual")
+    {
+        return $"""
+            Reduce the power of deck workspace {workspaceId}.
+            Target power: {targetPower}
+
+            Use normalize_deck_cards, summarize_deck_plan, estimate_commander_bracket,
+            find_power_reduction_candidates, and preview_deck_plan. Prefer gentler replacements over
+            removing core identity cards. Return the plan id, preview deltas, and likely gameplay impact.
+            Do not use apply_deck_plan unless the user explicitly approves the preview.
+            """;
+    }
+
+    /// <summary>
+    /// Handles lower commander bracket.
+    /// </summary>
+    [McpServerPrompt(Name = "lower_commander_bracket")]
+    [Description("Lower an estimated Commander bracket using Game Changer and power-pressure analysis.")]
+    public string LowerCommanderBracket(string workspaceId, int targetBracket = 2)
+    {
+        return $"""
+            Lower deck workspace {workspaceId} toward Commander bracket {targetBracket}.
+
+            Use normalize_deck_cards, estimate_commander_bracket, find_bracket_reduction_candidates,
+            and preview_deck_plan. Treat bracket output as an advisory estimate for pregame discussion,
+            not an official ruling. Game Changer data comes live from Scryfall. Return the plan id,
+            bracket signals addressed, and before/after bracket estimate. Do not use apply_deck_plan
+            unless the user explicitly approves the preview.
+
+            Bracket beta context: https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-february-9-2026
+            """;
+    }
+
+    /// <summary>
+    /// Handles optimize mana base.
+    /// </summary>
+    [McpServerPrompt(Name = "optimize_mana_base")]
+    [Description("Improve a deck mana base with analysis, recommendations, and preview.")]
+    public string OptimizeManaBase(string workspaceId, string maxPrice = "10")
+    {
+        return $"""
+            Optimize the mana base for deck workspace {workspaceId}.
+            Max price: {maxPrice}
+
+            Use normalize_deck_cards, analyze_mana_base, find_mana_base_improvements,
+            and preview_deck_plan. Preserve color identity, legality, and budget. Return land-count,
+            color-source, tapped-land, and fixing deltas. Do not use apply_deck_plan unless the user
+            explicitly approves the preview.
+            """;
+    }
+
+    /// <summary>
+    /// Handles improve deck consistency.
+    /// </summary>
+    [McpServerPrompt(Name = "improve_deck_consistency")]
+    [Description("Improve ramp, draw, tutor, card-selection, or balanced consistency.")]
+    public string ImproveDeckConsistency(string workspaceId, string focus = "balanced", string maxPrice = "10")
+    {
+        return $"""
+            Improve consistency for deck workspace {workspaceId}.
+            Focus: {focus}
+            Max price: {maxPrice}
+
+            Use normalize_deck_cards, analyze_deck_consistency, find_consistency_improvements,
+            and preview_deck_plan. Preserve color identity, legality, and the deck's core plan.
+            Return the plan id, key draw-odds deltas, and role-density changes. Do not use
+            apply_deck_plan unless the user explicitly approves the preview.
+            """;
+    }
+
+    /// <summary>
     /// Handles rules and rulings check.
     /// </summary>
     [McpServerPrompt(Name = "rules_and_rulings_check")]
