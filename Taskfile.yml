@@ -243,6 +243,11 @@ tasks:
     cmds:
       - pwsh -NoProfile -File scripts/release.ps1 Checksums -DistDir "{{.DIST_DIR}}"
 
+  release:winget:
+    desc: Generate a local WinGet manifest artifact
+    cmds:
+      - pwsh -NoProfile -File scripts/release.ps1 WingetManifest -Version "{{.VERSION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -DistDir "{{.DIST_DIR}}"
+
   release:tool-smoke:
     desc: Install the local NuGet tool package and smoke-run it
     cmds:
@@ -255,6 +260,7 @@ tasks:
       - task: release:clean
       - task: pack
       - task: release:archives
+      - task: release:winget
       - task: release:checksums
       - task: release:tool-smoke
 

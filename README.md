@@ -50,6 +50,31 @@ dotnet tool install --global Nccurry.MtgMcp
 mtg-mcp
 ```
 
+Windows users can also install the current GitHub release with WinGet while the
+package is pending in the official community source:
+
+```powershell
+$version = "0.1.0"
+$zip = "$env:TEMP\mtg-mcp-$version-winget.zip"
+$manifestRoot = "$env:TEMP\mtg-mcp-$version-winget"
+
+Invoke-WebRequest `
+  "https://github.com/nccurry/mtg-mcp/releases/download/$version/mtg-mcp-$version-winget.zip" `
+  -OutFile $zip
+
+Remove-Item $manifestRoot -Recurse -Force -ErrorAction SilentlyContinue
+Expand-Archive $zip -DestinationPath $manifestRoot
+
+winget settings --enable LocalManifestFiles
+winget install --manifest $manifestRoot --accept-package-agreements
+```
+
+After the official WinGet submission is approved, install with:
+
+```powershell
+winget install Nccurry.MtgMcp
+```
+
 Configure your MCP client to run the `mtg-mcp` stdio command. Scryfall lookup
 and local deck brewing do not require any API key.
 
