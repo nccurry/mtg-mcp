@@ -38,9 +38,10 @@ public sealed class MtgPrompts
             Tune deck workspace {workspaceId}.
             Goal: {goal}
 
-            Normalize the deck first if needed. Then summarize the deck plan, analyze draw odds,
-            identify weak roles or curve issues, create recommendation plans, and only use
-            apply_deck_plan after the user approves the plan.
+            Read get_deck_intent first. If no intent exists, use suggest_deck_intent and ask the user
+            whether to save it. Normalize the deck if needed, summarize the deck plan, analyze draw odds,
+            identify weak roles or curve issues, create recommendation plans, and only use apply_deck_plan
+            after the user approves the plan.
             """;
     }
 
@@ -55,9 +56,9 @@ public sealed class MtgPrompts
             Find budget replacements for deck workspace {workspaceId}.
             Budget target: {budgetTarget}
 
-            Use normalize_deck_cards and find_budget_replacements. Preserve color identity,
-            role, mana curve, and format legality. Return the persisted plan id and do not
-            mutate the deck unless the user explicitly asks to apply the plan.
+            Use get_deck_intent, normalize_deck_cards, and find_budget_replacements. Preserve color identity,
+            role, protected cards/packages, mana curve, and format legality. Return the persisted plan id
+            and do not mutate the deck unless the user explicitly asks to apply the plan.
             """;
     }
 

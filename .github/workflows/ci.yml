@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
@@ -22,3 +25,18 @@ jobs:
 
       - name: Run CI and packaging verification
         run: task release:verify VERSION=0.0.0-ci
+
+      - name: Restore .NET tools
+        run: dotnet tool restore
+
+      - name: Generate coverage report
+        run: task coverage
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: artifacts/coverage/codecov.cobertura.xml
+          disable_search: true
+          flags: all-src
+          fail_ci_if_error: true

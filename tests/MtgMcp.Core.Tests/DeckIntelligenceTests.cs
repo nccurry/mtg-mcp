@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 
 namespace MtgMcp.Core.Tests;
@@ -57,6 +58,189 @@ public sealed class DeckIntelligenceTests
 
         result.UpdatedCards.Should().Be(1);
         result.Workspace.Cards.Single().Snapshot.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that deck intent is parsed from Archidekt-style description text.
+    /// </summary>
+    [Fact]
+    public async Task GetDeckIntent_ReadsHumanReadableSectionFromDescription()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Intent",
+            Description =
+                """
+                {"ops":[{"insert":"Primer text\n\nMTG MCP Deck Intent\nVersion: 1\nArchetype: discard-control\nBudget: prefer cheaper swaps; avoid cards over $15 unless core\n\nTargets\nRamp: 8-10\nDraw: 9-11\n\nPrefer\n- repeatable discard\n\nAvoid\n- hard stax\n\nProtect\n- Tinybones, Trinket Thief\nEnd MTG MCP Deck Intent\n"}]}
+                """
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+        string originalText = DeckIntentText.ToPlainText(workspace.Description);
+
+        DeckIntentResult result = await service.GetDeckIntentAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        result.Found.Should().BeTrue();
+        result.Intent.Should().NotBeNull();
+        result.Intent!.Archetype.Should().Be("discard-control");
+        result.Intent.Budget.MaxCardPrice.Should().Be(15);
+        result.Intent.Targets[DeckRoles.Ramp].Minimum.Should().Be(8);
+        result.Intent.Prefer.Should().Contain("repeatable discard");
+        result.Intent.Avoid.Should().Contain("hard stax");
+        result.Intent.Protect.Should().Contain("Tinybones, Trinket Thief");
+    }
+
+    /// <summary>
+    /// Verifies that set and clear deck intent preserve surrounding description text.
+    /// </summary>
+    [Fact]
+    public async Task SetAndClearDeckIntent_PreserveSurroundingDescriptionText()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Intent Update",
+            Description = """{"ops":[{"insert":"Primer before\n"}]}"""
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+        string originalText = DeckIntentText.ToPlainText(workspace.Description);
+
+        DeckIntentChangeResult set = await service.SetDeckIntentAsync(
+            workspace.Id,
+            """
+            Archetype: discard-control
+
+            Targets
+            Ramp: 8-10
+            """,
+            TestContext.Current.CancellationToken);
+        string setText = DeckIntentText.ToPlainText(set.Workspace.Description);
+
+        set.Persistence.Should().Be(DeckPersistence.LocalOnly);
+        set.Intent.Found.Should().BeTrue();
+        setText.Should().Contain("Primer before");
+        setText.Should().Contain("MTG MCP Deck Intent");
+        setText.Should().Contain("End MTG MCP Deck Intent");
+
+        DeckIntentChangeResult cleared = await service.ClearDeckIntentAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+        string clearedText = DeckIntentText.ToPlainText(cleared.Workspace.Description);
+
+        cleared.Intent.Found.Should().BeFalse();
+        clearedText.Should().Contain("Primer before");
+        clearedText.Should().NotContain("MTG MCP Deck Intent");
+    }
+
+    /// <summary>
+    /// Verifies that intent edits preserve rich Quill description content.
+    /// </summary>
+    [Fact]
+    public async Task SetAndClearDeckIntent_PreserveQuillFormattingAndEmbeds()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Rich Intent Update",
+            Description =
+                """
+                {"ops":[{"insert":"Primer","attributes":{"bold":true}},{"insert":" before\n"},{"insert":{"image":"https://example.test/card.jpg"}},{"insert":"\nPrimer after\n","attributes":{"italic":true}}]}
+                """
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+        string originalText = DeckIntentText.ToPlainText(workspace.Description);
+
+        DeckIntentChangeResult set = await service.SetDeckIntentAsync(
+            workspace.Id,
+            "Archetype: discard-control",
+            TestContext.Current.CancellationToken);
+        string setText = DeckIntentText.ToPlainText(set.Workspace.Description);
+
+        setText.Should().Contain("Primer before");
+        setText.Should().Contain("Primer after");
+        setText.Should().Contain("discard-control");
+        setText.Should().NotContain("https://example.test/card.jpg");
+        AssertRichQuillContent(set.Workspace.Description!);
+
+        DeckIntentChangeResult cleared = await service.ClearDeckIntentAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+        string clearedText = DeckIntentText.ToPlainText(cleared.Workspace.Description);
+
+        clearedText.Should().Contain("Primer before");
+        clearedText.Should().Contain("Primer after");
+        clearedText.Should().NotContain("MTG MCP Deck Intent");
+        clearedText.Should().Be(originalText);
+        AssertRichQuillContent(cleared.Workspace.Description!);
+    }
+
+    /// <summary>
+    /// Verifies that description edits ignore loose marker mentions and incomplete blocks.
+    /// </summary>
+    [Fact]
+    public void DeckIntentDescriptionEdits_IgnoreLooseMentionsAndIncompleteBlocks()
+    {
+        string description =
+            """
+            Intro
+            This primer mentions MTG MCP Deck Intent in prose.
+            MTG MCP Deck Intent
+            Archetype: unfinished
+            Keep this footer.
+            """;
+
+        DeckIntentText.ClearDescription(description).Should().Be(description);
+
+        string updated = DeckIntentText.UpsertDescription(description, "Archetype: discard-control");
+        DeckIntentResult result = DeckIntentText.Extract(updated);
+
+        updated.Should().Contain("Keep this footer.");
+        updated.Should().Contain("Archetype: unfinished");
+        result.Found.Should().BeTrue();
+        result.Intent.Should().NotBeNull();
+        result.Intent!.Archetype.Should().Be("discard-control");
+        result.IntentText.Should().NotContain("unfinished");
+
+        string cleared = DeckIntentText.ClearDescription(updated);
+        cleared.Should().Contain("Keep this footer.");
+        cleared.Should().Contain("Archetype: unfinished");
+        cleared.Should().NotContain("discard-control");
+    }
+
+    /// <summary>
+    /// Verifies that setting deck intent writes through Archidekt metadata writeback.
+    /// </summary>
+    [Fact]
+    public async Task SetDeckIntent_ArchidektWritebackPersistsMetadata()
+    {
+        InMemoryRepository workspaces = new();
+        FakeArchidektGateway archidekt = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Name = "Remote Intent",
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+                Description = """{"ops":[{"insert":"Primer before\n"}]}"""
+            }
+        };
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidekt);
+        DeckWorkspace workspace = await service.OpenArchidektDeckAsync(
+            "123",
+            writeBack: true,
+            TestContext.Current.CancellationToken);
+
+        DeckIntentChangeResult result = await service.SetDeckIntentAsync(
+            workspace.Id,
+            "Archetype: discard-control",
+            TestContext.Current.CancellationToken);
+
+        result.Persistence.Should().Be(DeckPersistence.ArchidektWriteBack);
+        archidekt.PersistedMetadataRequests.Should().Be(1);
+        DeckIntentText.ToPlainText(archidekt.ImportedDeck.Description).Should().Contain("discard-control");
     }
 
     /// <summary>
@@ -166,6 +350,45 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that summarize deck plan uses intent thresholds when present.
+    /// </summary>
+    [Fact]
+    public async Task SummarizeDeckPlan_UsesIntentThresholdsWhenPresent()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Intent Summary",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Archetype: discard-control
+
+                Targets
+                Ramp: 4
+                Draw: 5
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 4, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Draw", Quantity = 5, PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckPlanSummary summary = await service.SummarizeDeckPlanAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        summary.Intent.Should().NotBeNull();
+        summary.IntentNotes.Should().Contain(note => note.Contains("discard-control", StringComparison.OrdinalIgnoreCase));
+        summary.Risks.Should().NotContain(risk => risk.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
+        summary.Risks.Should().NotContain(risk => risk.Contains("draw", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that analyze draw odds uses default targets.
     /// </summary>
     [Fact]
@@ -225,6 +448,41 @@ public sealed class DeckIntelligenceTests
         result.Plan.Operations[1].Operation.Should().Be(DeckEditOperations.AddCard);
         workspaces.Workspaces[workspace.Id].Cards.Single().Name.Should().Be("Mana Crypt");
         (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that budget replacements respect protected cards from intent.
+    /// </summary>
+    [Fact]
+    public async Task FindBudgetReplacements_RespectsIntentProtectedCards()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Protected Budget",
+            Description =
+                """
+                MTG MCP Deck Intent
+
+                Protect
+                - Mana Crypt
+                End MTG MCP Deck Intent
+                """,
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        RecommendationPlanResult result = await service.FindBudgetReplacementsAsync(
+            workspace.Id,
+            maxPrice: 5,
+            minSavings: 1,
+            limit: 5,
+            weights: null,
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().BeEmpty();
+        result.Plan.Warnings.Should().Contain(warning => warning.Contains("intent", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1167,6 +1425,51 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that a Quill description still contains rich content.
+    /// </summary>
+    private static void AssertRichQuillContent(string description)
+    {
+        using JsonDocument document = JsonDocument.Parse(description);
+        JsonElement ops = document.RootElement.GetProperty("ops");
+
+        ops.GetArrayLength().Should().BeGreaterThan(3);
+        ops.EnumerateArray().Any(HasBoldAttribute).Should().BeTrue();
+        ops.EnumerateArray().Any(HasItalicAttribute).Should().BeTrue();
+        ops.EnumerateArray().Any(HasImageInsert).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Checks whether an op has a bold attribute.
+    /// </summary>
+    private static bool HasBoldAttribute(JsonElement op)
+    {
+        return op.TryGetProperty("attributes", out JsonElement attributes)
+            && attributes.TryGetProperty("bold", out JsonElement bold)
+            && bold.ValueKind == JsonValueKind.True;
+    }
+
+    /// <summary>
+    /// Checks whether an op has an italic attribute.
+    /// </summary>
+    private static bool HasItalicAttribute(JsonElement op)
+    {
+        return op.TryGetProperty("attributes", out JsonElement attributes)
+            && attributes.TryGetProperty("italic", out JsonElement italic)
+            && italic.ValueKind == JsonValueKind.True;
+    }
+
+    /// <summary>
+    /// Checks whether an op has an image insert.
+    /// </summary>
+    private static bool HasImageInsert(JsonElement op)
+    {
+        return op.TryGetProperty("insert", out JsonElement insert)
+            && insert.ValueKind == JsonValueKind.Object
+            && insert.TryGetProperty("image", out JsonElement image)
+            && image.GetString() == "https://example.test/card.jpg";
+    }
+
+    /// <summary>
     /// Provides fake card catalog behavior.
     /// </summary>
     private sealed class FakeCardCatalog : ICardCatalog
@@ -1478,6 +1781,11 @@ public sealed class DeckIntelligenceTests
         public List<string> CreatedCheckpoints { get; } = [];
 
         /// <summary>
+        /// Gets persisted metadata count.
+        /// </summary>
+        public int PersistedMetadataRequests { get; private set; }
+
+        /// <summary>
         /// Gets fake auth status.
         /// </summary>
         public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
@@ -1541,6 +1849,7 @@ public sealed class DeckIntelligenceTests
         public Task PersistMetadataAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
         {
             ImportedDeck = workspace;
+            PersistedMetadataRequests++;
             return Task.CompletedTask;
         }
 

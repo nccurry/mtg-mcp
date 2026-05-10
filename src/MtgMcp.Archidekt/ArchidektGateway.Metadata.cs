@@ -20,7 +20,7 @@ public sealed partial class ArchidektGateway
         object payload = new
         {
             name = workspace.Name,
-            deckFormat = workspace.Format,
+            deckFormat = ResolveDeckFormatForUpdate(workspace),
             description = workspace.Description,
         };
 
@@ -31,5 +31,30 @@ public sealed partial class ArchidektGateway
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves the Archidekt deck format value used by the update endpoint.
+    /// </summary>
+    private static object? ResolveDeckFormatForUpdate(DeckWorkspace workspace)
+    {
+        return workspace.ArchidektDeckFormatId
+            ?? TryKnownDeckFormatId(workspace.Format)
+            ?? ParseIntOrString(workspace.Format);
+    }
+
+    /// <summary>
+    /// Maps common normalized format names back to Archidekt ids.
+    /// </summary>
+    private static int? TryKnownDeckFormatId(string? format)
+    {
+        string normalized = format?.Trim().ToLowerInvariant() ?? "";
+        return normalized switch
+        {
+            "3" => 3,
+            "commander" => 3,
+            "edh" => 3,
+            _ => null,
+        };
     }
 }

@@ -25,6 +25,7 @@ public sealed class McpSurfaceTests
         typeof(CategoryTools),
         typeof(CheckpointTools),
         typeof(IntelligenceTools),
+        typeof(IntentTools),
     ];
 
     /// <summary>
@@ -87,6 +88,10 @@ public sealed class McpSurfaceTests
             "get_deck_plan",
             "delete_deck_plan",
             "apply_deck_plan",
+            "get_deck_intent",
+            "suggest_deck_intent",
+            "set_deck_intent",
+            "clear_deck_intent",
         ];
 
         ToolTypes
@@ -123,10 +128,12 @@ public sealed class McpSurfaceTests
         [
             "mtg://deck/{deckId}",
             "mtg://deck/{deckId}/summary",
+            "mtg://deck/{deckId}/intent",
             "mtg://scryfall/syntax-cheatsheet",
             "mtg://formats/{format}/deck-rules",
             "mtg://usage/workspace-selection",
             "mtg://usage/operation-modes",
+            "mtg://usage/deck-intent",
             "mtg://config/effective",
             "mtg://archidekt/auth-status",
         ];

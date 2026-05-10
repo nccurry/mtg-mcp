@@ -11,12 +11,19 @@ vars:
   PACKAGE_DIR: '{{.ARTIFACTS_DIR}}/packages'
   DIST_DIR: '{{.ARTIFACTS_DIR}}/dist'
   PUBLISH_DIR: '{{.ARTIFACTS_DIR}}/publish'
+  COVERAGE_DIR: '{{.ARTIFACTS_DIR}}/coverage'
 
 tasks:
   setup:
     desc: Restore tools and packages
     cmds:
+      - dotnet tool restore
       - dotnet restore {{.SOLUTION}}
+
+  tools:restore:
+    desc: Restore local .NET tools
+    cmds:
+      - dotnet tool restore
 
   restore:
     desc: Restore NuGet packages
@@ -71,8 +78,27 @@ tasks:
       - dotnet test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"
 
   coverage:
-    desc: Run tests with coverage collection and an 85 percent line threshold
-    deps: [coverage:core, coverage:scryfall, coverage:archidekt]
+    desc: Run coverage gates and generate the Codecov report
+    cmds:
+      - task: coverage:core
+      - task: coverage:scryfall
+      - task: coverage:archidekt
+      - task: coverage:report
+
+  coverage:report:
+    desc: Generate a source-only Cobertura report for Codecov
+    deps: [tools:restore, build]
+    cmds:
+      - pwsh -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.COVERAGE_DIR}}' | Out-Null"
+      - >
+        dotnet tool run dotnet-coverage -- collect
+        --settings CodeCoverage.runsettings
+        --output {{.COVERAGE_DIR}}/codecov.cobertura.xml
+        --output-format cobertura
+        dotnet test {{.SOLUTION}}
+        --configuration {{.CONFIGURATION}}
+        --no-build
+        --filter "Category!=Live"
 
   coverage:core:
     desc: Enforce 85 percent line coverage for core deck services

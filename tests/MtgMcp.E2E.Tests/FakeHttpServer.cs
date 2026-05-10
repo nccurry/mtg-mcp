@@ -108,7 +108,7 @@ internal sealed class FakeHttpServer : IAsyncDisposable
         string json,
         HttpStatusCode statusCode = HttpStatusCode.OK)
     {
-        routes[(method.Method, NormalizePath(pathAndQuery))] = _ => FakeHttpResponse.Json(json, statusCode);
+        routes[(method.Method, NormalizeRouteKey(pathAndQuery))] = _ => FakeHttpResponse.Json(json, statusCode);
     }
 
     /// <summary>
@@ -183,11 +183,8 @@ internal sealed class FakeHttpServer : IAsyncDisposable
 
             string body = await ReadBodyAsync(stream, headers, cancellationToken).ConfigureAwait(false);
 
-            FakeHttpRequest request = new(
-                requestParts[0],
-                NormalizePath(requestParts[1]),
-                headers,
-                body);
+            string pathAndQuery = NormalizePath(requestParts[1]);
+            FakeHttpRequest request = new(requestParts[0], pathAndQuery, headers, body);
 
             lock (requestsLock)
             {
@@ -197,7 +194,7 @@ internal sealed class FakeHttpServer : IAsyncDisposable
             FakeHttpResponse response;
             if (
                 routes.TryGetValue(
-                    (request.Method, request.PathAndQuery),
+                    (request.Method, NormalizeRouteKey(request.PathAndQuery)),
                     out Func<FakeHttpRequest, FakeHttpResponse>? route
                 )
             )
@@ -410,6 +407,68 @@ internal sealed class FakeHttpServer : IAsyncDisposable
         }
 
         return value.TrimStart('/');
+    }
+
+    /// <summary>
+    /// Creates a stable route key across platform-specific query encoding differences.
+    /// </summary>
+    private static string NormalizeRouteKey(string pathAndQuery)
+    {
+        string normalized = NormalizePath(pathAndQuery);
+        int queryStart = normalized.IndexOf('?', StringComparison.Ordinal);
+        if (queryStart < 0)
+        {
+            return DecodeRepeatedly(normalized);
+        }
+
+        string path = DecodeRepeatedly(normalized[..queryStart]);
+        string query = normalized[(queryStart + 1)..];
+        string[] parts = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return path;
+        }
+
+        IEnumerable<string> normalizedParts = parts
+            .Select(NormalizeQueryPart)
+            .Order(StringComparer.Ordinal);
+        return $"{path}?{string.Join("&", normalizedParts)}";
+    }
+
+    /// <summary>
+    /// Normalizes a single query parameter for stable fake route matching.
+    /// </summary>
+    private static string NormalizeQueryPart(string part)
+    {
+        int separator = part.IndexOf('=', StringComparison.Ordinal);
+        if (separator < 0)
+        {
+            return DecodeRepeatedly(part);
+        }
+
+        string name = DecodeRepeatedly(part[..separator]);
+        string value = DecodeRepeatedly(part[(separator + 1)..]);
+        return $"{name}={value}";
+    }
+
+    /// <summary>
+    /// Decodes query text until it stabilizes so once- and twice-escaped clients match.
+    /// </summary>
+    private static string DecodeRepeatedly(string value)
+    {
+        string current = value;
+        for (int index = 0; index < 3; index++)
+        {
+            string decoded = WebUtility.UrlDecode(current);
+            if (decoded == current)
+            {
+                return decoded;
+            }
+
+            current = decoded;
+        }
+
+        return current;
     }
 
     /// <summary>
