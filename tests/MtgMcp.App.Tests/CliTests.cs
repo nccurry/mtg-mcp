@@ -1,0 +1,317 @@
+using System.Text.Json;
+using FluentAssertions;
+using Microsoft.Extensions.Options;
+using MtgMcp.Archidekt;
+using MtgMcp.App;
+using MtgMcp.Core;
+
+namespace MtgMcp.App.Tests;
+
+/// <summary>
+/// Contains tests for command-line helpers.
+/// </summary>
+public sealed class CliTests
+{
+    /// <summary>
+    /// Verifies that auth archidekt writes a credentials file and redacted setup output.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_WritesCredentialsFileAndRedactedSnippet()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "nested", "archidekt.json");
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = ArchidektAuthCommand.Run(
+                [
+                    "auth",
+                    "archidekt",
+                    "--credentials-file",
+                    credentialsFile,
+                    "--jwt",
+                    "secret-jwt",
+                    "--refresh-token",
+                    "secret-refresh",
+                    "--user-id",
+                    "278245",
+                ],
+                output,
+                error
+            );
+
+            exitCode.Should().Be(0);
+            error.ToString().Should().BeEmpty();
+            File.Exists(credentialsFile).Should().BeTrue();
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(credentialsFile));
+            JsonElement root = document.RootElement;
+            root.GetProperty("jwt").GetString().Should().Be("secret-jwt");
+            root.GetProperty("refreshToken").GetString().Should().Be("secret-refresh");
+            root.GetProperty("userId").GetString().Should().Be("278245");
+
+            string text = output.ToString();
+            text.Should().Contain("MTGMCP__ARCHIDEKT__CREDENTIALS_FILE");
+            text.Should().Contain(credentialsFile);
+            text.Should().Contain("jwt");
+            text.Should().Contain("refreshToken");
+            text.Should().NotContain("secret-jwt");
+            text.Should().NotContain("secret-refresh");
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that auth archidekt writes a file the Archidekt gateway can load.
+    /// </summary>
+    [Fact]
+    public async Task AuthArchidekt_WritesCredentialFileLoadedByGateway()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "archidekt.json");
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = ArchidektAuthCommand.Run(
+                [
+                    "auth",
+                    "archidekt",
+                    "--credentials-file",
+                    credentialsFile,
+                    "--jwt",
+                    "secret-jwt",
+                    "--refresh-token",
+                    "secret-refresh",
+                    "--user-id",
+                    "278245",
+                ],
+                output,
+                error
+            );
+            using ArchidektGateway gateway = new(
+                new HttpClient(),
+                Options.Create(
+                    new ArchidektOptions
+                    {
+                        BaseAddress = new Uri("https://archidekt.test/"),
+                        CredentialsFile = credentialsFile,
+                    }
+                )
+            );
+
+            AuthStatus status = await gateway.GetAuthStatusAsync(
+                TestContext.Current.CancellationToken
+            );
+
+            exitCode.Should().Be(0);
+            status.HasCredentialsFile.Should().BeTrue();
+            status.HasJwt.Should().BeTrue();
+            status.HasRefreshToken.Should().BeTrue();
+            status.HasUserId.Should().BeTrue();
+            status.Mode.Should().Be("jwt");
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that auth archidekt reports write failures without exposing secrets.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_ReportsWriteFailureWithoutLeakingSecret()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "archidekt.json");
+            Directory.CreateDirectory(credentialsFile);
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = ArchidektAuthCommand.Run(
+                ["auth", "archidekt", "--credentials-file", credentialsFile, "--jwt", "secret-jwt"],
+                output,
+                error
+            );
+
+            exitCode.Should().Be(1);
+            output.ToString().Should().BeEmpty();
+            error.ToString().Should().Contain("could not be written");
+            error.ToString().Should().NotContain("secret-jwt");
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that auth archidekt restricts file permissions on Unix-like systems.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_RestrictsUnixCredentialFilePermissions()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "nested", "archidekt.json");
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = ArchidektAuthCommand.Run(
+                ["auth", "archidekt", "--credentials-file", credentialsFile, "--jwt", "secret-jwt"],
+                output,
+                error
+            );
+
+            exitCode.Should().Be(0);
+            File.GetUnixFileMode(credentialsFile)
+                .Should()
+                .Be(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            File.GetUnixFileMode(Path.GetDirectoryName(credentialsFile)!)
+                .Should()
+                .Be(
+                    UnixFileMode.UserRead
+                        | UnixFileMode.UserWrite
+                        | UnixFileMode.UserExecute
+                );
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that auth archidekt does not overwrite credentials by default.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_RefusesOverwriteWithoutForce()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "archidekt.json");
+            File.WriteAllText(credentialsFile, "original");
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = ArchidektAuthCommand.Run(
+                ["auth", "archidekt", "--credentials-file", credentialsFile, "--jwt", "secret-jwt"],
+                output,
+                error
+            );
+
+            exitCode.Should().Be(1);
+            File.ReadAllText(credentialsFile).Should().Be("original");
+            output.ToString().Should().BeEmpty();
+            error.ToString().Should().Contain("already exists");
+            error.ToString().Should().NotContain("secret-jwt");
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that auth archidekt requires an actual authentication credential.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_RequiresUsableCredential()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "archidekt.json");
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = ArchidektAuthCommand.Run(
+                ["auth", "archidekt", "--credentials-file", credentialsFile, "--user-id", "278245"],
+                output,
+                error
+            );
+
+            exitCode.Should().Be(1);
+            File.Exists(credentialsFile).Should().BeFalse();
+            error.ToString().Should().Contain("Provide --jwt");
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that auth commands are handled before the MCP host is built.
+    /// </summary>
+    [Fact]
+    public async Task CliRunAsync_AuthCommandDoesNotBuildMcpHost()
+    {
+        string tempRoot = CreateTempRoot();
+        try
+        {
+            string credentialsFile = Path.Combine(tempRoot, "archidekt.json");
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = await MtgMcpCli
+                .RunAsync(
+                    [
+                        "auth",
+                        "archidekt",
+                        "--credentials-file",
+                        credentialsFile,
+                        "--jwt",
+                        "secret-jwt",
+                    ],
+                    output,
+                    error,
+                    _ => throw new InvalidOperationException("Host should not be built.")
+                );
+
+            exitCode.Should().Be(0);
+            File.Exists(credentialsFile).Should().BeTrue();
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    /// <summary>
+    /// Creates a temporary test root.
+    /// </summary>
+    private static string CreateTempRoot()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    /// <summary>
+    /// Deletes a temporary test root.
+    /// </summary>
+    private static void DeleteTempRoot(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+    }
+}

@@ -50,15 +50,60 @@ dotnet tool install --global Nccurry.MtgMcp
 mtg-mcp
 ```
 
-Configure your MCP client to run the `mtg-mcp` stdio command.
+Configure your MCP client to run the `mtg-mcp` stdio command. Scryfall lookup
+and local deck brewing do not require any API key.
 
 For Codex:
 
 ```powershell
 codex mcp add mtg-mcp `
-  --env MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.json" `
-  --env MTGMCP__OPERATION_MODE=apply `
+  --env MTGMCP__OPERATION_MODE=plan `
   -- mtg-mcp
+```
+
+For Claude Code:
+
+```powershell
+claude mcp add mtg-mcp --env MTGMCP__OPERATION_MODE=plan -- mtg-mcp
+```
+
+For Claude Desktop or Cursor:
+
+```json
+{
+  "mcpServers": {
+    "mtg-mcp": {
+      "command": "mtg-mcp",
+      "env": {
+        "MTGMCP__OPERATION_MODE": "plan"
+      }
+    }
+  }
+}
+```
+
+For VS Code:
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "mtg-mcp-operation-mode",
+      "description": "mtg-mcp operation mode: read-only, plan, or apply",
+      "default": "plan"
+    }
+  ],
+  "servers": {
+    "mtg-mcp": {
+      "type": "stdio",
+      "command": "mtg-mcp",
+      "env": {
+        "MTGMCP__OPERATION_MODE": "${input:mtg-mcp-operation-mode}"
+      }
+    }
+  }
+}
 ```
 
 For local development or testing an unpublished checkout, run from source:
@@ -90,15 +135,57 @@ binary or the `dotnet run` command above instead of `mtg-mcp`.
 Configuration can come from CLI arguments, environment variables, or JSON files.
 Environment variables use `__` as the section separator.
 
-Common settings:
+### Recommended presets
+
+Scryfall lookup and local deck analysis:
+
+```json
+{
+  "command": "mtg-mcp",
+  "env": {
+    "MTGMCP__OPERATION_MODE": "read-only"
+  }
+}
+```
+
+Safe deck tuning and recommendation planning:
+
+```json
+{
+  "command": "mtg-mcp",
+  "env": {
+    "MTGMCP__OPERATION_MODE": "plan"
+  }
+}
+```
+
+Archidekt writeback or deck-content edits:
+
+```json
+{
+  "command": "mtg-mcp",
+  "env": {
+    "MTGMCP__OPERATION_MODE": "apply",
+    "MTGMCP__ARCHIDEKT__CREDENTIALS_FILE": "C:/Users/you/.mtg-mcp/archidekt.json"
+  }
+}
+```
+
+Use `plan` as the default for LLM sessions. Switch to `apply` only when you want
+the assistant to create workspaces, mutate deck contents, create checkpoints, or
+write changes back to Archidekt.
+
+### Common settings
 
 ```powershell
 $env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
-$env:MTGMCP__OPERATION_MODE="apply"
+$env:MTGMCP__OPERATION_MODE="plan"
 $env:MTGMCP__ARCHIDEKT__JWT="..."
 $env:MTGMCP__ARCHIDEKT__REFRESH_TOKEN="..."
 $env:MTGMCP__ARCHIDEKT__USER_ID="..."
 $env:MTGMCP__ARCHIDEKT__EMAIL="..."
+$env:MTGMCP__ARCHIDEKT__USERNAME="..."
+$env:MTGMCP__ARCHIDEKT__PASSWORD="..."
 $env:MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.json"
 ```
 
@@ -108,7 +195,28 @@ $env:MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.js
 - `plan`: read-only tools and non-mutating planning tools are allowed; deck-content changes return an error asking for apply mode.
 - `read-only` or `ask`: read-only tools are allowed; deck-content changes and planning-state writes return an error asking for plan or apply mode.
 
-Credential files can contain:
+### Archidekt credentials
+
+Archidekt credentials are optional unless you want to list private decks, use
+account-bound deck data, create checkpoints, or write changes back. Prefer a
+credentials file so MCP client config can stay shareable without embedded
+secrets.
+
+Create a credentials file with the helper:
+
+```powershell
+mtg-mcp auth archidekt `
+  --credentials-file "$env:USERPROFILE\.mtg-mcp\archidekt.json" `
+  --refresh-token "..." `
+  --user-id "..."
+```
+
+The helper creates parent directories, writes the credentials file, and prints
+the `MTGMCP__ARCHIDEKT__CREDENTIALS_FILE` snippet to paste into your MCP client.
+It does not start the MCP server. On Unix-like systems, it also restricts the
+credentials file to the current user.
+
+Credential files can also be created by hand:
 
 ```json
 {
@@ -130,8 +238,43 @@ email=archidekt-user@example.com
 password=pa\ss"word=with#punctuation!
 ```
 
-JWT/refresh token auth is preferred. Email or username plus password login is only
-a fallback, and secrets are redacted from MCP resources and logs.
+JWT/refresh token auth is preferred. Email or username plus password login is
+only a fallback, and secrets are redacted from MCP resources and logs.
+
+Direct MCP config also works when you prefer environment variables over a
+credentials file:
+
+```json
+{
+  "mcpServers": {
+    "mtg-mcp": {
+      "command": "mtg-mcp",
+      "env": {
+        "MTGMCP__OPERATION_MODE": "apply",
+        "MTGMCP__ARCHIDEKT__JWT": "...",
+        "MTGMCP__ARCHIDEKT__REFRESH_TOKEN": "...",
+        "MTGMCP__ARCHIDEKT__USER_ID": "..."
+      }
+    }
+  }
+}
+```
+
+In VS Code, use `inputs` for sensitive direct tokens so they are prompted for
+and stored by the client instead of hardcoded in `mcp.json`.
+
+### Verify setup
+
+Smoke-test the installed command:
+
+```powershell
+mtg-mcp --smoke
+```
+
+Inside an MCP client, read these resources:
+
+- `mtg://config/effective` shows non-secret effective configuration.
+- `mtg://archidekt/auth-status` shows redacted Archidekt credential status.
 
 ## Development
 

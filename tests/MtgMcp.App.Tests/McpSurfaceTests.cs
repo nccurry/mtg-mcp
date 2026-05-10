@@ -285,6 +285,8 @@ public sealed class McpSurfaceTests
             ["OPERATION_MODE"] = "plan",
             ["ARCHIDEKT:JWT"] = "jwt-token",
             ["ARCHIDEKT:REFRESH_TOKEN"] = "refresh-token",
+            ["ARCHIDEKT:USER_ID"] = "278245",
+            ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
         };
         IConfiguration configuration = new ConfigurationBuilder()
@@ -299,7 +301,30 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:OperationMode"].Should().Be("plan");
         aliases["MtgMcp:Archidekt:Jwt"].Should().Be("jwt-token");
         aliases["MtgMcp:Archidekt:RefreshToken"].Should().Be("refresh-token");
+        aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
+        aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
+    }
+
+    /// <summary>
+    /// Verifies that legacy Archidekt user id environment key maps to documented config.
+    /// </summary>
+    [Fact]
+    public void ConfigurationAliases_MapArchidektUserIdEnvironmentKey()
+    {
+        Dictionary<string, string?> rawConfig = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ARCHIDEKT_USER_ID"] = "278245",
+        };
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(rawConfig)
+            .Build();
+
+        IReadOnlyDictionary<string, string?> aliases = MtgMcpConfigurationAliases.Create(
+            configuration
+        );
+
+        aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
     }
 
     /// <summary>
