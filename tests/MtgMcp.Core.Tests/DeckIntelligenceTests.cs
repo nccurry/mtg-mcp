@@ -716,6 +716,103 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that deterministic goldfish fixtures produce stable board and win estimates.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_ProducesStableExactProjectionForDeterministicComboDeck()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Deterministic Combo Goldfish",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Combo A",
+                    Quantity = 40,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        ManaValue = 0,
+                        OracleText = "Combo. Untap target permanent. Copy target activated ability."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Combo B",
+                    Quantity = 40,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        ManaValue = 0,
+                        OracleText = "Combo. Whenever an ability is copied, untap target permanent."
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 25,
+            seed: 123,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+        ProjectedTurnState projected = await service.ProjectBoardStateAsync(
+            workspace.Id,
+            turn: 3,
+            simulations: 25,
+            seed: 123,
+            TestContext.Current.CancellationToken);
+        WinTurnEstimate winTurn = await service.EstimateWinTurnAsync(
+            workspace.Id,
+            maxTurn: 5,
+            simulations: 25,
+            seed: 123,
+            TestContext.Current.CancellationToken);
+
+        goldfish.Simulations.Should().Be(100);
+        goldfish.Mulligans.Should().Be(100);
+        goldfish.TurnSummaries.Should().HaveCount(5);
+        goldfish.TurnSummaries.Select(summary => summary.MedianNonlandPermanents)
+            .Should()
+            .Equal(7, 8, 9, 10, 11);
+        goldfish.TurnSummaries.Should().OnlyContain(summary =>
+            summary.MedianLands == 0
+            && summary.MedianManaSources == 0
+            && summary.MedianCardsInHand == 0
+            && summary.MedianPower == 0
+            && summary.MedianTokens == 0
+            && summary.Confidence == 0.50);
+        goldfish.WinEstimate.MedianWinTurn.Should().Be(5);
+        goldfish.WinEstimate.P25WinTurn.Should().Be(5);
+        goldfish.WinEstimate.P75WinTurn.Should().Be(5);
+        goldfish.WinEstimate.WinByTurnRates.Should().Contain([
+            new KeyValuePair<int, double>(1, 0),
+            new KeyValuePair<int, double>(2, 0),
+            new KeyValuePair<int, double>(3, 0),
+            new KeyValuePair<int, double>(4, 0),
+            new KeyValuePair<int, double>(5, 1)
+        ]);
+        WinRoute route = goldfish.WinEstimate.Routes.Should().ContainSingle().Subject;
+        route.Name.Should().Be("combo");
+        route.EarliestTurn.Should().Be(5);
+        route.Probability.Should().Be(1);
+        route.Cards.Should().BeEquivalentTo(["Combo A", "Combo B"]);
+
+        projected.Turn.Should().Be(3);
+        projected.MedianNonlandPermanents.Should().Be(9);
+        projected.LikelyBoard.Should().Be("0 lands, 0 mana sources, 9 nonland permanents, about 0 pressure, 0 cards in hand.");
+        winTurn.Routes.Should().ContainSingle(route => route.Kind == "combo" && route.Probability == 1);
+    }
+
+    /// <summary>
     /// Verifies that budgeted goal packages do not treat unknown prices as free.
     /// </summary>
     [Fact]
@@ -1758,6 +1855,87 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that preview deck plan degrades gracefully when Game Changer data is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_WarnsWhenGameChangersUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "No-op preview"
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGameChangerSearch = true },
+            archidektGateway: null,
+            plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Warnings.Should().Contain(warning =>
+            warning.Contains("Game Changer", StringComparison.OrdinalIgnoreCase));
+        preview.Before.Bracket.GameChangers.Should().BeEmpty();
+        preview.Before.Bracket.Notes.Should().Contain(note =>
+            note.Contains("unavailable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that preview deck plan warns when added-card metadata resolution is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_WarnsWhenAddedCardResolutionUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview Missing Metadata"
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add card",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGetCard = true },
+            archidektGateway: null,
+            plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Warnings.Should().Contain(warning =>
+            warning.Contains("Could not resolve added card", StringComparison.OrdinalIgnoreCase));
+        preview.After.Analysis.CategoryCounts[DeckRoles.Ramp].Should().Be(1);
+        preview.After.Analysis.Notes.Should().Contain(note =>
+            note.Contains("not been normalized", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that preview deck plan applies card-category operations on the clone.
     /// </summary>
     [Fact]
@@ -2018,6 +2196,48 @@ public sealed class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
         await reapply.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*already been applied*");
+    }
+
+    /// <summary>
+    /// Verifies that applying a local add-card plan continues when Scryfall metadata is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDeckPlan_LocalPlan_AddsCardWhenMetadataUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace { Name = "Apply" }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add card",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Sol Ring",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGetCard = true },
+            archidektGateway: null,
+            plans);
+
+        DeckEditPlanApplyResult result = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: true,
+            checkpointName: null,
+            TestContext.Current.CancellationToken);
+
+        DeckCard added = result.Workspace.Cards.Single();
+        added.Name.Should().Be("Sol Ring");
+        added.ScryfallId.Should().BeNull();
+        result.Messages.Should().ContainSingle(message => message.Contains("Added 1 Sol Ring", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -3108,6 +3328,11 @@ public sealed class DeckIntelligenceTests
         public bool ThrowOnGameChangerSearch { get; init; }
 
         /// <summary>
+        /// Gets or sets whether single-card lookup throws.
+        /// </summary>
+        public bool ThrowOnGetCard { get; init; }
+
+        /// <summary>
         /// Searches fake cards.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
@@ -3201,6 +3426,11 @@ public sealed class DeckIntelligenceTests
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
+            if (ThrowOnGetCard)
+            {
+                throw new HttpRequestException("Scryfall unavailable.");
+            }
+
             return Task.FromResult<CardInfo?>(CreateCard(nameOrId));
         }
 

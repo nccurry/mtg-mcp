@@ -344,6 +344,7 @@ public sealed class McpSurfaceTests
             ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
             ["SCRYFALL:USER_AGENT"] = "mtg-mcp-test",
+            ["SCRYFALL:MAX_RATE_LIMIT_RETRIES"] = "5",
         };
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(rawConfig)
@@ -370,6 +371,7 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
         aliases["MtgMcp:Scryfall:UserAgent"].Should().Be("mtg-mcp-test");
+        aliases["MtgMcp:Scryfall:MaxRateLimitRetries"].Should().Be("5");
     }
 
     /// <summary>

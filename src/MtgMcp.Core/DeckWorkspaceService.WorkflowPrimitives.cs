@@ -29,8 +29,21 @@ public sealed partial class DeckWorkspaceService
         DeckEditPlan plan = await GetDeckPlanAsync(planId, cancellationToken).ConfigureAwait(false);
         DeckWorkspace workspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
         DeckWorkspace preview = CloneWorkspace(workspace);
-        IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
         List<string> warnings = [];
+        IReadOnlySet<string> gameChangers;
+        bool gameChangerDataAvailable = true;
+        try
+        {
+            gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception)
+        {
+            gameChangers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            gameChangerDataAvailable = false;
+            warnings.Add(
+                $"{exception.Message} Preview metrics exclude live Game Changer signals."
+            );
+        }
 
         foreach (DeckEditOperation operation in plan.Operations)
         {
@@ -43,8 +56,8 @@ public sealed partial class DeckWorkspaceService
             PlanId = plan.PlanId,
             WorkspaceId = plan.WorkspaceId,
             ResolveAddedCards = resolveAddedCards,
-            Before = BuildMetricSnapshot(workspace, gameChangers),
-            After = BuildMetricSnapshot(preview, gameChangers),
+            Before = BuildMetricSnapshot(workspace, gameChangers, gameChangerDataAvailable),
+            After = BuildMetricSnapshot(preview, gameChangers, gameChangerDataAvailable),
             Warnings = warnings
         };
     }
@@ -88,8 +101,18 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private DeckMetricSnapshot BuildMetricSnapshot(
         DeckWorkspace workspace,
-        IReadOnlySet<string> gameChangers)
+        IReadOnlySet<string> gameChangers,
+        bool gameChangerDataAvailable = true)
     {
+        CommanderBracketEstimate bracket = EstimateCommanderBracket(workspace, gameChangers);
+        if (!gameChangerDataAvailable)
+        {
+            bracket.Notes.RemoveAll(note =>
+                note.Contains("Game Changer data is fetched live", StringComparison.OrdinalIgnoreCase)
+            );
+            bracket.Notes.Add("Game Changer data was unavailable; this estimate excludes live Game Changer signals.");
+        }
+
         return new DeckMetricSnapshot
         {
             Cost = AnalyzeDeckCost(workspace),
@@ -97,7 +120,7 @@ public sealed partial class DeckWorkspaceService
             Analysis = DeckAnalyzer.Analyze(workspace),
             ManaBase = AnalyzeManaBase(workspace),
             Consistency = AnalyzeDeckConsistency(workspace),
-            Bracket = EstimateCommanderBracket(workspace, gameChangers)
+            Bracket = bracket
         };
     }
 
@@ -486,7 +509,7 @@ public sealed partial class DeckWorkspaceService
         }
 
         CardInfo? cardInfo = resolveAddedCards
-            ? await cardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false)
+            ? await TryGetCardForMutationAsync(cardName, cancellationToken).ConfigureAwait(false)
             : null;
         DeckCard card = new()
         {

@@ -129,6 +129,7 @@ Supported settings:
 | `MTGMCP__ARCHIDEKT__PASSWORD` | Fallback Archidekt login password. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` | Override Scryfall API URL for tests or mirrors. |
 | `MTGMCP__SCRYFALL__USER_AGENT` | Override Scryfall user agent. |
+| `MTGMCP__SCRYFALL__MAX_RATE_LIMIT_RETRIES` | Number of Scryfall `429` retries before surfacing a failure. Default: `3`. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Override Commander Spellbook API URL. |
 
 `mtg-mcp.json` is the only JSON config file mtg-mcp reads. Environment
@@ -169,6 +170,9 @@ Example `mtg-mcp.json`:
           "ApiKey": "..."
         }
       }
+    },
+    "Scryfall": {
+      "MaxRateLimitRetries": 3
     }
   }
 }

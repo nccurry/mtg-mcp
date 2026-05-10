@@ -170,8 +170,7 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
-        CardInfo? cardInfo = await cardCatalog
-            .GetCardAsync(cardName, cancellationToken)
+        CardInfo? cardInfo = await TryGetCardForMutationAsync(cardName, cancellationToken)
             .ConfigureAwait(false);
         DeckCard card = new()
         {
@@ -189,6 +188,23 @@ public sealed partial class DeckWorkspaceService
         }
 
         return card;
+    }
+
+    /// <summary>
+    /// Resolves optional card metadata for mutations while allowing deck edits to continue during catalog outages.
+    /// </summary>
+    private async Task<CardInfo?> TryGetCardForMutationAsync(
+        string cardName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await cardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

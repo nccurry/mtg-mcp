@@ -42,6 +42,7 @@ public static class MtgMcpConfigurationAliases
         ("ARCHIDEKT:CREDENTIALS_FILE", "MtgMcp:Archidekt:CredentialsFile"),
         ("SCRYFALL:BASE_ADDRESS", "MtgMcp:Scryfall:BaseAddress"),
         ("SCRYFALL:USER_AGENT", "MtgMcp:Scryfall:UserAgent"),
+        ("SCRYFALL:MAX_RATE_LIMIT_RETRIES", "MtgMcp:Scryfall:MaxRateLimitRetries"),
         ("COMMANDERSPELLBOOK:BASE_ADDRESS", "MtgMcp:CommanderSpellbook:BaseAddress"),
     ];
 

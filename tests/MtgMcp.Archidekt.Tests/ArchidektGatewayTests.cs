@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
@@ -996,6 +997,121 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that deck reads retry Archidekt throttle responses.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_RetriesRateLimitResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """{ "detail": "Request was throttled. Expected available in 55 seconds." }""",
+            HttpStatusCode.TooManyRequests,
+            TimeSpan.Zero
+        );
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken
+        );
+
+        deck.Name.Should().Be("Deck");
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Get && request.Path == "api/decks/123/")
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies that card writes retry Archidekt throttle responses.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_RetriesRateLimitResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "detail": "Request was throttled. Expected available in 55 seconds." }""",
+            HttpStatusCode.TooManyRequests,
+            TimeSpan.Zero
+        );
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Mind Rot",
+            Quantity = 1,
+            ArchidektCardId = "82308",
+            ArchidektDeckRelationId = 3085344231,
+            Categories = ["Discard"],
+            PrimaryCategory = "Discard",
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Patch)
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies that bodyless mutating requests retry Archidekt throttle responses.
+    /// </summary>
+    [Fact]
+    public async Task DeleteCategory_RetriesRateLimitResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Delete(
+            "api/decks/category/9/",
+            """{ "detail": "Request was throttled. Expected available in 55 seconds." }""",
+            HttpStatusCode.TooManyRequests,
+            TimeSpan.Zero
+        );
+        handler.Delete("api/decks/category/9/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+
+        await gateway.DeleteCategoryAsync(
+            deck,
+            new DeckCategory { Name = "Test", ArchidektCategoryId = 9 },
+            TestContext.Current.CancellationToken
+        );
+
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Delete)
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
     /// Creates a gateway with default test options.
     /// </summary>
     private static ArchidektGateway CreateGateway(RecordingHandler handler)
@@ -1043,9 +1159,14 @@ public sealed class ArchidektGatewayTests
         /// <summary>
         /// Reads a recorded response header value.
         /// </summary>
-        public void Get(string path, string response, HttpStatusCode statusCode = HttpStatusCode.OK)
+        public void Get(
+            string path,
+            string response,
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
+        )
         {
-            AddResponse(HttpMethod.Get, path, response, statusCode);
+            AddResponse(HttpMethod.Get, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -1054,10 +1175,11 @@ public sealed class ArchidektGatewayTests
         public void Post(
             string path,
             string response,
-            HttpStatusCode statusCode = HttpStatusCode.OK
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
         )
         {
-            AddResponse(HttpMethod.Post, path, response, statusCode);
+            AddResponse(HttpMethod.Post, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -1066,10 +1188,11 @@ public sealed class ArchidektGatewayTests
         public void Patch(
             string path,
             string response,
-            HttpStatusCode statusCode = HttpStatusCode.OK
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
         )
         {
-            AddResponse(HttpMethod.Patch, path, response, statusCode);
+            AddResponse(HttpMethod.Patch, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -1078,10 +1201,11 @@ public sealed class ArchidektGatewayTests
         public void Delete(
             string path,
             string response,
-            HttpStatusCode statusCode = HttpStatusCode.OK
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
         )
         {
-            AddResponse(HttpMethod.Delete, path, response, statusCode);
+            AddResponse(HttpMethod.Delete, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -1091,7 +1215,8 @@ public sealed class ArchidektGatewayTests
             HttpMethod method,
             string path,
             string response,
-            HttpStatusCode statusCode
+            HttpStatusCode statusCode,
+            TimeSpan? retryAfter
         )
         {
             if (!responses.TryGetValue((method, path), out Queue<RecordedResponse>? queue))
@@ -1100,7 +1225,7 @@ public sealed class ArchidektGatewayTests
                 responses[(method, path)] = queue;
             }
 
-            queue.Enqueue(new RecordedResponse(response, statusCode));
+            queue.Enqueue(new RecordedResponse(response, statusCode, retryAfter));
         }
 
         /// <summary>
@@ -1131,17 +1256,29 @@ public sealed class ArchidektGatewayTests
             }
 
             RecordedResponse response = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
-            return new HttpResponseMessage(response.StatusCode)
+            HttpResponseMessage message = new(response.StatusCode)
             {
                 Content = new StringContent(response.Body, Encoding.UTF8, "application/json"),
             };
+            if (response.RetryAfter.HasValue)
+            {
+                message.Headers.RetryAfter = new RetryConditionHeaderValue(
+                    response.RetryAfter.Value
+                );
+            }
+
+            return message;
         }
     }
 
     /// <summary>
     /// Represents recorded response.
     /// </summary>
-    private sealed record RecordedResponse(string Body, HttpStatusCode StatusCode);
+    private sealed record RecordedResponse(
+        string Body,
+        HttpStatusCode StatusCode,
+        TimeSpan? RetryAfter
+    );
 
     /// <summary>
     /// Represents recorded request.

@@ -98,6 +98,10 @@ public sealed class ScryfallCorpusSignalProvider : ICorpusSignalProvider
             }
         }
 
+        using IDisposable? cacheBypass = query.Refresh && cardCatalog is IScryfallCacheBypass bypass
+            ? bypass.BypassCache()
+            : null;
+
         string search = BuildSearchQuery(query);
         int limit = Math.Clamp(budget.MaxCandidates, 5, 100);
         IReadOnlyList<CardSearchResult> results = await cardCatalog
