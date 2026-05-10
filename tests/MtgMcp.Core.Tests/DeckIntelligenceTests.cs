@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 
 namespace MtgMcp.Core.Tests;
@@ -75,6 +76,7 @@ public sealed class DeckIntelligenceTests
                 """
         }, TestContext.Current.CancellationToken);
         DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+        string originalText = DeckIntentText.ToPlainText(workspace.Description);
 
         DeckIntentResult result = await service.GetDeckIntentAsync(
             workspace.Id,
@@ -103,6 +105,7 @@ public sealed class DeckIntelligenceTests
             Description = """{"ops":[{"insert":"Primer before\n"}]}"""
         }, TestContext.Current.CancellationToken);
         DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+        string originalText = DeckIntentText.ToPlainText(workspace.Description);
 
         DeckIntentChangeResult set = await service.SetDeckIntentAsync(
             workspace.Id,
@@ -129,6 +132,81 @@ public sealed class DeckIntelligenceTests
         cleared.Intent.Found.Should().BeFalse();
         clearedText.Should().Contain("Primer before");
         clearedText.Should().NotContain("MTG MCP Deck Intent");
+    }
+
+    /// <summary>
+    /// Verifies that intent edits preserve rich Quill description content.
+    /// </summary>
+    [Fact]
+    public async Task SetAndClearDeckIntent_PreserveQuillFormattingAndEmbeds()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Rich Intent Update",
+            Description =
+                """
+                {"ops":[{"insert":"Primer","attributes":{"bold":true}},{"insert":" before\n"},{"insert":{"image":"https://example.test/card.jpg"}},{"insert":"\nPrimer after\n","attributes":{"italic":true}}]}
+                """
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+        string originalText = DeckIntentText.ToPlainText(workspace.Description);
+
+        DeckIntentChangeResult set = await service.SetDeckIntentAsync(
+            workspace.Id,
+            "Archetype: discard-control",
+            TestContext.Current.CancellationToken);
+        string setText = DeckIntentText.ToPlainText(set.Workspace.Description);
+
+        setText.Should().Contain("Primer before");
+        setText.Should().Contain("Primer after");
+        setText.Should().Contain("discard-control");
+        setText.Should().NotContain("https://example.test/card.jpg");
+        AssertRichQuillContent(set.Workspace.Description!);
+
+        DeckIntentChangeResult cleared = await service.ClearDeckIntentAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+        string clearedText = DeckIntentText.ToPlainText(cleared.Workspace.Description);
+
+        clearedText.Should().Contain("Primer before");
+        clearedText.Should().Contain("Primer after");
+        clearedText.Should().NotContain("MTG MCP Deck Intent");
+        clearedText.Should().Be(originalText);
+        AssertRichQuillContent(cleared.Workspace.Description!);
+    }
+
+    /// <summary>
+    /// Verifies that description edits ignore loose marker mentions and incomplete blocks.
+    /// </summary>
+    [Fact]
+    public void DeckIntentDescriptionEdits_IgnoreLooseMentionsAndIncompleteBlocks()
+    {
+        string description =
+            """
+            Intro
+            This primer mentions MTG MCP Deck Intent in prose.
+            MTG MCP Deck Intent
+            Archetype: unfinished
+            Keep this footer.
+            """;
+
+        DeckIntentText.ClearDescription(description).Should().Be(description);
+
+        string updated = DeckIntentText.UpsertDescription(description, "Archetype: discard-control");
+        DeckIntentResult result = DeckIntentText.Extract(updated);
+
+        updated.Should().Contain("Keep this footer.");
+        updated.Should().Contain("Archetype: unfinished");
+        result.Found.Should().BeTrue();
+        result.Intent.Should().NotBeNull();
+        result.Intent!.Archetype.Should().Be("discard-control");
+        result.IntentText.Should().NotContain("unfinished");
+
+        string cleared = DeckIntentText.ClearDescription(updated);
+        cleared.Should().Contain("Keep this footer.");
+        cleared.Should().Contain("Archetype: unfinished");
+        cleared.Should().NotContain("discard-control");
     }
 
     /// <summary>
@@ -870,6 +948,51 @@ public sealed class DeckIntelligenceTests
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// Verifies that a Quill description still contains rich content.
+    /// </summary>
+    private static void AssertRichQuillContent(string description)
+    {
+        using JsonDocument document = JsonDocument.Parse(description);
+        JsonElement ops = document.RootElement.GetProperty("ops");
+
+        ops.GetArrayLength().Should().BeGreaterThan(3);
+        ops.EnumerateArray().Any(HasBoldAttribute).Should().BeTrue();
+        ops.EnumerateArray().Any(HasItalicAttribute).Should().BeTrue();
+        ops.EnumerateArray().Any(HasImageInsert).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Checks whether an op has a bold attribute.
+    /// </summary>
+    private static bool HasBoldAttribute(JsonElement op)
+    {
+        return op.TryGetProperty("attributes", out JsonElement attributes)
+            && attributes.TryGetProperty("bold", out JsonElement bold)
+            && bold.ValueKind == JsonValueKind.True;
+    }
+
+    /// <summary>
+    /// Checks whether an op has an italic attribute.
+    /// </summary>
+    private static bool HasItalicAttribute(JsonElement op)
+    {
+        return op.TryGetProperty("attributes", out JsonElement attributes)
+            && attributes.TryGetProperty("italic", out JsonElement italic)
+            && italic.ValueKind == JsonValueKind.True;
+    }
+
+    /// <summary>
+    /// Checks whether an op has an image insert.
+    /// </summary>
+    private static bool HasImageInsert(JsonElement op)
+    {
+        return op.TryGetProperty("insert", out JsonElement insert)
+            && insert.ValueKind == JsonValueKind.Object
+            && insert.TryGetProperty("image", out JsonElement image)
+            && image.GetString() == "https://example.test/card.jpg";
     }
 
     /// <summary>

@@ -217,6 +217,16 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
+    /// Gets the deck format id.
+    /// </summary>
+    private static int? GetDeckFormatId(JsonElement element)
+    {
+        return GetInt(element, "deckFormat")
+            ?? GetNestedInt(element, "deckFormat", "id")
+            ?? GetNestedInt(element, "deckFormat", "pk");
+    }
+
+    /// <summary>
     /// Extracts the deck id.
     /// </summary>
     private static string ExtractDeckId(string deckIdOrUrl)

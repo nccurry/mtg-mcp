@@ -61,6 +61,7 @@ public sealed partial class ArchidektGateway
             Mode = WorkspaceMode.Archidekt,
             WriteBack = writeBack,
             ArchidektDeckId = deckId,
+            ArchidektDeckFormatId = GetDeckFormatId(root),
             Categories = ParseCategories(root),
         };
 

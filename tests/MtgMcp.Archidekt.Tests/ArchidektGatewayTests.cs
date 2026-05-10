@@ -68,6 +68,7 @@ public sealed class ArchidektGatewayTests
 
         deck.Mode.Should().Be(WorkspaceMode.Archidekt);
         deck.ArchidektDeckId.Should().Be("123");
+        deck.ArchidektDeckFormatId.Should().Be(3);
         deck.Format.Should().Be("commander");
         deck.Categories.Should()
             .Contain(category => category.Name == "Maybeboard" && category.IncludedInDeck == false);
@@ -309,13 +310,14 @@ public sealed class ArchidektGatewayTests
             Mode = WorkspaceMode.Archidekt,
             WriteBack = true,
             ArchidektDeckId = "123",
+            ArchidektDeckFormatId = 3,
         };
 
         await gateway.PersistMetadataAsync(deck, TestContext.Current.CancellationToken);
 
         handler.Requests.Should().ContainSingle();
         handler.Requests[0].Path.Should().Be("api/decks/123/update/");
-        handler.Requests[0].Body.Should().Contain("\"deckFormat\":\"modern\"");
+        handler.Requests[0].Body.Should().Contain("\"deckFormat\":3");
         handler.Requests[0].Body.Should().Contain("\"description\":\"Updated\"");
     }
 

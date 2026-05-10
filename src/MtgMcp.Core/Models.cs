@@ -449,6 +449,11 @@ public sealed class DeckWorkspace
     public string? ArchidektDeckId { get; set; }
 
     /// <summary>
+    /// Gets or sets the Archidekt deck format id.
+    /// </summary>
+    public int? ArchidektDeckFormatId { get; set; }
+
+    /// <summary>
     /// Gets or sets the created at.
     /// </summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

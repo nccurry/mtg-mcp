@@ -95,6 +95,72 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Verifies that deck intent tools preserve rich Quill descriptions through MCP stdio.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task LocalIntentFlow_PreservesQuillDescriptionContent()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Intent",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+        string richDescription = """
+        {"ops":[{"insert":"Primer","attributes":{"bold":true}},{"insert":" before\n"},{"insert":{"image":"https://example.test/card.jpg"}},{"insert":"\nPrimer after\n","attributes":{"italic":true}}]}
+        """;
+
+        await CallJsonAsync(
+            session.Client,
+            "update_deck_metadata",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["description"] = richDescription
+            });
+        JsonElement setResult = await CallJsonAsync(
+            session.Client,
+            "set_deck_intent",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["intentText"] = "Archetype: discard-control"
+            });
+        string setDescription = GetString(GetObject(setResult, "workspace"), "description");
+
+        setDescription.Should().Contain("\"bold\":true");
+        setDescription.Should().Contain("\"italic\":true");
+        setDescription.Should().Contain("\"image\":\"https://example.test/card.jpg\"");
+        setDescription.Should().Contain("MTG MCP Deck Intent");
+        GetString(setResult, "persistence").Should().Be("local-only");
+
+        JsonElement clearResult = await CallJsonAsync(
+            session.Client,
+            "clear_deck_intent",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        string clearedDescription = GetString(GetObject(clearResult, "workspace"), "description");
+
+        clearedDescription.Should().Contain("\"bold\":true");
+        clearedDescription.Should().Contain("\"italic\":true");
+        clearedDescription.Should().Contain("\"image\":\"https://example.test/card.jpg\"");
+        clearedDescription.Should().NotContain("MTG MCP Deck Intent");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that an Archidekt workspace writes card additions back to the fake deck API.
     /// </summary>
     [Fact]

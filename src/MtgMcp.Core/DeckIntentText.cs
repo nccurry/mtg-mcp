@@ -1,12 +1,11 @@
 using System.Globalization;
-using System.Text.Json;
 
 namespace MtgMcp.Core;
 
 /// <summary>
 /// Parses and formats human-readable deck intent sections.
 /// </summary>
-public static class DeckIntentText
+public static partial class DeckIntentText
 {
     /// <summary>
     /// Stores the section title.
@@ -144,8 +143,13 @@ public static class DeckIntentText
     /// </summary>
     public static string UpsertDescription(string? description, string intentText)
     {
-        string plainText = ToPlainText(description).TrimEnd();
         string normalizedIntent = NormalizeIntentBlock(intentText);
+        if (TryUpsertQuillDescription(description, normalizedIntent, out string quillDescription))
+        {
+            return quillDescription;
+        }
+
+        string plainText = ToPlainText(description).TrimEnd();
         string updatedText;
 
         if (TryFindBlock(plainText, out int start, out int end))
@@ -182,6 +186,11 @@ public static class DeckIntentText
     /// </summary>
     public static string ClearDescription(string? description)
     {
+        if (TryClearQuillDescription(description, out string quillDescription))
+        {
+            return quillDescription;
+        }
+
         string plainText = ToPlainText(description).TrimEnd();
         if (!TryFindBlock(plainText, out int start, out int end))
         {
@@ -197,166 +206,6 @@ public static class DeckIntentText
         return FromPlainText(updatedText, IsQuillDelta(description));
     }
 
-    /// <summary>
-    /// Converts Archidekt description storage to plain text.
-    /// </summary>
-    public static string ToPlainText(string? description)
-    {
-        if (string.IsNullOrWhiteSpace(description))
-        {
-            return "";
-        }
-
-        if (!IsQuillDelta(description))
-        {
-            return description;
-        }
-
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(description);
-            if (!document.RootElement.TryGetProperty("ops", out JsonElement ops)
-                || ops.ValueKind != JsonValueKind.Array)
-            {
-                return description;
-            }
-
-            List<string> parts = [];
-            foreach (JsonElement op in ops.EnumerateArray())
-            {
-                if (!op.TryGetProperty("insert", out JsonElement insert))
-                {
-                    continue;
-                }
-
-                if (insert.ValueKind == JsonValueKind.String)
-                {
-                    parts.Add(insert.GetString() ?? "");
-                }
-                else
-                {
-                    parts.Add(insert.GetRawText());
-                }
-            }
-
-            return string.Concat(parts);
-        }
-        catch (JsonException)
-        {
-            return description;
-        }
-    }
-
-    /// <summary>
-    /// Converts plain text back to an Archidekt-compatible description shape.
-    /// </summary>
-    public static string FromPlainText(string plainText, bool asQuillDelta)
-    {
-        if (!asQuillDelta)
-        {
-            return plainText;
-        }
-
-        string text = plainText.EndsWith(Environment.NewLine, StringComparison.Ordinal)
-            ? plainText
-            : plainText + Environment.NewLine;
-        object delta = new
-        {
-            ops = new[]
-            {
-                new { insert = text }
-            }
-        };
-        return JsonSerializer.Serialize(delta);
-    }
-
-    /// <summary>
-    /// Creates a starter intent for a workspace.
-    /// </summary>
-    public static DeckIntent Suggest(DeckWorkspace workspace)
-    {
-        DeckIntent intent = new()
-        {
-            Format = workspace.Format,
-            Commander = FindCommander(workspace),
-            Archetype = SuggestArchetype(workspace),
-            PowerLevel = "tuned-casual",
-            Budget = new DeckIntentBudget
-            {
-                Text = "prefer cheaper swaps unless a card is core",
-                PreferCheaperSwaps = true
-            }
-        };
-
-        intent.Targets[DeckRoles.Lands] = Target("36-37", 36, 37);
-        intent.Targets[DeckRoles.Ramp] = Target("8-10", 8, 10);
-        intent.Targets[DeckRoles.Draw] = Target("9-11", 9, 11);
-        intent.Targets[DeckRoles.Interaction] = Target("10-14", 10, 14);
-        intent.Targets[DeckRoles.BoardWipes] = Target("2-4", 2, 4);
-        intent.Priorities = new ReplacementWeights();
-        intent.Prefer.AddRange(SuggestPreferences(workspace));
-        intent.Avoid.AddRange(["infinite combos", "hard stax"]);
-        intent.Protect.AddRange(SuggestProtectedCards(workspace));
-        return intent;
-    }
-
-    /// <summary>
-    /// Determines whether text looks like a Quill delta.
-    /// </summary>
-    private static bool IsQuillDelta(string? description)
-    {
-        string text = description?.Trim() ?? "";
-        return text.StartsWith('{')
-            && text.Contains("\"ops\"", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Finds the intent block range.
-    /// </summary>
-    private static bool TryFindBlock(string text, out int start, out int end)
-    {
-        start = -1;
-        end = -1;
-        string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
-        int normalizedStart = normalized.IndexOf(Title, StringComparison.OrdinalIgnoreCase);
-        if (normalizedStart < 0)
-        {
-            return false;
-        }
-
-        int normalizedEnd = normalized.IndexOf(EndMarker, normalizedStart, StringComparison.OrdinalIgnoreCase);
-        normalizedEnd = normalizedEnd < 0
-            ? normalized.Length
-            : normalizedEnd + EndMarker.Length;
-        start = ToOriginalIndex(text, normalizedStart);
-        end = ToOriginalIndex(text, normalizedEnd);
-        return true;
-    }
-
-    /// <summary>
-    /// Converts a normalized line-ending index to the original string.
-    /// </summary>
-    private static int ToOriginalIndex(string original, int normalizedIndex)
-    {
-        int originalIndex = 0;
-        int currentNormalized = 0;
-        while (originalIndex < original.Length && currentNormalized < normalizedIndex)
-        {
-            if (original[originalIndex] == '\r'
-                && originalIndex + 1 < original.Length
-                && original[originalIndex + 1] == '\n')
-            {
-                originalIndex += 2;
-                currentNormalized++;
-                continue;
-            }
-
-            originalIndex++;
-            currentNormalized++;
-        }
-
-        return originalIndex;
-    }
 
     /// <summary>
     /// Normalizes user-provided intent text to a bounded section.
@@ -618,72 +467,6 @@ public static class DeckIntentText
         {
             lines.Add($"- {value}");
         }
-    }
-
-    /// <summary>
-    /// Finds the commander card.
-    /// </summary>
-    private static string? FindCommander(DeckWorkspace workspace)
-    {
-        return workspace.Cards
-            .FirstOrDefault(card =>
-                string.Equals(card.PrimaryCategory, DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
-                || (card.Categories ?? []).Any(category => category.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)))
-            ?.Name;
-    }
-
-    /// <summary>
-    /// Suggests a broad archetype from tags and categories.
-    /// </summary>
-    private static string SuggestArchetype(DeckWorkspace workspace)
-    {
-        string text = string.Join(' ', workspace.Categories.Select(category => category.Name));
-        if (workspace.Cards.Any(card => DeckRoleClassifier.Classify(card).Tags.Contains(DeckTags.Discard, StringComparer.OrdinalIgnoreCase))
-            || ContainsAny(text, "discard"))
-        {
-            return "discard-control";
-        }
-
-        if (ContainsAny(text, "aristocrats", "death", "sacrifice"))
-        {
-            return "aristocrats";
-        }
-
-        return "synergy";
-    }
-
-    /// <summary>
-    /// Suggests preference lines from the current deck.
-    /// </summary>
-    private static IEnumerable<string> SuggestPreferences(DeckWorkspace workspace)
-    {
-        string archetype = SuggestArchetype(workspace);
-        if (archetype == "discard-control")
-        {
-            return ["repeatable discard", "discard payoffs", "cards that work without the commander"];
-        }
-
-        if (archetype == "aristocrats")
-        {
-            return ["death triggers", "sacrifice outlets", "recursive threats"];
-        }
-
-        return ["role fit", "mana efficiency", "cards that support the current plan"];
-    }
-
-    /// <summary>
-    /// Suggests protected cards.
-    /// </summary>
-    private static IEnumerable<string> SuggestProtectedCards(DeckWorkspace workspace)
-    {
-        List<string> protectedCards = [];
-        string? commander = FindCommander(workspace);
-        if (!string.IsNullOrWhiteSpace(commander))
-        {
-            protectedCards.Add(commander);
-        }
-
-        return protectedCards;
     }
 
     /// <summary>
