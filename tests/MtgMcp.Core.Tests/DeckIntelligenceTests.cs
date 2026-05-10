@@ -444,6 +444,533 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that role classifier recognizes expanded theorycrafting tags.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_ClassifiesExpandedTheorycraftingTags()
+    {
+        DeckRoleClassifier.Classify(Card(
+                "Ghostly Prison",
+                "Enchantment",
+                "Creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you."))
+            .Tags
+            .Should()
+            .Contain([DeckTags.Pillowfort, DeckTags.GoWideProtection]);
+        DeckRoleClassifier.Classify(Card(
+                "Illness in the Ranks",
+                "Enchantment",
+                "Creature tokens get -1/-1."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.TokenHate);
+        DeckRoleClassifier.Classify(Card(
+                "Bane of Progress",
+                "Creature",
+                "When Bane of Progress enters the battlefield, destroy all artifacts and enchantments."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.ArtifactEnchantmentHate);
+    }
+
+    /// <summary>
+    /// Verifies that best-practice analysis reports role gaps.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_ReturnsNeedProfileAndGaps()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Gaps",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 32, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Signet", Quantity = 4, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                Card("Doom Blade", "Instant", "Destroy target nonblack creature.")
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Status.Should().Be("low");
+        analysis.RecommendedProfile.Should().Be("commander-baseline");
+        analysis.HeuristicComparisons.Should().Contain(comparison => comparison.ProfileId == "command-zone-template");
+        analysis.Risks.Should().Contain(risk => risk.Contains("Win", StringComparison.OrdinalIgnoreCase)
+            || risk.Contains("win condition", StringComparison.OrdinalIgnoreCase));
+        analysis.Citations.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that best-practice analysis honors deck intent heuristic profiles.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_UsesIntentHeuristicProfile()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Command Zone Profile",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Heuristic Profile: command-zone-template
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 8, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Draw", Quantity = 9, PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] },
+                new DeckCard { Name = "Removal", Quantity = 8, PrimaryCategory = DeckRoles.Interaction, Categories = [DeckRoles.Interaction] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.RecommendedProfile.Should().Be("command-zone-template");
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(10);
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Draw).Minimum.Should().Be(10);
+        analysis.NeedProfile.Notes.Should().Contain(note => note.Contains("Command Zone template", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that best-practice analysis can use cEDH profiles from power intent.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_InfersCedhProfile()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Turbo Profile",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Power Level: cEDH
+                Archetype: turbo combo
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 10, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Tutor", Quantity = 4, PrimaryCategory = DeckRoles.Tutors, Categories = [DeckRoles.Tutors] },
+                new DeckCard { Name = "Interaction", Quantity = 8, PrimaryCategory = DeckRoles.Interaction, Categories = [DeckRoles.Interaction] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.RecommendedProfile.Should().Be("cedh-turbo");
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Lands).Status.Should().Be("high");
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(14);
+        analysis.HeuristicComparisons.Should().Contain(comparison => comparison.ProfileId == "cedh-turbo");
+    }
+
+    /// <summary>
+    /// Verifies that goal recommendations create a previewable plan.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsForDeckGoal_CreatesPlanForTableInteraction()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Goal",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
+            workspace.Id,
+            "add a few cards that interact with the whole table",
+            count: 2,
+            maxPrice: 5,
+            strategy: "balanced",
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation => operation.Operation == DeckEditOperations.AddCard);
+        result.Suggestions.Should().Contain(suggestion => suggestion.Tags.Contains(DeckTags.TableInteraction));
+        (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that new-card radar uses release filters and deck fit.
+    /// </summary>
+    [Fact]
+    public async Task FindNewCardsForDeck_UsesCatalogTrendFallback()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "New Cards",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Archetype: tokens
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        FakeCardCatalog catalog = new();
+        DeckWorkspaceService service = new(workspaces, catalog);
+
+        NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
+            workspace.Id,
+            since: "2026-01-01",
+            setCode: "tst",
+            limit: 3,
+            maxPrice: 5,
+            TestContext.Current.CancellationToken);
+
+        catalog.SearchQueries.Should().Contain(query => query.Contains("date>=2026-01-01", StringComparison.OrdinalIgnoreCase));
+        result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Season of Loss");
+    }
+
+    /// <summary>
+    /// Verifies that combo and goldfish projections return explainable estimates.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishAndComboTools_ReturnHeuristicEstimates()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Goldfish",
+            Cards =
+            [
+                new DeckCard { Name = "Forest", Quantity = 40, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 12, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp], Snapshot = new CardSnapshot { TypeLine = "Artifact", ManaValue = 2, OracleText = "{T}: Add {G}." } },
+                new DeckCard { Name = "Token Maker", Quantity = 16, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy], Snapshot = new CardSnapshot { TypeLine = "Creature", ManaValue = 3, OracleText = "When this enters, create two 1/1 creature tokens." } },
+                new DeckCard { Name = "Craterhoof Behemoth", Quantity = 3, PrimaryCategory = DeckRoles.Wincons, Categories = [DeckRoles.Wincons], Snapshot = new CardSnapshot { TypeLine = "Creature", ManaValue = 8, OracleText = "Creatures you control get +X/+X and gain trample until end of turn." } },
+                new DeckCard { Name = "Combo A", Quantity = 1, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy], Snapshot = new CardSnapshot { TypeLine = "Artifact", ManaValue = 2, OracleText = "Untap target permanent. Copy target activated ability." } },
+                new DeckCard { Name = "Combo B", Quantity = 1, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy], Snapshot = new CardSnapshot { TypeLine = "Artifact", ManaValue = 2, OracleText = "Whenever an ability is copied, untap target permanent." } }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 200,
+            seed: 9,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+        ComboPressureEstimate pressure = await service.EstimateComboPressureAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        goldfish.TurnSummaries.Should().HaveCount(5);
+        goldfish.TurnSummaries.Last().MedianManaSources.Should().BeGreaterThan(0);
+        goldfish.WinEstimate.Routes.Should().NotBeEmpty();
+        pressure.Level.Should().NotBe("low");
+    }
+
+    /// <summary>
+    /// Verifies that budgeted goal packages do not treat unknown prices as free.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsForDeckGoal_ExcludesUnpricedCardsWhenBudgeted()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Budget Goal",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new GoalBudgetCatalog(), archidektGateway: null, plans);
+
+        GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
+            workspace.Id,
+            "add a few cards that interact with the whole table",
+            count: 2,
+            maxPrice: 1,
+            strategy: "balanced",
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Syphon Mind");
+        result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Mystery Table Spell");
+    }
+
+    /// <summary>
+    /// Verifies that new-card fallback keeps searched print metadata.
+    /// </summary>
+    [Fact]
+    public async Task FindNewCardsForDeck_PreservesSearchPrintMetadataAndExcludesUnpricedCards()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Release Radar",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new TrendMetadataCatalog());
+
+        NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
+            workspace.Id,
+            since: "2026-01-01",
+            setCode: "new",
+            limit: 5,
+            maxPrice: 1,
+            TestContext.Current.CancellationToken);
+
+        NewCardSuggestion suggestion = result.Suggestions.Should().ContainSingle(card => card.CardName == "Reprinted Drain").Subject;
+        suggestion.Set.Should().Be("new");
+        suggestion.ReleasedAt.Should().Be(new DateOnly(2026, 2, 1));
+        result.Suggestions.Should().NotContain(card => card.CardName == "Unpriced New Card");
+    }
+
+    /// <summary>
+    /// Verifies that card trend providers are optional and failure-tolerant.
+    /// </summary>
+    [Fact]
+    public async Task FindNewCardsForDeck_FallsBackWhenTrendProviderFails()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Trend Fallback",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog(),
+            cardTrendProvider: new ThrowingCardTrendProvider());
+
+        NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
+            workspace.Id,
+            since: "2026-01-01",
+            setCode: "tst",
+            limit: 3,
+            maxPrice: 5,
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Season of Loss");
+        result.Notes.Should().Contain(note => note.Contains("provider failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that Commander meta providers are optional and failure-tolerant.
+    /// </summary>
+    [Fact]
+    public async Task CompareToCommanderMeta_FallsBackWhenProviderFails()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Meta Fallback",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog(),
+            commanderMetaProvider: new ThrowingCommanderMetaProvider());
+
+        CommanderMetaReport result = await service.CompareToCommanderMetaAsync(
+            workspace.Id,
+            limit: 5,
+            TestContext.Current.CancellationToken);
+
+        result.MissingPopularCards.Should().NotBeEmpty();
+        result.Notes.Should().Contain(note => note.Contains("provider failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that provider new-card suggestions are filtered through deck fit rules.
+    /// </summary>
+    [Fact]
+    public async Task FindNewCardsForDeck_FiltersProviderSuggestionsThroughDeckRules()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Provider Filtering",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            workspaces,
+            new FakeCardCatalog(),
+            cardTrendProvider: new FixedCardTrendProvider(
+            [
+                new NewCardSuggestion { CardName = "Blasphemous Act", Score = 1, Price = 3 },
+                new NewCardSuggestion { CardName = "Season of Loss", Score = 0.8, Price = 2, ReleasedAt = new DateOnly(2026, 2, 1), Set = "tst" }
+            ]));
+
+        NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
+            workspace.Id,
+            since: null,
+            setCode: null,
+            limit: 5,
+            maxPrice: 5,
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Season of Loss");
+        result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Blasphemous Act");
+    }
+
+    /// <summary>
+    /// Verifies that combo catalog failure falls back to local heuristics.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_FallsBackWhenComboCatalogFails()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Combo Fallback",
+            Cards =
+            [
+                new DeckCard { Name = "Exquisite Blood", Quantity = 1, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy] },
+                new DeckCard { Name = "Sanguine Bond", Quantity = 1, PrimaryCategory = DeckRoles.Wincons, Categories = [DeckRoles.Wincons] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), comboCatalog: new ThrowingComboCatalog());
+
+        DeckComboReport result = await service.FindDeckCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        result.Combos.Should().Contain(combo => combo.Name.Contains("Exquisite Blood", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("catalog failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that duplicate copies of one combo-tagged card do not form a completed combo.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_DoesNotTreatDuplicateSingleCardAsCompletedCombo()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Duplicate Combo",
+            Cards =
+            [
+                new DeckCard { Name = "Combo A", Quantity = 2, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy], Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "Untap target permanent. Copy target activated ability." } }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckComboReport completed = await service.FindDeckCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+        DeckComboReport nearMisses = await service.FindNearMissCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        completed.Combos.Should().BeEmpty();
+        nearMisses.NearMisses.Should().ContainSingle(combo => combo.Cards.Contains("Combo A"));
+    }
+
+    /// <summary>
+    /// Verifies that weak decks report no likely goldfish win route.
+    /// </summary>
+    [Fact]
+    public async Task EstimateWinTurn_ReturnsNoRouteForDeckWithoutWinCondition()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "No Wincon",
+            Cards =
+            [
+                new DeckCard { Name = "Forest", Quantity = 42, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 10, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp], Snapshot = new CardSnapshot { TypeLine = "Artifact", ManaValue = 2, OracleText = "{T}: Add {G}." } }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        WinTurnEstimate estimate = await service.EstimateWinTurnAsync(
+            workspace.Id,
+            maxTurn: 7,
+            simulations: 100,
+            seed: 17,
+            TestContext.Current.CancellationToken);
+
+        estimate.MedianWinTurn.Should().BeNull();
+        estimate.Routes.Should().BeEmpty();
+        estimate.Notes.Should().Contain(note => note.Contains("No likely win", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that brainstorming explicitly persists one previewable goal plan.
+    /// </summary>
+    [Fact]
+    public async Task BrainstormDeckImprovements_PersistsOnePreviewableGoalPlan()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Brainstorm",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        BrainstormDeckImprovementsResult result = await service.BrainstormDeckImprovementsAsync(
+            workspace.Id,
+            "add a few cards that interact with the whole table",
+            budget: 5,
+            targetPower: "balanced",
+            TestContext.Current.CancellationToken);
+
+        IReadOnlyList<DeckEditPlan> savedPlans = await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken);
+        savedPlans.Should().ContainSingle();
+        result.Notes.Should().Contain(note => note.Contains(savedPlans.Single().PlanId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that card-selection recommendations use a specific search query.
     /// </summary>
     [Fact]
@@ -1653,6 +2180,264 @@ public sealed class DeckIntelligenceTests
     /// <summary>
     /// Provides fake card catalog behavior.
     /// </summary>
+    /// <summary>
+    /// Provides card data for budget filtering tests.
+    /// </summary>
+    private sealed class GoalBudgetCatalog : ICardCatalog
+    {
+        /// <summary>
+        /// Searches budget goal candidates.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<CardSearchResult> results =
+            [
+                new CardSearchResult { Name = "Mystery Table Spell" },
+                new CardSearchResult { Name = "Syphon Mind" }
+            ];
+            return Task.FromResult(results);
+        }
+
+        /// <summary>
+        /// Gets a budget goal card.
+        /// </summary>
+        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CardInfo?>(CreateCard(nameOrId));
+        }
+
+        /// <summary>
+        /// Gets budget goal cards by name.
+        /// </summary>
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(names
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(name => name, CreateCard, StringComparer.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Gets no fake rulings.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
+        }
+
+        /// <summary>
+        /// Gets no fake prints.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
+        }
+
+        /// <summary>
+        /// Suggests no fake cards.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(string prompt, string? format, int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
+        /// Creates a budget test card.
+        /// </summary>
+        private static CardInfo CreateCard(string name)
+        {
+            return name.Equals("Syphon Mind", StringComparison.OrdinalIgnoreCase)
+                ? new CardInfo
+                {
+                    Name = "Syphon Mind",
+                    ManaCost = "{3}{B}",
+                    ManaValue = 4,
+                    TypeLine = "Sorcery",
+                    OracleText = "Each opponent discards a card. You draw a card for each card discarded this way.",
+                    ColorIdentity = ["B"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                }
+                : new CardInfo
+                {
+                    Name = "Mystery Table Spell",
+                    ManaCost = "{2}{B}",
+                    ManaValue = 3,
+                    TypeLine = "Sorcery",
+                    OracleText = "Each opponent loses 2 life. Each opponent sacrifices a creature.",
+                    ColorIdentity = ["B"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" }
+                };
+        }
+    }
+
+    /// <summary>
+    /// Provides card data for release metadata tests.
+    /// </summary>
+    private sealed class TrendMetadataCatalog : ICardCatalog
+    {
+        /// <summary>
+        /// Searches recent cards with explicit print metadata.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<CardSearchResult> results =
+            [
+                new CardSearchResult { Name = "Reprinted Drain", Set = "new", ReleasedAt = new DateOnly(2026, 2, 1) },
+                new CardSearchResult { Name = "Unpriced New Card", Set = "new", ReleasedAt = new DateOnly(2026, 2, 1) }
+            ];
+            return Task.FromResult(results);
+        }
+
+        /// <summary>
+        /// Gets a recent card.
+        /// </summary>
+        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CardInfo?>(CreateCard(nameOrId));
+        }
+
+        /// <summary>
+        /// Gets recent cards by name.
+        /// </summary>
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(names
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(name => name, CreateCard, StringComparer.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Gets no fake rulings.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
+        }
+
+        /// <summary>
+        /// Gets no fake prints.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
+        }
+
+        /// <summary>
+        /// Suggests no fake cards.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(string prompt, string? format, int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
+        /// Creates a release metadata test card.
+        /// </summary>
+        private static CardInfo CreateCard(string name)
+        {
+            Dictionary<string, string> prices = name.Equals("Reprinted Drain", StringComparison.OrdinalIgnoreCase)
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.25" }
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            return new CardInfo
+            {
+                Name = name,
+                ManaCost = "{1}{B}",
+                ManaValue = 2,
+                TypeLine = "Sorcery",
+                OracleText = "Each opponent loses life and you create a token.",
+                Set = "old",
+                ReleasedAt = new DateOnly(2020, 1, 1),
+                ColorIdentity = ["B"],
+                Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                Prices = prices
+            };
+        }
+    }
+
+    /// <summary>
+    /// Provides a failing trend provider.
+    /// </summary>
+    private sealed class ThrowingCardTrendProvider : ICardTrendProvider
+    {
+        /// <summary>
+        /// Throws for trend lookup.
+        /// </summary>
+        public Task<IReadOnlyList<NewCardSuggestion>> FindNewCardsAsync(
+            CardTrendQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("trend unavailable");
+        }
+    }
+
+    /// <summary>
+    /// Provides a failing Commander meta provider.
+    /// </summary>
+    private sealed class ThrowingCommanderMetaProvider : ICommanderMetaProvider
+    {
+        /// <summary>
+        /// Throws for Commander meta lookup.
+        /// </summary>
+        public Task<CommanderMetaReport> GetCommanderMetaAsync(
+            CommanderMetaQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("meta unavailable");
+        }
+    }
+
+    /// <summary>
+    /// Provides fixed trend suggestions.
+    /// </summary>
+    private sealed class FixedCardTrendProvider : ICardTrendProvider
+    {
+        /// <summary>
+        /// Stores fixed trend suggestions.
+        /// </summary>
+        private readonly IReadOnlyList<NewCardSuggestion> suggestions;
+
+        /// <summary>
+        /// Creates a fixed trend provider.
+        /// </summary>
+        public FixedCardTrendProvider(IReadOnlyList<NewCardSuggestion> suggestions)
+        {
+            this.suggestions = suggestions;
+        }
+
+        /// <summary>
+        /// Returns fixed trend suggestions.
+        /// </summary>
+        public Task<IReadOnlyList<NewCardSuggestion>> FindNewCardsAsync(
+            CardTrendQuery query,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(suggestions);
+        }
+    }
+
+    /// <summary>
+    /// Provides a failing combo catalog.
+    /// </summary>
+    private sealed class ThrowingComboCatalog : IComboCatalog
+    {
+        /// <summary>
+        /// Throws for combo lookup.
+        /// </summary>
+        public Task<DeckComboReport> FindCombosAsync(
+            ComboCatalogQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("combo unavailable");
+        }
+    }
+
+    /// <summary>
+    /// Provides card data for deck intelligence tests.
+    /// </summary>
     private sealed class FakeCardCatalog : ICardCatalog
     {
         /// <summary>
@@ -1717,6 +2502,30 @@ public sealed class DeckIntelligenceTests
                     new CardSearchResult { Name = "Lightning Greaves" },
                     new CardSearchResult { Name = "Hero's Downfall" }
                 ];
+            }
+            else if (query.Contains("each opponent", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("each player", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("each creature", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Syphon Mind" },
+                    new CardSearchResult { Name = "Blasphemous Act" }
+                ];
+            }
+            else if (query.Contains("destroy all tokens", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("creatures can't attack", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Illness in the Ranks" },
+                    new CardSearchResult { Name = "Crawlspace" }
+                ];
+            }
+            else if (query.Contains("date>=", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("set:", StringComparison.OrdinalIgnoreCase))
+            {
+                results = [new CardSearchResult { Name = "Season of Loss" }];
             }
             else if (query.Contains("legal:commander", StringComparison.OrdinalIgnoreCase))
             {
@@ -1921,6 +2730,78 @@ public sealed class DeckIntelligenceTests
                     EdhrecRank = 100,
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.10" }
+                },
+                "Syphon Mind" => new CardInfo
+                {
+                    Id = "syphon-mind",
+                    OracleId = "oracle-syphon-mind",
+                    Name = "Syphon Mind",
+                    ManaCost = "{3}{B}",
+                    ManaValue = 4,
+                    TypeLine = "Sorcery",
+                    OracleText = "Each other player discards a card. You draw a card for each card discarded this way.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 2_500,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                },
+                "Blasphemous Act" => new CardInfo
+                {
+                    Id = "blasphemous-act",
+                    OracleId = "oracle-blasphemous-act",
+                    Name = "Blasphemous Act",
+                    ManaCost = "{8}{R}",
+                    ManaValue = 9,
+                    TypeLine = "Sorcery",
+                    OracleText = "Blasphemous Act deals 13 damage to each creature.",
+                    ColorIdentity = ["R"],
+                    EdhrecRank = 300,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "3.00" }
+                },
+                "Illness in the Ranks" => new CardInfo
+                {
+                    Id = "illness-in-the-ranks",
+                    OracleId = "oracle-illness-in-the-ranks",
+                    Name = "Illness in the Ranks",
+                    ManaCost = "{B}",
+                    ManaValue = 1,
+                    TypeLine = "Enchantment",
+                    OracleText = "Creature tokens get -1/-1.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 8_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
+                "Crawlspace" => new CardInfo
+                {
+                    Id = "crawlspace",
+                    OracleId = "oracle-crawlspace",
+                    Name = "Crawlspace",
+                    ManaCost = "{3}",
+                    ManaValue = 3,
+                    TypeLine = "Artifact",
+                    OracleText = "No more than two creatures can attack you each combat.",
+                    ColorIdentity = [],
+                    EdhrecRank = 2_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "4.00" }
+                },
+                "Season of Loss" => new CardInfo
+                {
+                    Id = "season-of-loss",
+                    OracleId = "oracle-season-of-loss",
+                    Name = "Season of Loss",
+                    ManaCost = "{3}{B}{B}",
+                    ManaValue = 5,
+                    TypeLine = "Sorcery",
+                    OracleText = "Choose modes. Each opponent sacrifices a creature. Create two tapped creature tokens. You draw two cards.",
+                    Set = "tst",
+                    ReleasedAt = new DateOnly(2026, 2, 1),
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 1_500,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
                 },
                 _ => new CardInfo
                 {

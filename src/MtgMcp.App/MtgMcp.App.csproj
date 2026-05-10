@@ -3,6 +3,7 @@
         <ProjectReference Include="..\MtgMcp.Core\MtgMcp.Core.csproj" />
         <ProjectReference Include="..\MtgMcp.Scryfall\MtgMcp.Scryfall.csproj" />
         <ProjectReference Include="..\MtgMcp.Archidekt\MtgMcp.Archidekt.csproj" />
+        <ProjectReference Include="..\MtgMcp.CommanderSpellbook\MtgMcp.CommanderSpellbook.csproj" />
     </ItemGroup>
 
     <ItemGroup>

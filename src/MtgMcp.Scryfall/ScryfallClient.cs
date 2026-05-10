@@ -497,6 +497,7 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
             TypeLine = GetString(element, "type_line") ?? GetFaceString(element, "type_line"),
             Set = GetString(element, "set"),
             CollectorNumber = GetString(element, "collector_number"),
+            ReleasedAt = GetDateOnly(element, "released_at"),
             ScryfallUri = GetString(element, "scryfall_uri"),
         };
     }
@@ -518,6 +519,7 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
             Set = GetString(element, "set"),
             CollectorNumber = GetString(element, "collector_number"),
             Rarity = GetString(element, "rarity"),
+            ReleasedAt = GetDateOnly(element, "released_at"),
             ScryfallUri = GetString(element, "scryfall_uri"),
             EdhrecRank = GetInt(element, "edhrec_rank"),
         };
@@ -562,6 +564,16 @@ public sealed class ScryfallClient : ICardCatalog, IDisposable
         }
 
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText();
+    }
+
+    /// <summary>
+    /// Gets the date.
+    /// </summary>
+    private static DateOnly? GetDateOnly(JsonElement element, string propertyName)
+    {
+        return DateOnly.TryParse(GetString(element, propertyName), out DateOnly date)
+            ? date
+            : null;
     }
 
     /// <summary>

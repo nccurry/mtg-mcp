@@ -175,6 +175,74 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
+    /// Handles tuning for a local meta.
+    /// </summary>
+    [McpServerPrompt(Name = "tune_for_local_meta")]
+    [Description("Tune a deck for stated local metagame pressures.")]
+    public string TuneForLocalMeta(string workspaceId, string meta, string budget = "10")
+    {
+        return $"""
+            Tune deck workspace {workspaceId} for this local meta: {meta}
+            Budget per card: {budget}
+
+            Use analyze_deck_best_practices, find_cards_for_deck_goal, estimate_combo_pressure,
+            and preview_deck_plan. Prefer previewable plans and explain which local-meta problem
+            each package addresses.
+            """;
+    }
+
+    /// <summary>
+    /// Handles reviewing new releases.
+    /// </summary>
+    [McpServerPrompt(Name = "review_new_releases_for_deck")]
+    [Description("Review newly released cards that fit a deck.")]
+    public string ReviewNewReleasesForDeck(string workspaceId, string since = "", string setCode = "", string maxPrice = "")
+    {
+        return $"""
+            Review new cards for deck workspace {workspaceId}.
+            Since: {since}
+            Set: {setCode}
+            Max price: {maxPrice}
+
+            Use find_new_cards_for_deck, compare_to_commander_meta, and summarize_deck_plan.
+            Return cards by role, theme fit, price, and likely cuts when relevant.
+            """;
+    }
+
+    /// <summary>
+    /// Handles goldfishing a deck.
+    /// </summary>
+    [McpServerPrompt(Name = "goldfish_deck")]
+    [Description("Project board state and win timing when a deck is not interacted with.")]
+    public string GoldfishDeck(string workspaceId, int targetTurn = 5, int simulations = 1000)
+    {
+        return $"""
+            Goldfish deck workspace {workspaceId}.
+            Target turn: {targetTurn}
+            Simulations: {simulations}
+
+            Use simulate_goldfish, project_board_state, and estimate_win_turn. Explain that the
+            output assumes no opponent interaction and uses heuristics rather than a full rules engine.
+            """;
+    }
+
+    /// <summary>
+    /// Handles improving a deck toward a natural-language goal.
+    /// </summary>
+    [McpServerPrompt(Name = "make_deck_do_goal_better")]
+    [Description("Find a previewable package that makes a deck better at a stated goal.")]
+    public string MakeDeckDoGoalBetter(string workspaceId, string goal, string budget = "10")
+    {
+        return $"""
+            Make deck workspace {workspaceId} better at: {goal}
+            Budget per card: {budget}
+
+            Use find_cards_for_deck_goal, analyze_deck_best_practices, and preview_deck_plan.
+            Return the plan id, cards added, likely cuts, and tradeoffs.
+            """;
+    }
+
+    /// <summary>
     /// Handles rules and rulings check.
     /// </summary>
     [McpServerPrompt(Name = "rules_and_rulings_check")]

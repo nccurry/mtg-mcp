@@ -183,6 +183,61 @@ public static class DeckTags
     public const string Politics = "Politics";
 
     /// <summary>
+    /// Stores the table interaction tag.
+    /// </summary>
+    public const string TableInteraction = "Table Interaction";
+
+    /// <summary>
+    /// Stores the go-wide protection tag.
+    /// </summary>
+    public const string GoWideProtection = "Go-Wide Protection";
+
+    /// <summary>
+    /// Stores the pillowfort tag.
+    /// </summary>
+    public const string Pillowfort = "Pillowfort";
+
+    /// <summary>
+    /// Stores the token hate tag.
+    /// </summary>
+    public const string TokenHate = "Token Hate";
+
+    /// <summary>
+    /// Stores the artifact and enchantment hate tag.
+    /// </summary>
+    public const string ArtifactEnchantmentHate = "Artifact/Enchantment Hate";
+
+    /// <summary>
+    /// Stores the combat protection tag.
+    /// </summary>
+    public const string CombatProtection = "Combat Protection";
+
+    /// <summary>
+    /// Stores the evasion tag.
+    /// </summary>
+    public const string Evasion = "Evasion";
+
+    /// <summary>
+    /// Stores the finisher tag.
+    /// </summary>
+    public const string Finishers = "Finishers";
+
+    /// <summary>
+    /// Stores the sacrifice fodder tag.
+    /// </summary>
+    public const string SacrificeFodder = "Sacrifice Fodder";
+
+    /// <summary>
+    /// Stores the engine tag.
+    /// </summary>
+    public const string Engines = "Engines";
+
+    /// <summary>
+    /// Stores the combo enabler tag.
+    /// </summary>
+    public const string ComboEnabler = "Combo Enabler";
+
+    /// <summary>
     /// Stores the secondary tag taxonomy.
     /// </summary>
     public static readonly IReadOnlyList<string> Secondary =
@@ -202,7 +257,18 @@ public static class DeckTags
         Voltron,
         Blink,
         Mill,
-        Politics
+        Politics,
+        TableInteraction,
+        GoWideProtection,
+        Pillowfort,
+        TokenHate,
+        ArtifactEnchantmentHate,
+        CombatProtection,
+        Evasion,
+        Finishers,
+        SacrificeFodder,
+        Engines,
+        ComboEnabler
     ];
 }
 

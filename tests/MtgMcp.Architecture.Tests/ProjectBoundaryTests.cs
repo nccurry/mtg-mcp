@@ -19,6 +19,10 @@ public sealed class ProjectBoundaryTests
         {
             ["src/MtgMcp.Core/MtgMcp.Core.csproj"] = [],
             ["src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj"] = ["src/MtgMcp.Core/MtgMcp.Core.csproj"],
+            ["src/MtgMcp.CommanderSpellbook/MtgMcp.CommanderSpellbook.csproj"] =
+            [
+                "src/MtgMcp.Core/MtgMcp.Core.csproj",
+            ],
             ["src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj"] =
             [
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
@@ -28,6 +32,7 @@ public sealed class ProjectBoundaryTests
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
                 "src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj",
                 "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj",
+                "src/MtgMcp.CommanderSpellbook/MtgMcp.CommanderSpellbook.csproj",
             ],
         };
 

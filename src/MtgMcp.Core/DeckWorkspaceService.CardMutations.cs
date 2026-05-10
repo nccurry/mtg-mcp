@@ -206,6 +206,7 @@ public sealed partial class DeckWorkspaceService
             Set = cardInfo.Set,
             CollectorNumber = cardInfo.CollectorNumber,
             Rarity = cardInfo.Rarity,
+            ReleasedAt = cardInfo.ReleasedAt,
             ScryfallUri = cardInfo.ScryfallUri,
             EdhrecRank = cardInfo.EdhrecRank,
             Keywords = cardInfo.Keywords.ToList(),

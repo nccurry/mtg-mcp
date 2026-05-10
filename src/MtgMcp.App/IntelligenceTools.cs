@@ -294,6 +294,178 @@ public sealed class IntelligenceTools
     }
 
     /// <summary>
+    /// Analyzes deck best practices.
+    /// </summary>
+    [McpServerTool(Name = "analyze_deck_best_practices", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Analyze a deck against Commander best-practice heuristics, intent targets, role gaps, interaction coverage, wincon clarity, and cited rationale. Profile can be auto or a documented Heuristic Profile value.")]
+    public Task<DeckBestPracticeAnalysis> AnalyzeDeckBestPracticesAsync(
+        string workspaceId,
+        string profile = "auto",
+        CancellationToken cancellationToken = default)
+    {
+        return decks.AnalyzeDeckBestPracticesAsync(workspaceId, profile, cancellationToken);
+    }
+
+    /// <summary>
+    /// Compares a deck to commander meta.
+    /// </summary>
+    [McpServerTool(Name = "compare_to_commander_meta", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Compare a deck to optional Commander metagame context, reporting popular included and missing cards.")]
+    public Task<CommanderMetaReport> CompareToCommanderMetaAsync(
+        string workspaceId,
+        int limit = 25,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.CompareToCommanderMetaAsync(workspaceId, limit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds missing popular cards.
+    /// </summary>
+    [McpServerTool(Name = "find_missing_popular_cards", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan for popular commander/theme cards missing from the deck.")]
+    public Task<GoalPackagePlanResult> FindMissingPopularCardsAsync(
+        string workspaceId,
+        int limit = 10,
+        decimal? maxPrice = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_missing_popular_cards");
+        return decks.FindMissingPopularCardsAsync(workspaceId, limit, maxPrice, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds new cards for a deck.
+    /// </summary>
+    [McpServerTool(Name = "find_new_cards_for_deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Find newly released cards that fit the deck's format, color identity, intent, roles, and theme. Since accepts YYYY-MM-DD.")]
+    public Task<NewCardsForDeckResult> FindNewCardsForDeckAsync(
+        string workspaceId,
+        string? since = null,
+        string? setCode = null,
+        int limit = 10,
+        decimal? maxPrice = null,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.FindNewCardsForDeckAsync(workspaceId, since, setCode, limit, maxPrice, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds cards for a deck goal.
+    /// </summary>
+    [McpServerTool(Name = "find_cards_for_deck_goal", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating plan from a natural-language goal such as table-wide interaction, token defense, finishers, or graveyard hate.")]
+    public Task<GoalPackagePlanResult> FindCardsForDeckGoalAsync(
+        string workspaceId,
+        string goal,
+        int count = 3,
+        decimal maxPrice = 10,
+        string strategy = "balanced",
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_cards_for_deck_goal");
+        return decks.FindCardsForDeckGoalAsync(workspaceId, goal, count, maxPrice, strategy, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds deck combos.
+    /// </summary>
+    [McpServerTool(Name = "find_deck_combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Find completed combos using a configured combo catalog or local combo heuristics.")]
+    public Task<DeckComboReport> FindDeckCombosAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.FindDeckCombosAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds combo near misses.
+    /// </summary>
+    [McpServerTool(Name = "find_near_miss_combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Find one-card-away or partial combo routes using a configured combo catalog or local combo heuristics.")]
+    public Task<DeckComboReport> FindNearMissCombosAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.FindNearMissCombosAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Estimates combo pressure.
+    /// </summary>
+    [McpServerTool(Name = "estimate_combo_pressure", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Estimate combo pressure from completed combos, near misses, tutors, and combo-piece density.")]
+    public Task<ComboPressureEstimate> EstimateComboPressureAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.EstimateComboPressureAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Simulates a goldfish.
+    /// </summary>
+    [McpServerTool(Name = "simulate_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Run heuristic no-interaction goldfish simulations with simple mulligans, sequencing, board projection, and win-route estimates.")]
+    public Task<GoldfishSimulationResult> SimulateGoldfishAsync(
+        string workspaceId,
+        int targetTurn = 7,
+        int simulations = 1_000,
+        int seed = 1337,
+        bool mulligan = true,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.SimulateGoldfishAsync(workspaceId, targetTurn, simulations, seed, mulligan, cancellationToken);
+    }
+
+    /// <summary>
+    /// Projects the board state.
+    /// </summary>
+    [McpServerTool(Name = "project_board_state", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Project the likely board state by a turn if the deck is not interacted with.")]
+    public Task<ProjectedTurnState> ProjectBoardStateAsync(
+        string workspaceId,
+        int turn = 5,
+        int simulations = 1_000,
+        int seed = 1337,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.ProjectBoardStateAsync(workspaceId, turn, simulations, seed, cancellationToken);
+    }
+
+    /// <summary>
+    /// Estimates the win turn.
+    /// </summary>
+    [McpServerTool(Name = "estimate_win_turn", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Estimate likely goldfish win turns and routes such as combat, finishers, or combo.")]
+    public Task<WinTurnEstimate> EstimateWinTurnAsync(
+        string workspaceId,
+        int maxTurn = 12,
+        int simulations = 1_000,
+        int seed = 1337,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.EstimateWinTurnAsync(workspaceId, maxTurn, simulations, seed, cancellationToken);
+    }
+
+    /// <summary>
+    /// Brainstorms deck improvements.
+    /// </summary>
+    [McpServerTool(Name = "brainstorm_deck_improvements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Run best-practice analysis, meta comparison, new-card radar, goal recommendations, combo review, and goldfish projection in one workflow.")]
+    public Task<BrainstormDeckImprovementsResult> BrainstormDeckImprovementsAsync(
+        string workspaceId,
+        string goal = "",
+        decimal budget = 10,
+        string targetPower = "balanced",
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("brainstorm_deck_improvements");
+        return decks.BrainstormDeckImprovementsAsync(workspaceId, goal, budget, targetPower, cancellationToken);
+    }
+
+    /// <summary>
     /// Lists deck plans.
     /// </summary>
     [McpServerTool(Name = "list_deck_plans", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]

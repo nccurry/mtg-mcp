@@ -61,6 +61,10 @@ tasks:
         dotnet test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
+      - >
+        dotnet test tests/MtgMcp.CommanderSpellbook.Tests/MtgMcp.CommanderSpellbook.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
 
   test:e2e:
     desc: Run mocked MCP end-to-end tests

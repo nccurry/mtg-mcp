@@ -55,6 +55,48 @@ public interface ICardCatalog
 }
 
 /// <summary>
+/// Defines Commander metagame lookup behavior.
+/// </summary>
+public interface ICommanderMetaProvider
+{
+    /// <summary>
+    /// Gets Commander and theme popularity data from an optional external source.
+    /// </summary>
+    Task<CommanderMetaReport> GetCommanderMetaAsync(
+        CommanderMetaQuery query,
+        CancellationToken cancellationToken
+    );
+}
+
+/// <summary>
+/// Defines recent-card lookup behavior.
+/// </summary>
+public interface ICardTrendProvider
+{
+    /// <summary>
+    /// Finds recently released cards that match a deck theme or format.
+    /// </summary>
+    Task<IReadOnlyList<NewCardSuggestion>> FindNewCardsAsync(
+        CardTrendQuery query,
+        CancellationToken cancellationToken
+    );
+}
+
+/// <summary>
+/// Defines combo catalog lookup behavior.
+/// </summary>
+public interface IComboCatalog
+{
+    /// <summary>
+    /// Finds combos and near misses for a deck card pool.
+    /// </summary>
+    Task<DeckComboReport> FindCombosAsync(
+        ComboCatalogQuery query,
+        CancellationToken cancellationToken
+    );
+}
+
+/// <summary>
 /// Defines operations for deck workspace repository.
 /// </summary>
 public interface IDeckWorkspaceRepository

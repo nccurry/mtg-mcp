@@ -108,6 +108,11 @@ public sealed class CardInfo
     public string? Rarity { get; set; }
 
     /// <summary>
+    /// Gets or sets the release date.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
+
+    /// <summary>
     /// Gets or sets the scryfall uri.
     /// </summary>
     public string? ScryfallUri { get; set; }
@@ -189,6 +194,11 @@ public sealed class CardSearchResult
     /// Gets or sets the collector number.
     /// </summary>
     public string? CollectorNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the release date.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the scryfall uri.
@@ -369,6 +379,11 @@ public sealed class CardSnapshot
     /// Gets or sets the rarity.
     /// </summary>
     public string? Rarity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the release date.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the scryfall uri.

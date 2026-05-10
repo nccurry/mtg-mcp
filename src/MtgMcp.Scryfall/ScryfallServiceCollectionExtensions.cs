@@ -19,6 +19,8 @@ public static class ScryfallServiceCollectionExtensions
     {
         services.Configure<ScryfallOptions>(configuration.GetSection("MtgMcp:Scryfall"));
         services.AddHttpClient<ICardCatalog, ScryfallClient>();
+        services.AddTransient<ICardTrendProvider, ScryfallCardTrendProvider>();
+        services.AddTransient<ICommanderMetaProvider, ScryfallCommanderMetaProvider>();
         return services;
     }
 }

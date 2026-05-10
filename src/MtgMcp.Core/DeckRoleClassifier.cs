@@ -185,6 +185,17 @@ public static class DeckRoleClassifier
         AddTag(tags, DeckTags.Blink, ContainsAny(text, "exile") && ContainsAny(text, "return it", "return that card", "under its owner's control"));
         AddTag(tags, DeckTags.Mill, ContainsAny(text, "mill"));
         AddTag(tags, DeckTags.Politics, ContainsAny(text, "goad", "vote", "monarch", "tempting offer"));
+        AddTag(tags, DeckTags.TableInteraction, ContainsAny(text, "each opponent", "each player", "each creature", "all creatures", "any number of target"));
+        AddTag(tags, DeckTags.GoWideProtection, ContainsAny(text, "prevent all combat damage", "creatures can't attack you", "attacks you") && ContainsAny(text, "each creature", "creatures", "combat damage"));
+        AddTag(tags, DeckTags.Pillowfort, ContainsAny(text, "creatures can't attack you", "can't attack you", "unless their controller pays", "prevent all combat damage"));
+        AddTag(tags, DeckTags.TokenHate, ContainsAny(text, "destroy all tokens", "creature tokens", "tokens get", "tokens can't", "each creature gets -1/-1"));
+        AddTag(tags, DeckTags.ArtifactEnchantmentHate, ContainsAny(text, "destroy target artifact", "destroy target enchantment", "exile target artifact", "exile target enchantment", "destroy all artifacts", "destroy all enchantments"));
+        AddTag(tags, DeckTags.CombatProtection, ContainsAny(text, "prevent all combat damage", "prevent all damage", "phase out", "indestructible until end of turn"));
+        AddTag(tags, DeckTags.Evasion, ContainsAny(text, "flying", "trample", "menace", "can't be blocked", "unblockable"));
+        AddTag(tags, DeckTags.Finishers, ContainsAny(text, "creatures you control get +", "extra combat", "damage to each opponent", "each opponent loses", "win the game"));
+        AddTag(tags, DeckTags.SacrificeFodder, ContainsAny(text, "create") && ContainsAny(text, "token"));
+        AddTag(tags, DeckTags.Engines, ContainsAny(text, "whenever", "at the beginning") && ContainsAny(text, "draw", "create", "return", "lose 1 life"));
+        AddTag(tags, DeckTags.ComboEnabler, ContainsAny(text, "untap", "copy", "activate only once", "as though it had flash") && ContainsAny(text, "add", "permanent", "ability", "spell"));
 
         if (snapshot.ProducedMana.Count > 1 || ContainsAny(text, "mana of any color", "any color"))
         {

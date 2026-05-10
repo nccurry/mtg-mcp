@@ -21,9 +21,11 @@ Scryfall, or Archidekt.
 - Create, import, export, and manage local decks.
 - Open Archidekt decks and optionally write changes back to Archidekt.
 - Add, remove, move, categorize, and update cards and decks.
-- Analyze mana, cost, curve, consistency, draw odds, legality, and upgrade paths.
-- Create recommendation plans for budget swaps, upgrades, mana bases, categories,
-  and power tuning.
+- Analyze mana, cost, curve, consistency, draw odds, legality, brackets, and power.
+- Compare decks to Commander heuristics, meta staples, and recent card releases.
+- Find goal-driven card packages, budget swaps, upgrades, mana fixes, and cuts.
+- Detect Commander Spellbook combos and near-misses, then estimate combo pressure.
+- Simulate goldfish development, projected board states, and likely win turns.
 - Preview recommendation plans before applying them.
 
 ## Quickstart
@@ -161,8 +163,10 @@ For local decks, use `suggest_deck_intent`, edit the text, then save it with
 `set_deck_intent`. For Archidekt decks, the same block is stored in the deck
 description and writes back only when Archidekt writeback is enabled.
 
-Current tools use `Targets`, `Budget`, `Prefer`, `Avoid`, and `Protect`.
-Profile fields are parsed and preserved for profile-aware brewing workflows.
+Best-practice analysis uses `Power Level`, `Heuristic Profile`,
+`Package Template`, `Local Meta`, and `Packages` to choose and compare
+Commander heuristics. Recommendation tools use `Targets`, `Budget`, `Prefer`,
+`Avoid`, and `Protect`.
 
 ```text
 MTG MCP Deck Intent

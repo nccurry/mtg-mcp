@@ -26,18 +26,39 @@ public sealed partial class DeckWorkspaceService
     private readonly IArchidektGateway? archidektGateway;
 
     /// <summary>
+    /// Stores the Commander metagame provider.
+    /// </summary>
+    private readonly ICommanderMetaProvider? commanderMetaProvider;
+
+    /// <summary>
+    /// Stores the card trend provider.
+    /// </summary>
+    private readonly ICardTrendProvider? cardTrendProvider;
+
+    /// <summary>
+    /// Stores the combo catalog.
+    /// </summary>
+    private readonly IComboCatalog? comboCatalog;
+
+    /// <summary>
     /// Handles deck workspace service.
     /// </summary>
     public DeckWorkspaceService(
         IDeckWorkspaceRepository repository,
         ICardCatalog cardCatalog,
         IArchidektGateway? archidektGateway = null,
-        IDeckPlanRepository? planRepository = null
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null
     )
     {
         this.repository = repository;
         this.planRepository = planRepository;
         this.cardCatalog = cardCatalog;
         this.archidektGateway = archidektGateway;
+        this.commanderMetaProvider = commanderMetaProvider;
+        this.cardTrendProvider = cardTrendProvider;
+        this.comboCatalog = comboCatalog;
     }
 }

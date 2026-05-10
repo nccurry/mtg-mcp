@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using MtgMcp.Archidekt;
+using MtgMcp.CommanderSpellbook;
 using MtgMcp.Core;
 using MtgMcp.Scryfall;
 
@@ -31,6 +32,9 @@ public static class MtgMcpHost
         services.GetRequiredService<DeckWorkspaceService>();
         services.GetRequiredService<ICardCatalog>();
         services.GetRequiredService<IArchidektGateway>();
+        services.GetRequiredService<ICardTrendProvider>();
+        services.GetRequiredService<ICommanderMetaProvider>();
+        services.GetRequiredService<IComboCatalog>();
         _ = services.GetRequiredService<OperationModeGuard>().EffectiveMode;
     }
 
@@ -72,6 +76,7 @@ public static class MtgMcpHost
         builder.Services.AddSingleton<OperationModeGuard>();
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
+        builder.Services.AddCommanderSpellbook(builder.Configuration);
 
         builder
             .Services.AddMcpServer()
