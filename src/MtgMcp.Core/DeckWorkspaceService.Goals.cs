@@ -17,6 +17,8 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
+        bool reduceSalt = IsLessSaltyGoal(goal);
         (string normalizedStrategy, string category, string[] queries, string[] targets, string rationale) =
             BuildGoalSpec(goal, workspace.Format, maxPrice, strategy);
         DeckEditPlan plan = CreatePlan(workspace, "Goal package plan", "goal-package");
@@ -70,7 +72,10 @@ public sealed partial class DeckWorkspaceService
             }
         }
 
-        foreach (DeckCard cut in FindGoalCutCandidates(workspace, suggestions.Count))
+        IEnumerable<DeckCard> cuts = reduceSalt
+            ? FindLessSaltyCutCandidates(workspace, Math.Clamp(Math.Max(count, suggestions.Count), 1, 25), intent)
+            : FindGoalCutCandidates(workspace, suggestions.Count, intent);
+        foreach (DeckCard cut in cuts)
         {
             plan.Operations.Add(new DeckEditOperation
             {
@@ -78,7 +83,9 @@ public sealed partial class DeckWorkspaceService
                 CardName = cut.Name,
                 Quantity = 1,
                 Category = cut.PrimaryCategory,
-                Rationale = $"Cut a lower-signal {cut.PrimaryCategory} card to make room for the goal package."
+                Rationale = reduceSalt
+                    ? "Cut a high-pressure card to make the deck less salty."
+                    : $"Cut a lower-signal {cut.PrimaryCategory} card to make room for the goal package."
             });
         }
 
@@ -141,7 +148,7 @@ public sealed partial class DeckWorkspaceService
                 "Adds clearer closing cards and win routes.");
         }
 
-        if (normalized.Contains("less salty", StringComparison.OrdinalIgnoreCase) || normalized.Contains("less power", StringComparison.OrdinalIgnoreCase))
+        if (IsLessSaltyGoal(goal))
         {
             return ("casual", DeckRoles.Utility,
                 [$"(o:create or o:draw or o:gain) {legal}"],
@@ -153,6 +160,17 @@ public sealed partial class DeckWorkspaceService
             [$"{legal}", $"(o:draw or o:\"destroy target\" or o:add) {legal}"],
             [DeckRoles.Draw, DeckRoles.Interaction, DeckRoles.Ramp, DeckTags.Engines],
             "Adds broadly useful cards that improve weak role coverage.");
+    }
+
+    /// <summary>
+    /// Checks whether a goal asks to reduce salt or power.
+    /// </summary>
+    private static bool IsLessSaltyGoal(string goal)
+    {
+        return goal.Contains("less salty", StringComparison.OrdinalIgnoreCase)
+            || goal.Contains("less salt", StringComparison.OrdinalIgnoreCase)
+            || goal.Contains("less power", StringComparison.OrdinalIgnoreCase)
+            || goal.Contains("power down", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -189,7 +207,7 @@ public sealed partial class DeckWorkspaceService
     /// <summary>
     /// Finds low-signal cards to cut when a goal package adds cards to a full deck.
     /// </summary>
-    private static IEnumerable<DeckCard> FindGoalCutCandidates(DeckWorkspace workspace, int addedCount)
+    private static IEnumerable<DeckCard> FindGoalCutCandidates(DeckWorkspace workspace, int addedCount, DeckIntent? intent)
     {
         int includedCount = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity));
         int desiredCuts = NormalizeFormat(workspace.Format).Equals("commander", StringComparison.OrdinalIgnoreCase)
@@ -197,12 +215,65 @@ public sealed partial class DeckWorkspaceService
             : 0;
         return IncludedCards(workspace)
             .Where(card => !IsCommanderCard(card))
+            .Where(card => !IsProtectedCard(card, intent))
             .Select(card => new { Card = card, Role = DeckRoleClassifier.Classify(card) })
             .OrderBy(item => item.Role.PrimaryRole.Equals(DeckRoles.Utility, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ThenBy(item => item.Role.Confidence)
             .ThenByDescending(item => GetSnapshot(item.Card).EdhrecRank ?? int.MaxValue)
             .Take(desiredCuts)
             .Select(item => item.Card);
+    }
+
+    /// <summary>
+    /// Finds cards whose pressure profile conflicts with a lower-salt goal.
+    /// </summary>
+    private static IEnumerable<DeckCard> FindLessSaltyCutCandidates(DeckWorkspace workspace, int desiredCuts, DeckIntent? intent)
+    {
+        return IncludedCards(workspace)
+            .Where(card => !IsCommanderCard(card))
+            .Where(card => !IsProtectedCard(card, intent))
+            .Select(card => new { Card = card, Score = SaltPressureScore(card) })
+            .Where(item => item.Score > 0)
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Card.Name)
+            .Take(desiredCuts)
+            .Select(item => item.Card);
+    }
+
+    /// <summary>
+    /// Scores cards that often make casual Commander tables feel higher-pressure.
+    /// </summary>
+    private static int SaltPressureScore(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = $"{card.Name} {GetSnapshot(card).TypeLine} {GetSnapshot(card).OracleText}";
+        int score = 0;
+        if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase))
+        {
+            score += 3;
+        }
+
+        if (role.Tags.Contains(DeckTags.Stax))
+        {
+            score += 4;
+        }
+
+        if (role.Tags.Contains(DeckTags.ComboPiece) || role.Tags.Contains(DeckTags.ComboEnabler))
+        {
+            score += 3;
+        }
+
+        if (ContainsAny(text, "extra turn", "destroy all lands", "can't untap", "players can't cast", "opponents can't cast"))
+        {
+            score += 4;
+        }
+
+        if (ContainsAny(card.Name, "Mana Crypt", "Jeweled Lotus", "Dockside Extortionist", "Demonic Tutor", "Vampiric Tutor", "Thassa's Oracle"))
+        {
+            score += 5;
+        }
+
+        return score;
     }
 
 }

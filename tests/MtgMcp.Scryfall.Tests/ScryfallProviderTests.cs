@@ -111,12 +111,12 @@ public sealed class ScryfallProviderTests
             query,
             TestContext.Current.CancellationToken);
 
-        first.Source.Should().Be("Scryfall EDHREC-rank search");
+        first.Source.Should().Be("Scryfall global EDHREC-rank search");
         second.PopularCards.Should().HaveCount(2);
         second.PopularCards[0].Name.Should().Be("Blood Artist");
         second.PopularCards[0].InclusionRate.Should().BeGreaterThan(second.PopularCards[1].InclusionRate);
         second.PopularCards.Should().Contain(card => card.Category == DeckRoles.Draw);
-        second.Notes.Should().Contain(note => note.Contains("EDHREC rank", StringComparison.OrdinalIgnoreCase));
+        second.Notes.Should().Contain(note => note.Contains("global EDHREC rank", StringComparison.OrdinalIgnoreCase));
         catalog.SearchCalls.Should().Be(1);
         catalog.LastSearchQuery.Should().Contain("legal:commander");
         catalog.LastSearchQuery.Should().Contain("-t:basic");

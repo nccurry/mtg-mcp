@@ -41,6 +41,11 @@ public sealed partial class DeckWorkspaceService
     private readonly IComboCatalog? comboCatalog;
 
     /// <summary>
+    /// Stores an optional current date override for deterministic release-radar tests.
+    /// </summary>
+    private readonly DateOnly? currentDateOverride;
+
+    /// <summary>
     /// Handles deck workspace service.
     /// </summary>
     public DeckWorkspaceService(
@@ -50,7 +55,8 @@ public sealed partial class DeckWorkspaceService
         IDeckPlanRepository? planRepository = null,
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
-        IComboCatalog? comboCatalog = null
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null
     )
     {
         this.repository = repository;
@@ -60,5 +66,6 @@ public sealed partial class DeckWorkspaceService
         this.commanderMetaProvider = commanderMetaProvider;
         this.cardTrendProvider = cardTrendProvider;
         this.comboCatalog = comboCatalog;
+        this.currentDateOverride = currentDateOverride;
     }
 }

@@ -22,7 +22,8 @@ Scryfall, or Archidekt.
 - Open Archidekt decks and optionally write changes back to Archidekt.
 - Add, remove, move, categorize, and update cards and decks.
 - Analyze mana, cost, curve, consistency, draw odds, legality, brackets, and power.
-- Compare decks to Commander heuristics, meta staples, and recent card releases.
+- Compare decks to Commander heuristics, global popularity context, and recent
+  card releases.
 - Find goal-driven card packages, budget swaps, upgrades, mana fixes, and cuts.
 - Detect Commander Spellbook combos and near-misses, then estimate combo pressure.
 - Simulate goldfish development, projected board states, and likely win turns.
@@ -100,6 +101,7 @@ Supported settings:
 | `MTGMCP__ARCHIDEKT__EMAIL` | Fallback Archidekt login email. |
 | `MTGMCP__ARCHIDEKT__USERNAME` | Fallback Archidekt login username. |
 | `MTGMCP__ARCHIDEKT__PASSWORD` | Fallback Archidekt login password. |
+| `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Override Commander Spellbook API URL. |
 
 Archidekt credentials are only needed for private decks, account-bound deck data,
 checkpoints, or writeback. Create a credentials file:
@@ -148,6 +150,10 @@ Open this Archidekt deck locally, analyze the mana base, and suggest fixes under
 
 ```text
 Find budget replacements for cards over $20 and preview the plan before changing anything.
+```
+
+```text
+Find new cards for this deck from the last year, or pass a YYYY-MM-DD since date.
 ```
 
 ```text

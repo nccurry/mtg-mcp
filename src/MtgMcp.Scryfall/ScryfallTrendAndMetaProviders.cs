@@ -11,7 +11,7 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
     /// <summary>
     /// Caches recent-card lookups by Scryfall query.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, IReadOnlyList<NewCardSuggestion>> TrendCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, ProviderCacheEntry<IReadOnlyList<NewCardSuggestion>>> TrendCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Looks up card data through Scryfall.
@@ -35,7 +35,7 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
     {
         string search = BuildTrendSearchQuery(query);
         string cacheKey = $"{search}|{Math.Clamp(query.Limit, 1, 50)}";
-        if (TrendCache.TryGetValue(cacheKey, out IReadOnlyList<NewCardSuggestion>? cached))
+        if (ProviderCache.TryGet(TrendCache, cacheKey, out IReadOnlyList<NewCardSuggestion>? cached) && cached is not null)
         {
             return cached.Select(CloneSuggestion).ToList();
         }
@@ -57,7 +57,7 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
             .OrderByDescending(suggestion => suggestion.Score)
             .Take(Math.Clamp(query.Limit, 1, 50))
             .ToList();
-        TrendCache[cacheKey] = suggestions.Select(CloneSuggestion).ToList();
+        ProviderCache.Set(TrendCache, cacheKey, suggestions.Select(CloneSuggestion).ToList());
         return suggestions;
     }
 
@@ -213,14 +213,14 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
 }
 
 /// <summary>
-/// Provides Scryfall EDHREC-rank based Commander popularity context.
+/// Provides global Scryfall EDHREC-rank based Commander popularity context.
 /// </summary>
 public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
 {
     /// <summary>
     /// Caches Commander meta lookups by search query.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, CommanderMetaReport> MetaCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, ProviderCacheEntry<CommanderMetaReport>> MetaCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Looks up card data through Scryfall.
@@ -236,7 +236,7 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
     }
 
     /// <summary>
-    /// Gets Commander card popularity context from Scryfall EDHREC ranks.
+    /// Gets global Commander card popularity context from Scryfall EDHREC ranks.
     /// </summary>
     public async Task<CommanderMetaReport> GetCommanderMetaAsync(
         CommanderMetaQuery query,
@@ -245,7 +245,7 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
         int limit = Math.Clamp(query.Limit, 1, 100);
         string search = BuildMetaSearchQuery(query);
         string cacheKey = $"{search}|{query.Commander}|{query.Theme}|{limit}";
-        if (MetaCache.TryGetValue(cacheKey, out CommanderMetaReport? cached))
+        if (ProviderCache.TryGet(MetaCache, cacheKey, out CommanderMetaReport? cached) && cached is not null)
         {
             return CloneReport(cached);
         }
@@ -260,7 +260,7 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
         {
             Commander = query.Commander,
             Theme = query.Theme,
-            Source = "Scryfall EDHREC-rank search"
+            Source = "Scryfall global EDHREC-rank search"
         };
 
         int rank = 0;
@@ -290,8 +290,8 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
             });
         }
 
-        report.Notes.Add("Scryfall does not expose commander-specific deck inclusion data; this provider uses EDHREC rank ordered Scryfall search as popularity context.");
-        MetaCache[cacheKey] = CloneReport(report);
+        report.Notes.Add("Scryfall does not expose commander-specific deck inclusion data; this provider uses global EDHREC rank ordered Scryfall search as popularity context.");
+        ProviderCache.Set(MetaCache, cacheKey, CloneReport(report));
         return report;
     }
 
@@ -415,5 +415,69 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
     private static string NormalizeFormat(string format)
     {
         return string.IsNullOrWhiteSpace(format) ? "commander" : format.Trim().ToLowerInvariant();
+    }
+}
+
+/// <summary>
+/// Stores one cached provider value with an insertion time.
+/// </summary>
+internal sealed record ProviderCacheEntry<T>(T Value, DateTimeOffset StoredAt);
+
+/// <summary>
+/// Provides small freshness-bounded caches for optional context providers.
+/// </summary>
+internal static class ProviderCache
+{
+    /// <summary>
+    /// Stores the maximum entries per provider cache.
+    /// </summary>
+    private const int MaxEntries = 128;
+
+    /// <summary>
+    /// Stores how long provider results are reused.
+    /// </summary>
+    private static readonly TimeSpan TimeToLive = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// Attempts to get a fresh cached value.
+    /// </summary>
+    public static bool TryGet<T>(
+        ConcurrentDictionary<string, ProviderCacheEntry<T>> cache,
+        string key,
+        out T? value)
+    {
+        value = default;
+        if (!cache.TryGetValue(key, out ProviderCacheEntry<T>? entry))
+        {
+            return false;
+        }
+
+        if (DateTimeOffset.UtcNow - entry.StoredAt > TimeToLive)
+        {
+            cache.TryRemove(key, out _);
+            return false;
+        }
+
+        value = entry.Value;
+        return true;
+    }
+
+    /// <summary>
+    /// Stores a cached value while pruning old entries opportunistically.
+    /// </summary>
+    public static void Set<T>(
+        ConcurrentDictionary<string, ProviderCacheEntry<T>> cache,
+        string key,
+        T value)
+    {
+        if (cache.Count >= MaxEntries)
+        {
+            foreach (string staleKey in cache.Keys.Take(Math.Max(1, cache.Count - MaxEntries + 1)))
+            {
+                cache.TryRemove(staleKey, out _);
+            }
+        }
+
+        cache[key] = new ProviderCacheEntry<T>(value, DateTimeOffset.UtcNow);
     }
 }

@@ -22,7 +22,7 @@ public sealed partial class DeckWorkspaceService
         {
             Format = workspace.Format,
             Theme = intent?.Archetype ?? DominantTheme(workspace),
-            Since = ParseDateOnly(since),
+            Since = ParseDateOnly(since) ?? DefaultRecentReleaseDate(),
             SetCode = string.IsNullOrWhiteSpace(setCode) ? null : setCode.Trim(),
             Limit = Math.Clamp(limit, 1, 50),
             MaxPrice = maxPrice
@@ -62,6 +62,11 @@ public sealed partial class DeckWorkspaceService
                 .Take(query.Limit)
                 .ToList()
         };
+        if (string.IsNullOrWhiteSpace(since))
+        {
+            result.Notes.Add($"No since date supplied; using cards released on or after {query.Since.Value:yyyy-MM-dd}.");
+        }
+
         result.Notes.AddRange(notes);
 
         return result;

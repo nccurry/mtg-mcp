@@ -338,7 +338,7 @@ public sealed class IntelligenceTools
     /// Finds new cards for a deck.
     /// </summary>
     [McpServerTool(Name = "find_new_cards_for_deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Find newly released cards that fit the deck's format, color identity, intent, roles, and theme. Since accepts YYYY-MM-DD.")]
+    [Description("Find newly released cards that fit the deck's format, color identity, intent, roles, and theme. Since accepts YYYY-MM-DD and defaults to the last year.")]
     public Task<NewCardsForDeckResult> FindNewCardsForDeckAsync(
         string workspaceId,
         string? since = null,

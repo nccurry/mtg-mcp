@@ -27,6 +27,7 @@ public static class MtgMcpConfigurationAliases
         ("ARCHIDEKT:CREDENTIALS_FILE", "MtgMcp:Archidekt:CredentialsFile"),
         ("SCRYFALL:BASE_ADDRESS", "MtgMcp:Scryfall:BaseAddress"),
         ("SCRYFALL:USER_AGENT", "MtgMcp:Scryfall:UserAgent"),
+        ("COMMANDERSPELLBOOK:BASE_ADDRESS", "MtgMcp:CommanderSpellbook:BaseAddress"),
     ];
 
     /// <summary>

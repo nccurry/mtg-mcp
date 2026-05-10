@@ -33,7 +33,8 @@ internal sealed class McpProcessSession : IAsyncDisposable
         Uri scryfallBaseAddress,
         Uri archidektBaseAddress,
         string operationMode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Uri? commanderSpellbookBaseAddress = null)
     {
         string repoRoot = FindRepoRoot();
         string dataDirectory = Path.Combine(Path.GetTempPath(), "mtg-mcp-e2e", Guid.NewGuid().ToString("N"));
@@ -43,6 +44,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
             repoRoot,
             scryfallBaseAddress,
             archidektBaseAddress,
+            commanderSpellbookBaseAddress,
             dataDirectory,
             operationMode);
 
@@ -60,6 +62,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string repoRoot,
         Uri scryfallBaseAddress,
         Uri archidektBaseAddress,
+        Uri? commanderSpellbookBaseAddress,
         string dataDirectory,
         string operationMode)
     {
@@ -83,7 +86,8 @@ internal sealed class McpProcessSession : IAsyncDisposable
                 ["MTGMCP__SCRYFALL__BASE_ADDRESS"] = scryfallBaseAddress.ToString(),
                 ["MTGMCP__SCRYFALL__USER_AGENT"] = "mtg-mcp-e2e/1.0",
                 ["MTGMCP__ARCHIDEKT__BASE_ADDRESS"] = archidektBaseAddress.ToString(),
-                ["MTGMCP__ARCHIDEKT__JWT"] = "test-jwt"
+                ["MTGMCP__ARCHIDEKT__JWT"] = "test-jwt",
+                ["MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS"] = (commanderSpellbookBaseAddress ?? new Uri("http://127.0.0.1:9/")).ToString()
             }
         };
     }

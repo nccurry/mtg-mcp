@@ -30,10 +30,19 @@ public sealed class CommanderSpellbookComboCatalogTests
                 Format = "commander"
             },
             TestContext.Current.CancellationToken);
+        report.Combos[0].Cards.Add("mutated");
+        DeckComboReport cached = await catalog.FindCombosAsync(
+            new ComboCatalogQuery
+            {
+                CardNames = ["Basalt Monolith", "Rings of Brighthearth"],
+                Format = "commander"
+            },
+            TestContext.Current.CancellationToken);
 
         report.Combos.Should().ContainSingle(combo => combo.Name.Contains("Basalt Monolith", StringComparison.OrdinalIgnoreCase)
             && combo.WinRoute.Contains("Infinite colorless mana", StringComparison.OrdinalIgnoreCase));
-        report.NearMisses.Should().ContainSingle(combo => combo.MissingCards.Contains("Forsaken Monument"));
+        cached.Combos.Should().ContainSingle(combo => !combo.Cards.Contains("mutated"));
+        cached.NearMisses.Should().ContainSingle(combo => combo.MissingCards.Contains("Forsaken Monument"));
         mockHttp.VerifyNoOutstandingExpectation();
     }
 

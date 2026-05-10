@@ -10,12 +10,17 @@ namespace MtgMcp.CommanderSpellbook;
 /// <summary>
 /// Reads combo and near-miss data from Commander Spellbook.
 /// </summary>
-public sealed class CommanderSpellbookComboCatalog : IComboCatalog, IDisposable
+public sealed class CommanderSpellbookComboCatalog : IComboCatalog
 {
     /// <summary>
     /// Caches combo lookups by sorted card list.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, DeckComboReport> ComboCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, ComboCacheEntry> ComboCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Stores how long Commander Spellbook responses are reused.
+    /// </summary>
+    private static readonly TimeSpan CacheTimeToLive = TimeSpan.FromHours(6);
 
     /// <summary>
     /// Sends requests to Commander Spellbook.
@@ -49,7 +54,7 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog, IDisposable
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase));
-        if (ComboCache.TryGetValue(cardList, out DeckComboReport? cached))
+        if (TryGetCachedReport(cardList, out DeckComboReport? cached) && cached is not null)
         {
             return CloneReport(cached);
         }
@@ -69,15 +74,8 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog, IDisposable
         report.Combos.AddRange(ReadCombos(results, "included", present, nearMiss: false));
         report.NearMisses.AddRange(ReadCombos(results, "almostIncluded", present, nearMiss: true));
         report.Notes.Add("Commander Spellbook combo data comes from the public find-my-combos endpoint.");
-        ComboCache[cardList] = CloneReport(report);
+        SetCachedReport(cardList, CloneReport(report));
         return report;
-    }
-
-    /// <summary>
-    /// Releases resources held by the instance.
-    /// </summary>
-    public void Dispose()
-    {
     }
 
     /// <summary>
@@ -100,6 +98,44 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog, IDisposable
             },
             Notes = report.Notes.ToList()
         };
+    }
+
+    /// <summary>
+    /// Attempts to get a fresh cached combo report.
+    /// </summary>
+    private static bool TryGetCachedReport(string key, out DeckComboReport? report)
+    {
+        report = null;
+        if (!ComboCache.TryGetValue(key, out ComboCacheEntry? entry))
+        {
+            return false;
+        }
+
+        if (DateTimeOffset.UtcNow - entry.StoredAt > CacheTimeToLive)
+        {
+            ComboCache.TryRemove(key, out _);
+            return false;
+        }
+
+        report = entry.Report;
+        return true;
+    }
+
+    /// <summary>
+    /// Stores a combo report while keeping the cache bounded.
+    /// </summary>
+    private static void SetCachedReport(string key, DeckComboReport report)
+    {
+        const int maxEntries = 128;
+        if (ComboCache.Count >= maxEntries)
+        {
+            foreach (string staleKey in ComboCache.Keys.Take(Math.Max(1, ComboCache.Count - maxEntries + 1)))
+            {
+                ComboCache.TryRemove(staleKey, out _);
+            }
+        }
+
+        ComboCache[key] = new ComboCacheEntry(report, DateTimeOffset.UtcNow);
     }
 
     /// <summary>
@@ -257,4 +293,9 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog, IDisposable
             ? value.GetString()
             : null;
     }
+
+    /// <summary>
+    /// Stores one cached Commander Spellbook result.
+    /// </summary>
+    private sealed record ComboCacheEntry(DeckComboReport Report, DateTimeOffset StoredAt);
 }

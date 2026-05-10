@@ -304,6 +304,7 @@ public sealed class McpSurfaceTests
             ["ARCHIDEKT:USER_ID"] = "278245",
             ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
+            ["COMMANDERSPELLBOOK:BASE_ADDRESS"] = "https://spellbook.test/",
         };
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(rawConfig)
@@ -320,6 +321,7 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
         aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
+        aliases["MtgMcp:CommanderSpellbook:BaseAddress"].Should().Be("https://spellbook.test/");
     }
 
     /// <summary>

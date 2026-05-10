@@ -164,6 +164,98 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Verifies that the one-stop deckbuilding tools work through the MCP stdio surface.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task OneStopDeckbuildingFlow_ExercisesNewToolsThroughMcp()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        await using FakeHttpServer spellbook = new();
+        DateOnly defaultSince = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime).AddYears(-1);
+        scryfall.GetJson(
+            ScryfallSearchPath("(o:\"each opponent\" or o:\"each player\" or o:\"each creature\") legal:commander usd<=5"),
+            TableEdictSearchJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("(o:\"destroy all\" or o:\"exile all\") legal:commander usd<=5"),
+            EmptySearchJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("legal:commander -t:basic"),
+            TableEdictSearchJson);
+        scryfall.GetJson(
+            ScryfallSearchPath($"legal:commander date>={defaultSince:yyyy-MM-dd} usd<=5"),
+            TableEdictSearchJson);
+        scryfall.PostJson("cards/collection", TableEdictCollectionJson);
+        spellbook.PostJson("find-my-combos", EmptySpellbookJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken,
+            commanderSpellbookBaseAddress: spellbook.BaseAddress);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E One Stop",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        JsonElement goal = await CallJsonAsync(
+            session.Client,
+            "find_cards_for_deck_goal",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["goal"] = "add a few cards that interact with the whole table",
+                ["count"] = 1,
+                ["maxPrice"] = 5
+            });
+        JsonElement best = await CallJsonAsync(
+            session.Client,
+            "analyze_deck_best_practices",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement goldfish = await CallJsonAsync(
+            session.Client,
+            "simulate_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["targetTurn"] = 3,
+                ["simulations"] = 100
+            });
+        JsonElement combos = await CallJsonAsync(
+            session.Client,
+            "find_deck_combos",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement brainstorm = await CallJsonAsync(
+            session.Client,
+            "brainstorm_deck_improvements",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["goal"] = "add a few cards that interact with the whole table",
+                ["budget"] = 5
+            });
+
+        GetObject(goal, "plan").GetProperty("operations").GetArrayLength().Should().BeGreaterThan(0);
+        GetString(best, "recommendedProfile").Should().Be("commander-baseline");
+        GetInt32(goldfish, "targetTurn").Should().Be(3);
+        GetObject(combos, "pressure").ValueKind.Should().Be(JsonValueKind.Object);
+        GetObject(brainstorm, "goalPackage").ValueKind.Should().Be(JsonValueKind.Object);
+        scryfall.Requests.Should().Contain(request => request.PathAndQuery.Contains("date%3E%3D", StringComparison.OrdinalIgnoreCase)
+            || DecodeRepeatedly(request.PathAndQuery).Contains("date>=", StringComparison.OrdinalIgnoreCase));
+        spellbook.Requests.Should().ContainSingle(request => request.Method == "POST" && request.PathAndQuery == "find-my-combos");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that an Archidekt workspace writes card additions back to the fake deck API.
     /// </summary>
     [Fact]
@@ -529,6 +621,74 @@ public sealed class McpE2ETests
       "collector_number": "141",
       "scryfall_uri": "https://scryfall.example/card/clu/141",
       "color_identity": ["R"]
+    }
+    """;
+
+    /// <summary>
+    /// Provides an empty Scryfall search payload.
+    /// </summary>
+    private const string EmptySearchJson = """
+    {
+      "has_more": false,
+      "data": []
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall search payload for one-stop deckbuilding E2E tests.
+    /// </summary>
+    private const string TableEdictSearchJson = """
+    {
+      "has_more": false,
+      "data": [
+        {
+          "id": "table-edict",
+          "name": "Table Edict",
+          "type_line": "Sorcery",
+          "oracle_text": "Each opponent sacrifices a creature. You draw a card.",
+          "released_at": "2026-02-01",
+          "set": "tst",
+          "prices": { "usd": "0.50" },
+          "edhrec_rank": 2500
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall collection payload for one-stop deckbuilding E2E tests.
+    /// </summary>
+    private const string TableEdictCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "table-edict",
+          "oracle_id": "oracle-table-edict",
+          "name": "Table Edict",
+          "mana_cost": "{3}{B}",
+          "cmc": 4,
+          "type_line": "Sorcery",
+          "oracle_text": "Each opponent sacrifices a creature. You draw a card.",
+          "released_at": "2026-02-01",
+          "set": "tst",
+          "color_identity": ["B"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "0.50" },
+          "edhrec_rank": 2500
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides an empty Commander Spellbook payload.
+    /// </summary>
+    private const string EmptySpellbookJson = """
+    {
+      "results": {
+        "included": [],
+        "almostIncluded": []
+      }
     }
     """;
 

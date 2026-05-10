@@ -644,6 +644,39 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that release radar defaults to a recent window when since is omitted.
+    /// </summary>
+    [Fact]
+    public async Task FindNewCardsForDeck_DefaultsToRecentReleaseWindow()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Default Release Radar",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        FakeCardCatalog catalog = new();
+        DeckWorkspaceService service = new(
+            workspaces,
+            catalog,
+            currentDateOverride: new DateOnly(2026, 5, 10));
+
+        NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
+            workspace.Id,
+            since: null,
+            setCode: null,
+            limit: 3,
+            maxPrice: 5,
+            TestContext.Current.CancellationToken);
+
+        catalog.SearchQueries.Should().Contain(query => query.Contains("date>=2025-05-10", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("2025-05-10", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that combo and goldfish projections return explainable estimates.
     /// </summary>
     [Fact]
@@ -718,6 +751,65 @@ public sealed class DeckIntelligenceTests
 
         result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Syphon Mind");
         result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Mystery Table Spell");
+    }
+
+    /// <summary>
+    /// Verifies that lower-salt goal packages cut high-pressure cards rather than only adding value.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsForDeckGoal_LessSaltyAddsCutsForHighPressureCards()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Salty Deck",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                },
+                new DeckCard
+                {
+                    Name = "Mana Crypt",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "{T}: Add {C}{C}.", ColorIdentity = [] }
+                },
+                new DeckCard
+                {
+                    Name = "Demonic Tutor",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Tutors,
+                    Categories = [DeckRoles.Tutors],
+                    Snapshot = new CardSnapshot { TypeLine = "Sorcery", OracleText = "Search your library for a card.", ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
+            workspace.Id,
+            "make this deck less salty",
+            count: 2,
+            maxPrice: 5,
+            strategy: "casual",
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Phyrexian Arena");
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.RemoveCard && operation.CardName == "Mana Crypt");
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.RemoveCard && operation.CardName == "Demonic Tutor");
+        result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Ayara, First of Locthwain");
     }
 
     /// <summary>

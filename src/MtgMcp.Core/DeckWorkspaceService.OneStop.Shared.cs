@@ -39,6 +39,22 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Gets the current UTC date or the test override.
+    /// </summary>
+    private DateOnly CurrentDate()
+    {
+        return currentDateOverride ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+    }
+
+    /// <summary>
+    /// Gets the default recent-release lower bound.
+    /// </summary>
+    private DateOnly DefaultRecentReleaseDate()
+    {
+        return CurrentDate().AddYears(-1);
+    }
+
+    /// <summary>
     /// Checks whether an exception represents cooperative cancellation.
     /// </summary>
     private static bool IsCancellation(Exception exception)
