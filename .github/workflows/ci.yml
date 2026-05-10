@@ -23,14 +23,14 @@ jobs:
       - name: Set up Task
         uses: go-task/setup-task@v1
 
-      - name: Run CI and packaging verification
-        run: task release:verify VERSION=0.0.0-ci
-
-      - name: Restore .NET tools
-        run: dotnet tool restore
+      - name: Build with analyzers
+        run: task lint
 
       - name: Generate coverage report
-        run: task coverage
+        run: task coverage:report
+
+      - name: Enforce coverage gates
+        run: task coverage:gates
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v6
@@ -40,3 +40,24 @@ jobs:
           disable_search: true
           flags: all-src
           fail_ci_if_error: true
+
+      - name: Smoke MCP host
+        run: task smoke:mcp
+
+      - name: Clean release artifacts
+        run: task release:clean
+
+      - name: Pack NuGet tool
+        run: task pack VERSION=0.0.0-ci
+
+      - name: Build release archives
+        run: task release:archives VERSION=0.0.0-ci
+
+      - name: Build WinGet fallback manifest artifact
+        run: task release:winget VERSION=0.0.0-ci
+
+      - name: Generate release checksums
+        run: task release:checksums
+
+      - name: Smoke local tool package
+        run: task release:tool-smoke VERSION=0.0.0-ci
