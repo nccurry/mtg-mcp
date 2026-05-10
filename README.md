@@ -18,7 +18,7 @@ Scryfall, or Archidekt.
 ## What it does
 
 - Search Scryfall for cards, prints, rulings, and card suggestions.
-- Create, import, export, and manage local deck workspaces.
+- Create, import, export, and manage local decks.
 - Open Archidekt decks and optionally write changes back to Archidekt.
 - Add, remove, move, categorize, and update cards and decks.
 - Analyze mana, cost, curve, consistency, draw odds, legality, and upgrade paths.
@@ -67,14 +67,40 @@ For clients that use JSON MCP config:
 ```
 
 Use `plan` by default. Switch to `apply` when you want the assistant to create
-workspaces, change deck contents, create checkpoints, or write back to Archidekt.
+local decks, change deck contents, create checkpoints, or write back to
+Archidekt.
 
-## Optional Archidekt writeback
+## Configuration
 
-Archidekt credentials are only needed when you want to list private decks, open
-account-bound deck data, create checkpoints, or write changes back.
+Most users only need this:
 
-Create a credentials file:
+```powershell
+$env:MTGMCP__OPERATION_MODE="plan"
+$env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
+```
+
+`MTGMCP__OPERATION_MODE` accepts:
+
+- `read-only`: allow lookup and analysis tools only.
+- `plan`: allow lookup, analysis, metadata refresh, and recommendation plans.
+- `apply`: allow deck edits, checkpoints, and Archidekt writeback.
+
+Supported settings:
+
+| Setting | Use |
+| --- | --- |
+| `MTGMCP__OPERATION_MODE` | Safety mode: `read-only`, `plan`, or `apply`. |
+| `MTGMCP__DATA_DIR` | Local storage for decks, plans, and cached data. |
+| `MTGMCP__ARCHIDEKT__CREDENTIALS_FILE` | JSON credentials file for Archidekt. |
+| `MTGMCP__ARCHIDEKT__JWT` | Optional Archidekt JWT. |
+| `MTGMCP__ARCHIDEKT__REFRESH_TOKEN` | Preferred Archidekt auth token. |
+| `MTGMCP__ARCHIDEKT__USER_ID` | Archidekt user id used with token auth. |
+| `MTGMCP__ARCHIDEKT__EMAIL` | Fallback Archidekt login email. |
+| `MTGMCP__ARCHIDEKT__USERNAME` | Fallback Archidekt login username. |
+| `MTGMCP__ARCHIDEKT__PASSWORD` | Fallback Archidekt login password. |
+
+Archidekt credentials are only needed for private decks, account-bound deck data,
+checkpoints, or writeback. Create a credentials file:
 
 ```powershell
 mtg-mcp auth archidekt `
@@ -83,7 +109,7 @@ mtg-mcp auth archidekt `
   --user-id "..."
 ```
 
-Then configure your MCP client with write access:
+Then pass it to the MCP server:
 
 ```powershell
 codex mcp add mtg-mcp `
@@ -92,37 +118,8 @@ codex mcp add mtg-mcp `
   -- mtg-mcp
 ```
 
-A credentials file can also be created by hand:
-
-```json
-{
-  "jwt": "optional-jwt",
-  "refreshToken": "optional-refresh-token",
-  "userId": "optional-archidekt-user-id",
-  "email": "fallback-email",
-  "username": "fallback-username",
-  "password": "fallback-password"
-}
-```
-
 JWT or refresh token auth is preferred. Email or username plus password login is
 available as a fallback.
-
-## Configuration
-
-Most users only need these settings:
-
-```powershell
-$env:MTGMCP__OPERATION_MODE="plan"
-$env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
-$env:MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.json"
-```
-
-`MTGMCP__OPERATION_MODE` accepts:
-
-- `read-only`: allow lookup and analysis tools only.
-- `plan`: allow lookup, analysis, metadata refresh, and recommendation plans.
-- `apply`: allow deck edits, checkpoints, and Archidekt writeback.
 
 Inside an MCP client, these resources help verify setup:
 
@@ -137,10 +134,10 @@ Ask your MCP client for the deckbuilding task you want done:
 Search for blue one-mana cantrips legal in Commander.
 ```
 
-Prompts that create, open, or change workspaces need `apply` mode:
+Prompts that create, open, or change decks need `apply` mode:
 
 ```text
-Import this decklist into a local Commander workspace and summarize the plan.
+Import this decklist as a local Commander deck and summarize the plan.
 ```
 
 ```text
@@ -155,12 +152,78 @@ Find budget replacements for cards over $20 and preview the plan before changing
 Apply the previewed deck plan and create an Archidekt checkpoint first.
 ```
 
+## Deck Intent Configuration
+
+Deck intent is optional text that tells recommendations what the deck is trying
+to do.
+
+For local decks, use `suggest_deck_intent`, edit the text, then save it with
+`set_deck_intent`. For Archidekt decks, the same block is stored in the deck
+description and writes back only when Archidekt writeback is enabled.
+
+Current tools use `Targets`, `Budget`, `Prefer`, `Avoid`, and `Protect`.
+Profile fields are parsed and preserved for profile-aware brewing workflows.
+
+```text
+MTG MCP Deck Intent
+Version: 1
+Format: commander
+Commander: Teysa Karlov
+Power Level: tuned-casual
+Heuristic Profile: command-zone-template
+Package Template: none
+Local Meta: go-wide tokens, graveyards
+
+Targets
+Ramp: 8-10
+Draw: 10-12
+Interaction: 10-14
+
+Avoid
+- deterministic infinite combos
+End MTG MCP Deck Intent
+```
+
+These fields shape recommendations:
+
+- `Targets`: desired counts for roles or tags, such as `Ramp: 8-10`.
+- `Budget`: price guidance for upgrades and replacements.
+- `Prefer`: effects, themes, or cards to bias toward.
+- `Avoid`: effects, themes, or cards to keep out.
+- `Protect`: cards or packages that should not be cut casually.
+- `Power Level`: table strength. Values: `precon`, `casual`,
+  `tuned-casual`, `high-power`, `cedh`.
+
+`Heuristic Profile`: `auto`, `commander-baseline`, `command-zone-template`,
+`edhrec-foundation`, `mana-rich-39-land`, `fifty-mana-sources`, `package-8x8`,
+`package-7x9`, `package-9x7`, `seventy-five-percent`, `cedh-turbo`,
+`cedh-midrange`, `cedh-stax`, `cedh-tempo`.
+
+`Package Template`: `none`, `8x8`, `7x9`, `9x7`.
+
+Values are case-insensitive. Spaces and underscores normalize to hyphens.
+Aliases include `upgraded-precon` -> `casual`, `mid-power` -> `tuned-casual`,
+`optimized` -> `high-power`, and `competitive` or `cEDH` -> `cedh`.
+
+Package brews may add a `Packages` section. Counts use the same syntax as
+`Targets`: `8`, `6-9`, or `4+`.
+
+Heuristics are advisory. Sources include the
+[Command Zone Template](https://edh.fandom.com/wiki/Command_Zone_Template),
+[8x8 Theory](https://the8x8theory.tumblr.com/what-is-the-8x8-theory),
+[7x9 / 8x8 / 9x7 templates](https://edh.fandom.com/wiki/7_by_9),
+[EDHREC deckbuilding guide](https://edhrec.com/guides/how-to-build-a-commander-deck),
+[EDHREC mana-base foundations](https://edhrec.com/articles/foundations-how-to-build-mana-bases),
+[75% Commander](https://edh.fandom.com/wiki/75_Percent),
+[EDHREC cEDH intro](https://edhrec.com/guides/intro-to-cedh), and
+[Commander's Herald cEDH guide](https://commandersherald.com/a-beginners-guide-to-cedh/).
+
 ## How it works
 
 `mtg-mcp` runs as a stdio MCP server. Your MCP client calls its tools to search
-Scryfall, manage deck workspaces, analyze deck structure, and optionally sync
-changes to Archidekt.
+Scryfall, manage decks, analyze deck structure, and optionally sync changes to
+Archidekt.
 
-Local workspaces and recommendation plans are saved under `MTGMCP__DATA_DIR`.
-Archidekt writeback is opt-in: a workspace must be opened with writeback enabled,
+Local deck data and recommendation plans are saved under `MTGMCP__DATA_DIR`.
+Archidekt writeback is opt-in: the deck must be opened with writeback enabled,
 and the server must be running in `apply` mode before deck contents are changed.

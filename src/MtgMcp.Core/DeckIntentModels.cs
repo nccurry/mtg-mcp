@@ -31,6 +31,16 @@ public sealed class DeckIntent
     public string? PowerLevel { get; set; }
 
     /// <summary>
+    /// Gets or sets the named deckbuilding heuristic profile.
+    /// </summary>
+    public string? HeuristicProfile { get; set; }
+
+    /// <summary>
+    /// Gets or sets the named package template.
+    /// </summary>
+    public string? PackageTemplate { get; set; }
+
+    /// <summary>
     /// Gets or sets the budget guidance.
     /// </summary>
     public DeckIntentBudget Budget { get; set; } = new();
@@ -42,9 +52,20 @@ public sealed class DeckIntent
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets or sets desired package count targets.
+    /// </summary>
+    public Dictionary<string, DeckIntentTarget> Packages { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets or sets scoring priorities.
     /// </summary>
     public ReplacementWeights? Priorities { get; set; }
+
+    /// <summary>
+    /// Gets or sets local metagame pressures to account for.
+    /// </summary>
+    public List<string> LocalMeta { get; set; } = [];
 
     /// <summary>
     /// Gets or sets things the deck should prefer.

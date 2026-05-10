@@ -225,9 +225,15 @@ public sealed class MtgResources
     {
         return """
             Deck intent captures what the user is aiming for: archetype, budget,
-            role targets, cards/packages to protect, and things to avoid.
+            power level, heuristic profile, package template, local meta, role
+            targets, cards/packages to protect, and things to avoid.
             Store it in the deck description as a human-readable section titled
             "MTG MCP Deck Intent" and ending with "End MTG MCP Deck Intent".
+            Existing tools consume role targets, budget, preferences, avoided
+            cards, and protected cards; heuristic, package, and local-meta fields
+            are parsed and preserved for profile-aware brewing workflows.
+            Values such as Power Level, Heuristic Profile, and Package Template
+            are case-insensitive; spaces and underscores normalize to hyphens.
             Use get_deck_intent before analysis and recommendations.
             Use suggest_deck_intent to draft an intent section, then ask the user
             before calling set_deck_intent.

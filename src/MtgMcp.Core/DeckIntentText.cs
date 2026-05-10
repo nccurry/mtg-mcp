@@ -108,6 +108,9 @@ public static partial class DeckIntentText
         AddValue(lines, "Commander", intent.Commander);
         AddValue(lines, "Archetype", intent.Archetype);
         AddValue(lines, "Power Level", intent.PowerLevel);
+        AddValue(lines, "Heuristic Profile", intent.HeuristicProfile);
+        AddValue(lines, "Package Template", intent.PackageTemplate);
+        AddDelimitedValue(lines, "Local Meta", intent.LocalMeta);
 
         string? budget = FormatBudget(intent.Budget);
         AddValue(lines, "Budget", budget);
@@ -119,6 +122,16 @@ public static partial class DeckIntentText
             foreach (KeyValuePair<string, DeckIntentTarget> target in intent.Targets.OrderBy(target => target.Key))
             {
                 lines.Add($"{target.Key}: {FormatTarget(target.Value)}");
+            }
+        }
+
+        if (intent.Packages.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("Packages");
+            foreach (KeyValuePair<string, DeckIntentTarget> package in intent.Packages.OrderBy(package => package.Key))
+            {
+                lines.Add($"{package.Key}: {FormatTarget(package.Value)}");
             }
         }
 
@@ -241,7 +254,7 @@ public static partial class DeckIntentText
     private static bool TryReadSection(string line, out string section)
     {
         section = NormalizeKey(line.TrimEnd(':'));
-        return section is "targets" or "prefer" or "avoid" or "protect" or "priorities";
+        return section is "targets" or "packages" or "prefer" or "avoid" or "protect" or "priorities" or "localmeta";
     }
 
     /// <summary>
@@ -280,6 +293,18 @@ public static partial class DeckIntentText
             return;
         }
 
+        if (section == "packages")
+        {
+            intent.Packages[NormalizeRoleName(key)] = ParseTarget(value);
+            return;
+        }
+
+        if (section == "localmeta")
+        {
+            AddDelimitedItems(intent.LocalMeta, value);
+            return;
+        }
+
         if (section == "priorities")
         {
             intent.Priorities ??= new ReplacementWeights();
@@ -302,7 +327,16 @@ public static partial class DeckIntentText
                 intent.Archetype = EmptyToNull(value);
                 break;
             case "powerlevel":
-                intent.PowerLevel = EmptyToNull(value);
+                intent.PowerLevel = NormalizePowerLevel(value, warnings);
+                break;
+            case "heuristicprofile":
+                intent.HeuristicProfile = NormalizeHeuristicProfile(value, warnings);
+                break;
+            case "packagetemplate":
+                intent.PackageTemplate = NormalizePackageTemplate(value, warnings);
+                break;
+            case "localmeta":
+                AddDelimitedItems(intent.LocalMeta, value);
                 break;
             case "budget":
                 intent.Budget.Text = EmptyToNull(value);
@@ -369,6 +403,9 @@ public static partial class DeckIntentText
                 break;
             case "protect":
                 AddUnique(intent.Protect, item);
+                break;
+            case "localmeta":
+                AddDelimitedItems(intent.LocalMeta, item);
                 break;
         }
     }
@@ -452,6 +489,17 @@ public static partial class DeckIntentText
     }
 
     /// <summary>
+    /// Adds a comma-delimited value when present.
+    /// </summary>
+    private static void AddDelimitedValue(List<string> lines, string name, IReadOnlyList<string> values)
+    {
+        if (values.Count > 0)
+        {
+            lines.Add($"{name}: {string.Join(", ", values)}");
+        }
+    }
+
+    /// <summary>
     /// Adds a named list when present.
     /// </summary>
     private static void AddList(List<string> lines, string name, IReadOnlyList<string> values)
@@ -486,6 +534,69 @@ public static partial class DeckIntentText
         return normalized.Equals("wipes", StringComparison.OrdinalIgnoreCase)
             ? DeckRoles.BoardWipes
             : normalized;
+    }
+
+    /// <summary>
+    /// Normalizes a power level or keeps the raw value with a warning.
+    /// </summary>
+    private static string? NormalizePowerLevel(string value, List<string> warnings)
+    {
+        return NormalizeVocabularyValue(
+            value,
+            warnings,
+            DeckIntentVocabulary.TryNormalizePowerLevel,
+            "Power Level",
+            DeckIntentVocabulary.PowerLevels);
+    }
+
+    /// <summary>
+    /// Normalizes a heuristic profile or keeps the raw value with a warning.
+    /// </summary>
+    private static string? NormalizeHeuristicProfile(string value, List<string> warnings)
+    {
+        return NormalizeVocabularyValue(
+            value,
+            warnings,
+            DeckIntentVocabulary.TryNormalizeHeuristicProfile,
+            "Heuristic Profile",
+            DeckIntentVocabulary.HeuristicProfiles);
+    }
+
+    /// <summary>
+    /// Normalizes a package template or keeps the raw value with a warning.
+    /// </summary>
+    private static string? NormalizePackageTemplate(string value, List<string> warnings)
+    {
+        return NormalizeVocabularyValue(
+            value,
+            warnings,
+            DeckIntentVocabulary.TryNormalizePackageTemplate,
+            "Package Template",
+            DeckIntentVocabulary.PackageTemplates);
+    }
+
+    /// <summary>
+    /// Normalizes a known vocabulary value.
+    /// </summary>
+    private static string? NormalizeVocabularyValue(
+        string value,
+        List<string> warnings,
+        TryNormalizeVocabulary normalize,
+        string fieldName,
+        IReadOnlyList<string> supportedValues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (normalize(value, out string normalized))
+        {
+            return normalized;
+        }
+
+        warnings.Add($"{fieldName} '{value}' is not one of the documented values: {string.Join(", ", supportedValues)}.");
+        return value.Trim();
     }
 
     /// <summary>
@@ -533,10 +644,26 @@ public static partial class DeckIntentText
     }
 
     /// <summary>
+    /// Adds comma- or semicolon-delimited values.
+    /// </summary>
+    private static void AddDelimitedItems(List<string> values, string text)
+    {
+        foreach (string value in text.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            AddUnique(values, value);
+        }
+    }
+
+    /// <summary>
     /// Checks whether text contains one of the provided terms.
     /// </summary>
     private static bool ContainsAny(string value, params string[] terms)
     {
         return terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// Tries to normalize an intent vocabulary value.
+    /// </summary>
+    private delegate bool TryNormalizeVocabulary(string value, out string normalized);
 }

@@ -93,6 +93,167 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that newer deck intent fields normalize supported vocabulary.
+    /// </summary>
+    [Fact]
+    public void DeckIntentText_ParsesHeuristicFieldsAndPackages()
+    {
+        DeckIntentResult result = DeckIntentText.Parse(
+            """
+            MTG MCP Deck Intent
+            Version: 1
+            Power Level: cEDH
+            Heuristic Profile: Command Zone Template
+            Package Template: package_8x8
+            Local Meta: go-wide tokens, graveyards; artifact decks
+
+            Packages
+            Ramp: 8
+            Draw: 8
+            Interaction: 8
+            End MTG MCP Deck Intent
+            """);
+
+        result.Warnings.Should().BeEmpty();
+        result.Intent.Should().NotBeNull();
+        result.Intent!.PowerLevel.Should().Be("cedh");
+        result.Intent.HeuristicProfile.Should().Be("command-zone-template");
+        result.Intent.PackageTemplate.Should().Be("8x8");
+        result.Intent.LocalMeta.Should().Contain(["go-wide tokens", "graveyards", "artifact decks"]);
+        result.Intent.Packages[DeckRoles.Ramp].Minimum.Should().Be(8);
+        result.Intent.Packages[DeckRoles.Ramp].Maximum.Should().Be(8);
+    }
+
+    /// <summary>
+    /// Verifies that unknown vocabulary remains readable but produces warnings.
+    /// </summary>
+    [Fact]
+    public void DeckIntentText_KeepsUnknownVocabularyWithWarnings()
+    {
+        DeckIntentResult result = DeckIntentText.Parse(
+            """
+            MTG MCP Deck Intent
+            Power Level: kitchen table
+            Heuristic Profile: personal brew
+            Package Template: cube
+            End MTG MCP Deck Intent
+            """);
+
+        result.Intent.Should().NotBeNull();
+        result.Intent!.PowerLevel.Should().Be("kitchen table");
+        result.Intent.HeuristicProfile.Should().Be("personal brew");
+        result.Intent.PackageTemplate.Should().Be("cube");
+        result.Warnings.Should().HaveCount(3);
+    }
+
+    /// <summary>
+    /// Verifies that documented power-level aliases normalize to supported values.
+    /// </summary>
+    [Theory]
+    [InlineData("High Power", "high-power")]
+    [InlineData("high_power", "high-power")]
+    [InlineData("upgraded-precon", "casual")]
+    [InlineData("mid-power", "tuned-casual")]
+    [InlineData("optimized", "high-power")]
+    [InlineData("competitive", "cedh")]
+    public void DeckIntentVocabulary_NormalizesPowerLevels(string value, string expected)
+    {
+        DeckIntentVocabulary.TryNormalizePowerLevel(value, out string normalized).Should().BeTrue();
+        normalized.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Verifies that documented heuristic profile aliases normalize to supported values.
+    /// </summary>
+    [Theory]
+    [InlineData("Command Zone Template", "command-zone-template")]
+    [InlineData("package_8x8", "package-8x8")]
+    [InlineData("75%", "seventy-five-percent")]
+    [InlineData("cedh midrange", "cedh-midrange")]
+    public void DeckIntentVocabulary_NormalizesHeuristicProfiles(string value, string expected)
+    {
+        DeckIntentVocabulary.TryNormalizeHeuristicProfile(value, out string normalized).Should().BeTrue();
+        normalized.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Verifies that suggested intent includes normalized heuristic guidance.
+    /// </summary>
+    [Fact]
+    public async Task SuggestDeckIntent_IncludesHeuristicProfile()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Intent Suggestion",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Teysa Karlov",
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander]
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog());
+
+        DeckIntentResult result = await service.SuggestDeckIntentAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        result.Intent.Should().NotBeNull();
+        result.Intent!.HeuristicProfile.Should().Be("auto");
+        result.IntentText.Should().Contain("Heuristic Profile: auto");
+        DeckIntentText.Parse(result.IntentText).Warnings.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that the README documents all supported deck intent vocabulary.
+    /// </summary>
+    [Fact]
+    public void Readme_DocumentsSupportedDeckIntentVocabulary()
+    {
+        string readme = ReadRepoFile("README.md");
+
+        foreach (string powerLevel in DeckIntentVocabulary.PowerLevels)
+        {
+            readme.Should().Contain($"`{powerLevel}`");
+        }
+
+        foreach (string profile in DeckIntentVocabulary.HeuristicProfiles)
+        {
+            readme.Should().Contain($"`{profile}`");
+        }
+
+        foreach (string packageTemplate in DeckIntentVocabulary.PackageTemplates)
+        {
+            readme.Should().Contain($"`{packageTemplate}`");
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the README's deck intent example stays parseable.
+    /// </summary>
+    [Fact]
+    public void Readme_DeckIntentExampleParses()
+    {
+        string readme = ReadRepoFile("README.md");
+        string example = readme
+            .Split("```", StringSplitOptions.None)
+            .First(block => block.Contains("MTG MCP Deck Intent", StringComparison.Ordinal)
+                && block.Contains("Heuristic Profile", StringComparison.Ordinal));
+
+        DeckIntentResult result = DeckIntentText.Parse(example);
+
+        result.Intent.Should().NotBeNull();
+        result.Intent!.HeuristicProfile.Should().Be("command-zone-template");
+        result.Intent.PowerLevel.Should().Be("tuned-casual");
+        result.Warnings.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that set and clear deck intent preserve surrounding description text.
     /// </summary>
     [Fact]
@@ -1397,6 +1558,26 @@ public sealed class DeckIntelligenceTests
                 OracleText = oracleText
             }
         };
+    }
+
+    /// <summary>
+    /// Reads a file from the repository root.
+    /// </summary>
+    private static string ReadRepoFile(string relativePath)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            string candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+            {
+                return File.ReadAllText(candidate);
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find repository file '{relativePath}'.");
     }
 
     /// <summary>

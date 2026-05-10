@@ -16,6 +16,7 @@ public static partial class DeckIntentText
             Commander = FindCommander(workspace),
             Archetype = SuggestArchetype(workspace),
             PowerLevel = "tuned-casual",
+            HeuristicProfile = "auto",
             Budget = new DeckIntentBudget
             {
                 Text = "prefer cheaper swaps unless a card is core",
