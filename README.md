@@ -43,27 +43,47 @@ https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-f
 
 ## Quick Start
 
-Install the packaged tool:
+Install the packaged tool from NuGet:
 
 ```powershell
 dotnet tool install --global Nccurry.MtgMcp
 mtg-mcp
 ```
 
-Or run from source:
+Configure your MCP client to run the `mtg-mcp` stdio command.
+
+For Codex:
+
+```powershell
+codex mcp add mtg-mcp `
+  --env MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.json" `
+  --env MTGMCP__OPERATION_MODE=apply `
+  -- mtg-mcp
+```
+
+For local development or testing an unpublished checkout, run from source:
 
 ```powershell
 dotnet run --project src/MtgMcp.App/MtgMcp.App.csproj
 ```
 
-For a single-file binary:
+Or pack and install the current checkout as a local .NET tool:
+
+```powershell
+task pack VERSION=0.0.0-local
+dotnet tool install --global Nccurry.MtgMcp `
+  --version 0.0.0-local `
+  --add-source artifacts/packages
+```
+
+For a single-file binary fallback:
 
 ```powershell
 task publish
 ```
 
-Configure an MCP client to run `mtg-mcp`, a release archive binary, or the
-`dotnet run` command above.
+When using a fallback path, configure the MCP client to run the release archive
+binary or the `dotnet run` command above instead of `mtg-mcp`.
 
 ## Configuration
 
