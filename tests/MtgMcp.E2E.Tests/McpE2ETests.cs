@@ -92,7 +92,8 @@ public sealed class McpE2ETests
         scryfall
             .Requests.Should()
             .ContainSingle(request =>
-                WebUtility.UrlDecode(request.PathAndQuery) == "cards/named?fuzzy=Lightning Bolt");
+                request.Method == "GET"
+                && DecodeRepeatedly(request.PathAndQuery) == "cards/named?fuzzy=Lightning Bolt");
         archidekt.Requests.Should().BeEmpty();
     }
 
@@ -340,6 +341,26 @@ public sealed class McpE2ETests
         }
 
         throw new InvalidOperationException($"JSON property '{propertyName}' was not found in {element}.");
+    }
+
+    /// <summary>
+    /// Decodes request targets until they stabilize across platform-specific escaping.
+    /// </summary>
+    private static string DecodeRepeatedly(string value)
+    {
+        string current = value;
+        for (int index = 0; index < 3; index++)
+        {
+            string decoded = WebUtility.UrlDecode(current);
+            if (decoded == current)
+            {
+                return decoded;
+            }
+
+            current = decoded;
+        }
+
+        return current;
     }
 
     /// <summary>
