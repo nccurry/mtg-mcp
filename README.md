@@ -160,6 +160,10 @@ Find new cards for this deck from the last year, or pass a YYYY-MM-DD since date
 Apply the previewed deck plan and create an Archidekt checkpoint first.
 ```
 
+Common tuning tools include `refresh_deck_card_snapshots`,
+`summarize_deck_workspace`, `analyze_deck_consistency`,
+`find_card_upgrades`, and `preview_deck_plan`.
+
 ## Deck Intent Configuration
 
 Deck intent is optional text that tells recommendations what the deck is trying

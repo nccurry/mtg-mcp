@@ -1,0 +1,571 @@
+using System.Text.Json;
+using FluentAssertions;
+
+namespace MtgMcp.Core.Tests;
+
+/// <summary>
+/// Contains deck analysis, summary, combo, odds, and role-classifier tests.
+/// </summary>
+public sealed partial class DeckIntelligenceTests
+{
+    /// <summary>
+    /// Verifies that snapshot refresh populates extended metadata.
+    /// </summary>
+    [Fact]
+    public async Task RefreshDeckCardSnapshots_PopulatesExtendedSnapshot()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Normalize",
+            Cards = [new DeckCard { Name = "Sol Ring" }]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckNormalizationResult result = await service.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            "all",
+            TestContext.Current.CancellationToken);
+
+        result.UpdatedCards.Should().Be(1);
+        DeckCard card = result.Workspace.Cards.Single();
+        card.Snapshot.OracleText.Should().Contain("Add");
+        card.Snapshot.EdhrecRank.Should().Be(1);
+        card.Snapshot.ProducedMana.Should().Contain("C");
+        card.Snapshot.Prices["usd"].Should().Be("1.25");
+        card.Snapshot.Legalities["commander"].Should().Be("legal");
+    }
+
+    /// <summary>
+    /// Verifies that snapshot refresh handles legacy null snapshots.
+    /// </summary>
+    [Fact]
+    public async Task RefreshDeckCardSnapshots_HandlesLegacyNullSnapshots()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Legacy",
+            Cards = [new DeckCard { Name = "Sol Ring", Snapshot = null! }]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckNormalizationResult result = await service.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            "missing",
+            TestContext.Current.CancellationToken);
+
+        result.UpdatedCards.Should().Be(1);
+        result.Workspace.Cards.Single().Snapshot.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that role classifier classifies common deck roles and tags.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_ClassifiesCommonDeckRolesAndTags()
+    {
+        DeckRoleClassifier.Classify(Card("Arcane Signet", "Artifact", "{T}: Add one mana of any color."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Ramp);
+        DeckRoleClassifier.Classify(Card("Toxic Deluge", "Sorcery", "All creatures get -X/-X until end of turn."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.BoardWipes);
+
+        CardRoleAssignment tinybones = DeckRoleClassifier.Classify(Card(
+            "Tinybones, Trinket Thief",
+            "Legendary Creature",
+            "Whenever an opponent discards a card, you draw a card."));
+        tinybones.PrimaryRole.Should().Be(DeckRoles.Draw);
+        tinybones.Tags.Should().Contain(DeckTags.Discard);
+
+        DeckRoleClassifier.Classify(Card(
+                "Aclazotz, Deepest Betrayal // Temple of the Dead",
+                "Legendary Creature — Bat God // Land",
+                "Whenever Aclazotz attacks, each opponent discards a card. For each opponent who can't, you draw a card."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Draw);
+
+        DeckRoleClassifier.Classify(Card(
+                "Malakir Rebirth // Malakir Mire",
+                "Instant // Land",
+                "Choose target creature. You lose 2 life. Until end of turn, that creature gains when this creature dies, return it to the battlefield tapped."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Utility);
+    }
+
+    /// <summary>
+    /// Verifies that role classifier recognizes expanded theorycrafting tags.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_ClassifiesExpandedTheorycraftingTags()
+    {
+        DeckRoleClassifier.Classify(Card(
+                "Ghostly Prison",
+                "Enchantment",
+                "Creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you."))
+            .Tags
+            .Should()
+            .Contain([DeckTags.Pillowfort, DeckTags.GoWideProtection]);
+        DeckRoleClassifier.Classify(Card(
+                "Illness in the Ranks",
+                "Enchantment",
+                "Creature tokens get -1/-1."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.TokenHate);
+        DeckRoleClassifier.Classify(Card(
+                "Bane of Progress",
+                "Creature",
+                "When Bane of Progress enters the battlefield, destroy all artifacts and enchantments."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.ArtifactEnchantmentHate);
+    }
+
+    /// <summary>
+    /// Verifies that best-practice analysis reports role gaps.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_ReturnsNeedProfileAndGaps()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Gaps",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 32, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Signet", Quantity = 4, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                Card("Doom Blade", "Instant", "Destroy target nonblack creature.")
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Status.Should().Be("low");
+        analysis.RecommendedProfile.Should().Be("commander-baseline");
+        analysis.HeuristicComparisons.Should().Contain(comparison => comparison.ProfileId == "command-zone-template");
+        analysis.Risks.Should().Contain(risk => risk.Contains("Win", StringComparison.OrdinalIgnoreCase)
+            || risk.Contains("win condition", StringComparison.OrdinalIgnoreCase));
+        analysis.Citations.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that best-practice analysis honors deck intent heuristic profiles.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_UsesIntentHeuristicProfile()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Command Zone Profile",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Heuristic Profile: command-zone-template
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 8, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Draw", Quantity = 9, PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] },
+                new DeckCard { Name = "Removal", Quantity = 8, PrimaryCategory = DeckRoles.Interaction, Categories = [DeckRoles.Interaction] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.RecommendedProfile.Should().Be("command-zone-template");
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(10);
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Draw).Minimum.Should().Be(10);
+        analysis.NeedProfile.Notes.Should().Contain(note => note.Contains("Command Zone template", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that best-practice analysis can use cEDH profiles from power intent.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_InfersCedhProfile()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Turbo Profile",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Power Level: cEDH
+                Archetype: turbo combo
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 10, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Tutor", Quantity = 4, PrimaryCategory = DeckRoles.Tutors, Categories = [DeckRoles.Tutors] },
+                new DeckCard { Name = "Interaction", Quantity = 8, PrimaryCategory = DeckRoles.Interaction, Categories = [DeckRoles.Interaction] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.RecommendedProfile.Should().Be("cedh-turbo");
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Lands).Status.Should().Be("high");
+        analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(14);
+        analysis.HeuristicComparisons.Should().Contain(comparison => comparison.ProfileId == "cedh-turbo");
+    }
+
+    /// <summary>
+    /// Verifies that combo catalog failure falls back to local heuristics.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_FallsBackWhenComboCatalogFails()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Combo Fallback",
+            Cards =
+            [
+                new DeckCard { Name = "Exquisite Blood", Quantity = 1, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy] },
+                new DeckCard { Name = "Sanguine Bond", Quantity = 1, PrimaryCategory = DeckRoles.Wincons, Categories = [DeckRoles.Wincons] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog(), comboCatalog: new ThrowingComboCatalog());
+
+        DeckComboReport result = await service.FindDeckCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        result.Combos.Should().Contain(combo => combo.Name.Contains("Exquisite Blood", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("catalog failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that duplicate copies of one combo-tagged card do not form a completed combo.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_DoesNotTreatDuplicateSingleCardAsCompletedCombo()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Duplicate Combo",
+            Cards =
+            [
+                new DeckCard { Name = "Combo A", Quantity = 2, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy], Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "Untap target permanent. Copy target activated ability." } }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckComboReport completed = await service.FindDeckCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+        DeckComboReport nearMisses = await service.FindNearMissCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        completed.Combos.Should().BeEmpty();
+        nearMisses.NearMisses.Should().ContainSingle(combo => combo.Cards.Contains("Combo A"));
+    }
+
+    /// <summary>
+    /// Verifies that card-selection recommendations use a specific search query.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_QueryForRole_CoversCardSelection()
+    {
+        string query = DeckRoleClassifier.QueryForRole(DeckTags.CardSelection, "commander", maxPrice: 2);
+
+        query.Should().Contain("scry");
+        query.Should().Contain("legal:commander");
+        query.Should().Contain("usd<=2");
+    }
+
+    /// <summary>
+    /// Verifies that analyze draw odds uses hypergeometric odds.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDrawOdds_UsesHypergeometricOdds()
+    {
+        DeckWorkspace workspace = new()
+        {
+            Cards =
+            [
+                new DeckCard { Name = "Ramp A", Quantity = 2, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Spell A", Quantity = 8, PrimaryCategory = DeckRoles.Utility, Categories = [DeckRoles.Utility] }
+            ]
+        };
+
+        DeckOddsAnalysis analysis = DeckStatistics.AnalyzeDrawOdds(
+            workspace,
+            [DeckRoles.Ramp],
+            turn: 1,
+            openingHandSize: 5,
+            simulations: 1_000,
+            seed: 42);
+
+        analysis.Rows.Single().HypergeometricAtLeastOne.Should().BeApproximately(0.777777, 0.0005);
+        analysis.Rows.Single().MonteCarloAtLeastOne.Should().BeApproximately(0.809, 0.001);
+    }
+
+    /// <summary>
+    /// Verifies that summarize deck plan returns role counts and risks.
+    /// </summary>
+    [Fact]
+    public async Task SummarizeDeckWorkspace_ReturnsRoleCountsAndRisks()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Summary",
+            Cards =
+            [
+                Card("Tinybones, Trinket Thief", "Legendary Creature", "Whenever an opponent discards a card, you draw a card."),
+                Card("Arcane Signet", "Artifact", "{T}: Add one mana of any color."),
+                Card("Toxic Deluge", "Sorcery", "All creatures get -X/-X until end of turn.")
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckPlanSummary summary = await service.SummarizeDeckWorkspaceAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        summary.RoleCounts[DeckRoles.Ramp].Should().Be(1);
+        summary.RoleCounts[DeckRoles.Draw].Should().Be(1);
+        summary.RoleCounts[DeckRoles.BoardWipes].Should().Be(1);
+        summary.Risks.Should().Contain(note => note.Contains("Land count", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that summarize deck plan uses intent thresholds when present.
+    /// </summary>
+    [Fact]
+    public async Task SummarizeDeckWorkspace_UsesIntentThresholdsWhenPresent()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Intent Summary",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Archetype: discard-control
+
+                Targets
+                Ramp: 4
+                Draw: 5
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Ramp", Quantity = 4, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Draw", Quantity = 5, PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckPlanSummary summary = await service.SummarizeDeckWorkspaceAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        summary.Intent.Should().NotBeNull();
+        summary.IntentNotes.Should().Contain(note => note.Contains("discard-control", StringComparison.OrdinalIgnoreCase));
+        summary.Risks.Should().NotContain(risk => risk.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
+        summary.Risks.Should().NotContain(risk => risk.Contains("draw", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that analyze draw odds uses default targets.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDrawOddsAsync_UsesDefaultTargets()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Signet", Quantity = 8, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Spell", Quantity = 56, PrimaryCategory = DeckRoles.Utility, Categories = [DeckRoles.Utility] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckOddsAnalysis analysis = await service.AnalyzeDrawOddsAsync(
+            workspace.Id,
+            targets: null,
+            turn: 3,
+            openingHandSize: 7,
+            simulations: 500,
+            seed: 7,
+            TestContext.Current.CancellationToken);
+
+        analysis.Rows.Select(row => row.Target).Should().Contain([DeckRoles.Lands, DeckRoles.Ramp, DeckRoles.Draw]);
+        analysis.Rows.Single(row => row.Target == DeckRoles.Lands).SuccessesInDeck.Should().Be(36);
+    }
+
+    /// <summary>
+    /// Verifies that analyze deck cost returns totals and drivers from cached prices.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_ReturnsTotalsAndDrivers()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Cost",
+            Cards =
+            [
+                ExpensiveRamp(),
+                new DeckCard
+                {
+                    Name = "Maybe Draw",
+                    Quantity = 2,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard],
+                    Snapshot = new CardSnapshot
+                    {
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "3.00" }
+                    }
+                },
+                new DeckCard { Name = "Unknown Price", PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.IncludedTotal.Should().Be(180);
+        analysis.MaybeboardTotal.Should().Be(6);
+        analysis.MissingPriceCards.Should().Contain("Unknown Price");
+        analysis.TopCostDrivers.Should().ContainSingle().Which.CardName.Should().Be("Mana Crypt");
+    }
+
+    /// <summary>
+    /// Verifies that mana base and consistency analysis return useful signals.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBaseAndConsistency_ReturnSignals()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Signals",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 32,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                },
+                new DeckCard
+                {
+                    Name = "Temple of Deceit",
+                    Quantity = 4,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        OracleText = "Temple of Deceit enters the battlefield tapped.",
+                        ProducedMana = ["U", "B"]
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Arcane Signet",
+                    Quantity = 2,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        OracleText = "{T}: Add one mana of any color.",
+                        ProducedMana = ["W", "U", "B", "R", "G"],
+                        ManaValue = 2
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis manaBase = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+        DeckConsistencyAnalysis consistency = await service.AnalyzeDeckConsistencyAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        manaBase.LandCount.Should().Be(36);
+        manaBase.ColorSources["B"].Should().Be(36);
+        manaBase.TappedLandCount.Should().Be(4);
+        consistency.RampCount.Should().Be(2);
+        consistency.Risks.Should().Contain(note => note.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
+        consistency.KeyOdds.Rows.Should().Contain(row => row.Target == DeckRoles.Ramp);
+    }
+
+    /// <summary>
+    /// Verifies that commander bracket estimates use live Game Changer search results.
+    /// </summary>
+    [Fact]
+    public async Task EstimateCommanderBracket_UsesGameChangers()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Bracket",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        CommanderBracketEstimate estimate = await service.EstimateCommanderBracketAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        estimate.GameChangers.Should().Contain("Mana Crypt");
+        estimate.EstimatedBracket.Should().BeGreaterThanOrEqualTo(3);
+        estimate.Signals.Should().Contain(signal => signal.Signal == "game-changer");
+    }
+
+    /// <summary>
+    /// Verifies that unavailable Game Changer data fails clearly.
+    /// </summary>
+    [Fact]
+    public async Task EstimateCommanderBracket_FailsClearlyWhenGameChangersUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Bracket",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGameChangerSearch = true });
+
+        Func<Task> estimate = () => service.EstimateCommanderBracketAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        await estimate.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Unable to fetch live Commander Game Changer data from Scryfall.");
+    }
+}
