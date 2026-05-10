@@ -1,0 +1,57 @@
+name: Publish WinGet Fallback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version with checked-in WinGet manifests to publish
+        required: true
+        default: "0.1.0"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/winget-fallback.yml"
+      - "packaging/winget/Nccurry.MtgMcp/0.1.0/**"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.1.0' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Package WinGet manifests
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import zipfile
+
+          version = os.environ["VERSION"]
+          manifest_dir = pathlib.Path("packaging/winget/Nccurry.MtgMcp") / version
+          if not manifest_dir.is_dir():
+              raise SystemExit(f"WinGet manifest directory not found: {manifest_dir}")
+
+          output = pathlib.Path("artifacts/dist") / f"mtg-mcp-{version}-winget.zip"
+          output.parent.mkdir(parents=True, exist_ok=True)
+
+          with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(manifest_dir.glob("*.yaml")):
+                  archive.write(path, path.name)
+
+          print(f"Created {output}")
+          PY
+
+      - name: Upload WinGet manifest artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          files: artifacts/dist/mtg-mcp-${{ env.VERSION }}-winget.zip
