@@ -418,7 +418,12 @@ internal sealed class FakeHttpServer : IAsyncDisposable
         int queryStart = normalized.IndexOf('?', StringComparison.Ordinal);
         if (queryStart < 0)
         {
-            return DecodeRepeatedly(normalized);
+            normalized = DecodeRepeatedly(normalized);
+            queryStart = normalized.IndexOf('?', StringComparison.Ordinal);
+            if (queryStart < 0)
+            {
+                return normalized;
+            }
         }
 
         string path = DecodeRepeatedly(normalized[..queryStart]);
