@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -13,28 +12,32 @@ namespace MtgMcp.CommanderSpellbook;
 public sealed class CommanderSpellbookComboCatalog : IComboCatalog
 {
     /// <summary>
-    /// Caches combo lookups by sorted card list.
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, ComboCacheEntry> ComboCache = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Stores how long Commander Spellbook responses are reused.
-    /// </summary>
-    private static readonly TimeSpan CacheTimeToLive = TimeSpan.FromHours(6);
-
-    /// <summary>
     /// Sends requests to Commander Spellbook.
     /// </summary>
     private readonly HttpClient httpClient;
+
+    /// <summary>
+    /// Stores the shared source-fact cache.
+    /// </summary>
+    private readonly ICorpusCache cache;
+
+    /// <summary>
+    /// Stores mtg-mcp options.
+    /// </summary>
+    private readonly MtgMcpOptions mtgOptions;
 
     /// <summary>
     /// Creates a Commander Spellbook combo catalog.
     /// </summary>
     public CommanderSpellbookComboCatalog(
         HttpClient httpClient,
-        IOptions<CommanderSpellbookOptions> options)
+        IOptions<CommanderSpellbookOptions> options,
+        ICorpusCache cache,
+        IOptions<MtgMcpOptions> mtgOptions)
     {
         this.httpClient = httpClient;
+        this.cache = cache;
+        this.mtgOptions = mtgOptions.Value;
         this.httpClient.BaseAddress ??= options.Value.BaseAddress;
         this.httpClient.DefaultRequestHeaders.UserAgent.Clear();
         this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("mtg-mcp/1.0 (+https://github.com/nccurry/mtg-mcp)");
@@ -54,9 +57,25 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase));
-        if (TryGetCachedReport(cardList, out DeckComboReport? cached) && cached is not null)
+        CorpusCacheKey cacheKey = new()
         {
-            return CloneReport(cached);
+            Source = "commander-spellbook",
+            Endpoint = "find-my-combos",
+            Query = cardList,
+            AdapterVersion = "2",
+            Budget = "combo"
+        };
+        TimeSpan ttl = CorpusCacheFactory.ParseDuration(
+            mtgOptions.Intelligence.Cache.Ttls.CommanderSpellbook,
+            TimeSpan.FromHours(24));
+        if (!query.Refresh)
+        {
+            DeckComboReport? cached = await cache.GetAsync<DeckComboReport>(cacheKey, ttl, cancellationToken)
+                .ConfigureAwait(false);
+            if (cached is not null)
+            {
+                return cached;
+            }
         }
 
         using StringContent content = new(cardList, Encoding.UTF8, "text/plain");
@@ -74,86 +93,8 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
         report.Combos.AddRange(ReadCombos(results, "included", present, nearMiss: false));
         report.NearMisses.AddRange(ReadCombos(results, "almostIncluded", present, nearMiss: true));
         report.Notes.Add("Commander Spellbook combo data comes from the public find-my-combos endpoint.");
-        SetCachedReport(cardList, CloneReport(report));
+        await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
         return report;
-    }
-
-    /// <summary>
-    /// Clones a combo report for cache isolation.
-    /// </summary>
-    private static DeckComboReport CloneReport(DeckComboReport report)
-    {
-        return new DeckComboReport
-        {
-            WorkspaceId = report.WorkspaceId,
-            Combos = report.Combos.Select(CloneCombo).ToList(),
-            NearMisses = report.NearMisses.Select(CloneCombo).ToList(),
-            Pressure = new ComboPressureEstimate
-            {
-                WorkspaceId = report.Pressure.WorkspaceId,
-                Score = report.Pressure.Score,
-                Level = report.Pressure.Level,
-                Signals = report.Pressure.Signals.ToList(),
-                Notes = report.Pressure.Notes.ToList()
-            },
-            Notes = report.Notes.ToList()
-        };
-    }
-
-    /// <summary>
-    /// Attempts to get a fresh cached combo report.
-    /// </summary>
-    private static bool TryGetCachedReport(string key, out DeckComboReport? report)
-    {
-        report = null;
-        if (!ComboCache.TryGetValue(key, out ComboCacheEntry? entry))
-        {
-            return false;
-        }
-
-        if (DateTimeOffset.UtcNow - entry.StoredAt > CacheTimeToLive)
-        {
-            ComboCache.TryRemove(key, out _);
-            return false;
-        }
-
-        report = entry.Report;
-        return true;
-    }
-
-    /// <summary>
-    /// Stores a combo report while keeping the cache bounded.
-    /// </summary>
-    private static void SetCachedReport(string key, DeckComboReport report)
-    {
-        const int maxEntries = 128;
-        if (ComboCache.Count >= maxEntries)
-        {
-            foreach (string staleKey in ComboCache.Keys.Take(Math.Max(1, ComboCache.Count - maxEntries + 1)))
-            {
-                ComboCache.TryRemove(staleKey, out _);
-            }
-        }
-
-        ComboCache[key] = new ComboCacheEntry(report, DateTimeOffset.UtcNow);
-    }
-
-    /// <summary>
-    /// Clones one combo for cache isolation.
-    /// </summary>
-    private static DeckCombo CloneCombo(DeckCombo combo)
-    {
-        return new DeckCombo
-        {
-            Name = combo.Name,
-            Cards = combo.Cards.ToList(),
-            MissingCards = combo.MissingCards.ToList(),
-            WinRoute = combo.WinRoute,
-            Kind = combo.Kind,
-            Confidence = combo.Confidence,
-            Source = combo.Source,
-            Rationale = combo.Rationale
-        };
     }
 
     /// <summary>
@@ -293,9 +234,4 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
             ? value.GetString()
             : null;
     }
-
-    /// <summary>
-    /// Stores one cached Commander Spellbook result.
-    /// </summary>
-    private sealed record ComboCacheEntry(DeckComboReport Report, DateTimeOffset StoredAt);
 }

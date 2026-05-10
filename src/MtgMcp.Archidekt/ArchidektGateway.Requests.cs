@@ -10,6 +10,16 @@ namespace MtgMcp.Archidekt;
 public sealed partial class ArchidektGateway
 {
     /// <summary>
+    /// Limits retries for Archidekt write responses that report transient log creation failures.
+    /// </summary>
+    private const int MaxTransientWriteRetries = 5;
+
+    /// <summary>
+    /// Spaces retries for Archidekt write responses that fail before committing a change log.
+    /// </summary>
+    private static readonly TimeSpan TransientWriteRetryDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Gets the json.
     /// </summary>
     private async Task<JsonDocument> GetJsonAsync(string uri, CancellationToken cancellationToken)
@@ -42,25 +52,40 @@ public sealed partial class ArchidektGateway
             await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
         }
 
-        using HttpRequestMessage request = new(method, uri)
+        for (int attempt = 0; attempt <= MaxTransientWriteRetries; attempt++)
         {
-            Content = JsonContent.Create(payload, options: SerializerOptions),
-        };
+            using HttpRequestMessage request = new(method, uri)
+            {
+                Content = JsonContent.Create(payload, options: SerializerOptions),
+            };
 
-        using HttpResponseMessage response = await httpClient
-            .SendAsync(request, cancellationToken)
-            .ConfigureAwait(false);
-        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await httpClient
+                .SendAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+            string responseBody = await response
+                .Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-        string responseBody = await response
-            .Content.ReadAsStringAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(responseBody))
-        {
-            return JsonDocument.Parse("{}");
+            if (response.IsSuccessStatusCode)
+            {
+                return string.IsNullOrWhiteSpace(responseBody)
+                    ? JsonDocument.Parse("{}")
+                    : JsonDocument.Parse(responseBody);
+            }
+
+            if (IsTransientWriteFailure(responseBody) && attempt < MaxTransientWriteRetries)
+            {
+                await Task.Delay(TransientWriteRetryDelay, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            throw new HttpRequestException(
+                $"Archidekt request failed with {(int)response.StatusCode}: {SecretRedactor.Redact(responseBody)}"
+            );
         }
 
-        return JsonDocument.Parse(responseBody);
+        throw new InvalidOperationException("Archidekt request retry loop ended unexpectedly.");
     }
 
     /// <summary>
@@ -81,6 +106,17 @@ public sealed partial class ArchidektGateway
             .ConfigureAwait(false);
         throw new HttpRequestException(
             $"Archidekt request failed with {(int)response.StatusCode}: {SecretRedactor.Redact(body)}"
+        );
+    }
+
+    /// <summary>
+    /// Detects Archidekt's transient write-log failure response.
+    /// </summary>
+    private static bool IsTransientWriteFailure(string responseBody)
+    {
+        return responseBody.Contains(
+            "failed to create a log",
+            StringComparison.OrdinalIgnoreCase
         );
     }
 
@@ -209,12 +245,49 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
+    /// Gets the long.
+    /// </summary>
+    private static long? GetLong(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out JsonElement property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out long value))
+        {
+            return value;
+        }
+
+        return
+            property.ValueKind == JsonValueKind.String
+            && long.TryParse(
+                property.GetString(),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value
+            )
+            ? value
+            : null;
+    }
+
+    /// <summary>
     /// Gets the nested int.
     /// </summary>
     private static int? GetNestedInt(JsonElement element, string propertyName, string nestedPropertyName)
     {
         return element.TryGetProperty(propertyName, out JsonElement nested) && nested.ValueKind == JsonValueKind.Object
             ? GetInt(nested, nestedPropertyName)
+            : null;
+    }
+
+    /// <summary>
+    /// Gets the nested long.
+    /// </summary>
+    private static long? GetNestedLong(JsonElement element, string propertyName, string nestedPropertyName)
+    {
+        return element.TryGetProperty(propertyName, out JsonElement nested) && nested.ValueKind == JsonValueKind.Object
+            ? GetLong(nested, nestedPropertyName)
             : null;
     }
 

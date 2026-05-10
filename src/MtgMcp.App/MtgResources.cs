@@ -265,6 +265,16 @@ public sealed class MtgResources
     }
 
     /// <summary>
+    /// Gets deck corpus source status.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://corpus/sources", Name = "Corpus Sources")]
+    [Description("Enabled and planned deck-corpus sources with stability, attribution, and permission notes.")]
+    public string GetCorpusSources()
+    {
+        return JsonSerializer.Serialize(decks.ListCorpusSources(), JsonOptions);
+    }
+
+    /// <summary>
     /// Gets the archidekt auth status.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://archidekt/auth-status", Name = "Archidekt Auth Status")]

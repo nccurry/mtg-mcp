@@ -306,7 +306,7 @@ public sealed class DeckCard
     /// <summary>
     /// Gets or sets the archidekt deck relation id.
     /// </summary>
-    public int? ArchidektDeckRelationId { get; set; }
+    public long? ArchidektDeckRelationId { get; set; }
 
     /// <summary>
     /// Gets or sets the modifier.

@@ -46,6 +46,11 @@ public sealed partial class DeckWorkspaceService
     private readonly DateOnly? currentDateOverride;
 
     /// <summary>
+    /// Stores normalized corpus signal providers.
+    /// </summary>
+    private readonly IReadOnlyList<ICorpusSignalProvider> corpusSignalProviders;
+
+    /// <summary>
     /// Handles deck workspace service.
     /// </summary>
     public DeckWorkspaceService(
@@ -56,7 +61,8 @@ public sealed partial class DeckWorkspaceService
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
     )
     {
         this.repository = repository;
@@ -67,5 +73,6 @@ public sealed partial class DeckWorkspaceService
         this.cardTrendProvider = cardTrendProvider;
         this.comboCatalog = comboCatalog;
         this.currentDateOverride = currentDateOverride;
+        this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
     }
 }

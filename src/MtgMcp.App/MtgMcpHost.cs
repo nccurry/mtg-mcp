@@ -7,6 +7,7 @@ using ModelContextProtocol.Server;
 using MtgMcp.Archidekt;
 using MtgMcp.CommanderSpellbook;
 using MtgMcp.Core;
+using MtgMcp.Decklists;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App;
@@ -35,6 +36,8 @@ public static class MtgMcpHost
         services.GetRequiredService<ICardTrendProvider>();
         services.GetRequiredService<ICommanderMetaProvider>();
         services.GetRequiredService<IComboCatalog>();
+        services.GetRequiredService<ICorpusCache>();
+        _ = services.GetServices<ICorpusSignalProvider>().ToList();
         _ = services.GetRequiredService<OperationModeGuard>().EffectiveMode;
     }
 
@@ -44,11 +47,10 @@ public static class MtgMcpHost
     public static HostApplicationBuilder CreateBuilder(string[] args)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+        builder.Configuration.Sources.Clear();
 
         builder
-            .Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-            .AddJsonFile("mtg-mcp.json", optional: true, reloadOnChange: false)
-            .AddEnvironmentVariables()
+            .Configuration.AddJsonFile("mtg-mcp.json", optional: true, reloadOnChange: false)
             .AddEnvironmentVariables(prefix: "MTGMCP__")
             .AddCommandLine(args);
 
@@ -72,11 +74,17 @@ public static class MtgMcpHost
             MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
             return new JsonDeckPlanRepository(options.DataDir);
         });
+        builder.Services.AddSingleton<ICorpusCache>(serviceProvider =>
+        {
+            MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
+            return CorpusCacheFactory.Create(options.DataDir, options.Intelligence.Cache);
+        });
         builder.Services.AddTransient<DeckWorkspaceService>();
         builder.Services.AddSingleton<OperationModeGuard>();
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
         builder.Services.AddCommanderSpellbook(builder.Configuration);
+        builder.Services.AddDecklistCorpusSources();
 
         builder
             .Services.AddMcpServer()

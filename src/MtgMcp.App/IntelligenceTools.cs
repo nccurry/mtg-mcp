@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using MtgMcp.Core;
 
@@ -21,12 +22,21 @@ public sealed class IntelligenceTools
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
+    /// Stores configured MCP options.
+    /// </summary>
+    private readonly IOptions<MtgMcpOptions> options;
+
+    /// <summary>
     /// Handles intelligence tools.
     /// </summary>
-    public IntelligenceTools(DeckWorkspaceService decks, OperationModeGuard operationMode)
+    public IntelligenceTools(
+        DeckWorkspaceService decks,
+        OperationModeGuard operationMode,
+        IOptions<MtgMcpOptions> options)
     {
         this.decks = decks;
         this.operationMode = operationMode;
+        this.options = options;
     }
 
     /// <summary>
@@ -466,6 +476,96 @@ public sealed class IntelligenceTools
     }
 
     /// <summary>
+    /// Analyzes commander trends with normalized corpus signals.
+    /// </summary>
+    [McpServerTool(Name = "analyze_commander_trends", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Analyze commander or deck-context card trends using enabled API-backed corpus providers. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    public Task<CorpusRecommendationResult> AnalyzeCommanderTrendsAsync(
+        string workspaceId,
+        int limit = 10,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.AnalyzeCommanderTrendsAsync(workspaceId, limit, EffectiveAnalysisDepth(analysisDepth), refresh, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds lesser-known cards with corpus evidence.
+    /// </summary>
+    [McpServerTool(Name = "find_lesser_known_cards", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Find lower-known cards that fit a deck goal using API-backed corpus evidence. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    public Task<CorpusRecommendationResult> FindLesserKnownCardsAsync(
+        string workspaceId,
+        string goal = "",
+        int limit = 10,
+        decimal? maxPrice = null,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.FindLesserKnownCardsAsync(workspaceId, goal, limit, maxPrice, EffectiveAnalysisDepth(analysisDepth), refresh, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds corpus-enriched budget replacements.
+    /// </summary>
+    [McpServerTool(Name = "find_corpus_budget_replacements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted budget replacement plan and attach API-backed corpus evidence to each replacement. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    public Task<CorpusBudgetReplacementResult> FindCorpusBudgetReplacementsAsync(
+        string workspaceId,
+        decimal maxPrice = 5,
+        decimal minSavings = 1,
+        int limit = 10,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("find_corpus_budget_replacements");
+        return decks.FindCorpusBudgetReplacementsAsync(workspaceId, maxPrice, minSavings, limit, EffectiveAnalysisDepth(analysisDepth), refresh, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds top exemplar decks from enabled providers.
+    /// </summary>
+    [McpServerTool(Name = "find_top_exemplar_decks", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Find top exemplar decks for a deck context from enabled API-backed corpus providers. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    public Task<TopExemplarDecksResult> FindTopExemplarDecksAsync(
+        string workspaceId,
+        int limit = 20,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.FindTopExemplarDecksAsync(workspaceId, limit, EffectiveAnalysisDepth(analysisDepth), refresh, cancellationToken);
+    }
+
+    /// <summary>
+    /// Explains corpus evidence for one card.
+    /// </summary>
+    [McpServerTool(Name = "explain_card_corpus_signal", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Explain source evidence for a card in a deck context using compact normalized corpus signals. Refresh bypasses source-fact cache.")]
+    public Task<CorpusRecommendationResult> ExplainCardCorpusSignalAsync(
+        string workspaceId,
+        string cardName,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.ExplainCardCorpusSignalAsync(workspaceId, cardName, EffectiveAnalysisDepth(analysisDepth), refresh, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists configured corpus sources.
+    /// </summary>
+    [McpServerTool(Name = "list_corpus_sources", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("List enabled, disabled, missing-key, unsupported, unofficial, and permission-sensitive corpus sources.")]
+    public CorpusSourceStatusResult ListCorpusSources()
+    {
+        return decks.ListCorpusSources();
+    }
+
+    /// <summary>
     /// Lists deck plans.
     /// </summary>
     [McpServerTool(Name = "list_deck_plans", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
@@ -511,5 +611,15 @@ public sealed class IntelligenceTools
     {
         operationMode.EnsureCanMutate("apply_deck_plan");
         return decks.ApplyDeckPlanAsync(planId, createCheckpoint, checkpointName, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets the effective analysis depth for one tool call.
+    /// </summary>
+    private string EffectiveAnalysisDepth(string? analysisDepth)
+    {
+        return string.IsNullOrWhiteSpace(analysisDepth)
+            ? options.Value.Intelligence.AnalysisDepth
+            : analysisDepth;
     }
 }

@@ -97,6 +97,48 @@ public interface IComboCatalog
 }
 
 /// <summary>
+/// Defines normalized card-signal lookup behavior for deck corpus sources.
+/// </summary>
+public interface ICorpusSignalProvider
+{
+    /// <summary>
+    /// Gets source capability and attribution status.
+    /// </summary>
+    CorpusSourceStatus GetStatus();
+
+    /// <summary>
+    /// Gets normalized corpus signals for a deck context.
+    /// </summary>
+    Task<CorpusSignalReport> GetSignalsAsync(
+        CorpusSignalQuery query,
+        RecommendationAnalysisBudget budget,
+        CancellationToken cancellationToken
+    );
+}
+
+/// <summary>
+/// Defines source-fact caching for corpus API providers.
+/// </summary>
+public interface ICorpusCache
+{
+    /// <summary>
+    /// Gets a cached source fact when it is still fresh.
+    /// </summary>
+    Task<T?> GetAsync<T>(
+        CorpusCacheKey key,
+        TimeSpan timeToLive,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Stores a source fact for reuse by later corpus lookups.
+    /// </summary>
+    Task SetAsync<T>(
+        CorpusCacheKey key,
+        T value,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Defines operations for deck workspace repository.
 /// </summary>
 public interface IDeckWorkspaceRepository

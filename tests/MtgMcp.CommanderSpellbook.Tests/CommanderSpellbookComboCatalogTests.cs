@@ -55,7 +55,9 @@ public sealed class CommanderSpellbookComboCatalogTests
         httpClient.BaseAddress = new Uri("https://spellbook.test/");
         return new CommanderSpellbookComboCatalog(
             httpClient,
-            Options.Create(new CommanderSpellbookOptions { BaseAddress = new Uri("https://spellbook.test/") }));
+            Options.Create(new CommanderSpellbookOptions { BaseAddress = new Uri("https://spellbook.test/") }),
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(new MtgMcpOptions()));
     }
 
     /// <summary>
