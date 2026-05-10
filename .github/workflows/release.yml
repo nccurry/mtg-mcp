@@ -87,6 +87,9 @@ jobs:
           tar -xzf "${publisher_archive}" mcp-publisher
           chmod +x mcp-publisher
 
+      - name: Validate MCP Registry metadata
+        run: ./mcp-publisher validate
+
       - name: Authenticate to MCP Registry
         run: ./mcp-publisher login github-oidc
 
