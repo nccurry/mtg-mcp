@@ -59,6 +59,7 @@ public sealed partial class ArchidektGateway
         DeckCard card,
         int? quantity = null)
     {
+        DeckCategoryOrdering.Normalize(card);
         Dictionary<string, object?> modifications = new(StringComparer.Ordinal)
         {
             ["quantity"] = quantity ?? card.Quantity,

@@ -26,6 +26,7 @@ public sealed class McpSurfaceTests
         typeof(CheckpointTools),
         typeof(IntelligenceTools),
         typeof(IntentTools),
+        typeof(ServerTools),
     ];
 
     /// <summary>
@@ -76,6 +77,8 @@ public sealed class McpSurfaceTests
             "estimate_commander_bracket",
             "analyze_mana_base",
             "analyze_deck_consistency",
+            "analyze_deck_performance",
+            "compare_plan_performance",
             "find_budget_replacements",
             "find_card_upgrades",
             "find_power_upgrades",
@@ -104,6 +107,7 @@ public sealed class McpSurfaceTests
             "suggest_deck_intent",
             "set_deck_intent",
             "clear_deck_intent",
+            "get_server_info",
         ];
 
         ToolTypes
@@ -147,6 +151,7 @@ public sealed class McpSurfaceTests
             "mtg://usage/operation-modes",
             "mtg://usage/deck-intent",
             "mtg://config/effective",
+            "mtg://server/info",
             "mtg://archidekt/auth-status",
         ];
 
@@ -203,6 +208,31 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies that server info exposes build identity without requiring deck dependencies.
+    /// </summary>
+    [Fact]
+    public void ServerInfoService_ReturnsVersionAndRuntimeIdentity()
+    {
+        ServerInfoService service = new(
+            Options.Create(new MtgMcpOptions
+            {
+                DataDir = "C:/mtg-mcp-test-data",
+                OperationMode = "plan",
+            }),
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "plan" })));
+
+        ServerInfo info = service.GetInfo();
+
+        info.PackageId.Should().Be("Nccurry.MtgMcp");
+        info.AssemblyName.Should().Be("MtgMcp.App");
+        info.SemVer.Should().NotBeNullOrWhiteSpace();
+        info.InformationalVersion.Should().NotBeNullOrWhiteSpace();
+        info.OperationMode.Should().Be(OperationModeGuard.Plan);
+        info.DataDirectory.Should().Be("C:/mtg-mcp-test-data");
+        info.FrameworkDescription.Should().Contain(".NET");
+    }
+
+    /// <summary>
     /// Verifies that tool annotations mark read only and mutating tools.
     /// </summary>
     [Fact]
@@ -216,6 +246,8 @@ public sealed class McpSurfaceTests
         CustomAttributeData openLocal = GetToolAttribute(nameof(WorkspaceTools.OpenLocalDeckAsync));
         CustomAttributeData previewPlan = GetToolAttribute(nameof(IntelligenceTools.PreviewDeckPlanAsync));
         CustomAttributeData bracket = GetToolAttribute(nameof(IntelligenceTools.EstimateCommanderBracketAsync));
+        CustomAttributeData performance = GetToolAttribute(nameof(IntelligenceTools.AnalyzeDeckPerformanceAsync));
+        CustomAttributeData comparePerformance = GetToolAttribute(nameof(IntelligenceTools.ComparePlanPerformanceAsync));
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(searchCards, "OpenWorld").Should().BeTrue();
@@ -229,6 +261,10 @@ public sealed class McpSurfaceTests
         GetNamedBool(previewPlan, "OpenWorld").Should().BeTrue();
         GetNamedBool(bracket, "ReadOnly").Should().BeTrue();
         GetNamedBool(bracket, "OpenWorld").Should().BeTrue();
+        GetNamedBool(performance, "ReadOnly").Should().BeTrue();
+        GetNamedBool(performance, "OpenWorld").Should().BeFalse();
+        GetNamedBool(comparePerformance, "ReadOnly").Should().BeTrue();
+        GetNamedBool(comparePerformance, "OpenWorld").Should().BeTrue();
     }
 
     /// <summary>
@@ -369,6 +405,7 @@ public sealed class McpSurfaceTests
         host.Services.GetRequiredService<ICardCatalog>().Should().NotBeNull();
         host.Services.GetRequiredService<IDeckPlanRepository>().Should().NotBeNull();
         host.Services.GetRequiredService<IArchidektGateway>().Should().NotBeNull();
+        host.Services.GetRequiredService<ServerInfoService>().Should().NotBeNull();
         host.Services.GetRequiredService<IOptions<MtgMcpOptions>>()
             .Value.DataDir.Should()
             .NotBeNullOrWhiteSpace();

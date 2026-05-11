@@ -193,14 +193,6 @@ public static class DeckStatistics
     /// </summary>
     private static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
     {
-        foreach (DeckCard card in workspace.Cards)
-        {
-            DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
-                string.Equals(value.Name, card.PrimaryCategory, StringComparison.OrdinalIgnoreCase));
-            if (category?.IncludedInDeck ?? true)
-            {
-                yield return card;
-            }
-        }
+        return DeckCategoryInclusion.IncludedCards(workspace);
     }
 }

@@ -118,7 +118,8 @@ public sealed partial class DeckWorkspaceService
             }
 
             decimal? price = ReadUsdPrice(GetSnapshot(card));
-            bool isMaybeboard = string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase);
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            bool isMaybeboard = primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase);
             bool includedInDeck = IsIncluded(workspace, card);
             bool includedInPrice = IsIncludedInPrice(workspace, card);
 
@@ -145,7 +146,7 @@ public sealed partial class DeckWorkspaceService
                 drivers.Add(new DeckCostDriver
                 {
                     CardName = card.Name,
-                    Category = card.PrimaryCategory,
+                    Category = primaryCategory,
                     Quantity = quantity,
                     UnitPrice = price.Value,
                     TotalPrice = total
@@ -507,6 +508,7 @@ public sealed partial class DeckWorkspaceService
             warnings.Add($"Could not resolve added card '{cardName}' for preview metrics.");
         }
 
+        DeckCategoryOrdering.Normalize(card, normalizedCategory);
         workspace.Cards.Add(card);
     }
 
@@ -583,8 +585,7 @@ public sealed partial class DeckWorkspaceService
 
         string normalizedCategory = NormalizeCategoryName(toCategory);
         EnsureCategory(workspace, normalizedCategory);
-        card.PrimaryCategory = normalizedCategory;
-        AddCategoryName(card, normalizedCategory);
+        DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
     }
 
     /// <summary>
@@ -605,7 +606,7 @@ public sealed partial class DeckWorkspaceService
 
         string normalizedCategory = NormalizeCategoryName(category);
         EnsureCategory(workspace, normalizedCategory);
-        AddCategoryName(card, normalizedCategory);
+        DeckCategoryOrdering.AddSecondary(card, normalizedCategory);
     }
 
     /// <summary>
@@ -625,12 +626,8 @@ public sealed partial class DeckWorkspaceService
         }
 
         string normalizedCategory = NormalizeCategoryName(category);
-        card.Categories.RemoveAll(value => value.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase));
-        if (card.PrimaryCategory.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase))
-        {
-            card.PrimaryCategory = card.Categories.FirstOrDefault() ?? DeckDefaults.Mainboard;
-            EnsureCategory(workspace, card.PrimaryCategory);
-        }
+        DeckCategoryOrdering.Remove(card, normalizedCategory);
+        EnsureCategory(workspace, card.PrimaryCategory);
     }
 
     /// <summary>
@@ -651,8 +648,7 @@ public sealed partial class DeckWorkspaceService
 
         string normalizedCategory = NormalizeCategoryName(category);
         EnsureCategory(workspace, normalizedCategory);
-        card.PrimaryCategory = normalizedCategory;
-        AddCategoryName(card, normalizedCategory);
+        DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
     }
 
     /// <summary>
@@ -677,18 +673,7 @@ public sealed partial class DeckWorkspaceService
         category.Name = normalizedNewName;
         foreach (DeckCard card in workspace.Cards)
         {
-            for (int index = 0; index < card.Categories.Count; index++)
-            {
-                if (card.Categories[index].Equals(previousName, StringComparison.OrdinalIgnoreCase))
-                {
-                    card.Categories[index] = normalizedNewName;
-                }
-            }
-
-            if (card.PrimaryCategory.Equals(previousName, StringComparison.OrdinalIgnoreCase))
-            {
-                card.PrimaryCategory = normalizedNewName;
-            }
+            DeckCategoryOrdering.Replace(card, previousName, normalizedNewName);
         }
     }
 
@@ -707,16 +692,19 @@ public sealed partial class DeckWorkspaceService
 
         foreach (DeckCard card in workspace.Cards)
         {
-            bool wasPrimary = card.PrimaryCategory.Equals(categoryName, StringComparison.OrdinalIgnoreCase);
-            card.Categories.RemoveAll(value => value.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
+            bool wasPrimary = DeckCategoryOrdering.PrimaryCategory(card).Equals(
+                categoryName,
+                StringComparison.OrdinalIgnoreCase);
+            bool removedFromCard =
+                card.Categories.RemoveAll(value =>
+                    value.Equals(categoryName, StringComparison.OrdinalIgnoreCase)) > 0;
             if (wasPrimary)
             {
-                card.PrimaryCategory = replacement;
+                DeckCategoryOrdering.SetPrimary(card, replacement);
             }
-
-            if (wasPrimary)
+            else if (removedFromCard)
             {
-                AddCategoryName(card, replacement);
+                DeckCategoryOrdering.AddSecondary(card, replacement);
             }
         }
     }
@@ -736,8 +724,9 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static bool IsIncludedInPrice(DeckWorkspace workspace, DeckCard card)
     {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
         DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
-            string.Equals(value.Name, card.PrimaryCategory, StringComparison.OrdinalIgnoreCase));
+            string.Equals(value.Name, primaryCategory, StringComparison.OrdinalIgnoreCase));
         return category?.IncludedInPrice ?? true;
     }
 

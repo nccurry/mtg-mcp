@@ -304,7 +304,7 @@ public sealed partial class DeckWorkspaceService
                 "commander-baseline",
                 "Commander baseline",
                 RoleTargets((DeckRoles.Lands, 35, 39), (DeckRoles.Ramp, 8, 12), (DeckRoles.Draw, 8, 12), (DeckRoles.Interaction, 8, 13), (DeckRoles.BoardWipes, 2, 5), (DeckRoles.Protection, 2, 6), (DeckRoles.Recursion, 2, 6), (DeckRoles.Wincons, 2, 6)),
-                TagTargets((DeckTags.GraveyardHate, 1, 4), (DeckTags.ArtifactEnchantmentHate, 2, 6), (DeckTags.TableInteraction, 2, 7), (DeckTags.TokenHate, 1, 4), (DeckTags.Finishers, 2, 6)),
+                TagTargets((DeckTags.GraveyardHate, 1, 4), (DeckTags.ArtifactEnchantmentHate, 2, 6), (DeckTags.TableInteraction, 2, null), (DeckTags.TokenHate, 1, 4), (DeckTags.Finishers, 2, 6)),
                 "Broad default Commander thresholds."),
             Profile(
                 "command-zone-template",

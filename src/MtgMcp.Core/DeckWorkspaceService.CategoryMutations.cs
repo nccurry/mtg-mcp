@@ -20,7 +20,7 @@ public sealed partial class DeckWorkspaceService
         DeckCard card = FindRequiredCard(workspace, cardName, category: null);
         string normalizedCategory = NormalizeCategoryName(category);
         EnsureCategory(workspace, normalizedCategory);
-        AddCategoryName(card, normalizedCategory);
+        DeckCategoryOrdering.AddSecondary(card, normalizedCategory);
 
         await PersistCardsAsync(workspace, [card], [], cancellationToken).ConfigureAwait(false);
         return Change(
@@ -44,14 +44,8 @@ public sealed partial class DeckWorkspaceService
             .ConfigureAwait(false);
         DeckCard card = FindRequiredCard(workspace, cardName, category: null);
         string normalizedCategory = NormalizeCategoryName(category);
-        card.Categories.RemoveAll(value =>
-            value.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase)
-        );
-        if (card.PrimaryCategory.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase))
-        {
-            card.PrimaryCategory = card.Categories.FirstOrDefault() ?? DeckDefaults.Mainboard;
-            EnsureCategory(workspace, card.PrimaryCategory);
-        }
+        DeckCategoryOrdering.Remove(card, normalizedCategory);
+        EnsureCategory(workspace, card.PrimaryCategory);
 
         await PersistCardsAsync(workspace, [card], [], cancellationToken).ConfigureAwait(false);
         return Change(
@@ -76,8 +70,7 @@ public sealed partial class DeckWorkspaceService
         DeckCard card = FindRequiredCard(workspace, cardName, category: null);
         string normalizedCategory = NormalizeCategoryName(category);
         EnsureCategory(workspace, normalizedCategory);
-        card.PrimaryCategory = normalizedCategory;
-        AddCategoryName(card, normalizedCategory);
+        DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
 
         await PersistCardsAsync(workspace, [card], [], cancellationToken).ConfigureAwait(false);
         return Change(
@@ -133,18 +126,7 @@ public sealed partial class DeckWorkspaceService
 
         foreach (DeckCard card in workspace.Cards)
         {
-            for (int index = 0; index < card.Categories.Count; index++)
-            {
-                if (card.Categories[index].Equals(previousName, StringComparison.OrdinalIgnoreCase))
-                {
-                    card.Categories[index] = normalizedNewName;
-                }
-            }
-
-            if (card.PrimaryCategory.Equals(previousName, StringComparison.OrdinalIgnoreCase))
-            {
-                card.PrimaryCategory = normalizedNewName;
-            }
+            DeckCategoryOrdering.Replace(card, previousName, normalizedNewName);
         }
 
         await PersistCategoryAsync(workspace, category, cancellationToken).ConfigureAwait(false);
@@ -176,23 +158,22 @@ public sealed partial class DeckWorkspaceService
         workspace.Categories.Remove(removedCategory);
         foreach (DeckCard card in workspace.Cards)
         {
+            bool wasPrimary = DeckCategoryOrdering.PrimaryCategory(card).Equals(
+                removedCategory.Name,
+                StringComparison.OrdinalIgnoreCase
+            );
             bool removedFromCard =
                 card.Categories.RemoveAll(value =>
                     value.Equals(removedCategory.Name, StringComparison.OrdinalIgnoreCase)
                 ) > 0;
-            bool wasPrimary = card.PrimaryCategory.Equals(
-                removedCategory.Name,
-                StringComparison.OrdinalIgnoreCase
-            );
 
             if (wasPrimary)
             {
-                card.PrimaryCategory = replacement;
+                DeckCategoryOrdering.SetPrimary(card, replacement);
             }
-
-            if (removedFromCard || wasPrimary)
+            else if (removedFromCard)
             {
-                AddCategoryName(card, replacement);
+                DeckCategoryOrdering.AddSecondary(card, replacement);
             }
         }
 
@@ -247,25 +228,10 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
-    /// Adds the category name.
-    /// </summary>
-    private static void AddCategoryName(DeckCard card, string category)
-    {
-        if (
-            !card.Categories.Any(value =>
-                value.Equals(category, StringComparison.OrdinalIgnoreCase)
-            )
-        )
-        {
-            card.Categories.Add(category);
-        }
-    }
-
-    /// <summary>
     /// Normalizes the category name.
     /// </summary>
     private static string NormalizeCategoryName(string category)
     {
-        return string.IsNullOrWhiteSpace(category) ? DeckDefaults.Mainboard : category.Trim();
+        return DeckCategoryOrdering.NormalizeCategoryName(category);
     }
 }

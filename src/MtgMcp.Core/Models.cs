@@ -691,6 +691,12 @@ public sealed class DeckAnalysis
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets or sets primary-category counts for cards included in the active deck.
+    /// </summary>
+    public Dictionary<string, int> IncludedCategoryCounts { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets or sets the type counts.
     /// </summary>
     public Dictionary<string, int> TypeCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);

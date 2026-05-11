@@ -43,8 +43,9 @@ public static partial class DeckIntentText
     {
         return workspace.Cards
             .FirstOrDefault(card =>
-                string.Equals(card.PrimaryCategory, DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
-                || (card.Categories ?? []).Any(category => category.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)))
+                DeckCategoryOrdering.PrimaryCategory(card).Equals(
+                    DeckRoles.Commander,
+                    StringComparison.OrdinalIgnoreCase))
             ?.Name;
     }
 

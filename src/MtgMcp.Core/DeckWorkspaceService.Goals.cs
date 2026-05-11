@@ -116,11 +116,27 @@ public sealed partial class DeckWorkspaceService
     {
         string normalized = goal.ToLowerInvariant();
         string legal = $"legal:{NormalizeFormat(format)} usd<={maxPrice:0.##}";
+        if (ContainsAny(normalized, "commander protection", "protect commander", "protection", "protect my commander"))
+        {
+            return (NormalizeFocus(strategy), DeckRoles.Protection,
+                [$"(o:\"equipped creature has hexproof\" or o:\"equipped creature has shroud\" or o:\"target creature gains hexproof\" or o:\"permanents you control gain hexproof\") {legal}", $"(o:\"creature you control gains indestructible\" or o:\"target creature gains protection\" or o:\"phase out\") {legal}"],
+                [DeckRoles.Protection, DeckTags.CombatProtection, DeckTags.Voltron],
+                "Adds cards that can protect the commander or another important permanent.");
+        }
+
+        if (ContainsAny(normalized, "politics", "goad", "tempt", "tempting", "monarch", "vote", "council"))
+        {
+            return (NormalizeFocus(strategy), DeckRoles.Interaction,
+                [$"(o:goad or o:monarch or o:vote or o:\"council's dilemma\" or o:\"will of the council\" or o:\"tempting offer\") {legal}", $"(o:\"each opponent\" or o:\"opponents choose\" or o:\"each player votes\") {legal}"],
+                [DeckTags.Politics, DeckTags.TableInteraction, DeckRoles.Interaction],
+                "Adds political or table-wide effects that create choices and affect multiple opponents.");
+        }
+
         if (normalized.Contains("whole table", StringComparison.OrdinalIgnoreCase) || normalized.Contains("table", StringComparison.OrdinalIgnoreCase))
         {
             return (NormalizeFocus(strategy), DeckRoles.Interaction,
-                [$"(o:\"each opponent\" or o:\"each player\" or o:\"each creature\") {legal}", $"(o:\"destroy all\" or o:\"exile all\") {legal}"],
-                [DeckTags.TableInteraction, DeckRoles.BoardWipes, DeckRoles.Interaction],
+                [$"(o:goad or o:monarch or o:vote or o:\"tempting offer\" or o:\"each opponent\") {legal}", $"(o:\"each player\" or o:\"opponents choose\" or o:\"each creature\") {legal}"],
+                [DeckTags.TableInteraction, DeckTags.Politics, DeckRoles.BoardWipes, DeckRoles.Interaction],
                 "Adds effects that touch multiple opponents or the whole battlefield.");
         }
 

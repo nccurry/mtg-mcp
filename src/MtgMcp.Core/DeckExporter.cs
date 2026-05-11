@@ -17,7 +17,7 @@ public sealed class DeckExporter
         {
             List<DeckCard> cards = workspace
                 .Cards.Where(card =>
-                    card.PrimaryCategory.Equals(category.Name, StringComparison.OrdinalIgnoreCase)
+                    DeckCategoryOrdering.PrimaryCategory(card).Equals(category.Name, StringComparison.OrdinalIgnoreCase)
                 )
                 .OrderBy(card => card.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();

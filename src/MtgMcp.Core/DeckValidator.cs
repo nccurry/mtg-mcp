@@ -45,7 +45,7 @@ public sealed class DeckValidator
                 result.Errors.Add($"{card.Name} has a non-positive quantity.");
             }
 
-            if (string.IsNullOrWhiteSpace(card.PrimaryCategory))
+            if (string.IsNullOrWhiteSpace(DeckCategoryOrdering.PrimaryCategory(card)))
             {
                 result.Errors.Add($"{card.Name} has no primary category.");
             }
@@ -59,18 +59,10 @@ public sealed class DeckValidator
     /// </summary>
     private static int CountIncludedCards(DeckWorkspace workspace)
     {
-        HashSet<string> includedCategories = workspace
-            .Categories.Where(category => category.IncludedInDeck)
-            .Select(category => category.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         int total = 0;
-        foreach (DeckCard card in workspace.Cards)
+        foreach (DeckCard card in DeckCategoryInclusion.IncludedCards(workspace))
         {
-            if (includedCategories.Contains(card.PrimaryCategory))
-            {
-                total += card.Quantity;
-            }
+            total += card.Quantity;
         }
 
         return total;

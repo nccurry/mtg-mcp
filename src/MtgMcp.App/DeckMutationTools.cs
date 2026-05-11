@@ -115,7 +115,7 @@ public sealed class DeckMutationTools
         OpenWorld = true
     )]
     [Description(
-        "Move a card to another primary category, such as Mainboard, Sideboard, or Maybeboard."
+        "Move a card by making the target the first Archidekt category, such as Mainboard, Sideboard, or Maybeboard."
     )]
     public Task<DeckChangeResult> MoveCardAsync(
         string workspaceId,

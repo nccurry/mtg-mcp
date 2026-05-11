@@ -34,8 +34,18 @@ public sealed class McpE2ETests
             "search_cards",
             "start_deck_workspace",
             "add_card",
-            "analyze_deck"
+            "analyze_deck",
+            "analyze_deck_performance",
+            "compare_plan_performance",
+            "get_server_info"
         ]);
+
+        JsonElement serverInfo = await CallJsonAsync(
+            session.Client,
+            "get_server_info",
+            new Dictionary<string, object?>());
+        GetString(serverInfo, "assemblyName").Should().Be("MtgMcp.App");
+        GetString(serverInfo, "operationMode").Should().Be("apply");
     }
 
     /// <summary>
@@ -94,6 +104,90 @@ public sealed class McpE2ETests
             .ContainSingle(request =>
                 request.Method == "GET"
                 && DecodeRepeatedly(request.PathAndQuery) == "cards/named?fuzzy=Lightning Bolt");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that performance analysis and plan comparison work through MCP stdio.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task PerformanceFlow_AnalyzesAndComparesPlanThroughMcp()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        scryfall.PostJson("cards/collection", PerformanceCollectionJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("(o:add or o:treasure or o:\"search your library for a land\") legal:commander usd<=5"),
+            ArcaneSignetSearchJson);
+        scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "import_decklist",
+            new Dictionary<string, object?>
+            {
+                ["name"] = "E2E Performance",
+                ["format"] = "commander",
+                ["decklist"] = """
+                    30 Forest
+                    70 Blank Spell
+                    """
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        JsonElement analysis = await CallJsonAsync(
+            session.Client,
+            "analyze_deck_performance",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["simulations"] = 200,
+                ["maxTurn"] = 3,
+                ["seed"] = 2026,
+                ["includeMulligans"] = false
+            });
+        JsonElement planResult = await CallJsonAsync(
+            session.Client,
+            "find_consistency_improvements",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["focus"] = "ramp",
+                ["maxPrice"] = 5,
+                ["limit"] = 1
+            });
+        string planId = GetString(GetObject(planResult, "plan"), "planId");
+        JsonElement comparison = await CallJsonAsync(
+            session.Client,
+            "compare_plan_performance",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["simulations"] = 200,
+                ["maxTurn"] = 3,
+                ["seed"] = 2026
+            });
+
+        GetInt32(analysis, "deckSize").Should().Be(100);
+        FindNamedTurn(GetArray(analysis, "turnProbabilities"), "land-drop-by-turn", 3)
+            .GetProperty("sampleSize")
+            .GetInt32()
+            .Should()
+            .Be(200);
+        FindNamed(GetArray(analysis, "scenarios"), "stranded-high-mana-risk-by-max-turn")
+            .GetProperty("failureDriverCounts")
+            .ValueKind.Should()
+            .Be(JsonValueKind.Object);
+        JsonElement rampDelta = FindNamed(GetArray(comparison, "deltas"), "ramp-cast-by-turn-3", metricProperty: "metric");
+        rampDelta.GetProperty("after").GetDouble().Should().BeGreaterThan(rampDelta.GetProperty("before").GetDouble());
+        rampDelta.GetProperty("beforeLowConfidenceInterval").ValueKind.Should().NotBe(JsonValueKind.Null);
         archidekt.Requests.Should().BeEmpty();
     }
 
@@ -174,6 +268,12 @@ public sealed class McpE2ETests
         await using FakeHttpServer archidekt = new();
         await using FakeHttpServer spellbook = new();
         DateOnly defaultSince = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime).AddYears(-1);
+        scryfall.GetJson(
+            ScryfallSearchPath("(o:goad or o:monarch or o:vote or o:\"tempting offer\" or o:\"each opponent\") legal:commander usd<=5"),
+            TableEdictSearchJson);
+        scryfall.GetJson(
+            ScryfallSearchPath("(o:\"each player\" or o:\"opponents choose\" or o:\"each creature\") legal:commander usd<=5"),
+            EmptySearchJson);
         scryfall.GetJson(
             ScryfallSearchPath("(o:\"each opponent\" or o:\"each player\" or o:\"each creature\") legal:commander usd<=5"),
             TableEdictSearchJson);
@@ -559,6 +659,53 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Reads a JSON array property using camelCase or PascalCase naming.
+    /// </summary>
+    private static JsonElement.ArrayEnumerator GetArray(JsonElement element, string propertyName)
+    {
+        return GetProperty(element, propertyName).EnumerateArray();
+    }
+
+    /// <summary>
+    /// Finds a named object inside a JSON array.
+    /// </summary>
+    private static JsonElement FindNamed(
+        JsonElement.ArrayEnumerator values,
+        string name,
+        string metricProperty = "name")
+    {
+        foreach (JsonElement value in values)
+        {
+            if (GetString(value, metricProperty).Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        throw new InvalidOperationException($"Array item named '{name}' was not found.");
+    }
+
+    /// <summary>
+    /// Finds a named turn metric inside a JSON array.
+    /// </summary>
+    private static JsonElement FindNamedTurn(
+        JsonElement.ArrayEnumerator values,
+        string name,
+        int turn)
+    {
+        foreach (JsonElement value in values)
+        {
+            if (GetString(value, "name").Equals(name, StringComparison.OrdinalIgnoreCase)
+                && GetInt32(value, "turn") == turn)
+            {
+                return value;
+            }
+        }
+
+        throw new InvalidOperationException($"Array item named '{name}' for turn {turn} was not found.");
+    }
+
+    /// <summary>
     /// Finds a JSON property while tolerating serializer casing differences.
     /// </summary>
     private static JsonElement GetProperty(JsonElement element, string propertyName)
@@ -675,6 +822,76 @@ public sealed class McpE2ETests
           "legalities": { "commander": "legal" },
           "prices": { "usd": "0.50" },
           "edhrec_rank": 2500
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Scryfall search payload for performance comparison E2E tests.
+    /// </summary>
+    private const string ArcaneSignetSearchJson = """
+    {
+      "has_more": false,
+      "data": [
+        {
+          "id": "arcane-signet",
+          "name": "Arcane Signet",
+          "mana_cost": "{2}",
+          "cmc": 2,
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+          "produced_mana": ["W", "U", "B", "R", "G"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "1.00" },
+          "edhrec_rank": 5
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides Scryfall collection data for performance E2E deck imports and candidate hydration.
+    /// </summary>
+    private const string PerformanceCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "forest",
+          "oracle_id": "oracle-forest",
+          "name": "Forest",
+          "cmc": 0,
+          "type_line": "Basic Land - Forest",
+          "oracle_text": "({T}: Add {G}.)",
+          "produced_mana": ["G"],
+          "color_identity": ["G"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "0.05" }
+        },
+        {
+          "id": "blank-spell",
+          "oracle_id": "oracle-blank-spell",
+          "name": "Blank Spell",
+          "mana_cost": "{3}",
+          "cmc": 3,
+          "type_line": "Sorcery",
+          "oracle_text": "Scry 1.",
+          "color_identity": [],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "0.05" }
+        },
+        {
+          "id": "arcane-signet",
+          "oracle_id": "oracle-arcane-signet",
+          "name": "Arcane Signet",
+          "mana_cost": "{2}",
+          "cmc": 2,
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+          "produced_mana": ["W", "U", "B", "R", "G"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "1.00" },
+          "edhrec_rank": 5
         }
       ]
     }

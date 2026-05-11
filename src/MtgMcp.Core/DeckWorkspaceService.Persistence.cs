@@ -50,6 +50,7 @@ public sealed partial class DeckWorkspaceService
 
         fresh.Id = workspace.Id;
         fresh.WriteBack = true;
+        NormalizeWorkspaceCategories(fresh);
         return await repository.SaveAsync(fresh, cancellationToken).ConfigureAwait(false);
     }
 
@@ -63,6 +64,8 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        NormalizeWorkspaceCategories(workspace);
+
         if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack)
         {
             await RequireArchidektGateway()
@@ -82,6 +85,8 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        NormalizeWorkspaceCategories(workspace);
+
         if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack)
         {
             await RequireArchidektGateway()
@@ -101,6 +106,8 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        NormalizeWorkspaceCategories(workspace);
+
         if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack)
         {
             await RequireArchidektGateway()
@@ -137,5 +144,16 @@ public sealed partial class DeckWorkspaceService
     {
         return archidektGateway
             ?? throw new InvalidOperationException("Archidekt support is not configured.");
+    }
+
+    /// <summary>
+    /// Keeps cached card category mirrors aligned before persistence or adapter writeback.
+    /// </summary>
+    private static void NormalizeWorkspaceCategories(DeckWorkspace workspace)
+    {
+        foreach (DeckCard card in workspace.Cards)
+        {
+            DeckCategoryOrdering.Normalize(card);
+        }
     }
 }

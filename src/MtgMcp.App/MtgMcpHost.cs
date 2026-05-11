@@ -36,6 +36,7 @@ public static class MtgMcpHost
         services.GetRequiredService<ICommanderMetaProvider>();
         services.GetRequiredService<IComboCatalog>();
         _ = services.GetRequiredService<OperationModeGuard>().EffectiveMode;
+        services.GetRequiredService<ServerInfoService>();
     }
 
     /// <summary>
@@ -74,6 +75,7 @@ public static class MtgMcpHost
         });
         builder.Services.AddTransient<DeckWorkspaceService>();
         builder.Services.AddSingleton<OperationModeGuard>();
+        builder.Services.AddSingleton<ServerInfoService>();
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
         builder.Services.AddCommanderSpellbook(builder.Configuration);

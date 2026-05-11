@@ -74,7 +74,8 @@ public sealed class ArchidektGatewayTests
             .Contain(category => category.Name == "Maybeboard" && category.IncludedInDeck == false);
         deck.Cards.Should().ContainSingle();
         deck.Cards[0].Name.Should().Be("Lightning Bolt");
-        deck.Cards[0].Categories.Should().BeEquivalentTo(["Mainboard", "Maybeboard"]);
+        deck.Cards[0].PrimaryCategory.Should().Be(DeckDefaults.Mainboard);
+        deck.Cards[0].Categories.Should().Equal(DeckDefaults.Mainboard, DeckDefaults.Maybeboard);
         deck.Cards[0].ArchidektCardId.Should().Be("99");
         deck.Cards[0].ArchidektDeckRelationId.Should().Be(44);
         deck.Cards[0].Snapshot.TypeLine.Should().Be("Instant");
@@ -248,7 +249,7 @@ public sealed class ArchidektGatewayTests
         {
             Name = "Lightning Bolt",
             Quantity = 2,
-            Categories = [DeckDefaults.Mainboard],
+            Categories = ["Testing", DeckDefaults.Mainboard, "testing"],
             PrimaryCategory = DeckDefaults.Mainboard,
         };
 
@@ -265,11 +266,15 @@ public sealed class ArchidektGatewayTests
         JsonElement firstCard = document.RootElement.GetProperty("cards")[0];
         firstCard.GetProperty("action").GetString().Should().Be("add");
         firstCard.GetProperty("cardid").GetInt32().Should().Be(151147);
-        firstCard.GetProperty("categories")[0].GetString().Should().Be(DeckDefaults.Mainboard);
+        firstCard.GetProperty("categories").EnumerateArray()
+            .Select(category => category.GetString())
+            .Should()
+            .Equal("Testing", DeckDefaults.Mainboard);
         firstCard.GetProperty("modifications").GetProperty("quantity").GetInt32().Should().Be(2);
         firstCard.TryGetProperty("deckRelationId", out _).Should().BeFalse();
         firstCard.GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
         card.ArchidektCardId.Should().Be("151147");
+        card.PrimaryCategory.Should().Be("Testing");
     }
 
     /// <summary>

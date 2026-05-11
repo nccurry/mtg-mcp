@@ -141,6 +141,52 @@ public sealed class IntelligenceTools
     }
 
     /// <summary>
+    /// Analyzes whole-deck performance.
+    /// </summary>
+    [McpServerTool(Name = "analyze_deck_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Run deterministic Stats Lab Monte Carlo analysis for opening hands, mulligans, land drops, colors, castability, commander timing, combo assembly, stranded cards, and named scenarios.")]
+    public Task<DeckPerformanceAnalysis> AnalyzeDeckPerformanceAsync(
+        string workspaceId,
+        string profile = "commander-default",
+        int simulations = 50_000,
+        int maxTurn = 8,
+        int seed = 1337,
+        bool includeMulligans = true,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.AnalyzeDeckPerformanceAsync(
+            workspaceId,
+            profile,
+            simulations,
+            maxTurn,
+            seed,
+            includeMulligans,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Compares performance before and after a deck plan.
+    /// </summary>
+    [McpServerTool(Name = "compare_plan_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Preview a persisted deck edit plan and compare deterministic Stats Lab performance before and after the changes.")]
+    public Task<DeckPerformanceComparison> ComparePlanPerformanceAsync(
+        string planId,
+        string profile = "commander-default",
+        int simulations = 50_000,
+        int maxTurn = 8,
+        int seed = 1337,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.ComparePlanPerformanceAsync(
+            planId,
+            profile,
+            simulations,
+            maxTurn,
+            seed,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Finds budget replacements.
     /// </summary>
     [McpServerTool(Name = "find_budget_replacements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]

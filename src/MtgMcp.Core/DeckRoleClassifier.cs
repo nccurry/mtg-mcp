@@ -11,7 +11,8 @@ public static class DeckRoleClassifier
     public static CardRoleAssignment Classify(DeckCard card)
     {
         CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
-        string categoryText = string.Join(' ', Categories(card).Append(card.PrimaryCategory ?? ""));
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        string categoryText = string.Join(' ', Categories(card).Append(primaryCategory));
         string typeLine = Text(snapshot.TypeLine, card.Metadata, "typeLine");
         string primaryTypeLine = PrimaryTypeLine(typeLine);
         bool hasNonPrimaryLandFace = HasNonPrimaryLandFace(typeLine);
@@ -20,12 +21,13 @@ public static class DeckRoleClassifier
 
         List<string> tags = ClassifyTags(card, combined);
 
-        if (HasCategory(card, DeckDefaults.Maybeboard))
+        if (primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
         {
             return Assignment(DeckRoles.Maybeboard, tags, 0.95);
         }
 
-        if (HasCategory(card, DeckRoles.Commander) || HasCategory(card, "Commander"))
+        if (primaryCategory.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
+            || primaryCategory.Equals("Commander", StringComparison.OrdinalIgnoreCase))
         {
             return Assignment(DeckRoles.Commander, tags, 0.95);
         }
@@ -80,7 +82,7 @@ public static class DeckRoleClassifier
         }
 
         if (ContainsAny(categoryText, DeckRoles.Protection)
-            || ContainsAny(oracleText, "hexproof", "shroud", "indestructible", "protection from", "prevent all damage", "phase out"))
+            || ContainsCommanderProtectionText(oracleText))
         {
             return Assignment(DeckRoles.Protection, tags, 0.78);
         }
@@ -92,7 +94,7 @@ public static class DeckRoleClassifier
         }
 
         if (ContainsAny(categoryText, DeckRoles.Wincons, "finisher")
-            || ContainsAny(oracleText, "win the game", "each opponent loses", "loses half their life", "damage to each opponent"))
+            || ContainsFinisherText(oracleText))
         {
             return Assignment(DeckRoles.Wincons, tags, 0.72);
         }
@@ -133,7 +135,7 @@ public static class DeckRoleClassifier
             return true;
         }
 
-        return string.Equals(card.PrimaryCategory, target, StringComparison.OrdinalIgnoreCase);
+        return DeckCategoryOrdering.PrimaryCategory(card).Equals(target, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -189,10 +191,10 @@ public static class DeckRoleClassifier
         AddTag(tags, DeckTags.GoWideProtection, ContainsAny(text, "prevent all combat damage", "creatures can't attack you", "attacks you") && ContainsAny(text, "each creature", "creatures", "combat damage"));
         AddTag(tags, DeckTags.Pillowfort, ContainsAny(text, "creatures can't attack you", "can't attack you", "unless their controller pays", "prevent all combat damage"));
         AddTag(tags, DeckTags.TokenHate, ContainsAny(text, "destroy all tokens", "creature tokens", "tokens get", "tokens can't", "each creature gets -1/-1"));
-        AddTag(tags, DeckTags.ArtifactEnchantmentHate, ContainsAny(text, "destroy target artifact", "destroy target enchantment", "exile target artifact", "exile target enchantment", "destroy all artifacts", "destroy all enchantments"));
+        AddTag(tags, DeckTags.ArtifactEnchantmentHate, ContainsArtifactEnchantmentHateText(text));
         AddTag(tags, DeckTags.CombatProtection, ContainsAny(text, "prevent all combat damage", "prevent all damage", "phase out", "indestructible until end of turn"));
         AddTag(tags, DeckTags.Evasion, ContainsAny(text, "flying", "trample", "menace", "can't be blocked", "unblockable"));
-        AddTag(tags, DeckTags.Finishers, ContainsAny(text, "creatures you control get +", "extra combat", "damage to each opponent", "each opponent loses", "win the game"));
+        AddTag(tags, DeckTags.Finishers, ContainsFinisherText(text));
         AddTag(tags, DeckTags.SacrificeFodder, ContainsAny(text, "create") && ContainsAny(text, "token"));
         AddTag(tags, DeckTags.Engines, ContainsAny(text, "whenever", "at the beginning") && ContainsAny(text, "draw", "create", "return", "lose 1 life"));
         AddTag(tags, DeckTags.ComboEnabler, ContainsAny(text, "untap", "copy", "activate only once", "as though it had flash") && ContainsAny(text, "add", "permanent", "ability", "spell"));
@@ -234,8 +236,7 @@ public static class DeckRoleClassifier
     /// </summary>
     private static bool HasCategory(DeckCard card, string category)
     {
-        return Categories(card).Any(value => value.Equals(category, StringComparison.OrdinalIgnoreCase))
-            || string.Equals(card.PrimaryCategory, category, StringComparison.OrdinalIgnoreCase);
+        return DeckCategoryOrdering.HasCategory(card, category);
     }
 
     /// <summary>
@@ -299,6 +300,83 @@ public static class DeckRoleClassifier
         }
 
         return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
+    }
+
+    /// <summary>
+    /// Checks whether rules text can protect another important permanent rather than only itself.
+    /// </summary>
+    private static bool ContainsCommanderProtectionText(string oracleText)
+    {
+        bool protectionKeyword = ContainsAny(
+            oracleText,
+            "hexproof",
+            "shroud",
+            "indestructible",
+            "protection from",
+            "prevent all damage",
+            "phase out");
+        if (!protectionKeyword)
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            oracleText,
+            "equipped creature",
+            "enchanted creature",
+            "target creature",
+            "target permanent",
+            "creature you control",
+            "permanent you control",
+            "creatures you control",
+            "permanents you control",
+            "you control gain",
+            "you control have",
+            "prevent all damage");
+    }
+
+    /// <summary>
+    /// Checks whether text describes a game-closing effect rather than incidental life loss.
+    /// </summary>
+    private static bool ContainsFinisherText(string text)
+    {
+        if (ContainsAny(
+            text,
+            "win the game",
+            "loses half their life",
+            "repeat this process",
+            "repeat the following process",
+            "creatures you control get +",
+            "extra combat",
+            "damage to each opponent equal"))
+        {
+            return true;
+        }
+
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            text,
+            @"each opponent loses\s+x\s+life|each opponent loses life equal",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether rules text answers artifacts or enchantments.
+    /// </summary>
+    private static bool ContainsArtifactEnchantmentHateText(string text)
+    {
+        return ContainsAny(
+            text,
+            "destroy target artifact",
+            "destroy target enchantment",
+            "exile target artifact",
+            "exile target enchantment",
+            "destroy all artifacts",
+            "destroy all enchantments",
+            "artifacts and enchantments",
+            "artifact or enchantment",
+            "target creature or enchantment",
+            "sacrifices an enchantment",
+            "sacrifices an artifact");
     }
 
     /// <summary>

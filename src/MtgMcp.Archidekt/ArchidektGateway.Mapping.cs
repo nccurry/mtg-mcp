@@ -73,8 +73,11 @@ public sealed partial class ArchidektGateway
                 ?? GetString(cardElement, "name")
                 ?? GetString(relation, "name")
                 ?? "Unknown Card";
-            List<string> categoryNames = ParseCardCategories(relation, categories);
-            string primaryCategory = categoryNames.FirstOrDefault() ?? DeckDefaults.Mainboard;
+            List<string> parsedCategories = ParseCardCategories(relation, categories);
+            List<string> categoryNames = DeckCategoryOrdering.OrderedDistinct(
+                parsedCategories.FirstOrDefault() ?? DeckDefaults.Mainboard,
+                parsedCategories);
+            string primaryCategory = categoryNames[0];
 
             DeckCard card = new()
             {

@@ -26,25 +26,26 @@ public sealed class DeckAnalyzer
     public static DeckAnalysis Analyze(DeckWorkspace workspace)
     {
         DeckAnalysis analysis = new();
-        HashSet<string> includedCategories = workspace
-            .Categories.Where(category => category.IncludedInDeck)
-            .Select(category => category.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, DeckCategory> categories = DeckCategoryInclusion.BuildCategoryMap(workspace);
 
         foreach (DeckCard card in workspace.Cards)
         {
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
             analysis.TotalCards += card.Quantity;
-            Increment(analysis.CategoryCounts, card.PrimaryCategory, card.Quantity);
+            Increment(analysis.CategoryCounts, primaryCategory, card.Quantity);
+            bool included = DeckCategoryInclusion.IsIncludedInDeck(categories, primaryCategory);
+            if (!included)
+            {
+                continue;
+            }
+
+            analysis.IncludedCards += card.Quantity;
+            Increment(analysis.IncludedCategoryCounts, primaryCategory, card.Quantity);
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             Increment(analysis.RoleCounts, role.PrimaryRole, card.Quantity);
             foreach (string tag in role.Tags)
             {
                 Increment(analysis.TagCounts, tag, card.Quantity);
-            }
-
-            if (includedCategories.Contains(card.PrimaryCategory))
-            {
-                analysis.IncludedCards += card.Quantity;
             }
 
             string? typeLine = GetTypeLine(card);

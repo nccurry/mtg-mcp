@@ -441,6 +441,29 @@ public sealed class DeckIntelligenceTests
             .PrimaryRole
             .Should()
             .Be(DeckRoles.Utility);
+
+        DeckRoleClassifier.Classify(Card(
+                "Tourach, Dread Cantor",
+                "Legendary Creature",
+                "Kicker {B}{B}. Protection from white. Whenever an opponent discards a card, put a +1/+1 counter on Tourach."))
+            .PrimaryRole
+            .Should()
+            .NotBe(DeckRoles.Protection);
+
+        DeckRoleClassifier.Classify(Card(
+                "Swiftfoot Boots",
+                "Artifact — Equipment",
+                "Equipped creature has hexproof and haste. Equip {1}."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Protection);
+        DeckRoleClassifier.Classify(Card(
+                "Lightning Greaves",
+                "Artifact — Equipment",
+                "Equipped creature has haste and shroud. Equip {0}."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Protection);
     }
 
     /// <summary>
@@ -470,6 +493,35 @@ public sealed class DeckIntelligenceTests
             .Tags
             .Should()
             .Contain(DeckTags.ArtifactEnchantmentHate);
+
+        CardRoleAssignment viciousRumors = DeckRoleClassifier.Classify(Card(
+            "Vicious Rumors",
+            "Sorcery",
+            "Vicious Rumors deals 1 damage to each opponent. Each opponent discards a card."));
+        viciousRumors.PrimaryRole.Should().NotBe(DeckRoles.Wincons);
+        viciousRumors.Tags.Should().NotContain(DeckTags.Finishers);
+
+        CardRoleAssignment leechriddenSwamp = DeckRoleClassifier.Classify(Card(
+            "Leechridden Swamp",
+            "Land",
+            "{B}, {T}: Each opponent loses 1 life. Activate only if you control two or more black permanents."));
+        leechriddenSwamp.PrimaryRole.Should().NotBe(DeckRoles.Wincons);
+        leechriddenSwamp.Tags.Should().NotContain(DeckTags.Finishers);
+
+        DeckRoleClassifier.Classify(Card(
+                "Torment of Hailfire",
+                "Sorcery",
+                "Repeat the following process X times. Each opponent loses 3 life unless they sacrifice a nonland permanent or discard a card."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.Finishers);
+        DeckRoleClassifier.Classify(Card(
+                "Gray Merchant of Asphodel",
+                "Creature",
+                "When Gray Merchant enters, each opponent loses X life, where X is your devotion to black. You gain life equal to the life lost this way."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.Finishers);
     }
 
     /// <summary>
@@ -605,6 +657,89 @@ public sealed class DeckIntelligenceTests
         result.Plan.Operations.Should().Contain(operation => operation.Operation == DeckEditOperations.AddCard);
         result.Suggestions.Should().Contain(suggestion => suggestion.Tags.Contains(DeckTags.TableInteraction));
         (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that goal recommendations understand politics and table-wide interaction requests.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsForDeckGoal_CreatesPlanForPoliticsInteraction()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Politics Goal",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
+            workspace.Id,
+            "add politics or monarch cards that interact with the whole table",
+            count: 1,
+            maxPrice: 5,
+            strategy: "balanced",
+            TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().Contain(suggestion =>
+            suggestion.CardName == "Court of Ambition"
+            && suggestion.Tags.Contains(DeckTags.Politics)
+            && suggestion.Tags.Contains(DeckTags.TableInteraction));
+    }
+
+    /// <summary>
+    /// Verifies that goal recommendations understand commander protection requests.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsForDeckGoal_CreatesPlanForCommanderProtection()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Protection Goal",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
+            workspace.Id,
+            "ensure I have commander protection",
+            count: 1,
+            maxPrice: 10,
+            strategy: "balanced",
+            TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard
+            && operation.CardName == "Lightning Greaves"
+            && operation.Category == DeckRoles.Protection);
+        result.Suggestions.Should().Contain(suggestion =>
+            suggestion.CardName == "Lightning Greaves"
+            && suggestion.Role == DeckRoles.Protection);
     }
 
     /// <summary>
@@ -1812,6 +1947,63 @@ public sealed class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that preview and apply agree for delete-category replacement.
+    /// </summary>
+    [Fact]
+    public async Task PreviewAndApplyDeckPlan_DeleteCategoryReplacementAgree()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Delete Category Preview",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true, IncludedInPrice = true },
+                new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false, IncludedInPrice = true },
+            ],
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Move ramp to sideboard",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.DeleteCategory,
+                    Category = DeckRoles.Ramp,
+                    ToCategory = DeckDefaults.Sideboard
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+        DeckEditPlanApplyResult applied = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: false,
+            checkpointName: null,
+            TestContext.Current.CancellationToken);
+
+        preview.Warnings.Should().BeEmpty();
+        preview.After.Cost.IncludedTotal.Should().Be(0);
+        preview.After.Analysis.IncludedCards.Should().Be(0);
+        DeckCard appliedCard = applied.Workspace.Cards.Single();
+        appliedCard.PrimaryCategory.Should().Be(DeckDefaults.Sideboard);
+        appliedCard.Categories.Should().Equal(DeckDefaults.Sideboard);
+        DeckAnalyzer.Analyze(applied.Workspace).IncludedCards.Should().Be(preview.After.Analysis.IncludedCards);
+        DeckWorkspace opened = await service.OpenLocalDeckAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+        opened.Cards.Single().PrimaryCategory.Should().Be(DeckDefaults.Sideboard);
+    }
+
+    /// <summary>
     /// Verifies that bracket reduction creates a persisted non-mutating plan.
     /// </summary>
     [Fact]
@@ -2595,6 +2787,17 @@ public sealed class DeckIntelligenceTests
                     new CardSearchResult { Name = "Hero's Downfall" }
                 ];
             }
+            else if (query.Contains("goad", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("monarch", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("vote", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("tempting offer", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Court of Ambition" },
+                    new CardSearchResult { Name = "Syphon Mind" }
+                ];
+            }
             else if (query.Contains("each opponent", StringComparison.OrdinalIgnoreCase)
                 || query.Contains("each player", StringComparison.OrdinalIgnoreCase)
                 || query.Contains("each creature", StringComparison.OrdinalIgnoreCase))
@@ -2836,6 +3039,20 @@ public sealed class DeckIntelligenceTests
                     EdhrecRank = 2_500,
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                },
+                "Court of Ambition" => new CardInfo
+                {
+                    Id = "court-of-ambition",
+                    OracleId = "oracle-court-of-ambition",
+                    Name = "Court of Ambition",
+                    ManaCost = "{2}{B}{B}",
+                    ManaValue = 4,
+                    TypeLine = "Enchantment",
+                    OracleText = "When Court of Ambition enters the battlefield, you become the monarch. At the beginning of your upkeep, each opponent loses 3 life unless they discard a card.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 2_100,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "4.00" }
                 },
                 "Blasphemous Act" => new CardInfo
                 {

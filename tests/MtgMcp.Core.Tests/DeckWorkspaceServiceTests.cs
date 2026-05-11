@@ -40,7 +40,7 @@ public sealed class DeckWorkspaceServiceTests
     /// Verifies that local mutations move cards and preserve categories.
     /// </summary>
     [Fact]
-    public async Task LocalMutations_MoveCardsAndReplacePrimaryCategory()
+    public async Task LocalMutations_MoveCardsReordersPrimaryCategory()
     {
         InMemoryRepository repository = new();
         DeckWorkspaceService service = new(repository, new FakeCardCatalog());
@@ -79,14 +79,106 @@ public sealed class DeckWorkspaceServiceTests
         result.Persistence.Should().Be(DeckPersistence.LocalOnly);
         opened.Cards.Should().ContainSingle();
         opened.Cards[0].PrimaryCategory.Should().Be(DeckDefaults.Maybeboard);
-        opened.Cards[0].Categories.Should().NotContain(DeckDefaults.Mainboard);
-        opened.Cards[0].Categories.Should().Contain(DeckDefaults.Maybeboard);
-        opened.Cards[0].Categories.Should().Contain("Testing");
+        opened.Cards[0].Categories.Should().Equal(DeckDefaults.Maybeboard, DeckDefaults.Mainboard, "Testing");
         opened.Cards[0].Snapshot.TypeLine.Should().Be("Instant");
         opened.Cards[0].Snapshot.ColorIdentity.Should().BeEquivalentTo(["R"]);
         opened.Cards[0].Snapshot.Set.Should().Be("tst");
         opened.Cards[0].Snapshot.CollectorNumber.Should().Be("1");
         opened.Cards[0].Snapshot.ScryfallUri.Should().Contain("Lightning%20Bolt");
+    }
+
+    /// <summary>
+    /// Verifies that category mutations preserve ordered Archidekt categories.
+    /// </summary>
+    [Fact]
+    public async Task CategoryMutations_ReorderAppendDeduplicateAndPromoteCategories()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardAsync(
+            deck.Id,
+            "Sol Ring",
+            1,
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken
+        );
+
+        await service.AddCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "Testing",
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "Utility",
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "testing",
+            TestContext.Current.CancellationToken
+        );
+        await service.SetPrimaryCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "Testing",
+            TestContext.Current.CancellationToken
+        );
+
+        DeckCard reordered = (await service.OpenLocalDeckAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken
+        )).Cards.Single();
+        reordered.PrimaryCategory.Should().Be("Testing");
+        reordered.Categories.Should().Equal("Testing", DeckDefaults.Mainboard, "Utility");
+
+        await service.RemoveCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "Testing",
+            TestContext.Current.CancellationToken
+        );
+        DeckCard promoted = (await service.OpenLocalDeckAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken
+        )).Cards.Single();
+        promoted.PrimaryCategory.Should().Be(DeckDefaults.Mainboard);
+        promoted.Categories.Should().Equal(DeckDefaults.Mainboard, "Utility");
+
+        await service.RemoveCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken
+        );
+        DeckCard secondaryPromoted = (await service.OpenLocalDeckAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken
+        )).Cards.Single();
+        secondaryPromoted.PrimaryCategory.Should().Be("Utility");
+        secondaryPromoted.Categories.Should().Equal("Utility");
+
+        await service.RemoveCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "Utility",
+            TestContext.Current.CancellationToken
+        );
+        DeckCard fallback = (await service.OpenLocalDeckAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken
+        )).Cards.Single();
+        fallback.PrimaryCategory.Should().Be(DeckDefaults.Mainboard);
+        fallback.Categories.Should().Equal(DeckDefaults.Mainboard);
     }
 
     /// <summary>
@@ -402,12 +494,12 @@ public sealed class DeckWorkspaceServiceTests
         analysis.IncludedCards.Should().Be(3);
         analysis.TypeCounts["Instant"].Should().Be(2);
         analysis.TypeCounts["Artifact"].Should().Be(1);
-        analysis.TypeCounts["Land"].Should().Be(1);
+        analysis.TypeCounts.Should().NotContainKey("Land");
         analysis.ManaCurve["1"].Should().Be(3);
         analysis.ColorIdentityCounts["R"].Should().Be(2);
         analysis
             .Notes.Should()
-            .Contain(note => note.Contains("Missing Card", StringComparison.OrdinalIgnoreCase));
+            .NotContain(note => note.Contains("Missing Card", StringComparison.OrdinalIgnoreCase));
         validation
             .Errors.Should()
             .Contain(error => error.Contains("60", StringComparison.OrdinalIgnoreCase));
@@ -482,6 +574,101 @@ public sealed class DeckWorkspaceServiceTests
         analysis.ManaCurve["1"].Should().Be(2);
         analysis.ColorIdentityCounts["R"].Should().Be(2);
         analysis.Notes.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that functional analysis ignores cards whose primary category is excluded.
+    /// </summary>
+    [Fact]
+    public void Analyzer_UsesIncludedCardsForFunctionalCounts()
+    {
+        DeckWorkspace deck = new()
+        {
+            Categories =
+            [
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Active Removal",
+                    Quantity = 2,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Instant",
+                        ManaValue = 2,
+                        OracleText = "Destroy target creature.",
+                        ColorIdentity = ["B"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Maybeboard Finisher",
+                    Quantity = 3,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard, DeckDefaults.Mainboard],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        ManaValue = 7,
+                        OracleText = "Each opponent loses X life.",
+                        ColorIdentity = ["B"],
+                    },
+                },
+            ],
+        };
+
+        DeckAnalysis analysis = DeckAnalyzer.Analyze(deck);
+
+        analysis.TotalCards.Should().Be(5);
+        analysis.IncludedCards.Should().Be(2);
+        analysis.CategoryCounts[DeckDefaults.Mainboard].Should().Be(2);
+        analysis.CategoryCounts[DeckDefaults.Maybeboard].Should().Be(3);
+        analysis.IncludedCategoryCounts.Should().ContainSingle().Which.Should().Be(
+            new KeyValuePair<string, int>(DeckDefaults.Mainboard, 2));
+        analysis.RoleCounts.Should().ContainKey(DeckRoles.Interaction);
+        analysis.RoleCounts.Should().NotContainKey(DeckRoles.Wincons);
+        analysis.TagCounts.Should().NotContainKey(DeckTags.Finishers);
+        analysis.TypeCounts.Should().ContainSingle().Which.Should().Be(
+            new KeyValuePair<string, int>("Instant", 2));
+        analysis.ManaCurve.Should().ContainSingle().Which.Should().Be(
+            new KeyValuePair<string, int>("2", 2));
+        analysis.ColorIdentityCounts.Should().ContainSingle().Which.Should().Be(
+            new KeyValuePair<string, int>("B", 2));
+    }
+
+    /// <summary>
+    /// Verifies that analyzer and validator share inclusion rules for unknown categories.
+    /// </summary>
+    [Fact]
+    public void AnalyzerAndValidator_TreatUnknownPrimaryCategoriesAsIncluded()
+    {
+        DeckWorkspace deck = new()
+        {
+            Format = "modern",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Custom Card",
+                    Quantity = 60,
+                    PrimaryCategory = "Custom",
+                    Categories = ["Custom"],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", ManaValue = 1 },
+                },
+            ],
+        };
+
+        DeckAnalysis analysis = DeckAnalyzer.Analyze(deck);
+        DeckValidationResult validation = DeckValidator.Validate(deck);
+
+        analysis.IncludedCards.Should().Be(60);
+        validation.Errors.Should().NotContain(error =>
+            error.Contains("60", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -615,6 +802,60 @@ public sealed class DeckWorkspaceServiceTests
         affected.Categories.Should().Contain(DeckDefaults.Sideboard);
         unaffected.PrimaryCategory.Should().Be(DeckDefaults.Mainboard);
         unaffected.Categories.Should().NotContain(DeckDefaults.Sideboard);
+    }
+
+    /// <summary>
+    /// Verifies that deleting a secondary category keeps affected cards grouped under the replacement.
+    /// </summary>
+    [Fact]
+    public async Task DeleteCategory_ReplacesSecondaryCategoryTags()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardAsync(
+            deck.Id,
+            "Sol Ring",
+            1,
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardAsync(
+            deck.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardCategoryAsync(
+            deck.Id,
+            "Sol Ring",
+            "Testing",
+            TestContext.Current.CancellationToken
+        );
+
+        await service.DeleteCategoryAsync(
+            deck.Id,
+            "Testing",
+            DeckDefaults.Sideboard,
+            TestContext.Current.CancellationToken
+        );
+
+        DeckWorkspace opened = await service.OpenLocalDeckAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken
+        );
+        DeckCard affected = opened.Cards.Single(card => card.Name == "Sol Ring");
+        DeckCard unaffected = opened.Cards.Single(card => card.Name == "Lightning Bolt");
+
+        affected.PrimaryCategory.Should().Be(DeckDefaults.Mainboard);
+        affected.Categories.Should().Equal(DeckDefaults.Mainboard, DeckDefaults.Sideboard);
+        unaffected.Categories.Should().Equal(DeckDefaults.Mainboard);
     }
 
     /// <summary>

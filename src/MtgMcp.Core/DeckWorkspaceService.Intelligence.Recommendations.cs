@@ -212,7 +212,7 @@ public sealed partial class DeckWorkspaceService
                 Operation = DeckEditOperations.RemoveCard,
                 CardName = card.Name,
                 Quantity = card.Quantity,
-                Category = card.PrimaryCategory,
+                Category = DeckCategoryOrdering.PrimaryCategory(card),
                 Rationale = $"Remove {card.Name} to reduce bracket pressure."
             });
         }
@@ -565,7 +565,9 @@ public sealed partial class DeckWorkspaceService
             DeckCard? currentCard = workspace.Cards.FirstOrDefault(card =>
                 card.Name.Equals(suggestion.ReplaceCard, StringComparison.OrdinalIgnoreCase));
             int quantity = currentCard?.Quantity ?? 1;
-            string category = currentCard?.PrimaryCategory ?? DeckDefaults.Mainboard;
+            string category = currentCard is null
+                ? DeckDefaults.Mainboard
+                : DeckCategoryOrdering.PrimaryCategory(currentCard);
 
             plan.Operations.Add(new DeckEditOperation
             {
@@ -1039,8 +1041,9 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static bool IsCommanderCard(DeckCard card)
     {
-        return string.Equals(card.PrimaryCategory, DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
-            || (card.Categories ?? []).Any(category => category.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase));
+        return DeckCategoryOrdering.PrimaryCategory(card).Equals(
+            DeckRoles.Commander,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

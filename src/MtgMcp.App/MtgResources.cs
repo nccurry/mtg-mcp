@@ -41,19 +41,26 @@ public sealed class MtgResources
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
+    /// Stores server version and runtime diagnostics.
+    /// </summary>
+    private readonly ServerInfoService serverInfo;
+
+    /// <summary>
     /// Handles mtg resources.
     /// </summary>
     public MtgResources(
         DeckWorkspaceService decks,
         IConfiguration configuration,
         IArchidektGateway archidektGateway,
-        OperationModeGuard operationMode
+        OperationModeGuard operationMode,
+        ServerInfoService serverInfo
     )
     {
         this.decks = decks;
         this.configuration = configuration;
         this.archidektGateway = archidektGateway;
         this.operationMode = operationMode;
+        this.serverInfo = serverInfo;
     }
 
     /// <summary>
@@ -262,6 +269,16 @@ public sealed class MtgResources
         }
 
         return JsonSerializer.Serialize(SecretRedactor.Redact(values), JsonOptions);
+    }
+
+    /// <summary>
+    /// Gets version and runtime details for the running server.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://server/info", Name = "Server Info")]
+    [Description("Version, git commit, git branch, operation mode, data directory, and runtime details for the running mtg-mcp server.")]
+    public string GetServerInfo()
+    {
+        return JsonSerializer.Serialize(serverInfo.GetInfo(), JsonOptions);
     }
 
     /// <summary>

@@ -142,15 +142,8 @@ public sealed partial class DeckWorkspaceService
             .ConfigureAwait(false);
         DeckCard card = FindRequiredCard(workspace, cardName, fromCategory);
         string normalizedCategory = NormalizeCategoryName(toCategory);
-        string previousCategory = card.PrimaryCategory;
         EnsureCategory(workspace, normalizedCategory);
-        card.PrimaryCategory = normalizedCategory;
-        if (!previousCategory.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase))
-        {
-            card.Categories.RemoveAll(value => value.Equals(previousCategory, StringComparison.OrdinalIgnoreCase));
-        }
-
-        AddCategoryName(card, normalizedCategory);
+        DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
 
         await PersistCardsAsync(workspace, [card], [], cancellationToken).ConfigureAwait(false);
         return Change(
@@ -188,6 +181,7 @@ public sealed partial class DeckWorkspaceService
             ApplyCardSnapshot(card, cardInfo);
         }
 
+        DeckCategoryOrdering.Normalize(card, category);
         return card;
     }
 
@@ -222,6 +216,8 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static DeckCard? FindCard(DeckWorkspace workspace, string cardName, string? category)
     {
+        DeckCard? secondaryMatch = null;
+        string? normalizedCategory = category is null ? null : NormalizeCategoryName(category);
         foreach (DeckCard card in workspace.Cards)
         {
             if (!card.Name.Equals(cardName, StringComparison.OrdinalIgnoreCase))
@@ -229,16 +225,23 @@ public sealed partial class DeckWorkspaceService
                 continue;
             }
 
-            if (
-                category is null
-                || card.PrimaryCategory.Equals(category, StringComparison.OrdinalIgnoreCase)
-            )
+            if (normalizedCategory is null)
             {
                 return card;
             }
+
+            if (DeckCategoryOrdering.PrimaryCategory(card).Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase))
+            {
+                return card;
+            }
+
+            if (secondaryMatch is null && DeckCategoryOrdering.HasCategory(card, normalizedCategory))
+            {
+                secondaryMatch = card;
+            }
         }
 
-        return null;
+        return secondaryMatch;
     }
 
     /// <summary>

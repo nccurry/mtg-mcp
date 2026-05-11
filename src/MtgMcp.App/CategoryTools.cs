@@ -39,7 +39,7 @@ public sealed class CategoryTools
         Idempotent = true,
         OpenWorld = true
     )]
-    [Description("Add an Archidekt-style category tag to a card.")]
+    [Description("Append an Archidekt-style secondary category tag without changing categories[0], the primary category.")]
     public Task<DeckChangeResult> AddCardCategoryAsync(
         string workspaceId,
         string cardName,
@@ -61,7 +61,7 @@ public sealed class CategoryTools
         Idempotent = true,
         OpenWorld = true
     )]
-    [Description("Remove an Archidekt-style category tag from a card.")]
+    [Description("Remove an Archidekt-style category tag; if it was first, the next category becomes primary.")]
     public Task<DeckChangeResult> RemoveCardCategoryAsync(
         string workspaceId,
         string cardName,
@@ -84,7 +84,7 @@ public sealed class CategoryTools
         OpenWorld = true
     )]
     [Description(
-        "Set the primary category used to place a card in deck exports and Archidekt organization."
+        "Set the first Archidekt category, which is the card's primary category for deck organization."
     )]
     public Task<DeckChangeResult> SetPrimaryCardCategoryAsync(
         string workspaceId,

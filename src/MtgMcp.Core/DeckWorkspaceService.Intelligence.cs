@@ -84,11 +84,11 @@ public sealed partial class DeckWorkspaceService
             Persistence = DeckPersistence.For(workspace),
             IncludedCards = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
             MaybeboardCards = workspace.Cards
-                .Where(card => string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+                .Where(card => DeckCategoryOrdering.PrimaryCategory(card).Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
                 .Sum(card => Math.Max(0, card.Quantity))
         };
 
-        foreach (DeckCard card in workspace.Cards)
+        foreach (DeckCard card in IncludedCards(workspace))
         {
             CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
             AddCount(summary.RoleCounts, assignment.PrimaryRole, card.Quantity);
@@ -176,7 +176,7 @@ public sealed partial class DeckWorkspaceService
             suggestions.Add(new CategorySuggestion
             {
                 CardName = card.Name,
-                CurrentPrimaryCategory = card.PrimaryCategory,
+                CurrentPrimaryCategory = DeckCategoryOrdering.PrimaryCategory(card),
                 SuggestedPrimaryRole = assignment.PrimaryRole,
                 Tags = assignment.Tags,
                 Confidence = assignment.Confidence
@@ -187,14 +187,15 @@ public sealed partial class DeckWorkspaceService
                 continue;
             }
 
-            if (!string.Equals(card.PrimaryCategory, assignment.PrimaryRole, StringComparison.OrdinalIgnoreCase)
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            if (!string.Equals(primaryCategory, assignment.PrimaryRole, StringComparison.OrdinalIgnoreCase)
                 && assignment.Confidence >= 0.55)
             {
                 plan.Operations.Add(new DeckEditOperation
                 {
                     Operation = DeckEditOperations.MoveCard,
                     CardName = card.Name,
-                    FromCategory = card.PrimaryCategory,
+                    FromCategory = primaryCategory,
                     ToCategory = assignment.PrimaryRole,
                     Rationale = $"Classified as {assignment.PrimaryRole} with {assignment.Confidence:0.00} confidence."
                 });
@@ -385,7 +386,7 @@ public sealed partial class DeckWorkspaceService
         {
             "all" => true,
             "included" => IsIncluded(workspace, card),
-            "maybeboard" => string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase),
+            "maybeboard" => DeckCategoryOrdering.PrimaryCategory(card).Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase),
             "missing" => string.IsNullOrWhiteSpace(GetSnapshot(card).TypeLine)
                 || string.IsNullOrWhiteSpace(GetSnapshot(card).OracleText)
                 || GetSnapshot(card).Prices.Count == 0,
@@ -398,7 +399,7 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
     {
-        return workspace.Cards.Where(card => IsIncluded(workspace, card));
+        return DeckCategoryInclusion.IncludedCards(workspace);
     }
 
     /// <summary>
@@ -406,9 +407,7 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
     {
-        DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
-            string.Equals(value.Name, card.PrimaryCategory, StringComparison.OrdinalIgnoreCase));
-        return category?.IncludedInDeck ?? true;
+        return DeckCategoryInclusion.IsIncludedInDeck(workspace, card);
     }
 
     /// <summary>
