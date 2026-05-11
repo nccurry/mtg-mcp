@@ -65,6 +65,42 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that single-card lookups reuse the shared source-fact cache.
+    /// </summary>
+    [Fact]
+    public async Task GetCard_UsesSharedSourceFactCache()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/named*")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "id": "sol-ring",
+                  "name": "Sol Ring",
+                  "type_line": "Artifact",
+                  "oracle_text": "{T}: Add {C}{C}."
+                }
+                """);
+        MemoryCorpusCache cache = new(new MtgMcpCorpusCacheOptions());
+
+        ScryfallClient firstClient = CreateClient(mockHttp, cache: cache);
+        CardInfo? first = await firstClient.GetCardAsync(
+            "Sol Ring",
+            TestContext.Current.CancellationToken);
+        ScryfallClient secondClient = CreateClient(mockHttp, cache: cache);
+        CardInfo? second = await secondClient.GetCardAsync(
+            "Sol Ring",
+            TestContext.Current.CancellationToken);
+
+        first.Should().NotBeNull();
+        second.Should().NotBeNull();
+        second!.Name.Should().Be("Sol Ring");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that get cards by names posts collection and maps returned cards.
     /// </summary>
     [Fact]
@@ -538,27 +574,18 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
-    /// Verifies that search cards retries once after Scryfall rate limiting.
+    /// Verifies that search cards retries repeated Scryfall rate limits.
     /// </summary>
     [Fact]
-    public async Task SearchCards_RetriesRateLimitOnce()
+    public async Task SearchCards_RetriesRepeatedRateLimits()
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
             .Expect("https://api.scryfall.test/cards/search*")
-            .Respond(
-                _ =>
-                {
-                    HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
-                    {
-                        Content = new StringContent(
-                            """{ "object": "error", "code": "rate_limited" }""",
-                            System.Text.Encoding.UTF8,
-                            "application/json")
-                    };
-                    response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.Zero);
-                    return response;
-                });
+            .Respond(_ => RateLimitResponse());
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search*")
+            .Respond(_ => RateLimitResponse());
         mockHttp
             .Expect("https://api.scryfall.test/cards/search*")
             .Respond(
@@ -583,9 +610,38 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that configured Scryfall rate limit retry exhaustion surfaces the final error.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_ThrowsAfterConfiguredRateLimitRetries()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search*")
+            .Respond(_ => RateLimitResponse());
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search*")
+            .Respond(_ => RateLimitResponse());
+
+        ScryfallClient client = CreateClient(mockHttp, maxRateLimitRetries: 1);
+        Func<Task> act = () => client.SearchCardsAsync(
+            "o:scry",
+            10,
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<HttpRequestException>()
+            .WithMessage("*429*rate_limited*");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that create client.
     /// </summary>
-    private static ScryfallClient CreateClient(MockHttpMessageHandler mockHttp)
+    private static ScryfallClient CreateClient(
+        MockHttpMessageHandler mockHttp,
+        int maxRateLimitRetries = 3,
+        ICorpusCache? cache = null)
     {
         HttpClient httpClient = mockHttp.ToHttpClient();
         httpClient.BaseAddress = new Uri("https://api.scryfall.test/");
@@ -596,9 +652,32 @@ public sealed class ScryfallClientTests
                 {
                     BaseAddress = new Uri("https://api.scryfall.test/"),
                     MinimumDelay = TimeSpan.Zero,
+                    MaxRateLimitRetries = maxRateLimitRetries,
                     UserAgent = "mtg-mcp-test/1.0",
                 }
-            )
+            ),
+            cache ?? new NullCorpusCache(),
+            Options.Create(new MtgMcpOptions())
         );
+    }
+
+    /// <summary>
+    /// Builds a Scryfall rate limit response with a zero-second body hint for fast tests.
+    /// </summary>
+    private static HttpResponseMessage RateLimitResponse()
+    {
+        return new(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent(
+                """
+                {
+                  "object": "error",
+                  "code": "rate_limited",
+                  "details": "You are being rate-limited, try again after 0 seconds."
+                }
+                """,
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
     }
 }

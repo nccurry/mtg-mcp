@@ -1,0 +1,261 @@
+namespace MtgMcp.Core;
+
+/// <summary>
+/// Provides deck edit plan behavior.
+/// </summary>
+public sealed class DeckEditPlan
+{
+    /// <summary>
+    /// Gets or sets the plan id.
+    /// </summary>
+    public string PlanId { get; set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the kind.
+    /// </summary>
+    public string Kind { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the status.
+    /// </summary>
+    public string Status { get; set; } = DeckEditPlanStatus.Draft;
+
+    /// <summary>
+    /// Gets or sets the persistence.
+    /// </summary>
+    public string Persistence { get; set; } = DeckPersistence.LocalOnly;
+
+    /// <summary>
+    /// Gets or sets the created at.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Gets or sets the applied at.
+    /// </summary>
+    public DateTimeOffset? AppliedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the checkpoint id.
+    /// </summary>
+    public string? CheckpointId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rationale.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the confidence.
+    /// </summary>
+    public double Confidence { get; set; }
+
+    /// <summary>
+    /// Gets or sets the warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the operations.
+    /// </summary>
+    public List<DeckEditOperation> Operations { get; set; } = [];
+}
+
+/// <summary>
+/// Provides deck edit operation behavior.
+/// </summary>
+public sealed class DeckEditOperation
+{
+    /// <summary>
+    /// Gets or sets the edit operation name.
+    /// </summary>
+    public string Operation { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the card name.
+    /// </summary>
+    public string? CardName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the replacement card name.
+    /// </summary>
+    public string? ReplacementCardName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the quantity.
+    /// </summary>
+    public int? Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the category.
+    /// </summary>
+    public string? Category { get; set; }
+
+    /// <summary>
+    /// Gets or sets the from category.
+    /// </summary>
+    public string? FromCategory { get; set; }
+
+    /// <summary>
+    /// Gets or sets the to category.
+    /// </summary>
+    public string? ToCategory { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the format.
+    /// </summary>
+    public string? Format { get; set; }
+
+    /// <summary>
+    /// Gets or sets the description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets the included in deck.
+    /// </summary>
+    public bool? IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets the included in price.
+    /// </summary>
+    public bool? IncludedInPrice { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rationale.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+}
+
+/// <summary>
+/// Provides deck edit plan apply result behavior.
+/// </summary>
+public sealed class DeckEditPlanApplyResult
+{
+    /// <summary>
+    /// Gets or sets the plan id.
+    /// </summary>
+    public string PlanId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the persistence.
+    /// </summary>
+    public string Persistence { get; set; } = DeckPersistence.LocalOnly;
+
+    /// <summary>
+    /// Gets or sets the checkpoint id.
+    /// </summary>
+    public string? CheckpointId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the applied operations.
+    /// </summary>
+    public int AppliedOperations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the messages.
+    /// </summary>
+    public List<string> Messages { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the workspace.
+    /// </summary>
+    public DeckWorkspace Workspace { get; set; } = new();
+}
+
+/// <summary>
+/// Provides deck edit plan statuses.
+/// </summary>
+public static class DeckEditPlanStatus
+{
+    /// <summary>
+    /// Stores the draft status.
+    /// </summary>
+    public const string Draft = "draft";
+
+    /// <summary>
+    /// Stores the applied status.
+    /// </summary>
+    public const string Applied = "applied";
+}
+
+/// <summary>
+/// Provides deck edit operation names.
+/// </summary>
+public static class DeckEditOperations
+{
+    /// <summary>
+    /// Stores the add card edit name.
+    /// </summary>
+    public const string AddCard = "add_card";
+
+    /// <summary>
+    /// Stores the remove card edit name.
+    /// </summary>
+    public const string RemoveCard = "remove_card";
+
+    /// <summary>
+    /// Stores the set card quantity edit name.
+    /// </summary>
+    public const string SetCardQuantity = "set_card_quantity";
+
+    /// <summary>
+    /// Stores the move card edit name.
+    /// </summary>
+    public const string MoveCard = "move_card";
+
+    /// <summary>
+    /// Stores the add card category edit name.
+    /// </summary>
+    public const string AddCardCategory = "add_card_category";
+
+    /// <summary>
+    /// Stores the remove card category edit name.
+    /// </summary>
+    public const string RemoveCardCategory = "remove_card_category";
+
+    /// <summary>
+    /// Stores the set primary card category edit name.
+    /// </summary>
+    public const string SetPrimaryCardCategory = "set_primary_card_category";
+
+    /// <summary>
+    /// Stores the create category edit name.
+    /// </summary>
+    public const string CreateCategory = "create_category";
+
+    /// <summary>
+    /// Stores the rename category edit name.
+    /// </summary>
+    public const string RenameCategory = "rename_category";
+
+    /// <summary>
+    /// Stores the delete category edit name.
+    /// </summary>
+    public const string DeleteCategory = "delete_category";
+
+    /// <summary>
+    /// Stores the update deck metadata edit name.
+    /// </summary>
+    public const string UpdateDeckMetadata = "update_deck_metadata";
+}

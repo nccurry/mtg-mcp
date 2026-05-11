@@ -26,6 +26,7 @@ Scryfall, or Archidekt.
   card releases.
 - Find goal-driven card packages, budget swaps, upgrades, mana fixes, and cuts.
 - Detect Commander Spellbook combos and near-misses, then estimate combo pressure.
+- Aggregate normalized corpus signals for trends, lesser-known cards, exemplar decks, and budget swaps.
 - Simulate goldfish development, projected board states, and likely win turns.
 - Preview recommendation plans before applying them.
 
@@ -88,12 +89,37 @@ $env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
 - `plan`: allow lookup, analysis, metadata refresh, and recommendation plans.
 - `apply`: allow deck edits, checkpoints, and Archidekt writeback.
 
+`MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` controls how much corpus-aware
+recommendation tools request and return:
+
+- `minimal`: compact, high-signal evidence with fewer source calls.
+- `balanced`: default source breadth and compact evidence.
+- `best`: wider enabled source set and richer evidence for deeper analysis.
+
 Supported settings:
 
 | Setting | Use |
 | --- | --- |
 | `MTGMCP__OPERATION_MODE` | Safety mode: `read-only`, `plan`, or `apply`. |
+| `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Corpus analysis depth: `minimal`, `balanced`, or `best`. |
 | `MTGMCP__DATA_DIR` | Local storage for decks, plans, and cached data. |
+| `MTGMCP__INTELLIGENCE__CACHE__MODE` | Corpus source-fact cache: `persisted`, `memory`, or `off`. |
+| `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` | Persisted cache size limit. Default: `104857600`. |
+| `MTGMCP__INTELLIGENCE__CACHE__MAX_ENTRIES` | Cache entry limit. Default: `5000`. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` | Scryfall card metadata TTL. Default: `7d`. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_SEARCH` | Scryfall search and EDHREC-rank TTL. Default: `24h`. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__COMMANDERSPELLBOOK` | Commander Spellbook combo lookup TTL. Default: `24h`. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__DECK_SEARCH` | Deck search API TTL. Default: `6h`. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__DECK_DETAILS` | Individual deck detail API TTL. Default: `7d`. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__CORPUS_SIGNALS` | Normalized corpus signal report TTL. Default: `6h`. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` | Enable or disable Scryfall metadata corpus evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__COMMANDERSPELLBOOK__ENABLED` | Enable or disable Commander Spellbook corpus evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__ENABLED` | Enable or disable TopDeck.gg corpus evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` | TopDeck.gg API key for tournament decklist evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` | Override TopDeck.gg API URL for tests or mirrors. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__ENABLED` | Enable or disable Spicerack corpus evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__API_KEY` | Spicerack API key for recent public decklist evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__BASE_ADDRESS` | Override Spicerack API URL for tests or mirrors. |
 | `MTGMCP__ARCHIDEKT__CREDENTIALS_FILE` | JSON credentials file for Archidekt. |
 | `MTGMCP__ARCHIDEKT__JWT` | Optional Archidekt JWT. |
 | `MTGMCP__ARCHIDEKT__REFRESH_TOKEN` | Preferred Archidekt auth token. |
@@ -101,7 +127,68 @@ Supported settings:
 | `MTGMCP__ARCHIDEKT__EMAIL` | Fallback Archidekt login email. |
 | `MTGMCP__ARCHIDEKT__USERNAME` | Fallback Archidekt login username. |
 | `MTGMCP__ARCHIDEKT__PASSWORD` | Fallback Archidekt login password. |
+| `MTGMCP__SCRYFALL__BASE_ADDRESS` | Override Scryfall API URL for tests or mirrors. |
+| `MTGMCP__SCRYFALL__USER_AGENT` | Override Scryfall user agent. |
+| `MTGMCP__SCRYFALL__MAX_RATE_LIMIT_RETRIES` | Number of Scryfall `429` retries before surfacing a failure. Default: `3`. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Override Commander Spellbook API URL. |
+
+`mtg-mcp.json` is the only JSON config file mtg-mcp reads. Environment
+variables should use the `MTGMCP__...` names above; duplicate bare aliases such
+as `MODE` or `ANALYSIS_DEPTH` are not supported.
+
+Example `mtg-mcp.json`:
+
+```json
+{
+  "MtgMcp": {
+    "OperationMode": "plan",
+    "DataDir": "C:/Users/you/AppData/Local/mtg-mcp",
+    "Intelligence": {
+      "AnalysisDepth": "balanced",
+      "Cache": {
+        "Mode": "persisted",
+        "MaxBytes": 104857600,
+        "MaxEntries": 5000,
+        "Ttls": {
+          "ScryfallCardMetadata": "7d",
+          "ScryfallSearch": "24h",
+          "CommanderSpellbook": "24h",
+          "DeckSearch": "6h",
+          "DeckDetails": "7d",
+          "CorpusSignals": "6h"
+        }
+      },
+      "Sources": {
+        "Scryfall": { "Enabled": true },
+        "CommanderSpellbook": { "Enabled": true },
+        "TopDeck": {
+          "Enabled": true,
+          "ApiKey": "..."
+        },
+        "Spicerack": {
+          "Enabled": true,
+          "ApiKey": "..."
+        }
+      }
+    },
+    "Scryfall": {
+      "MaxRateLimitRetries": 3
+    }
+  }
+}
+```
+
+Corpus recommendations query structured APIs on demand and cache source facts
+under `DataDir/corpus-cache`. The cache is shared across agents using the same
+data directory. It does not store final recommendations, prompt rationale, or
+deckbuilding opinions. Pass `refresh=true` to corpus tools when you want one
+call to bypass fresh cache entries.
+
+The corpus source policy is API-only: official/documented APIs and unofficial
+structured JSON endpoints may be used when clearly labeled, but mtg-mcp does
+not scrape HTML, parse page markup, or use browser automation for corpus data.
+`mtg://corpus/sources` reports enabled, missing-key, disabled, unsupported, and
+permission-sensitive source states.
 
 Archidekt credentials are only needed for private decks, account-bound deck data,
 checkpoints, or writeback. Create a credentials file:
@@ -128,6 +215,7 @@ available as a fallback.
 Inside an MCP client, these resources help verify setup:
 
 - `mtg://config/effective` shows non-secret effective configuration.
+- `mtg://corpus/sources` shows enabled and planned corpus sources.
 - `mtg://archidekt/auth-status` shows redacted Archidekt credential status.
 
 ## How to use it
@@ -157,8 +245,20 @@ Find new cards for this deck from the last year, or pass a YYYY-MM-DD since date
 ```
 
 ```text
+Tell me what new or lesser-known cards are showing signal for this commander, using best analysis.
+```
+
+```text
+Show top exemplar decks and explain the source evidence for Skullclamp in this deck.
+```
+
+```text
 Apply the previewed deck plan and create an Archidekt checkpoint first.
 ```
+
+Common tuning tools include `refresh_deck_card_snapshots`,
+`summarize_deck_workspace`, `analyze_deck_consistency`,
+`find_card_upgrades`, and `preview_deck_plan`.
 
 ## Deck Intent Configuration
 

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
@@ -193,6 +194,48 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that import deck maps alternate deck relation id fields.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_MapsAlternateDeckRelationIdField()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [
+                { "id": 1, "name": "Mainboard", "includedInDeck": true, "includedInPrice": true }
+              ],
+              "cards": [
+                {
+                  "deckRelationId": 3085344231,
+                  "quantity": 1,
+                  "categories": ["Mainboard"],
+                  "card": {
+                    "id": 99,
+                    "oracleCard": { "name": "Mind Rot" }
+                  }
+                }
+              ]
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "https://archidekt.com/decks/123/deck",
+            writeBack: true,
+            TestContext.Current.CancellationToken
+        );
+
+        deck.Cards.Should().ContainSingle().Which.ArchidektDeckRelationId.Should().Be(3085344231L);
+    }
+
+    /// <summary>
     /// Verifies that list decks maps results and uses configured jwt.
     /// </summary>
     [Fact]
@@ -237,6 +280,31 @@ public sealed class ArchidektGatewayTests
             """
         );
         handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [
+                { "id": 2, "name": "Testing", "includedInDeck": true, "includedInPrice": true },
+                { "id": 1, "name": "Mainboard", "includedInDeck": true, "includedInPrice": true }
+              ],
+              "cards": [
+                {
+                  "id": 991,
+                  "quantity": 2,
+                  "categories": ["Testing", "Mainboard"],
+                  "card": {
+                    "id": 151147,
+                    "oracleCard": { "name": "Lightning Bolt" }
+                  }
+                }
+              ]
+            }
+            """
+        );
 
         ArchidektGateway gateway = CreateGateway(handler);
         DeckWorkspace deck = new()
@@ -275,6 +343,176 @@ public sealed class ArchidektGatewayTests
         firstCard.GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
         card.ArchidektCardId.Should().Be("151147");
         card.PrimaryCategory.Should().Be("Testing");
+        card.ArchidektDeckRelationId.Should().Be(991);
+    }
+
+    /// <summary>
+    /// Verifies that Archidekt-assigned relation ids are retained after adding a card.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_AddCopiesDeckRelationIdFromResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/cards/v2/?name=Mind%20Rot&pageSize=25",
+            """
+            { "results": [ { "id": 82308, "oracleCard": { "name": "Mind Rot" } } ] }
+            """
+        );
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """
+            {
+              "cards": [
+                {
+                  "id": 1521019999,
+                  "quantity": 1,
+                  "categories": ["Codex Manual Test"],
+                  "card": {
+                    "id": 82308,
+                    "oracleCard": { "name": "Mind Rot" }
+                  }
+                }
+              ]
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Mind Rot",
+            Quantity = 1,
+            Categories = ["Codex Manual Test"],
+            PrimaryCategory = "Codex Manual Test",
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        card.ArchidektCardId.Should().Be("82308");
+        card.ArchidektDeckRelationId.Should().Be(1521019999);
+    }
+
+    /// <summary>
+    /// Verifies that relation id hydration tolerates Archidekt's eventual deck read consistency.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_AddRetriesDeckReadUntilRelationAppears()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/cards/v2/?name=Mind%20Rot&pageSize=25",
+            """
+            { "results": [ { "id": 82308, "oracleCard": { "name": "Mind Rot" } } ] }
+            """
+        );
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [
+                { "id": 1, "name": "Codex Fix Verification", "includedInDeck": false, "includedInPrice": false }
+              ],
+              "cards": []
+            }
+            """
+        );
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [
+                { "id": 1, "name": "Codex Fix Verification", "includedInDeck": false, "includedInPrice": false }
+              ],
+              "cards": [
+                {
+                  "id": 3085344231,
+                  "quantity": 1,
+                  "categories": ["Codex Fix Verification"],
+                  "card": {
+                    "id": 82308,
+                    "oracleCard": { "name": "Mind Rot" }
+                  }
+                }
+              ]
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Mind Rot",
+            Quantity = 1,
+            Categories = ["Codex Fix Verification"],
+            PrimaryCategory = "Codex Fix Verification",
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        card.ArchidektDeckRelationId.Should().Be(3085344231L);
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Get && request.Path == "api/decks/123/")
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies that transient Archidekt write-log failures are retried.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_RetriesTransientWriteLogFailure()
+    {
+        RecordingHandler handler = new();
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "error": "Uh oh, failed to create a log. Not saving anything" }""",
+            HttpStatusCode.BadRequest
+        );
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Mind Rot",
+            Quantity = 1,
+            ArchidektCardId = "82308",
+            ArchidektDeckRelationId = 1521020000,
+            Categories = ["Codex Fix Verification"],
+            PrimaryCategory = "Codex Fix Verification",
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Patch)
+            .Should()
+            .HaveCount(2);
     }
 
     /// <summary>
@@ -765,6 +1003,121 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that deck reads retry Archidekt throttle responses.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_RetriesRateLimitResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """{ "detail": "Request was throttled. Expected available in 55 seconds." }""",
+            HttpStatusCode.TooManyRequests,
+            TimeSpan.Zero
+        );
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken
+        );
+
+        deck.Name.Should().Be("Deck");
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Get && request.Path == "api/decks/123/")
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies that card writes retry Archidekt throttle responses.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_RetriesRateLimitResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "detail": "Request was throttled. Expected available in 55 seconds." }""",
+            HttpStatusCode.TooManyRequests,
+            TimeSpan.Zero
+        );
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Mind Rot",
+            Quantity = 1,
+            ArchidektCardId = "82308",
+            ArchidektDeckRelationId = 3085344231,
+            Categories = ["Discard"],
+            PrimaryCategory = "Discard",
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Patch)
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies that bodyless mutating requests retry Archidekt throttle responses.
+    /// </summary>
+    [Fact]
+    public async Task DeleteCategory_RetriesRateLimitResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Delete(
+            "api/decks/category/9/",
+            """{ "detail": "Request was throttled. Expected available in 55 seconds." }""",
+            HttpStatusCode.TooManyRequests,
+            TimeSpan.Zero
+        );
+        handler.Delete("api/decks/category/9/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+
+        await gateway.DeleteCategoryAsync(
+            deck,
+            new DeckCategory { Name = "Test", ArchidektCategoryId = 9 },
+            TestContext.Current.CancellationToken
+        );
+
+        handler
+            .Requests.Where(request => request.Method == HttpMethod.Delete)
+            .Should()
+            .HaveCount(2);
+    }
+
+    /// <summary>
     /// Creates a gateway with default test options.
     /// </summary>
     private static ArchidektGateway CreateGateway(RecordingHandler handler)
@@ -799,9 +1152,9 @@ public sealed class ArchidektGatewayTests
     private sealed class RecordingHandler : HttpMessageHandler
     {
         /// <summary>
-        /// Verifies that dictionary.
+        /// Stores configured responses by method and request path.
         /// </summary>
-        private readonly Dictionary<(HttpMethod Method, string Path), RecordedResponse> responses =
+        private readonly Dictionary<(HttpMethod Method, string Path), Queue<RecordedResponse>> responses =
             new();
 
         /// <summary>
@@ -812,9 +1165,14 @@ public sealed class ArchidektGatewayTests
         /// <summary>
         /// Reads a recorded response header value.
         /// </summary>
-        public void Get(string path, string response, HttpStatusCode statusCode = HttpStatusCode.OK)
+        public void Get(
+            string path,
+            string response,
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
+        )
         {
-            responses[(HttpMethod.Get, path)] = new RecordedResponse(response, statusCode);
+            AddResponse(HttpMethod.Get, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -823,10 +1181,11 @@ public sealed class ArchidektGatewayTests
         public void Post(
             string path,
             string response,
-            HttpStatusCode statusCode = HttpStatusCode.OK
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
         )
         {
-            responses[(HttpMethod.Post, path)] = new RecordedResponse(response, statusCode);
+            AddResponse(HttpMethod.Post, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -835,10 +1194,11 @@ public sealed class ArchidektGatewayTests
         public void Patch(
             string path,
             string response,
-            HttpStatusCode statusCode = HttpStatusCode.OK
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
         )
         {
-            responses[(HttpMethod.Patch, path)] = new RecordedResponse(response, statusCode);
+            AddResponse(HttpMethod.Patch, path, response, statusCode, retryAfter);
         }
 
         /// <summary>
@@ -847,10 +1207,31 @@ public sealed class ArchidektGatewayTests
         public void Delete(
             string path,
             string response,
-            HttpStatusCode statusCode = HttpStatusCode.OK
+            HttpStatusCode statusCode = HttpStatusCode.OK,
+            TimeSpan? retryAfter = null
         )
         {
-            responses[(HttpMethod.Delete, path)] = new RecordedResponse(response, statusCode);
+            AddResponse(HttpMethod.Delete, path, response, statusCode, retryAfter);
+        }
+
+        /// <summary>
+        /// Adds a response and preserves insertion order for repeated matching requests.
+        /// </summary>
+        private void AddResponse(
+            HttpMethod method,
+            string path,
+            string response,
+            HttpStatusCode statusCode,
+            TimeSpan? retryAfter
+        )
+        {
+            if (!responses.TryGetValue((method, path), out Queue<RecordedResponse>? queue))
+            {
+                queue = new Queue<RecordedResponse>();
+                responses[(method, path)] = queue;
+            }
+
+            queue.Enqueue(new RecordedResponse(response, statusCode, retryAfter));
         }
 
         /// <summary>
@@ -868,7 +1249,7 @@ public sealed class ArchidektGatewayTests
             string? authorization = request.Headers.Authorization?.ToString();
             Requests.Add(new RecordedRequest(request.Method, path, body, authorization));
 
-            if (!responses.TryGetValue((request.Method, path), out RecordedResponse? response))
+            if (!responses.TryGetValue((request.Method, path), out Queue<RecordedResponse>? queue))
             {
                 return new HttpResponseMessage(HttpStatusCode.NotFound)
                 {
@@ -880,17 +1261,30 @@ public sealed class ArchidektGatewayTests
                 };
             }
 
-            return new HttpResponseMessage(response.StatusCode)
+            RecordedResponse response = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
+            HttpResponseMessage message = new(response.StatusCode)
             {
                 Content = new StringContent(response.Body, Encoding.UTF8, "application/json"),
             };
+            if (response.RetryAfter.HasValue)
+            {
+                message.Headers.RetryAfter = new RetryConditionHeaderValue(
+                    response.RetryAfter.Value
+                );
+            }
+
+            return message;
         }
     }
 
     /// <summary>
     /// Represents recorded response.
     /// </summary>
-    private sealed record RecordedResponse(string Body, HttpStatusCode StatusCode);
+    private sealed record RecordedResponse(
+        string Body,
+        HttpStatusCode StatusCode,
+        TimeSpan? RetryAfter
+    );
 
     /// <summary>
     /// Represents recorded request.

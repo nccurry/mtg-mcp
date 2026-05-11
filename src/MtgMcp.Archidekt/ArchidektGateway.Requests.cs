@@ -10,20 +10,52 @@ namespace MtgMcp.Archidekt;
 public sealed partial class ArchidektGateway
 {
     /// <summary>
+    /// Limits retries for Archidekt write responses that report transient log creation failures.
+    /// </summary>
+    private const int MaxTransientWriteRetries = 5;
+
+    /// <summary>
+    /// Limits retries for Archidekt rate-limit responses.
+    /// </summary>
+    private const int MaxRateLimitRetries = 2;
+
+    /// <summary>
+    /// Spaces retries for Archidekt write responses that fail before committing a change log.
+    /// </summary>
+    private static readonly TimeSpan TransientWriteRetryDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Gets the json.
     /// </summary>
     private async Task<JsonDocument> GetJsonAsync(string uri, CancellationToken cancellationToken)
     {
-        using HttpResponseMessage response = await httpClient
-            .GetAsync(uri, cancellationToken)
-            .ConfigureAwait(false);
-        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
-        await using Stream stream = await response
-            .Content.ReadAsStreamAsync(cancellationToken)
-            .ConfigureAwait(false);
-        return await JsonDocument
-            .ParseAsync(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
+        {
+            using HttpResponseMessage response = await httpClient
+                .GetAsync(uri, cancellationToken)
+                .ConfigureAwait(false);
+            string responseBody = await response
+                .Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return string.IsNullOrWhiteSpace(responseBody)
+                    ? JsonDocument.Parse("{}")
+                    : JsonDocument.Parse(responseBody);
+            }
+
+            if (IsRateLimited(response, responseBody) && attempt < MaxRateLimitRetries)
+            {
+                await DelayForRateLimitAsync(response, responseBody, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            throw CreateRequestException(response, responseBody);
+        }
+
+        throw new InvalidOperationException("Archidekt GET retry loop ended unexpectedly.");
     }
 
     /// <summary>
@@ -42,25 +74,82 @@ public sealed partial class ArchidektGateway
             await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
         }
 
-        using HttpRequestMessage request = new(method, uri)
+        for (int attempt = 0; attempt <= MaxTransientWriteRetries; attempt++)
         {
-            Content = JsonContent.Create(payload, options: SerializerOptions),
-        };
+            using HttpRequestMessage request = new(method, uri)
+            {
+                Content = JsonContent.Create(payload, options: SerializerOptions),
+            };
 
-        using HttpResponseMessage response = await httpClient
-            .SendAsync(request, cancellationToken)
-            .ConfigureAwait(false);
-        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await httpClient
+                .SendAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+            string responseBody = await response
+                .Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-        string responseBody = await response
-            .Content.ReadAsStringAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(responseBody))
-        {
-            return JsonDocument.Parse("{}");
+            if (response.IsSuccessStatusCode)
+            {
+                return string.IsNullOrWhiteSpace(responseBody)
+                    ? JsonDocument.Parse("{}")
+                    : JsonDocument.Parse(responseBody);
+            }
+
+            if (IsRateLimited(response, responseBody) && attempt < MaxTransientWriteRetries)
+            {
+                await DelayForRateLimitAsync(response, responseBody, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            if (IsTransientWriteFailure(responseBody) && attempt < MaxTransientWriteRetries)
+            {
+                await Task.Delay(TransientWriteRetryDelay, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            throw CreateRequestException(response, responseBody);
         }
 
-        return JsonDocument.Parse(responseBody);
+        throw new InvalidOperationException("Archidekt request retry loop ended unexpectedly.");
+    }
+
+    /// <summary>
+    /// Sends a request without a JSON body and applies Archidekt retry behavior.
+    /// </summary>
+    private async Task SendAsync(
+        HttpMethod method,
+        string uri,
+        CancellationToken cancellationToken
+    )
+    {
+        for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
+        {
+            using HttpRequestMessage request = new(method, uri);
+            using HttpResponseMessage response = await httpClient
+                .SendAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+            string responseBody = await response
+                .Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            if (IsRateLimited(response, responseBody) && attempt < MaxRateLimitRetries)
+            {
+                await DelayForRateLimitAsync(response, responseBody, cancellationToken)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            throw CreateRequestException(response, responseBody);
+        }
+
+        throw new InvalidOperationException("Archidekt request retry loop ended unexpectedly.");
     }
 
     /// <summary>
@@ -79,9 +168,95 @@ public sealed partial class ArchidektGateway
         string body = await response
             .Content.ReadAsStringAsync(cancellationToken)
             .ConfigureAwait(false);
-        throw new HttpRequestException(
-            $"Archidekt request failed with {(int)response.StatusCode}: {SecretRedactor.Redact(body)}"
+        throw CreateRequestException(response, body);
+    }
+
+    /// <summary>
+    /// Creates a sanitized Archidekt HTTP exception.
+    /// </summary>
+    private static HttpRequestException CreateRequestException(
+        HttpResponseMessage response,
+        string responseBody
+    )
+    {
+        return new HttpRequestException(
+            $"Archidekt request failed with {(int)response.StatusCode}: {SecretRedactor.Redact(responseBody)}"
         );
+    }
+
+    /// <summary>
+    /// Detects Archidekt's transient write-log failure response.
+    /// </summary>
+    private static bool IsTransientWriteFailure(string responseBody)
+    {
+        return responseBody.Contains(
+            "failed to create a log",
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    /// <summary>
+    /// Determines whether Archidekt asked the client to retry later.
+    /// </summary>
+    private static bool IsRateLimited(HttpResponseMessage response, string responseBody)
+    {
+        return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+            || responseBody.Contains("request was throttled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Waits for Archidekt's advertised throttle window before retrying.
+    /// </summary>
+    private static Task DelayForRateLimitAsync(
+        HttpResponseMessage response,
+        string responseBody,
+        CancellationToken cancellationToken
+    )
+    {
+        return Task.Delay(GetRateLimitDelay(response, responseBody), cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads retry timing from Retry-After headers or Archidekt's JSON detail string.
+    /// </summary>
+    private static TimeSpan GetRateLimitDelay(HttpResponseMessage response, string responseBody)
+    {
+        if (response.Headers.RetryAfter?.Delta is { } delta)
+        {
+            return delta < TimeSpan.Zero ? TimeSpan.Zero : delta;
+        }
+
+        if (response.Headers.RetryAfter?.Date is { } date)
+        {
+            TimeSpan delay = date - DateTimeOffset.UtcNow;
+            return delay < TimeSpan.Zero ? TimeSpan.Zero : delay;
+        }
+
+        int markerIndex = responseBody.IndexOf("available in ", StringComparison.OrdinalIgnoreCase);
+        if (markerIndex >= 0)
+        {
+            int start = markerIndex + "available in ".Length;
+            int end = start;
+            while (end < responseBody.Length && char.IsDigit(responseBody[end]))
+            {
+                end++;
+            }
+
+            if (
+                end > start
+                && int.TryParse(
+                    responseBody[start..end],
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out int seconds
+                )
+            )
+            {
+                return TimeSpan.FromSeconds(Math.Max(0, seconds));
+            }
+        }
+
+        return TimeSpan.FromSeconds(5);
     }
 
     /// <summary>
@@ -209,12 +384,49 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
+    /// Gets the long.
+    /// </summary>
+    private static long? GetLong(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out JsonElement property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out long value))
+        {
+            return value;
+        }
+
+        return
+            property.ValueKind == JsonValueKind.String
+            && long.TryParse(
+                property.GetString(),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value
+            )
+            ? value
+            : null;
+    }
+
+    /// <summary>
     /// Gets the nested int.
     /// </summary>
     private static int? GetNestedInt(JsonElement element, string propertyName, string nestedPropertyName)
     {
         return element.TryGetProperty(propertyName, out JsonElement nested) && nested.ValueKind == JsonValueKind.Object
             ? GetInt(nested, nestedPropertyName)
+            : null;
+    }
+
+    /// <summary>
+    /// Gets the nested long.
+    /// </summary>
+    private static long? GetNestedLong(JsonElement element, string propertyName, string nestedPropertyName)
+    {
+        return element.TryGetProperty(propertyName, out JsonElement nested) && nested.ValueKind == JsonValueKind.Object
+            ? GetLong(nested, nestedPropertyName)
             : null;
     }
 

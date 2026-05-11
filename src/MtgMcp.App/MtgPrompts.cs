@@ -22,7 +22,7 @@ public sealed class MtgPrompts
             Budget: {budget}
 
             Use mtg-mcp tools to search Scryfall, validate color identity,
-            create a local workspace, normalize card metadata, summarize the deck plan,
+            create a local workspace, refresh card snapshots, summarize the deck workspace,
             add cards by role, and explain the key packages before finalizing.
             """;
     }
@@ -39,7 +39,7 @@ public sealed class MtgPrompts
             Goal: {goal}
 
             Read get_deck_intent first. If no intent exists, use suggest_deck_intent and ask the user
-            whether to save it. Normalize the deck if needed, summarize the deck plan, analyze draw odds,
+            whether to save it. Refresh deck card snapshots if needed, summarize the deck workspace, analyze draw odds,
             identify weak roles or curve issues, create recommendation plans, and only use apply_deck_plan
             after the user approves the plan.
             """;
@@ -56,7 +56,7 @@ public sealed class MtgPrompts
             Find budget replacements for deck workspace {workspaceId}.
             Budget target: {budgetTarget}
 
-            Use get_deck_intent, normalize_deck_cards, and find_budget_replacements. Preserve color identity,
+            Use get_deck_intent, refresh_deck_card_snapshots, and find_budget_replacements. Preserve color identity,
             role, protected cards/packages, mana curve, and format legality. Return the persisted plan id
             and do not mutate the deck unless the user explicitly asks to apply the plan.
             """;
@@ -73,7 +73,7 @@ public sealed class MtgPrompts
             Reduce the cost of deck workspace {workspaceId}.
             Budget target: {budgetTarget}
 
-            Use normalize_deck_cards, analyze_deck_cost, summarize_deck_plan, find_budget_replacements,
+            Use refresh_deck_card_snapshots, analyze_deck_cost, summarize_deck_workspace, find_budget_replacements,
             and preview_deck_plan. Preserve color identity, role coverage, format legality, and the deck's
             stated game plan. Return the plan id, preview deltas, and tradeoffs. Do not use apply_deck_plan
             unless the user explicitly approves the preview.
@@ -92,8 +92,8 @@ public sealed class MtgPrompts
             Focus: {focus}
             Max price: {maxPrice}
 
-            Use normalize_deck_cards, summarize_deck_plan, analyze_deck_consistency,
-            find_power_upgrades, and preview_deck_plan. Preserve color identity and legality.
+            Use refresh_deck_card_snapshots, summarize_deck_workspace, analyze_deck_consistency,
+            find_card_upgrades, and preview_deck_plan. Preserve color identity and legality.
             Return the plan id and before/after metrics. Do not use apply_deck_plan unless the user
             explicitly approves the preview.
             """;
@@ -110,7 +110,7 @@ public sealed class MtgPrompts
             Reduce the power of deck workspace {workspaceId}.
             Target power: {targetPower}
 
-            Use normalize_deck_cards, summarize_deck_plan, estimate_commander_bracket,
+            Use refresh_deck_card_snapshots, summarize_deck_workspace, estimate_commander_bracket,
             find_power_reduction_candidates, and preview_deck_plan. Prefer gentler replacements over
             removing core identity cards. Return the plan id, preview deltas, and likely gameplay impact.
             Do not use apply_deck_plan unless the user explicitly approves the preview.
@@ -127,7 +127,7 @@ public sealed class MtgPrompts
         return $"""
             Lower deck workspace {workspaceId} toward Commander bracket {targetBracket}.
 
-            Use normalize_deck_cards, estimate_commander_bracket, find_bracket_reduction_candidates,
+            Use refresh_deck_card_snapshots, estimate_commander_bracket, find_bracket_reduction_candidates,
             and preview_deck_plan. Treat bracket output as an advisory estimate for pregame discussion,
             not an official ruling. Game Changer data comes live from Scryfall. Return the plan id,
             bracket signals addressed, and before/after bracket estimate. Do not use apply_deck_plan
@@ -148,7 +148,7 @@ public sealed class MtgPrompts
             Optimize the mana base for deck workspace {workspaceId}.
             Max price: {maxPrice}
 
-            Use normalize_deck_cards, analyze_mana_base, find_mana_base_improvements,
+            Use refresh_deck_card_snapshots, analyze_mana_base, find_mana_base_improvements,
             and preview_deck_plan. Preserve color identity, legality, and budget. Return land-count,
             color-source, tapped-land, and fixing deltas. Do not use apply_deck_plan unless the user
             explicitly approves the preview.
@@ -167,7 +167,7 @@ public sealed class MtgPrompts
             Focus: {focus}
             Max price: {maxPrice}
 
-            Use normalize_deck_cards, analyze_deck_consistency, find_consistency_improvements,
+            Use refresh_deck_card_snapshots, analyze_deck_consistency, find_consistency_improvements,
             and preview_deck_plan. Preserve color identity, legality, and the deck's core plan.
             Return the plan id, key draw-odds deltas, and role-density changes. Do not use
             apply_deck_plan unless the user explicitly approves the preview.
@@ -204,7 +204,7 @@ public sealed class MtgPrompts
             Set: {setCode}
             Max price: {maxPrice}
 
-            Use find_new_cards_for_deck, compare_to_commander_meta, and summarize_deck_plan.
+            Use find_new_cards_for_deck, compare_to_commander_meta, and summarize_deck_workspace.
             Return cards by role, theme fit, price, and likely cuts when relevant.
             """;
     }

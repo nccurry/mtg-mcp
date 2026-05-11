@@ -19,4 +19,9 @@ public sealed class ScryfallOptions
     /// Gets or sets the minimum delay.
     /// </summary>
     public TimeSpan MinimumDelay { get; set; } = TimeSpan.FromMilliseconds(125);
+
+    /// <summary>
+    /// Gets or sets how many Scryfall 429 responses are retried before surfacing the failure.
+    /// </summary>
+    public int MaxRateLimitRetries { get; set; } = 3;
 }

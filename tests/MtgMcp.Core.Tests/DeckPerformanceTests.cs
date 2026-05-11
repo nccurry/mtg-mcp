@@ -17,7 +17,7 @@ public sealed class DeckPerformanceTests
         InMemoryRepository repository = new();
         DeckWorkspace deck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 29);
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -83,7 +83,7 @@ public sealed class DeckPerformanceTests
             ],
         };
         await plans.SaveAsync(plan, CancellationToken.None);
-        DeckWorkspaceService service = new(
+        DeckSimulationService service = new(
             repository,
             new EmptyCardCatalog(),
             planRepository: plans);
@@ -118,7 +118,7 @@ public sealed class DeckPerformanceTests
         InMemoryRepository repository = new();
         DeckWorkspace deck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 29);
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis viaService = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -153,7 +153,7 @@ public sealed class DeckPerformanceTests
         InMemoryRepository repository = new();
         DeckWorkspace deck = CreateDoubleBlueDeck();
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -179,7 +179,7 @@ public sealed class DeckPerformanceTests
         InMemoryRepository repository = new();
         DeckWorkspace deck = CreateTappedIslandDeck();
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -211,7 +211,7 @@ public sealed class DeckPerformanceTests
             spellColorIdentity: ["W", "U"],
             spellText: "Counter target spell.");
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -262,7 +262,7 @@ public sealed class DeckPerformanceTests
             spellColorIdentity: ["G"],
             spellText: "Destroy target artifact.");
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -294,7 +294,7 @@ public sealed class DeckPerformanceTests
             spellColorIdentity: ["R"],
             spellText: "Phyrexian Shot deals damage to target creature.");
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -329,7 +329,7 @@ public sealed class DeckPerformanceTests
             End MTG MCP Deck Intent
             """);
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -355,7 +355,7 @@ public sealed class DeckPerformanceTests
         InMemoryRepository repository = new();
         DeckWorkspace deck = CreatePerformanceDeck(plains: 4, islands: 4, utility: 61);
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
 
         DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
             deck.Id,
@@ -595,7 +595,7 @@ public sealed class DeckPerformanceTests
         InMemoryRepository repository = new();
         DeckWorkspace deck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 29);
         await repository.SaveAsync(deck, CancellationToken.None);
-        DeckWorkspaceService service = new(repository, new EmptyCardCatalog());
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
         using CancellationTokenSource cancellation = new();
         await cancellation.CancelAsync();
 
