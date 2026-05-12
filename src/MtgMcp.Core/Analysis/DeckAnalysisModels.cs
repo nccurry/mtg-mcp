@@ -429,6 +429,21 @@ public sealed class ManaBaseAnalysis
     public int LandCount { get; set; }
 
     /// <summary>
+    /// Gets or sets cards whose primary category is a land slot.
+    /// </summary>
+    public int LandSlotCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets land slots that have a nonland front face and land back face.
+    /// </summary>
+    public int ModalDoubleFacedLandCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets land-role cards with inferred produced mana.
+    /// </summary>
+    public int ManaProducingLandCount { get; set; }
+
+    /// <summary>
     /// Gets or sets the color source counts.
     /// </summary>
     public Dictionary<string, int> ColorSources { get; set; } = new(StringComparer.OrdinalIgnoreCase);

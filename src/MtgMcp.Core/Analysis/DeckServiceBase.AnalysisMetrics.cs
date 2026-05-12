@@ -98,17 +98,36 @@ public abstract partial class DeckServiceBase
     protected static ManaBaseAnalysis AnalyzeManaBase(DeckWorkspace workspace)
     {
         ManaBaseAnalysis analysis = new() { WorkspaceId = workspace.Id };
+        HashSet<string> deckColorIdentity = GetDeckColoredIdentity(workspace);
         foreach (DeckCard card in IncludedCards(workspace))
         {
             CardSnapshot snapshot = GetSnapshot(card);
             int quantity = Math.Max(0, card.Quantity);
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             bool isLand = role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase);
-            bool fixesMana = snapshot.ProducedMana.Count > 1 || role.Tags.Contains(DeckTags.ManaFixing);
+            bool isLandSlot = IsLandSlotCategory(card);
+            bool isModalDoubleFacedLand = HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
+            IReadOnlyList<string> producedMana = ReadProducedMana(card);
+            bool fixesMana = producedMana.Count > 1 || role.Tags.Contains(DeckTags.ManaFixing);
+
+            if (isLandSlot)
+            {
+                analysis.LandSlotCount += quantity;
+            }
+
+            if (isModalDoubleFacedLand)
+            {
+                analysis.ModalDoubleFacedLandCount += quantity;
+            }
 
             if (isLand)
             {
                 analysis.LandCount += quantity;
+                if (producedMana.Count > 0)
+                {
+                    analysis.ManaProducingLandCount += quantity;
+                }
+
                 if (LooksTapped(snapshot))
                 {
                     analysis.TappedLandCount += quantity;
@@ -119,7 +138,7 @@ public abstract partial class DeckServiceBase
                 }
             }
 
-            foreach (string color in ReadProducedMana(card))
+            foreach (string color in producedMana)
             {
                 AddCount(analysis.ProducedManaSources, color, quantity);
                 if (isLand)
@@ -148,7 +167,7 @@ public abstract partial class DeckServiceBase
             analysis.Risks.Add("Many lands appear to enter tapped, which can slow early turns.");
         }
 
-        if (analysis.ColorSources.Count > 1 && analysis.FixingCount < 8)
+        if (deckColorIdentity.Count > 1 && analysis.FixingCount < 8)
         {
             analysis.Risks.Add("Multicolor decks usually want more fixing sources.");
         }
@@ -345,7 +364,7 @@ public abstract partial class DeckServiceBase
     }
 
     /// <summary>
-    /// Reads produced mana with basic land fallbacks.
+    /// Reads produced mana with basic land and MDFC land-slot fallbacks.
     /// </summary>
     protected static IReadOnlyList<string> ReadProducedMana(DeckCard card)
     {
@@ -362,7 +381,8 @@ public abstract partial class DeckServiceBase
         AddBasicLandColor(colors, text, "Swamp", "B");
         AddBasicLandColor(colors, text, "Mountain", "R");
         AddBasicLandColor(colors, text, "Forest", "G");
-        return colors;
+        AddModalDoubleFacedLandColors(colors, card, snapshot);
+        return colors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>
@@ -383,7 +403,77 @@ public abstract partial class DeckServiceBase
     {
         string oracleText = snapshot.OracleText ?? "";
         return oracleText.Contains("enters tapped", StringComparison.OrdinalIgnoreCase)
-            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase);
+            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase)
+            || HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
+    }
+
+    /// <summary>
+    /// Checks whether the primary category represents a land slot.
+    /// </summary>
+    private static bool IsLandSlotCategory(DeckCard card)
+    {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        return primaryCategory.Equals("Land", StringComparison.OrdinalIgnoreCase)
+            || primaryCategory.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether a type line has a land face behind a nonland front face.
+    /// </summary>
+    private static bool HasNonPrimaryLandFace(string typeLine)
+    {
+        string[] faces = typeLine.Split(["//"], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return faces.Length > 1
+            && !ContainsAny(faces[0], "Land")
+            && faces.Skip(1).Any(face => ContainsAny(face, "Land"));
+    }
+
+    /// <summary>
+    /// Infers MDFC land-face colors from color identity only when the deck has marked the card as a land slot.
+    /// </summary>
+    private static void AddModalDoubleFacedLandColors(List<string> colors, DeckCard card, CardSnapshot snapshot)
+    {
+        if (!IsLandSlotCategory(card) || !HasNonPrimaryLandFace(snapshot.TypeLine ?? ""))
+        {
+            return;
+        }
+
+        foreach (string color in snapshot.ColorIdentity.Where(IsColoredMana))
+        {
+            colors.Add(color.ToUpperInvariant());
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a mana symbol is one of Magic's five colors.
+    /// </summary>
+    private static bool IsColoredMana(string mana)
+    {
+        return mana.Equals("W", StringComparison.OrdinalIgnoreCase)
+            || mana.Equals("U", StringComparison.OrdinalIgnoreCase)
+            || mana.Equals("B", StringComparison.OrdinalIgnoreCase)
+            || mana.Equals("R", StringComparison.OrdinalIgnoreCase)
+            || mana.Equals("G", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gets the deck's colored identity from commanders when available, otherwise included cards.
+    /// </summary>
+    private static HashSet<string> GetDeckColoredIdentity(DeckWorkspace workspace)
+    {
+        HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
+        List<DeckCard> commanders = IncludedCards(workspace).Where(IsCommanderCard).ToList();
+        IEnumerable<DeckCard> sourceCards = commanders.Count > 0 ? commanders : IncludedCards(workspace);
+
+        foreach (DeckCard card in sourceCards)
+        {
+            foreach (string color in GetSnapshot(card).ColorIdentity.Where(IsColoredMana))
+            {
+                colors.Add(color);
+            }
+        }
+
+        return colors;
     }
 
     /// <summary>

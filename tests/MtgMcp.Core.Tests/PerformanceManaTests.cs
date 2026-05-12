@@ -95,6 +95,33 @@ public sealed class PerformanceManaTests
     }
 
     /// <summary>
+    /// Verifies that MDFC land slots use color identity as a conservative back-face mana fallback.
+    /// </summary>
+    [Fact]
+    public void ReadProducedMana_InfersModalDoubleFacedLandSlotColor()
+    {
+        DeckCard malakir = new()
+        {
+            Name = "Malakir Rebirth // Malakir Mire",
+            PrimaryCategory = DeckRoles.Lands,
+            Categories = [DeckRoles.Lands],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Instant // Land",
+                OracleText = "Choose target creature. You lose 2 life.",
+                ColorIdentity = ["B"],
+            },
+        };
+
+        PerformanceMana.ReadProducedMana(malakir).Should().ContainSingle(symbol => symbol == "B");
+        PerformanceMana.LooksTapped(malakir.Snapshot).Should().BeTrue();
+
+        malakir.PrimaryCategory = DeckDefaults.Mainboard;
+        malakir.Categories = [DeckDefaults.Mainboard];
+        PerformanceMana.ReadProducedMana(malakir).Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Creates a nonland test card with cached mana data.
     /// </summary>
     private static DeckCard Spell(

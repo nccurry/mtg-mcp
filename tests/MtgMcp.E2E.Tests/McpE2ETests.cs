@@ -192,6 +192,75 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Verifies that query-first recommendation tools bind array filters and report rejections through MCP.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task QueryRecommendationFlow_RanksAndCreatesPlanThroughMcp()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        string query = "o:\"whenever an opponent discards\" or o:\"each opponent discards\" or o:\"draw a card\"";
+        scryfall.GetJson(
+            ScryfallSearchPath($"({query}) legal:commander usd<=10"),
+            QueryRecommendationSearchJson);
+        scryfall.PostJson("cards/collection", QueryRecommendationCollectionJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "start_deck_workspace",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Query Recommendations",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        Dictionary<string, object?> args = new()
+        {
+            ["workspaceId"] = workspaceId,
+            ["goal"] = "Improve Tinybones draw/discard engine",
+            ["scryfallQuery"] = query,
+            ["count"] = 3,
+            ["maxPrice"] = 10,
+            ["requiredRoles"] = new[] { "Draw" },
+            ["requiredTags"] = new[] { "Discard" },
+            ["excludedRoles"] = new[] { "Wincons" },
+            ["excludedTags"] = new[] { "Aristocrats", "Drain" }
+        };
+        JsonElement ranking = await CallJsonAsync(session.Client, "rank_cards_for_deck_query", args);
+        JsonElement gethsGrimoire = FindNamed(GetArray(ranking, "candidates"), "Geth's Grimoire", "cardName");
+        JsonElement rejected = FindNamed(GetArray(ranking, "rejected"), "Zulaport Cutthroat", "cardName");
+        JsonElement rejectedWincon = FindNamed(GetArray(ranking, "rejected"), "Torment of Hailfire", "cardName");
+
+        GetString(gethsGrimoire, "role").Should().Be("Draw");
+        GetArray(rejected, "reasons")
+            .Select(reason => reason.GetString())
+            .Should()
+            .Contain(reason => reason != null && reason.Contains("Excluded tag", StringComparison.OrdinalIgnoreCase));
+        GetArray(rejectedWincon, "reasons")
+            .Select(reason => reason.GetString())
+            .Should()
+            .Contain(reason => reason != null && reason.Contains("Excluded role", StringComparison.OrdinalIgnoreCase));
+
+        args["category"] = "Draw";
+        JsonElement planResult = await CallJsonAsync(session.Client, "create_deck_plan_from_query", args);
+        JsonElement addOperation = GetArray(GetObject(planResult, "plan"), "operations")
+            .Single(operation => GetString(operation, "operation") == "add_card");
+
+        GetString(addOperation, "cardName").Should().Be("Geth's Grimoire");
+        GetString(addOperation, "category").Should().Be("Draw");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that MCP analysis tools return accurate numeric payloads for a known local deck.
     /// </summary>
     [Fact]
@@ -1340,6 +1409,78 @@ public sealed class McpE2ETests
     {
       "has_more": false,
       "data": []
+    }
+    """;
+
+    /// <summary>
+    /// Provides Scryfall search results for query-first recommendation E2E tests.
+    /// </summary>
+    private const string QueryRecommendationSearchJson = """
+    {
+      "has_more": false,
+      "data": [
+        {
+          "id": "geths-grimoire",
+          "name": "Geth's Grimoire"
+        },
+        {
+          "id": "zulaport-cutthroat",
+          "name": "Zulaport Cutthroat"
+        },
+        {
+          "id": "torment-of-hailfire",
+          "name": "Torment of Hailfire"
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides Scryfall collection data for query-first recommendation E2E tests.
+    /// </summary>
+    private const string QueryRecommendationCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "geths-grimoire",
+          "oracle_id": "oracle-geths-grimoire",
+          "name": "Geth's Grimoire",
+          "mana_cost": "{4}",
+          "cmc": 4,
+          "type_line": "Artifact",
+          "oracle_text": "Whenever an opponent discards a card, you may draw a card.",
+          "color_identity": [],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "4.00" },
+          "edhrec_rank": 1800
+        },
+        {
+          "id": "zulaport-cutthroat",
+          "oracle_id": "oracle-zulaport-cutthroat",
+          "name": "Zulaport Cutthroat",
+          "mana_cost": "{1}{B}",
+          "cmc": 2,
+          "type_line": "Creature - Human Rogue Ally",
+          "oracle_text": "Whenever Zulaport Cutthroat or another creature you control dies, each opponent loses 1 life and you gain 1 life.",
+          "color_identity": ["B"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "1.00" },
+          "edhrec_rank": 800
+        },
+        {
+          "id": "torment-of-hailfire",
+          "oracle_id": "oracle-torment-of-hailfire",
+          "name": "Torment of Hailfire",
+          "mana_cost": "{X}{B}{B}",
+          "cmc": 2,
+          "type_line": "Sorcery",
+          "oracle_text": "Repeat the following process X times. Each opponent loses 3 life unless they sacrifice a nonland permanent or discard a card.",
+          "color_identity": ["B"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "8.00" },
+          "edhrec_rank": 400
+        }
+      ]
     }
     """;
 

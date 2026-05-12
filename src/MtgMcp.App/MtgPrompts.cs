@@ -185,8 +185,9 @@ public sealed class MtgPrompts
             Tune deck workspace {workspaceId} for this local meta: {meta}
             Budget per card: {budget}
 
-            Use analyze_deck_best_practices, find_cards_for_deck_goal, estimate_combo_pressure,
-            and preview_deck_plan. Prefer previewable plans and explain which local-meta problem
+            Use analyze_deck_best_practices, rank_cards_for_deck_query when you can produce
+            a precise Scryfall query, create_deck_plan_from_query or find_cards_for_deck_goal,
+            estimate_combo_pressure, and preview_deck_plan. Explain which local-meta problem
             each package addresses.
             """;
     }
@@ -237,8 +238,10 @@ public sealed class MtgPrompts
             Make deck workspace {workspaceId} better at: {goal}
             Budget per card: {budget}
 
-            Use find_cards_for_deck_goal, analyze_deck_best_practices, and preview_deck_plan.
-            Return the plan id, cards added, likely cuts, and tradeoffs.
+            Prefer rank_cards_for_deck_query when you can produce a precise Scryfall query, then
+            create_deck_plan_from_query. Use find_cards_for_deck_goal for simple goals. Also run
+            analyze_deck_best_practices and preview_deck_plan. Return the plan id, cards added,
+            likely cuts, and tradeoffs.
             """;
     }
 

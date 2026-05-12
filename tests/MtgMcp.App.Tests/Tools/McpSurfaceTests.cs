@@ -94,6 +94,8 @@ public sealed class McpSurfaceTests
             "compare_to_commander_meta",
             "find_missing_popular_cards",
             "find_new_cards_for_deck",
+            "rank_cards_for_deck_query",
+            "create_deck_plan_from_query",
             "find_cards_for_deck_goal",
             "find_deck_combos",
             "find_near_miss_combos",

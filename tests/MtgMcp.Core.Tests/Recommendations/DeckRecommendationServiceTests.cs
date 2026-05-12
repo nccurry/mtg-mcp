@@ -24,7 +24,8 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        FakeCardCatalog catalog = new();
+        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog, archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -63,7 +64,8 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        FakeCardCatalog catalog = new();
+        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog, archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -103,7 +105,8 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        FakeCardCatalog catalog = new();
+        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog, archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -120,6 +123,148 @@ public sealed partial class DeckIntelligenceTests
         result.Suggestions.Should().Contain(suggestion =>
             suggestion.CardName == "Lightning Greaves"
             && suggestion.Role == DeckRoles.Protection);
+        catalog.SearchQueries.Should().Contain(query =>
+            query.Contains("o:equipped o:shroud", StringComparison.OrdinalIgnoreCase)
+            && query.Contains("o:equipped o:hexproof", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that query-first ranking keeps accepted and rejected cards explainable.
+    /// </summary>
+    [Fact]
+    public async Task RankCardsForDeckQuery_FiltersAndExplainsDrawDiscardCandidates()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Tinybones Query",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        DeckQueryRecommendationResult result = await service.RankCardsForDeckQueryAsync(
+            workspace.Id,
+            "Improve Tinybones draw/discard engine",
+            "o:\"whenever an opponent discards\" or o:\"each opponent discards\" or o:\"draw a card\"",
+            count: 4,
+            maxPrice: 10,
+            requiredRoles: [DeckRoles.Draw],
+            requiredTags: [DeckTags.Discard],
+            excludedRoles: [DeckRoles.Wincons],
+            excludedTags: [DeckTags.Aristocrats, DeckTags.Drain],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Candidates.Should().Contain(candidate => candidate.CardName == "Geth's Grimoire");
+        result.Candidates.Should().Contain(candidate => candidate.CardName == "Syphon Mind");
+        result.Candidates.Should().NotContain(candidate => candidate.CardName == "Zulaport Cutthroat");
+        result.Rejected.Should().Contain(rejected =>
+            rejected.CardName == "Zulaport Cutthroat"
+            && rejected.Reasons.Any(reason => reason.Contains("Excluded tag", StringComparison.OrdinalIgnoreCase)));
+        result.Rejected.Should().Contain(rejected =>
+            rejected.CardName == "Torment of Hailfire"
+            && rejected.Reasons.Any(reason => reason.Contains("Excluded role", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// Verifies that query-first recommendations can create persisted non-mutating plans.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeckPlanFromQuery_CreatesPersistedPlanFromRankedCandidates()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Query Plan",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckQueryPlanResult result = await service.CreateDeckPlanFromQueryAsync(
+            workspace.Id,
+            "Improve Tinybones draw/discard engine",
+            "o:\"whenever an opponent discards\" or o:\"each opponent discards\" or o:\"draw a card\"",
+            DeckRoles.Draw,
+            cutsStrategy: "auto",
+            count: 2,
+            maxPrice: 10,
+            requiredRoles: [DeckRoles.Draw],
+            requiredTags: [DeckTags.Discard],
+            excludedRoles: [],
+            excludedTags: [DeckTags.Aristocrats, DeckTags.Drain],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Plan.Operations.Should().Contain(operation =>
+            operation.Operation == DeckEditOperations.AddCard
+            && operation.CardName == "Geth's Grimoire"
+            && operation.Category == DeckRoles.Draw);
+        result.Ranking.Rejected.Should().Contain(rejected => rejected.CardName == "Zulaport Cutthroat");
+        (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that natural-language draw/discard goals use the query pipeline without drain leakage.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsForDeckGoal_DrawDiscardDoesNotRecommendAristocratsDrain()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Draw Discard Goal",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
+            workspace.Id,
+            "add draw/discard cards for Tinybones",
+            count: 3,
+            maxPrice: 10,
+            strategy: "balanced",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Waste Not");
+        result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Zulaport Cutthroat");
+        result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Torment of Hailfire");
+        result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Zulaport Cutthroat");
     }
 
     /// <summary>

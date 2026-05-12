@@ -578,6 +578,25 @@ public sealed partial class DeckIntelligenceTests
                     new CardSearchResult { Name = "Command Tower" }
                 ];
             }
+            else if (query.Contains("discard", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Geth's Grimoire" },
+                    new CardSearchResult { Name = "Waste Not" },
+                    new CardSearchResult { Name = "Syphon Mind" },
+                    new CardSearchResult { Name = "Torment of Hailfire" },
+                    new CardSearchResult { Name = "Zulaport Cutthroat" },
+                    new CardSearchResult { Name = "Mirkwood Bats" }
+                ];
+            }
+            else if (query.Contains("hexproof", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("shroud", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("phase out", StringComparison.OrdinalIgnoreCase)
+                || query.Contains("indestructible", StringComparison.OrdinalIgnoreCase))
+            {
+                results = [new CardSearchResult { Name = "Lightning Greaves" }];
+            }
             else if (query.Contains("add", StringComparison.OrdinalIgnoreCase))
             {
                 results = [new CardSearchResult { Name = "Arcane Signet" }];
@@ -859,6 +878,76 @@ public sealed partial class DeckIntelligenceTests
                     EdhrecRank = 2_500,
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                },
+                "Waste Not" => new CardInfo
+                {
+                    Id = "waste-not",
+                    OracleId = "oracle-waste-not",
+                    Name = "Waste Not",
+                    ManaCost = "{1}{B}",
+                    ManaValue = 2,
+                    TypeLine = "Enchantment",
+                    OracleText = "Whenever an opponent discards a creature card, create a 2/2 black Zombie creature token. Whenever an opponent discards a land card, add {B}{B}. Whenever an opponent discards a noncreature, nonland card, draw a card.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 1_400,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
+                },
+                "Geth's Grimoire" => new CardInfo
+                {
+                    Id = "geths-grimoire",
+                    OracleId = "oracle-geths-grimoire",
+                    Name = "Geth's Grimoire",
+                    ManaCost = "{4}",
+                    ManaValue = 4,
+                    TypeLine = "Artifact",
+                    OracleText = "Whenever an opponent discards a card, you may draw a card.",
+                    ColorIdentity = [],
+                    EdhrecRank = 1_800,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "4.00" }
+                },
+                "Torment of Hailfire" => new CardInfo
+                {
+                    Id = "torment-of-hailfire",
+                    OracleId = "oracle-torment-of-hailfire",
+                    Name = "Torment of Hailfire",
+                    ManaCost = "{X}{B}{B}",
+                    ManaValue = 2,
+                    TypeLine = "Sorcery",
+                    OracleText = "Repeat the following process X times. Each opponent loses 3 life unless they sacrifice a nonland permanent or discard a card.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 400,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "8.00" }
+                },
+                "Zulaport Cutthroat" => new CardInfo
+                {
+                    Id = "zulaport-cutthroat",
+                    OracleId = "oracle-zulaport-cutthroat",
+                    Name = "Zulaport Cutthroat",
+                    ManaCost = "{1}{B}",
+                    ManaValue = 2,
+                    TypeLine = "Creature — Human Rogue Ally",
+                    OracleText = "Whenever Zulaport Cutthroat or another creature you control dies, each opponent loses 1 life and you gain 1 life.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 800,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
+                "Mirkwood Bats" => new CardInfo
+                {
+                    Id = "mirkwood-bats",
+                    OracleId = "oracle-mirkwood-bats",
+                    Name = "Mirkwood Bats",
+                    ManaCost = "{3}{B}",
+                    ManaValue = 4,
+                    TypeLine = "Creature — Bat",
+                    OracleText = "Whenever you create or sacrifice a token, each opponent loses 1 life.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 900,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.75" }
                 },
                 "Blasphemous Act" => new CardInfo
                 {

@@ -120,7 +120,7 @@ internal static class PerformanceMana
     }
 
     /// <summary>
-    /// Reads produced mana with basic land and Wastes name fallbacks.
+    /// Reads produced mana with basic land, Wastes, and MDFC land-slot fallbacks.
     /// </summary>
     public static IReadOnlyList<string> ReadProducedMana(DeckCard card)
     {
@@ -143,7 +143,8 @@ internal static class PerformanceMana
         AddBasicLandSymbol(colors, text, "Mountain", "R");
         AddBasicLandSymbol(colors, text, "Forest", "G");
         AddBasicLandSymbol(colors, text, "Wastes", "C");
-        return colors;
+        AddModalDoubleFacedLandSymbols(colors, card, snapshot);
+        return colors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>
@@ -161,7 +162,8 @@ internal static class PerformanceMana
     {
         string oracleText = snapshot.OracleText ?? "";
         return oracleText.Contains("enters tapped", StringComparison.OrdinalIgnoreCase)
-            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase);
+            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase)
+            || HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
     }
 
     /// <summary>
@@ -318,6 +320,44 @@ internal static class PerformanceMana
         {
             colors.Add(color);
         }
+    }
+
+    /// <summary>
+    /// Infers MDFC land-face colors from color identity only when the deck has marked the card as a land slot.
+    /// </summary>
+    private static void AddModalDoubleFacedLandSymbols(List<string> colors, DeckCard card, CardSnapshot snapshot)
+    {
+        if (!IsPrimaryLandCategory(card) || !HasNonPrimaryLandFace(snapshot.TypeLine ?? ""))
+        {
+            return;
+        }
+
+        foreach (string color in snapshot.ColorIdentity.Where(symbol =>
+            ColoredSymbols.Contains(symbol, StringComparer.OrdinalIgnoreCase)))
+        {
+            colors.Add(color.ToUpperInvariant());
+        }
+    }
+
+    /// <summary>
+    /// Checks whether the primary category represents a land slot.
+    /// </summary>
+    private static bool IsPrimaryLandCategory(DeckCard card)
+    {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        return primaryCategory.Equals("Land", StringComparison.OrdinalIgnoreCase)
+            || primaryCategory.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether a type line has a land face behind a nonland front face.
+    /// </summary>
+    private static bool HasNonPrimaryLandFace(string typeLine)
+    {
+        string[] faces = typeLine.Split(["//"], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return faces.Length > 1
+            && !faces[0].Contains("Land", StringComparison.OrdinalIgnoreCase)
+            && faces.Skip(1).Any(face => face.Contains("Land", StringComparison.OrdinalIgnoreCase));
     }
 }
 

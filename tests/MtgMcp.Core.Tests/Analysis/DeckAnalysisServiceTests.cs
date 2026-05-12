@@ -97,6 +97,20 @@ public sealed partial class DeckIntelligenceTests
             .PrimaryRole
             .Should()
             .Be(DeckRoles.Utility);
+        DeckRoleClassifier.Classify(new DeckCard
+            {
+                Name = "Chart a Course",
+                PrimaryCategory = DeckRoles.Draw,
+                Categories = [DeckRoles.Draw, DeckRoles.Lands],
+                Snapshot = new CardSnapshot
+                {
+                    TypeLine = "Sorcery",
+                    OracleText = "Draw two cards. Then discard a card unless you attacked this turn."
+                }
+            })
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.Draw);
 
         DeckRoleClassifier.Classify(Card(
                 "Tourach, Dread Cantor",
@@ -572,6 +586,165 @@ public sealed partial class DeckIntelligenceTests
         consistency.RampCount.Should().Be(2);
         consistency.Risks.Should().Contain(note => note.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
         consistency.KeyOdds.Rows.Should().Contain(row => row.Target == DeckRoles.Ramp);
+    }
+
+    /// <summary>
+    /// Verifies that colorless utility lands do not make mono-color decks look multicolor.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBase_MonoBlackWithColorlessLandDoesNotWarnAboutMulticolorFixing()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "War Room",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                },
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 36,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                },
+                new DeckCard
+                {
+                    Name = "War Room",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Land", OracleText = "{T}: Add {C}.", ProducedMana = ["C"] }
+                },
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        OracleText = "{T}: Add one mana of any color in your commander's color identity.",
+                        ProducedMana = ["W", "U", "B", "R", "G"]
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis analysis = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.ColorSources.Should().ContainKey("B");
+        analysis.ColorSources.Should().ContainKey("C");
+        analysis.Risks.Should().NotContain(risk => risk.Contains("Multicolor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that multicolor commander identity still receives fixing guidance.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBase_MulticolorCommanderWarnsWhenFixingIsLow()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Two Color",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Krydle of Baldur's Gate",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["U", "B"] }
+                },
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 36,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                },
+                new DeckCard
+                {
+                    Name = "Temple of Deceit",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Land", ProducedMana = ["U", "B"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis analysis = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.Risks.Should().Contain(risk => risk.Contains("Multicolor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that MDFC lands in land categories are represented as land slots.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBase_MdfcLandCategoryReportsLandSlotAndManaProducingCounts()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "MDFC Lands",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 37,
+                    PrimaryCategory = "Land",
+                    Categories = ["Land"],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land — Swamp" }
+                },
+                new DeckCard
+                {
+                    Name = "Malakir Rebirth // Malakir Mire",
+                    Quantity = 1,
+                    PrimaryCategory = "Land",
+                    Categories = ["Land"],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Instant // Land",
+                        ColorIdentity = ["B"],
+                        OracleText = "Choose target creature. You lose 2 life. Until end of turn, that creature gains when this creature dies, return it to the battlefield tapped."
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis analysis = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.LandCount.Should().Be(38);
+        analysis.LandSlotCount.Should().Be(38);
+        analysis.ModalDoubleFacedLandCount.Should().Be(1);
+        analysis.ManaProducingLandCount.Should().Be(38);
+        analysis.ColorSources["B"].Should().Be(38);
+        analysis.TappedLandCount.Should().Be(1);
+        analysis.UntappedLandCount.Should().Be(37);
     }
 
     /// <summary>

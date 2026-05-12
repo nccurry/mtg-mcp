@@ -204,6 +204,71 @@ public sealed class RecommendationTools
     }
 
     /// <summary>
+    /// Ranks cards from an agent-supplied Scryfall query using deck-aware filters.
+    /// </summary>
+    [McpServerTool(Name = "rank_cards_for_deck_query", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Rank cards from a caller-supplied Scryfall query using deck legality, color identity, budget, required roles/tags, excluded roles/tags, and rejection reasons. Prefer this when the LLM can produce a precise Scryfall query.")]
+    public Task<DeckQueryRecommendationResult> RankCardsForDeckQueryAsync(
+        string workspaceId,
+        string goal,
+        string scryfallQuery,
+        int count = 10,
+        decimal? maxPrice = null,
+        string[]? requiredRoles = null,
+        string[]? requiredTags = null,
+        string[]? excludedRoles = null,
+        string[]? excludedTags = null,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.RankCardsForDeckQueryAsync(
+            workspaceId,
+            goal,
+            scryfallQuery,
+            count,
+            maxPrice,
+            requiredRoles,
+            requiredTags,
+            excludedRoles,
+            excludedTags,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a non-mutating deck edit plan from an agent-supplied Scryfall query.
+    /// </summary>
+    [McpServerTool(Name = "create_deck_plan_from_query", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Create a persisted non-mutating deck edit plan from a caller-supplied Scryfall query after deck-aware ranking, validation, scoring, and rejection analysis.")]
+    public Task<DeckQueryPlanResult> CreateDeckPlanFromQueryAsync(
+        string workspaceId,
+        string goal,
+        string scryfallQuery,
+        string category,
+        string cutsStrategy = "auto",
+        int count = 5,
+        decimal? maxPrice = null,
+        string[]? requiredRoles = null,
+        string[]? requiredTags = null,
+        string[]? excludedRoles = null,
+        string[]? excludedTags = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("create_deck_plan_from_query");
+        return recommendations.CreateDeckPlanFromQueryAsync(
+            workspaceId,
+            goal,
+            scryfallQuery,
+            category,
+            cutsStrategy,
+            count,
+            maxPrice,
+            requiredRoles,
+            requiredTags,
+            excludedRoles,
+            excludedTags,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Finds cards for a natural-language deck goal.
     /// </summary>
     [McpServerTool(Name = "find_cards_for_deck_goal", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]

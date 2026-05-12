@@ -32,7 +32,7 @@ public static class DeckRoleClassifier
             return Assignment(DeckRoles.Commander, tags, 0.95);
         }
 
-        if (ContainsAny(categoryText, DeckRoles.Lands) || ContainsAny(primaryTypeLine, "land"))
+        if (HasPrimaryLandCategory(card) || ContainsAny(primaryTypeLine, "land"))
         {
             return Assignment(DeckRoles.Lands, tags, 0.93);
         }
@@ -245,6 +245,16 @@ public static class DeckRoleClassifier
     private static IEnumerable<string> Categories(DeckCard card)
     {
         return card.Categories ?? [];
+    }
+
+    /// <summary>
+    /// Checks whether the primary category describes a land slot.
+    /// </summary>
+    private static bool HasPrimaryLandCategory(DeckCard card)
+    {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        return primaryCategory.Equals("Land", StringComparison.OrdinalIgnoreCase)
+            || primaryCategory.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
