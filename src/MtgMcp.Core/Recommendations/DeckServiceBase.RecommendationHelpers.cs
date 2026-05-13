@@ -57,7 +57,7 @@ public abstract partial class DeckServiceBase
         {
             "all" => true,
             "included" => IsIncluded(workspace, card),
-            "maybeboard" => string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase),
+            "maybeboard" => string.Equals(DeckCategoryOrdering.PrimaryCategory(card), DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase),
             "missing" => string.IsNullOrWhiteSpace(GetSnapshot(card).TypeLine)
                 || string.IsNullOrWhiteSpace(GetSnapshot(card).OracleText)
                 || GetSnapshot(card).Prices.Count == 0,
@@ -70,7 +70,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
     {
-        return workspace.Cards.Where(card => IsIncluded(workspace, card));
+        return DeckCategoryInclusion.IncludedCards(workspace);
     }
 
     /// <summary>
@@ -78,9 +78,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
     {
-        DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
-            string.Equals(value.Name, card.PrimaryCategory, StringComparison.OrdinalIgnoreCase));
-        return category?.IncludedInDeck ?? true;
+        return DeckCategoryInclusion.IsIncludedInDeck(workspace, card);
     }
 
     /// <summary>

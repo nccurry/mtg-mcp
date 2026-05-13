@@ -139,30 +139,11 @@ public static class DeckRoleClassifier
     }
 
     /// <summary>
-    /// Builds a Scryfall search query for a role.
+    /// Builds a provider-neutral catalog search request for a role.
     /// </summary>
-    public static string QueryForRole(string role, string? format, decimal? maxPrice = null)
+    public static CardSearchRequest SearchRequestForRole(string role, string? format, decimal? maxPrice = null)
     {
-        string legal = string.IsNullOrWhiteSpace(format) ? "" : $" legal:{format}";
-        string price = maxPrice.HasValue ? $" usd<={maxPrice.Value:0.##}" : "";
-        string roleQuery = role.ToLowerInvariant() switch
-        {
-            "lands" => "t:land",
-            "ramp" => "(o:add or o:treasure or o:\"search your library for a land\")",
-            "draw" => "o:draw",
-            "tutors" => "o:\"search your library\"",
-            "interaction" => "(o:\"destroy target\" or o:\"exile target\" or o:\"counter target\")",
-            "board wipes" => "(o:\"destroy all\" or o:\"exile all\" or o:\"all creatures\")",
-            "protection" => "(o:hexproof or o:indestructible or o:\"phase out\")",
-            "recursion" => "(o:graveyard o:return)",
-            "wincons" => "(o:\"win the game\" or o:\"each opponent loses\")",
-            "card selection" => "(o:scry or o:surveil or o:\"look at the top\" or o:\"reveal the top\")",
-            _ => ""
-        };
-
-        return string.IsNullOrWhiteSpace(roleQuery)
-            ? legal.Trim()
-            : $"{roleQuery}{legal}{price}".Trim();
+        return CardSearchRequest.ForRole(role, format, maxPrice);
     }
 
     /// <summary>

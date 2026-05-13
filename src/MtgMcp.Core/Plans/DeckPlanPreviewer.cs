@@ -40,390 +40,134 @@ internal sealed class DeckPlanPreviewer
         List<string> warnings,
         CancellationToken cancellationToken)
     {
-        switch (operation.Operation)
-        {
-            case DeckEditOperations.AddCard:
-                await AddCardAsync(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    operation.Quantity ?? 1,
-                    operation.Category ?? DeckDefaults.Mainboard,
-                    resolveAddedCards,
-                    warnings,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.RemoveCard:
-                RemoveCard(workspace, Require(operation.CardName, "cardName"), operation.Quantity ?? 1, operation.Category, warnings);
-                break;
-            case DeckEditOperations.SetCardQuantity:
-                SetCardQuantity(workspace, Require(operation.CardName, "cardName"), operation.Quantity ?? 1, operation.Category, warnings);
-                break;
-            case DeckEditOperations.MoveCard:
-                MoveCard(workspace, Require(operation.CardName, "cardName"), Require(operation.ToCategory, "toCategory"), operation.FromCategory, warnings);
-                break;
-            case DeckEditOperations.AddCardCategory:
-                AddCardCategory(workspace, Require(operation.CardName, "cardName"), Require(operation.Category, "category"), warnings);
-                break;
-            case DeckEditOperations.RemoveCardCategory:
-                RemoveCardCategory(workspace, Require(operation.CardName, "cardName"), Require(operation.Category, "category"), warnings);
-                break;
-            case DeckEditOperations.SetPrimaryCardCategory:
-                SetPrimaryCardCategory(workspace, Require(operation.CardName, "cardName"), Require(operation.Category, "category"), warnings);
-                break;
-            case DeckEditOperations.CreateCategory:
-                DeckCategory category = EnsureCategory(workspace, Require(operation.Category, "category"));
-                category.IncludedInDeck = operation.IncludedInDeck ?? true;
-                category.IncludedInPrice = operation.IncludedInPrice ?? true;
-                break;
-            case DeckEditOperations.RenameCategory:
-                RenameCategory(workspace, Require(operation.FromCategory, "fromCategory"), Require(operation.ToCategory, "toCategory"), warnings);
-                break;
-            case DeckEditOperations.DeleteCategory:
-                DeleteCategory(workspace, Require(operation.Category, "category"), operation.ToCategory ?? DeckDefaults.Mainboard);
-                break;
-            case DeckEditOperations.UpdateDeckMetadata:
-                workspace.Name = string.IsNullOrWhiteSpace(operation.Name) ? workspace.Name : operation.Name;
-                workspace.Format = string.IsNullOrWhiteSpace(operation.Format) ? workspace.Format : operation.Format;
-                workspace.Description = operation.Description ?? workspace.Description;
-                break;
-            default:
-                warnings.Add($"Preview skipped unsupported operation '{operation.Operation}'.");
-                break;
-        }
-    }
+        PreviewCardCatalog previewCatalog = new(cardCatalog, resolveAddedCards);
+        DeckWorkspaceService workspaceService = new(
+            new PreviewWorkspaceRepository(workspace),
+            previewCatalog);
+        WorkspaceMode originalMode = workspace.Mode;
+        bool originalWriteBack = workspace.WriteBack;
 
-    /// <summary>
-    /// Adds a card to the preview workspace.
-    /// </summary>
-    private async Task AddCardAsync(
-        DeckWorkspace workspace,
-        string cardName,
-        int quantity,
-        string category,
-        bool resolveAddedCards,
-        List<string> warnings,
-        CancellationToken cancellationToken)
-    {
-        string normalizedCategory = NormalizeCategoryName(category);
-        EnsureCategory(workspace, normalizedCategory);
-        DeckCard? existing = FindCard(workspace, cardName, normalizedCategory);
-        if (existing is not null)
+        try
         {
-            existing.Quantity += Math.Max(1, quantity);
-            return;
+            workspace.Mode = WorkspaceMode.Local;
+            workspace.WriteBack = false;
+
+            await ApplyOperationAsync(workspaceService, workspace.Id, operation, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception)
+        {
+            warnings.Add($"Preview skipped operation '{operation.Operation}': {exception.Message}");
+        }
+        finally
+        {
+            workspace.Mode = originalMode;
+            workspace.WriteBack = originalWriteBack;
         }
 
-        CardInfo? cardInfo = resolveAddedCards
-            ? await TryGetCardForPreviewAsync(cardName, cancellationToken).ConfigureAwait(false)
-            : null;
-        DeckCard card = new()
-        {
-            Name = cardInfo?.Name ?? cardName.Trim(),
-            Quantity = Math.Max(1, quantity),
-            PrimaryCategory = normalizedCategory,
-            Categories = [normalizedCategory],
-            ScryfallId = cardInfo?.Id,
-            ScryfallOracleId = cardInfo?.OracleId
-        };
-
-        if (cardInfo is not null)
-        {
-            ApplyCardSnapshot(card, cardInfo);
-        }
-        else if (resolveAddedCards)
+        foreach (string cardName in previewCatalog.UnresolvedCardNames)
         {
             warnings.Add($"Could not resolve added card '{cardName}' for preview metrics.");
         }
-
-        DeckCategoryOrdering.Normalize(card, normalizedCategory);
-        workspace.Cards.Add(card);
     }
 
     /// <summary>
-    /// Resolves optional card metadata while allowing preview metrics to continue during catalog outages.
+    /// Routes one preview operation through the same workspace mutation methods used by plan application.
     /// </summary>
-    private async Task<CardInfo?> TryGetCardForPreviewAsync(
-        string cardName,
+    private static async Task ApplyOperationAsync(
+        DeckWorkspaceService workspaceService,
+        string workspaceId,
+        DeckEditOperation operation,
         CancellationToken cancellationToken)
     {
-        try
+        switch (operation.Operation)
         {
-            return await cardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false);
+            case DeckEditOperations.AddCard:
+                await workspaceService.AddCardAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    operation.Quantity ?? 1,
+                    operation.Category ?? DeckDefaults.Mainboard,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.RemoveCard:
+                await workspaceService.RemoveCardAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    operation.Quantity ?? 1,
+                    operation.Category,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.SetCardQuantity:
+                await workspaceService.SetCardQuantityAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    operation.Quantity ?? 1,
+                    operation.Category,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.MoveCard:
+                await workspaceService.MoveCardAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    Require(operation.ToCategory, "toCategory"),
+                    operation.FromCategory,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.AddCardCategory:
+                await workspaceService.AddCardCategoryAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    Require(operation.Category, "category"),
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.RemoveCardCategory:
+                await workspaceService.RemoveCardCategoryAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    Require(operation.Category, "category"),
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.SetPrimaryCardCategory:
+                await workspaceService.SetPrimaryCardCategoryAsync(
+                    workspaceId,
+                    Require(operation.CardName, "cardName"),
+                    Require(operation.Category, "category"),
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.CreateCategory:
+                await workspaceService.CreateCategoryAsync(
+                    workspaceId,
+                    Require(operation.Category, "category"),
+                    operation.IncludedInDeck ?? true,
+                    operation.IncludedInPrice ?? true,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.RenameCategory:
+                await workspaceService.RenameCategoryAsync(
+                    workspaceId,
+                    Require(operation.FromCategory, "fromCategory"),
+                    Require(operation.ToCategory, "toCategory"),
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.DeleteCategory:
+                await workspaceService.DeleteCategoryAsync(
+                    workspaceId,
+                    Require(operation.Category, "category"),
+                    operation.ToCategory ?? DeckDefaults.Mainboard,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case DeckEditOperations.UpdateDeckMetadata:
+                await workspaceService.UpdateDeckMetadataAsync(
+                    workspaceId,
+                    operation.Name,
+                    operation.Format,
+                    operation.Description,
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown deck edit operation '{operation.Operation}'.");
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Removes a card from the preview workspace.
-    /// </summary>
-    private static void RemoveCard(
-        DeckWorkspace workspace,
-        string cardName,
-        int quantity,
-        string? category,
-        List<string> warnings)
-    {
-        DeckCard? card = FindCard(workspace, cardName, category);
-        if (card is null)
-        {
-            warnings.Add($"Preview could not remove missing card '{cardName}'.");
-            return;
-        }
-
-        int amount = Math.Max(1, quantity);
-        if (card.Quantity <= amount)
-        {
-            workspace.Cards.Remove(card);
-        }
-        else
-        {
-            card.Quantity -= amount;
-        }
-    }
-
-    /// <summary>
-    /// Sets a preview card quantity.
-    /// </summary>
-    private static void SetCardQuantity(
-        DeckWorkspace workspace,
-        string cardName,
-        int quantity,
-        string? category,
-        List<string> warnings)
-    {
-        DeckCard? card = FindCard(workspace, cardName, category);
-        if (card is null)
-        {
-            warnings.Add($"Preview could not set quantity for missing card '{cardName}'.");
-            return;
-        }
-
-        if (quantity <= 0)
-        {
-            workspace.Cards.Remove(card);
-            return;
-        }
-
-        card.Quantity = quantity;
-    }
-
-    /// <summary>
-    /// Moves a card to another primary category in the preview workspace.
-    /// </summary>
-    private static void MoveCard(
-        DeckWorkspace workspace,
-        string cardName,
-        string toCategory,
-        string? fromCategory,
-        List<string> warnings)
-    {
-        DeckCard? card = FindCard(workspace, cardName, fromCategory);
-        if (card is null)
-        {
-            warnings.Add($"Preview could not move missing card '{cardName}'.");
-            return;
-        }
-
-        string normalizedCategory = NormalizeCategoryName(toCategory);
-        EnsureCategory(workspace, normalizedCategory);
-        DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
-    }
-
-    /// <summary>
-    /// Adds a secondary category to a preview card.
-    /// </summary>
-    private static void AddCardCategory(
-        DeckWorkspace workspace,
-        string cardName,
-        string category,
-        List<string> warnings)
-    {
-        DeckCard? card = FindCard(workspace, cardName, category: null);
-        if (card is null)
-        {
-            warnings.Add($"Preview could not add a category to missing card '{cardName}'.");
-            return;
-        }
-
-        string normalizedCategory = NormalizeCategoryName(category);
-        EnsureCategory(workspace, normalizedCategory);
-        DeckCategoryOrdering.AddSecondary(card, normalizedCategory);
-    }
-
-    /// <summary>
-    /// Removes a secondary category from a preview card.
-    /// </summary>
-    private static void RemoveCardCategory(
-        DeckWorkspace workspace,
-        string cardName,
-        string category,
-        List<string> warnings)
-    {
-        DeckCard? card = FindCard(workspace, cardName, category: null);
-        if (card is null)
-        {
-            warnings.Add($"Preview could not remove a category from missing card '{cardName}'.");
-            return;
-        }
-
-        string normalizedCategory = NormalizeCategoryName(category);
-        DeckCategoryOrdering.Remove(card, normalizedCategory);
-        EnsureCategory(workspace, card.PrimaryCategory);
-    }
-
-    /// <summary>
-    /// Changes a preview card's primary category.
-    /// </summary>
-    private static void SetPrimaryCardCategory(
-        DeckWorkspace workspace,
-        string cardName,
-        string category,
-        List<string> warnings)
-    {
-        DeckCard? card = FindCard(workspace, cardName, category: null);
-        if (card is null)
-        {
-            warnings.Add($"Preview could not set a primary category for missing card '{cardName}'.");
-            return;
-        }
-
-        string normalizedCategory = NormalizeCategoryName(category);
-        EnsureCategory(workspace, normalizedCategory);
-        DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
-    }
-
-    /// <summary>
-    /// Renames a category and updates card category references in the preview workspace.
-    /// </summary>
-    private static void RenameCategory(
-        DeckWorkspace workspace,
-        string fromCategory,
-        string toCategory,
-        List<string> warnings)
-    {
-        DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
-            value.Name.Equals(fromCategory, StringComparison.OrdinalIgnoreCase));
-        if (category is null)
-        {
-            warnings.Add($"Preview could not rename missing category '{fromCategory}'.");
-            return;
-        }
-
-        string normalizedNewName = NormalizeCategoryName(toCategory);
-        string previousName = category.Name;
-        category.Name = normalizedNewName;
-        foreach (DeckCard card in workspace.Cards)
-        {
-            DeckCategoryOrdering.Replace(card, previousName, normalizedNewName);
-        }
-    }
-
-    /// <summary>
-    /// Deletes a category and moves primary cards to a replacement category in the preview workspace.
-    /// </summary>
-    private static void DeleteCategory(
-        DeckWorkspace workspace,
-        string categoryName,
-        string replacementCategory)
-    {
-        string replacement = NormalizeCategoryName(replacementCategory);
-        EnsureCategory(workspace, replacement);
-        workspace.Categories.RemoveAll(category =>
-            category.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
-
-        foreach (DeckCard card in workspace.Cards)
-        {
-            bool wasPrimary = DeckCategoryOrdering.PrimaryCategory(card).Equals(
-                categoryName,
-                StringComparison.OrdinalIgnoreCase);
-            bool removedFromCard = card.Categories.RemoveAll(value =>
-                value.Equals(categoryName, StringComparison.OrdinalIgnoreCase)) > 0;
-
-            if (wasPrimary)
-            {
-                DeckCategoryOrdering.SetPrimary(card, replacement);
-            }
-            else if (removedFromCard)
-            {
-                DeckCategoryOrdering.AddSecondary(card, replacement);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Finds a card by name and optional primary category, falling back to secondary tags.
-    /// </summary>
-    private static DeckCard? FindCard(DeckWorkspace workspace, string cardName, string? category)
-    {
-        DeckCard? secondaryMatch = null;
-        string? normalizedCategory = category is null ? null : NormalizeCategoryName(category);
-        foreach (DeckCard card in workspace.Cards)
-        {
-            if (!card.Name.Equals(cardName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (normalizedCategory is null)
-            {
-                return card;
-            }
-
-            if (DeckCategoryOrdering.PrimaryCategory(card).Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase))
-            {
-                return card;
-            }
-
-            if (secondaryMatch is null && DeckCategoryOrdering.HasCategory(card, normalizedCategory))
-            {
-                secondaryMatch = card;
-            }
-        }
-
-        return secondaryMatch;
-    }
-
-    /// <summary>
-    /// Ensures a category row exists in the preview workspace.
-    /// </summary>
-    private static DeckCategory EnsureCategory(DeckWorkspace workspace, string category)
-    {
-        DeckCategory? existing = workspace.Categories.FirstOrDefault(value =>
-            value.Name.Equals(category, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        DeckCategory created = new()
-        {
-            Name = category,
-            IncludedInDeck = !category.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase)
-                && !category.Equals(DeckDefaults.Sideboard, StringComparison.OrdinalIgnoreCase),
-            IncludedInPrice = true,
-        };
-
-        workspace.Categories.Add(created);
-        return created;
-    }
-
-    /// <summary>
-    /// Adds a category name to a card if it is not already present.
-    /// </summary>
-    private static void AddCategoryName(DeckCard card, string category)
-    {
-        DeckCategoryOrdering.AddSecondary(card, category);
-    }
-
-    /// <summary>
-    /// Normalizes empty category input to the mainboard.
-    /// </summary>
-    private static string NormalizeCategoryName(string category)
-    {
-        return DeckCategoryOrdering.NormalizeCategoryName(category);
     }
 
     /// <summary>
@@ -437,28 +181,171 @@ internal sealed class DeckPlanPreviewer
     }
 
     /// <summary>
-    /// Copies catalog card facts into a preview card snapshot.
+    /// Stores the cloned preview workspace behind the normal repository contract.
     /// </summary>
-    private static void ApplyCardSnapshot(DeckCard card, CardInfo cardInfo)
+    private sealed class PreviewWorkspaceRepository : IDeckWorkspaceRepository
     {
-        card.Snapshot = new CardSnapshot
+        /// <summary>
+        /// Stores the preview workspace reference.
+        /// </summary>
+        private DeckWorkspace workspace;
+
+        /// <summary>
+        /// Creates a repository around one cloned workspace.
+        /// </summary>
+        public PreviewWorkspaceRepository(DeckWorkspace workspace)
         {
-            ManaCost = cardInfo.ManaCost,
-            TypeLine = cardInfo.TypeLine,
-            ManaValue = cardInfo.ManaValue,
-            OracleText = cardInfo.OracleText,
-            ColorIdentity = cardInfo.ColorIdentity.ToList(),
-            Set = cardInfo.Set,
-            CollectorNumber = cardInfo.CollectorNumber,
-            Rarity = cardInfo.Rarity,
-            ReleasedAt = cardInfo.ReleasedAt,
-            ScryfallUri = cardInfo.ScryfallUri,
-            EdhrecRank = cardInfo.EdhrecRank,
-            Keywords = cardInfo.Keywords.ToList(),
-            ProducedMana = cardInfo.ProducedMana.ToList(),
-            Legalities = new Dictionary<string, string>(cardInfo.Legalities, StringComparer.OrdinalIgnoreCase),
-            Prices = new Dictionary<string, string>(cardInfo.Prices, StringComparer.OrdinalIgnoreCase),
-            ImageUris = new Dictionary<string, string>(cardInfo.ImageUris, StringComparer.OrdinalIgnoreCase),
-        };
+            this.workspace = workspace;
+        }
+
+        /// <summary>
+        /// Saves the preview workspace in memory.
+        /// </summary>
+        public Task<DeckWorkspace> SaveAsync(DeckWorkspace workspace, CancellationToken cancellationToken)
+        {
+            this.workspace = workspace;
+            return Task.FromResult(workspace);
+        }
+
+        /// <summary>
+        /// Gets the preview workspace by id.
+        /// </summary>
+        public Task<DeckWorkspace?> GetAsync(string workspaceId, CancellationToken cancellationToken)
+        {
+            DeckWorkspace? result = workspace.Id.Equals(workspaceId, StringComparison.OrdinalIgnoreCase)
+                ? workspace
+                : null;
+            return Task.FromResult(result);
+        }
+
+        /// <summary>
+        /// Lists the single preview workspace.
+        /// </summary>
+        public Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<DeckWorkspace>>([workspace]);
+        }
+    }
+
+    /// <summary>
+    /// Controls whether preview add-card operations resolve catalog snapshots.
+    /// </summary>
+    private sealed class PreviewCardCatalog : ICardCatalog
+    {
+        /// <summary>
+        /// Stores the configured card catalog.
+        /// </summary>
+        private readonly ICardCatalog inner;
+
+        /// <summary>
+        /// Stores whether added cards should be looked up.
+        /// </summary>
+        private readonly bool resolveAddedCards;
+
+        /// <summary>
+        /// Creates a preview catalog wrapper.
+        /// </summary>
+        public PreviewCardCatalog(ICardCatalog inner, bool resolveAddedCards)
+        {
+            this.inner = inner;
+            this.resolveAddedCards = resolveAddedCards;
+        }
+
+        /// <summary>
+        /// Gets names whose optional preview metadata could not be resolved.
+        /// </summary>
+        public List<string> UnresolvedCardNames { get; } = [];
+
+        /// <summary>
+        /// Searches cards with provider-specific syntax.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return inner.SearchCardsAsync(query, limit, cancellationToken);
+        }
+
+        /// <summary>
+        /// Searches cards from a provider-neutral request.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return inner.SearchCardsAsync(request, limit, cancellationToken);
+        }
+
+        /// <summary>
+        /// Gets card details only when preview metrics requested resolved additions.
+        /// </summary>
+        public async Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            if (!resolveAddedCards)
+            {
+                return null;
+            }
+
+            try
+            {
+                CardInfo? card = await inner.GetCardAsync(nameOrId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (card is null)
+                {
+                    UnresolvedCardNames.Add(nameOrId);
+                }
+
+                return card;
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+            {
+                UnresolvedCardNames.Add(nameOrId);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets cards by name through the configured catalog.
+        /// </summary>
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            return inner.GetCardsByNamesAsync(names, cancellationToken);
+        }
+
+        /// <summary>
+        /// Gets rulings through the configured catalog.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken)
+        {
+            return inner.GetRulingsAsync(nameOrId, cancellationToken);
+        }
+
+        /// <summary>
+        /// Gets prints through the configured catalog.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken)
+        {
+            return inner.GetPrintsAsync(nameOrId, cancellationToken);
+        }
+
+        /// <summary>
+        /// Suggests cards through the configured catalog.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
+            string prompt,
+            string? format,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return inner.SuggestCardsAsync(prompt, format, limit, cancellationToken);
+        }
     }
 }

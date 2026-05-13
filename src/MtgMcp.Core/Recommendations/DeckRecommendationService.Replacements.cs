@@ -368,14 +368,12 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return null;
         }
 
-        string query = DeckRoleClassifier.QueryForRole(currentRole.PrimaryRole, workspace.Format, maxPrice);
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            query = string.IsNullOrWhiteSpace(workspace.Format) ? currentRole.PrimaryRole : $"legal:{workspace.Format}";
-        }
-
+        CardSearchRequest searchRequest = DeckRoleClassifier.SearchRequestForRole(
+            currentRole.PrimaryRole,
+            workspace.Format,
+            maxPrice);
         IReadOnlyList<CardSearchResult> searchResults = await CardCatalog
-            .SearchCardsAsync(query, limit: 12, cancellationToken)
+            .SearchCardsAsync(searchRequest, limit: 12, cancellationToken)
             .ConfigureAwait(false);
         IReadOnlyDictionary<string, CardInfo> candidatesByName = await CardCatalog
             .GetCardsByNamesAsync(searchResults.Select(result => result.Name).ToList(), cancellationToken)
@@ -573,14 +571,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         IReadOnlySet<string>? excludedNames = null,
         Func<CardInfo, bool>? candidateFilter = null)
     {
-        string query = DeckRoleClassifier.QueryForRole(role, workspace.Format, maxPrice);
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            query = $"legal:{NormalizeFormat(workspace.Format)} usd<={maxPrice:0.##}";
-        }
-
+        CardSearchRequest searchRequest = DeckRoleClassifier.SearchRequestForRole(role, workspace.Format, maxPrice);
         IReadOnlyList<CardSearchResult> results = await CardCatalog
-            .SearchCardsAsync(query, limit: 12, cancellationToken)
+            .SearchCardsAsync(searchRequest, limit: 12, cancellationToken)
             .ConfigureAwait(false);
         IReadOnlyDictionary<string, CardInfo> cardsByName = await CardCatalog
             .GetCardsByNamesAsync(results.Select(result => result.Name).ToList(), cancellationToken)

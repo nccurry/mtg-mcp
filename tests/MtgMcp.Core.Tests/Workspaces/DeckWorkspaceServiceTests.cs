@@ -1249,6 +1249,17 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
+        /// Verifies that semantic search cards.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
         /// Verifies that get card.
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)

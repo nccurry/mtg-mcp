@@ -15,6 +15,15 @@ public interface ICardCatalog
     );
 
     /// <summary>
+    /// Searches cards from a provider-neutral deckbuilding request.
+    /// </summary>
+    Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+        CardSearchRequest request,
+        int limit,
+        CancellationToken cancellationToken
+    );
+
+    /// <summary>
     /// Gets the card.
     /// </summary>
     Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken);

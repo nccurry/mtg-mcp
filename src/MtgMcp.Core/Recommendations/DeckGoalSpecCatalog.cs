@@ -11,16 +11,15 @@ internal static class DeckGoalSpecCatalog
     public static DeckGoalSpec Build(string goal, string format, decimal maxPrice, string strategy)
     {
         string normalized = goal.ToLowerInvariant();
-        string legal = $"legal:{NormalizeFormat(format)} usd<={maxPrice:0.##}";
         if (ContainsAny(normalized, "commander protection", "protect commander", "protection", "protect my commander"))
         {
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Protection,
-                Queries:
+                Searches:
                 [
-                    $"(o:equipped o:hexproof or o:equipped o:shroud or (o:target o:creature o:hexproof) or (o:permanents o:control o:hexproof)) {legal}",
-                    $"((o:\"creature you control\" o:indestructible) or (o:target o:creature o:protection) or o:\"phase out\") {legal}"
+                    Request(CardSearchPreset.CommanderProtectionEquipment, format, maxPrice),
+                    Request(CardSearchPreset.CommanderProtectionSpell, format, maxPrice)
                 ],
                 RequiredRoles: [DeckRoles.Protection],
                 RequiredTags: [],
@@ -34,9 +33,9 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Draw,
-                Queries:
+                Searches:
                 [
-                    $"(o:draw or o:\"draw a card\" or o:\"each opponent discards\" or o:\"each player discards\" or o:\"whenever an opponent discards\" or o:\"whenever you discard\" or o:\"discard a card\") {legal}"
+                    Request(CardSearchPreset.DrawDiscard, format, maxPrice)
                 ],
                 RequiredRoles: [DeckRoles.Draw, DeckRoles.Payoffs, DeckRoles.Synergy, DeckRoles.Ramp],
                 RequiredTags: [DeckTags.Discard],
@@ -50,7 +49,7 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Draw,
-                Queries: [$"(o:draw or o:\"draw a card\" or o:\"draw cards\") {legal}"],
+                Searches: [Request(CardSearchPreset.CardDraw, format, maxPrice)],
                 RequiredRoles: [DeckRoles.Draw],
                 RequiredTags: [],
                 ExcludedRoles: [],
@@ -63,9 +62,9 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Payoffs,
-                Queries:
+                Searches:
                 [
-                    $"(o:\"each opponent discards\" or o:\"each player discards\" or o:\"target player discards\" or o:\"whenever an opponent discards\" or o:\"whenever you discard\") {legal}"
+                    Request(CardSearchPreset.DiscardSynergy, format, maxPrice)
                 ],
                 RequiredRoles: [],
                 RequiredTags: [DeckTags.Discard],
@@ -79,10 +78,10 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Interaction,
-                Queries:
+                Searches:
                 [
-                    $"(o:goad or o:monarch or o:vote or o:\"council's dilemma\" or o:\"will of the council\" or o:\"tempting offer\") {legal}",
-                    $"(o:\"each opponent\" or o:\"opponents choose\" or o:\"each player votes\") {legal}"
+                    Request(CardSearchPreset.PoliticalChoices, format, maxPrice),
+                    Request(CardSearchPreset.PoliticalTableEffects, format, maxPrice)
                 ],
                 RequiredRoles: [],
                 RequiredTags: [DeckTags.Politics, DeckTags.TableInteraction],
@@ -96,10 +95,10 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Interaction,
-                Queries:
+                Searches:
                 [
-                    $"(o:goad or o:monarch or o:vote or o:\"tempting offer\" or o:\"each opponent\") {legal}",
-                    $"(o:\"each player\" or o:\"opponents choose\" or o:\"each creature\") {legal}"
+                    Request(CardSearchPreset.WholeTablePolitics, format, maxPrice),
+                    Request(CardSearchPreset.WholeTableEffects, format, maxPrice)
                 ],
                 RequiredRoles: [],
                 RequiredTags: [DeckTags.TableInteraction, DeckTags.Politics],
@@ -113,10 +112,10 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Interaction,
-                Queries:
+                Searches:
                 [
-                    $"(o:\"destroy all tokens\" or o:\"each creature gets -1/-1\" or o:\"prevent all combat damage\") {legal}",
-                    $"(o:\"creatures can't attack you\" or o:\"unless their controller pays\") {legal}"
+                    Request(CardSearchPreset.TokenDefenseSweepers, format, maxPrice),
+                    Request(CardSearchPreset.TokenDefensePillowfort, format, maxPrice)
                 ],
                 RequiredRoles: [],
                 RequiredTags: [DeckTags.TokenHate, DeckTags.GoWideProtection, DeckTags.Pillowfort],
@@ -130,9 +129,9 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Interaction,
-                Queries:
+                Searches:
                 [
-                    $"(o:\"exile target card from a graveyard\" or o:\"exile all graveyards\" or o:\"cards in graveyards\") {legal}"
+                    Request(CardSearchPreset.GraveyardHate, format, maxPrice)
                 ],
                 RequiredRoles: [],
                 RequiredTags: [DeckTags.GraveyardHate],
@@ -146,7 +145,7 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: NormalizeFocus(strategy),
                 Category: DeckRoles.Wincons,
-                Queries: [$"(o:\"each opponent loses\" or o:\"damage to each opponent\" or o:\"win the game\" or o:\"extra combat\") {legal}"],
+                Searches: [Request(CardSearchPreset.Finishers, format, maxPrice)],
                 RequiredRoles: [DeckRoles.Wincons],
                 RequiredTags: [],
                 ExcludedRoles: [],
@@ -159,7 +158,7 @@ internal static class DeckGoalSpecCatalog
             return new DeckGoalSpec(
                 Strategy: "casual",
                 Category: DeckRoles.Utility,
-                Queries: [$"(o:create or o:draw or o:gain) {legal}"],
+                Searches: [Request(CardSearchPreset.LessSaltyValue, format, maxPrice)],
                 RequiredRoles: [DeckRoles.Draw, DeckRoles.Synergy],
                 RequiredTags: [],
                 ExcludedRoles: [DeckRoles.Tutors, DeckRoles.Wincons],
@@ -170,12 +169,24 @@ internal static class DeckGoalSpecCatalog
         return new DeckGoalSpec(
             Strategy: NormalizeFocus(strategy),
             Category: DeckRoles.Utility,
-            Queries: [$"{legal}", $"(o:draw or o:\"destroy target\" or o:add) {legal}"],
+            Searches:
+            [
+                Request(CardSearchPreset.BroadUseful, format, maxPrice),
+                Request(CardSearchPreset.BroadUsefulFallback, format, maxPrice)
+            ],
             RequiredRoles: [DeckRoles.Draw, DeckRoles.Interaction, DeckRoles.Ramp],
             RequiredTags: [],
             ExcludedRoles: [],
             ExcludedTags: [],
             Rationale: "Adds broadly useful cards that improve weak role coverage.");
+    }
+
+    /// <summary>
+    /// Creates a filtered catalog search request for a goal preset.
+    /// </summary>
+    private static CardSearchRequest Request(CardSearchPreset preset, string format, decimal maxPrice)
+    {
+        return CardSearchRequest.ForPreset(preset, format, maxPrice);
     }
 
     /// <summary>
@@ -209,20 +220,6 @@ internal static class DeckGoalSpecCatalog
     }
 
     /// <summary>
-    /// Normalizes a format name.
-    /// </summary>
-    private static string NormalizeFormat(string? format)
-    {
-        string normalized = format?.Trim().ToLowerInvariant() ?? "";
-        return normalized switch
-        {
-            "" => "commander",
-            "edh" => "commander",
-            _ => normalized
-        };
-    }
-
-    /// <summary>
     /// Checks whether text contains any needles.
     /// </summary>
     private static bool ContainsAny(string value, params string[] needles)
@@ -237,7 +234,7 @@ internal static class DeckGoalSpecCatalog
 internal sealed record DeckGoalSpec(
     string Strategy,
     string Category,
-    string[] Queries,
+    CardSearchRequest[] Searches,
     string[] RequiredRoles,
     string[] RequiredTags,
     string[] ExcludedRoles,

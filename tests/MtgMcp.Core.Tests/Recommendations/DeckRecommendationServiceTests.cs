@@ -123,9 +123,7 @@ public sealed partial class DeckIntelligenceTests
         result.Suggestions.Should().Contain(suggestion =>
             suggestion.CardName == "Lightning Greaves"
             && suggestion.Role == DeckRoles.Protection);
-        catalog.SearchQueries.Should().Contain(query =>
-            query.Contains("o:equipped o:shroud", StringComparison.OrdinalIgnoreCase)
-            && query.Contains("o:equipped o:hexproof", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(CardSearchPreset.CommanderProtectionEquipment.ToString());
     }
 
     /// <summary>
@@ -299,7 +297,7 @@ public sealed partial class DeckIntelligenceTests
             maxPrice: 5,
             TestContext.Current.CancellationToken);
 
-        catalog.SearchQueries.Should().Contain(query => query.Contains("date>=2026-01-01", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(query => query.Contains("RecentCards:2026-01-01", StringComparison.OrdinalIgnoreCase));
         result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Season of Loss");
     }
 
@@ -332,7 +330,7 @@ public sealed partial class DeckIntelligenceTests
             maxPrice: 5,
             TestContext.Current.CancellationToken);
 
-        catalog.SearchQueries.Should().Contain(query => query.Contains("date>=2025-05-10", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(query => query.Contains("RecentCards:2025-05-10", StringComparison.OrdinalIgnoreCase));
         result.Notes.Should().Contain(note => note.Contains("2025-05-10", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -1067,7 +1065,7 @@ public sealed partial class DeckIntelligenceTests
         result.Plan.Operations.Should().Contain(operation =>
             operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Opt");
         result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Lightning Greaves");
-        catalog.SearchQueries.Should().Contain(query => query.Contains("scry", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(query => query.Contains($"Role:{DeckTags.CardSelection}", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

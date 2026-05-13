@@ -316,6 +316,38 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that semantic role requests are translated inside the Scryfall adapter.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_TranslatesRoleRequest()
+    {
+        string query = "(o:scry or o:surveil or o:\"look at the top\" or o:\"reveal the top\") legal:commander usd<=2";
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect($"https://api.scryfall.test/cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "1", "name": "Opt", "type_line": "Instant" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            CardSearchRequest.ForRole(DeckTags.CardSelection, "commander", maxPrice: 2),
+            10,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Opt");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that get rulings fetches named card then rulings.
     /// </summary>
     [Fact]

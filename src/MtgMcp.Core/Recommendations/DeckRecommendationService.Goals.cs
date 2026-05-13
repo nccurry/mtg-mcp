@@ -22,7 +22,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckQueryRecommendationResult ranking = await RankCardsForDeckQueriesAsync(
             workspace,
             goal,
-            spec.Queries,
+            spec.Searches,
             count,
             maxPrice,
             spec.RequiredRoles,

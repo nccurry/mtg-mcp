@@ -298,6 +298,17 @@ public sealed partial class DeckIntelligenceTests
         }
 
         /// <summary>
+        /// Searches budget goal candidates from a semantic request.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return SearchCardsAsync(request.Preset.ToString(), limit, cancellationToken);
+        }
+
+        /// <summary>
         /// Gets a budget goal card.
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
@@ -387,6 +398,17 @@ public sealed partial class DeckIntelligenceTests
                 new CardSearchResult { Name = "Unpriced New Card", Set = "new", ReleasedAt = new DateOnly(2026, 2, 1) }
             ];
             return Task.FromResult(results);
+        }
+
+        /// <summary>
+        /// Searches recent cards from a semantic request.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return SearchCardsAsync(request.Preset.ToString(), limit, cancellationToken);
         }
 
         /// <summary>
@@ -560,6 +582,26 @@ public sealed partial class DeckIntelligenceTests
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
         {
             SearchQueries.Add(query);
+            return Task.FromResult(SearchFakeCards(query));
+        }
+
+        /// <summary>
+        /// Searches fake cards from a semantic request.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            SearchQueries.Add(DescribeSearchRequest(request));
+            return Task.FromResult(SearchFakeCards(BuildFakeQuery(request)));
+        }
+
+        /// <summary>
+        /// Returns fake cards for a query-like test fixture string.
+        /// </summary>
+        private IReadOnlyList<CardSearchResult> SearchFakeCards(string query)
+        {
             IReadOnlyList<CardSearchResult> results;
             if (query.Contains("is:game-changer", StringComparison.OrdinalIgnoreCase))
             {
@@ -665,7 +707,71 @@ public sealed partial class DeckIntelligenceTests
                 results = [];
             }
 
-            return Task.FromResult(results);
+            return results;
+        }
+
+        /// <summary>
+        /// Converts semantic test requests into fixture selectors.
+        /// </summary>
+        private static string BuildFakeQuery(CardSearchRequest request)
+        {
+            return request.Preset switch
+            {
+                CardSearchPreset.RawQuery => request.RawQuery ?? "",
+                CardSearchPreset.CommanderGameChangers => "is:game-changer",
+                CardSearchPreset.Role => RoleFixtureQuery(request.Role),
+                CardSearchPreset.CommanderProtectionEquipment => "hexproof shroud",
+                CardSearchPreset.CommanderProtectionSpell => "indestructible phase out",
+                CardSearchPreset.DrawDiscard => "discard",
+                CardSearchPreset.CardDraw => "draw",
+                CardSearchPreset.DiscardSynergy => "discard",
+                CardSearchPreset.PoliticalChoices => "goad monarch vote",
+                CardSearchPreset.PoliticalTableEffects => "each opponent",
+                CardSearchPreset.WholeTablePolitics => "goad monarch vote each opponent",
+                CardSearchPreset.WholeTableEffects => "each player each creature",
+                CardSearchPreset.TableWideInteraction => "each opponent each player each creature",
+                CardSearchPreset.TokenDefenseSweepers => "destroy all tokens",
+                CardSearchPreset.TokenDefensePillowfort => "creatures can't attack",
+                CardSearchPreset.GraveyardHate => "graveyard",
+                CardSearchPreset.Finishers => "each opponent loses",
+                CardSearchPreset.LessSaltyValue => "draw",
+                CardSearchPreset.BroadUseful => "legal:commander",
+                CardSearchPreset.BroadUsefulFallback => "draw destroy target add",
+                CardSearchPreset.RecentCards => $"date>={request.Since:yyyy-MM-dd} set:{request.SetCode}",
+                _ => ""
+            };
+        }
+
+        /// <summary>
+        /// Converts a role request into a fixture selector.
+        /// </summary>
+        private static string RoleFixtureQuery(string? role)
+        {
+            return (role ?? "").ToLowerInvariant() switch
+            {
+                "lands" => "t:land",
+                "ramp" => "add",
+                "draw" => "draw",
+                "interaction" => "destroy target",
+                "board wipes" => "each creature",
+                "protection" => "hexproof",
+                "card selection" => "scry",
+                _ => "legal:commander"
+            };
+        }
+
+        /// <summary>
+        /// Describes a semantic request without adapter query syntax.
+        /// </summary>
+        private static string DescribeSearchRequest(CardSearchRequest request)
+        {
+            return request.Preset switch
+            {
+                CardSearchPreset.RawQuery => request.RawQuery ?? "",
+                CardSearchPreset.Role => $"Role:{request.Role}",
+                CardSearchPreset.RecentCards => $"RecentCards:{request.Since:yyyy-MM-dd}",
+                _ => request.Preset.ToString()
+            };
         }
 
         /// <summary>

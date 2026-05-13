@@ -6,33 +6,6 @@ namespace MtgMcp.Core;
 internal static class DeckQueryRecommendationEngine
 {
     /// <summary>
-    /// Builds a query with search-side legality and budget hints while preserving complete caller queries.
-    /// </summary>
-    public static string BuildEffectiveScryfallQuery(string query, string format, decimal? maxPrice)
-    {
-        List<string> parts = [];
-        bool addLegality = !query.Contains("legal:", StringComparison.OrdinalIgnoreCase);
-        bool addBudget = maxPrice.HasValue
-            && !ContainsAny(query, "usd<", "usd>", "eur<", "eur>", "tix<", "tix>");
-        if (!string.IsNullOrWhiteSpace(query))
-        {
-            parts.Add(addLegality || addBudget ? $"({query.Trim()})" : query.Trim());
-        }
-
-        if (addLegality)
-        {
-            parts.Add($"legal:{format}");
-        }
-
-        if (addBudget)
-        {
-            parts.Add($"usd<={maxPrice.GetValueOrDefault():0.##}");
-        }
-
-        return string.Join(' ', parts);
-    }
-
-    /// <summary>
     /// Builds a deterministic rejection record for a query result, or null when the card is eligible.
     /// </summary>
     public static DeckQueryRejectedCandidate? BuildRejection(
@@ -328,13 +301,6 @@ internal static class DeckQueryRecommendationEngine
         return reasons;
     }
 
-    /// <summary>
-    /// Checks whether text contains any needles.
-    /// </summary>
-    private static bool ContainsAny(string value, params string[] needles)
-    {
-        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
-    }
 }
 
 /// <summary>

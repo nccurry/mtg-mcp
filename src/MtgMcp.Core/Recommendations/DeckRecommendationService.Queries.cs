@@ -24,7 +24,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         return await RankCardsForDeckQueriesAsync(
             workspace,
             goal,
-            [scryfallQuery],
+            [CardSearchRequest.Raw(scryfallQuery)],
             count,
             maxPrice,
             requiredRoles,
@@ -55,7 +55,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckQueryRecommendationResult ranking = await RankCardsForDeckQueriesAsync(
             workspace,
             goal,
-            [scryfallQuery],
+            [CardSearchRequest.Raw(scryfallQuery)],
             count,
             maxPrice,
             requiredRoles,
@@ -89,7 +89,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private async Task<DeckQueryRecommendationResult> RankCardsForDeckQueriesAsync(
         DeckWorkspace workspace,
         string goal,
-        IReadOnlyList<string> scryfallQueries,
+        IReadOnlyList<CardSearchRequest> searchRequests,
         int count,
         decimal? maxPrice,
         IReadOnlyList<string>? requiredRoles,
@@ -131,7 +131,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         {
             WorkspaceId = workspace.Id,
             Goal = goal,
-            ScryfallQuery = string.Join(" | ", scryfallQueries.Where(query => !string.IsNullOrWhiteSpace(query))),
+            ScryfallQuery = string.Join(" | ", searchRequests.Select(DescribeSearchRequest).Where(query => !string.IsNullOrWhiteSpace(query))),
             Constraints = new DeckQueryRecommendationConstraints
             {
                 Format = format,
@@ -145,12 +145,18 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
         };
 
-        foreach (string rawQuery in scryfallQueries.Where(query => !string.IsNullOrWhiteSpace(query)))
+        foreach (CardSearchRequest request in searchRequests)
         {
-            string executedQuery = DeckQueryRecommendationEngine.BuildEffectiveScryfallQuery(rawQuery, format, maxPrice);
+            CardSearchRequest effectiveRequest = NormalizeSearchRequest(request, format, maxPrice);
+            string executedQuery = DescribeSearchRequest(effectiveRequest);
+            if (string.IsNullOrWhiteSpace(executedQuery))
+            {
+                continue;
+            }
+
             result.ExecutedQueries.Add(executedQuery);
             IReadOnlyList<CardSearchResult> searchResults = await CardCatalog
-                .SearchCardsAsync(executedQuery, searchLimit, cancellationToken)
+                .SearchCardsAsync(effectiveRequest, searchLimit, cancellationToken)
                 .ConfigureAwait(false);
             IReadOnlyDictionary<string, CardInfo> cards = await CardCatalog
                 .GetCardsByNamesAsync(
@@ -209,8 +215,56 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             .OrderBy(candidate => candidate.CardName)
             .ToList();
 
-        DeckQueryRecommendationEngine.AddWarnings(result, scryfallQueries, candidates.Count, candidateLimit, searchLimit);
+        DeckQueryRecommendationEngine.AddWarnings(result, result.ExecutedQueries, candidates.Count, candidateLimit, searchLimit);
         return result;
+    }
+
+    /// <summary>
+    /// Applies workspace-level filters to a card search request.
+    /// </summary>
+    private static CardSearchRequest NormalizeSearchRequest(
+        CardSearchRequest request,
+        string format,
+        decimal? maxPrice)
+    {
+        return request.Preset switch
+        {
+            CardSearchPreset.RawQuery => CardSearchRequest.Raw(request.RawQuery ?? "", format, maxPrice),
+            CardSearchPreset.Role => CardSearchRequest.ForRole(request.Role ?? "", request.Format ?? format, request.MaxPrice ?? maxPrice),
+            CardSearchPreset.RecentCards => new CardSearchRequest
+            {
+                Preset = CardSearchPreset.RecentCards,
+                Format = request.Format ?? format,
+                MaxPrice = request.MaxPrice ?? maxPrice,
+                Since = request.Since,
+                SetCode = request.SetCode,
+                Theme = request.Theme
+            },
+            _ => CardSearchRequest.ForPreset(
+                request.Preset,
+                request.Format ?? format,
+                request.MaxPrice ?? maxPrice)
+        };
+    }
+
+    /// <summary>
+    /// Describes a search request without exposing adapter-owned query syntax.
+    /// </summary>
+    private static string DescribeSearchRequest(CardSearchRequest request)
+    {
+        if (request.Preset == CardSearchPreset.RawQuery)
+        {
+            return request.RawQuery?.Trim() ?? "";
+        }
+
+        if (request.Preset == CardSearchPreset.Role)
+        {
+            return string.IsNullOrWhiteSpace(request.Role)
+                ? CardSearchPreset.Role.ToString()
+                : $"Role:{request.Role}";
+        }
+
+        return request.Preset.ToString();
     }
 
     /// <summary>

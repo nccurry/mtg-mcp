@@ -327,6 +327,17 @@ public sealed class ScryfallProviderTests
         }
 
         /// <summary>
+        /// Searches fake cards from a semantic request.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return SearchCardsAsync(request.RawQuery ?? request.Preset.ToString(), limit, cancellationToken);
+        }
+
+        /// <summary>
         /// Gets a fake card.
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)

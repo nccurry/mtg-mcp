@@ -32,7 +32,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         if (CardTrendProvider is null)
         {
             suggestions = await FindNewCardsViaCatalogAsync(workspace, query, cancellationToken).ConfigureAwait(false);
-            notes.Add("No dedicated card trend provider is configured; queried Scryfall syntax through the card catalog.");
+            notes.Add("No dedicated card trend provider is configured; queried recent cards through the card catalog.");
         }
         else
         {
@@ -80,8 +80,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CardTrendQuery query,
         CancellationToken cancellationToken)
     {
-        string search = BuildTrendSearchQuery(query);
-        IReadOnlyList<CardSearchResult> results = await CardCatalog.SearchCardsAsync(search, Math.Clamp(query.Limit * 3, 10, 75), cancellationToken)
+        IReadOnlyList<CardSearchResult> results = await CardCatalog
+            .SearchCardsAsync(CardSearchRequest.Recent(query), Math.Clamp(query.Limit * 3, 10, 75), cancellationToken)
             .ConfigureAwait(false);
         Dictionary<string, CardSearchResult> searchByName = results
             .GroupBy(card => card.Name, StringComparer.OrdinalIgnoreCase)
@@ -200,64 +200,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     }
 
     /// <summary>
-    /// Builds a Scryfall syntax search query for trend lookup.
-    /// </summary>
-    private static string BuildTrendSearchQuery(CardTrendQuery query)
-    {
-        List<string> parts = [$"legal:{NormalizeFormat(query.Format)}"];
-        if (query.Since.HasValue)
-        {
-            parts.Add($"date>={query.Since.Value:yyyy-MM-dd}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.SetCode))
-        {
-            parts.Add($"set:{query.SetCode}");
-        }
-
-        if (query.MaxPrice.HasValue)
-        {
-            parts.Add($"usd<={query.MaxPrice.Value:0.##}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Theme))
-        {
-            parts.Add(ThemeSearchFragment(query.Theme));
-        }
-
-        return string.Join(' ', parts.Where(part => !string.IsNullOrWhiteSpace(part)));
-    }
-
-    /// <summary>
-    /// Builds a rough Scryfall search fragment from a theme.
-    /// </summary>
-    private static string ThemeSearchFragment(string theme)
-    {
-        string normalized = theme.ToLowerInvariant();
-        if (normalized.Contains("token", StringComparison.OrdinalIgnoreCase))
-        {
-            return "(o:create o:token)";
-        }
-
-        if (normalized.Contains("discard", StringComparison.OrdinalIgnoreCase))
-        {
-            return "o:discard";
-        }
-
-        if (normalized.Contains("grave", StringComparison.OrdinalIgnoreCase) || normalized.Contains("reanim", StringComparison.OrdinalIgnoreCase))
-        {
-            return "(o:graveyard or o:reanimate or o:\"return target creature\")";
-        }
-
-        if (normalized.Contains("aristocrat", StringComparison.OrdinalIgnoreCase) || normalized.Contains("sacrifice", StringComparison.OrdinalIgnoreCase))
-        {
-            return "(o:sacrifice or o:\"whenever a creature dies\")";
-        }
-
-        return "";
-    }
-
-    /// <summary>
     /// Builds a recent-card suggestion.
     /// </summary>
     private static NewCardSuggestion BuildNewCardSuggestion(
@@ -294,4 +236,3 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     }
 
 }
-

@@ -38,6 +38,43 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that included-scope refresh follows the ordered primary category rather than the legacy mirror.
+    /// </summary>
+    [Fact]
+    public async Task RefreshDeckCardSnapshots_IncludedScopeUsesOrderedPrimaryCategory()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Ordered Primary",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false }
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckRoles.Ramp, DeckDefaults.Maybeboard]
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckNormalizationResult result = await service.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            "included",
+            TestContext.Current.CancellationToken);
+
+        result.RequestedCards.Should().Be(1);
+        result.UpdatedCards.Should().Be(1);
+        result.Workspace.Cards.Single().ScryfallId.Should().Be("sol-ring");
+    }
+
+    /// <summary>
     /// Verifies that snapshot refresh handles legacy null snapshots.
     /// </summary>
     [Fact]
@@ -347,16 +384,17 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
-    /// Verifies that card-selection recommendations use a specific search query.
+    /// Verifies that card-selection recommendations request the intended search role.
     /// </summary>
     [Fact]
-    public void RoleClassifier_QueryForRole_CoversCardSelection()
+    public void RoleClassifier_SearchRequestForRole_CoversCardSelection()
     {
-        string query = DeckRoleClassifier.QueryForRole(DeckTags.CardSelection, "commander", maxPrice: 2);
+        CardSearchRequest request = DeckRoleClassifier.SearchRequestForRole(DeckTags.CardSelection, "commander", maxPrice: 2);
 
-        query.Should().Contain("scry");
-        query.Should().Contain("legal:commander");
-        query.Should().Contain("usd<=2");
+        request.Preset.Should().Be(CardSearchPreset.Role);
+        request.Role.Should().Be(DeckTags.CardSelection);
+        request.Format.Should().Be("commander");
+        request.MaxPrice.Should().Be(2);
     }
 
     /// <summary>

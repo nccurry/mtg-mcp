@@ -649,6 +649,17 @@ public sealed class McpSurfaceTests
         }
 
         /// <summary>
+        /// Verifies that semantic search cards returns empty.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
         /// Verifies that get card.
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
@@ -721,6 +732,22 @@ public sealed class McpSurfaceTests
             IReadOnlyList<CardSearchResult> results = query.Contains("draw", StringComparison.OrdinalIgnoreCase)
                 ? [new CardSearchResult { Name = "Phyrexian Arena" }]
                 : [];
+            return Task.FromResult(results);
+        }
+
+        /// <summary>
+        /// Searches upgrade candidates by semantic role request.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            string role = request.Role ?? "";
+            IReadOnlyList<CardSearchResult> results = request.Preset == CardSearchPreset.Role
+                && role.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase)
+                    ? [new CardSearchResult { Name = "Phyrexian Arena" }]
+                    : [];
             return Task.FromResult(results);
         }
 

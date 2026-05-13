@@ -50,7 +50,8 @@ public abstract partial class DeckServiceBase
             }
 
             decimal? price = ReadUsdPrice(GetSnapshot(card));
-            bool isMaybeboard = string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase);
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            bool isMaybeboard = string.Equals(primaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase);
             bool includedInDeck = IsIncluded(workspace, card);
             bool includedInPrice = IsIncludedInPrice(workspace, card);
 
@@ -77,7 +78,7 @@ public abstract partial class DeckServiceBase
                 drivers.Add(new DeckCostDriver
                 {
                     CardName = card.Name,
-                    Category = card.PrimaryCategory,
+                    Category = primaryCategory,
                     Quantity = quantity,
                     UnitPrice = price.Value,
                     TotalPrice = total
@@ -338,7 +339,10 @@ public abstract partial class DeckServiceBase
         try
         {
             IReadOnlyList<CardSearchResult> results = await CardCatalog
-                .SearchCardsAsync("is:game-changer", limit: 250, cancellationToken)
+                .SearchCardsAsync(
+                    CardSearchRequest.ForPreset(CardSearchPreset.CommanderGameChangers),
+                    limit: 250,
+                    cancellationToken)
                 .ConfigureAwait(false);
             return results
                 .Select(result => result.Name)
@@ -358,8 +362,9 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static bool IsIncludedInPrice(DeckWorkspace workspace, DeckCard card)
     {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
         DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
-            string.Equals(value.Name, card.PrimaryCategory, StringComparison.OrdinalIgnoreCase));
+            string.Equals(value.Name, primaryCategory, StringComparison.OrdinalIgnoreCase));
         return category?.IncludedInPrice ?? true;
     }
 
