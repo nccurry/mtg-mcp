@@ -185,12 +185,78 @@ public sealed class ArchidektGatewayTests
         card.Categories.Should().Equal("Maybeboard", "Creature");
         card.Modifier.Should().Be("Normal");
         card.Snapshot.ManaCost.Should().Be("{3}{B}{B}");
-        card.Snapshot.TypeLine.Should().Be("Legendary Creature - God");
+        card.Snapshot.TypeLine.Should().Be("Legendary Creature - God // Legendary Artifact");
         card.Snapshot.Set.Should().Be("khm");
         card.Snapshot.OracleText.Should().Contain("Whenever an opponent sacrifices");
         card.Snapshot.OracleText.Should().Contain("Target player loses 3 life");
         card.Snapshot.ColorIdentity.Should().ContainSingle().Which.Should().Be("B");
         card.Snapshot.Prices["usd"].Should().Be("17.65");
+    }
+
+    /// <summary>
+    /// Verifies that import deck preserves the land face type on modal double-faced lands.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_MapsModalDoubleFacedLandTypeLine()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/5850815/",
+            """
+            {
+              "id": 5850815,
+              "name": "Tinybones, Trinket Thief",
+              "deckFormat": 3,
+              "categories": [
+                { "id": 52857748, "name": "Land", "includedInDeck": true, "includedInPrice": true }
+              ],
+              "cards": [
+                {
+                  "id": 3087658000,
+                  "categories": ["Land"],
+                  "quantity": 1,
+                  "card": {
+                    "id": 91694,
+                    "uid": "malakir-card",
+                    "oracleCard": {
+                      "uid": "malakir-oracle",
+                      "name": "Malakir Rebirth // Malakir Mire",
+                      "cmc": 1,
+                      "manaCost": "",
+                      "colorIdentity": ["Black"],
+                      "faces": [
+                        {
+                          "manaCost": "{B}",
+                          "text": "Choose target creature. You lose 2 life.",
+                          "types": "Instant",
+                          "subTypes": ""
+                        },
+                        {
+                          "text": "Malakir Mire enters the battlefield tapped.",
+                          "types": "Land",
+                          "subTypes": ""
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "https://archidekt.com/decks/5850815/tinybones_trinket_thief",
+            writeBack: true,
+            TestContext.Current.CancellationToken
+        );
+
+        DeckCard card = deck.Cards.Should().ContainSingle().Which;
+        card.PrimaryCategory.Should().Be("Land");
+        card.Snapshot.TypeLine.Should().Be("Instant // Land");
+        card.Snapshot.OracleText.Should().Contain("Malakir Mire enters");
+        card.Snapshot.ColorIdentity.Should().ContainSingle().Which.Should().Be("B");
     }
 
     /// <summary>

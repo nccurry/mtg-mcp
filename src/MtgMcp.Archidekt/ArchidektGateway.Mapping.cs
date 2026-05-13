@@ -132,8 +132,8 @@ public sealed partial class ArchidektGateway
                 GetNestedFaceString(cardElement, "mana_cost")),
             TypeLine = FirstNonEmpty(
                 GetNestedString(cardElement, "oracleCard", "typeLine"),
-                GetNestedString(cardElement, "oracleCard", "type"),
-                BuildNestedTypeLine(cardElement)),
+                BuildNestedTypeLine(cardElement),
+                GetNestedString(cardElement, "oracleCard", "type")),
             ManaValue =
                 GetDouble(cardElement, "manaValue")
                 ?? GetDouble(cardElement, "cmc")
@@ -238,17 +238,38 @@ public sealed partial class ArchidektGateway
             return null;
         }
 
-        JsonElement source = oracleCard;
         if (
             oracleCard.TryGetProperty("faces", out JsonElement faces)
             && faces.ValueKind == JsonValueKind.Array
         )
         {
-            source = faces.EnumerateArray().FirstOrDefault();
-            if (source.ValueKind == JsonValueKind.Undefined)
+            List<string> faceTypeLines = faces
+                .EnumerateArray()
+                .Select(BuildTypeLine)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToList();
+
+            if (faceTypeLines.Count > 0)
             {
-                source = oracleCard;
+                return string.Join(" // ", faceTypeLines);
             }
+        }
+
+        return BuildTypeLine(oracleCard);
+    }
+
+    /// <summary>
+    /// Builds one face's type line from Archidekt split type fields.
+    /// </summary>
+    private static string? BuildTypeLine(JsonElement source)
+    {
+        string? directTypeLine = FirstNonEmpty(
+            GetString(source, "typeLine"),
+            GetString(source, "type_line"));
+        if (!string.IsNullOrWhiteSpace(directTypeLine))
+        {
+            return directTypeLine;
         }
 
         List<string> supertypes = ReadStringList(source, "superTypes");
