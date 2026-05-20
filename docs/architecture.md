@@ -14,6 +14,7 @@ Existing capabilities include:
 
 - Scryfall-backed card metadata, prices, legality, rulings, prints, and card search.
 - Local and Archidekt-backed deck workspaces.
+- Factual card facets and explicit predicate counts over Scryfall snapshots, workspace categories, and local annotations.
 - Role and tag classification for deck cards.
 - Hypergeometric and Monte Carlo draw odds for roles or tags.
 - Heuristic no-opponent goldfish projection.

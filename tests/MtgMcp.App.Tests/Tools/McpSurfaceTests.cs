@@ -30,6 +30,7 @@ public sealed class McpSurfaceTests
         typeof(PlanTools),
         typeof(SimulationTools),
         typeof(IntentTools),
+        typeof(FacetTools),
         typeof(ServerTools),
     ];
 
@@ -118,6 +119,11 @@ public sealed class McpSurfaceTests
             "suggest_deck_intent",
             "set_deck_intent",
             "clear_deck_intent",
+            "get_card_facets",
+            "get_deck_facets",
+            "count_deck_cards_matching",
+            "explain_card_match",
+            "set_card_facet_annotations",
             "get_server_info",
         ];
 

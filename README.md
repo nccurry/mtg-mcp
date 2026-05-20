@@ -22,6 +22,7 @@ Scryfall, or Archidekt.
 - Open Archidekt decks and optionally write changes back to Archidekt.
 - Add, remove, move, categorize, and update cards and decks.
 - Analyze mana, cost, curve, consistency, draw odds, legality, brackets, and power.
+- Expose factual card facets and count cards from explicit caller-supplied predicates.
 - Compare decks to Commander heuristics, global popularity context, and recent
   card releases.
 - Find goal-driven card packages, budget swaps, upgrades, mana fixes, and cuts.
@@ -258,7 +259,14 @@ Apply the previewed deck plan and create an Archidekt checkpoint first.
 
 Common tuning tools include `refresh_deck_card_snapshots`,
 `summarize_deck_workspace`, `analyze_deck_consistency`,
-`find_card_upgrades`, and `preview_deck_plan`.
+`get_card_facets`, `count_deck_cards_matching`, `find_card_upgrades`, and
+`preview_deck_plan`.
+
+Facet tools are deliberately fact-first. For example,
+`count_deck_cards_matching` does not decide what "card advantage" means; the
+caller supplies a JSON predicate over facets such as `scryfall.oracle_text`,
+`workspace.categories`, `user.tags`, or locally stored `tagger.oracle_tags`, and
+the tool returns matching cards plus the exact evidence rows.
 
 ## Deck Intent Configuration
 

@@ -35,6 +35,7 @@ public static class MtgMcpHost
         services.GetRequiredService<DeckRecommendationService>();
         services.GetRequiredService<DeckPlanService>();
         services.GetRequiredService<DeckSimulationService>();
+        services.GetRequiredService<CardFacetService>();
         services.GetRequiredService<ICardCatalog>();
         services.GetRequiredService<IArchidektGateway>();
         services.GetRequiredService<ICardTrendProvider>();
@@ -89,6 +90,7 @@ public static class MtgMcpHost
         builder.Services.AddTransient<DeckRecommendationService>();
         builder.Services.AddTransient<DeckPlanService>();
         builder.Services.AddTransient<DeckSimulationService>();
+        builder.Services.AddTransient<CardFacetService>();
         builder.Services.AddSingleton<OperationModeGuard>();
         builder.Services.AddSingleton<ServerInfoService>();
         builder.Services.AddScryfall(builder.Configuration);
