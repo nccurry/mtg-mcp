@@ -287,7 +287,12 @@ public sealed partial class DeckRecommendationService
             Sources = MergeSourceStatuses(report.Sources),
             ExemplarDecks = budget.IncludeExemplarDecks
                 ? report.ExemplarDecks.OrderByDescending(deck => deck.Weight).Take(budget.MaxDecksPerSource).ToList()
-                : []
+                : [],
+            Discussions = report.Discussions
+                .OrderByDescending(discussion => discussion.Score ?? 0)
+                .ThenByDescending(discussion => discussion.CreatedAt ?? DateTimeOffset.MinValue)
+                .Take(Math.Clamp(budget.MaxRecommendations * budget.MaxEvidencePerRecommendation, 5, 100))
+                .ToList()
         };
         result.Notes.AddRange(report.Notes);
         if (CorpusSignalProviders.Count == 0)
@@ -327,15 +332,23 @@ public sealed partial class DeckRecommendationService
             combined.Sources.AddRange(KnownCorpusSources());
         }
 
-        foreach (ICorpusSignalProvider provider in CorpusSignalProviders.Take(budget.MaxSources))
+        int queriedSources = 0;
+        foreach (ICorpusSignalProvider provider in CorpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
             combined.Sources.Add(status);
+            if (!status.Enabled || queriedSources >= budget.MaxSources)
+            {
+                continue;
+            }
+
+            queriedSources++;
             try
             {
                 CorpusSignalReport report = await provider.GetSignalsAsync(query, budget, cancellationToken).ConfigureAwait(false);
                 combined.Signals.AddRange(report.Signals);
                 combined.ExemplarDecks.AddRange(report.ExemplarDecks);
+                combined.Discussions.AddRange(report.Discussions);
                 combined.Sources.AddRange(report.Sources);
                 combined.Notes.AddRange(report.Notes);
             }
@@ -350,6 +363,11 @@ public sealed partial class DeckRecommendationService
         combined.Signals = DeduplicateSignals(combined.Signals)
             .OrderByDescending(signal => signal.Score)
             .Take(budget.MaxCandidates * Math.Max(1, budget.MaxSources))
+            .ToList();
+        combined.Discussions = DeduplicateDiscussions(combined.Discussions)
+            .OrderByDescending(discussion => discussion.Score ?? 0)
+            .ThenByDescending(discussion => discussion.CreatedAt ?? DateTimeOffset.MinValue)
+            .Take(Math.Clamp(budget.MaxDecksPerSource * budget.MaxEvidencePerRecommendation, 5, 100))
             .ToList();
         combined.Sources = MergeSourceStatuses(combined.Sources);
         return combined;
@@ -432,8 +450,22 @@ public sealed partial class DeckRecommendationService
     private static List<CardCorpusSignal> DeduplicateSignals(IEnumerable<CardCorpusSignal> signals)
     {
         return signals
-            .GroupBy(signal => $"{signal.CardName}|{signal.Source}|{signal.SignalType}", StringComparer.OrdinalIgnoreCase)
+            .GroupBy(signal => $"{signal.CardName}|{signal.Source}|{signal.SignalType}|{signal.Uri}|{signal.Rationale}", StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(signal => signal.Score).First())
+            .ToList();
+    }
+
+    /// <summary>
+    /// Removes duplicate discussion rows by source URL and body.
+    /// </summary>
+    private static List<DiscussionEvidence> DeduplicateDiscussions(IEnumerable<DiscussionEvidence> discussions)
+    {
+        return discussions
+            .Where(discussion => !string.IsNullOrWhiteSpace(discussion.Uri) || !string.IsNullOrWhiteSpace(discussion.Body))
+            .GroupBy(
+                discussion => $"{discussion.Source}|{discussion.Uri}|{discussion.Body}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(discussion => discussion.Score ?? 0).First())
             .ToList();
     }
 
@@ -459,7 +491,6 @@ public sealed partial class DeckRecommendationService
         return
         [
             SourceStatus("edhrec-commander", "EDHREC commander aggregates", "unofficial-api", "https://edhrec.com/", stableApi: false, attributionRequired: true, apiType: CorpusSourceApiTypes.UnofficialApi, status: CorpusSourceStatuses.Disabled, permissionSensitive: true),
-            SourceStatus("edhtop16", "EDHTop16", "cedh-performance", "https://edhtop16.com/about", stableApi: true, attributionRequired: false, apiType: CorpusSourceApiTypes.Official, status: CorpusSourceStatuses.Disabled, permissionSensitive: false),
             SourceStatus("archidekt-exemplars", "Archidekt structured public endpoints", "unofficial-api", "https://archidekt.com/", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.UnofficialApi, status: CorpusSourceStatuses.Disabled, permissionSensitive: true),
             SourceStatus("moxfield-exemplars", "Moxfield structured public endpoints", "unofficial-api", "https://www.moxfield.com/", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.UnofficialApi, status: CorpusSourceStatuses.Disabled, permissionSensitive: true),
             SourceStatus("mtggoldfish", "MTGGoldfish metagame", "unsupported", "https://www.mtggoldfish.com/metagame/commander", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.Unsupported, status: CorpusSourceStatuses.Unsupported, permissionSensitive: true),

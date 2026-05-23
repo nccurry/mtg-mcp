@@ -225,6 +225,70 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that automatic cuts use deterministic deck statistics in their rationale.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeckPlanFromQuery_RanksCutsFromDeckStatistics()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Cut Statistics",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 37, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands], Snapshot = new CardSnapshot { TypeLine = "Basic Land" } },
+                new DeckCard
+                {
+                    Name = "Clunky Bauble",
+                    Quantity = 61,
+                    PrimaryCategory = DeckRoles.Utility,
+                    Categories = [DeckRoles.Utility],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "" }
+                },
+                new DeckCard
+                {
+                    Name = "Arcane Signet",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "{T}: Add one mana of any color." }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckQueryPlanResult result = await service.CreateDeckPlanFromQueryAsync(
+            workspace.Id,
+            "Add a draw piece",
+            "draw",
+            DeckRoles.Draw,
+            cutsStrategy: "auto",
+            count: 1,
+            maxPrice: 10,
+            requiredRoles: [DeckRoles.Draw],
+            requiredTags: [],
+            excludedRoles: [],
+            excludedTags: [],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        DeckEditOperation cut = result.Plan.Operations.Should().ContainSingle(operation =>
+            operation.Operation == DeckEditOperations.RemoveCard).Which;
+        cut.CardName.Should().Be("Clunky Bauble");
+        cut.Rationale.Should().Contain("Utility count");
+        cut.Rationale.Should().Contain("target maximum");
+    }
+
+    /// <summary>
     /// Verifies that natural-language draw/discard goals use the query pipeline without drain leakage.
     /// </summary>
     [Fact]

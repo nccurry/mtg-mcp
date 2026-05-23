@@ -22,6 +22,7 @@ public static class ScryfallServiceCollectionExtensions
         services.AddTransient<ICardTrendProvider, ScryfallCardTrendProvider>();
         services.AddTransient<ICommanderMetaProvider, ScryfallCommanderMetaProvider>();
         services.AddTransient<ICorpusSignalProvider, ScryfallCorpusSignalProvider>();
+        services.AddTransient<ICorpusSignalProvider, ScryfallTaggerCorpusSignalProvider>();
         return services;
     }
 }

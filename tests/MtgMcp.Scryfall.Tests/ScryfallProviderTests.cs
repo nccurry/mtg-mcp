@@ -251,6 +251,84 @@ public sealed class ScryfallProviderTests
     }
 
     /// <summary>
+    /// Verifies that Scryfall Tagger provider emits deterministic oracle-tag signals.
+    /// </summary>
+    [Fact]
+    public async Task TaggerCorpusProvider_UsesOtagSearchAndSignals()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults =
+            [
+                new CardSearchResult { Name = "Efficient Mana Rock" }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Efficient Mana Rock"] = Card("Efficient Mana Rock", "Artifact", "{T}: Add one mana of any color.", "1.25", 750, "abc", null)
+            }
+        };
+        ScryfallTaggerCorpusSignalProvider provider = new(catalog, new NullCorpusCache(), Options.Create(new MtgMcpOptions()));
+        CorpusSignalQuery query = new()
+        {
+            Format = "edh",
+            Goal = "add more ramp"
+        };
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            query,
+            RecommendationAnalysisBudget.FromDepth("minimal"),
+            TestContext.Current.CancellationToken);
+
+        catalog.SearchQueries.Should().Contain(queryText =>
+            queryText.Contains("otag:ramp", StringComparison.OrdinalIgnoreCase)
+            && queryText.Contains("legal:commander", StringComparison.OrdinalIgnoreCase));
+        report.Sources.Should().ContainSingle(source => source.Key == "scryfall-tagger");
+        report.Signals.Should().Contain(signal =>
+            signal.CardName == "Efficient Mana Rock"
+            && signal.Source == "Scryfall Tagger oracle tags"
+            && signal.SignalType == CorpusSignalTypes.Tag
+            && signal.Rationale.Contains("'ramp'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that Scryfall Tagger provider selects concrete high-signal tags for theme language.
+    /// </summary>
+    [Fact]
+    public async Task TaggerCorpusProvider_SelectsHighSignalThemeTags()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults =
+            [
+                new CardSearchResult { Name = "Theme Fit" }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Theme Fit"] = Card("Theme Fit", "Enchantment", "Whenever you cast a spell, draw a card.", "0.75", 1_200, "abc", null)
+            }
+        };
+        ScryfallTaggerCorpusSignalProvider provider = new(catalog, new NullCorpusCache(), Options.Create(new MtgMcpOptions()));
+        CorpusSignalQuery query = new()
+        {
+            Format = "commander",
+            Goal = "lifegain discard mill spellslinger counters synergy"
+        };
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            query,
+            RecommendationAnalysisBudget.FromDepth("balanced"),
+            TestContext.Current.CancellationToken);
+
+        catalog.SearchQueries.Should().Contain(queryText => queryText.Contains("otag:lifegain", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(queryText => queryText.Contains("otag:discard", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(queryText => queryText.Contains("otag:mill-self", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(queryText => queryText.Contains("otag:counters-matter", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(queryText => queryText.Contains("otag:copy-spell", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain(queryText => queryText.Contains("otag:cast-trigger-you", StringComparison.OrdinalIgnoreCase));
+        report.Notes.Should().Contain(note => note.Contains("deterministic tag-search evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Creates a card info fixture.
     /// </summary>
     private static CardInfo Card(
@@ -308,6 +386,11 @@ public sealed class ScryfallProviderTests
         public string LastSearchQuery { get; private set; } = "";
 
         /// <summary>
+        /// Gets all search queries.
+        /// </summary>
+        public List<string> SearchQueries { get; } = [];
+
+        /// <summary>
         /// Gets the last search limit.
         /// </summary>
         public int LastSearchLimit { get; private set; }
@@ -322,6 +405,7 @@ public sealed class ScryfallProviderTests
         {
             SearchCalls++;
             LastSearchQuery = query;
+            SearchQueries.Add(query);
             LastSearchLimit = limit;
             return Task.FromResult<IReadOnlyList<CardSearchResult>>(SearchResults.Take(limit).ToList());
         }

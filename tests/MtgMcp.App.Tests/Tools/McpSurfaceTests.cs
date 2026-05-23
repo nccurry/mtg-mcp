@@ -444,9 +444,16 @@ public sealed class McpSurfaceTests
             ["INTELLIGENCE:CACHE:TTLS:SCRYFALL_SEARCH"] = "12h",
             ["INTELLIGENCE:CACHE:TTLS:COMMANDERSPELLBOOK"] = "18h",
             ["INTELLIGENCE:SOURCES:SCRYFALL:ENABLED"] = "false",
+            ["INTELLIGENCE:SOURCES:SCRYFALL_TAGGER:ENABLED"] = "false",
             ["INTELLIGENCE:SOURCES:COMMANDERSPELLBOOK:ENABLED"] = "false",
             ["INTELLIGENCE:SOURCES:TOPDECK:API_KEY"] = "topdeck-key",
             ["INTELLIGENCE:SOURCES:TOPDECK:BASE_ADDRESS"] = "https://topdeck.test/api/",
+            ["INTELLIGENCE:SOURCES:EDHTOP16:ENABLED"] = "true",
+            ["INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API"] = "true",
+            ["INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS"] = "https://edhtop16.test/",
+            ["INTELLIGENCE:SOURCES:REDDIT:ENABLED"] = "true",
+            ["INTELLIGENCE:SOURCES:REDDIT:ALLOW_UNOFFICIAL_API"] = "true",
+            ["INTELLIGENCE:SOURCES:REDDIT:BASE_ADDRESS"] = "https://reddit.test/",
             ["ARCHIDEKT:JWT"] = "jwt-token",
             ["ARCHIDEKT:REFRESH_TOKEN"] = "refresh-token",
             ["ARCHIDEKT:USER_ID"] = "278245",
@@ -471,9 +478,16 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Intelligence:Cache:Ttls:ScryfallSearch"].Should().Be("12h");
         aliases["MtgMcp:Intelligence:Cache:Ttls:CommanderSpellbook"].Should().Be("18h");
         aliases["MtgMcp:Intelligence:Sources:Scryfall:Enabled"].Should().Be("false");
+        aliases["MtgMcp:Intelligence:Sources:ScryfallTagger:Enabled"].Should().Be("false");
         aliases["MtgMcp:Intelligence:Sources:CommanderSpellbook:Enabled"].Should().Be("false");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:ApiKey"].Should().Be("topdeck-key");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:BaseAddress"].Should().Be("https://topdeck.test/api/");
+        aliases["MtgMcp:Intelligence:Sources:EdhTop16:Enabled"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"].Should().Be("https://edhtop16.test/");
+        aliases["MtgMcp:Intelligence:Sources:Reddit:Enabled"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:Reddit:AllowUnofficialApi"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:Reddit:BaseAddress"].Should().Be("https://reddit.test/");
         aliases["MtgMcp:Archidekt:Jwt"].Should().Be("jwt-token");
         aliases["MtgMcp:Archidekt:RefreshToken"].Should().Be("refresh-token");
         aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");

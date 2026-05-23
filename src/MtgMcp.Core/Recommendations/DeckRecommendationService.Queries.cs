@@ -299,20 +299,18 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         }
 
         int desiredHighPressureCuts = Math.Clamp(Math.Max(requestedCount, ranking.Candidates.Count), 1, 25);
-        IEnumerable<DeckCard> cuts = highPressureCuts
+        IEnumerable<CutCandidateChoice> cuts = highPressureCuts
             ? FindLessSaltyCutCandidates(workspace, desiredHighPressureCuts, intent)
             : FindGoalCutCandidates(workspace, ranking.Candidates.Count, intent);
-        foreach (DeckCard cut in cuts)
+        foreach (CutCandidateChoice cut in cuts)
         {
             plan.Operations.Add(new DeckEditOperation
             {
                 Operation = DeckEditOperations.RemoveCard,
-                CardName = cut.Name,
+                CardName = cut.Card.Name,
                 Quantity = 1,
-                Category = cut.PrimaryCategory,
-                Rationale = highPressureCuts
-                    ? "Cut a high-pressure card to make the deck less salty."
-                    : $"Cut a lower-signal {cut.PrimaryCategory} card to make room for the query package."
+                Category = cut.Card.PrimaryCategory,
+                Rationale = cut.Rationale
             });
         }
 

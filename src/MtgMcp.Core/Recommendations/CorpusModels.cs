@@ -240,6 +240,16 @@ public static class CorpusSignalTypes
     /// Indicates direct fit with the local deck and intent.
     /// </summary>
     public const string LocalFit = "local-fit";
+
+    /// <summary>
+    /// Indicates that a card matched an explicit source tag.
+    /// </summary>
+    public const string Tag = "tag";
+
+    /// <summary>
+    /// Indicates that a card was explicitly mentioned in source discussion text.
+    /// </summary>
+    public const string Discussion = "discussion";
 }
 
 /// <summary>
@@ -492,6 +502,57 @@ public sealed class DeckExemplarSignal
 }
 
 /// <summary>
+/// Describes bounded raw discussion evidence from a public discussion source.
+/// </summary>
+public sealed class DiscussionEvidence
+{
+    /// <summary>
+    /// Gets or sets the source name.
+    /// </summary>
+    public string Source { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the source query that found this discussion row.
+    /// </summary>
+    public string Query { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the subreddit or community name when known.
+    /// </summary>
+    public string? Community { get; set; }
+
+    /// <summary>
+    /// Gets or sets the post or thread title.
+    /// </summary>
+    public string Title { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the bounded source body text.
+    /// </summary>
+    public string Body { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the source URL for the discussion row.
+    /// </summary>
+    public string? Uri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the source score when provided.
+    /// </summary>
+    public int? Score { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the source row was created.
+    /// </summary>
+    public DateTimeOffset? CreatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets card names explicitly referenced by the discussion row.
+    /// </summary>
+    public List<string> MentionedCards { get; set; } = [];
+}
+
+/// <summary>
 /// Reports normalized signals from one or more corpus sources.
 /// </summary>
 public sealed class CorpusSignalReport
@@ -510,6 +571,11 @@ public sealed class CorpusSignalReport
     /// Gets or sets exemplar deck rows.
     /// </summary>
     public List<DeckExemplarSignal> ExemplarDecks { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets bounded raw discussion rows.
+    /// </summary>
+    public List<DiscussionEvidence> Discussions { get; set; } = [];
 
     /// <summary>
     /// Gets or sets lookup notes.
@@ -653,6 +719,11 @@ public sealed class CorpusRecommendationResult
     /// Gets or sets exemplar deck rows.
     /// </summary>
     public List<DeckExemplarSignal> ExemplarDecks { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets bounded raw discussion rows that informed the lookup.
+    /// </summary>
+    public List<DiscussionEvidence> Discussions { get; set; } = [];
 
     /// <summary>
     /// Gets or sets lookup notes.

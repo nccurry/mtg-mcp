@@ -79,6 +79,108 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
+    /// Verifies that EDHTop16 maps cEDH staple and tournament-entry data.
+    /// </summary>
+    [Fact]
+    public async Task EdhTop16Provider_MapsStaplesAndEntries()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Post, "https://edhtop16.test/api/graphql")
+            .Respond("application/json", EdhTop16StaplesResponseJson);
+        mockHttp.Expect(HttpMethod.Post, "https://edhtop16.test/api/graphql")
+            .Respond("application/json", EdhTop16EntriesResponseJson);
+        EdhTop16CorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhtop16.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("EdhTop16", "", allowUnofficialApi: true)));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().Contain(signal =>
+            signal.CardName == "Waste Not"
+            && signal.Source == "EDHTop16"
+            && signal.SignalType == CorpusSignalTypes.Performance
+            && signal.InclusionRate == 0.42);
+        report.ExemplarDecks.Should().ContainSingle(deck =>
+            deck.Name == "Tinybones Open - Pilot A"
+            && deck.Source == "EDHTop16"
+            && deck.Weight > 0.90);
+    }
+
+    /// <summary>
+    /// Verifies that EDHTop16 requires explicit unofficial endpoint opt-in.
+    /// </summary>
+    [Fact]
+    public async Task EdhTop16Provider_RequiresUnofficialApiOptIn()
+    {
+        EdhTop16CorpusSignalProvider provider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://edhtop16.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("EdhTop16", "")));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "edhtop16"
+            && !source.Enabled
+            && source.UnofficialApi
+            && source.Status == CorpusSourceStatuses.Disabled);
+    }
+
+    /// <summary>
+    /// Verifies that Reddit maps bounded raw discussions and explicit card references.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_MapsDiscussionsAndExplicitCardSignals()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
+            .Respond("application/json", RedditSearchResponseJson);
+        mockHttp.Expect(HttpMethod.Get, "https://reddit.test/comments/abc123.json*")
+            .Respond("application/json", RedditCommentsResponseJson);
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://reddit.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)));
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
+        budget.MaxDecksPerSource = 1;
+        budget.MaxEvidencePerRecommendation = 2;
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), budget, TestContext.Current.CancellationToken);
+
+        report.Discussions.Should().HaveCount(2);
+        report.Discussions.Should().Contain(discussion =>
+            discussion.Source == "Reddit discussion search"
+            && discussion.Body.Contains("[[Waste Not]]", StringComparison.Ordinal)
+            && discussion.MentionedCards.Contains("Waste Not"));
+        report.Signals.Should().Contain(signal =>
+            signal.CardName == "Dark Deal"
+            && signal.SignalType == CorpusSignalTypes.Discussion);
+    }
+
+    /// <summary>
+    /// Verifies that Reddit requires explicit unofficial endpoint opt-in.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_RequiresUnofficialApiOptIn()
+    {
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "")));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        report.Discussions.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "reddit-discussions"
+            && !source.Enabled
+            && source.UnofficialApi
+            && source.Status == CorpusSourceStatuses.Disabled);
+    }
+
+    /// <summary>
     /// Verifies that providers reject HTML payloads instead of scraping them.
     /// </summary>
     [Fact]
@@ -289,7 +391,10 @@ public sealed class DecklistCorpusProviderTests
     /// <summary>
     /// Creates mtg-mcp options with one enabled API source.
     /// </summary>
-    private static MtgMcpOptions OptionsWithSource(string source, string apiKey)
+    private static MtgMcpOptions OptionsWithSource(
+        string source,
+        string apiKey,
+        bool allowUnofficialApi = false)
     {
         return new MtgMcpOptions
         {
@@ -301,9 +406,15 @@ public sealed class DecklistCorpusProviderTests
                     {
                         Enabled = true,
                         ApiKey = apiKey,
-                        BaseAddress = source == "TopDeck"
-                            ? new Uri("https://topdeck.test/")
-                            : new Uri("https://spicerack.test/")
+                        AllowUnofficialApi = allowUnofficialApi,
+                        BaseAddress = source switch
+                        {
+                            "TopDeck" => new Uri("https://topdeck.test/"),
+                            "Spicerack" => new Uri("https://spicerack.test/"),
+                            "EdhTop16" => new Uri("https://edhtop16.test/"),
+                            "Reddit" => new Uri("https://reddit.test/"),
+                            _ => new Uri("https://decklist-source.test/")
+                        }
                     }
                 }
             }
@@ -373,5 +484,113 @@ public sealed class DecklistCorpusProviderTests
         }
       ]
     }
+    """;
+
+    /// <summary>
+    /// Provides a representative EDHTop16 staple response.
+    /// </summary>
+    private const string EdhTop16StaplesResponseJson = """
+    {
+      "data": {
+        "commander": {
+          "name": "Tinybones, Trinket Thief",
+          "staples": [
+            {
+              "id": "Card:1",
+              "name": "Waste Not",
+              "type": "Enchantment",
+              "manaCost": "{1}{B}",
+              "scryfallUrl": "https://scryfall.test/card/waste-not",
+              "playRateLastYear": 0.42
+            }
+          ]
+        }
+      }
+    }
+    """;
+
+    /// <summary>
+    /// Provides a representative EDHTop16 entry response.
+    /// </summary>
+    private const string EdhTop16EntriesResponseJson = """
+    {
+      "data": {
+        "commander": {
+          "entries": {
+            "edges": [
+              {
+                "node": {
+                  "standing": 1,
+                  "wins": 5,
+                  "losses": 1,
+                  "draws": 0,
+                  "decklist": "https://deck.test/tinybones",
+                  "player": "Pilot A",
+                  "tournament": {
+                    "name": "Tinybones Open",
+                    "size": 64,
+                    "tournamentDate": "2026-01-01",
+                    "TID": "event-1"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+    """;
+
+    /// <summary>
+    /// Provides a representative Reddit search response.
+    /// </summary>
+    private const string RedditSearchResponseJson = """
+    {
+      "data": {
+        "children": [
+          {
+            "kind": "t3",
+            "data": {
+              "id": "abc123",
+              "subreddit": "EDH",
+              "title": "Tinybones discard package",
+              "selftext": "I would start with [[Waste Not]] and a few wheel effects.",
+              "permalink": "/r/EDH/comments/abc123/tinybones_discard_package/",
+              "score": 42,
+              "created_utc": 1767225600
+            }
+          }
+        ]
+      }
+    }
+    """;
+
+    /// <summary>
+    /// Provides a representative Reddit comments response.
+    /// </summary>
+    private const string RedditCommentsResponseJson = """
+    [
+      {
+        "data": {
+          "children": []
+        }
+      },
+      {
+        "data": {
+          "children": [
+            {
+              "kind": "t1",
+              "data": {
+                "subreddit": "EDH",
+                "body": "[[Dark Deal]] is clunky but strong with Tinybones.",
+                "permalink": "/r/EDH/comments/abc123/comment/def456/",
+                "score": 12,
+                "created_utc": 1767229200
+              }
+            }
+          ]
+        }
+      }
+    ]
     """;
 }
