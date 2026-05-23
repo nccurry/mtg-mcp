@@ -19,13 +19,16 @@ public sealed partial class DeckIntelligenceTests
 
         minimal.AnalysisDepth.Should().Be(AnalysisDepths.Minimal);
         minimal.MaxSources.Should().Be(2);
+        minimal.SourceTimeoutSeconds.Should().Be(12);
         minimal.IncludeSourceUrls.Should().BeFalse();
         minimal.IncludeComboDetails.Should().BeFalse();
         balanced.AnalysisDepth.Should().Be(AnalysisDepths.Balanced);
         balanced.MaxSources.Should().Be(4);
+        balanced.SourceTimeoutSeconds.Should().Be(20);
         best.AnalysisDepth.Should().Be(AnalysisDepths.Best);
         best.MaxSources.Should().Be(10);
         best.MaxEvidencePerRecommendation.Should().Be(6);
+        best.SourceTimeoutSeconds.Should().Be(25);
     }
 
     /// <summary>
@@ -214,6 +217,68 @@ public sealed partial class DeckIntelligenceTests
             && source.Status == CorpusSourceStatuses.Failed);
         result.Recommendations.Should().Contain(recommendation => recommendation.CardName == "Illness in the Ranks");
         result.Notes.Should().Contain(note => note.Contains("failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that provider timeouts are isolated from other corpus sources.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeCommanderTrends_ReportsProviderTimeoutAndContinues()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new TimeoutCorpusSignalProvider(), new FakeCorpusSignalProvider()]);
+
+        CorpusRecommendationResult result = await service.AnalyzeCommanderTrendsAsync(
+            workspace.Id,
+            limit: 5,
+            analysisDepth: "balanced",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Sources.Should().Contain(source =>
+            source.Key == "timeout-corpus"
+            && source.Status == CorpusSourceStatuses.Failed
+            && source.Notes.Any(note => note.Contains("Timed out", StringComparison.OrdinalIgnoreCase)));
+        result.Recommendations.Should().Contain(recommendation => recommendation.CardName == "Illness in the Ranks");
+    }
+
+    /// <summary>
+    /// Verifies that source-specific searches return raw grouped evidence without querying other providers.
+    /// </summary>
+    [Fact]
+    public async Task SearchCorpusEvidence_ReturnsSourceFilteredEvidenceTable()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
+        FakeCorpusSignalProvider provider = new();
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new FailingCorpusSignalProvider(), provider]);
+
+        CorpusEvidenceSearchResult result = await service.SearchCorpusEvidenceAsync(
+            workspace.Id,
+            sourceKey: "fake-corpus",
+            goal: "token hate",
+            limit: 5,
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        provider.LastQuery.Should().NotBeNull();
+        result.SourceKey.Should().Be("fake-corpus");
+        result.Sources.Should().ContainSingle(source => source.Key == "fake-corpus");
+        result.CardEvidence.Should().Contain(row =>
+            row.CardName == "Illness in the Ranks"
+            && row.Source == "Fake corpus"
+            && row.SignalType == CorpusSignalTypes.Novelty
+            && row.EvidenceCount == 12
+            && !row.AlreadyInDeck);
+        result.Notes.Should().NotContain(note => note.Contains("Failing corpus", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -602,6 +667,39 @@ public sealed partial class DeckIntelligenceTests
             CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("changed JSON shape");
+        }
+    }
+
+    /// <summary>
+    /// Provides a corpus source that simulates exhausting its source budget.
+    /// </summary>
+    private sealed class TimeoutCorpusSignalProvider : ICorpusSignalProvider
+    {
+        /// <summary>
+        /// Gets fake timeout source status.
+        /// </summary>
+        public CorpusSourceStatus GetStatus()
+        {
+            return new CorpusSourceStatus
+            {
+                Key = "timeout-corpus",
+                Name = "Timeout corpus",
+                Kind = "test",
+                Enabled = true,
+                StableApi = true,
+                Status = CorpusSourceStatuses.Available
+            };
+        }
+
+        /// <summary>
+        /// Throws cancellation to exercise source timeout isolation.
+        /// </summary>
+        public Task<CorpusSignalReport> GetSignalsAsync(
+            CorpusSignalQuery query,
+            RecommendationAnalysisBudget budget,
+            CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
     }
 }

@@ -301,7 +301,7 @@ public sealed class WorkspaceTools
                 .Where(card => IsIncludedByPrimaryCategory(categories, card))
                 .Sum(card => Math.Max(0, card.Quantity)),
             MaybeboardCards = workspace.Cards
-                .Where(card => HasPrimaryCategory(card, DeckDefaults.Maybeboard))
+                .Where(card => !IsIncludedByPrimaryCategory(categories, card))
                 .Sum(card => Math.Max(0, card.Quantity)),
             Commanders = workspace.Cards
                 .Where(card =>

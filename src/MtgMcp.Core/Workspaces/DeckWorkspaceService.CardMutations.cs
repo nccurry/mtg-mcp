@@ -6,9 +6,14 @@ namespace MtgMcp.Core;
 public sealed partial class DeckWorkspaceService
 {
     /// <summary>
-    /// Adds the card.
+    /// Stores the Commander deck size limit enforced before included-card additions.
     /// </summary>
-    public async Task<DeckChangeResult> AddCardAsync(
+    private const int CommanderDeckSizeLimit = 100;
+
+    /// <summary>
+    /// Adds a card to a workspace while refusing accidental Commander overfills.
+    /// </summary>
+    public Task<DeckChangeResult> AddCardAsync(
         string workspaceId,
         string cardName,
         int quantity,
@@ -16,10 +21,33 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        return AddCardAsync(
+            workspaceId,
+            cardName,
+            quantity,
+            category,
+            force: false,
+            cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds a card to a workspace and optionally permits an intentional Commander overfill.
+    /// </summary>
+    public async Task<DeckChangeResult> AddCardAsync(
+        string workspaceId,
+        string cardName,
+        int quantity,
+        string category,
+        bool force,
+        CancellationToken cancellationToken
+    )
+    {
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         string normalizedCategory = NormalizeCategoryName(category);
+        int amount = Math.Max(1, quantity);
         EnsureCategory(workspace, normalizedCategory);
+        EnsureCommanderIncludedAdditionIsSafe(workspace, normalizedCategory, amount, force);
         DeckCard? existing = FindCard(workspace, cardName, normalizedCategory);
         DeckCard changed;
 
@@ -27,7 +55,7 @@ public sealed partial class DeckWorkspaceService
         {
             changed = await CreateDeckCardAsync(
                     cardName,
-                    Math.Max(1, quantity),
+                    amount,
                     normalizedCategory,
                     cancellationToken
                 )
@@ -36,7 +64,7 @@ public sealed partial class DeckWorkspaceService
         }
         else
         {
-            existing.Quantity += Math.Max(1, quantity);
+            existing.Quantity += amount;
             changed = existing;
         }
 
@@ -44,7 +72,7 @@ public sealed partial class DeckWorkspaceService
         return Change(
             workspace,
             DeckMutationKind.CardAdded,
-            $"Added {Math.Max(1, quantity)} {changed.Name} to {normalizedCategory}."
+            $"Added {amount} {changed.Name} to {normalizedCategory}."
         );
     }
 
@@ -214,5 +242,38 @@ public sealed partial class DeckWorkspaceService
             ?? throw new InvalidOperationException(
                 $"Card '{cardName}' was not found in workspace '{workspace.Id}'."
             );
+    }
+
+    /// <summary>
+    /// Refuses included Commander additions that would unexpectedly exceed the deck size limit.
+    /// </summary>
+    private static void EnsureCommanderIncludedAdditionIsSafe(
+        DeckWorkspace workspace,
+        string category,
+        int quantity,
+        bool force)
+    {
+        if (force || !workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Dictionary<string, DeckCategory> categoryMap = DeckCategoryInclusion.BuildCategoryMap(workspace);
+        if (!DeckCategoryInclusion.IsIncludedInDeck(categoryMap, category))
+        {
+            return;
+        }
+
+        int includedCount = DeckCategoryInclusion.IncludedCards(workspace)
+            .Sum(card => Math.Max(0, card.Quantity));
+        int projectedCount = includedCount + Math.Max(1, quantity);
+        if (projectedCount <= CommanderDeckSizeLimit)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Adding {Math.Max(1, quantity)} card(s) to included category '{category}' would raise this Commander deck from {includedCount} to {projectedCount} included cards. Add to an excluded category such as Maybeboard, set the category to IncludedInDeck=false, or retry with force=true if this overfill is intentional."
+        );
     }
 }

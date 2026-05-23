@@ -98,6 +98,8 @@ public sealed class McpSurfaceTests
             "find_lesser_known_cards",
             "find_top_exemplar_decks",
             "explain_card_corpus_signal",
+            "search_corpus_evidence",
+            "search_reddit_discussions",
             "list_corpus_sources",
             "create_deck_plan_from_explicit_changes",
             "list_deck_plans",
@@ -340,6 +342,7 @@ public sealed class McpSurfaceTests
                     new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
                     new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true },
                     new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+                    new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false },
                 ],
                 Cards =
                 [
@@ -364,6 +367,13 @@ public sealed class McpSurfaceTests
                         PrimaryCategory = DeckDefaults.Maybeboard,
                         Categories = [DeckDefaults.Maybeboard, DeckRoles.Ramp],
                     },
+                    new DeckCard
+                    {
+                        Name = "Sideboard Test",
+                        Quantity = 1,
+                        PrimaryCategory = DeckDefaults.Sideboard,
+                        Categories = [DeckDefaults.Sideboard],
+                    },
                 ],
             },
         };
@@ -381,12 +391,13 @@ public sealed class McpSurfaceTests
             true,
             TestContext.Current.CancellationToken);
 
-        result.TotalCards.Should().Be(4);
+        result.TotalCards.Should().Be(5);
         result.IncludedCards.Should().Be(1);
-        result.MaybeboardCards.Should().Be(3);
+        result.MaybeboardCards.Should().Be(4);
         result.Categories.Single(category => category.Name == DeckRoles.Ramp).CardCount.Should().Be(1);
         result.Categories.Single(category => category.Name == DeckRoles.Draw).CardCount.Should().Be(0);
         result.Categories.Single(category => category.Name == DeckDefaults.Maybeboard).CardCount.Should().Be(3);
+        result.Categories.Single(category => category.Name == DeckDefaults.Sideboard).CardCount.Should().Be(1);
     }
 
     /// <summary>

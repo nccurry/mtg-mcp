@@ -56,6 +56,13 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
+    /// Finds decklist URLs commonly shared in Commander discussions.
+    /// </summary>
+    private static readonly Regex LinkedDeckUriPattern = new(
+        @"https?://(?:www\.)?(?:archidekt\.com/decks/[^\s\]\)<>]+|moxfield\.com/decks/[^\s\]\)<>]+|mtggoldfish\.com/deck/[^\s\]\)<>]+|tappedout\.net/mtg-decks/[^\s\]\)<>]+|deckstats\.net/decks/[^\s\]\)<>]+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// Sends requests to Reddit.
     /// </summary>
     private readonly HttpClient httpClient;
@@ -131,6 +138,7 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             [
                 "Queries bounded Reddit post and comment JSON for exact card-reference evidence.",
                 "Searches a fixed EDH/Commander subreddit allowlist for popular commander discussions.",
+                "Reports linked decklist URLs from discussion text without fetching those sites.",
                 "ApiKey may hold an OAuth bearer token; otherwise set AllowUnofficialApi=true before querying public JSON endpoints."
             ]
         };
@@ -164,7 +172,7 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             Source = status.Key,
             Endpoint = "search.json/comments.json",
             Query = $"{searchText}|{string.Join(',', subreddits)}|{budget.AnalysisDepth}|{budget.MaxDecksPerSource}",
-            AdapterVersion = "2",
+            AdapterVersion = "3",
             Budget = budget.AnalysisDepth
         };
         TimeSpan ttl = CorpusCacheFactory.ParseDuration(options.Intelligence.Cache.Ttls.CorpusSignals, TimeSpan.FromHours(6));
@@ -365,7 +373,8 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             Uri = AbsoluteRedditUri(ReadString(data, "permalink")),
             Score = ReadInt32(data, "score"),
             CreatedAt = ReadUnixTime(data, "created_utc"),
-            MentionedCards = ExtractTrustedCardReferences(combined, query)
+            MentionedCards = ExtractTrustedCardReferences(combined, query),
+            LinkedDeckUris = ExtractLinkedDeckUris(combined)
         };
     }
 
@@ -479,6 +488,18 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(20)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Extracts linked decklist URLs from discussion text.
+    /// </summary>
+    private static List<string> ExtractLinkedDeckUris(string text)
+    {
+        return LinkedDeckUriPattern.Matches(text)
+            .Select(match => match.Value.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
             .ToList();
     }
 

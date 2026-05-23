@@ -37,6 +37,25 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that candidate-card headings normalize to considering.
+    /// </summary>
+    [Fact]
+    public void ParseDecklist_NormalizesConsideringHeadings()
+    {
+        const string decklist = """
+            Consider
+            1 Lightning Bolt
+            """;
+
+        ParsedDecklist parsed = DeckParser.Parse(decklist);
+
+        parsed.Warnings.Should().BeEmpty();
+        parsed.Cards.Should().ContainSingle(card =>
+            card.Name == "Lightning Bolt"
+            && card.Category == DeckDefaults.Considering);
+    }
+
+    /// <summary>
     /// Verifies that local mutations move cards and preserve categories.
     /// </summary>
     [Fact]
@@ -374,6 +393,144 @@ public sealed class DeckWorkspaceServiceTests
         );
 
         opened.Cards.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that included Commander additions refuse accidental overfills.
+    /// </summary>
+    [Fact]
+    public async Task AddCard_RefusesIncludedCommanderOverfillUnlessForced()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace workspace = await repository.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Full Commander",
+                Format = "commander",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                    new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = true },
+                ],
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Existing Package",
+                        Quantity = 100,
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                    },
+                ],
+            },
+            TestContext.Current.CancellationToken);
+
+        Func<Task> blocked = () => service.AddCardAsync(
+            workspace.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Sideboard,
+            TestContext.Current.CancellationToken);
+        await blocked.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Commander deck from 100 to 101*force=true*");
+
+        DeckChangeResult forced = await service.AddCardAsync(
+            workspace.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Sideboard,
+            force: true,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        forced.Workspace.Cards.Should().Contain(card =>
+            card.Name == "Lightning Bolt"
+            && card.PrimaryCategory == DeckDefaults.Sideboard);
+    }
+
+    /// <summary>
+    /// Verifies that excluded categories remain safe places for Commander maybes.
+    /// </summary>
+    [Fact]
+    public async Task AddCard_AllowsExcludedCommanderSideboardOverfill()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace workspace = await repository.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Full Commander",
+                Format = "commander",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                    new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false },
+                ],
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Existing Package",
+                        Quantity = 100,
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                    },
+                ],
+            },
+            TestContext.Current.CancellationToken);
+
+        DeckChangeResult result = await service.AddCardAsync(
+            workspace.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Sideboard,
+            TestContext.Current.CancellationToken);
+
+        result.Workspace.Cards.Should().Contain(card =>
+            card.Name == "Lightning Bolt"
+            && card.PrimaryCategory == DeckDefaults.Sideboard);
+    }
+
+    /// <summary>
+    /// Verifies that considering is created as an excluded candidate category.
+    /// </summary>
+    [Fact]
+    public async Task AddCard_CreatesConsideringAsExcludedCategory()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace workspace = await repository.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Full Commander",
+                Format = "commander",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Existing Package",
+                        Quantity = 100,
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                    },
+                ],
+            },
+            TestContext.Current.CancellationToken);
+
+        DeckChangeResult result = await service.AddCardAsync(
+            workspace.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Considering,
+            TestContext.Current.CancellationToken);
+
+        result.Workspace.Categories.Should().Contain(category =>
+            category.Name == DeckDefaults.Considering
+            && !category.IncludedInDeck);
+        result.Workspace.Cards.Should().Contain(card =>
+            card.Name == "Lightning Bolt"
+            && card.PrimaryCategory == DeckDefaults.Considering);
     }
 
     /// <summary>

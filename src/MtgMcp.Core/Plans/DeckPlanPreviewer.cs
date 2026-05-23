@@ -88,7 +88,8 @@ internal sealed class DeckPlanPreviewer
                     Require(operation.CardName, "cardName"),
                     operation.Quantity ?? 1,
                     operation.Category ?? DeckDefaults.Mainboard,
-                    cancellationToken).ConfigureAwait(false);
+                    force: true,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
                 break;
             case DeckEditOperations.RemoveCard:
                 await workspaceService.RemoveCardAsync(

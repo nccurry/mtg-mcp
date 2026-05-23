@@ -70,19 +70,21 @@ public sealed partial class DeckParser
     }
 
     /// <summary>
-    /// Determines whether likely heading.
+    /// Recognizes section headings before card-line parsing.
     /// </summary>
     private static bool IsLikelyHeading(string value)
     {
         return value.Equals(DeckDefaults.Mainboard, StringComparison.OrdinalIgnoreCase)
             || value.Equals(DeckDefaults.Sideboard, StringComparison.OrdinalIgnoreCase)
             || value.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase)
+            || value.Equals(DeckDefaults.Considering, StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Consider", StringComparison.OrdinalIgnoreCase)
             || value.Equals("Commander", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith(':');
     }
 
     /// <summary>
-    /// Normalizes the category.
+    /// Normalizes common section aliases to workspace category names.
     /// </summary>
     private static string NormalizeCategory(string value, string fallback)
     {
@@ -107,6 +109,14 @@ public sealed partial class DeckParser
         )
         {
             return DeckDefaults.Maybeboard;
+        }
+
+        if (
+            value.Equals("Considering", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Consider", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return DeckDefaults.Considering;
         }
 
         if (

@@ -39,17 +39,18 @@ public sealed class DeckMutationTools
         Idempotent = false,
         OpenWorld = true
     )]
-    [Description("Add a card to a deck workspace and write back to Archidekt when bound.")]
+    [Description("Add a card to a deck workspace and write back to Archidekt when bound. Included Commander additions that exceed 100 cards are refused unless force=true.")]
     public Task<DeckChangeResult> AddCardAsync(
         string workspaceId,
         string cardName,
         int quantity = 1,
         string category = DeckDefaults.Mainboard,
+        bool force = false,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("add_card");
-        return decks.AddCardAsync(workspaceId, cardName, quantity, category, cancellationToken);
+        return decks.AddCardAsync(workspaceId, cardName, quantity, category, force, cancellationToken);
     }
 
     /// <summary>

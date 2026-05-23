@@ -155,6 +155,8 @@ public sealed class DecklistCorpusProviderTests
             discussion.Source == "Reddit discussion search"
             && discussion.Body.Contains("[[Waste Not]]", StringComparison.Ordinal)
             && discussion.MentionedCards.Contains("Waste Not"));
+        report.Discussions.Should().Contain(discussion =>
+            discussion.LinkedDeckUris.Contains("https://archidekt.com/decks/12345/tinybones"));
         report.Signals.Should().Contain(signal =>
             signal.CardName == "Dark Deal"
             && signal.SignalType == CorpusSignalTypes.Discussion);
@@ -691,7 +693,7 @@ public sealed class DecklistCorpusProviderTests
               "kind": "t1",
               "data": {
                 "subreddit": "EDH",
-                "body": "[[Dark Deal]] is clunky but strong with Tinybones.",
+                "body": "[[Dark Deal]] is clunky but strong with Tinybones. My list is https://archidekt.com/decks/12345/tinybones.",
                 "permalink": "/r/EDH/comments/abc123/comment/def456/",
                 "score": 12,
                 "created_utc": 1767229200

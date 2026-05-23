@@ -630,6 +630,23 @@ public static class DeckDefaults
     public const string Maybeboard = "Maybeboard";
 
     /// <summary>
+    /// Stores the considering category used for candidate cards.
+    /// </summary>
+    public const string Considering = "Considering";
+
+    /// <summary>
+    /// Checks whether a category should be excluded when mtg-mcp creates it implicitly.
+    /// </summary>
+    public static bool IsDefaultExcludedCategory(string category)
+    {
+        return category.Equals(Maybeboard, StringComparison.OrdinalIgnoreCase)
+            || category.Equals(Sideboard, StringComparison.OrdinalIgnoreCase)
+            || category.Equals(Considering, StringComparison.OrdinalIgnoreCase)
+            || category.Equals("Maybe", StringComparison.OrdinalIgnoreCase)
+            || category.Equals("Consider", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Creates the default categories.
     /// </summary>
     public static List<DeckCategory> CreateDefaultCategories()

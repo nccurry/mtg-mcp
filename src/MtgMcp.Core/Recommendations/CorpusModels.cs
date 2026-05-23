@@ -119,6 +119,11 @@ public sealed class RecommendationAnalysisBudget
     public int MaxEvidencePerRecommendation { get; set; } = 3;
 
     /// <summary>
+    /// Bounds each corpus provider call so slow sources yield partial results instead of blocking the whole lookup.
+    /// </summary>
+    public int SourceTimeoutSeconds { get; set; } = 20;
+
+    /// <summary>
     /// Gets or sets whether source URLs should be returned in compact evidence.
     /// </summary>
     public bool IncludeSourceUrls { get; set; } = true;
@@ -149,6 +154,7 @@ public sealed class RecommendationAnalysisBudget
                 MaxCandidates = 15,
                 MaxRecommendations = 5,
                 MaxEvidencePerRecommendation = 2,
+                SourceTimeoutSeconds = 12,
                 IncludeSourceUrls = false,
                 IncludeExemplarDecks = false,
                 IncludeComboDetails = false
@@ -161,6 +167,7 @@ public sealed class RecommendationAnalysisBudget
                 MaxCandidates = 100,
                 MaxRecommendations = 20,
                 MaxEvidencePerRecommendation = 6,
+                SourceTimeoutSeconds = 25,
                 IncludeSourceUrls = true,
                 IncludeExemplarDecks = true,
                 IncludeComboDetails = true
@@ -550,6 +557,11 @@ public sealed class DiscussionEvidence
     /// Gets or sets card names explicitly referenced by the discussion row.
     /// </summary>
     public List<string> MentionedCards { get; set; } = [];
+
+    /// <summary>
+    /// Lists decklist URLs found in the discussion body or title.
+    /// </summary>
+    public List<string> LinkedDeckUris { get; set; } = [];
 }
 
 /// <summary>
@@ -579,6 +591,123 @@ public sealed class CorpusSignalReport
 
     /// <summary>
     /// Gets or sets lookup notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one deterministic card evidence row grouped from corpus signals.
+/// </summary>
+public sealed class CardEvidenceTableRow
+{
+    /// <summary>
+    /// Names the card represented by this grouped evidence row.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Names the source that produced the evidence.
+    /// </summary>
+    public string Source { get; set; } = "";
+
+    /// <summary>
+    /// Identifies the normalized corpus signal type.
+    /// </summary>
+    public string SignalType { get; set; } = "";
+
+    /// <summary>
+    /// Captures the strongest source score represented by the row.
+    /// </summary>
+    public double Score { get; set; }
+
+    /// <summary>
+    /// Counts evidence rows or deck rows represented by this group.
+    /// </summary>
+    public int EvidenceCount { get; set; }
+
+    /// <summary>
+    /// Carries source deck count when provided separately from evidence rows.
+    /// </summary>
+    public int? DeckCount { get; set; }
+
+    /// <summary>
+    /// Carries observed inclusion rate when the source provides one.
+    /// </summary>
+    public double? InclusionRate { get; set; }
+
+    /// <summary>
+    /// Indicates whether this card is already present in the workspace.
+    /// </summary>
+    public bool AlreadyInDeck { get; set; }
+
+    /// <summary>
+    /// Points to a representative source URL.
+    /// </summary>
+    public string? Uri { get; set; }
+
+    /// <summary>
+    /// Summarizes the source rationale without adding LLM interpretation.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+}
+
+/// <summary>
+/// Reports raw source evidence and grouped card rows without making deckbuilding choices.
+/// </summary>
+public sealed class CorpusEvidenceSearchResult
+{
+    /// <summary>
+    /// Identifies the workspace used for the evidence query.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Names the commander used to build the source query.
+    /// </summary>
+    public string? Commander { get; set; }
+
+    /// <summary>
+    /// Describes the requested or inferred deck theme.
+    /// </summary>
+    public string? Theme { get; set; }
+
+    /// <summary>
+    /// Echoes the requested source key or name.
+    /// </summary>
+    public string SourceKey { get; set; } = "";
+
+    /// <summary>
+    /// Records the normalized analysis depth.
+    /// </summary>
+    public string AnalysisDepth { get; set; } = AnalysisDepths.Balanced;
+
+    /// <summary>
+    /// Records the effective source budget.
+    /// </summary>
+    public RecommendationAnalysisBudget Budget { get; set; } = new();
+
+    /// <summary>
+    /// Contains deterministic card evidence rows grouped from source signals.
+    /// </summary>
+    public List<CardEvidenceTableRow> CardEvidence { get; set; } = [];
+
+    /// <summary>
+    /// Contains raw bounded discussion rows returned by discussion providers.
+    /// </summary>
+    public List<DiscussionEvidence> Discussions { get; set; } = [];
+
+    /// <summary>
+    /// Contains exemplar deck rows returned by decklist providers.
+    /// </summary>
+    public List<DeckExemplarSignal> ExemplarDecks { get; set; } = [];
+
+    /// <summary>
+    /// Contains source status rows.
+    /// </summary>
+    public List<CorpusSourceStatus> Sources { get; set; } = [];
+
+    /// <summary>
+    /// Contains lookup notes and source limitations.
     /// </summary>
     public List<string> Notes { get; set; } = [];
 }

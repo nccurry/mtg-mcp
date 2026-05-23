@@ -36,7 +36,7 @@ public sealed class CorpusTools
     /// Analyzes commander and deck-context trends from enabled corpus providers.
     /// </summary>
     [McpServerTool(Name = "analyze_commander_trends", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Analyze commander or deck-context card trends using enabled API-backed corpus providers. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    [Description("Analyze commander or deck-context card trends using enabled API-backed corpus providers. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache. Use search_corpus_evidence or search_reddit_discussions when raw deterministic source rows are needed instead of ranked recommendations.")]
     public Task<CorpusRecommendationResult> AnalyzeCommanderTrendsAsync(
         string workspaceId,
         int limit = 10,
@@ -56,7 +56,7 @@ public sealed class CorpusTools
     /// Finds lower-known cards with useful corpus evidence for a deck goal.
     /// </summary>
     [McpServerTool(Name = "find_lesser_known_cards", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Find lower-known cards that fit a deck goal using API-backed corpus evidence. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    [Description("Find lower-known cards that fit a deck goal using API-backed corpus evidence. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache. Use source-specific evidence tools before mutating a deck.")]
     public Task<CorpusRecommendationResult> FindLesserKnownCardsAsync(
         string workspaceId,
         string goal = "",
@@ -111,6 +111,53 @@ public sealed class CorpusTools
         return recommendations.ExplainCardCorpusSignalAsync(
             workspaceId,
             cardName,
+            EffectiveAnalysisDepth(analysisDepth),
+            refresh,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Searches one corpus source for raw evidence rows.
+    /// </summary>
+    [McpServerTool(Name = "search_corpus_evidence", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Search one enabled corpus source by sourceKey and return deterministic card evidence rows plus raw discussions or exemplar decks. This tool does not infer card quality or choose cuts.")]
+    public Task<CorpusEvidenceSearchResult> SearchCorpusEvidenceAsync(
+        string workspaceId,
+        string sourceKey,
+        string goal = "",
+        int limit = 20,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.SearchCorpusEvidenceAsync(
+            workspaceId,
+            sourceKey,
+            goal,
+            limit,
+            EffectiveAnalysisDepth(analysisDepth),
+            refresh,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Searches Reddit EDH and Commander communities for raw discussion evidence.
+    /// </summary>
+    [McpServerTool(Name = "search_reddit_discussions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Search popular EDH and Commander subreddits for the commander, theme, or goal and return bounded raw posts/comments, exact card references, linked deck URLs, and deterministic card evidence rows.")]
+    public Task<CorpusEvidenceSearchResult> SearchRedditDiscussionsAsync(
+        string workspaceId,
+        string goal = "",
+        int limit = 20,
+        string? analysisDepth = null,
+        bool refresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.SearchCorpusEvidenceAsync(
+            workspaceId,
+            "reddit-discussions",
+            goal,
+            limit,
             EffectiveAnalysisDepth(analysisDepth),
             refresh,
             cancellationToken);

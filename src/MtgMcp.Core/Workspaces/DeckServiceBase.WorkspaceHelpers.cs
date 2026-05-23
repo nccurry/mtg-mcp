@@ -80,9 +80,7 @@ public abstract partial class DeckServiceBase
         DeckCategory created = new()
         {
             Name = category,
-            IncludedInDeck =
-                !category.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase)
-                && !category.Equals(DeckDefaults.Sideboard, StringComparison.OrdinalIgnoreCase),
+            IncludedInDeck = !DeckDefaults.IsDefaultExcludedCategory(category),
             IncludedInPrice = true,
         };
 

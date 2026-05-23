@@ -217,6 +217,68 @@ public sealed partial class DeckRecommendationService
     }
 
     /// <summary>
+    /// Searches one corpus source and returns raw evidence rows without synthesizing recommendations.
+    /// </summary>
+    public async Task<CorpusEvidenceSearchResult> SearchCorpusEvidenceAsync(
+        string workspaceId,
+        string sourceKey,
+        string goal,
+        int limit,
+        string? analysisDepth,
+        bool refresh,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceKey))
+        {
+            throw new ArgumentException("A corpus source key or name is required.", nameof(sourceKey));
+        }
+
+        int boundedLimit = Math.Clamp(limit, 1, 100);
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth(analysisDepth);
+        budget.MaxCandidates = Math.Clamp(Math.Max(budget.MaxCandidates, boundedLimit), 1, 200);
+        budget.MaxRecommendations = Math.Clamp(boundedLimit, 1, 100);
+        budget.IncludeSourceUrls = true;
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
+        CorpusSignalReport report = await CollectCorpusSignalsAsync(
+            workspace,
+            string.IsNullOrWhiteSpace(goal) ? null : goal,
+            maxPrice: null,
+            budget,
+            refresh,
+            cancellationToken,
+            sourceKey).ConfigureAwait(false);
+
+        CorpusEvidenceSearchResult result = new()
+        {
+            WorkspaceId = workspace.Id,
+            Commander = intent?.Commander ?? FindCommanderName(workspace),
+            Theme = intent?.Archetype ?? DominantTheme(workspace),
+            SourceKey = sourceKey,
+            AnalysisDepth = budget.AnalysisDepth,
+            Budget = budget,
+            CardEvidence = BuildCardEvidenceTable(report.Signals, workspace, boundedLimit),
+            Discussions = report.Discussions
+                .OrderByDescending(discussion => discussion.Score ?? 0)
+                .ThenByDescending(discussion => discussion.CreatedAt ?? DateTimeOffset.MinValue)
+                .Take(Math.Clamp(boundedLimit * budget.MaxEvidencePerRecommendation, 1, 100))
+                .ToList(),
+            ExemplarDecks = report.ExemplarDecks
+                .OrderByDescending(deck => deck.Weight)
+                .Take(Math.Clamp(boundedLimit, 1, budget.MaxDecksPerSource))
+                .ToList(),
+            Sources = MergeSourceStatuses(report.Sources)
+        };
+        result.Notes.AddRange(report.Notes);
+        if (result.CardEvidence.Count == 0 && result.Discussions.Count == 0 && result.ExemplarDecks.Count == 0)
+        {
+            result.Notes.Add("The requested corpus source returned no raw evidence for this deck context.");
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Lists configured and planned corpus sources.
     /// </summary>
     public CorpusSourceStatusResult ListCorpusSources()
@@ -312,7 +374,8 @@ public sealed partial class DeckRecommendationService
         decimal? maxPrice,
         RecommendationAnalysisBudget budget,
         bool refresh,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sourceKey = null)
     {
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         CorpusSignalQuery query = new()
@@ -327,15 +390,23 @@ public sealed partial class DeckRecommendationService
             Refresh = refresh
         };
         CorpusSignalReport combined = new();
-        if (budget.AnalysisDepth.Equals(AnalysisDepths.Best, StringComparison.OrdinalIgnoreCase))
+        bool sourceFilterActive = !string.IsNullOrWhiteSpace(sourceKey);
+        if (!sourceFilterActive && budget.AnalysisDepth.Equals(AnalysisDepths.Best, StringComparison.OrdinalIgnoreCase))
         {
             combined.Sources.AddRange(KnownCorpusSources());
         }
 
         int queriedSources = 0;
+        bool matchedSource = false;
         foreach (ICorpusSignalProvider provider in CorpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
+            if (sourceFilterActive && !MatchesSourceFilter(status, sourceKey))
+            {
+                continue;
+            }
+
+            matchedSource = true;
             combined.Sources.Add(status);
             if (!status.Enabled || queriedSources >= budget.MaxSources)
             {
@@ -345,12 +416,24 @@ public sealed partial class DeckRecommendationService
             queriedSources++;
             try
             {
-                CorpusSignalReport report = await provider.GetSignalsAsync(query, budget, cancellationToken).ConfigureAwait(false);
+                using CancellationTokenSource providerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                if (budget.SourceTimeoutSeconds > 0)
+                {
+                    providerCancellation.CancelAfter(TimeSpan.FromSeconds(budget.SourceTimeoutSeconds));
+                }
+
+                CorpusSignalReport report = await provider.GetSignalsAsync(query, budget, providerCancellation.Token).ConfigureAwait(false);
                 combined.Signals.AddRange(report.Signals);
                 combined.ExemplarDecks.AddRange(report.ExemplarDecks);
                 combined.Discussions.AddRange(report.Discussions);
                 combined.Sources.AddRange(report.Sources);
                 combined.Notes.AddRange(report.Notes);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                status.Status = CorpusSourceStatuses.Failed;
+                status.Notes.Add($"Timed out after {budget.SourceTimeoutSeconds} second(s).");
+                combined.Notes.Add($"{status.Name} timed out; continuing with remaining corpus sources.");
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {
@@ -358,6 +441,17 @@ public sealed partial class DeckRecommendationService
                 status.Notes.Add($"{exception.GetType().Name}: {exception.Message}");
                 combined.Notes.Add($"{status.Name} failed; continuing with remaining corpus sources.");
             }
+        }
+
+        if (sourceFilterActive && !matchedSource)
+        {
+            List<CorpusSourceStatus> knownMatches = KnownCorpusSources()
+                .Where(source => MatchesSourceFilter(source, sourceKey))
+                .ToList();
+            combined.Sources.AddRange(knownMatches);
+            combined.Notes.Add(knownMatches.Count == 0
+                ? $"No configured corpus source matched '{sourceKey}'."
+                : $"Corpus source '{sourceKey}' is known but no enabled provider is configured for it.");
         }
 
         combined.Signals = DeduplicateSignals(combined.Signals)
@@ -371,6 +465,69 @@ public sealed partial class DeckRecommendationService
             .ToList();
         combined.Sources = MergeSourceStatuses(combined.Sources);
         return combined;
+    }
+
+    /// <summary>
+    /// Builds deterministic card evidence rows without applying recommendation scoring.
+    /// </summary>
+    private static List<CardEvidenceTableRow> BuildCardEvidenceTable(
+        IReadOnlyList<CardCorpusSignal> signals,
+        DeckWorkspace workspace,
+        int limit)
+    {
+        HashSet<string> existing = workspace.Cards
+            .Select(card => card.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return signals
+            .Where(signal => !string.IsNullOrWhiteSpace(signal.CardName))
+            .GroupBy(
+                signal => $"{signal.CardName}|{signal.Source}|{signal.SignalType}",
+                signal => signal,
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                CardCorpusSignal best = group
+                    .OrderByDescending(signal => signal.Score)
+                    .ThenBy(signal => signal.Source)
+                    .First();
+                int? deckCount = group.Any(signal => signal.DeckCount.HasValue)
+                    ? group.Sum(signal => signal.DeckCount ?? 0)
+                    : null;
+                List<string> rationales = group
+                    .Select(signal => signal.Rationale)
+                    .Where(rationale => !string.IsNullOrWhiteSpace(rationale))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(2)
+                    .ToList();
+
+                return new CardEvidenceTableRow
+                {
+                    CardName = best.CardName,
+                    Source = best.Source,
+                    SignalType = best.SignalType,
+                    Score = group.Max(signal => signal.Score),
+                    EvidenceCount = deckCount ?? group.Count(),
+                    DeckCount = deckCount,
+                    InclusionRate = group
+                        .Where(signal => signal.InclusionRate.HasValue)
+                        .Select(signal => signal.InclusionRate)
+                        .DefaultIfEmpty(best.InclusionRate)
+                        .Max(),
+                    AlreadyInDeck = existing.Contains(best.CardName),
+                    Uri = group
+                        .OrderByDescending(signal => signal.Score)
+                        .Select(signal => signal.Uri)
+                        .FirstOrDefault(uri => !string.IsNullOrWhiteSpace(uri)),
+                    Rationale = rationales.Count == 0
+                        ? $"{best.SignalType} evidence from {best.Source}."
+                        : string.Join(" ", rationales)
+                };
+            })
+            .OrderByDescending(row => row.Score)
+            .ThenByDescending(row => row.EvidenceCount)
+            .ThenBy(row => row.CardName, StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Clamp(limit, 1, 100))
+            .ToList();
     }
 
     /// <summary>
@@ -481,6 +638,16 @@ public sealed partial class DeckRecommendationService
             .OrderBy(source => source.Enabled ? 0 : 1)
             .ThenBy(source => source.Name)
             .ToList();
+    }
+
+    /// <summary>
+    /// Checks whether a source row matches a requested source key or display name.
+    /// </summary>
+    private static bool MatchesSourceFilter(CorpusSourceStatus source, string? sourceKey)
+    {
+        return string.IsNullOrWhiteSpace(sourceKey)
+            || source.Key.Equals(sourceKey, StringComparison.OrdinalIgnoreCase)
+            || source.Name.Equals(sourceKey, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

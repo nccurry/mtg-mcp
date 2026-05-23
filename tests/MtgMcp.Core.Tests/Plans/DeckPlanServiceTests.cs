@@ -137,6 +137,58 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that preview metrics can show an overfilled plan without mutating saved state.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_ShowsIncludedOverfillWithoutMutatingWorkspace()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview Overfill",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Existing Package",
+                    Quantity = 100,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add ramp",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            TestContext.Current.CancellationToken);
+
+        preview.Before.Analysis.IncludedCards.Should().Be(100);
+        preview.After.Analysis.IncludedCards.Should().Be(101);
+        preview.After.Validation.Errors.Should().Contain(error =>
+            error.Contains("100", StringComparison.OrdinalIgnoreCase));
+        workspaces.Workspaces[workspace.Id].Cards.Should().ContainSingle().Which.Name.Should().Be("Existing Package");
+    }
+
+    /// <summary>
     /// Verifies that preview deck plan applies card-category operations on the clone.
     /// </summary>
     [Fact]
