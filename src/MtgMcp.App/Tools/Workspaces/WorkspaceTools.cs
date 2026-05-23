@@ -283,10 +283,9 @@ public sealed class WorkspaceTools
     /// </summary>
     private static DeckOpenResult CreateOpenResult(DeckWorkspace workspace)
     {
-        HashSet<string> includedCategories = workspace.Categories
-            .Where(category => category.IncludedInDeck)
-            .Select(category => category.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, DeckCategory> categories = workspace.Categories
+            .GroupBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         return new DeckOpenResult
         {
@@ -299,10 +298,10 @@ public sealed class WorkspaceTools
             Persistence = DeckPersistence.For(workspace),
             TotalCards = workspace.Cards.Sum(card => Math.Max(0, card.Quantity)),
             IncludedCards = workspace.Cards
-                .Where(card => card.Categories.Any(includedCategories.Contains))
+                .Where(card => IsIncludedByPrimaryCategory(categories, card))
                 .Sum(card => Math.Max(0, card.Quantity)),
             MaybeboardCards = workspace.Cards
-                .Where(card => card.Categories.Contains(DeckDefaults.Maybeboard, StringComparer.OrdinalIgnoreCase))
+                .Where(card => HasPrimaryCategory(card, DeckDefaults.Maybeboard))
                 .Sum(card => Math.Max(0, card.Quantity)),
             Commanders = workspace.Cards
                 .Where(card =>
@@ -318,10 +317,31 @@ public sealed class WorkspaceTools
                     Name = category.Name,
                     IncludedInDeck = category.IncludedInDeck,
                     CardCount = workspace.Cards
-                        .Where(card => card.PrimaryCategory.Equals(category.Name, StringComparison.OrdinalIgnoreCase))
+                        .Where(card => HasPrimaryCategory(card, category.Name))
                         .Sum(card => Math.Max(0, card.Quantity))
                 })
                 .ToList()
         };
+    }
+
+    /// <summary>
+    /// Checks whether a card's primary category contributes to the active deck.
+    /// </summary>
+    private static bool IsIncludedByPrimaryCategory(
+        IReadOnlyDictionary<string, DeckCategory> categories,
+        DeckCard card)
+    {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        return !categories.TryGetValue(primaryCategory, out DeckCategory? category)
+            || category.IncludedInDeck;
+    }
+
+    /// <summary>
+    /// Checks whether a card's ordered primary category matches a category name.
+    /// </summary>
+    private static bool HasPrimaryCategory(DeckCard card, string category)
+    {
+        return DeckCategoryOrdering.PrimaryCategory(card)
+            .Equals(category, StringComparison.OrdinalIgnoreCase);
     }
 }

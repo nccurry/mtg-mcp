@@ -321,6 +321,75 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies that open deck summaries follow primary category inclusion rules.
+    /// </summary>
+    [Fact]
+    public async Task OpenArchidektDeck_UsesPrimaryCategoryForIncludedCount()
+    {
+        FakeArchidektGateway archidektGateway = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Id = "remote-workspace",
+                Name = "Remote",
+                Format = "commander",
+                Mode = WorkspaceMode.Archidekt,
+                ArchidektDeckId = "123",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                    new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true },
+                    new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+                ],
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Main Ramp",
+                        Quantity = 1,
+                        PrimaryCategory = DeckRoles.Ramp,
+                        Categories = [DeckRoles.Ramp],
+                    },
+                    new DeckCard
+                    {
+                        Name = "Maybe Draw",
+                        Quantity = 1,
+                        PrimaryCategory = DeckDefaults.Maybeboard,
+                        Categories = [DeckDefaults.Maybeboard, DeckRoles.Draw],
+                    },
+                    new DeckCard
+                    {
+                        Name = "Maybe Ramp",
+                        Quantity = 2,
+                        PrimaryCategory = DeckDefaults.Maybeboard,
+                        Categories = [DeckDefaults.Maybeboard, DeckRoles.Ramp],
+                    },
+                ],
+            },
+        };
+        DeckWorkspaceService deckService = new(
+            new InMemoryRepository(),
+            new EmptyCardCatalog(),
+            archidektGateway);
+        OperationModeGuard operationMode = new(
+            Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })
+        );
+        WorkspaceTools tools = new(deckService, operationMode);
+
+        DeckOpenResult result = await tools.OpenArchidektDeckAsync(
+            "https://archidekt.com/decks/123/remote",
+            true,
+            TestContext.Current.CancellationToken);
+
+        result.TotalCards.Should().Be(4);
+        result.IncludedCards.Should().Be(1);
+        result.MaybeboardCards.Should().Be(3);
+        result.Categories.Single(category => category.Name == DeckRoles.Ramp).CardCount.Should().Be(1);
+        result.Categories.Single(category => category.Name == DeckRoles.Draw).CardCount.Should().Be(0);
+        result.Categories.Single(category => category.Name == DeckDefaults.Maybeboard).CardCount.Should().Be(3);
+    }
+
+    /// <summary>
     /// Verifies that configuration aliases map the single documented prefixed environment shape.
     /// </summary>
     [Fact]
@@ -541,6 +610,187 @@ public sealed class McpSurfaceTests
             value.MemberName.Equals(propertyName, StringComparison.Ordinal)
         );
         return argument.HasValue ? (bool?)argument.Value.TypedValue.Value : null;
+    }
+
+    /// <summary>
+    /// Provides Archidekt gateway behavior for app tool tests.
+    /// </summary>
+    private sealed class FakeArchidektGateway : IArchidektGateway
+    {
+        /// <summary>
+        /// Gets or sets the workspace returned from import.
+        /// </summary>
+        public DeckWorkspace ImportedDeck { get; set; } = new();
+
+        /// <summary>
+        /// Returns a configured authenticated status.
+        /// </summary>
+        public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AuthStatus { HasJwt = true });
+        }
+
+        /// <summary>
+        /// Returns no deck summaries.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([]);
+        }
+
+        /// <summary>
+        /// Imports the configured fake workspace.
+        /// </summary>
+        public Task<DeckWorkspace> ImportDeckAsync(
+            string deckIdOrUrl,
+            bool writeBack,
+            CancellationToken cancellationToken
+        )
+        {
+            DeckWorkspace workspace = new()
+            {
+                Id = ImportedDeck.Id,
+                Name = ImportedDeck.Name,
+                Format = ImportedDeck.Format,
+                Description = ImportedDeck.Description,
+                Mode = ImportedDeck.Mode,
+                WriteBack = writeBack,
+                ArchidektDeckId = ImportedDeck.ArchidektDeckId,
+                ArchidektDeckFormatId = ImportedDeck.ArchidektDeckFormatId,
+                Categories = ImportedDeck.Categories.ToList(),
+                Cards = ImportedDeck.Cards.ToList(),
+            };
+            return Task.FromResult(workspace);
+        }
+
+        /// <summary>
+        /// Ignores card persistence requests.
+        /// </summary>
+        public Task PersistCardsAsync(
+            DeckWorkspace workspace,
+            IReadOnlyList<DeckCard> upsertedCards,
+            IReadOnlyList<DeckCard> removedCards,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Ignores category persistence requests.
+        /// </summary>
+        public Task PersistCategoryAsync(
+            DeckWorkspace workspace,
+            DeckCategory category,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Ignores category deletion requests.
+        /// </summary>
+        public Task DeleteCategoryAsync(
+            DeckWorkspace workspace,
+            DeckCategory category,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Ignores metadata persistence requests.
+        /// </summary>
+        public Task PersistMetadataAsync(
+            DeckWorkspace workspace,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Creates a fake checkpoint response.
+        /// </summary>
+        public Task<DeckCheckpoint> CreateCheckpointAsync(
+            DeckWorkspace workspace,
+            string name,
+            string? description,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult(new DeckCheckpoint
+            {
+                Id = "checkpoint",
+                DeckId = workspace.ArchidektDeckId ?? "",
+                Name = name,
+                Description = description,
+            });
+        }
+
+        /// <summary>
+        /// Returns no fake checkpoints.
+        /// </summary>
+        public Task<IReadOnlyList<DeckCheckpoint>> ListCheckpointsAsync(
+            DeckWorkspace workspace,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult<IReadOnlyList<DeckCheckpoint>>([]);
+        }
+
+        /// <summary>
+        /// Returns a fake checkpoint by id.
+        /// </summary>
+        public Task<DeckCheckpoint> GetCheckpointAsync(
+            DeckWorkspace workspace,
+            string checkpointId,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult(new DeckCheckpoint
+            {
+                Id = checkpointId,
+                DeckId = workspace.ArchidektDeckId ?? "",
+                Name = "Checkpoint",
+            });
+        }
+
+        /// <summary>
+        /// Renames a fake checkpoint.
+        /// </summary>
+        public Task<DeckCheckpoint> RenameCheckpointAsync(
+            DeckWorkspace workspace,
+            string checkpointId,
+            string name,
+            string? description,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult(new DeckCheckpoint
+            {
+                Id = checkpointId,
+                DeckId = workspace.ArchidektDeckId ?? "",
+                Name = name,
+                Description = description,
+            });
+        }
+
+        /// <summary>
+        /// Ignores checkpoint deletion requests.
+        /// </summary>
+        public Task DeleteCheckpointAsync(
+            DeckWorkspace workspace,
+            string checkpointId,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>
