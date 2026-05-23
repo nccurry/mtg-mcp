@@ -192,9 +192,9 @@ public interface IDeckPlanRepository
     );
 
     /// <summary>
-    /// Deletes the plan.
+    /// Deletes the plan and reports whether one existed.
     /// </summary>
-    Task DeleteAsync(string planId, CancellationToken cancellationToken);
+    Task<bool> DeleteAsync(string planId, CancellationToken cancellationToken);
 }
 
 /// <summary>

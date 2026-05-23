@@ -40,25 +40,26 @@ public sealed class MtgPrompts
 
             Read get_deck_intent first. If no intent exists, use suggest_deck_intent and ask the user
             whether to save it. Refresh deck card snapshots if needed, summarize the deck workspace, analyze draw odds,
-            identify weak roles or curve issues, create recommendation plans, and only use apply_deck_plan
-            after the user approves the plan.
+            identify weak roles or curve issues, gather candidate data with explicit Scryfall queries,
+            and only create or apply deck plans after the user approves the exact change direction.
             """;
     }
 
     /// <summary>
-    /// Finds the budget replacements.
+    /// Researches budget replacement data.
     /// </summary>
-    [McpServerPrompt(Name = "find_budget_replacements")]
-    [Description("Find cheaper card replacements for a deck workspace.")]
-    public string FindBudgetReplacements(string workspaceId, string budgetTarget = "")
+    [McpServerPrompt(Name = "research_budget_replacements")]
+    [Description("Gather cheaper card replacement data for a deck workspace.")]
+    public string ResearchBudgetReplacements(string workspaceId, string budgetTarget = "")
     {
         return $"""
             Find budget replacements for deck workspace {workspaceId}.
             Budget target: {budgetTarget}
 
-            Use get_deck_intent, refresh_deck_card_snapshots, and find_budget_replacements. Preserve color identity,
-            role, protected cards/packages, mana curve, and format legality. Return the persisted plan id
-            and do not mutate the deck unless the user explicitly asks to apply the plan.
+            Use get_deck_intent, refresh_deck_card_snapshots, analyze_deck_cost, and explicit
+            query_cards_for_deck lookups. Preserve color identity, role, protected cards/packages,
+            mana curve, and format legality. Return candidate data first; create a plan only after
+            the replacement query and target cards are explicit.
             """;
     }
 
@@ -73,10 +74,10 @@ public sealed class MtgPrompts
             Reduce the cost of deck workspace {workspaceId}.
             Budget target: {budgetTarget}
 
-            Use refresh_deck_card_snapshots, analyze_deck_cost, summarize_deck_workspace, find_budget_replacements,
-            and preview_deck_plan. Preserve color identity, role coverage, format legality, and the deck's
-            stated game plan. Return the plan id, preview deltas, and tradeoffs. Do not use apply_deck_plan
-            unless the user explicitly approves the preview.
+            Use refresh_deck_card_snapshots, analyze_deck_cost, summarize_deck_workspace, and explicit
+            query_cards_for_deck lookups. Preserve color identity, role coverage, format legality, and
+            the deck's stated game plan. Return source data and candidate swaps; create and preview a plan
+            only after the user approves the proposed query and targets.
             """;
     }
 
@@ -93,9 +94,8 @@ public sealed class MtgPrompts
             Max price: {maxPrice}
 
             Use refresh_deck_card_snapshots, summarize_deck_workspace, analyze_deck_consistency,
-            find_card_upgrades, and preview_deck_plan. Preserve color identity and legality.
-            Return the plan id and before/after metrics. Do not use apply_deck_plan unless the user
-            explicitly approves the preview.
+            and query_cards_for_deck with explicit Scryfall syntax. Preserve color identity and legality.
+            Return source data first; create and preview a plan only after the user approves the targets.
             """;
     }
 
@@ -111,9 +111,9 @@ public sealed class MtgPrompts
             Target power: {targetPower}
 
             Use refresh_deck_card_snapshots, summarize_deck_workspace, estimate_commander_bracket,
-            find_power_reduction_candidates, and preview_deck_plan. Prefer gentler replacements over
-            removing core identity cards. Return the plan id, preview deltas, and likely gameplay impact.
-            Do not use apply_deck_plan unless the user explicitly approves the preview.
+            and query_cards_for_deck with explicit replacement searches. Prefer gentler replacements over
+            removing core identity cards. Return source data and likely gameplay impact; create a plan only
+            after the user approves the exact changes.
             """;
     }
 
@@ -127,11 +127,10 @@ public sealed class MtgPrompts
         return $"""
             Lower deck workspace {workspaceId} toward Commander bracket {targetBracket}.
 
-            Use refresh_deck_card_snapshots, estimate_commander_bracket, find_bracket_reduction_candidates,
-            and preview_deck_plan. Treat bracket output as an advisory estimate for pregame discussion,
-            not an official ruling. Game Changer data comes live from Scryfall. Return the plan id,
-            bracket signals addressed, and before/after bracket estimate. Do not use apply_deck_plan
-            unless the user explicitly approves the preview.
+            Use refresh_deck_card_snapshots, estimate_commander_bracket, get_deck_facets, and explicit
+            query_cards_for_deck lookups for replacement data. Treat bracket output as an advisory estimate
+            for pregame discussion, not an official ruling. Game Changer data comes live from Scryfall.
+            Create a plan only after the user approves exact changes.
 
             Bracket beta context: https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-february-9-2026
             """;
@@ -148,10 +147,9 @@ public sealed class MtgPrompts
             Optimize the mana base for deck workspace {workspaceId}.
             Max price: {maxPrice}
 
-            Use refresh_deck_card_snapshots, analyze_mana_base, find_mana_base_improvements,
-            and preview_deck_plan. Preserve color identity, legality, and budget. Return land-count,
-            color-source, tapped-land, and fixing deltas. Do not use apply_deck_plan unless the user
-            explicitly approves the preview.
+            Use refresh_deck_card_snapshots, analyze_mana_base, and explicit query_cards_for_deck
+            lookups for lands or fixing. Preserve color identity, legality, and budget. Return
+            land-count, color-source, tapped-land, and fixing data before creating any plan.
             """;
     }
 
@@ -167,10 +165,9 @@ public sealed class MtgPrompts
             Focus: {focus}
             Max price: {maxPrice}
 
-            Use refresh_deck_card_snapshots, analyze_deck_consistency, find_consistency_improvements,
-            and preview_deck_plan. Preserve color identity, legality, and the deck's core plan.
-            Return the plan id, key draw-odds deltas, and role-density changes. Do not use
-            apply_deck_plan unless the user explicitly approves the preview.
+            Use refresh_deck_card_snapshots, analyze_deck_consistency, analyze_draw_odds, and
+            explicit query_cards_for_deck lookups. Preserve color identity, legality, and the deck's
+            core plan. Return source data and role-density changes before creating any plan.
             """;
     }
 
@@ -185,10 +182,10 @@ public sealed class MtgPrompts
             Tune deck workspace {workspaceId} for this local meta: {meta}
             Budget per card: {budget}
 
-            Use analyze_deck_best_practices, rank_cards_for_deck_query when you can produce
-            a precise Scryfall query, create_deck_plan_from_query or find_cards_for_deck_goal,
-            estimate_combo_pressure, and preview_deck_plan. Explain which local-meta problem
-            each package addresses.
+            Use analyze_deck_best_practices, query_cards_for_deck when you can produce
+            a precise Scryfall query, estimate_combo_pressure, and source data tools. Create a deck
+            plan only after the query and exact add/remove choices are explicit. Explain which
+            local-meta problem each package addresses.
             """;
     }
 
@@ -238,10 +235,10 @@ public sealed class MtgPrompts
             Make deck workspace {workspaceId} better at: {goal}
             Budget per card: {budget}
 
-            Prefer rank_cards_for_deck_query when you can produce a precise Scryfall query, then
-            create_deck_plan_from_query. Use find_cards_for_deck_goal for simple goals. Also run
-            analyze_deck_best_practices and preview_deck_plan. Return the plan id, cards added,
-            likely cuts, and tradeoffs.
+            Prefer query_cards_for_deck when you can produce a precise Scryfall query. Create a deck
+            plan only after the query and exact add/remove choices are explicit. Also run
+            analyze_deck_best_practices. Return candidate source data, likely tradeoffs, and any
+            plan id only after explicit approval.
             """;
     }
 

@@ -84,33 +84,22 @@ public sealed class McpSurfaceTests
             "analyze_deck_consistency",
             "analyze_deck_performance",
             "compare_plan_performance",
-            "find_budget_replacements",
-            "find_card_upgrades",
-            "find_bracket_reduction_candidates",
-            "find_power_reduction_candidates",
-            "find_mana_base_improvements",
-            "find_consistency_improvements",
-            "suggest_deck_categories",
             "analyze_deck_best_practices",
             "compare_to_commander_meta",
-            "find_missing_popular_cards",
             "find_new_cards_for_deck",
-            "rank_cards_for_deck_query",
-            "create_deck_plan_from_query",
-            "find_cards_for_deck_goal",
+            "query_cards_for_deck",
             "find_deck_combos",
             "find_near_miss_combos",
             "estimate_combo_pressure",
             "simulate_goldfish",
             "project_board_state",
             "estimate_win_turn",
-            "brainstorm_deck_improvements",
             "analyze_commander_trends",
             "find_lesser_known_cards",
-            "find_corpus_budget_replacements",
             "find_top_exemplar_decks",
             "explain_card_corpus_signal",
             "list_corpus_sources",
+            "create_deck_plan_from_explicit_changes",
             "list_deck_plans",
             "get_deck_plan",
             "delete_deck_plan",
@@ -131,82 +120,6 @@ public sealed class McpSurfaceTests
             .SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
             .Should()
             .BeEquivalentTo(expected);
-    }
-
-    /// <summary>
-    /// Verifies that card upgrade weights are true optional overrides.
-    /// </summary>
-    [Fact]
-    public void FindCardUpgrades_UsesNullableWeightOverrides()
-    {
-        MethodInfo method = typeof(RecommendationTools).GetMethod(nameof(RecommendationTools.FindCardUpgradesAsync))
-            ?? throw new InvalidOperationException("find_card_upgrades method not found.");
-
-        ParameterInfo[] parameters = method.GetParameters();
-        parameters.Single(parameter => parameter.Name == "focus").ParameterType.Should().Be<string>();
-        parameters.Single(parameter => parameter.Name == "maxPrice").ParameterType.Should().Be<decimal?>();
-        parameters.Single(parameter => parameter.Name == "roleWeight").ParameterType.Should().Be<double?>();
-        parameters.Single(parameter => parameter.Name == "roleWeight").DefaultValue.Should().BeNull();
-        parameters.Single(parameter => parameter.Name == "powerWeight").ParameterType.Should().Be<double?>();
-        parameters.Single(parameter => parameter.Name == "powerWeight").DefaultValue.Should().BeNull();
-        parameters.Single(parameter => parameter.Name == "priceWeight").ParameterType.Should().Be<double?>();
-        parameters.Single(parameter => parameter.Name == "priceWeight").DefaultValue.Should().BeNull();
-    }
-
-    /// <summary>
-    /// Verifies that find_card_upgrades creates card-upgrade plans when focus options are supplied.
-    /// </summary>
-    [Fact]
-    public async Task FindCardUpgrades_ForwardsFocusOptionsToCardUpgradePlan()
-    {
-        InMemoryRepository workspaces = new();
-        InMemoryPlanRepository plans = new();
-        UpgradeCardCatalog catalog = new();
-        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
-        {
-            Name = "App Upgrade Surface",
-            Cards =
-            [
-                new DeckCard
-                {
-                    Name = "Weak Draw",
-                    PrimaryCategory = DeckRoles.Draw,
-                    Categories = [DeckRoles.Draw],
-                    Snapshot = new CardSnapshot
-                    {
-                        TypeLine = "Enchantment",
-                        OracleText = "At the beginning of your upkeep, you may draw a card.",
-                        ManaValue = 5,
-                        EdhrecRank = 20_000,
-                        ColorIdentity = ["B"]
-                    }
-                }
-            ]
-        }, TestContext.Current.CancellationToken);
-        DeckAnalysisService analysis = new(workspaces, catalog, planRepository: plans);
-        DeckSimulationService simulation = new(workspaces, catalog, planRepository: plans);
-        DeckRecommendationService recommendations = new(
-            workspaces,
-            catalog,
-            analysis,
-            simulation,
-            planRepository: plans);
-        RecommendationTools tools = new(
-            recommendations,
-            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "plan" })));
-
-        RecommendationPlanResult result = await tools.FindCardUpgradesAsync(
-            workspace.Id,
-            focus: "speed",
-            maxPrice: null,
-            limit: 3,
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        result.Plan.Kind.Should().Be("card-upgrades");
-        result.Plan.Name.Should().Be("Card upgrade plan");
-        result.Plan.Rationale.Should().Contain("power=0.5");
-        result.Suggestions.Should().ContainSingle().Which.WithCard.Should().Be("Phyrexian Arena");
-        (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
     }
 
     /// <summary>
@@ -246,7 +159,7 @@ public sealed class McpSurfaceTests
         [
             "brew_commander_deck",
             "tune_existing_deck",
-            "find_budget_replacements",
+            "research_budget_replacements",
             "reduce_deck_cost",
             "upgrade_deck_power",
             "reduce_deck_power",
@@ -324,6 +237,8 @@ public sealed class McpSurfaceTests
         CustomAttributeData bracket = GetToolAttribute(nameof(AnalysisTools.EstimateCommanderBracketAsync));
         CustomAttributeData performance = GetToolAttribute(nameof(SimulationTools.AnalyzeDeckPerformanceAsync));
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
+        CustomAttributeData queryCards = GetToolAttribute(nameof(RecommendationTools.QueryCardsForDeckAsync));
+        CustomAttributeData createExplicitPlan = GetToolAttribute(nameof(PlanTools.CreateDeckPlanFromExplicitChangesAsync));
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(searchCards, "OpenWorld").Should().BeTrue();
@@ -341,6 +256,10 @@ public sealed class McpSurfaceTests
         GetNamedBool(performance, "OpenWorld").Should().BeFalse();
         GetNamedBool(comparePerformance, "ReadOnly").Should().BeTrue();
         GetNamedBool(comparePerformance, "OpenWorld").Should().BeTrue();
+        GetNamedBool(queryCards, "ReadOnly").Should().BeTrue();
+        GetNamedBool(queryCards, "OpenWorld").Should().BeTrue();
+        GetNamedBool(createExplicitPlan, "ReadOnly").Should().BeFalse();
+        GetNamedBool(createExplicitPlan, "OpenWorld").Should().BeFalse();
     }
 
     /// <summary>
@@ -369,13 +288,13 @@ public sealed class McpSurfaceTests
         OperationModeGuard planMode = new(Options.Create(new MtgMcpOptions { OperationMode = "plan" }));
         OperationModeGuard readOnlyMode = new(Options.Create(new MtgMcpOptions { OperationMode = "read-only" }));
 
-        planMode.Invoking(guard => guard.EnsureCanWritePlanningState("find_budget_replacements"))
+        planMode.Invoking(guard => guard.EnsureCanWritePlanningState("create_deck_plan_from_explicit_changes"))
             .Should()
             .NotThrow();
-        readOnlyMode.Invoking(guard => guard.EnsureCanWritePlanningState("find_budget_replacements"))
+        readOnlyMode.Invoking(guard => guard.EnsureCanWritePlanningState("create_deck_plan_from_explicit_changes"))
             .Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("*read-only mode*find_budget_replacements*");
+            .WithMessage("*read-only mode*create_deck_plan_from_explicit_changes*");
     }
 
     /// <summary>
@@ -399,33 +318,6 @@ public sealed class McpSurfaceTests
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*create_local_deck*");
-    }
-
-    /// <summary>
-    /// Verifies that read-only mode blocks corpus tools that write local planning state.
-    /// </summary>
-    [Fact]
-    public async Task OperationModeGuard_BlocksCorpusBudgetPlanWhenReadOnly()
-    {
-        InMemoryRepository workspaces = new();
-        EmptyCardCatalog catalog = new();
-        DeckAnalysisService analysis = new(workspaces, catalog);
-        DeckSimulationService simulation = new(workspaces, catalog);
-        DeckRecommendationService recommendations = new(workspaces, catalog, analysis, simulation);
-        IOptions<MtgMcpOptions> options = Options.Create(new MtgMcpOptions
-        {
-            OperationMode = "read-only"
-        });
-        OperationModeGuard operationMode = new(options);
-        CorpusTools tools = new(recommendations, operationMode, options);
-
-        Func<Task> act = () => tools.FindCorpusBudgetReplacementsAsync(
-            "workspace-1",
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        await act.Should()
-            .ThrowAsync<InvalidOperationException>()
-            .WithMessage("*read-only mode*find_corpus_budget_replacements*");
     }
 
     /// <summary>
@@ -737,123 +629,6 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
-    /// Provides enough card data for the card-upgrade MCP surface test.
-    /// </summary>
-    private sealed class UpgradeCardCatalog : ICardCatalog
-    {
-        /// <summary>
-        /// Searches upgrade candidates by role query.
-        /// </summary>
-        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
-            string query,
-            int limit,
-            CancellationToken cancellationToken)
-        {
-            IReadOnlyList<CardSearchResult> results = query.Contains("draw", StringComparison.OrdinalIgnoreCase)
-                ? [new CardSearchResult { Name = "Phyrexian Arena" }]
-                : [];
-            return Task.FromResult(results);
-        }
-
-        /// <summary>
-        /// Searches upgrade candidates by semantic role request.
-        /// </summary>
-        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
-            CardSearchRequest request,
-            int limit,
-            CancellationToken cancellationToken)
-        {
-            string role = request.Role ?? "";
-            IReadOnlyList<CardSearchResult> results = request.Preset == CardSearchPreset.Role
-                && role.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase)
-                    ? [new CardSearchResult { Name = "Phyrexian Arena" }]
-                    : [];
-            return Task.FromResult(results);
-        }
-
-        /// <summary>
-        /// Gets one fake upgrade candidate.
-        /// </summary>
-        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
-        {
-            return Task.FromResult<CardInfo?>(nameOrId.Equals("Phyrexian Arena", StringComparison.OrdinalIgnoreCase)
-                ? new CardInfo
-                {
-                    Id = "phyrexian-arena",
-                    OracleId = "oracle-phyrexian-arena",
-                    Name = "Phyrexian Arena",
-                    ManaCost = "{1}{B}{B}",
-                    ManaValue = 3,
-                    TypeLine = "Enchantment",
-                    OracleText = "At the beginning of your upkeep, you draw a card and you lose 1 life.",
-                    ColorIdentity = ["B"],
-                    EdhrecRank = 250,
-                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["commander"] = "legal",
-                    },
-                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["usd"] = "3.00",
-                    },
-                }
-                : null);
-        }
-
-        /// <summary>
-        /// Gets fake cards by name.
-        /// </summary>
-        public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
-            IReadOnlyList<string> names,
-            CancellationToken cancellationToken)
-        {
-            Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
-            foreach (string name in names)
-            {
-                CardInfo? card = await GetCardAsync(name, cancellationToken).ConfigureAwait(false);
-                if (card is not null)
-                {
-                    cards[name] = card;
-                }
-            }
-
-            return cards;
-        }
-
-        /// <summary>
-        /// Gets no fake rulings.
-        /// </summary>
-        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
-            string nameOrId,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
-        }
-
-        /// <summary>
-        /// Gets no fake prints.
-        /// </summary>
-        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
-            string nameOrId,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
-        }
-
-        /// <summary>
-        /// Suggests no fake prompt cards.
-        /// </summary>
-        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
-            string prompt,
-            string? format,
-            int limit,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
-        }
-    }
-
-    /// <summary>
     /// Provides in memory repository behavior.
     /// </summary>
     private sealed class InMemoryRepository : IDeckWorkspaceRepository
@@ -896,55 +671,4 @@ public sealed class McpSurfaceTests
         }
     }
 
-    /// <summary>
-    /// Provides in-memory plan persistence for MCP surface behavior tests.
-    /// </summary>
-    private sealed class InMemoryPlanRepository : IDeckPlanRepository
-    {
-        /// <summary>
-        /// Stores fake plans by id.
-        /// </summary>
-        private readonly Dictionary<string, DeckEditPlan> plans = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Saves a fake plan.
-        /// </summary>
-        public Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken)
-        {
-            plans[plan.PlanId] = plan;
-            return Task.FromResult(plan);
-        }
-
-        /// <summary>
-        /// Gets a fake plan by id.
-        /// </summary>
-        public Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken)
-        {
-            plans.TryGetValue(planId, out DeckEditPlan? plan);
-            return Task.FromResult(plan);
-        }
-
-        /// <summary>
-        /// Lists fake plans.
-        /// </summary>
-        public Task<IReadOnlyList<DeckEditPlan>> ListAsync(
-            string? workspaceId,
-            CancellationToken cancellationToken)
-        {
-            IReadOnlyList<DeckEditPlan> result = plans.Values
-                .Where(plan => string.IsNullOrWhiteSpace(workspaceId)
-                    || plan.WorkspaceId.Equals(workspaceId, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            return Task.FromResult(result);
-        }
-
-        /// <summary>
-        /// Deletes a fake plan.
-        /// </summary>
-        public Task DeleteAsync(string planId, CancellationToken cancellationToken)
-        {
-            plans.Remove(planId);
-            return Task.CompletedTask;
-        }
-    }
 }

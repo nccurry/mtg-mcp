@@ -227,6 +227,93 @@ public sealed class DeckWorkspace
 }
 
 /// <summary>
+/// Provides a compact response for opening a workspace through MCP.
+/// </summary>
+public sealed class DeckOpenResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id to use with follow-up tools.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deck name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deck format.
+    /// </summary>
+    public string Format { get; set; } = "commander";
+
+    /// <summary>
+    /// Gets or sets the workspace mode.
+    /// </summary>
+    public WorkspaceMode Mode { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether Archidekt writeback is enabled.
+    /// </summary>
+    public bool WriteBack { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Archidekt deck id when the workspace is Archidekt-backed.
+    /// </summary>
+    public string? ArchidektDeckId { get; set; }
+
+    /// <summary>
+    /// Gets or sets where future mutations will be persisted.
+    /// </summary>
+    public string Persistence { get; set; } = DeckPersistence.LocalOnly;
+
+    /// <summary>
+    /// Gets or sets total card quantity across all categories.
+    /// </summary>
+    public int TotalCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets card quantity included in the active deck.
+    /// </summary>
+    public int IncludedCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets card quantity in excluded maybeboard categories.
+    /// </summary>
+    public int MaybeboardCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets commander card names found in included commander categories.
+    /// </summary>
+    public List<string> Commanders { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets compact category counts.
+    /// </summary>
+    public List<DeckOpenCategorySummary> Categories { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one category in a compact deck-open response.
+/// </summary>
+public sealed class DeckOpenCategorySummary
+{
+    /// <summary>
+    /// Gets or sets the category name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether the category counts toward the active deck.
+    /// </summary>
+    public bool IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card quantity in this category.
+    /// </summary>
+    public int CardCount { get; set; }
+}
+
+/// <summary>
 /// Provides archidekt deck summary behavior.
 /// </summary>
 public sealed class ArchidektDeckSummary

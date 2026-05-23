@@ -47,6 +47,108 @@ public sealed class DeckQueryRecommendationConstraints
 }
 
 /// <summary>
+/// Describes one accepted card from a deck-filtered Scryfall query without assigning a fit score.
+/// </summary>
+public sealed class DeckQueryDataCard
+{
+    /// <summary>
+    /// Gets or sets the card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the primary role assigned by the local classifier.
+    /// </summary>
+    public string Role { get; set; } = DeckRoles.Utility;
+
+    /// <summary>
+    /// Gets or sets secondary tags assigned by the local classifier.
+    /// </summary>
+    public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the mana value when known.
+    /// </summary>
+    public double? ManaValue { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card type line.
+    /// </summary>
+    public string? TypeLine { get; set; }
+
+    /// <summary>
+    /// Gets or sets the oracle text.
+    /// </summary>
+    public string? OracleText { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card color identity.
+    /// </summary>
+    public List<string> ColorIdentity { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the EDHREC rank published in the Scryfall snapshot.
+    /// </summary>
+    public int? EdhrecRank { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card price.
+    /// </summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page when available.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+}
+
+/// <summary>
+/// Reports deck-filtered Scryfall query data in source result order.
+/// </summary>
+public sealed class DeckQueryDataResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the caller-provided purpose for the lookup.
+    /// </summary>
+    public string Goal { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the raw Scryfall query supplied by the caller.
+    /// </summary>
+    public string ScryfallQuery { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the Scryfall queries executed by the service.
+    /// </summary>
+    public List<string> ExecutedQueries { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets deck constraints applied after search.
+    /// </summary>
+    public DeckQueryRecommendationConstraints Constraints { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets accepted cards in source result order.
+    /// </summary>
+    public List<DeckQueryDataCard> Cards { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets rejected cards with exact filter reasons.
+    /// </summary>
+    public List<DeckQueryRejectedCandidate> Rejected { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal query quality warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
 /// Describes an accepted card from a deck-aware Scryfall query.
 /// </summary>
 public sealed class DeckQueryCandidate
@@ -182,20 +284,4 @@ public sealed class DeckQueryRecommendationResult
     /// Gets or sets non-fatal query quality warnings.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
-}
-
-/// <summary>
-/// Reports a persisted non-mutating plan created from a deck-aware query.
-/// </summary>
-public sealed class DeckQueryPlanResult
-{
-    /// <summary>
-    /// Gets or sets the persisted plan.
-    /// </summary>
-    public DeckEditPlan Plan { get; set; } = new();
-
-    /// <summary>
-    /// Gets or sets the ranking result that produced the plan.
-    /// </summary>
-    public DeckQueryRecommendationResult Ranking { get; set; } = new();
 }

@@ -113,17 +113,18 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
     }
 
     /// <summary>
-    /// Deletes the plan.
+    /// Deletes the plan and reports whether one existed.
     /// </summary>
-    public Task DeleteAsync(string planId, CancellationToken cancellationToken)
+    public Task<bool> DeleteAsync(string planId, CancellationToken cancellationToken)
     {
         string path = GetPlanPath(planId);
-        if (File.Exists(path))
+        bool exists = File.Exists(path);
+        if (exists)
         {
             File.Delete(path);
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(exists);
     }
 
     /// <summary>

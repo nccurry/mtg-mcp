@@ -25,11 +25,12 @@ Scryfall, or Archidekt.
 - Expose factual card facets and count cards from explicit caller-supplied predicates.
 - Compare decks to Commander heuristics, global popularity context, and recent
   card releases.
-- Find goal-driven card packages, budget swaps, upgrades, mana fixes, and cuts.
+- Gather deterministic card data from explicit Scryfall queries, then persist
+  caller-supplied add/remove plans.
 - Detect Commander Spellbook combos and near-misses, then estimate combo pressure.
-- Aggregate normalized corpus signals for trends, lesser-known cards, exemplar decks, and budget swaps.
+- Aggregate normalized corpus signals for trends, lesser-known cards, exemplar decks, and source-backed budget data.
 - Simulate goldfish development, projected board states, and likely win turns.
-- Preview recommendation plans before applying them.
+- Preview persisted edit plans before applying them.
 
 ## Quickstart
 
@@ -87,11 +88,11 @@ $env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
 `MTGMCP__OPERATION_MODE` accepts:
 
 - `read-only`: allow lookup and analysis tools only.
-- `plan`: allow lookup, analysis, metadata refresh, and recommendation plans.
+- `plan`: allow lookup, analysis, metadata refresh, and explicit edit plans.
 - `apply`: allow deck edits, checkpoints, and Archidekt writeback.
 
 `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` controls how much corpus-aware
-recommendation tools request and return:
+data tools request and return:
 
 - `minimal`: compact, high-signal evidence with fewer source calls.
 - `balanced`: default source breadth and compact evidence.
@@ -259,8 +260,8 @@ Apply the previewed deck plan and create an Archidekt checkpoint first.
 
 Common tuning tools include `refresh_deck_card_snapshots`,
 `summarize_deck_workspace`, `analyze_deck_consistency`,
-`get_card_facets`, `count_deck_cards_matching`, `find_card_upgrades`, and
-`preview_deck_plan`.
+`get_card_facets`, `count_deck_cards_matching`, `query_cards_for_deck`,
+`create_deck_plan_from_explicit_changes`, and `preview_deck_plan`.
 
 Facet tools are deliberately fact-first. For example,
 `count_deck_cards_matching` does not decide what "card advantage" means; the
@@ -270,8 +271,8 @@ the tool returns matching cards plus the exact evidence rows.
 
 ## Deck Intent Configuration
 
-Deck intent is optional text that tells recommendations what the deck is trying
-to do.
+Deck intent is optional text that tells analyses and caller-supplied queries what
+the deck is trying to do.
 
 For local decks, use `suggest_deck_intent`, edit the text, then save it with
 `set_deck_intent`. For Archidekt decks, the same block is stored in the deck
@@ -279,8 +280,8 @@ description and writes back only when Archidekt writeback is enabled.
 
 Best-practice analysis uses `Power Level`, `Heuristic Profile`,
 `Package Template`, `Local Meta`, and `Packages` to choose and compare
-Commander heuristics. Recommendation tools use `Targets`, `Budget`, `Prefer`,
-`Avoid`, and `Protect`.
+Commander heuristics. Query and planning workflows can use `Targets`, `Budget`,
+`Prefer`, `Avoid`, and `Protect` as explicit constraints.
 
 ```text
 MTG MCP Deck Intent
@@ -302,7 +303,7 @@ Avoid
 End MTG MCP Deck Intent
 ```
 
-These fields shape recommendations:
+These fields shape analyses and explicit query/planning workflows:
 
 - `Targets`: desired counts for roles or tags, such as `Ramp: 8-10`.
 - `Budget`: price guidance for upgrades and replacements.
@@ -342,6 +343,6 @@ Heuristics are advisory. Sources include the
 Scryfall, manage decks, analyze deck structure, and optionally sync changes to
 Archidekt.
 
-Local deck data and recommendation plans are saved under `MTGMCP__DATA_DIR`.
+Local deck data and edit plans are saved under `MTGMCP__DATA_DIR`.
 Archidekt writeback is opt-in: the deck must be opened with writeback enabled,
 and the server must be running in `apply` mode before deck contents are changed.

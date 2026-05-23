@@ -260,13 +260,11 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
         {
             Commander = query.Commander,
             Theme = query.Theme,
-            Source = "Scryfall global EDHREC-rank search"
+            Source = "Scryfall global EDHREC-rank facts"
         };
 
-        int rank = 0;
         foreach (CardInfo card in cards.Values.OrderBy(card => card.EdhrecRank ?? int.MaxValue).Take(limit))
         {
-            rank++;
             DeckCard candidate = new()
             {
                 Name = card.Name,
@@ -283,14 +281,15 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
             {
                 Name = card.Name,
                 Category = role.PrimaryRole,
-                InclusionRate = EstimateInclusionRate(card.EdhrecRank, rank),
-                SynergyScore = EstimateSynergyScore(role, query.Theme),
+                InclusionRate = 0,
+                SynergyScore = 0,
+                EdhrecRank = card.EdhrecRank,
                 Source = "scryfall-edhrec-rank",
                 Uri = card.ScryfallUri
             });
         }
 
-        report.Notes.Add("Scryfall does not expose commander-specific deck inclusion data; this provider uses global EDHREC rank ordered Scryfall search as popularity context.");
+        report.Notes.Add("Scryfall does not expose commander-specific deck inclusion data; inclusionRate and synergyScore are not inferred for this source.");
         ProviderCache.Set(MetaCache, cacheKey, CloneReport(report));
         return report;
     }
@@ -324,6 +323,7 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
             Category = card.Category,
             InclusionRate = card.InclusionRate,
             SynergyScore = card.SynergyScore,
+            EdhrecRank = card.EdhrecRank,
             Source = card.Source,
             Uri = card.Uri
         };
@@ -341,43 +341,6 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
         }
 
         return string.Join(' ', parts.Where(part => !string.IsNullOrWhiteSpace(part)));
-    }
-
-    /// <summary>
-    /// Estimates an inclusion rate from EDHREC rank.
-    /// </summary>
-    private static double EstimateInclusionRate(int? edhrecRank, int ordinal)
-    {
-        if (!edhrecRank.HasValue)
-        {
-            return Math.Clamp(0.25 - (ordinal * 0.01), 0.05, 0.25);
-        }
-
-        return edhrecRank.Value switch
-        {
-            <= 100 => 0.65,
-            <= 500 => 0.50,
-            <= 1_000 => 0.40,
-            <= 5_000 => 0.25,
-            <= 10_000 => 0.15,
-            _ => 0.08
-        };
-    }
-
-    /// <summary>
-    /// Estimates theme synergy from classified role tags.
-    /// </summary>
-    private static double EstimateSynergyScore(CardRoleAssignment role, string? theme)
-    {
-        if (string.IsNullOrWhiteSpace(theme))
-        {
-            return 0.2;
-        }
-
-        return role.Tags.Any(tag => theme.Contains(tag, StringComparison.OrdinalIgnoreCase))
-            || theme.Contains(role.PrimaryRole, StringComparison.OrdinalIgnoreCase)
-            ? 0.75
-            : 0.25;
     }
 
     /// <summary>

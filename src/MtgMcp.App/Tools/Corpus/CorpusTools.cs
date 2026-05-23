@@ -17,11 +17,6 @@ public sealed class CorpusTools
     private readonly DeckRecommendationService recommendations;
 
     /// <summary>
-    /// Guards corpus tools that persist planning state.
-    /// </summary>
-    private readonly OperationModeGuard operationMode;
-
-    /// <summary>
     /// Supplies default corpus analysis settings.
     /// </summary>
     private readonly IOptions<MtgMcpOptions> options;
@@ -31,11 +26,9 @@ public sealed class CorpusTools
     /// </summary>
     public CorpusTools(
         DeckRecommendationService recommendations,
-        OperationModeGuard operationMode,
         IOptions<MtgMcpOptions> options)
     {
         this.recommendations = recommendations;
-        this.operationMode = operationMode;
         this.options = options;
     }
 
@@ -78,31 +71,6 @@ public sealed class CorpusTools
             goal,
             limit,
             maxPrice,
-            EffectiveAnalysisDepth(analysisDepth),
-            refresh,
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Creates budget replacement plans enriched with corpus evidence.
-    /// </summary>
-    [McpServerTool(Name = "find_corpus_budget_replacements", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
-    [Description("Create a persisted budget replacement plan and attach API-backed corpus evidence to each replacement. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
-    public Task<CorpusBudgetReplacementResult> FindCorpusBudgetReplacementsAsync(
-        string workspaceId,
-        decimal maxPrice = 5,
-        decimal minSavings = 1,
-        int limit = 10,
-        string? analysisDepth = null,
-        bool refresh = false,
-        CancellationToken cancellationToken = default)
-    {
-        operationMode.EnsureCanWritePlanningState("find_corpus_budget_replacements");
-        return recommendations.FindCorpusBudgetReplacementsAsync(
-            workspaceId,
-            maxPrice,
-            minSavings,
-            limit,
             EffectiveAnalysisDepth(analysisDepth),
             refresh,
             cancellationToken);

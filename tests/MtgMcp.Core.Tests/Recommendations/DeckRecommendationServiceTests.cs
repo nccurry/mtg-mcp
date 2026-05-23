@@ -127,10 +127,10 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
-    /// Verifies that query-first ranking keeps accepted and rejected cards explainable.
+    /// Verifies that query-first data lookups keep accepted and rejected cards explainable.
     /// </summary>
     [Fact]
-    public async Task RankCardsForDeckQuery_FiltersAndExplainsDrawDiscardCandidates()
+    public async Task QueryCardsForDeck_FiltersAndExplainsDrawDiscardCandidates()
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
@@ -152,7 +152,7 @@ public sealed partial class DeckIntelligenceTests
         }, TestContext.Current.CancellationToken);
         DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
 
-        DeckQueryRecommendationResult result = await service.RankCardsForDeckQueryAsync(
+        DeckQueryDataResult result = await service.QueryCardsForDeckAsync(
             workspace.Id,
             "Improve Tinybones draw/discard engine",
             "o:\"whenever an opponent discards\" or o:\"each opponent discards\" or o:\"draw a card\"",
@@ -164,128 +164,15 @@ public sealed partial class DeckIntelligenceTests
             excludedTags: [DeckTags.Aristocrats, DeckTags.Drain],
             cancellationToken: TestContext.Current.CancellationToken);
 
-        result.Candidates.Should().Contain(candidate => candidate.CardName == "Geth's Grimoire");
-        result.Candidates.Should().Contain(candidate => candidate.CardName == "Syphon Mind");
-        result.Candidates.Should().NotContain(candidate => candidate.CardName == "Zulaport Cutthroat");
+        result.Cards.Should().Contain(candidate => candidate.CardName == "Geth's Grimoire");
+        result.Cards.Should().Contain(candidate => candidate.CardName == "Syphon Mind");
+        result.Cards.Should().NotContain(candidate => candidate.CardName == "Zulaport Cutthroat");
         result.Rejected.Should().Contain(rejected =>
             rejected.CardName == "Zulaport Cutthroat"
             && rejected.Reasons.Any(reason => reason.Contains("Excluded tag", StringComparison.OrdinalIgnoreCase)));
         result.Rejected.Should().Contain(rejected =>
             rejected.CardName == "Torment of Hailfire"
             && rejected.Reasons.Any(reason => reason.Contains("Excluded role", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    /// <summary>
-    /// Verifies that query-first recommendations can create persisted non-mutating plans.
-    /// </summary>
-    [Fact]
-    public async Task CreateDeckPlanFromQuery_CreatesPersistedPlanFromRankedCandidates()
-    {
-        InMemoryRepository workspaces = new();
-        InMemoryPlanRepository plans = new();
-        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
-        {
-            Name = "Query Plan",
-            Format = "commander",
-            Cards =
-            [
-                new DeckCard
-                {
-                    Name = "Tinybones, Trinket Thief",
-                    Quantity = 1,
-                    PrimaryCategory = DeckRoles.Commander,
-                    Categories = [DeckRoles.Commander],
-                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
-                },
-                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
-            ]
-        }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
-
-        DeckQueryPlanResult result = await service.CreateDeckPlanFromQueryAsync(
-            workspace.Id,
-            "Improve Tinybones draw/discard engine",
-            "o:\"whenever an opponent discards\" or o:\"each opponent discards\" or o:\"draw a card\"",
-            DeckRoles.Draw,
-            cutsStrategy: "auto",
-            count: 2,
-            maxPrice: 10,
-            requiredRoles: [DeckRoles.Draw],
-            requiredTags: [DeckTags.Discard],
-            excludedRoles: [],
-            excludedTags: [DeckTags.Aristocrats, DeckTags.Drain],
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        result.Plan.Operations.Should().Contain(operation =>
-            operation.Operation == DeckEditOperations.AddCard
-            && operation.CardName == "Geth's Grimoire"
-            && operation.Category == DeckRoles.Draw);
-        result.Ranking.Rejected.Should().Contain(rejected => rejected.CardName == "Zulaport Cutthroat");
-        (await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
-    }
-
-    /// <summary>
-    /// Verifies that automatic cuts use deterministic deck statistics in their rationale.
-    /// </summary>
-    [Fact]
-    public async Task CreateDeckPlanFromQuery_RanksCutsFromDeckStatistics()
-    {
-        InMemoryRepository workspaces = new();
-        InMemoryPlanRepository plans = new();
-        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
-        {
-            Name = "Cut Statistics",
-            Format = "commander",
-            Cards =
-            [
-                new DeckCard
-                {
-                    Name = "Tinybones, Trinket Thief",
-                    Quantity = 1,
-                    PrimaryCategory = DeckRoles.Commander,
-                    Categories = [DeckRoles.Commander],
-                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
-                },
-                new DeckCard { Name = "Swamp", Quantity = 37, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands], Snapshot = new CardSnapshot { TypeLine = "Basic Land" } },
-                new DeckCard
-                {
-                    Name = "Clunky Bauble",
-                    Quantity = 61,
-                    PrimaryCategory = DeckRoles.Utility,
-                    Categories = [DeckRoles.Utility],
-                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "" }
-                },
-                new DeckCard
-                {
-                    Name = "Arcane Signet",
-                    Quantity = 1,
-                    PrimaryCategory = DeckRoles.Ramp,
-                    Categories = [DeckRoles.Ramp],
-                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "{T}: Add one mana of any color." }
-                }
-            ]
-        }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
-
-        DeckQueryPlanResult result = await service.CreateDeckPlanFromQueryAsync(
-            workspace.Id,
-            "Add a draw piece",
-            "draw",
-            DeckRoles.Draw,
-            cutsStrategy: "auto",
-            count: 1,
-            maxPrice: 10,
-            requiredRoles: [DeckRoles.Draw],
-            requiredTags: [],
-            excludedRoles: [],
-            excludedTags: [],
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        DeckEditOperation cut = result.Plan.Operations.Should().ContainSingle(operation =>
-            operation.Operation == DeckEditOperations.RemoveCard).Which;
-        cut.CardName.Should().Be("Clunky Bauble");
-        cut.Rationale.Should().Contain("Utility count");
-        cut.Rationale.Should().Contain("target maximum");
     }
 
     /// <summary>
@@ -437,10 +324,10 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
-    /// Verifies that lower-salt goal packages cut high-pressure cards rather than only adding value.
+    /// Verifies that goal packages do not invent cuts.
     /// </summary>
     [Fact]
-    public async Task FindCardsForDeckGoal_LessSaltyAddsCutsForHighPressureCards()
+    public async Task FindCardsForDeckGoal_DoesNotGenerateCuts()
     {
         InMemoryRepository workspaces = new();
         InMemoryPlanRepository plans = new();
@@ -488,11 +375,8 @@ public sealed partial class DeckIntelligenceTests
 
         result.Plan.Operations.Should().Contain(operation =>
             operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Phyrexian Arena");
-        result.Plan.Operations.Should().Contain(operation =>
-            operation.Operation == DeckEditOperations.RemoveCard && operation.CardName == "Mana Crypt");
-        result.Plan.Operations.Should().Contain(operation =>
-            operation.Operation == DeckEditOperations.RemoveCard && operation.CardName == "Demonic Tutor");
-        result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Ayara, First of Locthwain");
+        result.Plan.Operations.Should().NotContain(operation => operation.Operation == DeckEditOperations.RemoveCard);
+        result.Plan.Warnings.Should().Contain(warning => warning.Contains("No cuts were generated", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -569,7 +453,7 @@ public sealed partial class DeckIntelligenceTests
     /// Verifies that Commander meta providers are optional and failure-tolerant.
     /// </summary>
     [Fact]
-    public async Task CompareToCommanderMeta_FallsBackWhenProviderFails()
+    public async Task CompareToCommanderMeta_DoesNotInferRowsWhenProviderFails()
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
@@ -590,7 +474,8 @@ public sealed partial class DeckIntelligenceTests
             limit: 5,
             TestContext.Current.CancellationToken);
 
-        result.MissingPopularCards.Should().NotBeEmpty();
+        result.Source.Should().Be("provider-error");
+        result.MissingPopularCards.Should().BeEmpty();
         result.Notes.Should().Contain(note => note.Contains("provider failed", StringComparison.OrdinalIgnoreCase));
     }
 
