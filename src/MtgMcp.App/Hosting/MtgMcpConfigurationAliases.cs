@@ -37,6 +37,7 @@ public static class MtgMcpConfigurationAliases
         ("INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API", "MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"),
         ("INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS", "MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"),
         ("INTELLIGENCE:SOURCES:REDDIT:ENABLED", "MtgMcp:Intelligence:Sources:Reddit:Enabled"),
+        ("INTELLIGENCE:SOURCES:REDDIT:API_KEY", "MtgMcp:Intelligence:Sources:Reddit:ApiKey"),
         ("INTELLIGENCE:SOURCES:REDDIT:ALLOW_UNOFFICIAL_API", "MtgMcp:Intelligence:Sources:Reddit:AllowUnofficialApi"),
         ("INTELLIGENCE:SOURCES:REDDIT:BASE_ADDRESS", "MtgMcp:Intelligence:Sources:Reddit:BaseAddress"),
         ("ARCHIDEKT:BASE_ADDRESS", "MtgMcp:Archidekt:BaseAddress"),

@@ -17,16 +17,53 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
     private static readonly Uri DefaultBaseAddress = new("https://www.reddit.com/");
 
     /// <summary>
+    /// Stores the Reddit OAuth API base address used when a bearer token is configured.
+    /// </summary>
+    private static readonly Uri OAuthBaseAddress = new("https://oauth.reddit.com/");
+
+    /// <summary>
+    /// Limits discussion evidence to recent Commander discourse.
+    /// </summary>
+    private const int DiscussionLookbackYears = 4;
+
+    /// <summary>
+    /// Caps exact-name validation requests built from plain discussion text.
+    /// </summary>
+    private const int MaximumPlainTextCandidates = 120;
+
+    /// <summary>
     /// Finds explicit MTGCardFetcher-style card references.
     /// </summary>
-    private static readonly Regex CardReferencePattern = new(
+    private static readonly Regex DoubleBracketCardReferencePattern = new(
         @"\[\[(?<name>[^\]\|\r\n]{2,120})(?:\|[^\]\r\n]*)?\]\]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Finds single-bracket card references for exact Scryfall name validation.
+    /// </summary>
+    private static readonly Regex SingleBracketCardCandidatePattern = new(
+        @"(?<!\[)\[(?<name>[^\]\|\r\n]{2,120})(?:\|[^\]\r\n]*)?\](?!\])",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Finds card-like title-case phrases for exact Scryfall name validation.
+    /// </summary>
+    private static readonly Regex PlainTextCardCandidatePattern = new(
+        @"\b(?:[A-Z0-9][A-Za-z0-9'\-]*(?:,)?|of|the|and|to|for|in|on|a|an|"
+            + @"from|at|by|with|without|into|over|under|up|down|not|or|as)"
+            + @"(?:\s+(?:[A-Z0-9][A-Za-z0-9'\-]*(?:,)?|of|the|and|to|for|"
+            + @"in|on|a|an|from|at|by|with|without|into|over|under|up|down|not|or|as)){0,5}\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Sends requests to Reddit.
     /// </summary>
     private readonly HttpClient httpClient;
+
+    /// <summary>
+    /// Resolves exact card names found in discussion text.
+    /// </summary>
+    private readonly ICardCatalog cardCatalog;
 
     /// <summary>
     /// Stores source facts for reuse between prompts.
@@ -43,14 +80,24 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
     /// </summary>
     public RedditDiscussionCorpusSignalProvider(
         HttpClient httpClient,
+        ICardCatalog cardCatalog,
         ICorpusCache cache,
         IOptions<MtgMcpOptions> options)
     {
         this.httpClient = httpClient;
+        this.cardCatalog = cardCatalog;
         this.cache = cache;
         this.options = options.Value;
-        this.httpClient.BaseAddress ??= SourceOptions().BaseAddress ?? DefaultBaseAddress;
+        MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
+        this.httpClient.BaseAddress ??= sourceOptions.BaseAddress
+            ?? (string.IsNullOrWhiteSpace(sourceOptions.ApiKey) ? DefaultBaseAddress : OAuthBaseAddress);
         this.httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (!string.IsNullOrWhiteSpace(sourceOptions.ApiKey)
+            && this.httpClient.DefaultRequestHeaders.Authorization is null)
+        {
+            this.httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sourceOptions.ApiKey);
+        }
+
         if (this.httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
         {
             this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("mtg-mcp/1.0");
@@ -63,16 +110,17 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
     public CorpusSourceStatus GetStatus()
     {
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
-        bool enabled = sourceOptions.Enabled && sourceOptions.AllowUnofficialApi;
+        bool hasBearerToken = !string.IsNullOrWhiteSpace(sourceOptions.ApiKey);
+        bool enabled = sourceOptions.Enabled && (hasBearerToken || sourceOptions.AllowUnofficialApi);
         return new CorpusSourceStatus
         {
             Key = "reddit-discussions",
             Name = "Reddit discussion search",
             Kind = "discussion-api",
             Enabled = enabled,
-            StableApi = false,
-            ApiType = CorpusSourceApiTypes.UnofficialApi,
-            UnofficialApi = true,
+            StableApi = hasBearerToken,
+            ApiType = hasBearerToken ? CorpusSourceApiTypes.Official : CorpusSourceApiTypes.UnofficialApi,
+            UnofficialApi = !hasBearerToken,
             PermissionSensitive = true,
             AttributionRequired = true,
             Status = sourceOptions.Enabled
@@ -81,8 +129,9 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             Uri = "https://www.reddit.com/dev/api/",
             Notes =
             [
-                "Queries Reddit JSON endpoints for bounded post and comment evidence.",
-                "Set AllowUnofficialApi=true for the Reddit source before querying; OAuth support can replace this adapter later."
+                "Queries bounded Reddit post and comment JSON for exact card-reference evidence.",
+                "Searches a fixed EDH/Commander subreddit allowlist for popular commander discussions.",
+                "ApiKey may hold an OAuth bearer token; otherwise set AllowUnofficialApi=true before querying public JSON endpoints."
             ]
         };
     }
@@ -115,7 +164,7 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             Source = status.Key,
             Endpoint = "search.json/comments.json",
             Query = $"{searchText}|{string.Join(',', subreddits)}|{budget.AnalysisDepth}|{budget.MaxDecksPerSource}",
-            AdapterVersion = "1",
+            AdapterVersion = "2",
             Budget = budget.AnalysisDepth
         };
         TimeSpan ttl = CorpusCacheFactory.ParseDuration(options.Intelligence.Cache.Ttls.CorpusSignals, TimeSpan.FromHours(6));
@@ -132,13 +181,31 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
 
         int postsPerSubreddit = Math.Clamp(budget.MaxDecksPerSource, 2, 10);
         int commentsPerPost = Math.Clamp(budget.MaxEvidencePerRecommendation, 1, 8);
+        DateTimeOffset earliestCreatedAt = DateTimeOffset.UtcNow.AddYears(-DiscussionLookbackYears);
         foreach (string subreddit in subreddits)
         {
-            using JsonDocument searchDocument = await GetJsonAsync(
-                $"r/{subreddit}/search.json?q={Uri.EscapeDataString(searchText)}&restrict_sr=1&sort=relevance&t=year&limit={postsPerSubreddit}&raw_json=1",
-                cancellationToken).ConfigureAwait(false);
-            List<RedditPost> posts = ReadPosts(searchDocument.RootElement, status, query, searchText);
-            foreach (RedditPost post in posts.Take(postsPerSubreddit))
+            Dictionary<string, RedditPost> postsById = new(StringComparer.OrdinalIgnoreCase);
+            foreach (RedditSearchRequest searchRequest in BuildSearchRequests(budget))
+            {
+                using JsonDocument searchDocument = await GetJsonAsync(
+                    BuildSearchPath(subreddit, searchText, searchRequest, postsPerSubreddit),
+                    cancellationToken).ConfigureAwait(false);
+                foreach (RedditPost post in ReadPosts(searchDocument.RootElement, status, query, searchText))
+                {
+                    if (!string.IsNullOrWhiteSpace(post.Id))
+                    {
+                        postsById.TryAdd(post.Id, post);
+                    }
+                }
+            }
+
+            List<RedditPost> selectedPosts = postsById.Values
+                .Where(post => IsRecentEnough(post.Evidence.CreatedAt, earliestCreatedAt))
+                .OrderByDescending(post => post.Evidence.Score ?? 0)
+                .ThenByDescending(post => post.Evidence.CreatedAt ?? DateTimeOffset.MinValue)
+                .Take(postsPerSubreddit)
+                .ToList();
+            foreach (RedditPost post in selectedPosts)
             {
                 report.Discussions.Add(post.Evidence);
                 report.Discussions.AddRange(await GetCommentsAsync(post.Id, post.Title, searchText, status, query, commentsPerPost, cancellationToken)
@@ -146,8 +213,10 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             }
         }
 
+        await AnnotateMentionedCardsAsync(report.Discussions, query, report.Notes, cancellationToken)
+            .ConfigureAwait(false);
         AddSignalsFromDiscussions(report, status, budget.MaxCandidates);
-        report.Notes.Add("Reddit evidence is raw bounded discussion data with exact card-reference extraction; mtg-mcp does not infer sentiment or card quality from comment text.");
+        report.Notes.Add($"Reddit evidence is raw bounded discussion data from posts within the last {DiscussionLookbackYears} years; mtg-mcp does not infer sentiment or card quality from comment text.");
         await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
         return report;
     }
@@ -296,7 +365,7 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             Uri = AbsoluteRedditUri(ReadString(data, "permalink")),
             Score = ReadInt32(data, "score"),
             CreatedAt = ReadUnixTime(data, "created_utc"),
-            MentionedCards = ExtractMentionedCards(combined, query)
+            MentionedCards = ExtractTrustedCardReferences(combined, query)
         };
     }
 
@@ -332,11 +401,67 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
     }
 
     /// <summary>
-    /// Extracts explicit card references from discussion text.
+    /// Resolves bracketed, known, and plain-text card references in all sampled discussions.
     /// </summary>
-    private static List<string> ExtractMentionedCards(string text, CorpusSignalQuery query)
+    private async Task AnnotateMentionedCardsAsync(
+        IReadOnlyList<DiscussionEvidence> discussions,
+        CorpusSignalQuery query,
+        List<string> notes,
+        CancellationToken cancellationToken)
     {
-        List<string> names = CardReferencePattern.Matches(text)
+        Dictionary<DiscussionEvidence, List<string>> candidatesByDiscussion = new();
+        List<string> allCandidates = [];
+        foreach (DiscussionEvidence discussion in discussions)
+        {
+            string text = $"{discussion.Title}\n{discussion.Body}";
+            List<string> candidates = ExtractPlainTextCardCandidates(text);
+            candidatesByDiscussion[discussion] = candidates;
+            allCandidates.AddRange(candidates);
+        }
+
+        IReadOnlyDictionary<string, CardInfo> validatedCards = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase);
+        List<string> candidateNames = allCandidates
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaximumPlainTextCandidates)
+            .ToList();
+        if (candidateNames.Count > 0)
+        {
+            try
+            {
+                validatedCards = await cardCatalog.GetCardsByNamesAsync(candidateNames, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (!IsCancellation(exception))
+            {
+                notes.Add($"{exception.GetType().Name}: Reddit plain-text card-name validation failed; bracketed card references are still included.");
+            }
+        }
+
+        foreach (DiscussionEvidence discussion in discussions)
+        {
+            List<string> names = [.. discussion.MentionedCards];
+            foreach (string candidate in candidatesByDiscussion[discussion])
+            {
+                if (validatedCards.TryGetValue(candidate, out CardInfo? card))
+                {
+                    names.Add(card.Name);
+                }
+            }
+
+            discussion.MentionedCards = names
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(30)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Extracts card references that do not need external validation.
+    /// </summary>
+    private static List<string> ExtractTrustedCardReferences(string text, CorpusSignalQuery query)
+    {
+        List<string> names = DoubleBracketCardReferencePattern.Matches(text)
             .Select(match => match.Groups["name"].Value.Trim())
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .ToList();
@@ -355,6 +480,71 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(20)
             .ToList();
+    }
+
+    /// <summary>
+    /// Extracts title-case phrases that could be exact Magic card names.
+    /// </summary>
+    private static List<string> ExtractPlainTextCardCandidates(string text)
+    {
+        List<string> candidates = SingleBracketCardCandidatePattern.Matches(text)
+            .Select(match => NormalizeCardReference(match.Groups["name"].Value))
+            .Where(IsPlausiblePlainTextCardCandidate)
+            .ToList();
+        foreach (Match match in PlainTextCardCandidatePattern.Matches(text))
+        {
+            string candidate = NormalizePlainTextCardCandidate(match.Value);
+            AddPlainTextCandidate(candidates, candidate);
+            string[] words = candidate.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (int start = 0; start < words.Length; start++)
+            {
+                for (int length = 1; length <= Math.Min(6, words.Length - start); length++)
+                {
+                    AddPlainTextCandidate(candidates, string.Join(' ', words.Skip(start).Take(length)));
+                }
+            }
+        }
+
+        return candidates
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(80)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Adds one plausible plain-text card-name candidate.
+    /// </summary>
+    private static void AddPlainTextCandidate(List<string> candidates, string candidate)
+    {
+        if (IsPlausiblePlainTextCardCandidate(candidate))
+        {
+            candidates.Add(candidate);
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a title-case phrase is worth exact card-name validation.
+    /// </summary>
+    private static bool IsPlausiblePlainTextCardCandidate(string candidate)
+    {
+        string value = candidate.Trim(',', '.', ';', ':', '!', '?', ')', ']', '}');
+        if (value.Length < 4 || value.Length > 120)
+        {
+            return false;
+        }
+
+        if (!value.Any(char.IsLetter) || value.Contains("http", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string[] words = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length > 6)
+        {
+            return false;
+        }
+
+        return words.Any(word => char.IsUpper(word[0]) || char.IsDigit(word[0]));
     }
 
     /// <summary>
@@ -385,8 +575,52 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
         }
 
         return budget.AnalysisDepth.Equals(AnalysisDepths.Best, StringComparison.OrdinalIgnoreCase)
-            ? ["EDH", "CompetitiveEDH", "Magicdeckbuilding"]
-            : ["EDH", "CompetitiveEDH"];
+            ? ["EDH", "Commander", "Magicdeckbuilding", "BudgetBrews", "CompetitiveEDH"]
+            : ["EDH", "Commander", "Magicdeckbuilding"];
+    }
+
+    /// <summary>
+    /// Builds the deterministic search variants used for the current analysis depth.
+    /// </summary>
+    private static IReadOnlyList<RedditSearchRequest> BuildSearchRequests(RecommendationAnalysisBudget budget)
+    {
+        List<RedditSearchRequest> requests =
+        [
+            new("top", "year"),
+        ];
+        if (!budget.AnalysisDepth.Equals(AnalysisDepths.Minimal, StringComparison.OrdinalIgnoreCase))
+        {
+            requests.Add(new RedditSearchRequest("top", "all"));
+        }
+
+        if (budget.AnalysisDepth.Equals(AnalysisDepths.Best, StringComparison.OrdinalIgnoreCase))
+        {
+            requests.Add(new RedditSearchRequest("relevance", "all"));
+        }
+
+        return requests;
+    }
+
+    /// <summary>
+    /// Builds one Reddit search endpoint path.
+    /// </summary>
+    private static string BuildSearchPath(
+        string subreddit,
+        string searchText,
+        RedditSearchRequest searchRequest,
+        int limit)
+    {
+        return $"r/{subreddit}/search.json?q={Uri.EscapeDataString(searchText)}"
+            + $"&restrict_sr=1&sort={searchRequest.Sort}&t={searchRequest.TimeWindow}"
+            + $"&limit={limit}&type=link&raw_json=1";
+    }
+
+    /// <summary>
+    /// Checks whether a Reddit row falls inside the bounded recent-discussion window.
+    /// </summary>
+    private static bool IsRecentEnough(DateTimeOffset? createdAt, DateTimeOffset earliestCreatedAt)
+    {
+        return createdAt is null || createdAt >= earliestCreatedAt;
     }
 
     /// <summary>
@@ -402,7 +636,25 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
     /// </summary>
     private static string NormalizeCardReference(string value)
     {
-        return value.Split('#', StringSplitOptions.TrimEntries)[0].Trim();
+        return value.Split('#', StringSplitOptions.TrimEntries)[0]
+            .Trim();
+    }
+
+    /// <summary>
+    /// Normalizes a loose title-case card candidate from sentence text.
+    /// </summary>
+    private static string NormalizePlainTextCardCandidate(string value)
+    {
+        return NormalizeCardReference(value)
+            .Trim(',', '.', ';', ':', '!', '?', ')', ']', '}');
+    }
+
+    /// <summary>
+    /// Checks whether an exception is cancellation-related.
+    /// </summary>
+    private static bool IsCancellation(Exception exception)
+    {
+        return exception is OperationCanceledException;
     }
 
     /// <summary>
@@ -476,4 +728,9 @@ public sealed class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
     /// Carries a Reddit post and its normalized discussion evidence.
     /// </summary>
     private sealed record RedditPost(string Id, string Title, DiscussionEvidence Evidence);
+
+    /// <summary>
+    /// Describes one Reddit search sort and time-window pair.
+    /// </summary>
+    private sealed record RedditSearchRequest(string Sort, string TimeWindow);
 }

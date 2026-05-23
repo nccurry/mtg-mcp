@@ -122,6 +122,10 @@ Supported settings:
 | `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__ENABLED` | Enable or disable Spicerack corpus evidence. |
 | `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__API_KEY` | Spicerack API key for recent public decklist evidence. |
 | `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__BASE_ADDRESS` | Override Spicerack API URL for tests or mirrors. |
+| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__ENABLED` | Enable or disable Reddit discussion evidence. |
+| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__API_KEY` | Optional Reddit OAuth bearer token for Data API requests. |
+| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__ALLOW_UNOFFICIAL_API` | Permit bounded public Reddit JSON lookups when no OAuth token is configured. |
+| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__BASE_ADDRESS` | Override Reddit API URL for tests or mirrors. |
 | `MTGMCP__ARCHIDEKT__CREDENTIALS_FILE` | JSON credentials file for Archidekt. |
 | `MTGMCP__ARCHIDEKT__JWT` | Optional Archidekt JWT. |
 | `MTGMCP__ARCHIDEKT__REFRESH_TOKEN` | Preferred Archidekt auth token. |

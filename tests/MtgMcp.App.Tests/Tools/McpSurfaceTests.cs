@@ -413,6 +413,7 @@ public sealed class McpSurfaceTests
             ["INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS"] = "https://edhtop16.test/",
             ["INTELLIGENCE:SOURCES:REDDIT:ENABLED"] = "true",
+            ["INTELLIGENCE:SOURCES:REDDIT:API_KEY"] = "reddit-token",
             ["INTELLIGENCE:SOURCES:REDDIT:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:REDDIT:BASE_ADDRESS"] = "https://reddit.test/",
             ["ARCHIDEKT:JWT"] = "jwt-token",
@@ -447,6 +448,7 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"].Should().Be("https://edhtop16.test/");
         aliases["MtgMcp:Intelligence:Sources:Reddit:Enabled"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:Reddit:ApiKey"].Should().Be("reddit-token");
         aliases["MtgMcp:Intelligence:Sources:Reddit:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:Reddit:BaseAddress"].Should().Be("https://reddit.test/");
         aliases["MtgMcp:Archidekt:Jwt"].Should().Be("jwt-token");
