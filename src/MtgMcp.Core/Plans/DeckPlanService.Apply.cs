@@ -31,9 +31,14 @@ public sealed partial class DeckPlanService : DeckServiceBase
     /// <summary>
     /// Deletes a deck edit plan.
     /// </summary>
-    public Task DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken)
+    public async Task<DeckEditPlanDeleteResult> DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken)
     {
-        return RequirePlanRepository().DeleteAsync(planId, cancellationToken);
+        bool deleted = await RequirePlanRepository().DeleteAsync(planId, cancellationToken).ConfigureAwait(false);
+        return new DeckEditPlanDeleteResult
+        {
+            PlanId = planId,
+            Deleted = deleted
+        };
     }
 
     /// <summary>

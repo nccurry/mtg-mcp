@@ -143,6 +143,32 @@ public sealed class DeckEditOperation
 }
 
 /// <summary>
+/// Describes one caller-selected card add or remove for an explicit deck edit plan.
+/// </summary>
+public sealed class ExplicitDeckPlanCardChange
+{
+    /// <summary>
+    /// Gets or sets the exact card name supplied by the caller.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the quantity to add or remove; values below one are treated as one.
+    /// </summary>
+    public int Quantity { get; set; } = 1;
+
+    /// <summary>
+    /// Identifies the workspace category the caller wants this change to target.
+    /// </summary>
+    public string? Category { get; set; }
+
+    /// <summary>
+    /// Captures the caller's reason for choosing this card change.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+}
+
+/// <summary>
 /// Provides deck edit plan apply result behavior.
 /// </summary>
 public sealed class DeckEditPlanApplyResult
@@ -181,6 +207,22 @@ public sealed class DeckEditPlanApplyResult
     /// Gets or sets the workspace.
     /// </summary>
     public DeckWorkspace Workspace { get; set; } = new();
+}
+
+/// <summary>
+/// Reports whether a deck edit plan deletion found a saved plan.
+/// </summary>
+public sealed class DeckEditPlanDeleteResult
+{
+    /// <summary>
+    /// Gets or sets the requested plan id.
+    /// </summary>
+    public string PlanId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether a plan file was deleted.
+    /// </summary>
+    public bool Deleted { get; set; }
 }
 
 /// <summary>

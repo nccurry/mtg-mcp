@@ -142,9 +142,10 @@ public sealed class WorkspaceTools
     )]
     [Description(
         "Open an Archidekt deck by id or URL. "
-            + "Requires explicit writeBack true or false; ask the user when writeback intent is unclear."
+            + "Requires explicit writeBack true or false; ask the user when writeback intent is unclear. "
+            + "Returns a compact workspace summary; use export_deck, analyze_deck, or get_deck_facets for details."
     )]
-    public Task<DeckWorkspace> OpenArchidektDeckAsync(
+    public async Task<DeckOpenResult> OpenArchidektDeckAsync(
         string deckIdOrUrl,
         bool? writeBack = null,
         CancellationToken cancellationToken = default
@@ -159,7 +160,9 @@ public sealed class WorkspaceTools
             );
         }
 
-        return decks.OpenArchidektDeckAsync(deckIdOrUrl, writeBack.Value, cancellationToken);
+        DeckWorkspace workspace = await decks.OpenArchidektDeckAsync(deckIdOrUrl, writeBack.Value, cancellationToken)
+            .ConfigureAwait(false);
+        return CreateOpenResult(workspace);
     }
 
     /// <summary>
@@ -273,5 +276,52 @@ public sealed class WorkspaceTools
     )
     {
         return decks.AnalyzeDeckAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates the compact result returned by remote open operations.
+    /// </summary>
+    private static DeckOpenResult CreateOpenResult(DeckWorkspace workspace)
+    {
+        HashSet<string> includedCategories = workspace.Categories
+            .Where(category => category.IncludedInDeck)
+            .Select(category => category.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return new DeckOpenResult
+        {
+            WorkspaceId = workspace.Id,
+            Name = workspace.Name,
+            Format = workspace.Format,
+            Mode = workspace.Mode,
+            WriteBack = workspace.WriteBack,
+            ArchidektDeckId = workspace.ArchidektDeckId,
+            Persistence = DeckPersistence.For(workspace),
+            TotalCards = workspace.Cards.Sum(card => Math.Max(0, card.Quantity)),
+            IncludedCards = workspace.Cards
+                .Where(card => card.Categories.Any(includedCategories.Contains))
+                .Sum(card => Math.Max(0, card.Quantity)),
+            MaybeboardCards = workspace.Cards
+                .Where(card => card.Categories.Contains(DeckDefaults.Maybeboard, StringComparer.OrdinalIgnoreCase))
+                .Sum(card => Math.Max(0, card.Quantity)),
+            Commanders = workspace.Cards
+                .Where(card =>
+                    card.PrimaryCategory.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
+                    || card.Categories.Contains(DeckRoles.Commander, StringComparer.OrdinalIgnoreCase))
+                .Select(card => card.Name)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            Categories = workspace.Categories
+                .OrderBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(category => new DeckOpenCategorySummary
+                {
+                    Name = category.Name,
+                    IncludedInDeck = category.IncludedInDeck,
+                    CardCount = workspace.Cards
+                        .Where(card => card.PrimaryCategory.Equals(category.Name, StringComparison.OrdinalIgnoreCase))
+                        .Sum(card => Math.Max(0, card.Quantity))
+                })
+                .ToList()
+        };
     }
 }

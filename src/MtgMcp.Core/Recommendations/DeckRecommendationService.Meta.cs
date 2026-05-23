@@ -23,10 +23,16 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             Limit = Math.Clamp(limit, 1, 100)
         };
         CommanderMetaReport report;
-        bool providerFallback = false;
         if (CommanderMetaProvider is null)
         {
-            report = BuildHeuristicMetaReport(workspace, query);
+            report = new CommanderMetaReport
+            {
+                WorkspaceId = workspace.Id,
+                Commander = query.Commander,
+                Theme = query.Theme,
+                Source = "unconfigured"
+            };
+            report.Notes.Add("No Commander meta provider is configured; no popularity rows were inferred.");
         }
         else
         {
@@ -36,9 +42,14 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {
-                report = BuildHeuristicMetaReport(workspace, query);
-                providerFallback = true;
-                report.Notes.Add($"Commander meta provider failed; using built-in heuristic fallback. {exception.GetType().Name}: {exception.Message}");
+                report = new CommanderMetaReport
+                {
+                    WorkspaceId = workspace.Id,
+                    Commander = query.Commander,
+                    Theme = query.Theme,
+                    Source = "provider-error"
+                };
+                report.Notes.Add($"Commander meta provider failed; no popularity rows were inferred. {exception.GetType().Name}: {exception.Message}");
             }
         }
 
@@ -54,14 +65,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             .Where(card => !existing.Contains(card.Name))
             .Take(query.Limit)
             .ToList();
-        if (CommanderMetaProvider is null)
-        {
-            report.Notes.Add("No Commander meta provider is configured; using built-in staple heuristics.");
-        }
-        else if (providerFallback)
-        {
-            report.Source = "built-in commander staple heuristics after provider fallback";
-        }
 
         return report;
     }
@@ -130,51 +133,4 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         };
     }
 
-    /// <summary>
-    /// Builds a heuristic staple report when no external provider is configured.
-    /// </summary>
-    private static CommanderMetaReport BuildHeuristicMetaReport(DeckWorkspace workspace, CommanderMetaQuery query)
-    {
-        CommanderMetaReport report = new()
-        {
-            WorkspaceId = workspace.Id,
-            Commander = query.Commander,
-            Theme = query.Theme,
-            Source = "built-in commander staple heuristics"
-        };
-        report.PopularCards.AddRange(
-        [
-            MetaCard("Sol Ring", "staple", 0.90, 0.10),
-            MetaCard("Arcane Signet", "staple", 0.80, 0.10),
-            MetaCard("Command Tower", "mana base", 0.80, 0.10),
-            MetaCard("Lightning Greaves", "protection", 0.45, 0.10),
-            MetaCard("Swiftfoot Boots", "protection", 0.40, 0.10),
-            MetaCard("Beast Within", "interaction", 0.35, 0.10),
-            MetaCard("Generous Gift", "interaction", 0.35, 0.10),
-            MetaCard("Swords to Plowshares", "interaction", 0.35, 0.10),
-            MetaCard("Chaos Warp", "interaction", 0.30, 0.10),
-            MetaCard("Heroic Intervention", "protection", 0.30, 0.10),
-            MetaCard("Skullclamp", "engine", 0.25, 0.15),
-            MetaCard("Bojuka Bog", "graveyard hate", 0.25, 0.10)
-        ]);
-        report.PopularCards = report.PopularCards.Take(Math.Clamp(query.Limit, 1, 100)).ToList();
-        return report;
-    }
-
-    /// <summary>
-    /// Creates a Commander meta card.
-    /// </summary>
-    private static CommanderMetaCard MetaCard(string name, string category, double inclusionRate, double synergyScore)
-    {
-        return new CommanderMetaCard
-        {
-            Name = name,
-            Category = category,
-            InclusionRate = inclusionRate,
-            SynergyScore = synergyScore,
-            Source = "built-in"
-        };
-    }
-
 }
-

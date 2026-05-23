@@ -1226,10 +1226,9 @@ public sealed class DeckPerformanceTests
         /// <summary>
         /// Deletes a plan.
         /// </summary>
-        public Task DeleteAsync(string planId, CancellationToken cancellationToken)
+        public Task<bool> DeleteAsync(string planId, CancellationToken cancellationToken)
         {
-            plans.Remove(planId);
-            return Task.CompletedTask;
+            return Task.FromResult(plans.Remove(planId));
         }
     }
 

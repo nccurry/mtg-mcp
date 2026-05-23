@@ -278,6 +278,84 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that explicit plan creation preserves caller-supplied adds and cuts.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeckPlanFromExplicitChanges_PersistsExactOperations()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace { Name = "Explicit" }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckEditPlan plan = await service.CreateDeckPlanFromExplicitChangesAsync(
+            workspace.Id,
+            "Agent-selected edits",
+            "The caller decided these exact changes.",
+            addCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp,
+                    Rationale = "Chosen by the caller."
+                }
+            ],
+            removeCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Mind Stone",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp,
+                    Rationale = "Caller-supplied cut."
+                }
+            ],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        plan.Kind.Should().Be("explicit-changes");
+        plan.Rationale.Should().Be("The caller decided these exact changes.");
+        plan.Confidence.Should().Be(1);
+        plan.Operations.Should().HaveCount(2);
+        plan.Operations[0].Should().Match<DeckEditOperation>(operation =>
+            operation.Operation == DeckEditOperations.AddCard
+            && operation.CardName == "Arcane Signet"
+            && operation.Category == DeckRoles.Ramp
+            && operation.Rationale == "Chosen by the caller.");
+        plan.Operations[1].Should().Match<DeckEditOperation>(operation =>
+            operation.Operation == DeckEditOperations.RemoveCard
+            && operation.CardName == "Mind Stone"
+            && operation.Category == DeckRoles.Ramp
+            && operation.Rationale == "Caller-supplied cut.");
+        (await plans.GetAsync(plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that explicit plan creation does not persist empty plans.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeckPlanFromExplicitChanges_RequiresAtLeastOneOperation()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace { Name = "Empty" }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        Func<Task> act = () => service.CreateDeckPlanFromExplicitChangesAsync(
+            workspace.Id,
+            name: null,
+            rationale: null,
+            addCards: [],
+            removeCards: [],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*At least one explicit card add or remove is required*");
+        (await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken)).Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that apply deck plan handles local category quantity and metadata operations.
     /// </summary>
     [Fact]
@@ -408,7 +486,11 @@ public sealed partial class DeckIntelligenceTests
             IReadOnlyList<DeckEditPlan> listed = await repository.ListAsync("workspace-1", TestContext.Current.CancellationToken);
             listed.Should().ContainSingle(plan => plan.PlanId == saved.PlanId);
 
-            await repository.DeleteAsync(saved.PlanId, TestContext.Current.CancellationToken);
+            bool deleted = await repository.DeleteAsync(saved.PlanId, TestContext.Current.CancellationToken);
+            bool deletedAgain = await repository.DeleteAsync(saved.PlanId, TestContext.Current.CancellationToken);
+
+            deleted.Should().BeTrue();
+            deletedAgain.Should().BeFalse();
             (await repository.GetAsync(saved.PlanId, TestContext.Current.CancellationToken)).Should().BeNull();
         }
         finally

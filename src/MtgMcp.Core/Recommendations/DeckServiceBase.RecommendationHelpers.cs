@@ -171,7 +171,7 @@ public abstract partial class DeckServiceBase
         }
 
         summary.NextSteps.Add("Run analyze_draw_odds for lands, ramp, draw, discard, interaction, and board wipes.");
-        summary.NextSteps.Add("Run suggest_deck_categories before applying category changes.");
+        summary.NextSteps.Add("Review category counts and card facets before applying category changes.");
     }
 
     /// <summary>

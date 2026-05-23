@@ -42,14 +42,19 @@ public sealed class CommanderMetaCard
     public string Category { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the observed inclusion rate.
+    /// Gets or sets the observed inclusion rate when a source provides one.
     /// </summary>
     public double InclusionRate { get; set; }
 
     /// <summary>
-    /// Gets or sets the source-specific synergy score.
+    /// Gets or sets the source-specific synergy score when a source provides one.
     /// </summary>
     public double SynergyScore { get; set; }
+
+    /// <summary>
+    /// Gets or sets the EDHREC rank published in the Scryfall snapshot.
+    /// </summary>
+    public int? EdhrecRank { get; set; }
 
     /// <summary>
     /// Gets or sets the data source.

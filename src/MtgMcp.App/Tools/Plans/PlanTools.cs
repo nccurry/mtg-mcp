@@ -30,6 +30,29 @@ public sealed class PlanTools
     }
 
     /// <summary>
+    /// Creates a plan from exact card adds and removals supplied by the caller.
+    /// </summary>
+    [McpServerTool(Name = "create_deck_plan_from_explicit_changes", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Create a persisted non-mutating deck edit plan from caller-supplied add/remove operations. The MCP does not choose cards or cuts.")]
+    public Task<DeckEditPlan> CreateDeckPlanFromExplicitChangesAsync(
+        string workspaceId,
+        string? name = null,
+        string? rationale = null,
+        ExplicitDeckPlanCardChange[]? addCards = null,
+        ExplicitDeckPlanCardChange[]? removeCards = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanWritePlanningState("create_deck_plan_from_explicit_changes");
+        return plans.CreateDeckPlanFromExplicitChangesAsync(
+            workspaceId,
+            name,
+            rationale,
+            addCards,
+            removeCards,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Previews a persisted plan without mutating local or remote state.
     /// </summary>
     [McpServerTool(Name = "preview_deck_plan", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
@@ -69,7 +92,7 @@ public sealed class PlanTools
     /// </summary>
     [McpServerTool(Name = "delete_deck_plan", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Delete a persisted deck edit plan. This does not change deck contents.")]
-    public Task DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken = default)
+    public Task<DeckEditPlanDeleteResult> DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken = default)
     {
         operationMode.EnsureCanWritePlanningState("delete_deck_plan");
         return plans.DeleteDeckPlanAsync(planId, cancellationToken);

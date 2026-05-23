@@ -12,6 +12,11 @@ namespace MtgMcp.E2E.Tests;
 public sealed class McpE2ETests
 {
     /// <summary>
+    /// Stores the repeated ramp role filter used by explicit query-plan E2E flows.
+    /// </summary>
+    private static readonly string[] RampRequiredRoles = ["Ramp"];
+
+    /// <summary>
     /// Verifies that the MCP server advertises card and workspace tool groups.
     /// </summary>
     [Fact]
@@ -117,9 +122,6 @@ public sealed class McpE2ETests
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
         scryfall.PostJson("cards/collection", PerformanceCollectionJson);
-        scryfall.GetJson(
-            ScryfallSearchPath("(o:add or o:treasure or o:\"search your library for a land\") legal:commander usd<=5"),
-            ArcaneSignetSearchJson);
         scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
 
         await using McpProcessSession session = await McpProcessSession.StartAsync(
@@ -155,15 +157,15 @@ public sealed class McpE2ETests
             });
         JsonElement planResult = await CallJsonAsync(
             session.Client,
-            "find_consistency_improvements",
+            "create_deck_plan_from_explicit_changes",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
-                ["focus"] = "ramp",
-                ["maxPrice"] = 5,
-                ["limit"] = 1
+                ["name"] = "Add one ramp card",
+                ["rationale"] = "The caller selected Arcane Signet from deterministic card data.",
+                ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") }
             });
-        string planId = GetString(GetObject(planResult, "plan"), "planId");
+        string planId = GetString(planResult, "planId");
         JsonElement comparison = await CallJsonAsync(
             session.Client,
             "compare_plan_performance",
@@ -192,11 +194,11 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
-    /// Verifies that query-first recommendation tools bind array filters and report rejections through MCP.
+    /// Verifies that query-first data tools bind array filters and feed explicit plans through MCP.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
-    public async Task QueryRecommendationFlow_RanksAndCreatesPlanThroughMcp()
+    public async Task QueryRecommendationFlow_QueriesDataAndCreatesExplicitPlanThroughMcp()
     {
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
@@ -235,10 +237,10 @@ public sealed class McpE2ETests
             ["excludedRoles"] = new[] { "Wincons" },
             ["excludedTags"] = new[] { "Aristocrats", "Drain" }
         };
-        JsonElement ranking = await CallJsonAsync(session.Client, "rank_cards_for_deck_query", args);
-        JsonElement gethsGrimoire = FindNamed(GetArray(ranking, "candidates"), "Geth's Grimoire", "cardName");
-        JsonElement rejected = FindNamed(GetArray(ranking, "rejected"), "Zulaport Cutthroat", "cardName");
-        JsonElement rejectedWincon = FindNamed(GetArray(ranking, "rejected"), "Torment of Hailfire", "cardName");
+        JsonElement data = await CallJsonAsync(session.Client, "query_cards_for_deck", args);
+        JsonElement gethsGrimoire = FindNamed(GetArray(data, "cards"), "Geth's Grimoire", "cardName");
+        JsonElement rejected = FindNamed(GetArray(data, "rejected"), "Zulaport Cutthroat", "cardName");
+        JsonElement rejectedWincon = FindNamed(GetArray(data, "rejected"), "Torment of Hailfire", "cardName");
 
         GetString(gethsGrimoire, "role").Should().Be("Draw");
         GetArray(rejected, "reasons")
@@ -250,9 +252,17 @@ public sealed class McpE2ETests
             .Should()
             .Contain(reason => reason != null && reason.Contains("Excluded role", StringComparison.OrdinalIgnoreCase));
 
-        args["category"] = "Draw";
-        JsonElement planResult = await CallJsonAsync(session.Client, "create_deck_plan_from_query", args);
-        JsonElement addOperation = GetArray(GetObject(planResult, "plan"), "operations")
+        JsonElement planResult = await CallJsonAsync(
+            session.Client,
+            "create_deck_plan_from_explicit_changes",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["name"] = "Add caller-selected draw card",
+                ["rationale"] = "The caller selected Geth's Grimoire after inspecting query data.",
+                ["addCards"] = new[] { ExplicitCardChange("Geth's Grimoire", 1, "Draw", "Caller-selected draw/discard engine.") }
+            });
+        JsonElement addOperation = GetArray(planResult, "operations")
             .Single(operation => GetString(operation, "operation") == "add_card");
 
         GetString(addOperation, "cardName").Should().Be("Geth's Grimoire");
@@ -632,25 +642,16 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
-    /// Verifies that corpus budget replacement plans preview and apply through MCP.
+    /// Verifies that explicit local plans preview and apply through MCP.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
-    public async Task CorpusBudgetReplacementFlow_PreviewsAndAppliesLocalPlan()
+    public async Task ExplicitPlanFlow_PreviewsAndAppliesLocalPlan()
     {
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
         scryfall.GetJson("cards/named?fuzzy=Mana%20Crypt", ManaCryptJson);
         scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
-        scryfall.GetJson(
-            ScryfallSearchPath("(o:add or o:treasure or o:\"search your library for a land\") legal:commander usd<=5"),
-            ArcaneSignetSearchJson);
-        scryfall.GetJson(
-            ScryfallSearchPath("legal:commander usd<=5"),
-            ArcaneSignetSearchJson);
-        scryfall.GetJson(
-            ScryfallSearchPath("legal:commander -t:basic"),
-            ArcaneSignetSearchJson);
         scryfall.PostJson("cards/collection", ArcaneSignetCollectionJson);
 
         await using McpProcessSession session = await McpProcessSession.StartAsync(
@@ -682,24 +683,15 @@ public sealed class McpE2ETests
             });
         JsonElement replacement = await CallJsonAsync(
             session.Client,
-            "find_corpus_budget_replacements",
+            "create_deck_plan_from_explicit_changes",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
-                ["maxPrice"] = 5,
-                ["minSavings"] = 1,
-                ["limit"] = 1,
-                ["analysisDepth"] = "minimal"
+                ["name"] = "Add cheaper ramp consideration",
+                ["rationale"] = "The caller selected Arcane Signet to consider alongside Mana Crypt.",
+                ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") }
             });
-        string planId = GetString(GetObject(replacement, "plan"), "planId");
-        JsonElement recommendation = GetProperty(replacement, "recommendations").EnumerateArray()
-            .Should()
-            .ContainSingle()
-            .Subject;
-
-        GetString(recommendation, "cardName").Should().Be("Arcane Signet");
-        GetString(recommendation, "replaceCard").Should().Be("Mana Crypt");
-        GetProperty(recommendation, "evidence").GetArrayLength().Should().BeGreaterThan(0);
+        string planId = GetString(replacement, "planId");
 
         JsonElement preview = await CallJsonAsync(
             session.Client,
@@ -733,15 +725,15 @@ public sealed class McpE2ETests
             .Be(1);
         GetInt32(GetObject(afterSnapshot, "analysis"), "includedCards")
             .Should()
-            .Be(1);
-        GetProperty(GetObject(beforeSnapshot, "cost"), "includedTotal").GetDecimal()
+            .Be(2);
+        GetProperty(GetObject(afterSnapshot, "cost"), "includedTotal").GetDecimal()
             .Should()
-            .BeGreaterThan(GetProperty(GetObject(afterSnapshot, "cost"), "includedTotal").GetDecimal());
+            .BeGreaterThan(GetProperty(GetObject(beforeSnapshot, "cost"), "includedTotal").GetDecimal());
         beforeApplyExport.Should().Contain("1 Mana Crypt");
         beforeApplyExport.Should().NotContain("Arcane Signet");
-        GetInt32(apply, "appliedOperations").Should().Be(2);
+        GetInt32(apply, "appliedOperations").Should().Be(1);
         afterApplyExport.Should().Contain("1 Arcane Signet");
-        afterApplyExport.Should().NotContain("Mana Crypt");
+        afterApplyExport.Should().Contain("1 Mana Crypt");
         archidekt.Requests.Should().BeEmpty();
     }
 
@@ -853,11 +845,12 @@ public sealed class McpE2ETests
 
         JsonElement goal = await CallJsonAsync(
             session.Client,
-            "find_cards_for_deck_goal",
+            "query_cards_for_deck",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
                 ["goal"] = "add a few cards that interact with the whole table",
+                ["scryfallQuery"] = "o:goad or o:monarch or o:vote or o:\"tempting offer\" or o:\"each opponent\"",
                 ["count"] = 1,
                 ["maxPrice"] = 5
             });
@@ -878,21 +871,21 @@ public sealed class McpE2ETests
             session.Client,
             "find_deck_combos",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
-        JsonElement brainstorm = await CallJsonAsync(
+        JsonElement newCards = await CallJsonAsync(
             session.Client,
-            "brainstorm_deck_improvements",
+            "find_new_cards_for_deck",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
-                ["goal"] = "add a few cards that interact with the whole table",
-                ["budget"] = 5
+                ["maxPrice"] = 5,
+                ["limit"] = 1
             });
 
-        GetObject(goal, "plan").GetProperty("operations").GetArrayLength().Should().BeGreaterThan(0);
+        GetProperty(goal, "cards").GetArrayLength().Should().BeGreaterThan(0);
         GetString(best, "recommendedProfile").Should().Be("commander-baseline");
         GetInt32(goldfish, "targetTurn").Should().Be(3);
         GetObject(combos, "pressure").ValueKind.Should().Be(JsonValueKind.Object);
-        GetObject(brainstorm, "goalPackage").ValueKind.Should().Be(JsonValueKind.Object);
+        GetProperty(newCards, "suggestions").GetArrayLength().Should().BeGreaterThan(0);
         scryfall.Requests.Should().Contain(request => request.PathAndQuery.Contains("date%3E%3D", StringComparison.OrdinalIgnoreCase)
             || DecodeRepeatedly(request.PathAndQuery).Contains("date>=", StringComparison.OrdinalIgnoreCase));
         spellbook.Requests.Should().ContainSingle(request => request.Method == "POST" && request.PathAndQuery == "find-my-combos");
@@ -979,18 +972,6 @@ public sealed class McpE2ETests
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
         scryfall.GetJson(
-            ScryfallSearchPath(
-                "(o:add or o:treasure or o:\"search your library for a land\") legal:commander usd<=10"
-            ),
-            """
-            {
-              "has_more": false,
-              "data": [
-                { "id": "arcane-signet", "name": "Arcane Signet", "type_line": "Artifact" }
-              ]
-            }
-            """);
-        scryfall.GetJson(
             ScryfallSearchPath("is:game-changer"),
             """
             {
@@ -1055,15 +1036,15 @@ public sealed class McpE2ETests
 
         JsonElement planResult = await CallJsonAsync(
             session.Client,
-            "find_consistency_improvements",
+            "create_deck_plan_from_explicit_changes",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
-                ["focus"] = "ramp",
-                ["maxPrice"] = 10,
-                ["limit"] = 1
+                ["name"] = "Add one ramp card",
+                ["rationale"] = "The caller selected Arcane Signet from deterministic card data.",
+                ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") }
             });
-        string planId = GetString(GetObject(planResult, "plan"), "planId");
+        string planId = GetString(planResult, "planId");
         JsonElement preview = await CallJsonAsync(
             session.Client,
             "preview_deck_plan",
@@ -1189,6 +1170,24 @@ public sealed class McpE2ETests
                 ["quantity"] = quantity,
                 ["category"] = category
             });
+    }
+
+    /// <summary>
+    /// Builds an explicit card change payload for plan-creation tool calls.
+    /// </summary>
+    private static Dictionary<string, object?> ExplicitCardChange(
+        string cardName,
+        int quantity,
+        string category,
+        string rationale)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["cardName"] = cardName,
+            ["quantity"] = quantity,
+            ["category"] = category,
+            ["rationale"] = rationale
+        };
     }
 
     /// <summary>
@@ -1525,29 +1524,6 @@ public sealed class McpE2ETests
           "legalities": { "commander": "legal" },
           "prices": { "usd": "0.50" },
           "edhrec_rank": 2500
-        }
-      ]
-    }
-    """;
-
-    /// <summary>
-    /// Provides a Scryfall search payload for performance comparison E2E tests.
-    /// </summary>
-    private const string ArcaneSignetSearchJson = """
-    {
-      "has_more": false,
-      "data": [
-        {
-          "id": "arcane-signet",
-          "name": "Arcane Signet",
-          "mana_cost": "{2}",
-          "cmc": 2,
-          "type_line": "Artifact",
-          "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
-          "produced_mana": ["W", "U", "B", "R", "G"],
-          "legalities": { "commander": "legal" },
-          "prices": { "usd": "1.00" },
-          "edhrec_rank": 5
         }
       ]
     }
