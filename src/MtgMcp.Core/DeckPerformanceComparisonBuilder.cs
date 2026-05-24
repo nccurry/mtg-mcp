@@ -16,6 +16,7 @@ internal static class DeckPerformanceComparisonBuilder
         [
             BuildDelta("seven-card-keep-rate", before.OpeningHands.SevenCardKeepRate, after.OpeningHands.SevenCardKeepRate),
             BuildDelta("average-mulligans", before.OpeningHands.AverageMulligans, after.OpeningHands.AverageMulligans),
+            BuildDelta("average-kept-hand-size", before.OpeningHands.AverageKeptHandSize, after.OpeningHands.AverageKeptHandSize),
             BuildScenarioDelta("commander-by-turn-4", before, after, "commander-by-turn-4"),
             BuildScenarioDelta("all-colors-by-turn-3", before, after, "all-colors-by-turn-3"),
             BuildProbabilityDelta("ramp-cast-by-turn-3", before, after, "ramp-cast-by-turn", 3),

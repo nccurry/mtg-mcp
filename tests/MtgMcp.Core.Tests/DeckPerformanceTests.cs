@@ -499,6 +499,135 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies deterministic fixtures produce precomputed no-mulligan statistics.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_MatchesPrecomputedNoMulliganFixtureStatistics()
+    {
+        DeckPerformanceAnalysis allLands = AnalyzeDirect(
+            CreateLandSpellDeck(lands: 100, spells: 0),
+            simulations: 100,
+            maxTurn: 3,
+            seed: 404,
+            includeMulligans: false);
+        DeckPerformanceAnalysis noLands = AnalyzeDirect(
+            CreateLandSpellDeck(lands: 0, spells: 100),
+            simulations: 100,
+            maxTurn: 3,
+            seed: 404,
+            includeMulligans: false);
+
+        allLands.DeckSize.Should().Be(100);
+        allLands.OpeningHands.SevenCardKeepRate.Should().Be(1);
+        allLands.OpeningHands.AverageMulligans.Should().Be(0);
+        allLands.OpeningHands.AverageKeptHandSize.Should().Be(7);
+        allLands.OpeningHands.AverageKeptLands.Should().Be(7);
+        allLands.OpeningHands.FloodedSevenRate.Should().Be(1);
+        allLands.OpeningHands.MulliganDistribution.Should().ContainKey(0).WhoseValue.Should().Be(100);
+        Probability(allLands, "land-drop-by-turn", 3).Should().Be(1);
+        Probability(allLands, "on-curve-untapped-mana-by-turn", 3).Should().Be(1);
+        ColorProbability(allLands, "G", 1).Should().Be(1);
+
+        noLands.OpeningHands.SevenCardKeepRate.Should().Be(1);
+        noLands.OpeningHands.AverageMulligans.Should().Be(0);
+        noLands.OpeningHands.AverageKeptHandSize.Should().Be(7);
+        noLands.OpeningHands.AverageKeptLands.Should().Be(0);
+        noLands.OpeningHands.NoLandSevenRate.Should().Be(1);
+        noLands.OpeningHands.MulliganDistribution.Should().ContainKey(0).WhoseValue.Should().Be(100);
+        Probability(noLands, "land-drop-by-turn", 1).Should().Be(0);
+        Probability(noLands, "on-curve-untapped-mana-by-turn", 1).Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies deterministic Commander fixtures produce precomputed mulligan statistics.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_MatchesPrecomputedCommanderMulliganFixtureStatistics()
+    {
+        DeckPerformanceAnalysis allLands = AnalyzeDirect(
+            CreateCommanderAllLandDeck(),
+            simulations: 100,
+            maxTurn: 1,
+            seed: 405,
+            includeMulligans: true);
+        DeckPerformanceAnalysis noLands = AnalyzeDirect(
+            CreateCommanderNoLandDeck(),
+            simulations: 100,
+            maxTurn: 1,
+            seed: 405,
+            includeMulligans: true);
+
+        allLands.OpeningHands.SevenCardKeepRate.Should().Be(0);
+        allLands.OpeningHands.AverageMulligans.Should().Be(3);
+        allLands.OpeningHands.AverageKeptHandSize.Should().Be(5);
+        allLands.OpeningHands.AverageKeptLands.Should().Be(5);
+        allLands.OpeningHands.FloodedSevenRate.Should().Be(1);
+        allLands.OpeningHands.MulliganDistribution.Should().ContainKey(3).WhoseValue.Should().Be(100);
+
+        noLands.OpeningHands.SevenCardKeepRate.Should().Be(0);
+        noLands.OpeningHands.AverageMulligans.Should().Be(3);
+        noLands.OpeningHands.AverageKeptHandSize.Should().Be(5);
+        noLands.OpeningHands.AverageKeptLands.Should().Be(0);
+        noLands.OpeningHands.NoLandSevenRate.Should().Be(1);
+        noLands.OpeningHands.MulliganDistribution.Should().ContainKey(3).WhoseValue.Should().Be(100);
+    }
+
+    /// <summary>
+    /// Verifies that Commander analysis keeps the multiplayer free mulligan as a seven-card hand.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_UsesFreeFirstMulliganForCommander()
+    {
+        DeckWorkspace commander = CreatePerformanceDeck(plains: 10, islands: 10, utility: 45);
+        DeckWorkspace nonFree = CreatePerformanceDeck(plains: 10, islands: 10, utility: 45);
+        nonFree.Format = "modern";
+
+        DeckPerformanceAnalysis commanderAnalysis = AnalyzeDirect(
+            commander,
+            simulations: 2_000,
+            maxTurn: 1,
+            seed: 202,
+            includeMulligans: true);
+        DeckPerformanceAnalysis nonFreeAnalysis = AnalyzeDirect(
+            nonFree,
+            simulations: 2_000,
+            maxTurn: 1,
+            seed: 202,
+            includeMulligans: true);
+
+        commanderAnalysis.OpeningHands.AverageKeptHandSize.Should()
+            .BeGreaterThan(nonFreeAnalysis.OpeningHands.AverageKeptHandSize + 0.20);
+        commanderAnalysis.Assumptions.Should().Contain(note => note.Contains("first mulligan as free", StringComparison.OrdinalIgnoreCase));
+        nonFreeAnalysis.Assumptions.Should().NotContain(note => note.Contains("first mulligan as free", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that mulligans improve access to early ramp in ramp-capable decks.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_MulligansImproveEarlyRampAccess()
+    {
+        DeckWorkspace deck = CreateCommanderRampDeck(ramp: 16);
+
+        DeckPerformanceAnalysis withoutMulligans = AnalyzeDirect(
+            deck,
+            simulations: 2_000,
+            maxTurn: 1,
+            seed: 303,
+            includeMulligans: false);
+        DeckPerformanceAnalysis withMulligans = AnalyzeDirect(
+            deck,
+            simulations: 2_000,
+            maxTurn: 1,
+            seed: 303,
+            includeMulligans: true);
+
+        Probability(withMulligans, "ramp-seen-by-turn", 1)
+            .Should().BeGreaterThan(Probability(withoutMulligans, "ramp-seen-by-turn", 1) + 0.05);
+        withMulligans.OpeningHands.AverageMulligans.Should().BeGreaterThan(0);
+    }
+
+    /// <summary>
     /// Verifies that obvious all-land and no-land decks produce bounded oracle outcomes.
     /// </summary>
     [Fact]
@@ -676,7 +805,7 @@ public sealed class DeckPerformanceTests
         Probability(krenko, "ramp-seen-by-turn", 3).Should().BeGreaterThan(0.55);
         ScenarioRate(krenko, "stranded-high-mana-risk-by-max-turn").Should().BeLessThan(0.55);
 
-        ScenarioRate(atraxa, "all-colors-by-turn-3").Should().BeInRange(0.35, 0.85);
+        ScenarioRate(atraxa, "all-colors-by-turn-3").Should().BeInRange(0.35, 0.92);
         CommanderProbability(atraxa, 4).Should().BeInRange(0.30, 0.85);
         ScenarioRate(atraxa, "stranded-high-mana-risk-by-max-turn")
             .Should()
@@ -1053,6 +1182,52 @@ public sealed class DeckPerformanceTests
         };
         workspace.Cards.AddRange(cards);
         return workspace;
+    }
+
+    /// <summary>
+    /// Creates a Commander deck whose library is all lands.
+    /// </summary>
+    private static DeckWorkspace CreateCommanderAllLandDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Commander All Lands",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Green Commander", 1, DeckRoles.Commander, "Creature - Druid", "{2}{G}", 3, "", ["G"]),
+                Card("Forest", 99, DeckDefaults.Mainboard, "Basic Land - Forest", null, 0, "", ["G"], ["G"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a Commander deck whose library has no lands.
+    /// </summary>
+    private static DeckWorkspace CreateCommanderNoLandDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Commander No Lands",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Green Commander", 1, DeckRoles.Commander, "Creature - Druid", "{2}{G}", 3, "", ["G"]),
+                Card("Blank Spell", 99, DeckDefaults.Mainboard, "Sorcery", "{1}{G}", 2, "Scry 1.", ["G"]),
+            ],
+        };
     }
 
     /// <summary>

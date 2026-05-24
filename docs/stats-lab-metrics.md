@@ -11,11 +11,13 @@ Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not
 - A fixed seed must produce stable output for the same deck and inputs.
 - Larger sample counts should narrow confidence intervals for the same metric.
 - Mana payment treats each source as exclusive for a payment. A source that can produce multiple colors offers choices, but it can only satisfy one mana symbol before it is spent.
+- Mulligan-enabled performance analysis uses a deterministic London mulligan policy that scores functional mana, early plays, early ramp, card flow, interaction, and commander timing. Commander and Brawl workspaces treat the first mulligan as free.
 
 ## Opening Hands
 
 - `sevenCardKeepRate`: share of runs that kept the first seven-card hand under the current mulligan heuristic.
 - `averageMulligans`: average mulligans taken per run.
+- `averageKeptHandSize`: average card count in kept opening hands.
 - `averageKeptLands`: average land count in the kept opening hand.
 - `noLandSevenRate`: share of first seven-card hands with zero lands.
 - `oneLandSevenRate`: share of first seven-card hands with exactly one land.
