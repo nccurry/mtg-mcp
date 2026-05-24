@@ -246,6 +246,10 @@ Archidekt writeback has two gates: the server must run in `apply` mode, and the
 deck must be opened with writeback enabled. Multi-card Archidekt edits require
 or create a checkpoint before applying a plan.
 
+Card-only edit plans are applied as a single batch. Commander deck-size checks
+use the final included card count, so equal add/remove swaps can add before
+cutting as long as the finished deck remains legal.
+
 Corpus recommendations query structured APIs on demand and cache source facts
 under `DataDir/corpus-cache`. The cache stores source facts, not final
 recommendations or prompt rationale. Pass `refresh=true` to supported tools to
