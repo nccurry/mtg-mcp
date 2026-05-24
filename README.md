@@ -9,47 +9,25 @@
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.nccurry%2Fmtg--mcp-0f766e)](https://registry.modelcontextprotocol.io/?q=io.github.nccurry%2Fmtg-mcp)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
-`mtg-mcp` is an unofficial MCP server for building and tuning Magic: The Gathering
-decks with Scryfall card data and optional Archidekt writeback.
+`mtg-mcp` is an unofficial MCP server for Magic: The Gathering deckbuilding. It
+connects MCP clients to Scryfall card data, local deck workspaces, optional
+Archidekt writeback, Playgroup.gg playgroup data, Commander Spellbook combos,
+and API-backed deckbuilding evidence.
 
 It is not affiliated with Hasbro, Wizards of the Coast, Magic: The Gathering,
-Scryfall, or Archidekt.
-
-## What it does
-
-- Search Scryfall for cards, prints, rulings, and card suggestions.
-- Create, import, export, and manage local decks.
-- Open Archidekt decks and optionally write changes back to Archidekt.
-- Add, remove, move, categorize, and update cards and decks.
-- Analyze mana, cost, curve, consistency, draw odds, legality, brackets, and power.
-- Expose factual card facets and count cards from explicit caller-supplied predicates.
-- Compare decks to Commander heuristics, global popularity context, and recent
-  card releases.
-- Gather deterministic card data from explicit Scryfall queries, then persist
-  caller-supplied add/remove plans.
-- Detect Commander Spellbook combos and near-misses, then estimate combo pressure.
-- Aggregate normalized corpus signals for trends, lesser-known cards, exemplar decks, and source-backed budget data.
-- Simulate goldfish development, projected board states, and likely win turns.
-- Preview persisted edit plans before applying them.
+Scryfall, Archidekt, Playgroup.gg, or Commander Spellbook.
 
 ## Quickstart
 
-Install the .NET tool from NuGet:
-
 ```powershell
 dotnet tool install --global Nccurry.MtgMcp
-```
-
-Smoke-test the installed command:
-
-```powershell
 mtg-mcp --smoke
 ```
 
 Configure your MCP client to run the `mtg-mcp` stdio command. Scryfall lookup
-and local deck analysis do not require an API key.
+and local deck analysis work without account credentials.
 
-For Codex:
+Codex example:
 
 ```powershell
 codex mcp add mtg-mcp `
@@ -57,7 +35,7 @@ codex mcp add mtg-mcp `
   -- mtg-mcp
 ```
 
-For clients that use JSON MCP config:
+JSON MCP client example:
 
 ```json
 {
@@ -72,171 +50,29 @@ For clients that use JSON MCP config:
 }
 ```
 
-Use `plan` by default. Switch to `apply` when you want the assistant to create
-local decks, change deck contents, create checkpoints, or write back to
-Archidekt.
+Set `MTGMCP__OPERATION_MODE` explicitly:
 
-## Configuration
+- `read-only`: lookup and analysis only.
+- `plan`: lookup, analysis, metadata refresh, and saved edit plans.
+- `apply`: deck edits, checkpoints, and Archidekt writeback. Writeback still
+  requires opening the Archidekt workspace with writeback enabled.
 
-Most users only need this:
+## Features
 
-```powershell
-$env:MTGMCP__OPERATION_MODE="plan"
-$env:MTGMCP__DATA_DIR="$env:LOCALAPPDATA\mtg-mcp"
-```
-
-`MTGMCP__OPERATION_MODE` accepts:
-
-- `read-only`: allow lookup and analysis tools only.
-- `plan`: allow lookup, analysis, metadata refresh, and explicit edit plans.
-- `apply`: allow deck edits, checkpoints, and Archidekt writeback.
-
-`MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` controls how much corpus-aware
-data tools request and return:
-
-- `minimal`: compact, high-signal evidence with fewer source calls.
-- `balanced`: default source breadth and compact evidence.
-- `best`: wider enabled source set and richer evidence for deeper analysis.
-
-Supported settings:
-
-| Setting | Use |
+| Area | What the MCP exposes |
 | --- | --- |
-| `MTGMCP__OPERATION_MODE` | Safety mode: `read-only`, `plan`, or `apply`. |
-| `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Corpus analysis depth: `minimal`, `balanced`, or `best`. |
-| `MTGMCP__DATA_DIR` | Local storage for decks, plans, and cached data. |
-| `MTGMCP__INTELLIGENCE__CACHE__MODE` | Corpus source-fact cache: `persisted`, `memory`, or `off`. |
-| `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` | Persisted cache size limit. Default: `104857600`. |
-| `MTGMCP__INTELLIGENCE__CACHE__MAX_ENTRIES` | Cache entry limit. Default: `5000`. |
-| `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` | Scryfall card metadata TTL. Default: `7d`. |
-| `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_SEARCH` | Scryfall search and EDHREC-rank TTL. Default: `24h`. |
-| `MTGMCP__INTELLIGENCE__CACHE__TTLS__COMMANDERSPELLBOOK` | Commander Spellbook combo lookup TTL. Default: `24h`. |
-| `MTGMCP__INTELLIGENCE__CACHE__TTLS__DECK_SEARCH` | Deck search API TTL. Default: `6h`. |
-| `MTGMCP__INTELLIGENCE__CACHE__TTLS__DECK_DETAILS` | Individual deck detail API TTL. Default: `7d`. |
-| `MTGMCP__INTELLIGENCE__CACHE__TTLS__CORPUS_SIGNALS` | Normalized corpus signal report TTL. Default: `6h`. |
-| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` | Enable or disable Scryfall metadata corpus evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__COMMANDERSPELLBOOK__ENABLED` | Enable or disable Commander Spellbook corpus evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__ENABLED` | Enable or disable TopDeck.gg corpus evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` | TopDeck.gg API key for tournament decklist evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` | Override TopDeck.gg API URL for tests or mirrors. |
-| `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__ENABLED` | Enable or disable Spicerack corpus evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__API_KEY` | Spicerack API key for recent public decklist evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__BASE_ADDRESS` | Override Spicerack API URL for tests or mirrors. |
-| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__ENABLED` | Enable or disable Reddit discussion evidence. |
-| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__API_KEY` | Optional Reddit OAuth bearer token for Data API requests. |
-| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__ALLOW_UNOFFICIAL_API` | Permit bounded public Reddit JSON lookups when no OAuth token is configured. |
-| `MTGMCP__INTELLIGENCE__SOURCES__REDDIT__BASE_ADDRESS` | Override Reddit API URL for tests or mirrors. |
-| `MTGMCP__ARCHIDEKT__CREDENTIALS_FILE` | JSON credentials file for Archidekt. |
-| `MTGMCP__ARCHIDEKT__JWT` | Optional Archidekt JWT. |
-| `MTGMCP__ARCHIDEKT__REFRESH_TOKEN` | Preferred Archidekt auth token. |
-| `MTGMCP__ARCHIDEKT__USER_ID` | Archidekt user id used with token auth. |
-| `MTGMCP__ARCHIDEKT__EMAIL` | Fallback Archidekt login email. |
-| `MTGMCP__ARCHIDEKT__USERNAME` | Fallback Archidekt login username. |
-| `MTGMCP__ARCHIDEKT__PASSWORD` | Fallback Archidekt login password. |
-| `MTGMCP__SCRYFALL__BASE_ADDRESS` | Override Scryfall API URL for tests or mirrors. |
-| `MTGMCP__SCRYFALL__USER_AGENT` | Override Scryfall user agent. |
-| `MTGMCP__SCRYFALL__MAX_RATE_LIMIT_RETRIES` | Number of Scryfall `429` retries before surfacing a failure. Default: `3`. |
-| `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Override Commander Spellbook API URL. |
+| Card data | Scryfall search, fuzzy card lookup, prints, rulings, suggestions, and Scryfall query syntax guidance. |
+| Workspaces | Create, import, parse, export, open, validate, summarize, and update local or Archidekt-backed decks. |
+| Deck editing | Add, remove, move, categorize, annotate, and set quantities; create, preview, list, apply, or delete persisted edit plans. |
+| Archidekt | Open decks, list visible decks, write back when enabled, and manage deck checkpoints. |
+| Playgroup.gg | Check auth, get playgroups and decks, list playgroup users/decks, list user decks, and rank decks by power, Elo, win rate, competitive rating, games played, or average win turn. |
+| Analysis | Mana base, curve, colors, categories, cost, legality, draw odds, consistency, best practices, Commander bracket, card facets, and explicit facet predicates. |
+| Simulation | Goldfish runs, projected board states, win-turn estimates, deterministic performance analysis, plan comparisons, and Archidekt reference comparisons. |
+| Recommendations | New releases, Commander meta context, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, raw source evidence, and Reddit discussion evidence. |
+| Combos | Completed combos, near-misses, and combo pressure using Commander Spellbook or local heuristics. |
+| Deck intent | Optional human-readable deck goals, budgets, local meta, role targets, preferences, avoided cards, and protected cards. |
 
-`mtg-mcp.json` is the only JSON config file mtg-mcp reads. Environment
-variables should use the `MTGMCP__...` names above; duplicate bare aliases such
-as `MODE` or `ANALYSIS_DEPTH` are not supported.
-
-Example `mtg-mcp.json`:
-
-```json
-{
-  "MtgMcp": {
-    "OperationMode": "plan",
-    "DataDir": "C:/Users/you/AppData/Local/mtg-mcp",
-    "Intelligence": {
-      "AnalysisDepth": "balanced",
-      "Cache": {
-        "Mode": "persisted",
-        "MaxBytes": 104857600,
-        "MaxEntries": 5000,
-        "Ttls": {
-          "ScryfallCardMetadata": "7d",
-          "ScryfallSearch": "24h",
-          "CommanderSpellbook": "24h",
-          "DeckSearch": "6h",
-          "DeckDetails": "7d",
-          "CorpusSignals": "6h"
-        }
-      },
-      "Sources": {
-        "Scryfall": { "Enabled": true },
-        "CommanderSpellbook": { "Enabled": true },
-        "TopDeck": {
-          "Enabled": true,
-          "ApiKey": "..."
-        },
-        "Spicerack": {
-          "Enabled": true,
-          "ApiKey": "..."
-        }
-      }
-    },
-    "Scryfall": {
-      "MaxRateLimitRetries": 3
-    }
-  }
-}
-```
-
-Corpus recommendations query structured APIs on demand and cache source facts
-under `DataDir/corpus-cache`. The cache is shared across agents using the same
-data directory. It does not store final recommendations, prompt rationale, or
-deckbuilding opinions. Pass `refresh=true` to corpus tools when you want one
-call to bypass fresh cache entries.
-
-The corpus source policy is API-only: official/documented APIs and unofficial
-structured JSON endpoints may be used when clearly labeled, but mtg-mcp does
-not scrape HTML, parse page markup, or use browser automation for corpus data.
-`mtg://corpus/sources` reports enabled, missing-key, disabled, unsupported, and
-permission-sensitive source states.
-
-Archidekt credentials are only needed for private decks, account-bound deck data,
-checkpoints, or writeback. Create a credentials file:
-
-```powershell
-mtg-mcp auth archidekt `
-  --credentials-file "$env:USERPROFILE\.mtg-mcp\archidekt.json" `
-  --refresh-token "..." `
-  --user-id "..."
-```
-
-Then pass it to the MCP server:
-
-```powershell
-codex mcp add mtg-mcp `
-  --env MTGMCP__OPERATION_MODE=apply `
-  --env MTGMCP__ARCHIDEKT__CREDENTIALS_FILE="$env:USERPROFILE\.mtg-mcp\archidekt.json" `
-  -- mtg-mcp
-```
-
-JWT or refresh token auth is preferred. Email or username plus password login is
-available as a fallback.
-
-Inside an MCP client, these resources help verify setup:
-
-- `mtg://config/effective` shows non-secret effective configuration.
-- `mtg://corpus/sources` shows enabled and planned corpus sources.
-- `mtg://archidekt/auth-status` shows redacted Archidekt credential status.
-
-## How to use it
-
-Ask your MCP client for the deckbuilding task you want done:
-
-```text
-Search for blue one-mana cantrips legal in Commander.
-```
-
-Prompts that create, open, or change decks need `apply` mode:
-
-```text
-Import this decklist as a local Commander deck and summarize the plan.
-```
+Most users can ask naturally instead of naming tools:
 
 ```text
 Open this Archidekt deck locally, analyze the mana base, and suggest fixes under $10.
@@ -247,45 +83,130 @@ Find budget replacements for cards over $20 and preview the plan before changing
 ```
 
 ```text
-Find new cards for this deck from the last year, or pass a YYYY-MM-DD since date.
+List decks from this Playgroup URL and rank them by win rate.
 ```
 
 ```text
-Tell me what new or lesser-known cards are showing signal for this commander, using best analysis.
+Find new cards for this deck from the last year and explain the source evidence.
 ```
 
 ```text
-Show top exemplar decks and explain the source evidence for Skullclamp in this deck.
+Goldfish this deck through turn 6 and compare the previewed plan against it.
 ```
 
-```text
-Apply the previewed deck plan and create an Archidekt checkpoint first.
+## Configuration
+
+`mtg-mcp.json` is the only JSON config file the server reads. Environment
+variables use the `MTGMCP__...` names below; the equivalent JSON path is under
+`MtgMcp`. For example, `MTGMCP__PLAYGROUP__CREDENTIALS_FILE` maps to
+`MtgMcp.Playgroup.CredentialsFile`.
+
+Minimal `mtg-mcp.json`:
+
+```json
+{
+  "MtgMcp": {
+    "OperationMode": "plan",
+    "DataDir": "C:/Users/you/AppData/Local/mtg-mcp"
+  }
+}
 ```
 
-Common tuning tools include `refresh_deck_card_snapshots`,
-`summarize_deck_workspace`, `analyze_deck_consistency`,
-`get_card_facets`, `count_deck_cards_matching`, `query_cards_for_deck`,
-`create_deck_plan_from_explicit_changes`, and `preview_deck_plan`.
+Common credential config:
 
-Facet tools are deliberately fact-first. For example,
-`count_deck_cards_matching` does not decide what "card advantage" means; the
-caller supplies a JSON predicate over facets such as `scryfall.oracle_text`,
-`workspace.categories`, `user.tags`, or locally stored `tagger.oracle_tags`, and
-the tool returns matching cards plus the exact evidence rows.
+```json
+{
+  "MtgMcp": {
+    "Archidekt": {
+      "CredentialsFile": "C:/Users/you/.mtg-mcp/archidekt.json"
+    },
+    "Playgroup": {
+      "CredentialsFile": "C:/Users/you/.mtg-mcp/playgroup.json"
+    }
+  }
+}
+```
 
-## Deck Intent Configuration
+`archidekt.json`:
 
-Deck intent is optional text that tells analyses and caller-supplied queries what
-the deck is trying to do.
+```json
+{
+  "refreshToken": "...",
+  "userId": "..."
+}
+```
 
-For local decks, use `suggest_deck_intent`, edit the text, then save it with
-`set_deck_intent`. For Archidekt decks, the same block is stored in the deck
-description and writes back only when Archidekt writeback is enabled.
+`playgroup.json`:
 
-Best-practice analysis uses `Power Level`, `Heuristic Profile`,
-`Package Template`, `Local Meta`, and `Packages` to choose and compare
-Commander heuristics. Query and planning workflows can use `Targets`, `Budget`,
-`Prefer`, `Avoid`, and `Protect` as explicit constraints.
+```json
+{
+  "apiKey": "..."
+}
+```
+
+You can also create an Archidekt credentials file with:
+
+```powershell
+mtg-mcp auth archidekt `
+  --credentials-file "$env:USERPROFILE\.mtg-mcp\archidekt.json" `
+  --refresh-token "..." `
+  --user-id "..."
+```
+
+Supported environment settings. In rows with slashes, repeat the full prefix for
+each abbreviated suffix.
+
+| Setting | Use |
+| --- | --- |
+| `MTGMCP__OPERATION_MODE` | `read-only`, `plan`, or `apply`. Set explicitly; the app default is `apply`. |
+| `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, and corpus cache. |
+| `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Corpus depth: `minimal`, `balanced`, or `best`. |
+| `MTGMCP__INTELLIGENCE__CACHE__MODE` | Source-fact cache: `persisted`, `memory`, or `off`. |
+| `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` / `MAX_ENTRIES` | Persisted cache limits. |
+| `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` / `SCRYFALL_SEARCH` / `COMMANDERSPELLBOOK` / `DECK_SEARCH` / `DECK_DETAILS` / `CORPUS_SIGNALS` | Per-source cache TTLs such as `24h` or `7d`. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` / `SCRYFALL_TAGGER__ENABLED` / `COMMANDERSPELLBOOK__ENABLED` / `TOPDECK__ENABLED` / `SPICERACK__ENABLED` / `EDHTOP16__ENABLED` / `REDDIT__ENABLED` | Enable or disable corpus sources. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` / `SPICERACK__API_KEY` / `REDDIT__API_KEY` | Optional source API keys. |
+| `MTGMCP__INTELLIGENCE__SOURCES__EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
+| `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `JWT` / `REFRESH_TOKEN` / `USER_ID` / `EMAIL` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. Refresh token auth is preferred; email or username plus password is fallback. |
+| `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
+| `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |
+| `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Commander Spellbook API setting. |
+
+Use these resources inside an MCP client to verify setup without exposing
+secrets:
+
+- `mtg://config/effective`
+- `mtg://server/info`
+- `mtg://archidekt/auth-status`
+- `mtg://playgroup/auth-status`
+- `mtg://corpus/sources`
+
+## MCP Surface
+
+Useful resources:
+
+- Deck data: `mtg://deck/{deckId}`, `mtg://deck/{deckId}/summary`,
+  `mtg://deck/{deckId}/intent`.
+- Usage guides: `mtg://scryfall/syntax-cheatsheet`,
+  `mtg://formats/{format}/deck-rules`, `mtg://usage/workspace-selection`,
+  `mtg://usage/operation-modes`, `mtg://usage/deck-intent`.
+- Status: `mtg://config/effective`, `mtg://corpus/sources`,
+  `mtg://server/info`, `mtg://archidekt/auth-status`,
+  `mtg://playgroup/auth-status`.
+
+Built-in prompts cover brewing, tuning, budget replacements, cost reduction,
+power increases or reductions, Commander bracket reduction, mana-base work,
+consistency, local meta tuning, new releases, goldfishing, goal-focused
+packages, and rules/rulings checks.
+
+## Deck Intent
+
+Deck intent is optional text stored in a workspace description, and in the
+Archidekt deck description when writeback is enabled. Use `suggest_deck_intent`,
+`get_deck_intent`, `set_deck_intent`, and `clear_deck_intent`.
+
+Small example:
 
 ```text
 MTG MCP Deck Intent
@@ -293,9 +214,8 @@ Version: 1
 Format: commander
 Commander: Teysa Karlov
 Power Level: tuned-casual
-Heuristic Profile: command-zone-template
-Package Template: none
-Local Meta: go-wide tokens, graveyards
+Local Meta: graveyards, go-wide tokens
+Budget: prefer upgrades under $10
 
 Targets
 Ramp: 8-10
@@ -307,46 +227,31 @@ Avoid
 End MTG MCP Deck Intent
 ```
 
-These fields shape analyses and explicit query/planning workflows:
+For the full syntax, read `mtg://usage/deck-intent`.
 
-- `Targets`: desired counts for roles or tags, such as `Ramp: 8-10`.
-- `Budget`: price guidance for upgrades and replacements.
-- `Prefer`: effects, themes, or cards to bias toward.
-- `Avoid`: effects, themes, or cards to keep out.
-- `Protect`: cards or packages that should not be cut casually.
-- `Power Level`: table strength. Values: `precon`, `casual`,
-  `tuned-casual`, `high-power`, `cedh`.
+## How It Works
 
-`Heuristic Profile`: `auto`, `commander-baseline`, `command-zone-template`,
-`edhrec-foundation`, `mana-rich-39-land`, `fifty-mana-sources`, `package-8x8`,
-`package-7x9`, `package-9x7`, `seventy-five-percent`, `cedh-turbo`,
-`cedh-midrange`, `cedh-stax`, `cedh-tempo`.
+`mtg-mcp` runs as a stdio MCP server. It stores local workspaces, edit plans,
+annotations, and cache data under `MTGMCP__DATA_DIR`.
 
-`Package Template`: `none`, `8x8`, `7x9`, `9x7`.
+Archidekt writeback has two gates: the server must run in `apply` mode, and the
+deck must be opened with writeback enabled. Multi-card Archidekt edits require
+or create a checkpoint before applying a plan.
 
-Values are case-insensitive. Spaces and underscores normalize to hyphens.
-Aliases include `upgraded-precon` -> `casual`, `mid-power` -> `tuned-casual`,
-`optimized` -> `high-power`, and `competitive` or `cEDH` -> `cedh`.
+Corpus recommendations query structured APIs on demand and cache source facts
+under `DataDir/corpus-cache`. The cache stores source facts, not final
+recommendations or prompt rationale. Pass `refresh=true` to supported tools to
+bypass fresh cache entries for one call.
 
-Package brews may add a `Packages` section. Counts use the same syntax as
-`Targets`: `8`, `6-9`, or `4+`.
+The corpus policy is API-only: official/documented APIs and explicitly allowed
+unofficial structured JSON endpoints may be used, but mtg-mcp does not scrape
+HTML, parse page markup, or use browser automation for corpus data.
 
-Heuristics are advisory. Sources include the
-[Command Zone Template](https://edh.fandom.com/wiki/Command_Zone_Template),
-[8x8 Theory](https://the8x8theory.tumblr.com/what-is-the-8x8-theory),
-[7x9 / 8x8 / 9x7 templates](https://edh.fandom.com/wiki/7_by_9),
-[EDHREC deckbuilding guide](https://edhrec.com/guides/how-to-build-a-commander-deck),
-[EDHREC mana-base foundations](https://edhrec.com/articles/foundations-how-to-build-mana-bases),
-[75% Commander](https://edh.fandom.com/wiki/75_Percent),
-[EDHREC cEDH intro](https://edhrec.com/guides/intro-to-cedh), and
-[Commander's Herald cEDH guide](https://commandersherald.com/a-beginners-guide-to-cedh/).
+## Development
 
-## How it works
+Use `Taskfile.yml` for common workflows:
 
-`mtg-mcp` runs as a stdio MCP server. Your MCP client calls its tools to search
-Scryfall, manage decks, analyze deck structure, and optionally sync changes to
-Archidekt.
-
-Local deck data and edit plans are saved under `MTGMCP__DATA_DIR`.
-Archidekt writeback is opt-in: the deck must be opened with writeback enabled,
-and the server must be running in `apply` mode before deck contents are changed.
+```powershell
+task test
+task lint
+```
