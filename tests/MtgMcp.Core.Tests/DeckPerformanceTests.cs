@@ -439,6 +439,66 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies land-drop probabilities against exact hypergeometric rates for a normal Commander mana base.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_MatchesExactLandDropRatesForNormalManaBase()
+    {
+        DeckWorkspace deck = CreateLandSpellDeck(lands: 37, spells: 63);
+
+        DeckPerformanceAnalysis analysis = AnalyzeDirect(
+            deck,
+            simulations: 1_500,
+            maxTurn: 5,
+            seed: 2027,
+            includeMulligans: false);
+
+        double expectedTurn3 = HypergeometricAtLeast(
+            populationSize: 100,
+            successCount: 37,
+            drawCount: 10,
+            minimumSuccesses: 3);
+        double expectedTurn5 = HypergeometricAtLeast(
+            populationSize: 100,
+            successCount: 37,
+            drawCount: 12,
+            minimumSuccesses: 5);
+
+        Probability(analysis, "land-drop-by-turn", 3).Should().BeApproximately(expectedTurn3, 0.06);
+        Probability(analysis, "land-drop-by-turn", 5).Should().BeApproximately(expectedTurn5, 0.06);
+    }
+
+    /// <summary>
+    /// Verifies role-seen probabilities against exact rates when no extra draw effects alter cards seen.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_MatchesExactRoleSeenRatesForControlledPackages()
+    {
+        DeckWorkspace deck = CreateRoleSeenOracleDeck();
+
+        DeckPerformanceAnalysis analysis = AnalyzeDirect(
+            deck,
+            simulations: 1_500,
+            maxTurn: 5,
+            seed: 2028,
+            includeMulligans: false);
+
+        double expectedRampByTurn3 = HypergeometricAtLeast(
+            populationSize: 100,
+            successCount: 10,
+            drawCount: 10,
+            minimumSuccesses: 1);
+        double expectedInteractionByTurn5 = HypergeometricAtLeast(
+            populationSize: 100,
+            successCount: 8,
+            drawCount: 12,
+            minimumSuccesses: 1);
+
+        Probability(analysis, "ramp-seen-by-turn", 3).Should().BeApproximately(expectedRampByTurn3, 0.06);
+        Probability(analysis, "interaction-seen-by-turn", 5).Should().BeApproximately(expectedInteractionByTurn5, 0.06);
+    }
+
+    /// <summary>
     /// Verifies that obvious all-land and no-land decks produce bounded oracle outcomes.
     /// </summary>
     [Fact]
@@ -587,6 +647,47 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies static popular-commander fixtures produce plausible profile-specific performance bands.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_PopularCommanderFixturesStayWithinExpectedBands()
+    {
+        DeckPerformanceAnalysis krenko = AnalyzeDirect(
+            CreateKrenkoTokensFixtureDeck(),
+            simulations: 600,
+            maxTurn: 5,
+            seed: 3001);
+        DeckPerformanceAnalysis atraxa = AnalyzeDirect(
+            CreateAtraxaCountersFixtureDeck(),
+            simulations: 600,
+            maxTurn: 5,
+            seed: 3002);
+        DeckPerformanceAnalysis muldrotha = AnalyzeDirect(
+            CreateMuldrothaValueFixtureDeck(),
+            simulations: 600,
+            maxTurn: 5,
+            seed: 3003);
+
+        krenko.DeckSize.Should().Be(100);
+        atraxa.DeckSize.Should().Be(100);
+        muldrotha.DeckSize.Should().Be(100);
+
+        CommanderProbability(krenko, 4).Should().BeGreaterThan(0.55);
+        Probability(krenko, "ramp-seen-by-turn", 3).Should().BeGreaterThan(0.55);
+        ScenarioRate(krenko, "stranded-high-mana-risk-by-max-turn").Should().BeLessThan(0.55);
+
+        ScenarioRate(atraxa, "all-colors-by-turn-3").Should().BeInRange(0.35, 0.85);
+        CommanderProbability(atraxa, 4).Should().BeInRange(0.30, 0.85);
+        ScenarioRate(atraxa, "stranded-high-mana-risk-by-max-turn")
+            .Should()
+            .BeGreaterThan(ScenarioRate(krenko, "stranded-high-mana-risk-by-max-turn"));
+
+        CommanderProbability(muldrotha, 4).Should().BeLessThan(0.45);
+        CommanderProbability(muldrotha, 5).Should().BeGreaterThan(CommanderProbability(muldrotha, 4) + 0.10);
+        ScenarioRate(muldrotha, "stranded-high-mana-risk-by-max-turn").Should().BeGreaterThan(0.20);
+    }
+
+    /// <summary>
     /// Verifies that long-running performance analysis observes cancellation.
     /// </summary>
     [Fact]
@@ -697,6 +798,25 @@ public sealed class DeckPerformanceTests
             + LogCombination(populationSize - successCount, drawCount - observedSuccesses)
             - LogCombination(populationSize, drawCount);
         return Math.Exp(logProbability);
+    }
+
+    /// <summary>
+    /// Calculates the exact hypergeometric probability of drawing at least a count of successes.
+    /// </summary>
+    private static double HypergeometricAtLeast(
+        int populationSize,
+        int successCount,
+        int drawCount,
+        int minimumSuccesses)
+    {
+        int maximumSuccesses = Math.Min(successCount, drawCount);
+        double probability = 0;
+        for (int successes = minimumSuccesses; successes <= maximumSuccesses; successes++)
+        {
+            probability += HypergeometricExactly(populationSize, successCount, drawCount, successes);
+        }
+
+        return probability;
     }
 
     /// <summary>
@@ -819,6 +939,120 @@ public sealed class DeckPerformanceTests
                 Card("Blank Spell", spells, DeckDefaults.Mainboard, "Sorcery", "{3}", 3, "Scry 1.", []),
             ],
         };
+    }
+
+    /// <summary>
+    /// Creates a controlled package deck where role-seen rates have direct hypergeometric oracles.
+    /// </summary>
+    private static DeckWorkspace CreateRoleSeenOracleDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Role Seen Oracle",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Forest", 37, DeckDefaults.Mainboard, "Basic Land - Forest", null, 0, "", ["G"], ["G"]),
+                Card("Ramp Stone", 10, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add {G}.", [], ["G"]),
+                Card("Nature's Claim", 8, DeckRoles.Interaction, "Instant", "{G}", 1, "Destroy target artifact or enchantment.", ["G"]),
+                Card("Blank Spell", 45, DeckDefaults.Mainboard, "Sorcery", "{3}", 3, "Scry 1.", []),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a Krenko, Mob Boss go-wide token fixture inspired by EDHREC Goblin token shells.
+    /// </summary>
+    private static DeckWorkspace CreateKrenkoTokensFixtureDeck()
+    {
+        return CommanderFixture(
+            "Krenko Tokens Fixture",
+            Card("Krenko, Mob Boss", 1, DeckRoles.Commander, "Legendary Creature - Goblin Warrior", "{2}{R}", 4, "{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.", ["R"]),
+            [
+                Card("Mountain", 34, "Land", "Basic Land - Mountain", null, 0, "", ["R"], ["R"]),
+                Card("Red Ramp Package", 10, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["R"]),
+                Card("Goblin Draw Package", 10, DeckRoles.Draw, "Sorcery", "{2}{R}", 3, "Draw two cards, then discard a card.", ["R"]),
+                Card("Red Interaction Package", 8, DeckRoles.Interaction, "Instant", "{1}{R}", 2, "Destroy target artifact or deal damage to target creature.", ["R"]),
+                Card("Goblin Token Package", 21, DeckRoles.Synergy, "Creature - Goblin", "{2}{R}", 3, "When this creature enters, create two 1/1 red Goblin creature tokens.", ["R"]),
+                Card("Goblin Finisher Package", 8, DeckRoles.Wincons, "Creature - Goblin", "{4}{R}", 5, "Creatures you control get +2/+0 and gain haste until end of turn.", ["R"]),
+                Card("Goblin Utility Package", 8, DeckRoles.Utility, "Creature - Goblin", "{2}{R}", 3, "Other Goblins you control get +1/+1.", ["R"]),
+            ]);
+    }
+
+    /// <summary>
+    /// Creates an Atraxa, Praetors' Voice counters fixture inspired by EDHREC proliferate and +1/+1 counter shells.
+    /// </summary>
+    private static DeckWorkspace CreateAtraxaCountersFixtureDeck()
+    {
+        return CommanderFixture(
+            "Atraxa Counters Fixture",
+            Card("Atraxa, Praetors' Voice", 1, DeckRoles.Commander, "Legendary Creature - Phyrexian Angel Horror", "{G}{W}{U}{B}", 4, "Flying, vigilance, deathtouch, lifelink. At the beginning of your end step, proliferate.", ["W", "U", "B", "G"]),
+            [
+                Card("Four-Color Fixing Land Package", 5, "Land", "Land", null, 0, "{T}: Add one mana of any color in your commander's color identity.", [], ["W", "U", "B", "G"]),
+                Card("Forest", 10, "Land", "Basic Land - Forest", null, 0, "", ["G"], ["G"]),
+                Card("Island", 8, "Land", "Basic Land - Island", null, 0, "", ["U"], ["U"]),
+                Card("Plains", 8, "Land", "Basic Land - Plains", null, 0, "", ["W"], ["W"]),
+                Card("Swamp", 6, "Land", "Basic Land - Swamp", null, 0, "", ["B"], ["B"]),
+                Card("Four-Color Ramp Package", 10, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["W", "U", "B", "G"]),
+                Card("Counter Draw Package", 10, DeckRoles.Draw, "Creature - Wizard", "{2}{U}", 3, "Whenever one or more counters are put on a creature you control, draw a card.", ["U"]),
+                Card("Counters Interaction Package", 9, DeckRoles.Interaction, "Instant", "{1}{W}", 2, "Exile target creature.", ["W"]),
+                Card("Counters Protection Package", 4, DeckRoles.Protection, "Instant", "{1}{G}", 2, "Creatures you control gain hexproof and indestructible until end of turn.", ["G"]),
+                Card("Proliferate Synergy Package", 17, DeckRoles.Synergy, "Creature - Human", "{2}{G}", 3, "When this creature enters, put a +1/+1 counter on each creature you control, then proliferate.", ["G"]),
+                Card("Counters Finisher Package", 5, DeckRoles.Wincons, "Creature - Hydra", "{4}{G}{G}", 6, "Double the number of +1/+1 counters on each creature you control.", ["G"]),
+                Card("Counters Utility Package", 7, DeckRoles.Utility, "Enchantment", "{3}", 3, "If one or more counters would be put on a permanent you control, put that many plus one instead.", ["G"]),
+            ]);
+    }
+
+    /// <summary>
+    /// Creates a Muldrotha, the Gravetide value fixture inspired by EDHREC graveyard-control shells.
+    /// </summary>
+    private static DeckWorkspace CreateMuldrothaValueFixtureDeck()
+    {
+        return CommanderFixture(
+            "Muldrotha Value Fixture",
+            Card("Muldrotha, the Gravetide", 1, DeckRoles.Commander, "Legendary Creature - Elemental Avatar", "{3}{B}{G}{U}", 6, "During each of your turns, you may play a permanent card of each permanent type from your graveyard.", ["B", "G", "U"]),
+            [
+                Card("Sultai Fixing Land Package", 4, "Land", "Land", null, 0, "{T}: Add one mana of any color in your commander's color identity.", [], ["B", "G", "U"]),
+                Card("Forest", 13, "Land", "Basic Land - Forest", null, 0, "", ["G"], ["G"]),
+                Card("Island", 11, "Land", "Basic Land - Island", null, 0, "", ["U"], ["U"]),
+                Card("Swamp", 10, "Land", "Basic Land - Swamp", null, 0, "", ["B"], ["B"]),
+                Card("Sultai Ramp Package", 11, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["B", "G", "U"]),
+                Card("Graveyard Draw Package", 10, DeckRoles.Draw, "Enchantment", "{2}{U}", 3, "At the beginning of your upkeep, draw a card.", ["U"]),
+                Card("Sultai Interaction Package", 10, DeckRoles.Interaction, "Instant", "{1}{B}", 2, "Destroy target creature or planeswalker.", ["B"]),
+                Card("Recursion Value Package", 18, DeckRoles.Recursion, "Creature - Shaman", "{3}{G}", 4, "Return target permanent card from your graveyard to your hand.", ["G"]),
+                Card("Graveyard Fuel Package", 8, DeckRoles.Synergy, "Creature - Horror", "{2}{B}", 3, "When this creature enters, mill three cards.", ["B"]),
+                Card("Muldrotha Finisher Package", 4, DeckRoles.Wincons, "Creature - Avatar", "{5}{G}{G}", 7, "When this creature enters, each opponent loses life equal to the number of permanents you control.", ["G"]),
+            ]);
+    }
+
+    /// <summary>
+    /// Creates a Commander fixture from one commander and already-quantified package cards.
+    /// </summary>
+    private static DeckWorkspace CommanderFixture(
+        string name,
+        DeckCard commander,
+        List<DeckCard> cards)
+    {
+        DeckWorkspace workspace = new()
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = name,
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = "Land", IncludedInDeck = true },
+            ],
+            Cards = [commander],
+        };
+        workspace.Cards.AddRange(cards);
+        return workspace;
     }
 
     /// <summary>
