@@ -8,6 +8,7 @@ using MtgMcp.Archidekt;
 using MtgMcp.CommanderSpellbook;
 using MtgMcp.Core;
 using MtgMcp.Decklists;
+using MtgMcp.Playgroup;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App;
@@ -38,6 +39,8 @@ public static class MtgMcpHost
         services.GetRequiredService<CardFacetService>();
         services.GetRequiredService<ICardCatalog>();
         services.GetRequiredService<IArchidektGateway>();
+        services.GetRequiredService<IPlaygroupGateway>();
+        services.GetRequiredService<PlaygroupService>();
         services.GetRequiredService<ICardTrendProvider>();
         services.GetRequiredService<ICommanderMetaProvider>();
         services.GetRequiredService<IComboCatalog>();
@@ -91,10 +94,12 @@ public static class MtgMcpHost
         builder.Services.AddTransient<DeckPlanService>();
         builder.Services.AddTransient<DeckSimulationService>();
         builder.Services.AddTransient<CardFacetService>();
+        builder.Services.AddTransient<PlaygroupService>();
         builder.Services.AddSingleton<OperationModeGuard>();
         builder.Services.AddSingleton<ServerInfoService>();
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
+        builder.Services.AddPlaygroup(builder.Configuration);
         builder.Services.AddCommanderSpellbook(builder.Configuration);
         builder.Services.AddDecklistCorpusSources();
 

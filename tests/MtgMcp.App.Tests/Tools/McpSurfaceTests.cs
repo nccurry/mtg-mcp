@@ -31,6 +31,7 @@ public sealed class McpSurfaceTests
         typeof(SimulationTools),
         typeof(IntentTools),
         typeof(FacetTools),
+        typeof(PlaygroupTools),
         typeof(ServerTools),
     ];
 
@@ -53,6 +54,13 @@ public sealed class McpSurfaceTests
             "open_local_deck",
             "open_archidekt_deck",
             "list_archidekt_decks",
+            "get_playgroup_auth_status",
+            "get_playgroup",
+            "get_playgroup_deck",
+            "list_playgroup_decks",
+            "list_playgroup_users",
+            "list_playgroup_user_decks",
+            "rank_playgroup_decks",
             "import_decklist",
             "export_deck",
             "add_card",
@@ -144,6 +152,7 @@ public sealed class McpSurfaceTests
             "mtg://server/info",
             "mtg://corpus/sources",
             "mtg://archidekt/auth-status",
+            "mtg://playgroup/auth-status",
         ];
 
         GetNamedAttributeValues(typeof(MtgResources), "McpServerResourceAttribute", "UriTemplate")
@@ -189,12 +198,14 @@ public sealed class McpSurfaceTests
         Dictionary<string, object?> values = new(StringComparer.OrdinalIgnoreCase)
         {
             ["MtgMcp:Archidekt:Jwt"] = "secret",
+            ["MtgMcp:Playgroup:ApiKey"] = "playgroup-secret",
             ["MtgMcp:DataDir"] = "C:/data",
         };
 
         Dictionary<string, object?> redacted = SecretRedactor.Redact(values);
 
         redacted["MtgMcp:Archidekt:Jwt"].Should().Be("***REDACTED***");
+        redacted["MtgMcp:Playgroup:ApiKey"].Should().Be("***REDACTED***");
         redacted["MtgMcp:DataDir"].Should().Be("C:/data");
     }
 
@@ -241,6 +252,7 @@ public sealed class McpSurfaceTests
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
         CustomAttributeData queryCards = GetToolAttribute(nameof(RecommendationTools.QueryCardsForDeckAsync));
         CustomAttributeData createExplicitPlan = GetToolAttribute(nameof(PlanTools.CreateDeckPlanFromExplicitChangesAsync));
+        CustomAttributeData listPlaygroupDecks = GetToolAttribute(nameof(PlaygroupTools.ListPlaygroupDecksAsync));
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(searchCards, "OpenWorld").Should().BeTrue();
@@ -262,6 +274,8 @@ public sealed class McpSurfaceTests
         GetNamedBool(queryCards, "OpenWorld").Should().BeTrue();
         GetNamedBool(createExplicitPlan, "ReadOnly").Should().BeFalse();
         GetNamedBool(createExplicitPlan, "OpenWorld").Should().BeFalse();
+        GetNamedBool(listPlaygroupDecks, "ReadOnly").Should().BeTrue();
+        GetNamedBool(listPlaygroupDecks, "OpenWorld").Should().BeTrue();
     }
 
     /// <summary>
@@ -432,6 +446,9 @@ public sealed class McpSurfaceTests
             ["ARCHIDEKT:USER_ID"] = "278245",
             ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
+            ["PLAYGROUP:BASE_ADDRESS"] = "https://playgroup.test/api/public/v1/",
+            ["PLAYGROUP:API_KEY"] = "playgroup-key",
+            ["PLAYGROUP:CREDENTIALS_FILE"] = "C:/playgroup-creds.json",
             ["SCRYFALL:USER_AGENT"] = "mtg-mcp-test",
             ["SCRYFALL:MAX_RATE_LIMIT_RETRIES"] = "5",
         };
@@ -467,6 +484,9 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
         aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
+        aliases["MtgMcp:Playgroup:BaseAddress"].Should().Be("https://playgroup.test/api/public/v1/");
+        aliases["MtgMcp:Playgroup:ApiKey"].Should().Be("playgroup-key");
+        aliases["MtgMcp:Playgroup:CredentialsFile"].Should().Be("C:/playgroup-creds.json");
         aliases["MtgMcp:Scryfall:UserAgent"].Should().Be("mtg-mcp-test");
         aliases["MtgMcp:Scryfall:MaxRateLimitRetries"].Should().Be("5");
     }
@@ -550,6 +570,8 @@ public sealed class McpSurfaceTests
         host.Services.GetRequiredService<ICardCatalog>().Should().NotBeNull();
         host.Services.GetRequiredService<IDeckPlanRepository>().Should().NotBeNull();
         host.Services.GetRequiredService<IArchidektGateway>().Should().NotBeNull();
+        host.Services.GetRequiredService<IPlaygroupGateway>().Should().NotBeNull();
+        host.Services.GetRequiredService<PlaygroupService>().Should().NotBeNull();
         host.Services.GetRequiredService<ServerInfoService>().Should().NotBeNull();
         host.Services.GetRequiredService<ICorpusCache>().Should().NotBeNull();
         host.Services.GetServices<ICorpusSignalProvider>().Should().NotBeEmpty();

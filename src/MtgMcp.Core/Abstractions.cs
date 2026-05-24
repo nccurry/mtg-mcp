@@ -301,3 +301,62 @@ public interface IArchidektGateway
         CancellationToken cancellationToken
     );
 }
+
+/// <summary>
+/// Defines Playgroup.gg lookup operations.
+/// </summary>
+public interface IPlaygroupGateway
+{
+    /// <summary>
+    /// Gets redacted Playgroup authentication status.
+    /// </summary>
+    Task<PlaygroupAuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the user associated with the configured API key.
+    /// </summary>
+    Task<PlaygroupUser> GetCurrentUserAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets a playgroup visible to the specified user.
+    /// </summary>
+    Task<PlaygroupSummary> GetUserPlaygroupAsync(
+        long userId,
+        long playgroupId,
+        CancellationToken cancellationToken
+    );
+
+    /// <summary>
+    /// Lists games recorded in a playgroup.
+    /// </summary>
+    Task<IReadOnlyList<PlaygroupGame>> ListPlaygroupGamesAsync(
+        long playgroupId,
+        int page,
+        int limit,
+        bool includeEvents,
+        CancellationToken cancellationToken
+    );
+
+    /// <summary>
+    /// Gets Playgroup deck details when the deck is accessible.
+    /// </summary>
+    Task<PlaygroupDeck> GetDeckAsync(long deckId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists accessible decks for a Playgroup user.
+    /// </summary>
+    Task<IReadOnlyList<PlaygroupDeck>> ListUserDecksAsync(
+        long userId,
+        CancellationToken cancellationToken
+    );
+
+    /// <summary>
+    /// Gets a deck's Elo history in a global, playgroup, or league scope.
+    /// </summary>
+    Task<PlaygroupEloHistory> GetDeckEloHistoryAsync(
+        long deckId,
+        long? playgroupId,
+        long? leagueId,
+        CancellationToken cancellationToken
+    );
+}
