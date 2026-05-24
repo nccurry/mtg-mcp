@@ -107,7 +107,7 @@ public sealed partial class DeckSimulationService
                 "Archidekt reference decks are imported read-only with writeBack=false.",
                 "Every deck uses the same target turn, simulation count, seed, and mulligan setting.",
                 "Deltas are reference minus active; negative medianWinTurnDelta means the reference goldfished faster.",
-                "Unsupported references are returned in referenceFailures without aborting other comparisons."
+                "Non-Archidekt references are returned in referenceFailures without aborting other comparisons."
             ],
             Warnings = failures
                 .Select(failure => $"{failure.Label}: {failure.Reason}")
@@ -184,23 +184,13 @@ public sealed partial class DeckSimulationService
     }
 
     /// <summary>
-    /// Reports the likely source for a public deck reference.
+    /// Reports the likely source for a non-Archidekt reference.
     /// </summary>
     private static string DetectReferenceSource(string input)
     {
         if (!Uri.TryCreate(input, UriKind.Absolute, out Uri? uri))
         {
             return "unknown";
-        }
-
-        if (uri.Host.Contains("playgroup.gg", StringComparison.OrdinalIgnoreCase))
-        {
-            return "playgroup";
-        }
-
-        if (uri.Host.Contains("moxfield.com", StringComparison.OrdinalIgnoreCase))
-        {
-            return "moxfield";
         }
 
         return uri.Host;

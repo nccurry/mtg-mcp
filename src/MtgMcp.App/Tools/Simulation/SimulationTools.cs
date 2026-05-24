@@ -43,7 +43,7 @@ public sealed class SimulationTools
     /// Compares active deck goldfish output against caller-supplied Archidekt decks.
     /// </summary>
     [McpServerTool(Name = "compare_archidekt_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Import up to three Archidekt deck ids or URLs read-only and compare deterministic goldfish simulation outputs against the active workspace. Unsupported references are reported without aborting other comparisons.")]
+    [Description("Import up to three Archidekt deck ids or URLs read-only and compare deterministic goldfish simulation outputs against the active workspace. Non-Archidekt references are reported without aborting other comparisons.")]
     public Task<ArchidektGoldfishComparisonResult> CompareArchidektGoldfishAsync(
         string workspaceId,
         string archidektDeckUrl1,
