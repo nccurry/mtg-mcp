@@ -90,6 +90,22 @@ internal static class DeckPerformanceAnalyzer
     }
 
     /// <summary>
+    /// Builds the deck-level context used by opening-hand mulligan decisions.
+    /// </summary>
+    private static PerformanceMulliganContext BuildPerformanceMulliganContext(
+        DeckWorkspace workspace,
+        IReadOnlyList<DeckCard> included,
+        IReadOnlySet<string> deckColors)
+    {
+        return new PerformanceMulliganContext
+        {
+            FreeFirstMulligan = UsesFreeFirstMulligan(workspace.Format),
+            DeckColors = new HashSet<string>(deckColors, StringComparer.OrdinalIgnoreCase),
+            Commander = included.FirstOrDefault(IsCommanderCard),
+        };
+    }
+
+    /// <summary>
     /// Simulates one heuristic game from opening hand through the target turn.
     /// </summary>
     private static PerformanceRun RunPerformanceGame(
@@ -102,7 +118,15 @@ internal static class DeckPerformanceAnalyzer
         string profile)
     {
         Random random = new(seed);
-        PerformanceOpeningHand opening = DrawPerformanceOpeningHand(workspace, random, includeMulligans);
+        PerformanceMulliganContext mulliganContext = BuildPerformanceMulliganContext(
+            workspace,
+            included,
+            deckColors);
+        PerformanceOpeningHand opening = DrawPerformanceOpeningHand(
+            workspace,
+            random,
+            includeMulligans,
+            mulliganContext);
         List<DeckCard> hand = opening.Hand;
         List<DeckCard> library = opening.Library;
         List<PerformancePermanent> battlefield = [];
@@ -290,28 +314,30 @@ internal static class DeckPerformanceAnalyzer
     private static PerformanceOpeningHand DrawPerformanceOpeningHand(
         DeckWorkspace workspace,
         Random random,
-        bool includeMulligans)
+        bool includeMulligans,
+        PerformanceMulliganContext context)
     {
-        int targetHandSize = 7;
         int mulligans = 0;
+        int maximumMulligans = context.FreeFirstMulligan ? 3 : 2;
         List<DeckCard> firstSeven = [];
-        for (int attempt = 0; attempt < 3; attempt++)
+        while (mulligans <= maximumMulligans)
         {
+            int targetHandSize = PerformanceTargetHandSize(mulligans, context);
             List<DeckCard> library = ExpandPerformanceLibrary(workspace);
             Shuffle(library, random);
             List<DeckCard> hand = library.Take(Math.Min(7, library.Count)).ToList();
             library = library.Skip(hand.Count).ToList();
-            if (attempt == 0)
+            if (mulligans == 0)
             {
                 firstSeven = hand.ToList();
             }
 
             bool keep = !includeMulligans
-                || IsKeepablePerformanceHand(hand, targetHandSize)
+                || IsKeepablePerformanceHand(hand, targetHandSize, mulligans, context)
                 || targetHandSize <= 5;
             if (keep)
             {
-                BottomPerformanceCards(hand, targetHandSize);
+                BottomPerformanceCards(hand, targetHandSize, context);
                 return new PerformanceOpeningHand
                 {
                     Hand = hand,
@@ -322,20 +348,9 @@ internal static class DeckPerformanceAnalyzer
             }
 
             mulligans++;
-            targetHandSize--;
         }
 
-        List<DeckCard> fallbackLibrary = ExpandPerformanceLibrary(workspace);
-        Shuffle(fallbackLibrary, random);
-        List<DeckCard> fallbackHand = fallbackLibrary.Take(Math.Min(5, fallbackLibrary.Count)).ToList();
-        fallbackLibrary = fallbackLibrary.Skip(fallbackHand.Count).ToList();
-        return new PerformanceOpeningHand
-        {
-            Hand = fallbackHand,
-            Library = fallbackLibrary,
-            Mulligans = 2,
-            OpeningSevenLands = CountPerformanceRole(firstSeven, DeckRoles.Lands),
-        };
+        throw new InvalidOperationException("Mulligan heuristic failed to keep a hand by five cards.");
     }
 
     /// <summary>
@@ -356,31 +371,330 @@ internal static class DeckPerformanceAnalyzer
     }
 
     /// <summary>
-    /// Determines whether a candidate opening hand should be kept.
+    /// Computes kept hand size after actual mulligans, including free first mulligans.
     /// </summary>
-    private static bool IsKeepablePerformanceHand(IReadOnlyList<DeckCard> hand, int targetHandSize)
+    private static int PerformanceTargetHandSize(
+        int mulligans,
+        PerformanceMulliganContext context)
     {
-        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
-        int cheapPlays = hand.Count(card =>
-            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            && PerformanceManaValue(card) <= 2);
-        return lands >= 2
-            && lands <= 5
-            && (lands >= 3 || cheapPlays > 0 || targetHandSize <= 5);
+        int paidMulligans = context.FreeFirstMulligan && mulligans > 0
+            ? mulligans - 1
+            : mulligans;
+        return Math.Max(0, 7 - paidMulligans);
     }
 
     /// <summary>
-    /// Bottoms cards after mulligans using a simple mana-curve priority.
+    /// Determines whether a candidate opening hand should be kept.
     /// </summary>
-    private static void BottomPerformanceCards(List<DeckCard> hand, int targetHandSize)
+    private static bool IsKeepablePerformanceHand(
+        IReadOnlyList<DeckCard> hand,
+        int targetHandSize,
+        int mulligans,
+        PerformanceMulliganContext context)
     {
-        while (hand.Count > targetHandSize)
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
+        if (lands == 0)
         {
-            DeckCard bottom = hand
-                .OrderByDescending(card => PerformanceBottomPriority(card, hand))
-                .ThenByDescending(PerformanceManaValue)
-                .First();
-            hand.Remove(bottom);
+            return false;
+        }
+
+        if (targetHandSize >= 6 && lands >= 6)
+        {
+            return false;
+        }
+
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2);
+        if (targetHandSize >= 6 && lands == 1 && earlyRamp < 2)
+        {
+            return false;
+        }
+
+        double score = ScorePerformanceOpeningHand(hand, context);
+        return score >= MinimumPerformanceKeepScore(targetHandSize, mulligans, context);
+    }
+
+    /// <summary>
+    /// Scores how well an opening hand supports functional early development.
+    /// </summary>
+    private static double ScorePerformanceOpeningHand(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceMulliganContext context)
+    {
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2);
+        int oneManaRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 1);
+        int earlyDraw = CountEarlyPerformanceRole(hand, DeckRoles.Draw, maxManaValue: 3);
+        int cheapPlays = CountCheapPerformancePlays(hand);
+        int earlyInteraction = CountEarlyPerformanceRole(hand, DeckRoles.Interaction, maxManaValue: 2)
+            + CountEarlyPerformanceRole(hand, DeckRoles.Protection, maxManaValue: 2);
+        int expensiveCards = hand.Count(card =>
+            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            && PerformanceManaValue(card) >= 6);
+        HashSet<string> colors = BuildOpeningHandColorAccess(hand);
+        bool hasCastableEarlySpell = HasCastableEarlyPerformanceSpell(hand);
+        bool hasCommanderPlan = HasPerformanceCommanderPlan(hand, context);
+        bool hasEarlyPlan = earlyRamp > 0
+            || earlyDraw > 0
+            || cheapPlays >= 2
+            || hasCastableEarlySpell
+            || hasCommanderPlan;
+
+        double score = lands switch
+        {
+            0 => -8,
+            1 => earlyRamp >= 2 ? 2 : -4,
+            2 => 4,
+            3 => 5,
+            4 => 3,
+            5 => 1,
+            _ => -4,
+        };
+
+        score += Math.Min(earlyRamp, 2) * 2;
+        score += oneManaRamp > 0 ? 1 : 0;
+        score += Math.Min(earlyDraw, 2);
+        score += Math.Min(cheapPlays, 3) * 0.75;
+        score += Math.Min(earlyInteraction, 2) * 0.5;
+        score += hasCastableEarlySpell ? 1 : -1;
+        score += hasCommanderPlan ? 2 : 0;
+        score -= Math.Min(expensiveCards, 3);
+
+        if (context.DeckColors.Count > 0)
+        {
+            int coveredColors = context.DeckColors.Count(color => colors.Contains(color));
+            if (coveredColors == context.DeckColors.Count)
+            {
+                score += 1.5;
+            }
+            else if (coveredColors > 0)
+            {
+                score += 0.5;
+            }
+            else
+            {
+                score -= 2;
+            }
+        }
+
+        if (lands >= 5 && !hasEarlyPlan)
+        {
+            score -= 2;
+        }
+
+        if (lands == 2 && earlyRamp == 0 && earlyDraw == 0 && !hasCommanderPlan)
+        {
+            score -= 1;
+        }
+
+        if (!hasEarlyPlan)
+        {
+            score -= 1;
+        }
+
+        return score;
+    }
+
+    /// <summary>
+    /// Returns the minimum hand score needed before accepting a mulligan decision.
+    /// </summary>
+    private static double MinimumPerformanceKeepScore(
+        int targetHandSize,
+        int mulligans,
+        PerformanceMulliganContext context)
+    {
+        if (targetHandSize <= 5)
+        {
+            return 1;
+        }
+
+        if (targetHandSize == 6)
+        {
+            return 4.5;
+        }
+
+        return context.FreeFirstMulligan && mulligans == 0 ? 7.5 : 6;
+    }
+
+    /// <summary>
+    /// Counts cheap cards for opening-hand development.
+    /// </summary>
+    private static int CountCheapPerformancePlays(IReadOnlyList<DeckCard> hand)
+    {
+        return hand.Count(card =>
+            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            && PerformanceManaValue(card) <= 2);
+    }
+
+    /// <summary>
+    /// Counts early plays with a specific primary role.
+    /// </summary>
+    private static int CountEarlyPerformanceRole(
+        IReadOnlyList<DeckCard> hand,
+        string roleName,
+        int maxManaValue)
+    {
+        return hand.Count(card =>
+            DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase)
+            && PerformanceManaValue(card) <= maxManaValue);
+    }
+
+    /// <summary>
+    /// Checks whether the hand can deploy at least one cheap nonland card.
+    /// </summary>
+    private static bool HasCastableEarlyPerformanceSpell(IReadOnlyList<DeckCard> hand)
+    {
+        List<PerformanceManaSource> sources = BuildOpeningLandManaSources(hand);
+        return hand.Any(card =>
+            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            && PerformanceManaValue(card) <= 2
+            && PerformanceMana.CanPay(card, sources));
+    }
+
+    /// <summary>
+    /// Checks whether opening resources plausibly cast the commander by turn four.
+    /// </summary>
+    private static bool HasPerformanceCommanderPlan(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceMulliganContext context)
+    {
+        if (context.Commander is null)
+        {
+            return false;
+        }
+
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2);
+        int expectedLandDropsByTurnFour = lands >= 2 ? Math.Min(4, lands + 1) : lands;
+        int expectedManaByTurnFour = expectedLandDropsByTurnFour + Math.Min(earlyRamp, 2);
+        if (expectedManaByTurnFour < PerformanceManaValue(context.Commander))
+        {
+            return false;
+        }
+
+        List<PerformanceManaSource> sources = BuildOpeningHandManaSources(hand);
+        return PerformanceMana.CanSatisfyRequirement(
+            PerformanceMana.BuildCostRequirement(context.Commander),
+            sources);
+    }
+
+    /// <summary>
+    /// Builds mana sources available from lands and castable cheap fixing.
+    /// </summary>
+    private static List<PerformanceManaSource> BuildOpeningHandManaSources(IReadOnlyList<DeckCard> hand)
+    {
+        List<PerformanceManaSource> sources = BuildOpeningLandManaSources(hand);
+        foreach (DeckCard card in hand.Where(card =>
+            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            && PerformanceManaValue(card) <= 2
+            && PerformanceMana.ReadProducedMana(card).Count > 0))
+        {
+            if (PerformanceMana.CanPay(card, sources))
+            {
+                sources.Add(new PerformanceManaSource(PerformanceMana.ReadProducedMana(card)));
+            }
+        }
+
+        return sources;
+    }
+
+    /// <summary>
+    /// Builds mana sources available from lands in the opening hand.
+    /// </summary>
+    private static List<PerformanceManaSource> BuildOpeningLandManaSources(IReadOnlyList<DeckCard> hand)
+    {
+        return hand
+            .Where(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+            .Select(card => new PerformanceManaSource(PerformanceMana.ReadProducedMana(card)))
+            .Where(source => source.Symbols.Count > 0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Reads color symbols reachable from opening lands and castable cheap fixing.
+    /// </summary>
+    private static HashSet<string> BuildOpeningHandColorAccess(IReadOnlyList<DeckCard> hand)
+    {
+        return BuildOpeningHandManaSources(hand)
+            .SelectMany(source => source.Symbols)
+            .Where(symbol => PerformanceMana.ColoredSymbols.Contains(symbol, StringComparer.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Bottoms cards after mulligans by preserving the highest-scoring kept hand.
+    /// </summary>
+    private static void BottomPerformanceCards(
+        List<DeckCard> hand,
+        int targetHandSize,
+        PerformanceMulliganContext context)
+    {
+        int removeCount = hand.Count - targetHandSize;
+        if (removeCount <= 0)
+        {
+            return;
+        }
+
+        List<int> bestIndexes = [];
+        double bestScore = double.NegativeInfinity;
+        int bestPriority = int.MinValue;
+        foreach (List<int> indexes in EnumerateIndexCombinations(hand.Count, removeCount))
+        {
+            HashSet<int> bottomIndexes = [.. indexes];
+            List<DeckCard> kept = hand
+                .Where((_, index) => !bottomIndexes.Contains(index))
+                .ToList();
+            double score = ScorePerformanceOpeningHand(kept, context);
+            int priority = indexes.Sum(index => PerformanceBottomPriority(hand[index], hand));
+            if (score > bestScore || (score.Equals(bestScore) && priority > bestPriority))
+            {
+                bestScore = score;
+                bestPriority = priority;
+                bestIndexes = indexes;
+            }
+        }
+
+        foreach (int index in bestIndexes.OrderByDescending(index => index))
+        {
+            hand.RemoveAt(index);
+        }
+    }
+
+    /// <summary>
+    /// Enumerates index combinations for choosing cards to bottom.
+    /// </summary>
+    private static IEnumerable<List<int>> EnumerateIndexCombinations(int count, int choose)
+    {
+        List<int> current = [];
+        foreach (List<int> combination in EnumerateIndexCombinations(count, choose, start: 0, current))
+        {
+            yield return combination;
+        }
+    }
+
+    /// <summary>
+    /// Recursively enumerates index combinations in increasing order.
+    /// </summary>
+    private static IEnumerable<List<int>> EnumerateIndexCombinations(
+        int count,
+        int choose,
+        int start,
+        List<int> current)
+    {
+        if (current.Count == choose)
+        {
+            yield return [.. current];
+            yield break;
+        }
+
+        for (int index = start; index <= count - (choose - current.Count); index++)
+        {
+            current.Add(index);
+            foreach (List<int> combination in EnumerateIndexCombinations(count, choose, index + 1, current))
+            {
+                yield return combination;
+            }
+
+            current.RemoveAt(current.Count - 1);
         }
     }
 
@@ -716,6 +1030,7 @@ internal static class DeckPerformanceAnalyzer
         {
             SevenCardKeepRate = PerformanceStatistics.Rate(runs.Count(run => run.Mulligans == 0), runs.Count),
             AverageMulligans = runs.Count == 0 ? 0 : runs.Average(run => run.Mulligans),
+            AverageKeptHandSize = runs.Count == 0 ? 0 : runs.Average(run => run.KeptHandSize),
             AverageKeptLands = runs.Count == 0 ? 0 : runs.Average(run => run.KeptOpeningLands),
             NoLandSevenRate = PerformanceStatistics.Rate(runs.Count(run => run.OpeningSevenLands == 0), runs.Count),
             OneLandSevenRate = PerformanceStatistics.Rate(runs.Count(run => run.OpeningSevenLands == 1), runs.Count),
@@ -1488,6 +1803,14 @@ internal static class DeckPerformanceAnalyzer
     }
 
     /// <summary>
+    /// Checks whether a format normally receives a free first mulligan.
+    /// </summary>
+    private static bool UsesFreeFirstMulligan(string format)
+    {
+        return ContainsAny(format, "commander", "brawl");
+    }
+
+    /// <summary>
     /// Adds assumptions and warnings that explain simulator boundaries.
     /// </summary>
     private static void AddPerformanceNotes(
@@ -1501,7 +1824,12 @@ internal static class DeckPerformanceAnalyzer
         analysis.Assumptions.Add("Simulation uses cached Scryfall snapshots and local role/tag heuristics.");
         analysis.Assumptions.Add($"Each run draws one card per turn, plays one land per turn, and sequences spells with the '{profile}' profile.");
         analysis.Assumptions.Add("Opponent interaction, stack timing, replacement effects, activated abilities, and full Magic rules are not simulated.");
-        analysis.Assumptions.Add("London mulligans draw seven and bottom cards using a deterministic keep heuristic.");
+        analysis.Assumptions.Add("London mulligans draw seven and bottom cards using a deterministic plan-aware keep heuristic.");
+        if (UsesFreeFirstMulligan(workspace.Format))
+        {
+            analysis.Assumptions.Add("Commander and Brawl performance treats the first mulligan as free.");
+        }
+
         analysis.Assumptions.Add("Nonpermanent ramp becomes one future mana source; draw spells draw one card.");
         if (intent is not null)
         {

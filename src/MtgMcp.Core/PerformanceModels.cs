@@ -143,6 +143,11 @@ public sealed class OpeningHandPerformance
     public double AverageMulligans { get; set; }
 
     /// <summary>
+    /// Gets or sets average card count in kept opening hands.
+    /// </summary>
+    public double AverageKeptHandSize { get; set; }
+
+    /// <summary>
     /// Gets or sets average land count in kept opening hands.
     /// </summary>
     public double AverageKeptLands { get; set; }

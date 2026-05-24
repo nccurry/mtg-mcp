@@ -38,6 +38,27 @@ internal sealed class PerformanceOpeningHand
 }
 
 /// <summary>
+/// Captures deck-level facts used to choose and bottom mulligan hands.
+/// </summary>
+internal sealed class PerformanceMulliganContext
+{
+    /// <summary>
+    /// Gets or sets whether the first mulligan does not reduce kept hand size.
+    /// </summary>
+    public bool FreeFirstMulligan { get; set; }
+
+    /// <summary>
+    /// Gets or sets the colors the deck must reliably access.
+    /// </summary>
+    public HashSet<string> DeckColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets the commander available from the command zone.
+    /// </summary>
+    public DeckCard? Commander { get; set; }
+}
+
+/// <summary>
 /// Stores target turns for the built-in scenario suite.
 /// </summary>
 internal sealed class PerformanceScenarioDefaults
