@@ -159,10 +159,9 @@ public sealed partial class DeckIntelligenceTests
         FakeArchidektGateway archidekt = new();
         string firstUrl = "https://archidekt.com/decks/111/reference_one";
         string secondUrl = "https://archidekt.com/decks/222/reference_two";
-        string thirdUrl = "https://archidekt.com/decks/333/reference_three";
+        string thirdUrl = "https://playgroup.gg/decks/333/reference-three";
         archidekt.ImportedDecksByInput[firstUrl] = CreateGoldfishFixtureDeck("Reference One", "111", wincons: 5);
         archidekt.ImportedDecksByInput[secondUrl] = CreateGoldfishFixtureDeck("Reference Two", "222", ramp: 16);
-        archidekt.ImportedDecksByInput[thirdUrl] = CreateGoldfishFixtureDeck("Reference Three", "333", tokens: 24);
         DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog(), archidekt);
 
         ArchidektGoldfishComparisonResult comparison = await service.CompareArchidektGoldfishAsync(
@@ -180,15 +179,21 @@ public sealed partial class DeckIntelligenceTests
         comparison.ActiveDeck.Label.Should().Be("active");
         comparison.ActiveDeck.Source.Should().Be("workspace");
         comparison.ActiveDeck.Goldfish.Simulations.Should().Be(100);
-        comparison.ReferenceDecks.Select(deck => deck.Label).Should().Equal("reference-1", "reference-2", "reference-3");
-        comparison.ReferenceDecks.Select(deck => deck.Input).Should().Equal(firstUrl, secondUrl, thirdUrl);
+        comparison.ReferenceDecks.Select(deck => deck.Label).Should().Equal("reference-1", "reference-2");
+        comparison.ReferenceDecks.Select(deck => deck.Input).Should().Equal(firstUrl, secondUrl);
         comparison.ReferenceDecks.Should().OnlyContain(deck =>
             deck.Source == "archidekt"
             && deck.Goldfish.TargetTurn == 5
             && deck.DeltaFromActive != null);
-        comparison.ReferenceDecks.Select(deck => deck.ArchidektDeckId).Should().Equal("111", "222", "333");
-        archidekt.ImportRequests.Select(request => request.DeckIdOrUrl).Should().Equal(firstUrl, secondUrl, thirdUrl);
+        comparison.ReferenceDecks.Select(deck => deck.ArchidektDeckId).Should().Equal("111", "222");
+        GoldfishReferenceImportFailure failure = comparison.ReferenceFailures.Should().ContainSingle().Subject;
+        failure.Label.Should().Be("reference-3");
+        failure.Input.Should().Be(thirdUrl);
+        failure.Source.Should().Be("playgroup");
+        failure.Reason.Should().Contain("Only Archidekt");
+        archidekt.ImportRequests.Select(request => request.DeckIdOrUrl).Should().Equal(firstUrl, secondUrl);
         archidekt.ImportRequests.Should().OnlyContain(request => !request.WriteBack);
+        comparison.Warnings.Should().Contain(warning => warning.Contains("reference-3", StringComparison.OrdinalIgnoreCase));
         comparison.Notes.Should().Contain(note => note.Contains("writeBack=false", StringComparison.OrdinalIgnoreCase));
     }
 

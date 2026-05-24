@@ -43,13 +43,39 @@ public sealed partial class DeckSimulationService
 
         IArchidektGateway gateway = RequireArchidektGateway();
         List<GoldfishDeckComparison> references = [];
+        List<GoldfishReferenceImportFailure> failures = [];
         for (int index = 0; index < referenceInputs.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string input = referenceInputs[index];
-            DeckWorkspace referenceWorkspace = await gateway
-                .ImportDeckAsync(input, writeBack: false, cancellationToken)
-                .ConfigureAwait(false);
+            string label = $"reference-{index + 1}";
+            if (!IsArchidektReference(input))
+            {
+                failures.Add(BuildImportFailure(
+                    label,
+                    input,
+                    DetectReferenceSource(input),
+                    "Only Archidekt deck ids and URLs can be imported by this tool today."));
+                continue;
+            }
+
+            DeckWorkspace referenceWorkspace;
+            try
+            {
+                referenceWorkspace = await gateway
+                    .ImportDeckAsync(input, writeBack: false, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failures.Add(BuildImportFailure(
+                    label,
+                    input,
+                    "archidekt",
+                    exception.Message));
+                continue;
+            }
+
             GoldfishSimulationResult referenceGoldfish = SimulateGoldfish(
                 referenceWorkspace,
                 targetTurn,
@@ -58,7 +84,7 @@ public sealed partial class DeckSimulationService
                 mulligan);
             GoldfishComparisonDelta delta = BuildDelta(activeGoldfish, referenceGoldfish);
             references.Add(BuildDeckComparison(
-                $"reference-{index + 1}",
+                label,
                 "archidekt",
                 input,
                 referenceWorkspace,
@@ -75,12 +101,17 @@ public sealed partial class DeckSimulationService
             Mulligan = mulligan,
             ActiveDeck = activeDeck,
             ReferenceDecks = references,
+            ReferenceFailures = failures,
             Notes =
             [
                 "Archidekt reference decks are imported read-only with writeBack=false.",
                 "Every deck uses the same target turn, simulation count, seed, and mulligan setting.",
-                "Deltas are reference minus active; negative medianWinTurnDelta means the reference goldfished faster."
+                "Deltas are reference minus active; negative medianWinTurnDelta means the reference goldfished faster.",
+                "Unsupported references are returned in referenceFailures without aborting other comparisons."
             ],
+            Warnings = failures
+                .Select(failure => $"{failure.Label}: {failure.Reason}")
+                .ToList(),
         };
     }
 
@@ -118,6 +149,61 @@ public sealed partial class DeckSimulationService
             Goldfish = goldfish,
             DeltaFromActive = delta,
         };
+    }
+
+    /// <summary>
+    /// Creates a deterministic import failure row for one reference.
+    /// </summary>
+    private static GoldfishReferenceImportFailure BuildImportFailure(
+        string label,
+        string input,
+        string source,
+        string reason)
+    {
+        return new GoldfishReferenceImportFailure
+        {
+            Label = label,
+            Input = input,
+            Source = source,
+            Reason = reason,
+        };
+    }
+
+    /// <summary>
+    /// Determines whether the reference can be passed to the Archidekt gateway.
+    /// </summary>
+    private static bool IsArchidektReference(string input)
+    {
+        if (input.All(char.IsDigit))
+        {
+            return true;
+        }
+
+        return Uri.TryCreate(input, UriKind.Absolute, out Uri? uri)
+            && uri.Host.Contains("archidekt.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reports the likely source for a public deck reference.
+    /// </summary>
+    private static string DetectReferenceSource(string input)
+    {
+        if (!Uri.TryCreate(input, UriKind.Absolute, out Uri? uri))
+        {
+            return "unknown";
+        }
+
+        if (uri.Host.Contains("playgroup.gg", StringComparison.OrdinalIgnoreCase))
+        {
+            return "playgroup";
+        }
+
+        if (uri.Host.Contains("moxfield.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return "moxfield";
+        }
+
+        return uri.Host;
     }
 
     /// <summary>

@@ -231,6 +231,32 @@ public sealed class GoldfishDeckComparison
 }
 
 /// <summary>
+/// Reports a reference deck that could not be imported for goldfish comparison.
+/// </summary>
+public sealed class GoldfishReferenceImportFailure
+{
+    /// <summary>
+    /// Gets or sets the stable comparison label, such as reference-1.
+    /// </summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the caller-supplied reference deck id or URL.
+    /// </summary>
+    public string Input { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the detected reference source.
+    /// </summary>
+    public string Source { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deterministic reason this reference was not simulated.
+    /// </summary>
+    public string Reason { get; set; } = "";
+}
+
+/// <summary>
 /// Reports arithmetic goldfish deltas between a reference deck and the active deck.
 /// </summary>
 public sealed class GoldfishComparisonDelta
@@ -330,6 +356,11 @@ public sealed class ArchidektGoldfishComparisonResult
     /// Gets or sets goldfish results for the Archidekt reference decks in caller order.
     /// </summary>
     public List<GoldfishDeckComparison> ReferenceDecks { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets references that could not be imported or simulated.
+    /// </summary>
+    public List<GoldfishReferenceImportFailure> ReferenceFailures { get; set; } = [];
 
     /// <summary>
     /// Gets or sets deterministic comparison notes.
