@@ -92,7 +92,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             result.TurnSummaries.Add(BuildProjectedTurnState(turn, runs));
         }
 
-        GoldfishRun representative = runs.OrderBy(run => Math.Abs((run.WinTurn ?? safeTurn + 4) - (result.WinEstimate.MedianWinTurn ?? safeTurn + 4))).First();
+        GoldfishRun representative = runs
+            .OrderBy(run => Math.Abs((run.WinTurn ?? safeTurn + 4) - (result.WinEstimate.MedianObservedWinTurn ?? safeTurn + 4)))
+            .First();
         result.RepresentativeLines = representative.Line.Take(12).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
         result.Notes.Add("Commander is treated as available from the command zone when the deck has a Commander category.");
@@ -365,9 +367,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         {
             WorkspaceId = workspace.Id,
             Simulations = runs.Count,
-            MedianWinTurn = Percentile(wins, 0.50),
-            P25WinTurn = Percentile(wins, 0.25),
-            P75WinTurn = Percentile(wins, 0.75)
+            ObservedWins = wins.Count,
+            ObservedWinRate = runs.Count == 0 ? 0 : wins.Count / (double)runs.Count,
+            MedianObservedWinTurn = Percentile(wins, 0.50),
+            P25ObservedWinTurn = Percentile(wins, 0.25),
+            P75ObservedWinTurn = Percentile(wins, 0.75)
         };
         for (int turn = 1; turn <= maxTurn; turn++)
         {
@@ -387,12 +391,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             });
         }
 
-        if (estimate.MedianWinTurn is null)
+        if (estimate.MedianObservedWinTurn is null)
         {
             estimate.Notes.Add($"No likely win was found by turn {maxTurn} in the goldfish runs.");
         }
 
         estimate.Notes.Add("Win timing is probabilistic and assumes no interaction.");
+        estimate.Notes.Add("Observed win-turn percentiles only include runs that reached a heuristic win; winByTurnRates and observedWinRate are measured against all runs.");
         return estimate;
     }
 
@@ -528,4 +533,3 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         public int Tokens { get => tokens; set => tokens = value; }
     }
 }
-

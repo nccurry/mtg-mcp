@@ -106,7 +106,7 @@ public sealed partial class DeckSimulationService
             [
                 "Archidekt reference decks are imported read-only with writeBack=false.",
                 "Every deck uses the same target turn, simulation count, seed, and mulligan setting.",
-                "Deltas are reference minus active; negative medianWinTurnDelta means the reference goldfished faster.",
+                "Deltas are reference minus active; negative medianObservedWinTurnDelta means the reference's observed wins were faster.",
                 "Non-Archidekt references are returned in referenceFailures without aborting other comparisons."
             ],
             Warnings = failures
@@ -205,10 +205,10 @@ public sealed partial class DeckSimulationService
     {
         ProjectedTurnState activeTurn = GetTurnSummary(active, active.TargetTurn);
         ProjectedTurnState referenceTurn = GetTurnSummary(reference, reference.TargetTurn);
-        int? medianWinTurnDelta =
-            active.WinEstimate.MedianWinTurn.HasValue
-            && reference.WinEstimate.MedianWinTurn.HasValue
-                ? reference.WinEstimate.MedianWinTurn.Value - active.WinEstimate.MedianWinTurn.Value
+        int? medianObservedWinTurnDelta =
+            active.WinEstimate.MedianObservedWinTurn.HasValue
+            && reference.WinEstimate.MedianObservedWinTurn.HasValue
+                ? reference.WinEstimate.MedianObservedWinTurn.Value - active.WinEstimate.MedianObservedWinTurn.Value
                 : null;
 
         return new GoldfishComparisonDelta
@@ -216,7 +216,7 @@ public sealed partial class DeckSimulationService
             BaselineWorkspaceId = active.WorkspaceId,
             ReferenceWorkspaceId = reference.WorkspaceId,
             TargetTurn = active.TargetTurn,
-            MedianWinTurnDelta = medianWinTurnDelta,
+            MedianObservedWinTurnDelta = medianObservedWinTurnDelta,
             TargetTurnWinRateDelta = WinRateByTurn(reference, reference.TargetTurn)
                 - WinRateByTurn(active, active.TargetTurn),
             MulliganRateDelta = MulliganRate(reference) - MulliganRate(active),

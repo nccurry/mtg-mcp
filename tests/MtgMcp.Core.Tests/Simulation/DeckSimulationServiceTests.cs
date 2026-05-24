@@ -9,6 +9,11 @@ namespace MtgMcp.Core.Tests;
 public sealed partial class DeckIntelligenceTests
 {
     /// <summary>
+    /// Serializes MCP-facing payloads with web-style property names.
+    /// </summary>
+    private static readonly JsonSerializerOptions WebJsonSerializerOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
     /// Verifies that combo and goldfish projections return explainable estimates.
     /// </summary>
     [Fact]
@@ -124,9 +129,15 @@ public sealed partial class DeckIntelligenceTests
             && summary.MedianPower == 0
             && summary.MedianTokens == 0
             && summary.Confidence == 0.50);
+        goldfish.WinEstimate.ObservedWins.Should().Be(100);
+        goldfish.WinEstimate.ObservedWinRate.Should().Be(1);
+        goldfish.WinEstimate.MedianObservedWinTurn.Should().Be(5);
+        goldfish.WinEstimate.P25ObservedWinTurn.Should().Be(5);
+        goldfish.WinEstimate.P75ObservedWinTurn.Should().Be(5);
         goldfish.WinEstimate.MedianWinTurn.Should().Be(5);
-        goldfish.WinEstimate.P25WinTurn.Should().Be(5);
-        goldfish.WinEstimate.P75WinTurn.Should().Be(5);
+        string winEstimateJson = JsonSerializer.Serialize(goldfish.WinEstimate, WebJsonSerializerOptions);
+        winEstimateJson.Should().Contain("medianObservedWinTurn");
+        winEstimateJson.Should().NotContain("medianWinTurn");
         goldfish.WinEstimate.WinByTurnRates.Should().Contain([
             new KeyValuePair<int, double>(1, 0),
             new KeyValuePair<int, double>(2, 0),
@@ -186,6 +197,17 @@ public sealed partial class DeckIntelligenceTests
             deck.Source == "archidekt"
             && deck.Goldfish.TargetTurn == 5
             && deck.DeltaFromActive != null);
+        comparison.ReferenceDecks.Should().OnlyContain(deck =>
+            deck.Goldfish.WinEstimate.ObservedWins >= 0
+            && deck.Goldfish.WinEstimate.ObservedWinRate >= 0
+            && deck.Goldfish.WinEstimate.ObservedWinRate <= 1);
+        comparison.ReferenceDecks.Should().OnlyContain(deck =>
+            deck.DeltaFromActive!.MedianObservedWinTurnDelta == deck.DeltaFromActive.MedianWinTurnDelta);
+        string deltaJson = JsonSerializer.Serialize(
+            comparison.ReferenceDecks.First().DeltaFromActive,
+            WebJsonSerializerOptions);
+        deltaJson.Should().Contain("medianObservedWinTurnDelta");
+        deltaJson.Should().NotContain("medianWinTurnDelta");
         comparison.ReferenceDecks.Select(deck => deck.ArchidektDeckId).Should().Equal("111", "222", "333");
         comparison.ReferenceFailures.Should().BeEmpty();
         archidekt.ImportRequests.Select(request => request.DeckIdOrUrl).Should().Equal(firstUrl, secondUrl, thirdUrl);
@@ -256,6 +278,9 @@ public sealed partial class DeckIntelligenceTests
             seed: 17,
             TestContext.Current.CancellationToken);
 
+        estimate.ObservedWins.Should().Be(0);
+        estimate.ObservedWinRate.Should().Be(0);
+        estimate.MedianObservedWinTurn.Should().BeNull();
         estimate.MedianWinTurn.Should().BeNull();
         estimate.Routes.Should().BeEmpty();
         estimate.Notes.Should().Contain(note => note.Contains("No likely win", StringComparison.OrdinalIgnoreCase));

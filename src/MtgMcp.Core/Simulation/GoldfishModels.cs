@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -52,19 +54,47 @@ public sealed class WinTurnEstimate
     public int Simulations { get; set; }
 
     /// <summary>
-    /// Gets or sets the median win turn.
+    /// Gets or sets the number of runs that reached a heuristic win by the maximum simulated turn.
     /// </summary>
-    public int? MedianWinTurn { get; set; }
+    public int ObservedWins { get; set; }
 
     /// <summary>
-    /// Gets or sets the twenty-fifth percentile win turn.
+    /// Gets or sets the fraction of all runs that reached a heuristic win.
     /// </summary>
-    public int? P25WinTurn { get; set; }
+    public double ObservedWinRate { get; set; }
 
     /// <summary>
-    /// Gets or sets the seventy-fifth percentile win turn.
+    /// Gets or sets the median win turn among only the runs that reached a heuristic win.
     /// </summary>
-    public int? P75WinTurn { get; set; }
+    public int? MedianObservedWinTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the twenty-fifth percentile win turn among only the runs that reached a heuristic win.
+    /// </summary>
+    public int? P25ObservedWinTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the seventy-fifth percentile win turn among only the runs that reached a heuristic win.
+    /// </summary>
+    public int? P75ObservedWinTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the legacy median observed win turn alias used by older in-process callers.
+    /// </summary>
+    [JsonIgnore]
+    public int? MedianWinTurn { get => MedianObservedWinTurn; set => MedianObservedWinTurn = value; }
+
+    /// <summary>
+    /// Gets or sets the legacy twenty-fifth percentile observed win turn alias used by older in-process callers.
+    /// </summary>
+    [JsonIgnore]
+    public int? P25WinTurn { get => P25ObservedWinTurn; set => P25ObservedWinTurn = value; }
+
+    /// <summary>
+    /// Gets or sets the legacy seventy-fifth percentile observed win turn alias used by older in-process callers.
+    /// </summary>
+    [JsonIgnore]
+    public int? P75WinTurn { get => P75ObservedWinTurn; set => P75ObservedWinTurn = value; }
 
     /// <summary>
     /// Gets or sets cumulative win rates by turn.
@@ -277,9 +307,19 @@ public sealed class GoldfishComparisonDelta
     public int TargetTurn { get; set; }
 
     /// <summary>
-    /// Gets or sets reference median win turn minus active median win turn.
+    /// Gets or sets reference median observed win turn minus active median observed win turn.
     /// </summary>
-    public int? MedianWinTurnDelta { get; set; }
+    public int? MedianObservedWinTurnDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets the legacy median observed win turn delta alias used by older in-process callers.
+    /// </summary>
+    [JsonIgnore]
+    public int? MedianWinTurnDelta
+    {
+        get => MedianObservedWinTurnDelta;
+        set => MedianObservedWinTurnDelta = value;
+    }
 
     /// <summary>
     /// Gets or sets reference cumulative win rate minus active cumulative win rate at the target turn.
