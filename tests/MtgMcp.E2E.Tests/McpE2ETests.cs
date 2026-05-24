@@ -42,6 +42,7 @@ public sealed class McpE2ETests
             "analyze_deck",
             "analyze_deck_performance",
             "compare_plan_performance",
+            "compare_archidekt_goldfish",
             "get_server_info"
         ]);
 
@@ -123,6 +124,7 @@ public sealed class McpE2ETests
         await using FakeHttpServer archidekt = new();
         scryfall.PostJson("cards/collection", PerformanceCollectionJson);
         scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
+        archidekt.GetJson("api/decks/456/", RemoteSwampsDeckJson);
 
         await using McpProcessSession session = await McpProcessSession.StartAsync(
             scryfall.BaseAddress,
@@ -176,6 +178,17 @@ public sealed class McpE2ETests
                 ["maxTurn"] = 3,
                 ["seed"] = 2026
             });
+        JsonElement goldfishComparison = await CallJsonAsync(
+            session.Client,
+            "compare_archidekt_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["archidektDeckUrl1"] = "456",
+                ["targetTurn"] = 3,
+                ["simulations"] = 100,
+                ["seed"] = 2026
+            });
 
         GetInt32(analysis, "deckSize").Should().Be(100);
         FindNamedTurn(GetArray(analysis, "turnProbabilities"), "land-drop-by-turn", 3)
@@ -190,7 +203,10 @@ public sealed class McpE2ETests
         JsonElement rampDelta = FindNamed(GetArray(comparison, "deltas"), "ramp-cast-by-turn-3", metricProperty: "metric");
         rampDelta.GetProperty("after").GetDouble().Should().BeGreaterThan(rampDelta.GetProperty("before").GetDouble());
         rampDelta.GetProperty("beforeLowConfidenceInterval").ValueKind.Should().NotBe(JsonValueKind.Null);
-        archidekt.Requests.Should().BeEmpty();
+        JsonElement reference = GetArray(goldfishComparison, "referenceDecks").Should().ContainSingle().Subject;
+        GetString(reference, "source").Should().Be("archidekt");
+        GetString(GetObject(goldfishComparison, "activeDeck"), "source").Should().Be("workspace");
+        archidekt.Requests.Should().ContainSingle(request => request.Method == "GET" && request.PathAndQuery == "api/decks/456/");
     }
 
     /// <summary>

@@ -147,6 +147,52 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that Archidekt goldfish comparison imports reference decks read-only and returns raw deltas.
+    /// </summary>
+    [Fact]
+    public async Task CompareArchidektGoldfish_ImportsReferencesReadOnlyAndReturnsDeltas()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace active = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Active Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new();
+        string firstUrl = "https://archidekt.com/decks/111/reference_one";
+        string secondUrl = "https://archidekt.com/decks/222/reference_two";
+        string thirdUrl = "https://archidekt.com/decks/333/reference_three";
+        archidekt.ImportedDecksByInput[firstUrl] = CreateGoldfishFixtureDeck("Reference One", "111", wincons: 5);
+        archidekt.ImportedDecksByInput[secondUrl] = CreateGoldfishFixtureDeck("Reference Two", "222", ramp: 16);
+        archidekt.ImportedDecksByInput[thirdUrl] = CreateGoldfishFixtureDeck("Reference Three", "333", tokens: 24);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog(), archidekt);
+
+        ArchidektGoldfishComparisonResult comparison = await service.CompareArchidektGoldfishAsync(
+            active.Id,
+            firstUrl,
+            secondUrl,
+            thirdUrl,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 44,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        comparison.WorkspaceId.Should().Be(active.Id);
+        comparison.ActiveDeck.Label.Should().Be("active");
+        comparison.ActiveDeck.Source.Should().Be("workspace");
+        comparison.ActiveDeck.Goldfish.Simulations.Should().Be(100);
+        comparison.ReferenceDecks.Select(deck => deck.Label).Should().Equal("reference-1", "reference-2", "reference-3");
+        comparison.ReferenceDecks.Select(deck => deck.Input).Should().Equal(firstUrl, secondUrl, thirdUrl);
+        comparison.ReferenceDecks.Should().OnlyContain(deck =>
+            deck.Source == "archidekt"
+            && deck.Goldfish.TargetTurn == 5
+            && deck.DeltaFromActive != null);
+        comparison.ReferenceDecks.Select(deck => deck.ArchidektDeckId).Should().Equal("111", "222", "333");
+        archidekt.ImportRequests.Select(request => request.DeckIdOrUrl).Should().Equal(firstUrl, secondUrl, thirdUrl);
+        archidekt.ImportRequests.Should().OnlyContain(request => !request.WriteBack);
+        comparison.Notes.Should().Contain(note => note.Contains("writeBack=false", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that weak decks report no likely goldfish win route.
     /// </summary>
     [Fact]
@@ -174,5 +220,81 @@ public sealed partial class DeckIntelligenceTests
         estimate.MedianWinTurn.Should().BeNull();
         estimate.Routes.Should().BeEmpty();
         estimate.Notes.Should().Contain(note => note.Contains("No likely win", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Creates a compact Commander-style fixture for goldfish comparison tests.
+    /// </summary>
+    private static DeckWorkspace CreateGoldfishFixtureDeck(
+        string name,
+        string? archidektDeckId,
+        int lands = 40,
+        int ramp = 12,
+        int tokens = 16,
+        int wincons = 3)
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = name,
+            Format = "commander",
+            Mode = archidektDeckId is null ? WorkspaceMode.Local : WorkspaceMode.Archidekt,
+            ArchidektDeckId = archidektDeckId,
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = lands,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Forest",
+                        ManaValue = 0,
+                        OracleText = "{T}: Add {G}."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Ramp",
+                    Quantity = ramp,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        ManaValue = 2,
+                        OracleText = "{T}: Add {G}."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Token Maker",
+                    Quantity = tokens,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature",
+                        ManaValue = 3,
+                        OracleText = "When this enters, create two 1/1 creature tokens."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Craterhoof Behemoth",
+                    Quantity = wincons,
+                    PrimaryCategory = DeckRoles.Wincons,
+                    Categories = [DeckRoles.Wincons],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature",
+                        ManaValue = 8,
+                        OracleText = "Creatures you control get +X/+X and gain trample until end of turn."
+                    }
+                },
+            ]
+        };
     }
 }

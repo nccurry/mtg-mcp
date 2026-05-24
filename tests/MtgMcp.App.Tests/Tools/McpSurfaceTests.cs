@@ -92,6 +92,7 @@ public sealed class McpSurfaceTests
             "find_near_miss_combos",
             "estimate_combo_pressure",
             "simulate_goldfish",
+            "compare_archidekt_goldfish",
             "project_board_state",
             "estimate_win_turn",
             "analyze_commander_trends",
@@ -239,6 +240,7 @@ public sealed class McpSurfaceTests
         CustomAttributeData bracket = GetToolAttribute(nameof(AnalysisTools.EstimateCommanderBracketAsync));
         CustomAttributeData performance = GetToolAttribute(nameof(SimulationTools.AnalyzeDeckPerformanceAsync));
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
+        CustomAttributeData compareGoldfish = GetToolAttribute(nameof(SimulationTools.CompareArchidektGoldfishAsync));
         CustomAttributeData queryCards = GetToolAttribute(nameof(RecommendationTools.QueryCardsForDeckAsync));
         CustomAttributeData createExplicitPlan = GetToolAttribute(nameof(PlanTools.CreateDeckPlanFromExplicitChangesAsync));
 
@@ -258,6 +260,8 @@ public sealed class McpSurfaceTests
         GetNamedBool(performance, "OpenWorld").Should().BeFalse();
         GetNamedBool(comparePerformance, "ReadOnly").Should().BeTrue();
         GetNamedBool(comparePerformance, "OpenWorld").Should().BeTrue();
+        GetNamedBool(compareGoldfish, "ReadOnly").Should().BeTrue();
+        GetNamedBool(compareGoldfish, "OpenWorld").Should().BeTrue();
         GetNamedBool(queryCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(queryCards, "OpenWorld").Should().BeTrue();
         GetNamedBool(createExplicitPlan, "ReadOnly").Should().BeFalse();

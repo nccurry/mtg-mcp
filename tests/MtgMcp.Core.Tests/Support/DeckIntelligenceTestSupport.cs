@@ -1162,6 +1162,16 @@ public sealed partial class DeckIntelligenceTests
         };
 
         /// <summary>
+        /// Gets fake imported decks keyed by the caller-supplied Archidekt input.
+        /// </summary>
+        public Dictionary<string, DeckWorkspace> ImportedDecksByInput { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets Archidekt import requests in caller order.
+        /// </summary>
+        public List<(string DeckIdOrUrl, bool WriteBack)> ImportRequests { get; } = [];
+
+        /// <summary>
         /// Gets created checkpoints.
         /// </summary>
         public List<string> CreatedCheckpoints { get; } = [];
@@ -1202,10 +1212,28 @@ public sealed partial class DeckIntelligenceTests
         /// </summary>
         public Task<DeckWorkspace> ImportDeckAsync(string deckIdOrUrl, bool writeBack, CancellationToken cancellationToken)
         {
+            ImportRequests.Add((deckIdOrUrl, writeBack));
+            if (ImportedDecksByInput.TryGetValue(deckIdOrUrl, out DeckWorkspace? importedDeck))
+            {
+                DeckWorkspace cloned = CloneWorkspace(importedDeck);
+                cloned.Mode = WorkspaceMode.Archidekt;
+                cloned.WriteBack = writeBack;
+                return Task.FromResult(cloned);
+            }
+
             ImportedDeck.Mode = WorkspaceMode.Archidekt;
             ImportedDeck.WriteBack = writeBack;
             ImportedDeck.ArchidektDeckId = "123";
             return Task.FromResult(ImportedDeck);
+        }
+
+        /// <summary>
+        /// Copies a workspace so tests can mutate returned imports without changing fixtures.
+        /// </summary>
+        private static DeckWorkspace CloneWorkspace(DeckWorkspace workspace)
+        {
+            string json = JsonSerializer.Serialize(workspace);
+            return JsonSerializer.Deserialize<DeckWorkspace>(json) ?? new DeckWorkspace();
         }
 
         /// <summary>

@@ -178,3 +178,166 @@ public sealed class GoldfishSimulationResult
     /// </summary>
     public List<string> Notes { get; set; } = [];
 }
+
+/// <summary>
+/// Reports deterministic goldfish results for one compared deck.
+/// </summary>
+public sealed class GoldfishDeckComparison
+{
+    /// <summary>
+    /// Gets or sets the stable comparison label, such as active or reference-1.
+    /// </summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether the deck came from the active workspace or an Archidekt import.
+    /// </summary>
+    public string Source { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the caller-supplied Archidekt id or URL when this is a reference deck.
+    /// </summary>
+    public string? Input { get; set; }
+
+    /// <summary>
+    /// Gets or sets the compared workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the compared deck name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the Archidekt deck id when known.
+    /// </summary>
+    public string? ArchidektDeckId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the count of included cards considered by the simulator.
+    /// </summary>
+    public int IncludedCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets the raw goldfish result for this deck.
+    /// </summary>
+    public GoldfishSimulationResult Goldfish { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets arithmetic deltas from the active deck when this is a reference deck.
+    /// </summary>
+    public GoldfishComparisonDelta? DeltaFromActive { get; set; }
+}
+
+/// <summary>
+/// Reports arithmetic goldfish deltas between a reference deck and the active deck.
+/// </summary>
+public sealed class GoldfishComparisonDelta
+{
+    /// <summary>
+    /// Gets or sets the active workspace id used as the baseline.
+    /// </summary>
+    public string BaselineWorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the reference workspace id compared to the baseline.
+    /// </summary>
+    public string ReferenceWorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the turn used for turn-summary deltas.
+    /// </summary>
+    public int TargetTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference median win turn minus active median win turn.
+    /// </summary>
+    public int? MedianWinTurnDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference cumulative win rate minus active cumulative win rate at the target turn.
+    /// </summary>
+    public double TargetTurnWinRateDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference mulligan rate minus active mulligan rate.
+    /// </summary>
+    public double MulliganRateDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference median land count minus active median land count at the target turn.
+    /// </summary>
+    public int MedianLandsDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference median mana sources minus active median mana sources at the target turn.
+    /// </summary>
+    public int MedianManaSourcesDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference median nonland permanents minus active median nonland permanents at the target turn.
+    /// </summary>
+    public int MedianNonlandPermanentsDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference median cards in hand minus active median cards in hand at the target turn.
+    /// </summary>
+    public int MedianCardsInHandDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets reference median token count minus active median token count at the target turn.
+    /// </summary>
+    public int MedianTokensDelta { get; set; }
+}
+
+/// <summary>
+/// Reports an active deck goldfish comparison against caller-supplied Archidekt reference decks.
+/// </summary>
+public sealed class ArchidektGoldfishComparisonResult
+{
+    /// <summary>
+    /// Gets or sets the active workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the projected target turn.
+    /// </summary>
+    public int TargetTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of simulations actually run for each deck.
+    /// </summary>
+    public int Simulations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the shared random seed used for every compared deck.
+    /// </summary>
+    public int Seed { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether simple mulligans were enabled.
+    /// </summary>
+    public bool Mulligan { get; set; }
+
+    /// <summary>
+    /// Gets or sets the active workspace goldfish result.
+    /// </summary>
+    public GoldfishDeckComparison ActiveDeck { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets goldfish results for the Archidekt reference decks in caller order.
+    /// </summary>
+    public List<GoldfishDeckComparison> ReferenceDecks { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets deterministic comparison notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal comparison warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+}
