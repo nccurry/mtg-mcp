@@ -214,6 +214,7 @@ Version: 1
 Format: commander
 Commander: Teysa Karlov
 Power Level: tuned-casual
+Heuristic Profile: command-zone-template
 Local Meta: graveyards, go-wide tokens
 Budget: prefer upgrades under $10
 
@@ -226,6 +227,13 @@ Avoid
 - deterministic infinite combos
 End MTG MCP Deck Intent
 ```
+
+Supported power levels are `precon`, `casual`, `tuned-casual`, `high-power`,
+and `cedh`. Supported heuristic profiles are `auto`, `commander-baseline`,
+`command-zone-template`, `edhrec-foundation`, `mana-rich-39-land`,
+`fifty-mana-sources`, `package-8x8`, `package-7x9`, `package-9x7`,
+`seventy-five-percent`, `cedh-turbo`, `cedh-midrange`, `cedh-stax`, and
+`cedh-tempo`. Package templates are `none`, `8x8`, `7x9`, and `9x7`.
 
 For the full syntax, read `mtg://usage/deck-intent`.
 

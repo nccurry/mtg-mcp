@@ -334,6 +334,131 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that add-first Commander swap plans are judged by their final included card count.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDeckPlan_CommanderSwapPlan_AddsBeforeRemovingWithoutTransientOverfill()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        FakeArchidektGateway archidekt = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Commander Swap",
+            Format = "commander",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Existing Package",
+                    Quantity = 100,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard]
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        archidekt.ImportedDeck = workspace;
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add before cut",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.RemoveCard,
+                    CardName = "Existing Package",
+                    Quantity = 1,
+                    Category = DeckDefaults.Mainboard
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidekt, plans);
+
+        DeckEditPlanApplyResult result = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: true,
+            checkpointName: "Before swap",
+            TestContext.Current.CancellationToken);
+
+        result.Success.Should().BeTrue();
+        result.Status.Should().Be(DeckEditPlanStatus.Applied);
+        result.AppliedOperations.Should().Be(2);
+        result.AttemptedOperations.Should().Be(2);
+        result.CheckpointId.Should().Be("checkpoint-1");
+        archidekt.PersistedCardRequests.Should().Be(1);
+        result.Workspace.Cards.Single(card => card.Name == "Existing Package").Quantity.Should().Be(99);
+        result.Workspace.Cards.Should().ContainSingle(card => card.Name == "Arcane Signet");
+        result.Workspace.Cards.Sum(card => Math.Max(0, card.Quantity)).Should().Be(100);
+    }
+
+    /// <summary>
+    /// Verifies that final Commander overfills still fail without mutating saved workspace state.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDeckPlan_CommanderOverfillPlan_FailsWithoutMutatingWorkspace()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Commander Overfill",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Existing Package",
+                    Quantity = 100,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard]
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Overfill",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckEditPlanApplyResult result = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: true,
+            checkpointName: null,
+            TestContext.Current.CancellationToken);
+
+        result.Success.Should().BeFalse();
+        result.Status.Should().Be(DeckEditPlanStatus.Failed);
+        result.AttemptedOperations.Should().Be(1);
+        result.FailedOperationIndex.Should().Be(0);
+        result.Error.Should().Contain("101 included cards");
+        DeckWorkspace saved = workspaces.Workspaces[workspace.Id];
+        saved.Cards.Should().ContainSingle().Which.Name.Should().Be("Existing Package");
+        saved.Cards.Single().Quantity.Should().Be(100);
+    }
+
+    /// <summary>
     /// Verifies that apply deck plan returns structured failure details instead of surfacing a generic MCP error.
     /// </summary>
     [Fact]

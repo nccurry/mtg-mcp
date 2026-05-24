@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -227,8 +229,10 @@ public sealed partial class DeckPlanService : DeckServiceBase
         IReadOnlyList<DeckEditOperation> operations,
         CancellationToken cancellationToken)
     {
-        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
+        DeckWorkspace persistedWorkspace = await LoadForMutationAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
+        int originalIncludedCount = CountCommanderIncludedCards(persistedWorkspace);
+        DeckWorkspace workspace = CloneWorkspaceForBatchApply(persistedWorkspace);
         HashSet<DeckCard> upsertedCards = [];
         HashSet<DeckCard> removedCards = [];
         List<string> messages = [];
@@ -252,6 +256,8 @@ public sealed partial class DeckPlanService : DeckServiceBase
                 throw new DeckEditPlanOperationException(index, operation, exception);
             }
         }
+
+        EnsureCommanderIncludedBatchResultIsSafe(workspace, operations, originalIncludedCount);
 
         try
         {
@@ -293,7 +299,6 @@ public sealed partial class DeckPlanService : DeckServiceBase
                 string category = NormalizeCategoryName(operation.Category ?? DeckDefaults.Mainboard);
                 int amount = Math.Max(1, operation.Quantity ?? 1);
                 EnsureCategory(workspace, category);
-                EnsureCommanderIncludedAdditionIsSafe(workspace, category, amount);
 
                 DeckCard? existing = FindCard(workspace, cardName, category);
                 DeckCard changed;
@@ -507,35 +512,76 @@ public sealed partial class DeckPlanService : DeckServiceBase
     }
 
     /// <summary>
-    /// Refuses included Commander additions that would unexpectedly exceed the deck size limit.
+    /// Clones a workspace so failed batch validation cannot dirty cached state before persistence.
     /// </summary>
-    private static void EnsureCommanderIncludedAdditionIsSafe(
+    private static DeckWorkspace CloneWorkspaceForBatchApply(DeckWorkspace workspace)
+    {
+        string json = JsonSerializer.Serialize(workspace);
+        return JsonSerializer.Deserialize<DeckWorkspace>(json)
+            ?? throw new InvalidOperationException("Unable to clone deck workspace for plan application.");
+    }
+
+    /// <summary>
+    /// Counts included Commander cards, returning zero for non-Commander workspaces.
+    /// </summary>
+    private static int CountCommanderIncludedCards(DeckWorkspace workspace)
+    {
+        if (!workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        return DeckCategoryInclusion.IncludedCards(workspace)
+            .Sum(card => Math.Max(0, card.Quantity));
+    }
+
+    /// <summary>
+    /// Refuses card batches that would leave a Commander deck newly over the size limit.
+    /// </summary>
+    private static void EnsureCommanderIncludedBatchResultIsSafe(
         DeckWorkspace workspace,
-        string category,
-        int quantity)
+        IReadOnlyList<DeckEditOperation> operations,
+        int originalIncludedCount)
     {
         if (!workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        Dictionary<string, DeckCategory> categoryMap = DeckCategoryInclusion.BuildCategoryMap(workspace);
-        if (!DeckCategoryInclusion.IsIncludedInDeck(categoryMap, category))
+        int finalIncludedCount = CountCommanderIncludedCards(workspace);
+        if (finalIncludedCount <= 100 || finalIncludedCount <= originalIncludedCount)
         {
             return;
         }
 
-        int includedCount = DeckCategoryInclusion.IncludedCards(workspace)
-            .Sum(card => Math.Max(0, card.Quantity));
-        int projectedCount = includedCount + Math.Max(1, quantity);
-        if (projectedCount <= 100)
-        {
-            return;
-        }
-
-        throw new InvalidOperationException(
-            $"Adding {Math.Max(1, quantity)} card(s) to included category '{category}' would raise this Commander deck from {includedCount} to {projectedCount} included cards. Add to an excluded category such as Maybeboard or set the category to IncludedInDeck=false."
+        int operationIndex = FindCommanderSizeFailureOperationIndex(operations);
+        throw new DeckEditPlanOperationException(
+            operationIndex,
+            operations[operationIndex],
+            new InvalidOperationException(
+                $"Applying this plan would leave this Commander deck with {finalIncludedCount} included cards, up from {originalIncludedCount}. Add to an excluded category such as Maybeboard, set the category to IncludedInDeck=false, or include enough cuts to keep the final deck at 100 cards."
+            )
         );
+    }
+
+    /// <summary>
+    /// Finds the edit most likely responsible for a final Commander deck-size overfill.
+    /// </summary>
+    private static int FindCommanderSizeFailureOperationIndex(IReadOnlyList<DeckEditOperation> operations)
+    {
+        for (int index = operations.Count - 1; index >= 0; index--)
+        {
+            if (operations[index].Operation is
+                DeckEditOperations.AddCard
+                or DeckEditOperations.SetCardQuantity
+                or DeckEditOperations.MoveCard
+                or DeckEditOperations.SetPrimaryCardCategory)
+            {
+                return index;
+            }
+        }
+
+        return Math.Max(0, operations.Count - 1);
     }
 
     /// <summary>
