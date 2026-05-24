@@ -55,7 +55,14 @@ public sealed partial class DeckPlanService : DeckServiceBase
         if (!string.IsNullOrWhiteSpace(plan.Status)
             && !plan.Status.Equals(DeckEditPlanStatus.Draft, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"Deck edit plan '{plan.PlanId}' has already been applied.");
+            if (plan.Status.Equals(DeckEditPlanStatus.Applied, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Deck edit plan '{plan.PlanId}' has already been applied.");
+            }
+
+            throw new InvalidOperationException(
+                $"Deck edit plan '{plan.PlanId}' cannot be applied because its status is '{plan.Status}'."
+            );
         }
 
         DeckWorkspace workspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
@@ -77,13 +84,103 @@ public sealed partial class DeckPlanService : DeckServiceBase
         }
 
         List<string> messages = [];
-        foreach (DeckEditOperation operation in plan.Operations)
+        int appliedOperations = 0;
+        int attemptedOperations = 0;
+        try
         {
-            DeckChangeResult? result = await ApplyOperationAsync(plan.WorkspaceId, operation, cancellationToken).ConfigureAwait(false);
-            if (result is not null)
+            if (CanApplyAsCardBatch(plan.Operations))
             {
-                messages.Add(result.Message);
+                DeckEditPlanBatchApplyResult batch = await ApplyCardOperationsInBatchAsync(
+                        plan.WorkspaceId,
+                        plan.Operations,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                messages.AddRange(batch.Messages);
+                appliedOperations = batch.AppliedOperations;
+                attemptedOperations = batch.AttemptedOperations;
             }
+            else
+            {
+                for (int index = 0; index < plan.Operations.Count; index++)
+                {
+                    DeckEditOperation operation = plan.Operations[index];
+                    attemptedOperations = index + 1;
+                    try
+                    {
+                        DeckChangeResult? result = await ApplyOperationAsync(plan.WorkspaceId, operation, cancellationToken).ConfigureAwait(false);
+                        appliedOperations++;
+                        if (result is not null)
+                        {
+                            messages.Add(result.Message);
+                        }
+                    }
+                    catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
+                    {
+                        return await CompleteFailedApplyAsync(
+                                plans,
+                                plan,
+                                checkpointId,
+                                appliedOperations,
+                                attemptedOperations,
+                                index,
+                                operation,
+                                exception,
+                                applyStateUnknown: IsRemoteTimeout(workspace, exception),
+                                messages,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                }
+            }
+        }
+        catch (DeckEditPlanOperationException exception)
+        {
+            return await CompleteFailedApplyAsync(
+                plans,
+                plan,
+                checkpointId,
+                appliedOperations,
+                exception.OperationIndex + 1,
+                exception.OperationIndex,
+                exception.Operation,
+                exception.InnerException ?? exception,
+                applyStateUnknown: false,
+                messages,
+                cancellationToken)
+            .ConfigureAwait(false);
+        }
+        catch (DeckEditPlanPersistenceException exception)
+        {
+            messages.AddRange(exception.Messages);
+            return await CompleteFailedApplyAsync(
+                    plans,
+                    plan,
+                    checkpointId,
+                    appliedOperations,
+                    exception.AttemptedOperations,
+                    failedOperationIndex: null,
+                    failedOperation: null,
+                    exception.InnerException ?? exception,
+                    applyStateUnknown: true,
+                    messages,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
+        {
+            return await CompleteFailedApplyAsync(
+                    plans,
+                    plan,
+                    checkpointId,
+                    appliedOperations,
+                    attemptedOperations,
+                    failedOperationIndex: null,
+                    failedOperation: null,
+                    exception,
+                    applyStateUnknown: IsRemoteTimeout(workspace, exception),
+                    messages,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         DeckWorkspace updatedWorkspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
@@ -94,14 +191,482 @@ public sealed partial class DeckPlanService : DeckServiceBase
 
         return new DeckEditPlanApplyResult
         {
+            Success = true,
             PlanId = plan.PlanId,
             WorkspaceId = plan.WorkspaceId,
             Persistence = DeckPersistence.For(updatedWorkspace),
             CheckpointId = checkpointId,
-            AppliedOperations = plan.Operations.Count,
+            Status = plan.Status,
+            AppliedOperations = appliedOperations,
+            AttemptedOperations = attemptedOperations,
             Messages = messages,
             Workspace = updatedWorkspace
         };
+    }
+
+    /// <summary>
+    /// Returns whether all operations can be applied in one card persistence pass.
+    /// </summary>
+    private static bool CanApplyAsCardBatch(IReadOnlyList<DeckEditOperation> operations)
+    {
+        return operations.Count > 0 && operations.All(operation => operation.Operation is
+            DeckEditOperations.AddCard
+            or DeckEditOperations.RemoveCard
+            or DeckEditOperations.SetCardQuantity
+            or DeckEditOperations.MoveCard
+            or DeckEditOperations.AddCardCategory
+            or DeckEditOperations.RemoveCardCategory
+            or DeckEditOperations.SetPrimaryCardCategory);
+    }
+
+    /// <summary>
+    /// Applies card-only plans in memory and writes all card mutations in one repository or Archidekt call.
+    /// </summary>
+    private async Task<DeckEditPlanBatchApplyResult> ApplyCardOperationsInBatchAsync(
+        string workspaceId,
+        IReadOnlyList<DeckEditOperation> operations,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        HashSet<DeckCard> upsertedCards = [];
+        HashSet<DeckCard> removedCards = [];
+        List<string> messages = [];
+
+        for (int index = 0; index < operations.Count; index++)
+        {
+            DeckEditOperation operation = operations[index];
+            try
+            {
+                string message = await ApplyCardOperationToWorkspaceAsync(
+                        workspace,
+                        operation,
+                        upsertedCards,
+                        removedCards,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                messages.Add(message);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                throw new DeckEditPlanOperationException(index, operation, exception);
+            }
+        }
+
+        try
+        {
+            await PersistCardsAsync(
+                    workspace,
+                    upsertedCards.ToList(),
+                    removedCards.ToList(),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
+        {
+            throw new DeckEditPlanPersistenceException(operations.Count, messages, exception);
+        }
+
+        return new DeckEditPlanBatchApplyResult
+        {
+            AppliedOperations = operations.Count,
+            AttemptedOperations = operations.Count,
+            Messages = messages
+        };
+    }
+
+    /// <summary>
+    /// Applies one card mutation to an already-loaded workspace.
+    /// </summary>
+    private async Task<string> ApplyCardOperationToWorkspaceAsync(
+        DeckWorkspace workspace,
+        DeckEditOperation operation,
+        HashSet<DeckCard> upsertedCards,
+        HashSet<DeckCard> removedCards,
+        CancellationToken cancellationToken)
+    {
+        switch (operation.Operation)
+        {
+            case DeckEditOperations.AddCard:
+            {
+                string cardName = Require(operation.CardName, "cardName");
+                string category = NormalizeCategoryName(operation.Category ?? DeckDefaults.Mainboard);
+                int amount = Math.Max(1, operation.Quantity ?? 1);
+                EnsureCategory(workspace, category);
+                EnsureCommanderIncludedAdditionIsSafe(workspace, category, amount);
+
+                DeckCard? existing = FindCard(workspace, cardName, category);
+                DeckCard changed;
+                if (existing is null)
+                {
+                    changed = await CreateDeckCardForPlanAsync(cardName, amount, category, cancellationToken)
+                        .ConfigureAwait(false);
+                    workspace.Cards.Add(changed);
+                }
+                else
+                {
+                    existing.Quantity += amount;
+                    changed = existing;
+                }
+
+                TrackChanged(upsertedCards, removedCards, changed);
+                return $"Added {amount} {changed.Name} to {category}.";
+            }
+
+            case DeckEditOperations.RemoveCard:
+            {
+                DeckCard card = FindRequiredPlanCard(
+                    workspace,
+                    Require(operation.CardName, "cardName"),
+                    operation.Category);
+                int amount = Math.Max(1, operation.Quantity ?? 1);
+                if (card.Quantity <= amount)
+                {
+                    workspace.Cards.Remove(card);
+                    TrackRemoved(upsertedCards, removedCards, card);
+                }
+                else
+                {
+                    card.Quantity -= amount;
+                    TrackChanged(upsertedCards, removedCards, card);
+                }
+
+                return $"Removed {amount} {card.Name}.";
+            }
+
+            case DeckEditOperations.SetCardQuantity:
+            {
+                DeckCard card = FindRequiredPlanCard(
+                    workspace,
+                    Require(operation.CardName, "cardName"),
+                    operation.Category);
+                int quantity = operation.Quantity ?? 1;
+                if (quantity <= 0)
+                {
+                    workspace.Cards.Remove(card);
+                    TrackRemoved(upsertedCards, removedCards, card);
+                }
+                else
+                {
+                    card.Quantity = quantity;
+                    TrackChanged(upsertedCards, removedCards, card);
+                }
+
+                return $"Set {card.Name} quantity to {quantity}.";
+            }
+
+            case DeckEditOperations.MoveCard:
+            {
+                DeckCard card = FindRequiredPlanCard(
+                    workspace,
+                    Require(operation.CardName, "cardName"),
+                    operation.FromCategory);
+                string category = NormalizeCategoryName(Require(operation.ToCategory, "toCategory"));
+                EnsureCategory(workspace, category);
+                DeckCategoryOrdering.SetPrimary(card, category);
+                TrackChanged(upsertedCards, removedCards, card);
+                return $"Moved {card.Name} to {category}.";
+            }
+
+            case DeckEditOperations.AddCardCategory:
+            {
+                DeckCard card = FindRequiredPlanCard(
+                    workspace,
+                    Require(operation.CardName, "cardName"),
+                    category: null);
+                string category = NormalizeCategoryName(Require(operation.Category, "category"));
+                EnsureCategory(workspace, category);
+                DeckCategoryOrdering.AddSecondary(card, category);
+                TrackChanged(upsertedCards, removedCards, card);
+                return $"Added {category} to {card.Name}.";
+            }
+
+            case DeckEditOperations.RemoveCardCategory:
+            {
+                DeckCard card = FindRequiredPlanCard(
+                    workspace,
+                    Require(operation.CardName, "cardName"),
+                    category: null);
+                string category = NormalizeCategoryName(Require(operation.Category, "category"));
+                DeckCategoryOrdering.Remove(card, category);
+                EnsureCategory(workspace, card.PrimaryCategory);
+                TrackChanged(upsertedCards, removedCards, card);
+                return $"Removed {category} from {card.Name}.";
+            }
+
+            case DeckEditOperations.SetPrimaryCardCategory:
+            {
+                DeckCard card = FindRequiredPlanCard(
+                    workspace,
+                    Require(operation.CardName, "cardName"),
+                    category: null);
+                string category = NormalizeCategoryName(Require(operation.Category, "category"));
+                EnsureCategory(workspace, category);
+                DeckCategoryOrdering.SetPrimary(card, category);
+                TrackChanged(upsertedCards, removedCards, card);
+                return $"Set {card.Name} primary category to {category}.";
+            }
+
+            default:
+                throw new InvalidOperationException($"Operation '{operation.Operation}' cannot be applied as a card batch.");
+        }
+    }
+
+    /// <summary>
+    /// Builds a workspace card for one batched add-card step.
+    /// </summary>
+    private async Task<DeckCard> CreateDeckCardForPlanAsync(
+        string cardName,
+        int quantity,
+        string category,
+        CancellationToken cancellationToken)
+    {
+        CardInfo? cardInfo = await TryGetCardForPlanMutationAsync(cardName, cancellationToken)
+            .ConfigureAwait(false);
+        DeckCard card = new()
+        {
+            Name = cardInfo?.Name ?? cardName.Trim(),
+            Quantity = Math.Max(1, quantity),
+            PrimaryCategory = category,
+            Categories = [category],
+            ScryfallId = cardInfo?.Id,
+            ScryfallOracleId = cardInfo?.OracleId,
+        };
+
+        if (cardInfo is not null)
+        {
+            ApplyCardSnapshot(card, cardInfo);
+        }
+
+        DeckCategoryOrdering.Normalize(card, category);
+        return card;
+    }
+
+    /// <summary>
+    /// Resolves optional card facts for batched plan edits while allowing catalog outages.
+    /// </summary>
+    private async Task<CardInfo?> TryGetCardForPlanMutationAsync(
+        string cardName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await CardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Finds a card for a plan operation or reports the failing card and workspace clearly.
+    /// </summary>
+    private static DeckCard FindRequiredPlanCard(
+        DeckWorkspace workspace,
+        string cardName,
+        string? category)
+    {
+        return FindCard(workspace, cardName, category)
+            ?? throw new InvalidOperationException(
+                $"Card '{cardName}' was not found in workspace '{workspace.Id}'."
+            );
+    }
+
+    /// <summary>
+    /// Tracks one changed card unless it has already been removed later in the batch.
+    /// </summary>
+    private static void TrackChanged(
+        HashSet<DeckCard> upsertedCards,
+        HashSet<DeckCard> removedCards,
+        DeckCard card)
+    {
+        if (!removedCards.Contains(card))
+        {
+            upsertedCards.Add(card);
+        }
+    }
+
+    /// <summary>
+    /// Tracks one removed card and cancels any pending upsert for that same workspace row.
+    /// </summary>
+    private static void TrackRemoved(
+        HashSet<DeckCard> upsertedCards,
+        HashSet<DeckCard> removedCards,
+        DeckCard card)
+    {
+        bool hadPendingUpsert = upsertedCards.Remove(card);
+        if (!hadPendingUpsert
+            || card.ArchidektDeckRelationId.HasValue
+            || !string.IsNullOrWhiteSpace(card.ArchidektCardId))
+        {
+            removedCards.Add(card);
+        }
+    }
+
+    /// <summary>
+    /// Refuses included Commander additions that would unexpectedly exceed the deck size limit.
+    /// </summary>
+    private static void EnsureCommanderIncludedAdditionIsSafe(
+        DeckWorkspace workspace,
+        string category,
+        int quantity)
+    {
+        if (!workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Dictionary<string, DeckCategory> categoryMap = DeckCategoryInclusion.BuildCategoryMap(workspace);
+        if (!DeckCategoryInclusion.IsIncludedInDeck(categoryMap, category))
+        {
+            return;
+        }
+
+        int includedCount = DeckCategoryInclusion.IncludedCards(workspace)
+            .Sum(card => Math.Max(0, card.Quantity));
+        int projectedCount = includedCount + Math.Max(1, quantity);
+        if (projectedCount <= 100)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Adding {Math.Max(1, quantity)} card(s) to included category '{category}' would raise this Commander deck from {includedCount} to {projectedCount} included cards. Add to an excluded category such as Maybeboard or set the category to IncludedInDeck=false."
+        );
+    }
+
+    /// <summary>
+    /// Persists failed or partial plan state and returns structured MCP-safe failure details.
+    /// </summary>
+    private async Task<DeckEditPlanApplyResult> CompleteFailedApplyAsync(
+        IDeckPlanRepository plans,
+        DeckEditPlan plan,
+        string? checkpointId,
+        int appliedOperations,
+        int attemptedOperations,
+        int? failedOperationIndex,
+        DeckEditOperation? failedOperation,
+        Exception exception,
+        bool applyStateUnknown,
+        List<string> messages,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await TryLoadWorkspaceForFailureAsync(plan.WorkspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        plan.Status = applyStateUnknown
+            ? DeckEditPlanStatus.ApplyStateUnknown
+            : appliedOperations > 0
+            ? DeckEditPlanStatus.PartiallyApplied
+            : DeckEditPlanStatus.Failed;
+        plan.AppliedAt = DateTimeOffset.UtcNow;
+        plan.CheckpointId = checkpointId;
+        plan.Warnings.Add(BuildFailureMessage(plan, attemptedOperations, failedOperationIndex, failedOperation, exception));
+        await plans.SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+
+        return new DeckEditPlanApplyResult
+        {
+            Success = false,
+            PlanId = plan.PlanId,
+            WorkspaceId = plan.WorkspaceId,
+            Persistence = DeckPersistence.For(workspace),
+            CheckpointId = checkpointId,
+            Status = plan.Status,
+            AppliedOperations = appliedOperations,
+            AttemptedOperations = attemptedOperations,
+            FailedOperationIndex = failedOperationIndex,
+            FailedOperation = failedOperation,
+            Error = BuildFailureMessage(plan, attemptedOperations, failedOperationIndex, failedOperation, exception),
+            Messages = messages,
+            Workspace = workspace
+        };
+    }
+
+    /// <summary>
+    /// Loads best-effort workspace state after a failed apply attempt.
+    /// </summary>
+    private async Task<DeckWorkspace> TryLoadWorkspaceForFailureAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+            if (workspace.Mode != WorkspaceMode.Archidekt
+                || !workspace.WriteBack
+                || string.IsNullOrWhiteSpace(workspace.ArchidektDeckId))
+            {
+                return workspace;
+            }
+
+            DeckWorkspace fresh = await RequireArchidektGateway()
+                .ImportDeckAsync(workspace.ArchidektDeckId, writeBack: true, cancellationToken)
+                .ConfigureAwait(false);
+            fresh.Id = workspace.Id;
+            fresh.WriteBack = true;
+            foreach (DeckCard card in fresh.Cards)
+            {
+                DeckCategoryOrdering.Normalize(card);
+            }
+
+            return await Repository.SaveAsync(fresh, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
+        {
+            return new DeckWorkspace { Id = workspaceId, Name = "Unavailable workspace" };
+        }
+    }
+
+    /// <summary>
+    /// Builds a concise failure message that identifies the operation boundary.
+    /// </summary>
+    private static string BuildFailureMessage(
+        DeckEditPlan plan,
+        int attemptedOperations,
+        int? failedOperationIndex,
+        DeckEditOperation? failedOperation,
+        Exception exception)
+    {
+        string operationText = failedOperation is null || !failedOperationIndex.HasValue
+            ? $"while confirming persistence after {attemptedOperations} attempted operation(s)"
+            : $"at operation {failedOperationIndex.Value + 1}/{plan.Operations.Count} ({DescribeOperation(failedOperation)})";
+        return $"Failed to apply deck edit plan '{plan.PlanId}' {operationText}: {exception.GetType().Name}: {SecretRedactor.Redact(exception.Message)}";
+    }
+
+    /// <summary>
+    /// Describes a plan operation without requiring clients to inspect the whole object.
+    /// </summary>
+    private static string DescribeOperation(DeckEditOperation operation)
+    {
+        string target =
+            operation.CardName
+            ?? operation.Category
+            ?? operation.FromCategory
+            ?? operation.ToCategory
+            ?? operation.Name
+            ?? "unnamed target";
+        return $"{operation.Operation} {target}";
+    }
+
+    /// <summary>
+    /// Reports recoverable apply failures while preserving caller-requested cancellation.
+    /// </summary>
+    private static bool IsReportableApplyException(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception is not OperationCanceledException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested;
+    }
+
+    /// <summary>
+    /// Identifies Archidekt write attempts where an HTTP timeout leaves remote state uncertain.
+    /// </summary>
+    private static bool IsRemoteTimeout(DeckWorkspace workspace, Exception exception)
+    {
+        return workspace.Mode == WorkspaceMode.Archidekt
+            && workspace.WriteBack
+            && exception is TaskCanceledException;
     }
 
     /// <summary>
@@ -177,5 +742,84 @@ public sealed partial class DeckPlanService : DeckServiceBase
                 cancellationToken).ConfigureAwait(false),
             _ => throw new InvalidOperationException($"Unknown deck edit operation '{operation.Operation}'.")
         };
+    }
+
+    /// <summary>
+    /// Captures the result of applying an in-memory card batch.
+    /// </summary>
+    private sealed class DeckEditPlanBatchApplyResult
+    {
+        /// <summary>
+        /// Gets or sets how many operations were prepared and persisted.
+        /// </summary>
+        public int AppliedOperations { get; set; }
+
+        /// <summary>
+        /// Gets or sets how many operations were prepared before persistence completed.
+        /// </summary>
+        public int AttemptedOperations { get; set; }
+
+        /// <summary>
+        /// Gets or sets operation messages produced while mutating the workspace.
+        /// </summary>
+        public List<string> Messages { get; set; } = [];
+    }
+
+    /// <summary>
+    /// Wraps a failure that happened after card operations were prepared for persistence.
+    /// </summary>
+    private sealed class DeckEditPlanPersistenceException : Exception
+    {
+        /// <summary>
+        /// Creates an exception with operation-count context for structured MCP reporting.
+        /// </summary>
+        public DeckEditPlanPersistenceException(
+            int attemptedOperations,
+            IReadOnlyList<string> messages,
+            Exception innerException)
+            : base(innerException.Message, innerException)
+        {
+            AttemptedOperations = attemptedOperations;
+            Messages = messages.ToList();
+        }
+
+        /// <summary>
+        /// Gets how many operations had been prepared when persistence failed.
+        /// </summary>
+        public int AttemptedOperations { get; }
+
+        /// <summary>
+        /// Captures prepared card-change messages from the interrupted batch.
+        /// </summary>
+        public List<string> Messages { get; }
+    }
+
+    /// <summary>
+    /// Wraps a failure that happened while preparing one concrete edit step.
+    /// </summary>
+    private sealed class DeckEditPlanOperationException : Exception
+    {
+        /// <summary>
+        /// Creates an exception with operation context for structured MCP reporting.
+        /// </summary>
+        public DeckEditPlanOperationException(
+            int operationIndex,
+            DeckEditOperation operation,
+            Exception innerException)
+            : base(innerException.Message, innerException)
+        {
+            OperationIndex = operationIndex;
+            Operation = operation;
+        }
+
+        /// <summary>
+        /// Gets the zero-based operation index.
+        /// </summary>
+        public int OperationIndex { get; }
+
+        /// <summary>
+        /// Identifies the edit step that raised the exception.
+        /// </summary>
+        public DeckEditOperation Operation { get; }
     }
 }

@@ -1172,6 +1172,16 @@ public sealed partial class DeckIntelligenceTests
         public int PersistedMetadataRequests { get; private set; }
 
         /// <summary>
+        /// Gets persisted card mutation request count.
+        /// </summary>
+        public int PersistedCardRequests { get; private set; }
+
+        /// <summary>
+        /// Gets or sets the fake card persistence exception.
+        /// </summary>
+        public Exception? PersistCardsException { get; set; }
+
+        /// <summary>
         /// Gets fake auth status.
         /// </summary>
         public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
@@ -1208,6 +1218,12 @@ public sealed partial class DeckIntelligenceTests
             CancellationToken cancellationToken)
         {
             ImportedDeck = workspace;
+            PersistedCardRequests++;
+            if (PersistCardsException is not null)
+            {
+                throw PersistCardsException;
+            }
+
             return Task.CompletedTask;
         }
 

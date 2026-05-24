@@ -174,6 +174,11 @@ public sealed class ExplicitDeckPlanCardChange
 public sealed class DeckEditPlanApplyResult
 {
     /// <summary>
+    /// Gets or sets whether every plan operation completed.
+    /// </summary>
+    public bool Success { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the plan id.
     /// </summary>
     public string PlanId { get; set; } = "";
@@ -194,9 +199,34 @@ public sealed class DeckEditPlanApplyResult
     public string? CheckpointId { get; set; }
 
     /// <summary>
+    /// Gets or sets the saved status of the plan after the apply attempt.
+    /// </summary>
+    public string Status { get; set; } = DeckEditPlanStatus.Applied;
+
+    /// <summary>
     /// Gets or sets the applied operations.
     /// </summary>
     public int AppliedOperations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the operations that were attempted before success or failure was known.
+    /// </summary>
+    public int AttemptedOperations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the zero-based operation index that failed, when known.
+    /// </summary>
+    public int? FailedOperationIndex { get; set; }
+
+    /// <summary>
+    /// Gets or sets the concrete failed edit step, when the failure can be tied to a single step.
+    /// </summary>
+    public DeckEditOperation? FailedOperation { get; set; }
+
+    /// <summary>
+    /// Gets or sets a sanitized failure summary for MCP clients.
+    /// </summary>
+    public string? Error { get; set; }
 
     /// <summary>
     /// Gets or sets the messages.
@@ -239,6 +269,21 @@ public static class DeckEditPlanStatus
     /// Stores the applied status.
     /// </summary>
     public const string Applied = "applied";
+
+    /// <summary>
+    /// Stores the failed status.
+    /// </summary>
+    public const string Failed = "failed";
+
+    /// <summary>
+    /// Stores the partially applied status.
+    /// </summary>
+    public const string PartiallyApplied = "partially-applied";
+
+    /// <summary>
+    /// Stores the status used when a remote write may have succeeded but the client did not receive confirmation.
+    /// </summary>
+    public const string ApplyStateUnknown = "apply-state-unknown";
 }
 
 /// <summary>

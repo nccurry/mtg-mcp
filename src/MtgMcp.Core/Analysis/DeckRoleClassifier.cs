@@ -18,8 +18,10 @@ public static class DeckRoleClassifier
         bool hasNonPrimaryLandFace = HasNonPrimaryLandFace(typeLine);
         string oracleText = Text(snapshot.OracleText, card.Metadata, "oracleText");
         string combined = $"{card.Name} {categoryText} {typeLine} {oracleText}";
+        List<string> taggerOracleTags = AnnotationValues(card.Metadata, CardFacetNames.TaggerOracleTags);
 
         List<string> tags = ClassifyTags(card, combined);
+        AddCanonicalTaggerTags(tags, taggerOracleTags);
 
         if (primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
         {
@@ -35,6 +37,12 @@ public static class DeckRoleClassifier
         if (HasPrimaryLandCategory(card) || ContainsAny(primaryTypeLine, "land"))
         {
             return Assignment(DeckRoles.Lands, tags, 0.93);
+        }
+
+        CardRoleAssignment? taggerAssignment = TryClassifyFromTaggerTags(taggerOracleTags, tags);
+        if (taggerAssignment is not null)
+        {
+            return taggerAssignment;
         }
 
         if (ContainsAny(categoryText, DeckRoles.Ramp)
@@ -213,6 +221,53 @@ public static class DeckRoleClassifier
     }
 
     /// <summary>
+    /// Adds secondary tags backed by saved Scryfall Tagger oracle-card annotations.
+    /// </summary>
+    private static void AddCanonicalTaggerTags(List<string> tags, IReadOnlyList<string> taggerOracleTags)
+    {
+        foreach (string taggerTag in taggerOracleTags)
+        {
+            if (DeckTaggerTaxonomy.TryGetRule(taggerTag, out DeckTaggerRule? rule))
+            {
+                AddTag(tags, rule.SecondaryTag, condition: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Uses canonical Tagger annotations as the strongest functional signal after fixed deck-state roles.
+    /// </summary>
+    private static CardRoleAssignment? TryClassifyFromTaggerTags(
+        IReadOnlyList<string> taggerOracleTags,
+        List<string> tags)
+    {
+        DeckTaggerRule? best = taggerOracleTags
+            .Select(tag => DeckTaggerTaxonomy.TryGetRule(tag, out DeckTaggerRule rule) ? rule : null)
+            .Where(rule => rule is not null)
+            .OrderByDescending(rule => rule!.Priority)
+            .ThenBy(rule => RolePriority(rule!.Role))
+            .FirstOrDefault();
+
+        return best is null ? null : Assignment(best.Role, tags, 0.9);
+    }
+
+    /// <summary>
+    /// Gets the stable primary-role order for tie-breaking canonical Tagger rules.
+    /// </summary>
+    private static int RolePriority(string role)
+    {
+        for (int index = 0; index < DeckRoles.Primary.Count; index++)
+        {
+            if (DeckRoles.Primary[index].Equals(role, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return int.MaxValue;
+    }
+
+    /// <summary>
     /// Checks whether the card has a category.
     /// </summary>
     private static bool HasCategory(DeckCard card, string category)
@@ -376,6 +431,25 @@ public static class DeckRoleClassifier
     private static bool ContainsAny(string value, params string[] needles)
     {
         return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Splits locally stored annotation values using the same separators as facet snapshots.
+    /// </summary>
+    private static List<string> AnnotationValues(
+        IReadOnlyDictionary<string, string> metadata,
+        string key)
+    {
+        if (!metadata.TryGetValue(key, out string? value) || string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return value
+            .Split([',', ';', '|', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>

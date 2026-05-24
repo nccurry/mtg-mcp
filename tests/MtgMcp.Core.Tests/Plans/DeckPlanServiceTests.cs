@@ -274,7 +274,10 @@ public sealed partial class DeckIntelligenceTests
             checkpointName: null,
             TestContext.Current.CancellationToken);
 
+        result.Success.Should().BeTrue();
+        result.Status.Should().Be(DeckEditPlanStatus.Applied);
         result.AppliedOperations.Should().Be(1);
+        result.AttemptedOperations.Should().Be(1);
         result.Workspace.Cards.Single().Name.Should().Be("Sol Ring");
         result.Persistence.Should().Be(DeckPersistence.LocalOnly);
 
@@ -323,10 +326,56 @@ public sealed partial class DeckIntelligenceTests
             checkpointName: null,
             TestContext.Current.CancellationToken);
 
+        result.Success.Should().BeTrue();
         DeckCard added = result.Workspace.Cards.Single();
         added.Name.Should().Be("Sol Ring");
         added.ScryfallId.Should().BeNull();
         result.Messages.Should().ContainSingle(message => message.Contains("Added 1 Sol Ring", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies that apply deck plan returns structured failure details instead of surfacing a generic MCP error.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDeckPlan_LocalPlan_ReturnsFailedOperationDetails()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace { Name = "Apply Failure" }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Bad remove",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.RemoveCard,
+                    CardName = "Missing Card",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckEditPlanApplyResult result = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: true,
+            checkpointName: null,
+            TestContext.Current.CancellationToken);
+
+        result.Success.Should().BeFalse();
+        result.Status.Should().Be(DeckEditPlanStatus.Failed);
+        result.AppliedOperations.Should().Be(0);
+        result.AttemptedOperations.Should().Be(1);
+        result.FailedOperationIndex.Should().Be(0);
+        result.FailedOperation.Should().NotBeNull();
+        result.Error.Should().Contain("Missing Card");
+        (await plans.GetAsync(plan.PlanId, TestContext.Current.CancellationToken))!
+            .Status
+            .Should()
+            .Be(DeckEditPlanStatus.Failed);
     }
 
     /// <summary>
@@ -464,6 +513,7 @@ public sealed partial class DeckIntelligenceTests
             checkpointName: null,
             TestContext.Current.CancellationToken);
 
+        result.Success.Should().BeTrue();
         result.Workspace.Name.Should().Be("Updated");
         result.Workspace.Description.Should().Be("Edited");
         result.Workspace.Cards.Should().ContainSingle(card => card.Name == "Sol Ring" && card.Quantity == 2);
@@ -514,8 +564,65 @@ public sealed partial class DeckIntelligenceTests
             checkpointName: "Before remote edits",
             TestContext.Current.CancellationToken);
 
+        result.Success.Should().BeTrue();
         result.CheckpointId.Should().Be("checkpoint-1");
         archidekt.CreatedCheckpoints.Should().ContainSingle().Which.Should().Be("Before remote edits");
+        archidekt.PersistedCardRequests.Should().Be(1);
+        result.Workspace.Cards.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Verifies that Archidekt writeback timeouts return structured unknown-state details.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDeckPlan_ArchidektWritebackTimeout_ReturnsStructuredUnknownState()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        FakeArchidektGateway archidekt = new()
+        {
+            PersistCardsException = new TaskCanceledException("Archidekt write timed out.")
+        };
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Remote Timeout",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123"
+        }, TestContext.Current.CancellationToken);
+        archidekt.ImportedDeck = workspace;
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Remote timeout edits",
+            Operations =
+            [
+                new DeckEditOperation { Operation = DeckEditOperations.AddCard, CardName = "Sol Ring", Quantity = 1, Category = DeckRoles.Ramp },
+                new DeckEditOperation { Operation = DeckEditOperations.AddCard, CardName = "Arcane Signet", Quantity = 1, Category = DeckRoles.Ramp }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidekt, plans);
+
+        DeckEditPlanApplyResult result = await service.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: true,
+            checkpointName: "Before remote timeout",
+            TestContext.Current.CancellationToken);
+
+        result.Success.Should().BeFalse();
+        result.Status.Should().Be(DeckEditPlanStatus.ApplyStateUnknown);
+        result.AppliedOperations.Should().Be(0);
+        result.AttemptedOperations.Should().Be(2);
+        result.FailedOperationIndex.Should().BeNull();
+        result.Error.Should().Contain("timed out");
+        result.Messages.Should().Contain(message => message.Contains("Added 1 Sol Ring", StringComparison.Ordinal));
+        result.Messages.Should().Contain(message => message.Contains("Added 1 Arcane Signet", StringComparison.Ordinal));
+        result.Workspace.Cards.Should().HaveCount(2);
+        archidekt.PersistedCardRequests.Should().Be(1);
+        (await plans.GetAsync(plan.PlanId, TestContext.Current.CancellationToken))!
+            .Status
+            .Should()
+            .Be(DeckEditPlanStatus.ApplyStateUnknown);
     }
 
     /// <summary>

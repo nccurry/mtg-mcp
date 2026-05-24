@@ -102,7 +102,7 @@ public sealed class PlanTools
     /// Applies a saved deck edit plan.
     /// </summary>
     [McpServerTool(Name = "apply_deck_plan", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
-    [Description("Apply a persisted deck edit plan. Archidekt writeback workspaces require or create a checkpoint before multi-card edits.")]
+    [Description("Apply a persisted deck edit plan, returning structured success or failed-operation details. Archidekt writeback workspaces require or create a checkpoint before multi-card edits.")]
     public Task<DeckEditPlanApplyResult> ApplyDeckPlanAsync(
         string planId,
         bool createCheckpoint = true,

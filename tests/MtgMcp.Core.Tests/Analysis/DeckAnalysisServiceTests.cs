@@ -174,6 +174,75 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that saved Scryfall Tagger oracle annotations drive role classification before text heuristics.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_UsesCanonicalTaggerOracleTags()
+    {
+        DeckCard treasureEngine = new()
+        {
+            Name = "Mystery Engine",
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Enchantment",
+                OracleText = "At the beginning of your upkeep, choose one."
+            },
+            Metadata =
+            {
+                [CardFacetNames.TaggerOracleTags] = "repeatable-treasures"
+            }
+        };
+
+        CardRoleAssignment assignment = DeckRoleClassifier.Classify(treasureEngine);
+
+        assignment.PrimaryRole.Should().Be(DeckRoles.Ramp);
+        assignment.Tags.Should().Contain(DeckTags.ManaFixing);
+    }
+
+    /// <summary>
+    /// Verifies that the runtime Tagger taxonomy only names slugs present as oracle-card tags in the saved snapshot.
+    /// </summary>
+    [Fact]
+    public void TaggerTaxonomy_UsesOnlySnapshotOracleCardTags()
+    {
+        using JsonDocument document = JsonDocument.Parse(ReadRepoFile("docs/reference/scryfall-tagger-tags-2026-05-23.json"));
+        HashSet<string> oracleCardSlugs = document.RootElement
+            .GetProperty("tags")
+            .EnumerateArray()
+            .Where(tag => tag.GetProperty("namespace").GetString() == "card")
+            .Select(tag => tag.GetProperty("slug").GetString() ?? "")
+            .Where(slug => !string.IsNullOrWhiteSpace(slug))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        DeckTaggerTaxonomy.Rules.Select(rule => rule.Slug)
+            .Should()
+            .OnlyContain(slug => oracleCardSlugs.Contains(slug));
+    }
+
+    /// <summary>
+    /// Verifies that deterministic role ordering matches the public category taxonomy.
+    /// </summary>
+    [Fact]
+    public void DeckRoles_Primary_UsesCanonicalCategoryOrder()
+    {
+        DeckRoles.Primary.Should().Equal(
+            DeckRoles.Maybeboard,
+            DeckRoles.Commander,
+            DeckRoles.Lands,
+            DeckRoles.Ramp,
+            DeckRoles.Draw,
+            DeckRoles.Tutors,
+            DeckRoles.BoardWipes,
+            DeckRoles.Interaction,
+            DeckRoles.Protection,
+            DeckRoles.Recursion,
+            DeckRoles.Wincons,
+            DeckRoles.Payoffs,
+            DeckRoles.Synergy,
+            DeckRoles.Utility);
+    }
+
+    /// <summary>
     /// Verifies that role classifier recognizes expanded theorycrafting tags.
     /// </summary>
     [Fact]

@@ -80,20 +80,20 @@ public static class DeckRoles
     /// </summary>
     public static readonly IReadOnlyList<string> Primary =
     [
+        Maybeboard,
         Commander,
         Lands,
         Ramp,
         Draw,
         Tutors,
-        Interaction,
         BoardWipes,
+        Interaction,
         Protection,
         Recursion,
-        Synergy,
-        Payoffs,
         Wincons,
-        Utility,
-        Maybeboard
+        Payoffs,
+        Synergy,
+        Utility
     ];
 }
 
