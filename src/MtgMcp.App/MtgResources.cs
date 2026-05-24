@@ -46,6 +46,11 @@ public sealed class MtgResources
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
+    /// Stores the Playgroup aggregation service.
+    /// </summary>
+    private readonly PlaygroupService playgroups;
+
+    /// <summary>
     /// Stores server version and runtime diagnostics.
     /// </summary>
     private readonly ServerInfoService serverInfo;
@@ -59,6 +64,7 @@ public sealed class MtgResources
         IConfiguration configuration,
         IArchidektGateway archidektGateway,
         OperationModeGuard operationMode,
+        PlaygroupService playgroups,
         ServerInfoService serverInfo
     )
     {
@@ -67,6 +73,7 @@ public sealed class MtgResources
         this.configuration = configuration;
         this.archidektGateway = archidektGateway;
         this.operationMode = operationMode;
+        this.playgroups = playgroups;
         this.serverInfo = serverInfo;
     }
 
@@ -308,6 +315,21 @@ public sealed class MtgResources
     )
     {
         AuthStatus status = await archidektGateway
+            .GetAuthStatusAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return JsonSerializer.Serialize(status, JsonOptions);
+    }
+
+    /// <summary>
+    /// Gets the Playgroup auth status.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://playgroup/auth-status", Name = "Playgroup Auth Status")]
+    [Description("Redacted Playgroup.gg API-key and credentials-file availability status.")]
+    public async Task<string> GetPlaygroupAuthStatusAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        PlaygroupAuthStatus status = await playgroups
             .GetAuthStatusAsync(cancellationToken)
             .ConfigureAwait(false);
         return JsonSerializer.Serialize(status, JsonOptions);

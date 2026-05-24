@@ -5,6 +5,7 @@
         <ProjectReference Include="..\MtgMcp.Archidekt\MtgMcp.Archidekt.csproj" />
         <ProjectReference Include="..\MtgMcp.CommanderSpellbook\MtgMcp.CommanderSpellbook.csproj" />
         <ProjectReference Include="..\MtgMcp.Decklists\MtgMcp.Decklists.csproj" />
+        <ProjectReference Include="..\MtgMcp.Playgroup\MtgMcp.Playgroup.csproj" />
     </ItemGroup>
 
     <ItemGroup>
