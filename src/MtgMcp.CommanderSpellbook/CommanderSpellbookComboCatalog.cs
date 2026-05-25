@@ -88,10 +88,18 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
             .ConfigureAwait(false);
 
         DeckComboReport report = new();
-        JsonElement results = document.RootElement.GetProperty("results");
-        HashSet<string> present = query.CardNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        report.Combos.AddRange(ReadCombos(results, "included", present, nearMiss: false));
-        report.NearMisses.AddRange(ReadCombos(results, "almostIncluded", present, nearMiss: true));
+        if (document.RootElement.TryGetProperty("results", out JsonElement results)
+            && results.ValueKind == JsonValueKind.Object)
+        {
+            HashSet<string> present = query.CardNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            report.Combos.AddRange(ReadCombos(results, "included", present, nearMiss: false));
+            report.NearMisses.AddRange(ReadCombos(results, "almostIncluded", present, nearMiss: true));
+        }
+        else
+        {
+            report.Notes.Add("Commander Spellbook response did not include combo results.");
+        }
+
         report.Notes.Add("Commander Spellbook combo data comes from the public find-my-combos endpoint.");
         await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
         return report;

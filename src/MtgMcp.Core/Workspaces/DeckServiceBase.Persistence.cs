@@ -1,25 +1,10 @@
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Loads and persists workspaces for feature services.
+/// Loads mutation-ready workspaces and persists local or writeback changes.
 /// </summary>
-public abstract partial class DeckServiceBase
+public abstract partial class DeckMutationServiceBase
 {
-    /// <summary>
-    /// Loads a workspace by id or throws when it is unknown.
-    /// </summary>
-    protected async Task<DeckWorkspace> LoadWorkspaceAsync(
-        string workspaceId,
-        CancellationToken cancellationToken
-    )
-    {
-        DeckWorkspace? workspace = await Repository
-            .GetAsync(workspaceId, cancellationToken)
-            .ConfigureAwait(false);
-        return workspace
-            ?? throw new InvalidOperationException($"Workspace '{workspaceId}' was not found.");
-    }
-
     /// <summary>
     /// Loads a workspace and refreshes Archidekt-bound state before mutation.
     /// </summary>
@@ -135,24 +120,6 @@ public abstract partial class DeckServiceBase
             Message = message,
             Workspace = workspace,
         };
-    }
-
-    /// <summary>
-    /// Requires the Archidekt gateway for an operation that cannot run locally.
-    /// </summary>
-    protected IArchidektGateway RequireArchidektGateway()
-    {
-        return ArchidektGateway
-            ?? throw new InvalidOperationException("Archidekt support is not configured.");
-    }
-
-    /// <summary>
-    /// Requires the Moxfield gateway for read-only import operations.
-    /// </summary>
-    protected IMoxfieldGateway RequireMoxfieldGateway()
-    {
-        return MoxfieldGateway
-            ?? throw new InvalidOperationException("Moxfield support is not configured.");
     }
 
     /// <summary>

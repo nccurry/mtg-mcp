@@ -3,7 +3,7 @@ namespace MtgMcp.Core;
 /// <summary>
 /// Previews generated deck edit plans without mutating local or remote state.
 /// </summary>
-public sealed partial class DeckPlanService : DeckServiceBase
+public sealed partial class DeckPlanService
 {
     /// <summary>
     /// Previews a deck edit plan without mutating local or remote state.

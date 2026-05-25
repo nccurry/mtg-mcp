@@ -137,6 +137,49 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that caller cancellation during added-card resolution is not converted into a preview warning.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_PropagatesCallerCancellationDuringAddedCardResolution()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Cancelled Preview"
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add card",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Arcane Signet",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(
+            workspaces,
+            new FakeCardCatalog { CancelGetCard = true },
+            archidektGateway: null,
+            plans);
+        using CancellationTokenSource cancellation = new();
+        await cancellation.CancelAsync();
+
+        Func<Task> preview = () => service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: true,
+            cancellation.Token);
+
+        await preview.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    /// <summary>
     /// Verifies that preview metrics can show an overfilled plan without mutating saved state.
     /// </summary>
     [Fact]

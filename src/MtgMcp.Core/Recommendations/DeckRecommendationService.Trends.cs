@@ -29,7 +29,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         };
         IReadOnlyList<NewCardSuggestion> suggestions;
         List<string> notes = [];
-        if (CardTrendProvider is null)
+        if (cardTrendProvider is null)
         {
             suggestions = await FindNewCardsViaCatalogAsync(workspace, query, cancellationToken).ConfigureAwait(false);
             notes.Add("No dedicated card trend provider is configured; queried recent cards through the card catalog.");
@@ -38,7 +38,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         {
             try
             {
-                IReadOnlyList<NewCardSuggestion> providerSuggestions = await CardTrendProvider
+                IReadOnlyList<NewCardSuggestion> providerSuggestions = await cardTrendProvider
                     .FindNewCardsAsync(query, cancellationToken)
                     .ConfigureAwait(false);
                 suggestions = await ValidateProviderNewCardsAsync(workspace, query, providerSuggestions, cancellationToken)

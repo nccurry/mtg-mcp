@@ -332,10 +332,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         SimulationProfile profile)
     {
         int mulligans = 0;
-        int maximumMulligans = UsesFreeFirstGoldfishMulligan(workspace.Format) ? 3 : 2;
+        int maximumMulligans = MulliganHeuristics.MaximumMulligans(workspace.Format);
         while (mulligans <= maximumMulligans)
         {
-            int targetHandSize = GoldfishTargetHandSize(mulligans, workspace.Format);
+            int targetHandSize = MulliganHeuristics.TargetHandSize(mulligans, workspace.Format);
             List<DeckCard> library = ExpandLibrary(workspace);
             Shuffle(library, random);
             List<DeckCard> hand = library.Take(Math.Min(7, library.Count)).ToList();
@@ -381,7 +381,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             ? profile.Mulligan.FiveCardKeepScore
             : targetHandSize == 6
                 ? profile.Mulligan.SixCardKeepScore
-                : UsesFreeFirstGoldfishMulligan(workspace.Format) && mulligans == 0
+                : MulliganHeuristics.UsesFreeFirstMulligan(workspace.Format) && mulligans == 0
                     ? profile.Mulligan.SevenCardFreeKeepScore
                     : profile.Mulligan.SevenCardKeepScore;
         return score >= keepScore;
@@ -464,40 +464,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
-    /// Computes kept hand size after free and paid mulligans.
-    /// </summary>
-    private static int GoldfishTargetHandSize(int mulligans, string format)
-    {
-        int paidMulligans = UsesFreeFirstGoldfishMulligan(format) && mulligans > 0
-            ? mulligans - 1
-            : mulligans;
-        return Math.Max(0, 7 - paidMulligans);
-    }
-
-    /// <summary>
-    /// Checks whether a format normally grants a free first mulligan.
-    /// </summary>
-    private static bool UsesFreeFirstGoldfishMulligan(string format)
-    {
-        return ContainsAny(format, "commander", "brawl");
-    }
-
-    /// <summary>
-    /// Checks whether the format uses Commander deck construction limits.
-    /// </summary>
-    private static bool IsCommanderGoldfishFormat(string format)
-    {
-        return format.Trim().Equals("commander", StringComparison.OrdinalIgnoreCase)
-            || format.Trim().Equals("edh", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
     /// Builds a warning when a Commander goldfish samples fewer or more than 100 included cards.
     /// </summary>
     private static string? BuildPartialCommanderDeckWarning(DeckWorkspace workspace)
     {
         int includedCount = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity));
-        if (!IsCommanderGoldfishFormat(workspace.Format) || includedCount == 100)
+        if (!MulliganHeuristics.UsesCommanderDeckConstruction(workspace.Format) || includedCount == 100)
         {
             return null;
         }

@@ -10,7 +10,7 @@ namespace MtgMcp.Archidekt;
 public sealed partial class ArchidektGateway
 {
     /// <summary>
-    /// Gets the auth status.
+    /// Returns redacted Archidekt credential availability.
     /// </summary>
     public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
     {

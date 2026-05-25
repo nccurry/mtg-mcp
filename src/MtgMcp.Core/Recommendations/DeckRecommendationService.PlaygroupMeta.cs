@@ -267,7 +267,7 @@ public sealed partial class DeckRecommendationService
         bool importedDecklist = false;
         if (IsArchidektDecklistUrl(deck.DecklistUrl))
         {
-            if (ArchidektGateway is null)
+            if (archidektGateway is null)
             {
                 warnings.Add("Archidekt decklist URL was present, but no Archidekt gateway is configured.");
             }
@@ -318,7 +318,7 @@ public sealed partial class DeckRecommendationService
         ConcurrentDictionary<string, Lazy<Task<DeckWorkspace>>> importCache,
         CancellationToken cancellationToken)
     {
-        IArchidektGateway gateway = ArchidektGateway
+        IArchidektGateway gateway = archidektGateway
             ?? throw new InvalidOperationException("Archidekt gateway is not configured.");
         Lazy<Task<DeckWorkspace>> importTask = importCache.GetOrAdd(
             decklistUrl,

@@ -21,7 +21,7 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
     private readonly string planDirectory;
 
     /// <summary>
-    /// Handles json deck plan Repository.
+    /// Creates a repository rooted under the mtg-mcp data directory.
     /// </summary>
     public JsonDeckPlanRepository(string dataDirectory)
     {
@@ -61,7 +61,7 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
     }
 
     /// <summary>
-    /// Gets the plan.
+    /// Loads a deck edit plan by id from disk.
     /// </summary>
     public async Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken)
     {
@@ -128,7 +128,7 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
     }
 
     /// <summary>
-    /// Gets the plan path.
+    /// Builds a safe filesystem path for a plan id.
     /// </summary>
     private string GetPlanPath(string planId)
     {

@@ -900,4 +900,29 @@ public sealed partial class DeckIntelligenceTests
         await estimate.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Unable to fetch live Commander Game Changer data from Scryfall.");
     }
+
+    /// <summary>
+    /// Verifies that caller cancellation during Game Changer search is not converted into an outage error.
+    /// </summary>
+    [Fact]
+    public async Task EstimateCommanderBracket_PropagatesCallerCancellationDuringGameChangerSearch()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Bracket",
+            Cards = [ExpensiveRamp()]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(
+            workspaces,
+            new FakeCardCatalog { CancelGameChangerSearch = true });
+        using CancellationTokenSource cancellation = new();
+        await cancellation.CancelAsync();
+
+        Func<Task> estimate = () => service.EstimateCommanderBracketAsync(
+            workspace.Id,
+            cancellation.Token);
+
+        await estimate.Should().ThrowAsync<OperationCanceledException>();
+    }
 }

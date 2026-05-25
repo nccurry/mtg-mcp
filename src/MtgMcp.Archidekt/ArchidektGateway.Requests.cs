@@ -35,7 +35,7 @@ public sealed partial class ArchidektGateway
     private static readonly Queue<DateTimeOffset> RequestRateTimestamps = new();
 
     /// <summary>
-    /// Gets the json.
+    /// Sends an authenticated GET request and parses a JSON response.
     /// </summary>
     private async Task<JsonDocument> GetJsonAsync(string uri, CancellationToken cancellationToken)
     {
@@ -70,7 +70,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Handles send json.
+    /// Sends a JSON request with Archidekt authentication, throttling, and retry handling.
     /// </summary>
     private async Task<JsonDocument> SendJsonAsync(
         HttpMethod method,
@@ -210,25 +210,6 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Ensures the success.
-    /// </summary>
-    private static async Task EnsureSuccessAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken
-    )
-    {
-        if (response.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        string body = await response
-            .Content.ReadAsStringAsync(cancellationToken)
-            .ConfigureAwait(false);
-        throw CreateRequestException(response, body);
-    }
-
-    /// <summary>
     /// Creates a sanitized Archidekt HTTP exception.
     /// </summary>
     private static HttpRequestException CreateRequestException(
@@ -317,7 +298,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Handles enumerate collection.
+    /// Enumerates collection payloads across Archidekt's observed response envelopes.
     /// </summary>
     private static IEnumerable<JsonElement> EnumerateCollection(JsonElement root)
     {
@@ -356,7 +337,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Handles require deck id.
+    /// Returns the bound Archidekt deck id or fails before a remote write.
     /// </summary>
     private static string RequireDeckId(DeckWorkspace workspace)
     {
@@ -380,7 +361,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Gets the string.
+    /// Reads a string property while tolerating non-string JSON values.
     /// </summary>
     private static string? GetString(JsonElement element, string propertyName)
     {
@@ -414,7 +395,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Gets the int.
+    /// Reads an integer property from a numeric or string JSON value.
     /// </summary>
     private static int? GetInt(JsonElement element, string propertyName)
     {
@@ -441,7 +422,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Gets the long.
+    /// Reads a long integer property from a numeric or string JSON value.
     /// </summary>
     private static long? GetLong(JsonElement element, string propertyName)
     {
@@ -488,7 +469,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Gets the double.
+    /// Reads a floating-point property from a numeric or string JSON value.
     /// </summary>
     private static double? GetDouble(JsonElement element, string propertyName)
     {
@@ -531,7 +512,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Gets the bool.
+    /// Reads a boolean property from a bool or string JSON value.
     /// </summary>
     private static bool GetBool(JsonElement element, string propertyName, bool defaultValue)
     {
@@ -550,7 +531,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Handles try date.
+    /// Parses an optional date value from Archidekt JSON text.
     /// </summary>
     private static DateTimeOffset? TryDate(string? value)
     {
@@ -564,7 +545,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Handles first non empty.
+    /// Returns the first non-empty value from equivalent Archidekt fields.
     /// </summary>
     private static string? FirstNonEmpty(params string?[] values)
     {

@@ -349,7 +349,9 @@ public abstract partial class DeckServiceBase
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (
+            exception is HttpRequestException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             throw new InvalidOperationException(
                 "Unable to fetch live Commander Game Changer data from Scryfall.",

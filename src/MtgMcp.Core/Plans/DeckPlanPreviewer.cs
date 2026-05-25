@@ -300,7 +300,9 @@ internal sealed class DeckPlanPreviewer
 
                 return card;
             }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+            catch (Exception exception) when (
+                exception is HttpRequestException
+                || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
             {
                 UnresolvedCardNames.Add(nameOrId);
                 return null;

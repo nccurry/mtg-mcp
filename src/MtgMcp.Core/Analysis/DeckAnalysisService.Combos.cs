@@ -52,7 +52,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         };
         DeckComboReport report;
         bool providerFallback = false;
-        if (ComboCatalog is null)
+        if (comboCatalog is null)
         {
             report = BuildHeuristicComboReport(workspace);
         }
@@ -60,7 +60,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         {
             try
             {
-                report = await ComboCatalog.FindCombosAsync(query, cancellationToken).ConfigureAwait(false);
+                report = await comboCatalog.FindCombosAsync(query, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {
@@ -72,7 +72,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
 
         report.WorkspaceId = workspace.Id;
         report.Pressure = BuildComboPressure(workspace, report);
-        if (ComboCatalog is null)
+        if (comboCatalog is null)
         {
             report.Notes.Add("No combo catalog is configured; using local combo-tag heuristics.");
         }
@@ -216,4 +216,3 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     }
 
 }
-

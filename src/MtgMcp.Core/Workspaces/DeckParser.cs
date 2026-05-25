@@ -146,7 +146,7 @@ public sealed partial class DeckParser
     }
 
     /// <summary>
-    /// Handles deck line regex.
+    /// Matches a decklist quantity and card name line.
     /// </summary>
     [GeneratedRegex(
         @"^(?<quantity>\d+)\s+x?\s*(?<name>.+?)\s*$",

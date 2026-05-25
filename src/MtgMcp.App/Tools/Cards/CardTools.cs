@@ -16,7 +16,7 @@ public sealed class CardTools
     private readonly ICardCatalog cards;
 
     /// <summary>
-    /// Handles card tools.
+    /// Creates the MCP card lookup tool group.
     /// </summary>
     public CardTools(ICardCatalog cards)
     {
@@ -44,7 +44,7 @@ public sealed class CardTools
     }
 
     /// <summary>
-    /// Gets the card.
+    /// Returns a card by Scryfall id or fuzzy name.
     /// </summary>
     [McpServerTool(
         Name = "get_card",
@@ -63,7 +63,7 @@ public sealed class CardTools
     }
 
     /// <summary>
-    /// Gets the rulings.
+    /// Returns official Scryfall rulings for a card.
     /// </summary>
     [McpServerTool(
         Name = "get_rulings",
@@ -82,7 +82,7 @@ public sealed class CardTools
     }
 
     /// <summary>
-    /// Gets the prints.
+    /// Returns known Scryfall prints for a card.
     /// </summary>
     [McpServerTool(
         Name = "get_prints",

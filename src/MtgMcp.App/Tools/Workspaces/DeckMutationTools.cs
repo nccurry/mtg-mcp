@@ -21,7 +21,7 @@ public sealed class DeckMutationTools
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
-    /// Handles deck mutation tools.
+    /// Creates the MCP tools that mutate deck cards or metadata.
     /// </summary>
     public DeckMutationTools(DeckWorkspaceService decks, OperationModeGuard operationMode)
     {

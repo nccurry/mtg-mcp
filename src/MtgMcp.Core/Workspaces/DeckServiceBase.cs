@@ -1,7 +1,7 @@
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Shares deck service dependencies and cross-cutting helpers across feature services.
+/// Shares core workspace storage, card catalog, plan storage, and date helpers across feature services.
 /// </summary>
 public abstract partial class DeckServiceBase
 {
@@ -21,36 +21,6 @@ public abstract partial class DeckServiceBase
     protected ICardCatalog CardCatalog { get; }
 
     /// <summary>
-    /// Applies Archidekt-specific read and writeback operations when a workspace is bound.
-    /// </summary>
-    protected IArchidektGateway? ArchidektGateway { get; }
-
-    /// <summary>
-    /// Imports Moxfield decks into provider-neutral local workspaces.
-    /// </summary>
-    protected IMoxfieldGateway? MoxfieldGateway { get; }
-
-    /// <summary>
-    /// Supplies optional Commander metagame context for recommendation workflows.
-    /// </summary>
-    protected ICommanderMetaProvider? CommanderMetaProvider { get; }
-
-    /// <summary>
-    /// Supplies optional recent-card recommendations beyond direct catalog search.
-    /// </summary>
-    protected ICardTrendProvider? CardTrendProvider { get; }
-
-    /// <summary>
-    /// Supplies optional combo lookups before falling back to local heuristics.
-    /// </summary>
-    protected IComboCatalog? ComboCatalog { get; }
-
-    /// <summary>
-    /// Supplies optional corpus-backed card and exemplar evidence for recommendations.
-    /// </summary>
-    protected IReadOnlyList<ICorpusSignalProvider> CorpusSignalProviders { get; }
-
-    /// <summary>
     /// Overrides today's date for deterministic release-radar tests.
     /// </summary>
     protected DateOnly? CurrentDateOverride { get; }
@@ -61,25 +31,26 @@ public abstract partial class DeckServiceBase
     protected DeckServiceBase(
         IDeckWorkspaceRepository repository,
         ICardCatalog cardCatalog,
-        IArchidektGateway? archidektGateway = null,
         IDeckPlanRepository? planRepository = null,
-        ICommanderMetaProvider? commanderMetaProvider = null,
-        ICardTrendProvider? cardTrendProvider = null,
-        IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
-        IMoxfieldGateway? moxfieldGateway = null
-    )
+        DateOnly? currentDateOverride = null)
     {
         Repository = repository;
         PlanRepository = planRepository;
         CardCatalog = cardCatalog;
-        ArchidektGateway = archidektGateway;
-        MoxfieldGateway = moxfieldGateway;
-        CommanderMetaProvider = commanderMetaProvider;
-        CardTrendProvider = cardTrendProvider;
-        ComboCatalog = comboCatalog;
         CurrentDateOverride = currentDateOverride;
-        CorpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
+    }
+
+    /// <summary>
+    /// Loads a workspace by id or throws when it is unknown.
+    /// </summary>
+    protected async Task<DeckWorkspace> LoadWorkspaceAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace? workspace = await Repository
+            .GetAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return workspace
+            ?? throw new InvalidOperationException($"Workspace '{workspaceId}' was not found.");
     }
 }

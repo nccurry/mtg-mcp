@@ -23,7 +23,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             Limit = Math.Clamp(limit, 1, 100)
         };
         CommanderMetaReport report;
-        if (CommanderMetaProvider is null)
+        if (commanderMetaProvider is null)
         {
             report = new CommanderMetaReport
             {
@@ -38,7 +38,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         {
             try
             {
-                report = await CommanderMetaProvider.GetCommanderMetaAsync(query, cancellationToken).ConfigureAwait(false);
+                report = await commanderMetaProvider.GetCommanderMetaAsync(query, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {

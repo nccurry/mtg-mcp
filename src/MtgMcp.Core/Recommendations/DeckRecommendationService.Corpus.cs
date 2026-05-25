@@ -285,7 +285,7 @@ public sealed partial class DeckRecommendationService
     {
         return new CorpusSourceStatusResult
         {
-            Sources = MergeSourceStatuses(CorpusSignalProviders.Select(provider => provider.GetStatus()).Concat(KnownCorpusSources()))
+            Sources = MergeSourceStatuses(corpusSignalProviders.Select(provider => provider.GetStatus()).Concat(KnownCorpusSources()))
         };
     }
 
@@ -357,7 +357,7 @@ public sealed partial class DeckRecommendationService
                 .ToList()
         };
         result.Notes.AddRange(report.Notes);
-        if (CorpusSignalProviders.Count == 0)
+        if (corpusSignalProviders.Count == 0)
         {
             result.Notes.Add("No API-backed corpus providers are configured, so no corpus recommendations were generated.");
         }
@@ -398,7 +398,7 @@ public sealed partial class DeckRecommendationService
 
         int queriedSources = 0;
         bool matchedSource = false;
-        foreach (ICorpusSignalProvider provider in CorpusSignalProviders)
+        foreach (ICorpusSignalProvider provider in corpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
             if (sourceFilterActive && !MatchesSourceFilter(status, sourceKey))

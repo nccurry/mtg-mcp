@@ -861,6 +861,30 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that caller cancellation is not treated as an optional metadata outage.
+    /// </summary>
+    [Fact]
+    public async Task AddCard_PropagatesCallerCancellationDuringMetadataLookup()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog { CancelGetCard = true });
+        DeckWorkspace workspace = await repository.SaveAsync(
+            new DeckWorkspace { Name = "Cancelled Add" },
+            TestContext.Current.CancellationToken);
+        using CancellationTokenSource cancellation = new();
+        await cancellation.CancelAsync();
+
+        Func<Task> add = () => service.AddCardAsync(
+            workspace.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Mainboard,
+            cancellation.Token);
+
+        await add.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    /// <summary>
     /// Verifies that remove card decrements then removes card.
     /// </summary>
     [Fact]
@@ -1791,7 +1815,12 @@ public sealed class DeckWorkspaceServiceTests
     private sealed class FakeCardCatalog : ICardCatalog
     {
         /// <summary>
-        /// Verifies that search cards.
+        /// Gets or sets whether single-card lookup should simulate caller cancellation.
+        /// </summary>
+        public bool CancelGetCard { get; init; }
+
+        /// <summary>
+        /// Returns no fake search results.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
             string query,
@@ -1803,7 +1832,7 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that semantic search cards.
+        /// Returns no fake semantic search results.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
             CardSearchRequest request,
@@ -1814,10 +1843,15 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that get card.
+        /// Returns deterministic fake card metadata for workspace mutations.
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
+            if (CancelGetCard)
+            {
+                throw new TaskCanceledException("Caller cancelled card lookup.");
+            }
+
             if (nameOrId.Contains("Missing", StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult<CardInfo?>(null);
@@ -1841,7 +1875,7 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that get cards by names.
+        /// Returns fake metadata for each requested name that resolves.
         /// </summary>
         public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
             IReadOnlyList<string> names,
@@ -1862,7 +1896,7 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that get type line.
+        /// Chooses a type line from the fixture card name.
         /// </summary>
         private static string GetTypeLine(string name)
         {
@@ -1880,7 +1914,7 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that get rulings.
+        /// Returns no fake rulings.
         /// </summary>
         public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
             string nameOrId,
@@ -1891,7 +1925,7 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that get prints.
+        /// Returns no fake prints.
         /// </summary>
         public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
             string nameOrId,
@@ -1902,7 +1936,7 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
-        /// Verifies that suggest cards.
+        /// Returns no fake suggestions.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
             string prompt,

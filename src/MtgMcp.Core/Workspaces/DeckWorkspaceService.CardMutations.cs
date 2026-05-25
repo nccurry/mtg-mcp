@@ -223,7 +223,9 @@ public sealed partial class DeckWorkspaceService
         {
             return await CardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (
+            exception is HttpRequestException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             return null;
         }

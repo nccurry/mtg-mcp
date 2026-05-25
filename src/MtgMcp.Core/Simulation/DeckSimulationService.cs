@@ -6,6 +6,11 @@ namespace MtgMcp.Core;
 public sealed partial class DeckSimulationService : DeckServiceBase
 {
     /// <summary>
+    /// Imports reference Archidekt decks for goldfish comparison when configured.
+    /// </summary>
+    private readonly IArchidektGateway? archidektGateway;
+
+    /// <summary>
     /// Resolves built-in, configured, and deck-local simulation profiles.
     /// </summary>
     private readonly SimulationProfileCatalog simulationProfiles;
@@ -18,24 +23,25 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         ICardCatalog cardCatalog,
         IArchidektGateway? archidektGateway = null,
         IDeckPlanRepository? planRepository = null,
-        ICommanderMetaProvider? commanderMetaProvider = null,
-        ICardTrendProvider? cardTrendProvider = null,
-        IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
         SimulationProfileCatalog? simulationProfiles = null
     )
         : base(
             repository,
             cardCatalog,
-            archidektGateway,
             planRepository,
-            commanderMetaProvider,
-            cardTrendProvider,
-            comboCatalog,
-            currentDateOverride,
-            corpusSignalProviders)
+            currentDateOverride)
     {
+        this.archidektGateway = archidektGateway;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
+    }
+
+    /// <summary>
+    /// Requires Archidekt support for comparing the active deck against remote references.
+    /// </summary>
+    private IArchidektGateway RequireArchidektGateway()
+    {
+        return archidektGateway
+            ?? throw new InvalidOperationException("Archidekt support is not configured.");
     }
 }

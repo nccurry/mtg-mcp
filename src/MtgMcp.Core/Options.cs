@@ -28,7 +28,7 @@ public sealed class MtgMcpOptions
     public MtgMcpSimulationOptions Simulation { get; set; } = new();
 
     /// <summary>
-    /// Handles default data dir.
+    /// Resolves the default persisted data directory for this user.
     /// </summary>
     private static string DefaultDataDir()
     {
@@ -235,7 +235,7 @@ public static class SecretRedactor
     ];
 
     /// <summary>
-    /// Handles redact.
+    /// Redacts a raw value when it appears to contain a secret.
     /// </summary>
     public static string Redact(string value)
     {
@@ -256,7 +256,7 @@ public static class SecretRedactor
     }
 
     /// <summary>
-    /// Handles redact.
+    /// Redacts secret-keyed values from a dictionary.
     /// </summary>
     public static Dictionary<string, object?> Redact(IDictionary<string, object?> values)
     {
@@ -270,7 +270,7 @@ public static class SecretRedactor
     }
 
     /// <summary>
-    /// Handles redact.
+    /// Redacts secret-keyed fields from a JSON document.
     /// </summary>
     public static JsonDocument Redact(JsonDocument document)
     {
@@ -280,7 +280,7 @@ public static class SecretRedactor
     }
 
     /// <summary>
-    /// Handles redact element.
+    /// Redacts a JSON element while preserving non-secret structure.
     /// </summary>
     private static object? RedactElement(JsonElement element, string? key)
     {
@@ -308,7 +308,7 @@ public static class SecretRedactor
     }
 
     /// <summary>
-    /// Handles redact object.
+    /// Redacts secret-keyed properties from a JSON object.
     /// </summary>
     private static Dictionary<string, object?> RedactObject(JsonElement element)
     {

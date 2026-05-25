@@ -47,6 +47,33 @@ public sealed class CommanderSpellbookComboCatalogTests
     }
 
     /// <summary>
+    /// Verifies that unexpected response shapes return an empty report with a diagnostic note.
+    /// </summary>
+    [Fact]
+    public async Task FindCombos_MissingResultsReturnsEmptyReport()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Post, "https://spellbook.test/find-my-combos")
+            .WithContent("Sol Ring")
+            .Respond("application/json", """{ "detail": "temporarily unavailable" }""");
+        CommanderSpellbookComboCatalog catalog = CreateCatalog(mockHttp);
+
+        DeckComboReport report = await catalog.FindCombosAsync(
+            new ComboCatalogQuery
+            {
+                CardNames = ["Sol Ring"],
+                Format = "commander"
+            },
+            TestContext.Current.CancellationToken);
+
+        report.Combos.Should().BeEmpty();
+        report.NearMisses.Should().BeEmpty();
+        report.Notes.Should().Contain(note =>
+            note.Contains("did not include combo results", StringComparison.OrdinalIgnoreCase));
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Creates a catalog with a mocked HTTP client.
     /// </summary>
     private static CommanderSpellbookComboCatalog CreateCatalog(MockHttpMessageHandler mockHttp)

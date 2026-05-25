@@ -53,6 +53,20 @@ public sealed class DocumentationCommentTests
     }
 
     /// <summary>
+    /// Verifies that common generated summary shapes are treated as low-signal comments.
+    /// </summary>
+    [Theory]
+    [InlineData("Handles send json.")]
+    [InlineData("Handles start deck workspace.")]
+    [InlineData("Gets the string.")]
+    [InlineData("Gets the card.")]
+    [InlineData("Maps the card.")]
+    public void LowSignalSummarySamples_AreRejected(string summary)
+    {
+        IsLowSignalSummary(summary).Should().BeTrue();
+    }
+
+    /// <summary>
     /// Enumerates C# source files that should be checked for documentation.
     /// </summary>
     private static IEnumerable<string> EnumerateSourceFiles(string root)
@@ -248,10 +262,30 @@ public sealed class DocumentationCommentTests
         string normalized = summary.Trim().TrimEnd('.').ToLowerInvariant();
 
         return normalized.Contains("the member", StringComparison.Ordinal)
+            || normalized.StartsWith("handles ", StringComparison.Ordinal)
             || normalized.EndsWith(" operation", StringComparison.Ordinal)
-            || normalized is "handles for"
-                or "handles get"
-                or "handles save"
+            || normalized is "gets the auth status"
+                or "gets the bool"
+                or "gets the card"
+                or "gets the checkpoint"
+                or "gets the date"
+                or "gets the deck"
+                or "gets the deck intent"
+                or "gets the deck summary"
+                or "gets the double"
+                or "gets the effective configuration"
+                or "gets the format rules"
+                or "gets the int"
+                or "gets the json"
+                or "gets the long"
+                or "gets the operation mode guidance"
+                or "gets the plan"
+                or "gets the prints"
+                or "gets the rulings"
+                or "gets the scryfall syntax cheatsheet"
+                or "gets the string"
+                or "gets the workspace selection guidance"
+                or "maps the card"
                 or "verifies that get"
                 or "verifies that save"
                 or "verifies that create gateway";

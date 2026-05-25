@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +17,17 @@ namespace MtgMcp.App.Tests;
 public sealed class McpSurfaceTests
 {
     /// <summary>
-    /// Stores the tool types.
+    /// Maps single-byte IL opcodes for method-body inspection.
+    /// </summary>
+    private static readonly OpCode[] SingleByteOpCodes = CreateOpCodeLookup(multiByte: false);
+
+    /// <summary>
+    /// Maps two-byte IL opcodes for method-body inspection.
+    /// </summary>
+    private static readonly OpCode[] MultiByteOpCodes = CreateOpCodeLookup(multiByte: true);
+
+    /// <summary>
+    /// Lists all tool wrapper types that contribute to the MCP surface.
     /// </summary>
     private static readonly Type[] ToolTypes =
     [
@@ -325,7 +337,34 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
-    /// Verifies that operation mode guard blocks mutating tools when read only.
+    /// Verifies that every mutating tool wrapper calls the operation mode guard before doing work.
+    /// </summary>
+    [Fact]
+    public void MutatingTools_CallOperationModeGuard()
+    {
+        List<string> unguardedTools = [];
+        foreach (MethodInfo method in ToolTypes.SelectMany(type =>
+            type.GetMethods(BindingFlags.Instance | BindingFlags.Public)))
+        {
+            CustomAttributeData? toolAttribute = TryGetToolAttribute(method);
+            if (toolAttribute is null || GetNamedBool(toolAttribute, "ReadOnly") != false)
+            {
+                continue;
+            }
+
+            if (!CallsOperationModeGuard(method))
+            {
+                string toolName = GetNamedString(toolAttribute, "Name") ?? method.Name;
+                unguardedTools.Add($"{method.DeclaringType?.Name}.{method.Name} ({toolName})");
+            }
+        }
+
+        unguardedTools.Should().BeEmpty(
+            "mutating tools must fail fast when mtg-mcp is in read-only or plan mode");
+    }
+
+    /// <summary>
+    /// Verifies that operation mode guard blocks an invoked mutating tool when read only.
     /// </summary>
     [Fact]
     public async Task OperationModeGuard_BlocksMutatingToolsWhenReadOnly()
@@ -615,7 +654,18 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
-    /// Verifies that get named attribute values.
+    /// Reads a named string value from custom attribute metadata.
+    /// </summary>
+    private static string? GetNamedString(CustomAttributeData attribute, string propertyName)
+    {
+        CustomAttributeNamedArgument? argument = attribute.NamedArguments.FirstOrDefault(value =>
+            value.MemberName.Equals(propertyName, StringComparison.Ordinal)
+        );
+        return argument.HasValue ? (string?)argument.Value.TypedValue.Value : null;
+    }
+
+    /// <summary>
+    /// Reads named string values from method attributes on a type.
     /// </summary>
     private static IReadOnlyList<string> GetNamedAttributeValues(
         Type type,
@@ -652,7 +702,7 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
-    /// Verifies that get tool attribute.
+    /// Gets the MCP tool attribute for the named tool method.
     /// </summary>
     private static CustomAttributeData GetToolAttribute(string methodName)
     {
@@ -661,13 +711,30 @@ public sealed class McpSurfaceTests
                 .Select(type => type.GetMethod(methodName))
                 .SingleOrDefault(method => method is not null)
             ?? throw new InvalidOperationException($"Method {methodName} was not found.");
-        return method.CustomAttributes.Single(attribute =>
+        return GetToolAttribute(method);
+    }
+
+    /// <summary>
+    /// Gets the MCP tool attribute for a reflected tool method.
+    /// </summary>
+    private static CustomAttributeData GetToolAttribute(MethodInfo method)
+    {
+        return TryGetToolAttribute(method)
+            ?? throw new InvalidOperationException($"{method.Name} is not an MCP tool method.");
+    }
+
+    /// <summary>
+    /// Gets the MCP tool attribute when a method exposes one.
+    /// </summary>
+    private static CustomAttributeData? TryGetToolAttribute(MethodInfo method)
+    {
+        return method.CustomAttributes.SingleOrDefault(attribute =>
             attribute.AttributeType.Name == "McpServerToolAttribute"
         );
     }
 
     /// <summary>
-    /// Verifies that get named bool.
+    /// Reads a named boolean value from custom attribute metadata.
     /// </summary>
     private static bool? GetNamedBool(CustomAttributeData attribute, string propertyName)
     {
@@ -675,6 +742,135 @@ public sealed class McpSurfaceTests
             value.MemberName.Equals(propertyName, StringComparison.Ordinal)
         );
         return argument.HasValue ? (bool?)argument.Value.TypedValue.Value : null;
+    }
+
+    /// <summary>
+    /// Checks the wrapper method and its async state machine for operation guard calls.
+    /// </summary>
+    private static bool CallsOperationModeGuard(MethodInfo method)
+    {
+        if (CallsOperationModeGuardInMethod(method))
+        {
+            return true;
+        }
+
+        AsyncStateMachineAttribute? stateMachine = method.GetCustomAttribute<AsyncStateMachineAttribute>();
+        MethodInfo? moveNext = stateMachine?.StateMachineType.GetMethod(
+            "MoveNext",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        return moveNext is not null && CallsOperationModeGuardInMethod(moveNext);
+    }
+
+    /// <summary>
+    /// Scans one IL method body for calls to operation mode guard methods.
+    /// </summary>
+    private static bool CallsOperationModeGuardInMethod(MethodInfo method)
+    {
+        byte[]? il = method.GetMethodBody()?.GetILAsByteArray();
+        if (il is null)
+        {
+            return false;
+        }
+
+        int index = 0;
+        while (index < il.Length)
+        {
+            OpCode opCode = ReadOpCode(il, ref index);
+            int operandStart = index;
+            int operandSize = GetOperandSize(opCode.OperandType, il, operandStart);
+            if ((opCode == OpCodes.Call || opCode == OpCodes.Callvirt) && operandSize == 4)
+            {
+                int token = BitConverter.ToInt32(il, operandStart);
+                if (IsOperationModeGuardCall(method.Module, token))
+                {
+                    return true;
+                }
+            }
+
+            index += operandSize;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves a call target and checks whether it is one of the guard methods.
+    /// </summary>
+    private static bool IsOperationModeGuardCall(Module module, int metadataToken)
+    {
+        try
+        {
+            MethodBase? target = module.ResolveMethod(metadataToken);
+            return target?.DeclaringType == typeof(OperationModeGuard)
+                && target.Name is nameof(OperationModeGuard.EnsureCanMutate)
+                    or nameof(OperationModeGuard.EnsureCanWritePlanningState);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reads one opcode and advances the IL cursor.
+    /// </summary>
+    private static OpCode ReadOpCode(byte[] il, ref int index)
+    {
+        byte value = il[index++];
+        return value == 0xFE
+            ? MultiByteOpCodes[il[index++]]
+            : SingleByteOpCodes[value];
+    }
+
+    /// <summary>
+    /// Returns the byte width of an opcode operand.
+    /// </summary>
+    private static int GetOperandSize(OperandType operandType, byte[] il, int operandStart)
+    {
+        return operandType switch
+        {
+            OperandType.InlineNone => 0,
+            OperandType.ShortInlineBrTarget
+                or OperandType.ShortInlineI
+                or OperandType.ShortInlineVar => 1,
+            OperandType.InlineVar => 2,
+            OperandType.InlineBrTarget
+                or OperandType.InlineField
+                or OperandType.InlineI
+                or OperandType.InlineMethod
+                or OperandType.InlineSig
+                or OperandType.InlineString
+                or OperandType.InlineTok
+                or OperandType.InlineType
+                or OperandType.ShortInlineR => 4,
+            OperandType.InlineI8 or OperandType.InlineR => 8,
+            OperandType.InlineSwitch => 4 + BitConverter.ToInt32(il, operandStart) * 4,
+            _ => throw new InvalidOperationException($"Unsupported IL operand type {operandType}.")
+        };
+    }
+
+    /// <summary>
+    /// Builds an opcode lookup table from the runtime opcode definitions.
+    /// </summary>
+    private static OpCode[] CreateOpCodeLookup(bool multiByte)
+    {
+        OpCode[] opCodes = new OpCode[256];
+        foreach (FieldInfo field in typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (field.GetValue(null) is not OpCode opCode)
+            {
+                continue;
+            }
+
+            ushort value = (ushort)opCode.Value;
+            bool isMultiByte = (value & 0xFF00) == 0xFE00;
+            if (isMultiByte == multiByte)
+            {
+                opCodes[value & 0xFF] = opCode;
+            }
+        }
+
+        return opCodes;
     }
 
     /// <summary>

@@ -6,29 +6,24 @@ namespace MtgMcp.Core;
 public sealed partial class DeckAnalysisService : DeckServiceBase
 {
     /// <summary>
+    /// Supplies optional combo lookups before analysis falls back to local heuristics.
+    /// </summary>
+    private readonly IComboCatalog? comboCatalog;
+
+    /// <summary>
     /// Creates an analysis service backed by workspace storage and card-data providers.
     /// </summary>
     public DeckAnalysisService(
         IDeckWorkspaceRepository repository,
         ICardCatalog cardCatalog,
-        IArchidektGateway? archidektGateway = null,
-        IDeckPlanRepository? planRepository = null,
-        ICommanderMetaProvider? commanderMetaProvider = null,
-        ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
+        DateOnly? currentDateOverride = null
     )
         : base(
             repository,
             cardCatalog,
-            archidektGateway,
-            planRepository,
-            commanderMetaProvider,
-            cardTrendProvider,
-            comboCatalog,
-            currentDateOverride,
-            corpusSignalProviders)
+            currentDateOverride: currentDateOverride)
     {
+        this.comboCatalog = comboCatalog;
     }
 }

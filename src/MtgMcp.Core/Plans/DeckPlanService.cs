@@ -3,7 +3,7 @@ namespace MtgMcp.Core;
 /// <summary>
 /// Persists, previews, and applies generated deck edit plans.
 /// </summary>
-public sealed partial class DeckPlanService : DeckServiceBase
+public sealed partial class DeckPlanService : DeckMutationServiceBase
 {
     /// <summary>
     /// Applies plan operations through the same workspace mutation path used by MCP tools.
@@ -19,22 +19,15 @@ public sealed partial class DeckPlanService : DeckServiceBase
         DeckWorkspaceService workspaces,
         IArchidektGateway? archidektGateway = null,
         IDeckPlanRepository? planRepository = null,
-        ICommanderMetaProvider? commanderMetaProvider = null,
-        ICardTrendProvider? cardTrendProvider = null,
-        IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
+        DateOnly? currentDateOverride = null
     )
         : base(
             repository,
             cardCatalog,
-            archidektGateway,
-            planRepository,
-            commanderMetaProvider,
-            cardTrendProvider,
-            comboCatalog,
-            currentDateOverride,
-            corpusSignalProviders)
+            archidektGateway: archidektGateway,
+            moxfieldGateway: null,
+            planRepository: planRepository,
+            currentDateOverride: currentDateOverride)
     {
         this.workspaces = workspaces;
     }

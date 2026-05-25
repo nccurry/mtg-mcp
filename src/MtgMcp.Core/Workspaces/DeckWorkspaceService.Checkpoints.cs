@@ -6,7 +6,7 @@ namespace MtgMcp.Core;
 public sealed partial class DeckWorkspaceService
 {
     /// <summary>
-    /// Handles checkpoint deck.
+    /// Creates an Archidekt checkpoint for a workspace.
     /// </summary>
     public async Task<DeckCheckpoint> CheckpointDeckAsync(
         string workspaceId,
@@ -38,7 +38,7 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
-    /// Gets the deck checkpoint.
+    /// Fetches one Archidekt checkpoint for a workspace.
     /// </summary>
     public async Task<DeckCheckpoint> GetDeckCheckpointAsync(
         string workspaceId,

@@ -13,7 +13,7 @@ namespace MtgMcp.App;
 public sealed class MtgResources
 {
     /// <summary>
-    /// Handles json options.
+    /// Configures JSON serialization for MCP resource payloads.
     /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -56,7 +56,7 @@ public sealed class MtgResources
     private readonly ServerInfoService serverInfo;
 
     /// <summary>
-    /// Handles mtg resources.
+    /// Creates the MCP resource endpoint group.
     /// </summary>
     public MtgResources(
         DeckWorkspaceService decks,
@@ -78,7 +78,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the deck.
+    /// Returns the full JSON representation for a saved workspace.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://deck/{deckId}", Name = "Deck Workspace")]
     [Description("Full JSON representation of a saved deck workspace.")]
@@ -94,7 +94,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the deck summary.
+    /// Returns a compact JSON summary for a saved workspace.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://deck/{deckId}/summary", Name = "Deck Summary")]
     [Description("Summary, counts, validation status, and category list for a deck workspace.")]
@@ -110,7 +110,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the deck intent.
+    /// Returns parsed deck intent stored in a workspace description.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://deck/{deckId}/intent", Name = "Deck Intent")]
     [Description("Parsed MTG MCP Deck Intent stored in the workspace description.")]
@@ -126,7 +126,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the scryfall syntax cheatsheet.
+    /// Returns a compact Scryfall search syntax reference.
     /// </summary>
     [McpServerResource(
         UriTemplate = "mtg://scryfall/syntax-cheatsheet",
@@ -147,7 +147,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the format rules.
+    /// Returns lightweight deck construction rules for a format.
     /// </summary>
     [McpServerResource(
         UriTemplate = "mtg://formats/{format}/deck-rules",
@@ -180,7 +180,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the workspace selection guidance.
+    /// Returns guidance for choosing local, Moxfield, or Archidekt workspace modes.
     /// </summary>
     [McpServerResource(
         UriTemplate = "mtg://usage/workspace-selection",
@@ -208,7 +208,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the operation mode guidance.
+    /// Returns the current operation mode and mutation policy.
     /// </summary>
     [McpServerResource(
         UriTemplate = "mtg://usage/operation-modes",
@@ -285,7 +285,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the effective configuration.
+    /// Returns redacted effective configuration values.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://config/effective", Name = "Effective Configuration")]
     [Description("Effective non-secret configuration values visible to the server.")]
@@ -327,7 +327,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the archidekt auth status.
+    /// Returns redacted Archidekt credential availability.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://archidekt/auth-status", Name = "Archidekt Auth Status")]
     [Description("Redacted Archidekt credential availability status.")]
@@ -342,7 +342,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets the Playgroup auth status.
+    /// Returns redacted Playgroup.gg credential availability.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://playgroup/auth-status", Name = "Playgroup Auth Status")]
     [Description("Redacted Playgroup.gg API-key and credentials-file availability status.")]

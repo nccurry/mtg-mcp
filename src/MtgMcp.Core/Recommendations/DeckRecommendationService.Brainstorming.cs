@@ -72,4 +72,3 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         return result;
     }
 }
-

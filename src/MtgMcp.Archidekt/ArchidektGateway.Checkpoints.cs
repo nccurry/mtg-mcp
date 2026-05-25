@@ -56,7 +56,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Gets the checkpoint.
+    /// Fetches one Archidekt checkpoint snapshot.
     /// </summary>
     public async Task<DeckCheckpoint> GetCheckpointAsync(
         DeckWorkspace workspace,

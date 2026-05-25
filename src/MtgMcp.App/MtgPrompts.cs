@@ -10,7 +10,7 @@ namespace MtgMcp.App;
 public sealed class MtgPrompts
 {
     /// <summary>
-    /// Handles brew commander deck.
+    /// Builds a prompt for planning a Commander deck from a commander and theme.
     /// </summary>
     [McpServerPrompt(Name = "brew_commander_deck")]
     [Description("Plan a Commander deck from a commander, theme, and constraints.")]
@@ -28,7 +28,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles tune existing deck.
+    /// Builds a prompt for analyzing and tuning an existing workspace.
     /// </summary>
     [McpServerPrompt(Name = "tune_existing_deck")]
     [Description("Analyze and tune an existing local or Archidekt-bound workspace.")]
@@ -64,7 +64,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles reduce deck cost.
+    /// Builds a prompt for lowering deck cost while preserving the game plan.
     /// </summary>
     [McpServerPrompt(Name = "reduce_deck_cost")]
     [Description("Reduce deck cost while preserving roles, color identity, legality, and core functionality.")]
@@ -82,7 +82,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles upgrade deck power.
+    /// Builds a prompt for targeted deck power upgrades.
     /// </summary>
     [McpServerPrompt(Name = "upgrade_deck_power")]
     [Description("Increase deck power with targeted upgrades and plan preview.")]
@@ -100,7 +100,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles reduce deck power.
+    /// Builds a prompt for gentler replacements that reduce deck power or salt.
     /// </summary>
     [McpServerPrompt(Name = "reduce_deck_power")]
     [Description("Reduce deck power or salt while keeping the deck functional.")]
@@ -118,7 +118,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles lower commander bracket.
+    /// Builds a prompt for lowering an estimated Commander bracket.
     /// </summary>
     [McpServerPrompt(Name = "lower_commander_bracket")]
     [Description("Lower an estimated Commander bracket using Game Changer and power-pressure analysis.")]
@@ -137,7 +137,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles optimize mana base.
+    /// Builds a prompt for mana-base analysis and replacement searches.
     /// </summary>
     [McpServerPrompt(Name = "optimize_mana_base")]
     [Description("Improve a deck mana base with analysis, recommendations, and preview.")]
@@ -154,7 +154,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles improve deck consistency.
+    /// Builds a prompt for improving ramp, draw, tutor, or card-selection consistency.
     /// </summary>
     [McpServerPrompt(Name = "improve_deck_consistency")]
     [Description("Improve ramp, draw, tutor, card-selection, or balanced consistency.")]
@@ -172,7 +172,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles tuning for a local meta.
+    /// Builds a prompt for tuning against stated local metagame pressures.
     /// </summary>
     [McpServerPrompt(Name = "tune_for_local_meta")]
     [Description("Tune a deck for stated local metagame pressures.")]
@@ -192,7 +192,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles reviewing new releases.
+    /// Builds a prompt for reviewing new card releases against a workspace.
     /// </summary>
     [McpServerPrompt(Name = "review_new_releases_for_deck")]
     [Description("Review newly released cards that fit a deck.")]
@@ -210,7 +210,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles goldfishing a deck.
+    /// Builds a prompt for projecting no-interaction deck performance.
     /// </summary>
     [McpServerPrompt(Name = "goldfish_deck")]
     [Description("Project board state and win timing when a deck is not interacted with.")]
@@ -227,7 +227,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles improving a deck toward a natural-language goal.
+    /// Builds a prompt for improving a deck toward a natural-language goal.
     /// </summary>
     [McpServerPrompt(Name = "make_deck_do_goal_better")]
     [Description("Find a previewable package that makes a deck better at a stated goal.")]
@@ -245,7 +245,7 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
-    /// Handles rules and rulings check.
+    /// Builds a prompt for checking card rulings and interaction questions.
     /// </summary>
     [McpServerPrompt(Name = "rules_and_rulings_check")]
     [Description("Check rulings and legality for specific cards or deck interactions.")]

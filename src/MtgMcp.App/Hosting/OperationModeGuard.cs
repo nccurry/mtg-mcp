@@ -4,32 +4,32 @@ using MtgMcp.Core;
 namespace MtgMcp.App;
 
 /// <summary>
-/// Provides operation mode guard behavior.
+/// Enforces the configured safety mode before tools write deck, remote, or planning state.
 /// </summary>
 public sealed class OperationModeGuard
 {
     /// <summary>
-    /// Stores the apply.
+    /// Allows all local and remote mutations.
     /// </summary>
     public const string Apply = "apply";
 
     /// <summary>
-    /// Stores the plan.
+    /// Allows local planning writes while blocking deck mutations.
     /// </summary>
     public const string Plan = "plan";
 
     /// <summary>
-    /// Stores the read only.
+    /// Blocks every write-capable tool.
     /// </summary>
     public const string ReadOnly = "read-only";
 
     /// <summary>
-    /// Stores the options.
+    /// Supplies the raw operation mode from configuration.
     /// </summary>
     private readonly IOptions<MtgMcpOptions> options;
 
     /// <summary>
-    /// Handles operation mode guard.
+    /// Creates a guard backed by the current mtg-mcp options snapshot.
     /// </summary>
     public OperationModeGuard(IOptions<MtgMcpOptions> options)
     {
@@ -37,12 +37,12 @@ public sealed class OperationModeGuard
     }
 
     /// <summary>
-    /// Handles effective mode.
+    /// Gets the normalized safety mode used by tool wrappers.
     /// </summary>
     public string EffectiveMode => Normalize(options.Value.OperationMode);
 
     /// <summary>
-    /// Ensures the can mutate.
+    /// Throws unless the configured mode permits deck or remote mutations.
     /// </summary>
     public void EnsureCanMutate(string toolName)
     {
@@ -67,7 +67,7 @@ public sealed class OperationModeGuard
     }
 
     /// <summary>
-    /// Ensures the can write planning state.
+    /// Throws unless the configured mode permits local plan and metadata writes.
     /// </summary>
     public void EnsureCanWritePlanningState(string toolName)
     {
@@ -84,7 +84,7 @@ public sealed class OperationModeGuard
     }
 
     /// <summary>
-    /// Gets the status.
+    /// Returns a serializable snapshot of the current operation mode.
     /// </summary>
     public object GetStatus()
     {
@@ -98,7 +98,7 @@ public sealed class OperationModeGuard
     }
 
     /// <summary>
-    /// Normalizes the mode.
+    /// Maps accepted client aliases onto one of the supported safety modes.
     /// </summary>
     private static string Normalize(string? mode)
     {

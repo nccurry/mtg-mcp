@@ -21,7 +21,7 @@ public sealed class WorkspaceTools
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
-    /// Handles workspace tools.
+    /// Creates the MCP workspace lifecycle tool group.
     /// </summary>
     public WorkspaceTools(DeckWorkspaceService decks, OperationModeGuard operationMode)
     {
@@ -55,7 +55,7 @@ public sealed class WorkspaceTools
     }
 
     /// <summary>
-    /// Handles start deck workspace.
+    /// Starts a workspace from the explicitly selected source mode.
     /// </summary>
     [McpServerTool(
         Name = "start_deck_workspace",

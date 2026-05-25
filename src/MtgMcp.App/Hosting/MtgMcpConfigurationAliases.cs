@@ -8,7 +8,7 @@ namespace MtgMcp.App;
 public static class MtgMcpConfigurationAliases
 {
     /// <summary>
-    /// Handles readonly.
+    /// Maps short environment keys to canonical mtg-mcp configuration paths.
     /// </summary>
     private static readonly (string Alias, string Canonical)[] Aliases =
     [

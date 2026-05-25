@@ -6,6 +6,26 @@ namespace MtgMcp.Core;
 public sealed partial class DeckRecommendationService : DeckServiceBase
 {
     /// <summary>
+    /// Imports Archidekt decks when recommendation scoring compares against Playgroup meta.
+    /// </summary>
+    private readonly IArchidektGateway? archidektGateway;
+
+    /// <summary>
+    /// Supplies Commander metagame context when a provider is configured.
+    /// </summary>
+    private readonly ICommanderMetaProvider? commanderMetaProvider;
+
+    /// <summary>
+    /// Supplies recent-card suggestions beyond direct catalog searches.
+    /// </summary>
+    private readonly ICardTrendProvider? cardTrendProvider;
+
+    /// <summary>
+    /// Supplies corpus-backed card evidence, exemplar decks, and discussions.
+    /// </summary>
+    private readonly IReadOnlyList<ICorpusSignalProvider> corpusSignalProviders;
+
+    /// <summary>
     /// Provides analysis workflows used by combined recommendation reports.
     /// </summary>
     private readonly DeckAnalysisService analysis;
@@ -37,7 +57,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         IDeckPlanRepository? planRepository = null,
         ICommanderMetaProvider? commanderMetaProvider = null,
         ICardTrendProvider? cardTrendProvider = null,
-        IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
         IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
         SimulationProfileCatalog? simulationProfiles = null,
@@ -46,14 +65,13 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         : base(
             repository,
             cardCatalog,
-            archidektGateway,
             planRepository,
-            commanderMetaProvider,
-            cardTrendProvider,
-            comboCatalog,
-            currentDateOverride,
-            corpusSignalProviders)
+            currentDateOverride)
     {
+        this.archidektGateway = archidektGateway;
+        this.commanderMetaProvider = commanderMetaProvider;
+        this.cardTrendProvider = cardTrendProvider;
+        this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();

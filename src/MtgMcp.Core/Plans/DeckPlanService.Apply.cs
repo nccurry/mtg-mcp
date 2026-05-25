@@ -5,7 +5,7 @@ namespace MtgMcp.Core;
 /// <summary>
 /// Persists and applies deck edit plans.
 /// </summary>
-public sealed partial class DeckPlanService : DeckServiceBase
+public sealed partial class DeckPlanService
 {
     /// <summary>
     /// Lists deck edit plans.

@@ -21,7 +21,7 @@ public sealed class CheckpointTools
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
-    /// Handles checkpoint tools.
+    /// Creates the MCP tools that manage Archidekt checkpoints.
     /// </summary>
     public CheckpointTools(DeckWorkspaceService decks, OperationModeGuard operationMode)
     {
@@ -30,7 +30,7 @@ public sealed class CheckpointTools
     }
 
     /// <summary>
-    /// Handles checkpoint deck.
+    /// Creates an Archidekt checkpoint for a bound workspace.
     /// </summary>
     [McpServerTool(
         Name = "checkpoint_deck",

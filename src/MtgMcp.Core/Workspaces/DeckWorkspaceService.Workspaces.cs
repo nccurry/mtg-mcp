@@ -41,7 +41,7 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
-    /// Handles start deck workspace.
+    /// Starts a workspace from an explicit local, Archidekt, or Moxfield mode.
     /// </summary>
     public async Task<DeckWorkspace> StartDeckWorkspaceAsync(
         string? mode,
@@ -350,7 +350,7 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
-    /// Gets the deck resource.
+    /// Loads the full workspace for MCP resource serialization.
     /// </summary>
     public async Task<DeckWorkspace> GetDeckResourceAsync(
         string workspaceId,
@@ -361,7 +361,7 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
-    /// Gets the deck summary.
+    /// Builds the compact workspace summary used by MCP resources.
     /// </summary>
     public async Task<object> GetDeckSummaryAsync(
         string workspaceId,

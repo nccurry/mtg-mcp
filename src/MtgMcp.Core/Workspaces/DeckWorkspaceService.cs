@@ -3,7 +3,7 @@ namespace MtgMcp.Core;
 /// <summary>
 /// Manages deck workspaces, local mutations, Archidekt writeback, checkpoints, and intent metadata.
 /// </summary>
-public sealed partial class DeckWorkspaceService : DeckServiceBase
+public sealed partial class DeckWorkspaceService : DeckMutationServiceBase
 {
     /// <summary>
     /// Creates a workspace service backed by the configured repositories and adapters.
@@ -13,24 +13,16 @@ public sealed partial class DeckWorkspaceService : DeckServiceBase
         ICardCatalog cardCatalog,
         IArchidektGateway? archidektGateway = null,
         IDeckPlanRepository? planRepository = null,
-        ICommanderMetaProvider? commanderMetaProvider = null,
-        ICardTrendProvider? cardTrendProvider = null,
-        IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
         IMoxfieldGateway? moxfieldGateway = null
     )
         : base(
             repository,
             cardCatalog,
             archidektGateway,
+            moxfieldGateway,
             planRepository,
-            commanderMetaProvider,
-            cardTrendProvider,
-            comboCatalog,
-            currentDateOverride,
-            corpusSignalProviders,
-            moxfieldGateway)
+            currentDateOverride)
     {
     }
 }

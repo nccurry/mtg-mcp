@@ -6,7 +6,7 @@ namespace MtgMcp.Core;
 public sealed class DeckValidator
 {
     /// <summary>
-    /// Handles basic lands.
+    /// Lists card names exempt from singleton copy limits.
     /// </summary>
     private static readonly HashSet<string> BasicLands = new(StringComparer.OrdinalIgnoreCase)
     {

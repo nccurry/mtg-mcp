@@ -21,7 +21,7 @@ public sealed class CategoryTools
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
-    /// Handles category tools.
+    /// Creates the MCP tools that manage deck categories.
     /// </summary>
     public CategoryTools(DeckWorkspaceService decks, OperationModeGuard operationMode)
     {

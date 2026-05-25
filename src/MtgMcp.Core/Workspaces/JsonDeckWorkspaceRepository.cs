@@ -8,7 +8,7 @@ namespace MtgMcp.Core;
 public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
 {
     /// <summary>
-    /// Handles serializer options.
+    /// Configures persisted workspace JSON formatting.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(
         JsonSerializerDefaults.Web
@@ -23,7 +23,7 @@ public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
     private readonly string workspaceDirectory;
 
     /// <summary>
-    /// Handles json deck workspace Repository.
+    /// Creates a repository rooted under the mtg-mcp data directory.
     /// </summary>
     public JsonDeckWorkspaceRepository(string dataDirectory)
     {
@@ -81,7 +81,7 @@ public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
     }
 
     /// <summary>
-    /// Gets the workspace id.
+    /// Loads a workspace by id from disk.
     /// </summary>
     public async Task<DeckWorkspace?> GetAsync(
         string workspaceId,
@@ -127,7 +127,7 @@ public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
     }
 
     /// <summary>
-    /// Gets the workspace path.
+    /// Builds a safe filesystem path for a workspace id.
     /// </summary>
     private string GetWorkspacePath(string workspaceId)
     {

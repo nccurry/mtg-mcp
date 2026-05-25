@@ -24,7 +24,7 @@ public interface ICardCatalog
     );
 
     /// <summary>
-    /// Gets the card.
+    /// Looks up a single card by Scryfall id or fuzzy name.
     /// </summary>
     Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken);
 
@@ -37,7 +37,7 @@ public interface ICardCatalog
     );
 
     /// <summary>
-    /// Gets the rulings.
+    /// Looks up Scryfall rulings for a card.
     /// </summary>
     Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
         string nameOrId,
@@ -45,7 +45,7 @@ public interface ICardCatalog
     );
 
     /// <summary>
-    /// Gets the prints.
+    /// Looks up known Scryfall prints for a card.
     /// </summary>
     Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
         string nameOrId,
@@ -158,7 +158,7 @@ public interface IDeckWorkspaceRepository
     Task<DeckWorkspace> SaveAsync(DeckWorkspace workspace, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets the workspace id.
+    /// Loads a workspace by id.
     /// </summary>
     Task<DeckWorkspace?> GetAsync(string workspaceId, CancellationToken cancellationToken);
 
@@ -179,7 +179,7 @@ public interface IDeckPlanRepository
     Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets the plan.
+    /// Loads a persisted deck edit plan by id.
     /// </summary>
     Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken);
 
@@ -203,7 +203,7 @@ public interface IDeckPlanRepository
 public interface IArchidektGateway
 {
     /// <summary>
-    /// Gets the auth status.
+    /// Returns redacted Archidekt credential availability.
     /// </summary>
     Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken);
 
@@ -281,7 +281,7 @@ public interface IArchidektGateway
     );
 
     /// <summary>
-    /// Gets the checkpoint.
+    /// Loads one Archidekt checkpoint for a workspace.
     /// </summary>
     Task<DeckCheckpoint> GetCheckpointAsync(
         DeckWorkspace workspace,

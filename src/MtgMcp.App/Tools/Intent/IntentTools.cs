@@ -21,7 +21,7 @@ public sealed class IntentTools
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
-    /// Handles intent tools.
+    /// Creates the MCP tools for reading and editing deck intent.
     /// </summary>
     public IntentTools(DeckWorkspaceService decks, OperationModeGuard operationMode)
     {

@@ -566,13 +566,13 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Handles deck id regex.
+    /// Matches a bare Archidekt deck id.
     /// </summary>
     [GeneratedRegex(@"(?<id>\d+)(?:/)?$", RegexOptions.CultureInvariant)]
     private static partial Regex DeckIdRegex();
 
     /// <summary>
-    /// Handles deck url id regex.
+    /// Captures a deck id from an Archidekt deck URL.
     /// </summary>
     [GeneratedRegex(
         @"(?:^|/)decks/(?<id>\d+)(?:/|$)",
