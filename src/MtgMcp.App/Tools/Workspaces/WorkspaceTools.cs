@@ -66,7 +66,7 @@ public sealed class WorkspaceTools
     )]
     [Description(
         "Preferred first deck workspace tool. "
-            + "Requires explicit mode 'local' or 'archidekt'; if unclear, ask the user before calling. "
+            + "Requires explicit mode 'local', 'archidekt', or 'moxfield'; if unclear, ask the user before calling. "
             + "Archidekt mode also requires an explicit writeBack choice."
     )]
     public Task<DeckWorkspace> StartDeckWorkspaceAsync(
@@ -75,6 +75,7 @@ public sealed class WorkspaceTools
         string format = "commander",
         string? description = null,
         string? archidektDeckIdOrUrl = null,
+        string? moxfieldDeckIdOrUrl = null,
         bool? writeBack = null,
         string? decklist = null,
         CancellationToken cancellationToken = default
@@ -87,6 +88,7 @@ public sealed class WorkspaceTools
             format,
             description,
             archidektDeckIdOrUrl,
+            moxfieldDeckIdOrUrl,
             writeBack,
             decklist,
             cancellationToken
@@ -163,6 +165,116 @@ public sealed class WorkspaceTools
         DeckWorkspace workspace = await decks.OpenArchidektDeckAsync(deckIdOrUrl, writeBack.Value, cancellationToken)
             .ConfigureAwait(false);
         return CreateOpenResult(workspace);
+    }
+
+    /// <summary>
+    /// Imports a Moxfield deck.
+    /// </summary>
+    [McpServerTool(
+        Name = "open_moxfield_deck",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description(
+        "Import a public or unlisted Moxfield deck by id or URL as a generic local workspace. "
+            + "Moxfield writeback is not supported; use copy_workspace_to_archidekt to migrate later."
+    )]
+    public async Task<DeckOpenResult> OpenMoxfieldDeckAsync(
+        string deckIdOrUrl,
+        CancellationToken cancellationToken = default
+    )
+    {
+        operationMode.EnsureCanMutate("open_moxfield_deck");
+        DeckWorkspace workspace = await decks.ImportMoxfieldDeckAsync(deckIdOrUrl, cancellationToken)
+            .ConfigureAwait(false);
+        return CreateOpenResult(workspace);
+    }
+
+    /// <summary>
+    /// Creates an Archidekt deck.
+    /// </summary>
+    [McpServerTool(
+        Name = "create_archidekt_deck",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description(
+        "Create an empty Archidekt deck with writeback enabled. "
+            + "Defaults to private visibility unless visibility is explicitly public or unlisted."
+    )]
+    public async Task<DeckOpenResult> CreateArchidektDeckAsync(
+        string name,
+        string format = "commander",
+        string? description = null,
+        string visibility = "private",
+        CancellationToken cancellationToken = default
+    )
+    {
+        operationMode.EnsureCanMutate("create_archidekt_deck");
+        DeckWorkspace workspace = await decks.CreateArchidektDeckAsync(
+                name,
+                format,
+                description,
+                visibility,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return CreateOpenResult(workspace);
+    }
+
+    /// <summary>
+    /// Copies a workspace into Archidekt.
+    /// </summary>
+    [McpServerTool(
+        Name = "copy_workspace_to_archidekt",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description(
+        "Dry-run or apply a full workspace copy into a new or existing Archidekt deck. "
+            + "dryRun defaults true; applying to a non-empty destination requires allowNonEmptyDestination=true "
+            + "to append or replaceExistingDestination=true to replace its cards."
+    )]
+    public Task<ArchidektCopyResult> CopyWorkspaceToArchidektAsync(
+        string workspaceId,
+        bool dryRun = true,
+        bool createNew = true,
+        string? destinationDeckIdOrUrl = null,
+        string? name = null,
+        string? format = null,
+        string? description = null,
+        string visibility = "private",
+        bool allowNonEmptyDestination = false,
+        bool replaceExistingDestination = false,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (dryRun)
+        {
+            operationMode.EnsureCanWritePlanningState("copy_workspace_to_archidekt");
+        }
+        else
+        {
+            operationMode.EnsureCanMutate("copy_workspace_to_archidekt");
+        }
+
+        return decks.CopyWorkspaceToArchidektAsync(
+            workspaceId,
+            dryRun,
+            createNew,
+            destinationDeckIdOrUrl,
+            name,
+            format,
+            description,
+            visibility,
+            allowNonEmptyDestination,
+            replaceExistingDestination,
+            cancellationToken);
     }
 
     /// <summary>
@@ -295,6 +407,8 @@ public sealed class WorkspaceTools
             Mode = workspace.Mode,
             WriteBack = workspace.WriteBack,
             ArchidektDeckId = workspace.ArchidektDeckId,
+            SourceReferences = workspace.SourceReferences,
+            Warnings = workspace.Warnings,
             Persistence = DeckPersistence.For(workspace),
             TotalCards = workspace.Cards.Sum(card => Math.Max(0, card.Quantity)),
             IncludedCards = workspace.Cards

@@ -186,15 +186,18 @@ public sealed class MtgResources
         UriTemplate = "mtg://usage/workspace-selection",
         Name = "Workspace Selection Guidance"
     )]
-    [Description("Policy for choosing local versus Archidekt workspaces and when to ask the user.")]
+    [Description("Policy for choosing local, Moxfield import, or Archidekt workspaces and when to ask the user.")]
     public string GetWorkspaceSelectionGuidance()
     {
         return """
             Use local mode when the user wants a new unsynced brew, a scratch deck, or an import from pasted deck text.
+            Use Moxfield mode when the user provides a Moxfield deck id or URL; Moxfield imports become local-only workspaces.
             Use Archidekt mode when the user provides an Archidekt deck id or URL,
             asks to update an online deck, or asks for Archidekt checkpoints.
-            If local and Archidekt are both plausible, ask the user which workspace mode to use
+            If local, Moxfield import, and Archidekt are each plausible, ask the user which workspace mode to use
             before creating or opening a workspace.
+            To migrate an imported or local workspace to Archidekt, dry-run copy_workspace_to_archidekt first,
+            then apply it only after the user confirms the destination and warnings.
             Never enable Archidekt writeback unless the user explicitly asks to update,
             organize, tag, move cards, checkpoint, or otherwise persist changes to Archidekt.
             If Archidekt writeback intent is unclear, ask whether edits should write back

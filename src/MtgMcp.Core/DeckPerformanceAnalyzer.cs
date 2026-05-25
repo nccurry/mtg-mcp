@@ -1801,6 +1801,15 @@ internal static class DeckPerformanceAnalyzer
     }
 
     /// <summary>
+    /// Checks whether the format uses Commander deck construction limits.
+    /// </summary>
+    private static bool IsCommanderFormat(string format)
+    {
+        return format.Trim().Equals("commander", StringComparison.OrdinalIgnoreCase)
+            || format.Trim().Equals("edh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Adds assumptions and warnings that explain simulator boundaries.
     /// </summary>
     private static void AddPerformanceNotes(
@@ -1840,6 +1849,12 @@ internal static class DeckPerformanceAnalyzer
         if (!colorIdentityKnown)
         {
             analysis.Warnings.Add("Deck color identity could not be inferred from commander or included card snapshots.");
+        }
+
+        if (IsCommanderFormat(workspace.Format) && analysis.DeckSize != 100)
+        {
+            analysis.Warnings.Add(
+                $"Commander workspace has {analysis.DeckSize} included cards instead of 100; excluded categories such as Sideboard and Maybeboard are not sampled, so performance probabilities reflect a partial active deck.");
         }
 
         if (analysis.DeckSize < 60)

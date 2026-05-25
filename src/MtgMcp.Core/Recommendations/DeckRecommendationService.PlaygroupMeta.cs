@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace MtgMcp.Core;
@@ -53,6 +54,21 @@ public sealed partial class DeckRecommendationService
     private const string StaxPressure = "stax-control";
 
     /// <summary>
+    /// Caps aggregate candidate performance simulations so large batches stay responsive.
+    /// </summary>
+    private const int CandidatePerformanceSimulationBudget = 4_000;
+
+    /// <summary>
+    /// Keeps each candidate performance sample above the analyzer's minimum useful size.
+    /// </summary>
+    private const int CandidatePerformanceMinimumSimulations = 100;
+
+    /// <summary>
+    /// Limits concurrent read-only Archidekt imports while collecting local-meta deck evidence.
+    /// </summary>
+    private const int MetaDeckEvidenceParallelism = 4;
+
+    /// <summary>
     /// Scores candidate cards using deterministic deck-plan, performance, meta, budget, and confidence factors.
     /// </summary>
     public async Task<PlaygroupMetaScoringResult> ScoreCardsForPlaygroupMetaAsync(
@@ -96,19 +112,24 @@ public sealed partial class DeckRecommendationService
             .GetCardsByNamesAsync(candidateNames, cancellationToken)
             .ConfigureAwait(false);
         IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
-        List<PlaygroupMetaDeckEvidence> metaDecks = [];
         List<string> warnings = [.. rankings.Warnings, .. intentResult.Warnings, .. profileResolution.Warnings];
-
-        foreach (PlaygroupDeckRanking ranking in rankings.Rankings.Take(safeMetaDeckLimit))
-        {
-            metaDecks.Add(await BuildMetaDeckEvidenceAsync(
-                    ranking,
-                    rankings.Rankings.Count,
-                    cancellationToken)
-                .ConfigureAwait(false));
-        }
+        List<PlaygroupDeckRanking> rankedMetaDecks = rankings.Rankings.Take(safeMetaDeckLimit).ToList();
+        List<PlaygroupMetaDeckEvidence> metaDecks = await BuildMetaDeckEvidenceBatchAsync(
+                rankedMetaDecks,
+                rankings.Rankings.Count,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         List<PlaygroupMetaPressureEvidence> pressures = AggregatePressures(metaDecks);
+        int candidatePerformanceSimulations = BudgetCandidatePerformanceSimulations(
+            candidateNames.Count,
+            safeSimulations);
+        if (candidatePerformanceSimulations < safeSimulations)
+        {
+            warnings.Add(
+                $"Candidate performance simulations were capped at {candidatePerformanceSimulations} per card from requested {safeSimulations} to keep local-meta scoring responsive for {candidateNames.Count} candidates; baseline analysis still used {safeSimulations} simulations.");
+        }
+
         if (candidateNames.Count == 0)
         {
             warnings.Add("No candidate cards were supplied and no cards were found in excluded workspace categories.");
@@ -169,7 +190,7 @@ public sealed partial class DeckRecommendationService
                 gameChangers,
                 colorKnown,
                 colors,
-                safeSimulations,
+                candidatePerformanceSimulations,
                 safeMaxTurn,
                 seed,
                 cancellationToken));
@@ -198,11 +219,46 @@ public sealed partial class DeckRecommendationService
     }
 
     /// <summary>
+    /// Builds pressure evidence for ranked local-meta decks using bounded import parallelism.
+    /// </summary>
+    private async Task<List<PlaygroupMetaDeckEvidence>> BuildMetaDeckEvidenceBatchAsync(
+        IReadOnlyList<PlaygroupDeckRanking> rankings,
+        int rankingCount,
+        CancellationToken cancellationToken)
+    {
+        ConcurrentDictionary<string, Lazy<Task<DeckWorkspace>>> importCache = new(StringComparer.OrdinalIgnoreCase);
+        using SemaphoreSlim gate = new(MetaDeckEvidenceParallelism);
+
+        async Task<PlaygroupMetaDeckEvidence> BuildWithGateAsync(PlaygroupDeckRanking ranking)
+        {
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await BuildMetaDeckEvidenceAsync(
+                        ranking,
+                        rankingCount,
+                        importCache,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        Task<PlaygroupMetaDeckEvidence>[] tasks = rankings.Select(BuildWithGateAsync).ToArray();
+        PlaygroupMetaDeckEvidence[] evidence = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return evidence.ToList();
+    }
+
+    /// <summary>
     /// Builds pressure evidence for one ranked local-meta deck.
     /// </summary>
     private async Task<PlaygroupMetaDeckEvidence> BuildMetaDeckEvidenceAsync(
         PlaygroupDeckRanking ranking,
         int rankingCount,
+        ConcurrentDictionary<string, Lazy<Task<DeckWorkspace>>> importCache,
         CancellationToken cancellationToken)
     {
         PlaygroupDeckSummary deck = ranking.Deck;
@@ -219,8 +275,10 @@ public sealed partial class DeckRecommendationService
             {
                 try
                 {
-                    imported = await ArchidektGateway
-                        .ImportDeckAsync(deck.DecklistUrl!, writeBack: false, cancellationToken)
+                    imported = await ImportArchidektDecklistAsync(
+                            deck.DecklistUrl!,
+                            importCache,
+                            cancellationToken)
                         .ConfigureAwait(false);
                     importedDecklist = true;
                 }
@@ -250,6 +308,24 @@ public sealed partial class DeckRecommendationService
             Pressures = pressures,
             Warnings = warnings,
         };
+    }
+
+    /// <summary>
+    /// Imports an Archidekt decklist once per scoring request, sharing duplicate URL lookups.
+    /// </summary>
+    private Task<DeckWorkspace> ImportArchidektDecklistAsync(
+        string decklistUrl,
+        ConcurrentDictionary<string, Lazy<Task<DeckWorkspace>>> importCache,
+        CancellationToken cancellationToken)
+    {
+        IArchidektGateway gateway = ArchidektGateway
+            ?? throw new InvalidOperationException("Archidekt gateway is not configured.");
+        Lazy<Task<DeckWorkspace>> importTask = importCache.GetOrAdd(
+            decklistUrl,
+            url => new Lazy<Task<DeckWorkspace>>(
+                () => gateway.ImportDeckAsync(url, writeBack: false, cancellationToken),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+        return importTask.Value;
     }
 
     /// <summary>
@@ -357,6 +433,23 @@ public sealed partial class DeckRecommendationService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(25)
             .ToList();
+    }
+
+    /// <summary>
+    /// Chooses the per-candidate simulation count for local-meta scoring batches.
+    /// </summary>
+    private static int BudgetCandidatePerformanceSimulations(int candidateCount, int requestedSimulations)
+    {
+        if (candidateCount <= 0)
+        {
+            return requestedSimulations;
+        }
+
+        int budgetedSimulations = CandidatePerformanceSimulationBudget / candidateCount;
+        return Math.Clamp(
+            Math.Min(requestedSimulations, budgetedSimulations),
+            CandidatePerformanceMinimumSimulations,
+            requestedSimulations);
     }
 
     /// <summary>

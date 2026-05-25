@@ -147,6 +147,15 @@ public abstract partial class DeckServiceBase
     }
 
     /// <summary>
+    /// Requires the Moxfield gateway for read-only import operations.
+    /// </summary>
+    protected IMoxfieldGateway RequireMoxfieldGateway()
+    {
+        return MoxfieldGateway
+            ?? throw new InvalidOperationException("Moxfield support is not configured.");
+    }
+
+    /// <summary>
     /// Keeps cached card category mirrors aligned before persistence or adapter writeback.
     /// </summary>
     private static void NormalizeWorkspaceCategories(DeckWorkspace workspace)

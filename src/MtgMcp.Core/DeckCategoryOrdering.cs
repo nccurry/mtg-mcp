@@ -1,7 +1,7 @@
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Keeps Archidekt category arrays ordered so index zero is the card's primary category.
+/// Keeps category arrays ordered so index zero is the card's primary category.
 /// </summary>
 public static class DeckCategoryOrdering
 {

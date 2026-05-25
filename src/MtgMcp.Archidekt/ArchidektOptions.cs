@@ -54,6 +54,27 @@ public sealed class ArchidektOptions
     /// Gets or sets the enable username password login.
     /// </summary>
     public bool EnableUsernamePasswordLogin { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets optional client-side pacing for Archidekt requests.
+    /// </summary>
+    public ArchidektRateLimitOptions RateLimit { get; set; } = new();
+}
+
+/// <summary>
+/// Configures optional client-side Archidekt request pacing.
+/// </summary>
+public sealed class ArchidektRateLimitOptions
+{
+    /// <summary>
+    /// Gets or sets the maximum requests allowed in one window; zero disables proactive pacing.
+    /// </summary>
+    public int MaxRequests { get; set; }
+
+    /// <summary>
+    /// Gets or sets the request window length in seconds.
+    /// </summary>
+    public int WindowSeconds { get; set; } = 60;
 }
 
 /// <summary>

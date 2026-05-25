@@ -64,6 +64,55 @@ public sealed class PlaygroupServiceTests
     }
 
     /// <summary>
+    /// Verifies that deck enrichment overlaps bounded Playgroup detail requests while preserving output order.
+    /// </summary>
+    [Fact]
+    public async Task ListDecks_EnrichesDetailsWithBoundedParallelism()
+    {
+        FakePlaygroupGateway gateway = new()
+        {
+            ReleaseDeckDetailsAfterStartedCount = 2,
+        };
+        List<PlaygroupParticipation> participations = [];
+        for (int index = 0; index < 6; index++)
+        {
+            long deckId = 1_000 + index;
+            participations.Add(new PlaygroupParticipation
+            {
+                DeckId = deckId,
+                DeckName = $"Deck {index}",
+                UserId = 10 + index,
+                UserName = $"Player {index}",
+            });
+            gateway.Decks[deckId] = new PlaygroupDeck
+            {
+                Id = deckId,
+                Name = $"Deck {index}",
+                PowerLevel = 5 + index,
+                ConfidenceFactor = 0.9,
+            };
+            gateway.Elo[deckId] = new PlaygroupEloHistory
+            {
+                DeckId = deckId,
+                CurrentRating = 1_500 + index,
+            };
+        }
+
+        gateway.Games.Add(new PlaygroupGame { Id = 1, Participations = participations });
+        PlaygroupService service = new(gateway);
+
+        PlaygroupDeckListResult result = await service.ListDecksAsync(
+            "49295",
+            maxGames: 10,
+            limit: 6,
+            TestContext.Current.CancellationToken
+        );
+
+        result.Decks.Select(deck => deck.DeckId).Should().Equal(1000, 1001, 1002, 1003, 1004, 1005);
+        gateway.MaxConcurrentDeckDetailRequests.Should().BeGreaterThan(1);
+    }
+
+    /// <summary>
     /// Verifies that playgroup users are derived from fetched game participations.
     /// </summary>
     [Fact]
@@ -355,6 +404,32 @@ public sealed class PlaygroupServiceTests
     private sealed class FakePlaygroupGateway : IPlaygroupGateway
     {
         /// <summary>
+        /// Releases blocked fake deck-detail requests once the configured request count has started.
+        /// </summary>
+        private readonly TaskCompletionSource<object?> deckDetailBarrier = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        /// Coordinates fake deck-detail concurrency counters.
+        /// </summary>
+        private readonly object deckDetailLock = new();
+
+        /// <summary>
+        /// Tracks currently running fake deck-detail requests.
+        /// </summary>
+        private int activeDeckDetailRequests;
+
+        /// <summary>
+        /// Stores the largest overlapping fake deck-detail request count observed.
+        /// </summary>
+        private int maxConcurrentDeckDetailRequests;
+
+        /// <summary>
+        /// Counts fake deck-detail requests that reached the deterministic test barrier.
+        /// </summary>
+        private int deckDetailBarrierStartedCount;
+
+        /// <summary>
         /// Gets or sets the current user returned by the fake gateway.
         /// </summary>
         public PlaygroupUser CurrentUser { get; set; } = new() { Id = 1, Username = "user" };
@@ -388,6 +463,25 @@ public sealed class PlaygroupServiceTests
         /// Gets playgroup summary requests made by the service.
         /// </summary>
         public List<(long UserId, long PlaygroupId)> PlaygroupRequests { get; } = [];
+
+        /// <summary>
+        /// Gets or sets the number of started deck details required before the fake barrier releases.
+        /// </summary>
+        public int ReleaseDeckDetailsAfterStartedCount { get; set; }
+
+        /// <summary>
+        /// Gets the largest number of overlapping fake deck-detail requests observed.
+        /// </summary>
+        public int MaxConcurrentDeckDetailRequests
+        {
+            get
+            {
+                lock (deckDetailLock)
+                {
+                    return maxConcurrentDeckDetailRequests;
+                }
+            }
+        }
 
         /// <summary>
         /// Returns configured fake authentication status.
@@ -436,9 +530,27 @@ public sealed class PlaygroupServiceTests
         /// <summary>
         /// Returns fake deck details by id.
         /// </summary>
-        public Task<PlaygroupDeck> GetDeckAsync(long deckId, CancellationToken cancellationToken)
+        public async Task<PlaygroupDeck> GetDeckAsync(long deckId, CancellationToken cancellationToken)
         {
-            return Task.FromResult(Decks[deckId]);
+            int active = Interlocked.Increment(ref activeDeckDetailRequests);
+            try
+            {
+                lock (deckDetailLock)
+                {
+                    maxConcurrentDeckDetailRequests = Math.Max(maxConcurrentDeckDetailRequests, active);
+                }
+
+                if (ReleaseDeckDetailsAfterStartedCount > 0)
+                {
+                    await WaitForDeckDetailBarrierAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                return Decks[deckId];
+            }
+            finally
+            {
+                Interlocked.Decrement(ref activeDeckDetailRequests);
+            }
         }
 
         /// <summary>
@@ -467,6 +579,22 @@ public sealed class PlaygroupServiceTests
         )
         {
             return Task.FromResult(Elo[deckId]);
+        }
+
+        /// <summary>
+        /// Waits until enough fake deck-detail requests have started to prove service overlap.
+        /// </summary>
+        private async Task WaitForDeckDetailBarrierAsync(CancellationToken cancellationToken)
+        {
+            int started = Interlocked.Increment(ref deckDetailBarrierStartedCount);
+            if (started >= ReleaseDeckDetailsAfterStartedCount)
+            {
+                deckDetailBarrier.TrySetResult(null);
+            }
+
+            await deckDetailBarrier.Task
+                .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 }

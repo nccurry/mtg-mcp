@@ -17,7 +17,8 @@ public sealed partial class DeckWorkspaceService : DeckServiceBase
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
+        IMoxfieldGateway? moxfieldGateway = null
     )
         : base(
             repository,
@@ -28,7 +29,8 @@ public sealed partial class DeckWorkspaceService : DeckServiceBase
             cardTrendProvider,
             comboCatalog,
             currentDateOverride,
-            corpusSignalProviders)
+            corpusSignalProviders,
+            moxfieldGateway)
     {
     }
 }

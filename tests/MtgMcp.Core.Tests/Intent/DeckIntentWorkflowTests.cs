@@ -351,4 +351,39 @@ public sealed partial class DeckIntelligenceTests
         archidekt.PersistedMetadataRequests.Should().Be(1);
         DeckIntentText.ToPlainText(archidekt.ImportedDeck.Description).Should().Contain("discard-control");
     }
+
+    /// <summary>
+    /// Verifies that Archidekt intent writes use the rich editor shape even when the original description is plain.
+    /// </summary>
+    [Fact]
+    public async Task SetDeckIntent_ArchidektWritebackConvertsPlainDescriptionToQuill()
+    {
+        InMemoryRepository workspaces = new();
+        FakeArchidektGateway archidekt = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Name = "Plain Remote Intent",
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+                Description = ""
+            }
+        };
+        DeckWorkspaceService service = CreateWorkspaceService(workspaces, new FakeCardCatalog(), archidekt);
+        DeckWorkspace workspace = await service.OpenArchidektDeckAsync(
+            "123",
+            writeBack: true,
+            TestContext.Current.CancellationToken);
+
+        DeckIntentChangeResult result = await service.SetDeckIntentAsync(
+            workspace.Id,
+            "Archetype: blink-combo",
+            TestContext.Current.CancellationToken);
+
+        result.Persistence.Should().Be(DeckPersistence.ArchidektWriteBack);
+        archidekt.PersistedMetadataRequests.Should().Be(1);
+        archidekt.ImportedDeck.Description.Should().Contain("\"ops\"");
+        DeckIntentText.ToPlainText(archidekt.ImportedDeck.Description).Should().Contain("blink-combo");
+    }
 }

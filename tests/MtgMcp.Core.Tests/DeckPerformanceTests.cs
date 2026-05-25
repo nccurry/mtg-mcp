@@ -43,6 +43,35 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies that performance analysis warns when a Commander active deck excludes sideboard cards.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckPerformance_WarnsWhenCommanderActiveDeckIsPartial()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace deck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 18);
+        deck.Categories.Add(new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false });
+        deck.Cards.Add(Card("Sideboard Spell", 11, DeckDefaults.Sideboard, "Sorcery", "{1}", 1, "Scry 1.", []));
+        await repository.SaveAsync(deck, CancellationToken.None);
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
+
+        DeckPerformanceAnalysis analysis = await service.AnalyzeDeckPerformanceAsync(
+            deck.Id,
+            "commander-default",
+            simulations: 100,
+            maxTurn: 3,
+            seed: 77,
+            includeMulligans: true,
+            CancellationToken.None);
+
+        analysis.DeckSize.Should().Be(89);
+        analysis.Warnings.Should().Contain(warning =>
+            warning.Contains("89 included cards", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("Sideboard", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("not sampled", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that plan performance comparison applies preview edits in memory.
     /// </summary>
     [Fact]

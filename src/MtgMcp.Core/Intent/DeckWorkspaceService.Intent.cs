@@ -30,7 +30,10 @@ public sealed partial class DeckWorkspaceService
         }
 
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        workspace.Description = DeckIntentText.UpsertDescription(workspace.Description, intentText);
+        workspace.Description = DeckIntentText.UpsertDescription(
+            workspace.Description,
+            intentText,
+            forceQuillDelta: workspace.Mode == WorkspaceMode.Archidekt);
         await PersistIntentMetadataAsync(workspace, cancellationToken).ConfigureAwait(false);
 
         DeckIntentResult result = DeckIntentText.Extract(workspace.Description, workspace.Id);
@@ -51,7 +54,9 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        workspace.Description = DeckIntentText.ClearDescription(workspace.Description);
+        workspace.Description = DeckIntentText.ClearDescription(
+            workspace.Description,
+            forceQuillDelta: workspace.Mode == WorkspaceMode.Archidekt);
         await PersistIntentMetadataAsync(workspace, cancellationToken).ConfigureAwait(false);
 
         DeckIntentResult result = DeckIntentText.Extract(workspace.Description, workspace.Id);

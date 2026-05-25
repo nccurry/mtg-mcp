@@ -108,6 +108,176 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that large candidate batches reduce per-card simulation work and report that tradeoff.
+    /// </summary>
+    [Fact]
+    public async Task ScoreCardsForPlaygroupMeta_BudgetsCandidatePerformanceSimulationsForLargeBatches()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Batch Scoring Test",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Lands, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "White Commander",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature",
+                        ManaValue = 3,
+                        ColorIdentity = ["W"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Plains",
+                    Quantity = 99,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Plains",
+                        ProducedMana = ["W"],
+                    },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        MetaScoringCatalog catalog = new();
+        FakeArchidektGateway archidekt = new();
+        archidekt.ImportedDecksByInput["https://archidekt.com/decks/999/raggadragga"] = RaggadraggaDeck();
+        PlaygroupService playgroups = new(new MetaPlaygroupGateway());
+        DeckAnalysisService analysis = CreateAnalysisService(workspaces, catalog, archidekt);
+        DeckSimulationService simulation = CreateSimulationService(workspaces, catalog, archidekt);
+        DeckRecommendationService service = new(
+            workspaces,
+            catalog,
+            analysis,
+            simulation,
+            archidektGateway: archidekt,
+            simulationProfiles: SimulationProfileCatalog.CreateDefault(),
+            playgroups: playgroups);
+        string[] candidates = Enumerable.Range(1, 20)
+            .Select(index => $"Candidate {index}")
+            .ToArray();
+
+        PlaygroupMetaScoringResult result = await service.ScoreCardsForPlaygroupMetaAsync(
+            workspace.Id,
+            "https://playgroup.gg/playgroups/49295-heaters",
+            candidates,
+            maxGames: 20,
+            metaDeckLimit: 1,
+            simulations: 1_000,
+            maxTurn: 1,
+            seed: 11,
+            maxPrice: null,
+            TestContext.Current.CancellationToken);
+
+        result.CandidateScores.Should().HaveCount(20);
+        result.Warnings.Should().Contain(warning =>
+            warning.Contains("capped at 200 per card", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("requested 1000", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("20 candidates", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that meta-deck imports overlap and repeated Archidekt URLs share the same import task.
+    /// </summary>
+    [Fact]
+    public async Task ScoreCardsForPlaygroupMeta_ParallelizesAndCachesArchidektMetaDeckImports()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Parallel Import Test",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Lands, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "White Commander",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature",
+                        ManaValue = 3,
+                        ColorIdentity = ["W"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Plains",
+                    Quantity = 99,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Plains",
+                        ProducedMana = ["W"],
+                    },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        string firstUrl = "https://archidekt.com/decks/900/raggadragga-900";
+        string secondUrl = "https://archidekt.com/decks/901/raggadragga-901";
+        MetaScoringCatalog catalog = new();
+        FakeArchidektGateway archidekt = new()
+        {
+            ReleaseImportsAfterStartedCount = 2,
+        };
+        archidekt.ImportedDecksByInput[firstUrl] = RaggadraggaDeck();
+        archidekt.ImportedDecksByInput[secondUrl] = RaggadraggaDeck();
+        PlaygroupService playgroups = new(new MetaPlaygroupGateway
+        {
+            DeckCount = 4,
+            DistinctDecklistUrls = 2,
+        });
+        DeckAnalysisService analysis = CreateAnalysisService(workspaces, catalog, archidekt);
+        DeckSimulationService simulation = CreateSimulationService(workspaces, catalog, archidekt);
+        DeckRecommendationService service = new(
+            workspaces,
+            catalog,
+            analysis,
+            simulation,
+            archidektGateway: archidekt,
+            simulationProfiles: SimulationProfileCatalog.CreateDefault(),
+            playgroups: playgroups);
+
+        PlaygroupMetaScoringResult result = await service.ScoreCardsForPlaygroupMetaAsync(
+            workspace.Id,
+            "https://playgroup.gg/playgroups/49295-heaters",
+            ["Swords to Plowshares"],
+            maxGames: 20,
+            metaDeckLimit: 4,
+            simulations: 100,
+            maxTurn: 1,
+            seed: 13,
+            maxPrice: null,
+            TestContext.Current.CancellationToken);
+
+        result.MetaDecks.Should().HaveCount(4);
+        result.MetaDecks.Should().OnlyContain(deck => deck.ImportedDecklist);
+        archidekt.ImportRequests.Select(request => request.DeckIdOrUrl).Should().BeEquivalentTo([firstUrl, secondUrl]);
+        archidekt.MaxConcurrentImports.Should().BeGreaterThan(1);
+    }
+
+    /// <summary>
     /// Creates an imported fast creature-combo deck fixture.
     /// </summary>
     private static DeckWorkspace RaggadraggaDeck()
@@ -265,6 +435,17 @@ public sealed partial class DeckIntelligenceTests
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.25" },
                 },
+                string candidate when candidate.StartsWith("Candidate ", StringComparison.OrdinalIgnoreCase) => new CardInfo
+                {
+                    Name = candidate,
+                    ManaCost = "{W}",
+                    ManaValue = 1,
+                    TypeLine = "Instant",
+                    OracleText = "Exile target creature.",
+                    ColorIdentity = ["W"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" },
+                },
                 _ => null,
             };
         }
@@ -275,6 +456,16 @@ public sealed partial class DeckIntelligenceTests
     /// </summary>
     private sealed class MetaPlaygroupGateway : IPlaygroupGateway
     {
+        /// <summary>
+        /// Gets or sets the number of fake decks observed in the playgroup games.
+        /// </summary>
+        public int DeckCount { get; set; } = 1;
+
+        /// <summary>
+        /// Gets or sets how many distinct Archidekt URLs are spread across fake decks.
+        /// </summary>
+        public int DistinctDecklistUrls { get; set; } = 1;
+
         /// <summary>
         /// Gets fake auth status.
         /// </summary>
@@ -312,23 +503,23 @@ public sealed partial class DeckIntelligenceTests
             bool includeEvents,
             CancellationToken cancellationToken)
         {
+            List<PlaygroupParticipation> participations = Enumerable.Range(0, Math.Max(1, DeckCount))
+                .Select(index => new PlaygroupParticipation
+                {
+                    DeckId = 100 + index,
+                    DeckName = DeckName(100 + index),
+                    UserId = 10 + index,
+                    UserName = $"Player {index + 1}",
+                    Winner = index == 0,
+                })
+                .ToList();
             IReadOnlyList<PlaygroupGame> games =
             [
                 new PlaygroupGame
                 {
                     Id = 1,
                     PlaygroupId = playgroupId,
-                    Participations =
-                    [
-                        new PlaygroupParticipation
-                        {
-                            DeckId = 100,
-                            DeckName = "Raggadragga Dork Combo",
-                            UserId = 10,
-                            UserName = "Jim",
-                            Winner = true,
-                        },
-                    ],
+                    Participations = participations,
                 },
             ];
             return Task.FromResult(games);
@@ -342,8 +533,8 @@ public sealed partial class DeckIntelligenceTests
             return Task.FromResult(new PlaygroupDeck
             {
                 Id = deckId,
-                Name = "Raggadragga Dork Combo",
-                DecklistUrl = "https://archidekt.com/decks/999/raggadragga",
+                Name = DeckName(deckId),
+                DecklistUrl = DecklistUrl(deckId),
                 PowerLevel = 8.5,
                 ConfidenceFactor = 0.9,
                 AverageWinsByRound = 5.5,
@@ -369,6 +560,31 @@ public sealed partial class DeckIntelligenceTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult(new PlaygroupEloHistory { DeckId = deckId, CurrentRating = 1600 });
+        }
+
+        /// <summary>
+        /// Creates a stable fake deck name.
+        /// </summary>
+        private static string DeckName(long deckId)
+        {
+            return deckId == 100
+                ? "Raggadragga Dork Combo"
+                : $"Raggadragga Dork Combo {deckId}";
+        }
+
+        /// <summary>
+        /// Creates stable Archidekt URLs, optionally repeating them across fake decks.
+        /// </summary>
+        private string DecklistUrl(long deckId)
+        {
+            if (DeckCount <= 1)
+            {
+                return "https://archidekt.com/decks/999/raggadragga";
+            }
+
+            int distinctUrls = Math.Clamp(DistinctDecklistUrls, 1, Math.Max(1, DeckCount));
+            long archidektDeckId = 900 + ((deckId - 100) % distinctUrls);
+            return $"https://archidekt.com/decks/{archidektDeckId}/raggadragga-{archidektDeckId}";
         }
     }
 }

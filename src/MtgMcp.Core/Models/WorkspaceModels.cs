@@ -224,6 +224,58 @@ public sealed class DeckWorkspace
     /// Gets or sets the cards.
     /// </summary>
     public List<DeckCard> Cards { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal import or migration warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets external deck sources that contributed to this local workspace.
+    /// </summary>
+    public List<DeckSourceReference> SourceReferences { get; set; } = [];
+}
+
+/// <summary>
+/// Identifies an external deck source imported into a provider-neutral workspace.
+/// </summary>
+public sealed class DeckSourceReference
+{
+    /// <summary>
+    /// Gets or sets the source provider key, such as moxfield or archidekt.
+    /// </summary>
+    public string Provider { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the provider's deck id or public id.
+    /// </summary>
+    public string ExternalId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the source URL when one is known.
+    /// </summary>
+    public string? Url { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the source was imported into mtg-mcp.
+    /// </summary>
+    public DateTimeOffset ImportedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// Provides well-known deck import provider keys.
+/// </summary>
+public static class DeckImportProviders
+{
+    /// <summary>
+    /// Stores the Archidekt provider key.
+    /// </summary>
+    public const string Archidekt = "archidekt";
+
+    /// <summary>
+    /// Stores the Moxfield provider key.
+    /// </summary>
+    public const string Moxfield = "moxfield";
 }
 
 /// <summary>
@@ -260,6 +312,16 @@ public sealed class DeckOpenResult
     /// Gets or sets the Archidekt deck id when the workspace is Archidekt-backed.
     /// </summary>
     public string? ArchidektDeckId { get; set; }
+
+    /// <summary>
+    /// Gets or sets source deck references imported into this workspace.
+    /// </summary>
+    public List<DeckSourceReference> SourceReferences { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal warnings from opening or importing the workspace.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
 
     /// <summary>
     /// Gets or sets where future mutations will be persisted.
@@ -337,6 +399,93 @@ public sealed class ArchidektDeckSummary
     /// Gets or sets the updated at.
     /// </summary>
     public DateTimeOffset? UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Describes a new Archidekt deck to create before optional card migration.
+/// </summary>
+public sealed class ArchidektDeckCreateRequest
+{
+    /// <summary>
+    /// Gets or sets the new deck name.
+    /// </summary>
+    public string Name { get; set; } = "Untitled Deck";
+
+    /// <summary>
+    /// Gets or sets the deck format, such as commander.
+    /// </summary>
+    public string Format { get; set; } = "commander";
+
+    /// <summary>
+    /// Gets or sets the deck description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets the requested visibility: private, unlisted, or public.
+    /// </summary>
+    public string Visibility { get; set; } = "private";
+}
+
+/// <summary>
+/// Reports the outcome or dry run for copying a workspace to Archidekt.
+/// </summary>
+public sealed class ArchidektCopyResult
+{
+    /// <summary>
+    /// Gets or sets whether this result describes a dry run.
+    /// </summary>
+    public bool DryRun { get; set; }
+
+    /// <summary>
+    /// Gets or sets the source workspace id.
+    /// </summary>
+    public string SourceWorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the destination workspace id after a real copy.
+    /// </summary>
+    public string? DestinationWorkspaceId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the destination Archidekt deck id when known.
+    /// </summary>
+    public string? DestinationArchidektDeckId { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the destination deck would be or was created.
+    /// </summary>
+    public bool CreatedNewDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets the destination deck name.
+    /// </summary>
+    public string DestinationName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets copied card quantity.
+    /// </summary>
+    public int TotalCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets included card quantity.
+    /// </summary>
+    public int IncludedCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets copied category names.
+    /// </summary>
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets commander names detected in the source workspace.
+    /// </summary>
+    public List<string> Commanders { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets warnings that should be reviewed before applying a copy.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
 }
 
 /// <summary>

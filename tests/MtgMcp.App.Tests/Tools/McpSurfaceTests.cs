@@ -53,6 +53,9 @@ public sealed class McpSurfaceTests
             "list_local_decks",
             "open_local_deck",
             "open_archidekt_deck",
+            "open_moxfield_deck",
+            "create_archidekt_deck",
+            "copy_workspace_to_archidekt",
             "list_archidekt_decks",
             "get_playgroup_auth_status",
             "get_playgroup",
@@ -454,6 +457,12 @@ public sealed class McpSurfaceTests
             ["ARCHIDEKT:USER_ID"] = "278245",
             ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
+            ["ARCHIDEKT:RATE_LIMIT:MAX_REQUESTS"] = "30",
+            ["ARCHIDEKT:RATE_LIMIT:WINDOW_SECONDS"] = "60",
+            ["MOXFIELD:BASE_ADDRESS"] = "https://moxfield.test/",
+            ["MOXFIELD:USER_AGENT"] = "mtg-mcp-test",
+            ["MOXFIELD:CURL_FALLBACK_ENABLED"] = "false",
+            ["MOXFIELD:CURL_PATH"] = "custom-curl",
             ["PLAYGROUP:BASE_ADDRESS"] = "https://playgroup.test/api/public/v1/",
             ["PLAYGROUP:API_KEY"] = "playgroup-key",
             ["PLAYGROUP:CREDENTIALS_FILE"] = "C:/playgroup-creds.json",
@@ -495,6 +504,12 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
         aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
+        aliases["MtgMcp:Archidekt:RateLimit:MaxRequests"].Should().Be("30");
+        aliases["MtgMcp:Archidekt:RateLimit:WindowSeconds"].Should().Be("60");
+        aliases["MtgMcp:Moxfield:BaseAddress"].Should().Be("https://moxfield.test/");
+        aliases["MtgMcp:Moxfield:UserAgent"].Should().Be("mtg-mcp-test");
+        aliases["MtgMcp:Moxfield:EnableCurlFallback"].Should().Be("false");
+        aliases["MtgMcp:Moxfield:CurlPath"].Should().Be("custom-curl");
         aliases["MtgMcp:Playgroup:BaseAddress"].Should().Be("https://playgroup.test/api/public/v1/");
         aliases["MtgMcp:Playgroup:ApiKey"].Should().Be("playgroup-key");
         aliases["MtgMcp:Playgroup:CredentialsFile"].Should().Be("C:/playgroup-creds.json");
@@ -584,6 +599,7 @@ public sealed class McpSurfaceTests
         host.Services.GetRequiredService<ICardCatalog>().Should().NotBeNull();
         host.Services.GetRequiredService<IDeckPlanRepository>().Should().NotBeNull();
         host.Services.GetRequiredService<IArchidektGateway>().Should().NotBeNull();
+        host.Services.GetRequiredService<IMoxfieldGateway>().Should().NotBeNull();
         host.Services.GetRequiredService<IPlaygroupGateway>().Should().NotBeNull();
         host.Services.GetRequiredService<PlaygroupService>().Should().NotBeNull();
         host.Services.GetRequiredService<ServerInfoService>().Should().NotBeNull();
@@ -687,6 +703,25 @@ public sealed class McpSurfaceTests
         )
         {
             return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([]);
+        }
+
+        /// <summary>
+        /// Creates a fake Archidekt deck.
+        /// </summary>
+        public Task<DeckWorkspace> CreateDeckAsync(
+            ArchidektDeckCreateRequest request,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult(new DeckWorkspace
+            {
+                Name = request.Name,
+                Format = request.Format,
+                Description = request.Description,
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "created",
+            });
         }
 
         /// <summary>

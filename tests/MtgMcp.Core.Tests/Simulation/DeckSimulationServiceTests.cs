@@ -160,6 +160,78 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that partial Commander goldfish runs warn and leave sideboard cards out of the sampled deck.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_WarnsWhenCommanderActiveDeckIsPartial()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Partial Commander Goldfish",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Test Commander",
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ManaValue = 3 }
+                },
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 88,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Forest", ManaValue = 0 }
+                },
+                new DeckCard
+                {
+                    Name = "Sideboard Bomb",
+                    Quantity = 11,
+                    PrimaryCategory = DeckDefaults.Sideboard,
+                    Categories = [DeckDefaults.Sideboard],
+                    Snapshot = new CardSnapshot { TypeLine = "Sorcery", ManaValue = 1 }
+                },
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 3,
+            simulations: 100,
+            seed: 21,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+        WinTurnEstimate estimate = await service.EstimateWinTurnAsync(
+            workspace.Id,
+            maxTurn: 3,
+            simulations: 100,
+            seed: 21,
+            TestContext.Current.CancellationToken);
+
+        goldfish.Warnings.Should().Contain(warning =>
+            warning.Contains("89 included cards", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("Sideboard", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("not sampled", StringComparison.OrdinalIgnoreCase));
+        goldfish.WinEstimate.Notes.Should().Contain(note =>
+            note.Contains("partial active deck", StringComparison.OrdinalIgnoreCase));
+        estimate.Notes.Should().Contain(note =>
+            note.Contains("89 included cards", StringComparison.OrdinalIgnoreCase));
+        goldfish.RepresentativeLines.Should().NotContain(line =>
+            line.Contains("Sideboard Bomb", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that Archidekt goldfish comparison imports reference decks read-only and returns raw deltas.
     /// </summary>
     [Fact]

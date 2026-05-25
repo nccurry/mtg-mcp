@@ -294,123 +294,123 @@ public sealed partial class DeckPlanService : DeckServiceBase
         switch (operation.Operation)
         {
             case DeckEditOperations.AddCard:
-            {
-                string cardName = Require(operation.CardName, "cardName");
-                string category = NormalizeCategoryName(operation.Category ?? DeckDefaults.Mainboard);
-                int amount = Math.Max(1, operation.Quantity ?? 1);
-                EnsureCategory(workspace, category);
-
-                DeckCard? existing = FindCard(workspace, cardName, category);
-                DeckCard changed;
-                if (existing is null)
                 {
-                    changed = await CreateDeckCardForPlanAsync(cardName, amount, category, cancellationToken)
-                        .ConfigureAwait(false);
-                    workspace.Cards.Add(changed);
-                }
-                else
-                {
-                    existing.Quantity += amount;
-                    changed = existing;
-                }
+                    string cardName = Require(operation.CardName, "cardName");
+                    string category = NormalizeCategoryName(operation.Category ?? DeckDefaults.Mainboard);
+                    int amount = Math.Max(1, operation.Quantity ?? 1);
+                    EnsureCategory(workspace, category);
 
-                TrackChanged(upsertedCards, removedCards, changed);
-                return $"Added {amount} {changed.Name} to {category}.";
-            }
+                    DeckCard? existing = FindCard(workspace, cardName, category);
+                    DeckCard changed;
+                    if (existing is null)
+                    {
+                        changed = await CreateDeckCardForPlanAsync(cardName, amount, category, cancellationToken)
+                            .ConfigureAwait(false);
+                        workspace.Cards.Add(changed);
+                    }
+                    else
+                    {
+                        existing.Quantity += amount;
+                        changed = existing;
+                    }
+
+                    TrackChanged(upsertedCards, removedCards, changed);
+                    return $"Added {amount} {changed.Name} to {category}.";
+                }
 
             case DeckEditOperations.RemoveCard:
-            {
-                DeckCard card = FindRequiredPlanCard(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    operation.Category);
-                int amount = Math.Max(1, operation.Quantity ?? 1);
-                if (card.Quantity <= amount)
                 {
-                    workspace.Cards.Remove(card);
-                    TrackRemoved(upsertedCards, removedCards, card);
-                }
-                else
-                {
-                    card.Quantity -= amount;
-                    TrackChanged(upsertedCards, removedCards, card);
-                }
+                    DeckCard card = FindRequiredPlanCard(
+                        workspace,
+                        Require(operation.CardName, "cardName"),
+                        operation.Category);
+                    int amount = Math.Max(1, operation.Quantity ?? 1);
+                    if (card.Quantity <= amount)
+                    {
+                        workspace.Cards.Remove(card);
+                        TrackRemoved(upsertedCards, removedCards, card);
+                    }
+                    else
+                    {
+                        card.Quantity -= amount;
+                        TrackChanged(upsertedCards, removedCards, card);
+                    }
 
-                return $"Removed {amount} {card.Name}.";
-            }
+                    return $"Removed {amount} {card.Name}.";
+                }
 
             case DeckEditOperations.SetCardQuantity:
-            {
-                DeckCard card = FindRequiredPlanCard(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    operation.Category);
-                int quantity = operation.Quantity ?? 1;
-                if (quantity <= 0)
                 {
-                    workspace.Cards.Remove(card);
-                    TrackRemoved(upsertedCards, removedCards, card);
-                }
-                else
-                {
-                    card.Quantity = quantity;
-                    TrackChanged(upsertedCards, removedCards, card);
-                }
+                    DeckCard card = FindRequiredPlanCard(
+                        workspace,
+                        Require(operation.CardName, "cardName"),
+                        operation.Category);
+                    int quantity = operation.Quantity ?? 1;
+                    if (quantity <= 0)
+                    {
+                        workspace.Cards.Remove(card);
+                        TrackRemoved(upsertedCards, removedCards, card);
+                    }
+                    else
+                    {
+                        card.Quantity = quantity;
+                        TrackChanged(upsertedCards, removedCards, card);
+                    }
 
-                return $"Set {card.Name} quantity to {quantity}.";
-            }
+                    return $"Set {card.Name} quantity to {quantity}.";
+                }
 
             case DeckEditOperations.MoveCard:
-            {
-                DeckCard card = FindRequiredPlanCard(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    operation.FromCategory);
-                string category = NormalizeCategoryName(Require(operation.ToCategory, "toCategory"));
-                EnsureCategory(workspace, category);
-                DeckCategoryOrdering.SetPrimary(card, category);
-                TrackChanged(upsertedCards, removedCards, card);
-                return $"Moved {card.Name} to {category}.";
-            }
+                {
+                    DeckCard card = FindRequiredPlanCard(
+                        workspace,
+                        Require(operation.CardName, "cardName"),
+                        operation.FromCategory);
+                    string category = NormalizeCategoryName(Require(operation.ToCategory, "toCategory"));
+                    EnsureCategory(workspace, category);
+                    DeckCategoryOrdering.SetPrimary(card, category);
+                    TrackChanged(upsertedCards, removedCards, card);
+                    return $"Moved {card.Name} to {category}.";
+                }
 
             case DeckEditOperations.AddCardCategory:
-            {
-                DeckCard card = FindRequiredPlanCard(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    category: null);
-                string category = NormalizeCategoryName(Require(operation.Category, "category"));
-                EnsureCategory(workspace, category);
-                DeckCategoryOrdering.AddSecondary(card, category);
-                TrackChanged(upsertedCards, removedCards, card);
-                return $"Added {category} to {card.Name}.";
-            }
+                {
+                    DeckCard card = FindRequiredPlanCard(
+                        workspace,
+                        Require(operation.CardName, "cardName"),
+                        category: null);
+                    string category = NormalizeCategoryName(Require(operation.Category, "category"));
+                    EnsureCategory(workspace, category);
+                    DeckCategoryOrdering.AddSecondary(card, category);
+                    TrackChanged(upsertedCards, removedCards, card);
+                    return $"Added {category} to {card.Name}.";
+                }
 
             case DeckEditOperations.RemoveCardCategory:
-            {
-                DeckCard card = FindRequiredPlanCard(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    category: null);
-                string category = NormalizeCategoryName(Require(operation.Category, "category"));
-                DeckCategoryOrdering.Remove(card, category);
-                EnsureCategory(workspace, card.PrimaryCategory);
-                TrackChanged(upsertedCards, removedCards, card);
-                return $"Removed {category} from {card.Name}.";
-            }
+                {
+                    DeckCard card = FindRequiredPlanCard(
+                        workspace,
+                        Require(operation.CardName, "cardName"),
+                        category: null);
+                    string category = NormalizeCategoryName(Require(operation.Category, "category"));
+                    DeckCategoryOrdering.Remove(card, category);
+                    EnsureCategory(workspace, card.PrimaryCategory);
+                    TrackChanged(upsertedCards, removedCards, card);
+                    return $"Removed {category} from {card.Name}.";
+                }
 
             case DeckEditOperations.SetPrimaryCardCategory:
-            {
-                DeckCard card = FindRequiredPlanCard(
-                    workspace,
-                    Require(operation.CardName, "cardName"),
-                    category: null);
-                string category = NormalizeCategoryName(Require(operation.Category, "category"));
-                EnsureCategory(workspace, category);
-                DeckCategoryOrdering.SetPrimary(card, category);
-                TrackChanged(upsertedCards, removedCards, card);
-                return $"Set {card.Name} primary category to {category}.";
-            }
+                {
+                    DeckCard card = FindRequiredPlanCard(
+                        workspace,
+                        Require(operation.CardName, "cardName"),
+                        category: null);
+                    string category = NormalizeCategoryName(Require(operation.Category, "category"));
+                    EnsureCategory(workspace, category);
+                    DeckCategoryOrdering.SetPrimary(card, category);
+                    TrackChanged(upsertedCards, removedCards, card);
+                    return $"Set {card.Name} primary category to {category}.";
+                }
 
             default:
                 throw new InvalidOperationException($"Operation '{operation.Operation}' cannot be applied as a card batch.");

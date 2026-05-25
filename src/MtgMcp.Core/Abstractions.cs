@@ -213,6 +213,14 @@ public interface IArchidektGateway
     Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Creates a new Archidekt deck and returns the imported writeback workspace.
+    /// </summary>
+    Task<DeckWorkspace> CreateDeckAsync(
+        ArchidektDeckCreateRequest request,
+        CancellationToken cancellationToken
+    );
+
+    /// <summary>
     /// Imports the deck.
     /// </summary>
     Task<DeckWorkspace> ImportDeckAsync(
@@ -298,6 +306,20 @@ public interface IArchidektGateway
     Task DeleteCheckpointAsync(
         DeckWorkspace workspace,
         string checkpointId,
+        CancellationToken cancellationToken
+    );
+}
+
+/// <summary>
+/// Defines read-only Moxfield deck import behavior.
+/// </summary>
+public interface IMoxfieldGateway
+{
+    /// <summary>
+    /// Imports a public or unlisted Moxfield deck into a provider-neutral local workspace.
+    /// </summary>
+    Task<DeckWorkspace> ImportDeckAsync(
+        string deckIdOrUrl,
         CancellationToken cancellationToken
     );
 }

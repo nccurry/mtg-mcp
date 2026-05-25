@@ -209,7 +209,7 @@ public static partial class DeckIntentText
     /// <summary>
     /// Updates or appends the intent section in a description.
     /// </summary>
-    public static string UpsertDescription(string? description, string intentText)
+    public static string UpsertDescription(string? description, string intentText, bool forceQuillDelta = false)
     {
         string normalizedIntent = NormalizeIntentBlock(intentText);
         if (TryUpsertQuillDescription(description, normalizedIntent, out string quillDescription))
@@ -246,13 +246,13 @@ public static partial class DeckIntentText
             );
         }
 
-        return FromPlainText(updatedText, IsQuillDelta(description));
+        return FromPlainText(updatedText, forceQuillDelta || IsQuillDelta(description));
     }
 
     /// <summary>
     /// Removes the intent section from a description.
     /// </summary>
-    public static string ClearDescription(string? description)
+    public static string ClearDescription(string? description, bool forceQuillDelta = false)
     {
         if (TryClearQuillDescription(description, out string quillDescription))
         {
@@ -262,7 +262,9 @@ public static partial class DeckIntentText
         string plainText = ToPlainText(description).TrimEnd();
         if (!TryFindBlock(plainText, out int start, out int end))
         {
-            return description ?? "";
+            return forceQuillDelta
+                ? FromPlainText(plainText, asQuillDelta: true)
+                : description ?? "";
         }
 
         string updatedText = string.Concat(
@@ -271,7 +273,7 @@ public static partial class DeckIntentText
             Environment.NewLine,
             plainText[end..].TrimStart()
         ).Trim();
-        return FromPlainText(updatedText, IsQuillDelta(description));
+        return FromPlainText(updatedText, forceQuillDelta || IsQuillDelta(description));
     }
 
 

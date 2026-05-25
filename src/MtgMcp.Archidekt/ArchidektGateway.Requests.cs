@@ -17,12 +17,22 @@ public sealed partial class ArchidektGateway
     /// <summary>
     /// Limits retries for Archidekt rate-limit responses.
     /// </summary>
-    private const int MaxRateLimitRetries = 2;
+    private const int MaxRateLimitRetries = 5;
 
     /// <summary>
     /// Spaces retries for Archidekt write responses that fail before committing a change log.
     /// </summary>
     private static readonly TimeSpan TransientWriteRetryDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Coordinates configured request pacing across Archidekt gateways in this process.
+    /// </summary>
+    private static readonly SemaphoreSlim RequestRateGate = new(1, 1);
+
+    /// <summary>
+    /// Stores recent Archidekt request timestamps for configured request pacing.
+    /// </summary>
+    private static readonly Queue<DateTimeOffset> RequestRateTimestamps = new();
 
     /// <summary>
     /// Gets the json.
@@ -31,6 +41,7 @@ public sealed partial class ArchidektGateway
     {
         for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
         {
+            await WaitForConfiguredRateLimitAsync(cancellationToken).ConfigureAwait(false);
             using HttpResponseMessage response = await httpClient
                 .GetAsync(uri, cancellationToken)
                 .ConfigureAwait(false);
@@ -81,6 +92,7 @@ public sealed partial class ArchidektGateway
                 Content = JsonContent.Create(payload, options: SerializerOptions),
             };
 
+            await WaitForConfiguredRateLimitAsync(cancellationToken).ConfigureAwait(false);
             using HttpResponseMessage response = await httpClient
                 .SendAsync(request, cancellationToken)
                 .ConfigureAwait(false);
@@ -127,6 +139,7 @@ public sealed partial class ArchidektGateway
         for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
         {
             using HttpRequestMessage request = new(method, uri);
+            await WaitForConfiguredRateLimitAsync(cancellationToken).ConfigureAwait(false);
             using HttpResponseMessage response = await httpClient
                 .SendAsync(request, cancellationToken)
                 .ConfigureAwait(false);
@@ -150,6 +163,50 @@ public sealed partial class ArchidektGateway
         }
 
         throw new InvalidOperationException("Archidekt request retry loop ended unexpectedly.");
+    }
+
+    /// <summary>
+    /// Waits until the configured process-local Archidekt request budget has room.
+    /// </summary>
+    private async Task WaitForConfiguredRateLimitAsync(CancellationToken cancellationToken)
+    {
+        ArchidektRateLimitOptions rateLimit = options.RateLimit ?? new ArchidektRateLimitOptions();
+        int maxRequests = rateLimit.MaxRequests;
+        if (maxRequests <= 0)
+        {
+            return;
+        }
+
+        TimeSpan window = TimeSpan.FromSeconds(Math.Max(1, rateLimit.WindowSeconds));
+        while (true)
+        {
+            TimeSpan? delay = null;
+            await RequestRateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                while (RequestRateTimestamps.TryPeek(out DateTimeOffset oldest)
+                    && now - oldest >= window)
+                {
+                    RequestRateTimestamps.Dequeue();
+                }
+
+                if (RequestRateTimestamps.Count < maxRequests)
+                {
+                    RequestRateTimestamps.Enqueue(now);
+                    return;
+                }
+
+                delay = window - (now - RequestRateTimestamps.Peek()) + TimeSpan.FromMilliseconds(50);
+            }
+            finally
+            {
+                RequestRateGate.Release();
+            }
+
+            await Task.Delay(delay.Value < TimeSpan.Zero ? TimeSpan.Zero : delay.Value, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     /// <summary>

@@ -1152,6 +1152,32 @@ public sealed partial class DeckIntelligenceTests
     private sealed class FakeArchidektGateway : IArchidektGateway
     {
         /// <summary>
+        /// Releases blocked fake imports once the configured import count has started.
+        /// </summary>
+        private readonly TaskCompletionSource<object?> importBarrier = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        /// Coordinates fake import request recording and concurrency counters.
+        /// </summary>
+        private readonly object importLock = new();
+
+        /// <summary>
+        /// Tracks currently running fake imports.
+        /// </summary>
+        private int activeImports;
+
+        /// <summary>
+        /// Stores the largest overlapping fake import count observed.
+        /// </summary>
+        private int maxConcurrentImports;
+
+        /// <summary>
+        /// Counts fake imports that reached the deterministic test barrier.
+        /// </summary>
+        private int importBarrierStartedCount;
+
+        /// <summary>
         /// Gets or sets the imported deck.
         /// </summary>
         public DeckWorkspace ImportedDeck { get; set; } = new()
@@ -1165,6 +1191,25 @@ public sealed partial class DeckIntelligenceTests
         /// Gets fake imported decks keyed by the caller-supplied Archidekt input.
         /// </summary>
         public Dictionary<string, DeckWorkspace> ImportedDecksByInput { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets or sets the number of started imports required before the fake import barrier releases.
+        /// </summary>
+        public int ReleaseImportsAfterStartedCount { get; set; }
+
+        /// <summary>
+        /// Gets the largest number of overlapping fake imports observed.
+        /// </summary>
+        public int MaxConcurrentImports
+        {
+            get
+            {
+                lock (importLock)
+                {
+                    return maxConcurrentImports;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets Archidekt import requests in caller order.
@@ -1208,23 +1253,82 @@ public sealed partial class DeckIntelligenceTests
         }
 
         /// <summary>
+        /// Creates a fake deck.
+        /// </summary>
+        public Task<DeckWorkspace> CreateDeckAsync(
+            ArchidektDeckCreateRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new DeckWorkspace
+            {
+                Name = request.Name,
+                Format = request.Format,
+                Description = request.Description,
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "created",
+            });
+        }
+
+        /// <summary>
         /// Imports a fake deck.
         /// </summary>
-        public Task<DeckWorkspace> ImportDeckAsync(string deckIdOrUrl, bool writeBack, CancellationToken cancellationToken)
+        public async Task<DeckWorkspace> ImportDeckAsync(string deckIdOrUrl, bool writeBack, CancellationToken cancellationToken)
         {
-            ImportRequests.Add((deckIdOrUrl, writeBack));
-            if (ImportedDecksByInput.TryGetValue(deckIdOrUrl, out DeckWorkspace? importedDeck))
+            lock (importLock)
             {
-                DeckWorkspace cloned = CloneWorkspace(importedDeck);
-                cloned.Mode = WorkspaceMode.Archidekt;
-                cloned.WriteBack = writeBack;
-                return Task.FromResult(cloned);
+                ImportRequests.Add((deckIdOrUrl, writeBack));
             }
 
-            ImportedDeck.Mode = WorkspaceMode.Archidekt;
-            ImportedDeck.WriteBack = writeBack;
-            ImportedDeck.ArchidektDeckId = "123";
-            return Task.FromResult(ImportedDeck);
+            int active = Interlocked.Increment(ref activeImports);
+            try
+            {
+                lock (importLock)
+                {
+                    maxConcurrentImports = Math.Max(maxConcurrentImports, active);
+                }
+
+                if (ReleaseImportsAfterStartedCount > 0)
+                {
+                    await WaitForImportBarrierAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                lock (importLock)
+                {
+                    if (ImportedDecksByInput.TryGetValue(deckIdOrUrl, out DeckWorkspace? importedDeck))
+                    {
+                        DeckWorkspace cloned = CloneWorkspace(importedDeck);
+                        cloned.Mode = WorkspaceMode.Archidekt;
+                        cloned.WriteBack = writeBack;
+                        return cloned;
+                    }
+
+                    ImportedDeck.Mode = WorkspaceMode.Archidekt;
+                    ImportedDeck.WriteBack = writeBack;
+                    ImportedDeck.ArchidektDeckId = "123";
+                    return ImportedDeck;
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref activeImports);
+            }
+        }
+
+        /// <summary>
+        /// Waits until enough fake imports have started to prove production import overlap.
+        /// </summary>
+        private async Task WaitForImportBarrierAsync(CancellationToken cancellationToken)
+        {
+            int started = Interlocked.Increment(ref importBarrierStartedCount);
+            if (started >= ReleaseImportsAfterStartedCount)
+            {
+                importBarrier.TrySetResult(null);
+            }
+
+            await importBarrier.Task
+                .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
+                .ConfigureAwait(false);
         }
 
         /// <summary>

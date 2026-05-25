@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -70,6 +71,9 @@ public sealed class ArchidektGatewayTests
         deck.Mode.Should().Be(WorkspaceMode.Archidekt);
         deck.ArchidektDeckId.Should().Be("123");
         deck.ArchidektDeckFormatId.Should().Be(3);
+        deck.SourceReferences.Should().ContainSingle(source =>
+            source.Provider == DeckImportProviders.Archidekt
+            && source.ExternalId == "123");
         deck.Format.Should().Be("commander");
         deck.Categories.Should()
             .Contain(category => category.Name == "Maybeboard" && category.IncludedInDeck == false);
@@ -333,6 +337,61 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that create deck posts a private deck payload and maps the created workspace.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeck_PostsPrivateDeckAndMapsWorkspace()
+    {
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/decks/v2/",
+            """
+            {
+              "id": 456,
+              "name": "Migrated",
+              "deckFormat": 3,
+              "description": "Copied deck",
+              "categories": [
+                { "id": 1, "name": "Mainboard", "includedInDeck": true, "includedInPrice": true }
+              ],
+              "cards": []
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace workspace = await gateway.CreateDeckAsync(
+            new ArchidektDeckCreateRequest
+            {
+                Name = "Migrated",
+                Format = "commander",
+                Description = "Copied deck",
+                Visibility = "private",
+            },
+            TestContext.Current.CancellationToken);
+
+        workspace.Mode.Should().Be(WorkspaceMode.Archidekt);
+        workspace.WriteBack.Should().BeTrue();
+        workspace.ArchidektDeckId.Should().Be("456");
+        workspace.ArchidektDeckFormatId.Should().Be(3);
+        workspace.Categories.Should().ContainSingle(category =>
+            category.Name == DeckDefaults.Mainboard
+            && category.ArchidektCategoryId == 1);
+
+        RecordedRequest request = handler.Requests.Single();
+        request.Method.Should().Be(HttpMethod.Post);
+        request.Path.Should().Be("api/decks/v2/");
+        request.Authorization.Should().Be("JWT test-jwt");
+        using JsonDocument document = JsonDocument.Parse(request.Body);
+        document.RootElement.GetProperty("name").GetString().Should().Be("Migrated");
+        document.RootElement.GetProperty("deckFormat").GetInt32().Should().Be(3);
+        document.RootElement.GetProperty("private").GetBoolean().Should().BeTrue();
+        document.RootElement.GetProperty("unlisted").GetBoolean().Should().BeFalse();
+        document.RootElement.GetProperty("theorycrafted").GetBoolean().Should().BeFalse();
+        document.RootElement.GetProperty("extras").GetProperty("decksToInclude").GetArrayLength().Should().Be(0);
+    }
+
+    /// <summary>
     /// Verifies that persist cards resolves add and patches modify cards endpoint.
     /// </summary>
     [Fact]
@@ -410,6 +469,64 @@ public sealed class ArchidektGatewayTests
         card.ArchidektCardId.Should().Be("151147");
         card.PrimaryCategory.Should().Be("Testing");
         card.ArchidektDeckRelationId.Should().Be(991);
+    }
+
+    /// <summary>
+    /// Verifies that card resolution prefers imported Scryfall print ids.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_PrefersScryfallPrintMatch()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/cards/v2/?name=Sol%20Ring&pageSize=25",
+            """
+            {
+              "results": [
+                { "id": 1, "uid": "wrong-print", "oracleCard": { "name": "Sol Ring" } },
+                { "id": 2, "uid": "scryfall-sol-ring", "oracleCard": { "name": "Sol Ring" } }
+              ]
+            }
+            """
+        );
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """
+            {
+              "cards": [
+                {
+                  "id": 7,
+                  "quantity": 1,
+                  "categories": ["Mainboard"],
+                  "card": { "id": 2, "uid": "scryfall-sol-ring", "oracleCard": { "name": "Sol Ring" } }
+                }
+              ]
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            ScryfallId = "scryfall-sol-ring",
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        string body = handler.Requests.Single(request => request.Method == HttpMethod.Patch).Body;
+        using JsonDocument document = JsonDocument.Parse(body);
+        document.RootElement.GetProperty("cards")[0].GetProperty("cardid").GetInt32().Should().Be(2);
+        card.ArchidektCardId.Should().Be("2");
     }
 
     /// <summary>
@@ -636,6 +753,44 @@ public sealed class ArchidektGatewayTests
         cards[1].GetProperty("action").GetString().Should().Be("remove");
         cards[1].GetProperty("modifications").GetProperty("quantity").GetInt32().Should().Be(0);
         cards[1].GetProperty("modifications").TryGetProperty("modifier", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that large card writes are split into Archidekt-sized batches.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_SendsLargeMutationsInBatches()
+    {
+        RecordingHandler handler = new();
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        List<DeckCard> cards = Enumerable.Range(1, 51)
+            .Select(index => new DeckCard
+            {
+                Name = $"Card {index}",
+                Quantity = 1,
+                ArchidektCardId = (1000 + index).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ArchidektDeckRelationId = 2000 + index,
+                Categories = [DeckDefaults.Mainboard],
+                PrimaryCategory = DeckDefaults.Mainboard,
+            })
+            .ToList();
+
+        await gateway.PersistCardsAsync(deck, cards, [], TestContext.Current.CancellationToken);
+
+        List<RecordedRequest> patchRequests = handler.Requests
+            .Where(request => request.Method == HttpMethod.Patch)
+            .ToList();
+        patchRequests.Should().HaveCount(2);
+        GetMutationCount(patchRequests[0]).Should().Be(50);
+        GetMutationCount(patchRequests[1]).Should().Be(1);
     }
 
     /// <summary>
@@ -1109,6 +1264,60 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that configured proactive Archidekt pacing delays requests before sending them.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AppliesConfiguredRequestPacing()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+        handler.Get(
+            "api/decks/456/",
+            """
+            {
+              "id": 456,
+              "name": "Other Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Jwt = "test-jwt",
+                UserId = "278245",
+                RateLimit = new ArchidektRateLimitOptions
+                {
+                    MaxRequests = 1,
+                    WindowSeconds = 1
+                }
+            });
+
+        Stopwatch timer = Stopwatch.StartNew();
+        await gateway.ImportDeckAsync("123", writeBack: false, TestContext.Current.CancellationToken);
+        await gateway.ImportDeckAsync("456", writeBack: false, TestContext.Current.CancellationToken);
+        timer.Stop();
+
+        timer.Elapsed.Should().BeGreaterThanOrEqualTo(TimeSpan.FromMilliseconds(900));
+        handler.Requests.Where(request => request.Method == HttpMethod.Get).Should().HaveCount(2);
+    }
+
+    /// <summary>
     /// Verifies that card writes retry Archidekt throttle responses.
     /// </summary>
     [Fact]
@@ -1181,6 +1390,15 @@ public sealed class ArchidektGatewayTests
             .Requests.Where(request => request.Method == HttpMethod.Delete)
             .Should()
             .HaveCount(2);
+    }
+
+    /// <summary>
+    /// Counts card mutation payload entries in a recorded request body.
+    /// </summary>
+    private static int GetMutationCount(RecordedRequest request)
+    {
+        using JsonDocument document = JsonDocument.Parse(request.Body);
+        return document.RootElement.GetProperty("cards").GetArrayLength();
     }
 
     /// <summary>

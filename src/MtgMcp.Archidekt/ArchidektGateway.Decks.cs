@@ -63,6 +63,15 @@ public sealed partial class ArchidektGateway
             ArchidektDeckId = deckId,
             ArchidektDeckFormatId = GetDeckFormatId(root),
             Categories = ParseCategories(root),
+            SourceReferences =
+            [
+                new DeckSourceReference
+                {
+                    Provider = DeckImportProviders.Archidekt,
+                    ExternalId = deckId,
+                    Url = $"https://archidekt.com/decks/{deckId}",
+                },
+            ],
         };
 
         workspace.Cards = ParseCards(root, workspace.Categories);

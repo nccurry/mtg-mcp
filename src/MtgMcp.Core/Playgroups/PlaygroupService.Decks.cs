@@ -28,15 +28,12 @@ public sealed partial class PlaygroupService
             )
             .ConfigureAwait(false);
         IReadOnlyList<DeckReference> references = ExtractDeckReferences(games, userId: null);
-        List<PlaygroupDeckSummary> summaries = [];
-
-        foreach (DeckReference reference in references.Take(normalizedLimit))
-        {
-            summaries.Add(
-                await BuildDeckSummaryAsync(playgroupId, reference, cancellationToken)
-                    .ConfigureAwait(false)
-            );
-        }
+        IReadOnlyList<DeckReference> limitedReferences = references.Take(normalizedLimit).ToList();
+        List<PlaygroupDeckSummary> summaries = await BuildDeckSummariesAsync(
+                playgroupId,
+                limitedReferences,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         List<string> warnings =
         [
@@ -61,6 +58,37 @@ public sealed partial class PlaygroupService
             Decks = summaries,
             Warnings = warnings,
         };
+    }
+
+    /// <summary>
+    /// Enriches discovered deck references using bounded API concurrency while preserving source order.
+    /// </summary>
+    private async Task<List<PlaygroupDeckSummary>> BuildDeckSummariesAsync(
+        long playgroupId,
+        IReadOnlyList<DeckReference> references,
+        CancellationToken cancellationToken
+    )
+    {
+        using SemaphoreSlim gate = new(DeckSummaryParallelism);
+
+        async Task<PlaygroupDeckSummary> BuildWithGateAsync(DeckReference reference)
+        {
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await BuildDeckSummaryAsync(playgroupId, reference, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        PlaygroupDeckSummary[] summaries = await Task
+            .WhenAll(references.Select(BuildWithGateAsync))
+            .ConfigureAwait(false);
+        return summaries.ToList();
     }
 
     /// <summary>

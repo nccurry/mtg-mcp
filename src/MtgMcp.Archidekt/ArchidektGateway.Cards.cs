@@ -21,6 +21,11 @@ public sealed partial class ArchidektGateway
     ];
 
     /// <summary>
+    /// Limits each Archidekt card mutation request to a size the live API accepts reliably.
+    /// </summary>
+    private const int CardMutationBatchSize = 50;
+
+    /// <summary>
     /// Persists the cards.
     /// </summary>
     public async Task PersistCardsAsync(
@@ -34,33 +39,53 @@ public sealed partial class ArchidektGateway
         string deckId = RequireDeckId(workspace);
         List<object> cards = [];
 
+        await ResolveMissingArchidektCardIdsAsync(upsertedCards, cancellationToken)
+            .ConfigureAwait(false);
+
+        List<(DeckCard? UpsertedCard, Dictionary<string, object?> Payload)> mutations = [];
         foreach (DeckCard card in upsertedCards)
         {
             string archidektCardId =
                 card.ArchidektCardId
-                ?? await ResolveArchidektCardIdAsync(card.Name, cancellationToken)
-                    .ConfigureAwait(false);
+                ?? throw new InvalidOperationException(
+                    $"Archidekt card id could not be resolved for '{card.Name}'.");
             card.ArchidektCardId = archidektCardId;
 
-            cards.Add(BuildCardMutationPayload(
-                card.ArchidektDeckRelationId.HasValue ? "modify" : "add",
-                archidektCardId,
-                card));
+            mutations.Add((
+                card,
+                BuildCardMutationPayload(
+                    card.ArchidektDeckRelationId.HasValue ? "modify" : "add",
+                    archidektCardId,
+                    card)));
         }
 
         foreach (DeckCard card in removedCards)
         {
-            cards.Add(BuildCardMutationPayload("remove", card.ArchidektCardId, card, quantity: 0));
+            mutations.Add((
+                null,
+                BuildCardMutationPayload("remove", card.ArchidektCardId, card, quantity: 0)));
         }
 
-        using JsonDocument document = await SendJsonAsync(
-                HttpMethod.Patch,
-                $"api/decks/{deckId}/modifyCards/v2/",
-                new { cards },
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-        ApplyDeckRelationIds(document.RootElement, upsertedCards);
+        foreach ((DeckCard? UpsertedCard, Dictionary<string, object?> Payload)[] batch
+            in mutations.Chunk(CardMutationBatchSize))
+        {
+            cards.Clear();
+            cards.AddRange(batch.Select(item => item.Payload));
+            using JsonDocument document = await SendJsonAsync(
+                    HttpMethod.Patch,
+                    $"api/decks/{deckId}/modifyCards/v2/",
+                    new { cards },
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            List<DeckCard> batchUpserts = batch
+                .Select(item => item.UpsertedCard)
+                .OfType<DeckCard>()
+                .ToList();
+            ApplyDeckRelationIds(document.RootElement, batchUpserts);
+        }
+
         if (upsertedCards.Any(card => !card.ArchidektDeckRelationId.HasValue))
         {
             await HydrateMissingDeckRelationIdsAsync(deckId, upsertedCards, cancellationToken)
@@ -335,39 +360,117 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
+    /// Resolves missing Archidekt card ids once for each unique imported print.
+    /// </summary>
+    private async Task ResolveMissingArchidektCardIdsAsync(
+        IReadOnlyList<DeckCard> upsertedCards,
+        CancellationToken cancellationToken)
+    {
+        List<IGrouping<string, DeckCard>> unresolvedGroups = upsertedCards
+            .Where(card => string.IsNullOrWhiteSpace(card.ArchidektCardId))
+            .GroupBy(GetResolutionCacheKey, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (unresolvedGroups.Count == 0)
+        {
+            return;
+        }
+
+        foreach (IGrouping<string, DeckCard> group in unresolvedGroups)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string resolvedId = await ResolveArchidektCardIdAsync(group.First(), cancellationToken)
+                .ConfigureAwait(false);
+            foreach (DeckCard card in group)
+            {
+                card.ArchidektCardId = resolvedId;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a cache key for cards that should resolve to the same Archidekt print.
+    /// </summary>
+    private static string GetResolutionCacheKey(DeckCard card)
+    {
+        string printKey = FirstNonEmpty(
+                card.ScryfallId,
+                string.IsNullOrWhiteSpace(card.Snapshot.Set)
+                    || string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber)
+                    ? null
+                    : $"{card.Snapshot.Set}:{card.Snapshot.CollectorNumber}",
+                card.Name)
+            ?? "";
+        return $"{card.Name}|{printKey}";
+    }
+
+    /// <summary>
     /// Resolves the archidekt card id.
     /// </summary>
     private async Task<string> ResolveArchidektCardIdAsync(
-        string cardName,
+        DeckCard card,
         CancellationToken cancellationToken
     )
     {
         using JsonDocument document = await GetJsonAsync(
-                $"api/cards/v2/?name={Uri.EscapeDataString(cardName)}&pageSize=25",
+                $"api/cards/v2/?name={Uri.EscapeDataString(card.Name)}&pageSize=25",
                 cancellationToken
             )
             .ConfigureAwait(false);
         string? fallback = null;
+        string? exactNameFallback = null;
 
         foreach (JsonElement item in EnumerateCollection(document.RootElement))
         {
             string? id = GetString(item, "id");
             fallback ??= id;
 
-            string? name = GetString(item, "name") ?? GetNestedString(item, "oracleCard", "name");
-            if (
-                name is not null
-                && name.Equals(cardName, StringComparison.OrdinalIgnoreCase)
-                && id is not null
-            )
+            if (id is not null && IsSameScryfallPrint(item, card))
             {
                 return id;
             }
+
+            string? name = GetString(item, "name") ?? GetNestedString(item, "oracleCard", "name");
+            if (
+                name is not null
+                && name.Equals(card.Name, StringComparison.OrdinalIgnoreCase)
+                && id is not null
+            )
+            {
+                exactNameFallback ??= id;
+            }
         }
 
-        return fallback
+        return exactNameFallback
+            ?? fallback
             ?? throw new InvalidOperationException(
-                $"Archidekt card id could not be resolved for '{cardName}'."
+                $"Archidekt card id could not be resolved for '{card.Name}'."
             );
+    }
+
+    /// <summary>
+    /// Checks whether an Archidekt card search result matches the imported Scryfall print.
+    /// </summary>
+    private static bool IsSameScryfallPrint(JsonElement item, DeckCard card)
+    {
+        if (
+            !string.IsNullOrWhiteSpace(card.ScryfallId)
+            && card.ScryfallId.Equals(GetString(item, "uid"), StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return true;
+        }
+
+        string? set =
+            GetString(item, "set")
+            ?? GetString(item, "setCode")
+            ?? GetNestedString(item, "edition", "editioncode")
+            ?? GetNestedString(item, "edition", "code");
+        string? collector =
+            GetString(item, "collectorNumber")
+            ?? GetString(item, "collector_number");
+        return !string.IsNullOrWhiteSpace(card.Snapshot.Set)
+            && !string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber)
+            && card.Snapshot.Set.Equals(set, StringComparison.OrdinalIgnoreCase)
+            && card.Snapshot.CollectorNumber.Equals(collector, StringComparison.OrdinalIgnoreCase);
     }
 }

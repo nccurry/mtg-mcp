@@ -249,6 +249,7 @@ public sealed class DeckWorkspaceServiceTests
                 format: "commander",
                 description: null,
                 archidektDeckIdOrUrl: null,
+                moxfieldDeckIdOrUrl: null,
                 writeBack: null,
                 decklist: null,
                 TestContext.Current.CancellationToken
@@ -274,6 +275,7 @@ public sealed class DeckWorkspaceServiceTests
             "commander",
             "notes",
             archidektDeckIdOrUrl: null,
+            moxfieldDeckIdOrUrl: null,
             writeBack: null,
             decklist: null,
             TestContext.Current.CancellationToken
@@ -284,6 +286,7 @@ public sealed class DeckWorkspaceServiceTests
             "modern",
             description: null,
             archidektDeckIdOrUrl: null,
+            moxfieldDeckIdOrUrl: null,
             writeBack: null,
             decklist: "1 Lightning Bolt",
             TestContext.Current.CancellationToken
@@ -313,6 +316,7 @@ public sealed class DeckWorkspaceServiceTests
                 format: "commander",
                 description: null,
                 archidektDeckIdOrUrl: "123",
+                moxfieldDeckIdOrUrl: null,
                 writeBack: null,
                 decklist: null,
                 TestContext.Current.CancellationToken
@@ -348,6 +352,7 @@ public sealed class DeckWorkspaceServiceTests
             format: "commander",
             description: null,
             archidektDeckIdOrUrl: "123",
+            moxfieldDeckIdOrUrl: null,
             writeBack: false,
             decklist: null,
             TestContext.Current.CancellationToken
@@ -356,6 +361,328 @@ public sealed class DeckWorkspaceServiceTests
         workspace.Mode.Should().Be(WorkspaceMode.Archidekt);
         workspace.WriteBack.Should().BeFalse();
         gateway.ImportedDeckRequests.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that start deck workspace imports Moxfield decks as local workspaces.
+    /// </summary>
+    [Fact]
+    public async Task StartDeckWorkspace_ImportsMoxfieldAsLocalWorkspace()
+    {
+        FakeMoxfieldGateway moxfield = new()
+        {
+            ImportedDeck = CreateImportedMoxfieldWorkspace(),
+        };
+        DeckWorkspaceService service = new(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            moxfieldGateway: moxfield);
+
+        DeckWorkspace workspace = await service.StartDeckWorkspaceAsync(
+            "moxfield",
+            name: null,
+            format: "commander",
+            description: null,
+            archidektDeckIdOrUrl: null,
+            moxfieldDeckIdOrUrl: "mox-1",
+            writeBack: null,
+            decklist: null,
+            TestContext.Current.CancellationToken);
+
+        workspace.Mode.Should().Be(WorkspaceMode.Local);
+        workspace.WriteBack.Should().BeFalse();
+        workspace.Cards.Single(card => card.Name == "Sol Ring").Categories
+            .Should().Equal(DeckDefaults.Mainboard, "Ramp");
+        workspace.SourceReferences.Should().ContainSingle(source =>
+            source.Provider == DeckImportProviders.Moxfield
+            && source.ExternalId == "mox-1");
+        moxfield.ImportRequests.Should().ContainSingle().Which.Should().Be("mox-1");
+    }
+
+    /// <summary>
+    /// Verifies that Moxfield mode refuses unsupported writeback.
+    /// </summary>
+    [Fact]
+    public async Task StartDeckWorkspace_RejectsMoxfieldWriteback()
+    {
+        DeckWorkspaceService service = new(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            moxfieldGateway: new FakeMoxfieldGateway());
+
+        Func<Task> act = () => service.StartDeckWorkspaceAsync(
+            "moxfield",
+            name: null,
+            format: "commander",
+            description: null,
+            archidektDeckIdOrUrl: null,
+            moxfieldDeckIdOrUrl: "mox-1",
+            writeBack: true,
+            decklist: null,
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Moxfield writeback is not supported*");
+    }
+
+    /// <summary>
+    /// Verifies that copy to Archidekt dry run reports a safe migration plan.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_DryRunReportsCardsCategoriesAndWarnings()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            repository,
+            new FakeCardCatalog(),
+            new FakeArchidektGateway());
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: true,
+            createNew: true,
+            destinationDeckIdOrUrl: null,
+            name: "Migrated",
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        result.DryRun.Should().BeTrue();
+        result.CreatedNewDeck.Should().BeTrue();
+        result.DestinationName.Should().Be("Migrated");
+        result.TotalCards.Should().Be(3);
+        result.IncludedCards.Should().Be(2);
+        result.Categories.Should().Contain(DeckDefaults.Mainboard);
+        result.Categories.Should().Contain(DeckDefaults.Maybeboard);
+        result.Categories.Should().Contain("Ramp");
+        result.Commanders.Should().ContainSingle().Which.Should().Be("Atraxa, Praetors' Voice");
+        result.Warnings.Should().Contain(warning => warning.Contains("no Scryfall id", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that copy to Archidekt creates a deck and preserves secondary tags.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_CreateNewPreservesTags()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: true,
+            destinationDeckIdOrUrl: null,
+            name: "Migrated",
+            format: "commander",
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        result.DryRun.Should().BeFalse();
+        result.DestinationArchidektDeckId.Should().Be("created");
+        archidekt.UpsertedCards.Should().Contain(card =>
+            card.Name == "Sol Ring"
+            && card.Categories.SequenceEqual(new[] { DeckDefaults.Mainboard, "Ramp" }));
+        archidekt.UpsertedCards.Should().Contain(card =>
+            card.Name == "Brainstorm"
+            && card.PrimaryCategory == DeckDefaults.Maybeboard
+            && card.Categories.Contains("Card Draw"));
+        archidekt.PersistedCategories.Should().Contain(category =>
+            category.Name == "Ramp" && !category.IncludedInDeck);
+        archidekt.PersistedCategories.Should().Contain(category =>
+            category.Name == "Card Draw" && !category.IncludedInDeck);
+        source.Mode.Should().Be(WorkspaceMode.Local);
+    }
+
+    /// <summary>
+    /// Verifies that copying into a non-empty Archidekt deck requires an explicit override.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_RejectsNonEmptyExistingDestination()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Id = "remote",
+                Name = "Existing",
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Sol Ring",
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                        ScryfallId = "scryfall-sol-ring",
+                        ArchidektCardId = "500",
+                        ArchidektDeckRelationId = 101,
+                    },
+                    new DeckCard
+                    {
+                        Name = "Existing Card",
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                    },
+                ],
+            },
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult dryRun = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: true,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+        Func<Task> apply = () => service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        dryRun.Warnings.Should().Contain(warning =>
+            warning.Contains("not empty", StringComparison.OrdinalIgnoreCase));
+        await apply.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not empty*allowNonEmptyDestination=true*replaceExistingDestination=true*");
+    }
+
+    /// <summary>
+    /// Verifies that append and replace modes cannot be requested together.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_RejectsConflictingNonEmptyPolicies()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        Func<Task> act = () => service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: true,
+            replaceExistingDestination: true,
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Choose either allowNonEmptyDestination=true*replaceExistingDestination=true*not both*");
+        archidekt.ImportedDeckRequests.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies that replace mode removes destination cards before copying source tags.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_ReplaceExistingDestination()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Id = "remote",
+                Name = "Existing",
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                ],
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Sol Ring",
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                        ScryfallId = "scryfall-sol-ring",
+                        ArchidektCardId = "500",
+                        ArchidektDeckRelationId = 101,
+                    },
+                    new DeckCard
+                    {
+                        Name = "Existing Card",
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard],
+                        ArchidektCardId = "99",
+                        ArchidektDeckRelationId = 100,
+                    },
+                ],
+            },
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: true,
+            TestContext.Current.CancellationToken);
+
+        result.DestinationArchidektDeckId.Should().Be("123");
+        archidekt.RemovedCards.Should().Contain(card => card.Name == "Existing Card");
+        archidekt.RemovedCards.Should().Contain(card => card.Name == "Sol Ring");
+        archidekt.UpsertedCards.Should().Contain(card =>
+            card.Name == "Sol Ring"
+            && card.ArchidektCardId == "500"
+            && card.Categories.SequenceEqual(new[] { DeckDefaults.Mainboard, "Ramp" }));
+        archidekt.UpsertedCards.Should().Contain(card =>
+            card.Name == "Brainstorm"
+            && card.Categories.Contains("Card Draw"));
     }
 
     /// <summary>
@@ -1389,6 +1716,76 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Creates a provider-neutral workspace shaped like a Moxfield import.
+    /// </summary>
+    private static DeckWorkspace CreateImportedMoxfieldWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Id = $"moxfield-{Guid.NewGuid():N}",
+            Name = "Imported Moxfield",
+            Format = "commander",
+            Mode = WorkspaceMode.Local,
+            WriteBack = false,
+            SourceReferences =
+            [
+                new DeckSourceReference
+                {
+                    Provider = DeckImportProviders.Moxfield,
+                    ExternalId = "mox-1",
+                    Url = "https://www.moxfield.com/decks/mox-1",
+                },
+            ],
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+                new DeckCategory { Name = "Ramp", IncludedInDeck = false },
+                new DeckCategory { Name = "Card Draw", IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Atraxa, Praetors' Voice",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    ScryfallId = "scryfall-atraxa",
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature",
+                        ColorIdentity = ["W", "U", "B", "G"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard, "Ramp"],
+                    ScryfallId = "scryfall-sol-ring",
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        Set = "cmm",
+                        CollectorNumber = "400",
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Brainstorm",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard, "Card Draw"],
+                    Snapshot = new CardSnapshot { TypeLine = "Instant" },
+                },
+            ],
+        };
+    }
+
+    /// <summary>
     /// Provides fake card catalog behavior.
     /// </summary>
     private sealed class FakeCardCatalog : ICardCatalog
@@ -1519,6 +1916,34 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Provides fake Moxfield import behavior.
+    /// </summary>
+    private sealed class FakeMoxfieldGateway : IMoxfieldGateway
+    {
+        /// <summary>
+        /// Gets or sets the imported deck.
+        /// </summary>
+        public DeckWorkspace ImportedDeck { get; set; } = CreateImportedMoxfieldWorkspace();
+
+        /// <summary>
+        /// Gets import requests in caller order.
+        /// </summary>
+        public List<string> ImportRequests { get; } = [];
+
+        /// <summary>
+        /// Imports a fake Moxfield deck.
+        /// </summary>
+        public Task<DeckWorkspace> ImportDeckAsync(
+            string deckIdOrUrl,
+            CancellationToken cancellationToken
+        )
+        {
+            ImportRequests.Add(deckIdOrUrl);
+            return Task.FromResult(ImportedDeck);
+        }
+    }
+
+    /// <summary>
     /// Provides in memory repository behavior.
     /// </summary>
     private sealed class InMemoryRepository : IDeckWorkspaceRepository
@@ -1594,6 +2019,11 @@ public sealed class DeckWorkspaceServiceTests
         public List<DeckCard> RemovedCards { get; } = [];
 
         /// <summary>
+        /// Gets categories persisted to the fake gateway.
+        /// </summary>
+        public List<DeckCategory> PersistedCategories { get; } = [];
+
+        /// <summary>
         /// Gets or sets the deleted checkpoint ids.
         /// </summary>
         public List<string> DeletedCheckpointIds { get; } = [];
@@ -1616,6 +2046,31 @@ public sealed class DeckWorkspaceServiceTests
             return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([
                 new ArchidektDeckSummary { Id = "123", Name = "Remote" },
             ]);
+        }
+
+        /// <summary>
+        /// Verifies that create deck.
+        /// </summary>
+        public Task<DeckWorkspace> CreateDeckAsync(
+            ArchidektDeckCreateRequest request,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult(new DeckWorkspace
+            {
+                Id = "created-workspace",
+                Name = request.Name,
+                Format = request.Format,
+                Description = request.Description,
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "created",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                    new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+                ],
+            });
         }
 
         /// <summary>
@@ -1666,6 +2121,12 @@ public sealed class DeckWorkspaceServiceTests
             CancellationToken cancellationToken
         )
         {
+            PersistedCategories.Add(new DeckCategory
+            {
+                Name = category.Name,
+                IncludedInDeck = category.IncludedInDeck,
+                IncludedInPrice = category.IncludedInPrice,
+            });
             return Task.CompletedTask;
         }
 

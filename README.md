@@ -11,11 +11,11 @@
 
 `mtg-mcp` is an unofficial MCP server for Magic: The Gathering deckbuilding. It
 connects MCP clients to Scryfall card data, local deck workspaces, optional
-Archidekt writeback, Playgroup.gg playgroup data, Commander Spellbook combos,
-and API-backed deckbuilding evidence.
+Moxfield imports, Archidekt writeback, Playgroup.gg playgroup data, Commander
+Spellbook combos, and API-backed deckbuilding evidence.
 
 It is not affiliated with Hasbro, Wizards of the Coast, Magic: The Gathering,
-Scryfall, Archidekt, Playgroup.gg, or Commander Spellbook.
+Scryfall, Moxfield, Archidekt, Playgroup.gg, or Commander Spellbook.
 
 ## Quickstart
 
@@ -62,9 +62,10 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 | Area | What the MCP exposes |
 | --- | --- |
 | Card data | Scryfall search, fuzzy card lookup, prints, rulings, suggestions, and Scryfall query syntax guidance. |
-| Workspaces | Create, import, parse, export, open, validate, summarize, and update local or Archidekt-backed decks. |
+| Workspaces | Create, import, parse, export, open, validate, summarize, migrate, and update local or Archidekt-backed decks. |
 | Deck editing | Add, remove, move, categorize, annotate, and set quantities; create, preview, list, apply, or delete persisted edit plans. |
-| Archidekt | Open decks, list visible decks, write back when enabled, and manage deck checkpoints. |
+| Moxfield | Import public or unlisted decks as generic local workspaces while preserving boards, tags, and print metadata when available. |
+| Archidekt | Create decks, open decks, list visible decks, write back when enabled, copy local workspaces into Archidekt, and manage deck checkpoints. |
 | Playgroup.gg | Check auth, get playgroups and decks, list playgroup users/decks, list user decks, rank decks by power, Elo, win rate, competitive rating, games played, or average win turn, and score candidate cards against local-meta pressure. |
 | Analysis | Mana base, curve, colors, categories, cost, legality, draw odds, consistency, best practices, Commander bracket, card facets, and explicit facet predicates. |
 | Simulation | Goldfish runs, projected board states, win-turn estimates, deterministic performance analysis, plan comparisons, and Archidekt reference comparisons. |
@@ -77,6 +78,16 @@ Most users can ask naturally instead of naming tools:
 ```text
 Open this Archidekt deck locally, analyze the mana base, and suggest fixes under $10.
 ```
+
+```text
+Import this Moxfield deck, dry-run copying it to a new private Archidekt deck, and preserve its tags.
+```
+
+Moxfield role tags import as secondary workspace categories. When copied to
+Archidekt, those tag categories are marked as not included in deck totals so
+Mainboard, Commander, and other board categories still control legality and
+deck size. Existing Archidekt copies can be repaired or refreshed with
+`copy_workspace_to_archidekt` using `replaceExistingDestination=true`.
 
 ```text
 Find budget replacements for cards over $20 and preview the plan before changing anything.
@@ -169,6 +180,8 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__SOURCES__EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
 | `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `JWT` / `REFRESH_TOKEN` / `USER_ID` / `EMAIL` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. Refresh token auth is preferred; email or username plus password is fallback. |
+| `MTGMCP__ARCHIDEKT__RATE_LIMIT__MAX_REQUESTS` / `WINDOW_SECONDS` | Optional process-local Archidekt pacing. For example, `30` requests per `60` seconds leaves room for browser activity; `0` max requests disables proactive pacing. |
+| `MTGMCP__MOXFIELD__BASE_ADDRESS` / `USER_AGENT` / `CURL_FALLBACK_ENABLED` / `CURL_PATH` | Moxfield import endpoint settings. Imports use an anonymous, unofficial endpoint; when Moxfield blocks .NET HTTP requests, the adapter can retry through `curl` if available. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
 | `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `MTGMCP__SIMULATION__ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |

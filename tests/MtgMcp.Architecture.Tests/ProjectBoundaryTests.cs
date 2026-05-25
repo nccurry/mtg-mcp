@@ -31,6 +31,10 @@ public sealed class ProjectBoundaryTests
             [
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
             ],
+            ["src/MtgMcp.Moxfield/MtgMcp.Moxfield.csproj"] =
+            [
+                "src/MtgMcp.Core/MtgMcp.Core.csproj",
+            ],
             ["src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj"] =
             [
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
@@ -42,6 +46,7 @@ public sealed class ProjectBoundaryTests
                 "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj",
                 "src/MtgMcp.CommanderSpellbook/MtgMcp.CommanderSpellbook.csproj",
                 "src/MtgMcp.Decklists/MtgMcp.Decklists.csproj",
+                "src/MtgMcp.Moxfield/MtgMcp.Moxfield.csproj",
                 "src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj",
             ],
         };

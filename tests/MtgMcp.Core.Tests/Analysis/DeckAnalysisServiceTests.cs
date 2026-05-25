@@ -135,16 +135,16 @@ public sealed partial class DeckIntelligenceTests
             .Should()
             .Be(DeckRoles.Utility);
         DeckRoleClassifier.Classify(new DeckCard
+        {
+            Name = "Chart a Course",
+            PrimaryCategory = DeckRoles.Draw,
+            Categories = [DeckRoles.Draw, DeckRoles.Lands],
+            Snapshot = new CardSnapshot
             {
-                Name = "Chart a Course",
-                PrimaryCategory = DeckRoles.Draw,
-                Categories = [DeckRoles.Draw, DeckRoles.Lands],
-                Snapshot = new CardSnapshot
-                {
-                    TypeLine = "Sorcery",
-                    OracleText = "Draw two cards. Then discard a card unless you attacked this turn."
-                }
-            })
+                TypeLine = "Sorcery",
+                OracleText = "Draw two cards. Then discard a card unless you attacked this turn."
+            }
+        })
             .PrimaryRole
             .Should()
             .Be(DeckRoles.Draw);

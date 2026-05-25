@@ -65,6 +65,10 @@ tasks:
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
       - >
+        dotnet test tests/MtgMcp.Moxfield.Tests/MtgMcp.Moxfield.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
+      - >
         dotnet test tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"

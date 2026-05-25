@@ -105,6 +105,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
         result.Notes.Add("Commander is treated as available from the command zone when the deck has a Commander category.");
         result.Notes.Add($"Resolved simulation profile '{profileResolution.Profile.Id}' from {profileResolution.Source}.");
+        if (BuildPartialCommanderDeckWarning(workspace) is string partialDeckWarning)
+        {
+            result.Warnings.Add(partialDeckWarning);
+        }
+
         result.Warnings.AddRange(profileResolution.Warnings);
         return result;
     }
@@ -478,6 +483,29 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Checks whether the format uses Commander deck construction limits.
+    /// </summary>
+    private static bool IsCommanderGoldfishFormat(string format)
+    {
+        return format.Trim().Equals("commander", StringComparison.OrdinalIgnoreCase)
+            || format.Trim().Equals("edh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Builds a warning when a Commander goldfish samples fewer or more than 100 included cards.
+    /// </summary>
+    private static string? BuildPartialCommanderDeckWarning(DeckWorkspace workspace)
+    {
+        int includedCount = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity));
+        if (!IsCommanderGoldfishFormat(workspace.Format) || includedCount == 100)
+        {
+            return null;
+        }
+
+        return $"Commander workspace has {includedCount} included cards instead of 100; excluded categories such as Sideboard and Maybeboard are not sampled, so goldfish probabilities reflect a partial active deck.";
+    }
+
+    /// <summary>
     /// Counts cards with a requested primary role.
     /// </summary>
     private static int CountGoldfishRole(IEnumerable<DeckCard> cards, string role)
@@ -710,6 +738,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         if (estimate.MedianObservedWinTurn is null)
         {
             estimate.Notes.Add($"No likely win was found by turn {maxTurn} in the goldfish runs.");
+        }
+
+        if (BuildPartialCommanderDeckWarning(workspace) is string partialDeckWarning)
+        {
+            estimate.Notes.Add(partialDeckWarning);
         }
 
         estimate.Notes.Add("Win timing is probabilistic and assumes no interaction.");

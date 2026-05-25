@@ -16,6 +16,11 @@ public sealed partial class PlaygroupService
     private const int MaximumDeckLimit = 200;
 
     /// <summary>
+    /// Limits concurrent Playgroup deck detail enrichment requests.
+    /// </summary>
+    private const int DeckSummaryParallelism = 4;
+
+    /// <summary>
     /// Bounds user discovery fan-out for one tool call.
     /// </summary>
     private const int MaximumUserLimit = 200;

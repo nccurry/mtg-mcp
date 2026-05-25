@@ -49,6 +49,7 @@ public sealed partial class DeckWorkspaceService
         string format,
         string? description,
         string? archidektDeckIdOrUrl,
+        string? moxfieldDeckIdOrUrl,
         bool? writeBack,
         string? decklist,
         CancellationToken cancellationToken
@@ -69,6 +70,14 @@ public sealed partial class DeckWorkspaceService
                 throw new InvalidOperationException(
                     "Local workspace mode cannot use an Archidekt deck id or URL. "
                         + "Ask the user whether they meant Archidekt instead."
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(moxfieldDeckIdOrUrl))
+            {
+                throw new InvalidOperationException(
+                    "Local workspace mode cannot use a Moxfield deck id or URL. "
+                        + "Use mode 'moxfield' to import a Moxfield deck as a local workspace."
                 );
             }
 
@@ -116,8 +125,43 @@ public sealed partial class DeckWorkspaceService
                 .ConfigureAwait(false);
         }
 
+        if (normalizedMode is "moxfield")
+        {
+            if (!string.IsNullOrWhiteSpace(decklist))
+            {
+                throw new InvalidOperationException(
+                    "Moxfield workspace mode cannot import pasted deck text directly. "
+                        + "Use local mode for pasted deck text."
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(archidektDeckIdOrUrl))
+            {
+                throw new InvalidOperationException(
+                    "Moxfield workspace mode cannot use an Archidekt deck id or URL."
+                );
+            }
+
+            if (writeBack == true)
+            {
+                throw new InvalidOperationException(
+                    "Moxfield writeback is not supported. Moxfield decks import as local-only workspaces."
+                );
+            }
+
+            if (string.IsNullOrWhiteSpace(moxfieldDeckIdOrUrl))
+            {
+                throw new InvalidOperationException(
+                    "Moxfield workspace mode requires a Moxfield deck id or URL."
+                );
+            }
+
+            return await ImportMoxfieldDeckAsync(moxfieldDeckIdOrUrl, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         throw new InvalidOperationException(
-            "Workspace mode must be either 'local' or 'archidekt'. Ask the user which workspace mode to use."
+            "Workspace mode must be 'local', 'archidekt', or 'moxfield'. Ask the user which workspace mode to use."
         );
     }
 
@@ -150,6 +194,25 @@ public sealed partial class DeckWorkspaceService
         await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
             .ConfigureAwait(false);
 
+        return await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Imports a Moxfield deck as a generic local workspace.
+    /// </summary>
+    public async Task<DeckWorkspace> ImportMoxfieldDeckAsync(
+        string deckIdOrUrl,
+        CancellationToken cancellationToken
+    )
+    {
+        DeckWorkspace workspace = await RequireMoxfieldGateway()
+            .ImportDeckAsync(deckIdOrUrl, cancellationToken)
+            .ConfigureAwait(false);
+        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
+            .ConfigureAwait(false);
+
+        workspace.Mode = WorkspaceMode.Local;
+        workspace.WriteBack = false;
         return await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 

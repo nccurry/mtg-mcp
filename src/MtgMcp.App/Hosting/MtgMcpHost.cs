@@ -8,6 +8,7 @@ using MtgMcp.Archidekt;
 using MtgMcp.CommanderSpellbook;
 using MtgMcp.Core;
 using MtgMcp.Decklists;
+using MtgMcp.Moxfield;
 using MtgMcp.Playgroup;
 using MtgMcp.Scryfall;
 
@@ -40,6 +41,7 @@ public static class MtgMcpHost
         services.GetRequiredService<CardFacetService>();
         services.GetRequiredService<ICardCatalog>();
         services.GetRequiredService<IArchidektGateway>();
+        services.GetRequiredService<IMoxfieldGateway>();
         services.GetRequiredService<IPlaygroupGateway>();
         services.GetRequiredService<PlaygroupService>();
         services.GetRequiredService<ICardTrendProvider>();
@@ -104,6 +106,7 @@ public static class MtgMcpHost
         builder.Services.AddSingleton<ServerInfoService>();
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
+        builder.Services.AddMoxfield(builder.Configuration);
         builder.Services.AddPlaygroup(builder.Configuration);
         builder.Services.AddCommanderSpellbook(builder.Configuration);
         builder.Services.AddDecklistCorpusSources();

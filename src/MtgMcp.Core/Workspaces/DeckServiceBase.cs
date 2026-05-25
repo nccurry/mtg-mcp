@@ -26,6 +26,11 @@ public abstract partial class DeckServiceBase
     protected IArchidektGateway? ArchidektGateway { get; }
 
     /// <summary>
+    /// Imports Moxfield decks into provider-neutral local workspaces.
+    /// </summary>
+    protected IMoxfieldGateway? MoxfieldGateway { get; }
+
+    /// <summary>
     /// Supplies optional Commander metagame context for recommendation workflows.
     /// </summary>
     protected ICommanderMetaProvider? CommanderMetaProvider { get; }
@@ -62,13 +67,15 @@ public abstract partial class DeckServiceBase
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
+        IMoxfieldGateway? moxfieldGateway = null
     )
     {
         Repository = repository;
         PlanRepository = planRepository;
         CardCatalog = cardCatalog;
         ArchidektGateway = archidektGateway;
+        MoxfieldGateway = moxfieldGateway;
         CommanderMetaProvider = commanderMetaProvider;
         CardTrendProvider = cardTrendProvider;
         ComboCatalog = comboCatalog;

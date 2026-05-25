@@ -5,6 +5,7 @@
         <ProjectReference Include="..\MtgMcp.Archidekt\MtgMcp.Archidekt.csproj" />
         <ProjectReference Include="..\MtgMcp.CommanderSpellbook\MtgMcp.CommanderSpellbook.csproj" />
         <ProjectReference Include="..\MtgMcp.Decklists\MtgMcp.Decklists.csproj" />
+        <ProjectReference Include="..\MtgMcp.Moxfield\MtgMcp.Moxfield.csproj" />
         <ProjectReference Include="..\MtgMcp.Playgroup\MtgMcp.Playgroup.csproj" />
     </ItemGroup>
 
@@ -27,8 +28,8 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Authors>Nick Curry</Authors>
         <Company>Nick Curry</Company>
-        <Description>A C#/.NET MCP server for building Magic: The Gathering decks with Scryfall card data and Archidekt deck writeback.</Description>
-        <PackageTags>mcp;model-context-protocol;magic-the-gathering;mtg;scryfall;archidekt</PackageTags>
+        <Description>A C#/.NET MCP server for building Magic: The Gathering decks with Scryfall card data, Moxfield imports, and Archidekt deck writeback.</Description>
+        <PackageTags>mcp;model-context-protocol;magic-the-gathering;mtg;scryfall;archidekt;moxfield</PackageTags>
         <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/nccurry/mtg-mcp</PackageProjectUrl>
         <RepositoryUrl>https://github.com/nccurry/mtg-mcp</RepositoryUrl>
