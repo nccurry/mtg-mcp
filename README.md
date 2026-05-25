@@ -1,6 +1,10 @@
 # mtg-mcp
 <!-- mcp-name: io.github.nccurry/mtg-mcp -->
 
+<p align="center">
+  <img src="assets/logo.svg" alt="mtg-mcp logo" width="220" />
+</p>
+
 [![CI](https://github.com/nccurry/mtg-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nccurry/mtg-mcp/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/nccurry/mtg-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/nccurry/mtg-mcp)
 [![NuGet](https://img.shields.io/nuget/v/Nccurry.MtgMcp?label=NuGet)](https://www.nuget.org/packages/Nccurry.MtgMcp)

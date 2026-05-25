@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">mtg-mcp logo</title>
+  <desc id="desc">A rounded hexagon badge with a centered fan of cards connected by chip lines to five mana-color circles.</desc>
+  <g fill="none" stroke="#17252d" stroke-linecap="round" stroke-linejoin="round">
+    <path
+      d="M275 81 395 150Q414 161 414 183V321Q414 343 395 354L275 423Q256 434 237 423L117 354Q98 343 98 321V183Q98 161 117 150L237 81Q256 70 275 81Z"
+      fill="#ffffff"
+      stroke-width="16" />
+
+    <g transform="translate(256 278) scale(0.93) translate(-256 -278)">
+      <g stroke-width="7.8">
+        <path d="M256 306v36" />
+
+        <path d="M134 240v15l31 31v36h34l30-36" />
+        <path d="M228 308l-31 37h-33l-19-19" />
+
+        <path d="M378 240v15l-31 31v36h-34l-30-36" />
+        <path d="M284 308l31 37h33l19-19" />
+      </g>
+
+      <g transform="translate(256 224) scale(0.8) translate(-256 -224)">
+        <g transform="rotate(10 310 225)">
+          <rect x="251" y="123" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
+          <rect x="267" y="139" width="86" height="172" rx="7" fill="#17252d" stroke-width="0" />
+        </g>
+
+        <g transform="rotate(5 288 222)">
+          <rect x="229" y="120" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
+          <rect x="245" y="136" width="86" height="172" rx="7" fill="#17252d" stroke-width="0" />
+        </g>
+
+        <g transform="rotate(1 266 220)">
+          <rect x="207" y="118" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
+          <rect x="223" y="134" width="86" height="172" rx="7" fill="#17252d" stroke-width="0" />
+        </g>
+
+        <g transform="rotate(-7 226 220)">
+          <rect x="167" y="118" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
+          <rect x="183" y="134" width="86" height="172" rx="7" fill="#7a4726" stroke-width="0" />
+        </g>
+      </g>
+
+      <g stroke-width="0">
+        <circle cx="134" cy="207" r="21" fill="#00733e" />
+        <circle cx="378" cy="207" r="21" fill="#0e68ab" />
+        <circle cx="123" cy="302" r="21" fill="#d3202a" />
+        <circle cx="389" cy="302" r="21" fill="#150b00" />
+        <circle cx="256" cy="371" r="21" fill="#f8f6d8" />
+      </g>
+    </g>
+  </g>
+</svg>
