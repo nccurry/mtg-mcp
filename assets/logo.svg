@@ -18,25 +18,25 @@
         <path d="M284 308l31 37h33l19-19" />
       </g>
 
-      <g transform="translate(256 224) scale(0.8) translate(-256 -224)">
+      <g transform="translate(248 224) scale(0.82) translate(-256 -224)">
         <g transform="rotate(10 310 225)">
-          <rect x="251" y="123" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
-          <rect x="267" y="139" width="86" height="172" rx="7" fill="#17252d" stroke-width="0" />
+          <rect x="248" y="139" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
+          <rect x="264" y="155" width="92" height="140" rx="7" fill="#17252d" stroke-width="0" />
         </g>
 
         <g transform="rotate(5 288 222)">
-          <rect x="229" y="120" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
-          <rect x="245" y="136" width="86" height="172" rx="7" fill="#17252d" stroke-width="0" />
+          <rect x="226" y="136" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
+          <rect x="242" y="152" width="92" height="140" rx="7" fill="#17252d" stroke-width="0" />
         </g>
 
         <g transform="rotate(1 266 220)">
-          <rect x="207" y="118" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
-          <rect x="223" y="134" width="86" height="172" rx="7" fill="#17252d" stroke-width="0" />
+          <rect x="204" y="134" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
+          <rect x="220" y="150" width="92" height="140" rx="7" fill="#17252d" stroke-width="0" />
         </g>
 
         <g transform="rotate(-7 226 220)">
-          <rect x="167" y="118" width="118" height="204" rx="14" fill="#ffffff" stroke-width="8" />
-          <rect x="183" y="134" width="86" height="172" rx="7" fill="#7a4726" stroke-width="0" />
+          <rect x="164" y="134" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
+          <rect x="180" y="150" width="92" height="140" rx="7" fill="#7a4726" stroke-width="0" />
         </g>
       </g>
 
