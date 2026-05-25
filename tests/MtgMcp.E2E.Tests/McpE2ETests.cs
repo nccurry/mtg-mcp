@@ -803,7 +803,9 @@ public sealed class McpE2ETests
         GetProperty(refreshed, "recommendations").GetArrayLength().Should().Be(1);
         scryfall.Requests.Count(request =>
                 request.Method == "GET"
-                && request.PathAndQuery.Equals(searchPath, StringComparison.OrdinalIgnoreCase))
+                && DecodeRepeatedly(request.PathAndQuery).Equals(
+                    DecodeRepeatedly(searchPath),
+                    StringComparison.OrdinalIgnoreCase))
             .Should()
             .Be(2);
         archidekt.Requests.Should().BeEmpty();
