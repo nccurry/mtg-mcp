@@ -53,9 +53,6 @@ jobs:
       - name: Build release archives
         run: task release:archives VERSION=0.0.0-ci
 
-      - name: Build WinGet fallback manifest artifact
-        run: task release:winget VERSION=0.0.0-ci
-
       - name: Generate release checksums
         run: task release:checksums
 
