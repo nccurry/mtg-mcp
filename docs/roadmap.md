@@ -14,7 +14,7 @@ Status: implemented.
 
 Implemented pure C# performance analysis in Core and exposed it through MCP.
 
-Planned tools:
+Implemented tools:
 
 - `analyze_deck_performance`
 - `compare_plan_performance`
@@ -55,18 +55,32 @@ Example scenarios:
 
 Scenario output identifies the relevant cards, the modeled assumptions, the probability band, and failure-driver counts.
 
-## Phase 3: Stats Lab Refinement
+## Phase 3: Profile-Aware Refinement
 
-Status: next.
+Status: implemented for the first profile and deck-intent pass; additional
+refinements remain possible.
 
-Improve the deterministic performance model before adding any full-game simulator integration.
+Added deterministic simulation profiles and deck-local intent overrides before
+adding any full-game simulator integration.
 
-Possible refinements:
+Implemented:
 
-- Better profile-specific sequencing for archetypes such as stax, reanimator, spellslinger, and creature combo.
+- Built-in `neutral`, `aggro`, `combo`, `control`, `value`, `big-mana`, and
+  `stax` simulation profiles.
+- Profile resolution from explicit tool arguments, deck intent, auto inference,
+  then `neutral`.
+- Deck Intent v2 fields for goals, archetype tags, target goldfish turns,
+  simulation settings, and win routes.
+- Profile-aware mulligan scoring, sequencing, interaction hold-up, scenario
+  targets, and fallback win detection.
+- External JSON profile loading from host config.
+- Route evidence in goldfish and win-turn outputs.
+
+Still useful future refinements:
+
 - Role density sensitivity analysis that estimates the impact of adding one more ramp, land, draw, tutor, or interaction card.
-- More nuanced mulligan heuristics by deck intent and commander plan.
 - More explicit tapland, color-fixing, and curve pressure summaries.
+- More exact deck-specific route libraries from combo/catalog data.
 
 ## Phase 4: Deferred Rules-Engine Research
 

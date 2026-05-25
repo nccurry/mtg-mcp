@@ -457,6 +457,9 @@ public sealed class McpSurfaceTests
             ["PLAYGROUP:BASE_ADDRESS"] = "https://playgroup.test/api/public/v1/",
             ["PLAYGROUP:API_KEY"] = "playgroup-key",
             ["PLAYGROUP:CREDENTIALS_FILE"] = "C:/playgroup-creds.json",
+            ["SIMULATION:PROFILE_PATHS:0"] = "profiles/simulation/*.json",
+            ["SIMULATION:PROFILE_PATHS:1"] = "C:/mtg-mcp/custom-profile.json",
+            ["SIMULATION:ALLOW_EXTERNAL_PROFILE_OVERRIDES"] = "false",
             ["SCRYFALL:USER_AGENT"] = "mtg-mcp-test",
             ["SCRYFALL:MAX_RATE_LIMIT_RETRIES"] = "5",
         };
@@ -495,6 +498,9 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Playgroup:BaseAddress"].Should().Be("https://playgroup.test/api/public/v1/");
         aliases["MtgMcp:Playgroup:ApiKey"].Should().Be("playgroup-key");
         aliases["MtgMcp:Playgroup:CredentialsFile"].Should().Be("C:/playgroup-creds.json");
+        aliases["MtgMcp:Simulation:ProfilePaths:0"].Should().Be("profiles/simulation/*.json");
+        aliases["MtgMcp:Simulation:ProfilePaths:1"].Should().Be("C:/mtg-mcp/custom-profile.json");
+        aliases["MtgMcp:Simulation:AllowExternalProfileOverrides"].Should().Be("false");
         aliases["MtgMcp:Scryfall:UserAgent"].Should().Be("mtg-mcp-test");
         aliases["MtgMcp:Scryfall:MaxRateLimitRetries"].Should().Be("5");
     }

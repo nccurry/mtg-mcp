@@ -12,6 +12,7 @@ Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not
 - Larger sample counts should narrow confidence intervals for the same metric.
 - Mana payment treats each source as exclusive for a payment. A source that can produce multiple colors offers choices, but it can only satisfy one mana symbol before it is spent.
 - Mulligan-enabled performance analysis uses a deterministic London mulligan policy that scores functional mana, early plays, early ramp, card flow, interaction, and commander timing. Commander and Brawl workspaces treat the first mulligan as free.
+- Profile-aware tools include `profileResolution`, which reports the selected simulation profile, source, auto-profile candidates, deck intent overrides, and non-fatal warnings.
 
 ## Opening Hands
 
@@ -57,6 +58,11 @@ Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not
 - `combo-assembly-by-turn`: probability that at least two combo-tagged or finisher cards had been seen.
 - `tutor-assisted-combo-by-turn`: probability that at least one combo card and one tutor had been seen.
 - `averageEarliestAssemblyTurn`: average first assembly turn among successful combo assembly runs.
+
+Goldfish win estimates prefer exact combo evidence and configured win routes
+before fallback pressure heuristics. Route evidence records matched and missing
+requirements so callers can distinguish configured routes from low-confidence
+fallback wins.
 
 ## Stranded Cards
 

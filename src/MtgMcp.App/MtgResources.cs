@@ -264,6 +264,15 @@ public sealed class MtgResources
             and Package Template are case-insensitive; spaces and underscores
             normalize to hyphens. Preferred v2 sections are Build Targets,
             Simulation, and Win Routes.
+            Simulation Profile resolves in this order: explicit tool argument,
+            deck intent value, auto inference, then neutral. Built-ins are
+            neutral, aggro, combo, control, value, big-mana, and stax; auto asks
+            the resolver to choose from deck facts.
+            Win Routes use lines such as:
+            Altar Loop: requires commander, repeatable-blink, card:Altar of the Brood; earliest turn 5; kind combo
+            Supported route requirements are commander, repeatable-blink,
+            card:<name>, role:<role>, tag:<tag>, mana>=N, tokens>=N,
+            interactionHeld>=N, dungeonProgress>=N, turn>=N, or a bare card name.
             Use get_deck_intent before analysis and recommendations.
             Use suggest_deck_intent to draft an intent section, then ask the user
             before calling set_deck_intent.

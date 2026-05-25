@@ -70,7 +70,7 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 | Simulation | Goldfish runs, projected board states, win-turn estimates, deterministic performance analysis, plan comparisons, and Archidekt reference comparisons. |
 | Recommendations | New releases, Commander meta context, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, raw source evidence, and Reddit discussion evidence. |
 | Combos | Completed combos, near-misses, and combo pressure using Commander Spellbook or local heuristics. |
-| Deck intent | Optional human-readable deck goals, budgets, local meta, role targets, preferences, avoided cards, and protected cards. |
+| Deck intent | Optional human-readable deck goals, budgets, local meta, role targets, simulation profiles, win routes, preferences, avoided cards, and protected cards. |
 
 Most users can ask naturally instead of naming tools:
 
@@ -170,7 +170,7 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
 | `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `JWT` / `REFRESH_TOKEN` / `USER_ID` / `EMAIL` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. Refresh token auth is preferred; email or username plus password is fallback. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
-| `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
+| `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `MTGMCP__SIMULATION__ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Commander Spellbook API setting. |
 
@@ -208,6 +208,11 @@ self-harm, price/bracket constraints, and evidence confidence. Playgroup decks
 are ranked from fetched game participations; Archidekt decklists are imported
 read-only when Playgroup exposes an Archidekt URL.
 
+Simulation results include the resolved simulation profile, why that profile was
+chosen, route evidence, and warnings when a claim comes from fallback
+heuristics. See [`docs/simulation-profiles.md`](docs/simulation-profiles.md)
+for the compact profile, deck-intent, and route syntax reference.
+
 ## Deck Intent
 
 Deck intent is optional text stored in a workspace description, and in the
@@ -241,6 +246,9 @@ Hold Interaction From Turn: 3
 Minimum Interaction Held: 1
 Prefer Commander On Curve: true
 
+Win Routes
+Blood Artist Drain: requires commander, tag:aristocrats, tokens>=4; earliest turn 6; kind finisher
+
 Avoid
 - deterministic infinite combos
 End MTG MCP Deck Intent
@@ -255,7 +263,8 @@ and `cedh`. Supported heuristic profiles are `auto`, `commander-baseline`,
 `combo`, `control`, `value`, `big-mana`, and `stax`. Package templates are
 `none`, `8x8`, `7x9`, and `9x7`.
 
-For the full syntax, read `mtg://usage/deck-intent`.
+For the full syntax, read `mtg://usage/deck-intent` or
+[`docs/simulation-profiles.md`](docs/simulation-profiles.md).
 
 ## How It Works
 
@@ -286,4 +295,11 @@ Use `Taskfile.yml` for common workflows:
 ```powershell
 task test
 task lint
+task install:local
 ```
+
+`task install:local` packs a unique local prerelease version, updates the global
+`.NET` tool, publishes a self-contained binary, and copies it to the configured
+local MCP command path when one is found. If that executable is locked by a
+running MCP process, it writes a versioned binary beside it and updates the
+Codex MCP config for the next server start.

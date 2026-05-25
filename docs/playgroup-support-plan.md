@@ -25,9 +25,12 @@ Give LLM clients a grounded way to answer questions like:
 
 This should complement, not replace, current local and Archidekt workspace flows.
 
-## Proposed MCP Surface
+Current status: implemented with read-only Playgroup tools plus deterministic
+local-meta candidate scoring.
 
-Start with read-only Playgroup tools:
+## Implemented MCP Surface
+
+Read-only Playgroup tools:
 
 - `get_playgroup_auth_status`
   - Returns configured auth mode, base URL, whether an API key or credential file exists, and any redacted credential-file parse error.
@@ -62,6 +65,12 @@ Start with read-only Playgroup tools:
   - Inputs: `deckId`.
   - Returns normalized Playgroup deck details, including source `decklist_url` when present.
 
+- `score_cards_for_playgroup_meta`
+  - Inputs: `workspaceId`, `playgroupIdOrUrl`, optional `candidateCards`, `maxGames`, `metaDeckLimit`, `simulations`, `maxTurn`, `seed`, and `maxPrice`.
+  - Scores explicit candidates, or excluded workspace cards when candidates are omitted.
+  - Factors are plan fit, deterministic performance delta, local-meta coverage, self-harm penalty, price/bracket constraints, and evidence confidence.
+  - Uses Playgroup-derived rankings and imports Archidekt decklists read-only when Playgroup exposes an Archidekt source URL.
+
 Consider an optional later tool:
 
 - `open_playgroup_deck`
@@ -76,7 +85,7 @@ Consider resources after the tool responses settle:
 
 ## Data Model
 
-Add provider-neutral Core models:
+Provider-neutral Core models:
 
 - `PlaygroupAuthStatus`
 - `PlaygroupUser`
@@ -118,7 +127,7 @@ Important fields for `PlaygroupDeckSummary`:
 
 ## Architecture
 
-Add a new adapter project:
+Adapter project:
 
 - `src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj`
 - `PlaygroupOptions`
@@ -127,13 +136,14 @@ Add a new adapter project:
 - `PlaygroupGateway`
 - request/response DTO files split by API area when useful
 
-Add Core pieces:
+Core pieces:
 
 - `IPlaygroupGateway`
 - normalized Playgroup models
 - `PlaygroupService` for id parsing, deck aggregation, ranking, and warnings
 
-Register the adapter in `MtgMcp.App` similarly to Scryfall and Archidekt. `MtgMcp.Core` must not reference the adapter.
+The adapter is registered in `MtgMcp.App` similarly to Scryfall and Archidekt.
+`MtgMcp.Core` does not reference the adapter.
 
 Configuration:
 
@@ -147,28 +157,25 @@ Environment aliases:
 - `PLAYGROUP:API_KEY`
 - `PLAYGROUP:CREDENTIALS_FILE`
 
-The adapter should also mirror Archidekt's direct credential fallback pattern with `PLAYGROUP_API_KEY`,
+The adapter mirrors Archidekt's direct credential fallback pattern with `PLAYGROUP_API_KEY`,
 `PLAYGROUP_BASE_ADDRESS`, and `PLAYGROUP_CREDENTIALS_FILE`, while the canonical .NET environment keys remain
 `MTGMCP__PLAYGROUP__BASE_ADDRESS`, `MTGMCP__PLAYGROUP__API_KEY`, and
 `MTGMCP__PLAYGROUP__CREDENTIALS_FILE`.
 
-Update secret redaction so `ApiKey` and Playgroup credential-file contents cannot appear in config output, errors, logs, or tests.
+Secret redaction prevents `ApiKey` and Playgroup credential-file contents from
+appearing in config output, errors, logs, or tests.
 
-## Implementation Phases
+## Implementation Status
 
-1. Plan and API contract
-   - Update this plan with the documented OpenAPI shape.
-   - Record that playgroup decks are derived from games, not a direct deck-list endpoint.
+Implemented:
 
-2. Core and adapter
-   - Add normalized Core models, `IPlaygroupGateway`, and `PlaygroupService`.
-   - Add `MtgMcp.Playgroup` with API-key credentials, credential-file loading, JSON mapping, and fake HTTP tests.
-   - Add service tests for id parsing, aggregation, ranking, and warning behavior.
-
-3. MCP surface
-   - Register Playgroup services in the host.
-   - Add `PlaygroupTools` and optional auth-status resource.
-   - Update MCP surface tests, configuration alias tests, project boundary tests, and documentation comments.
+- documented OpenAPI-backed contract and game-derived deck listing behavior.
+- normalized Core models, `IPlaygroupGateway`, and `PlaygroupService`.
+- `MtgMcp.Playgroup` adapter with API-key credentials, credential-file loading,
+  JSON mapping, and fake HTTP tests.
+- service tests for id parsing, aggregation, ranking, and warning behavior.
+- `PlaygroupTools`, auth-status resource, surface tests, configuration tests,
+  project boundary tests, and documentation comments.
 
 ## Risks and Decisions
 
@@ -181,6 +188,7 @@ Update secret redaction so `ApiKey` and Playgroup credential-file contents canno
 ## Acceptance Criteria
 
 - The server exposes `get_playgroup_auth_status`, `get_playgroup`, `get_playgroup_deck`, `list_playgroup_decks`, `list_playgroup_users`, `list_playgroup_user_decks`, and `rank_playgroup_decks`.
+- The server exposes `score_cards_for_playgroup_meta` for local-meta candidate scoring.
 - Normal tests pass without network access or real Playgroup credentials.
 - Config output and errors redact all Playgroup secrets.
 - A user with a valid Playgroup API key can list decks seen in a playgroup URL like `https://playgroup.gg/playgroups/49295-heaters`.

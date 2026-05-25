@@ -18,9 +18,11 @@ Existing capabilities include:
 - Role and tag classification for deck cards.
 - Hypergeometric and Monte Carlo draw odds for roles or tags.
 - Heuristic no-opponent goldfish projection.
-- Commander best-practice profiles and deck intent guidance.
+- Commander best-practice profiles, simulation profiles, and deck intent guidance.
+- Deck-local win routes with deterministic route predicate evidence.
 - Commander Spellbook combo and near-miss detection.
 - Corpus/context signals from Scryfall, Commander Spellbook, TopDeck, and Spicerack.
+- Playgroup.gg deck ranking and local-meta candidate scoring.
 - Previewable deck edit plans before any local or Archidekt mutation.
 - Stats Lab whole-deck performance analysis for opening hands, land drops, colors, castability, commander timing, combo/tutor assembly, stranded-card risk, and named scenarios.
 - Previewed plan performance comparison with before/after deltas and confidence interval context.
@@ -54,7 +56,13 @@ The Stats Lab should model:
 - Before/after performance deltas for previewed deck edit plans.
 - Confidence intervals and sensitivity signals for recommended changes.
 
+Simulation profiles tune the deterministic assumptions used by goldfish and
+performance analysis. Profile resolution is explicit tool argument, deck intent,
+auto inference, then `neutral`. Deck intent v2 can also add local win routes
+whose predicates are evaluated and returned as route evidence.
+
 Metric definitions and validation expectations are documented in `docs/stats-lab-metrics.md`.
+Profile and route syntax is documented in `docs/simulation-profiles.md`.
 
 This layer is an abstract scenario simulator, not a rules engine. It should make that explicit in every high-level result.
 
@@ -62,8 +70,13 @@ This layer is an abstract scenario simulator, not a rules engine. It should make
 
 Implemented tools are high-level and deckbuilder-facing:
 
+- `simulate_goldfish`
+- `project_board_state`
+- `estimate_win_turn`
+- `compare_archidekt_goldfish`
 - `analyze_deck_performance`
 - `compare_plan_performance`
+- `score_cards_for_playgroup_meta`
 
 These tools return compact structured summaries that an LLM can explain without guessing. Results include the analysis profile, simulation count, seed, assumptions, confidence, warnings, and key metrics.
 

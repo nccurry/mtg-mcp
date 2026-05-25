@@ -51,6 +51,7 @@ public static class MtgMcpConfigurationAliases
         ("PLAYGROUP:BASE_ADDRESS", "MtgMcp:Playgroup:BaseAddress"),
         ("PLAYGROUP:API_KEY", "MtgMcp:Playgroup:ApiKey"),
         ("PLAYGROUP:CREDENTIALS_FILE", "MtgMcp:Playgroup:CredentialsFile"),
+        ("SIMULATION:ALLOW_EXTERNAL_PROFILE_OVERRIDES", "MtgMcp:Simulation:AllowExternalProfileOverrides"),
         ("SCRYFALL:BASE_ADDRESS", "MtgMcp:Scryfall:BaseAddress"),
         ("SCRYFALL:USER_AGENT", "MtgMcp:Scryfall:UserAgent"),
         ("SCRYFALL:MAX_RATE_LIMIT_RETRIES", "MtgMcp:Scryfall:MaxRateLimitRetries"),
@@ -78,6 +79,39 @@ public static class MtgMcpConfigurationAliases
             }
         }
 
+        AddPrefixAliases(
+            configuration,
+            values,
+            "SIMULATION:PROFILE_PATHS:",
+            "MtgMcp:Simulation:ProfilePaths:");
+
         return values;
+    }
+
+    /// <summary>
+    /// Maps indexed collection aliases such as SIMULATION__PROFILE_PATHS__0.
+    /// </summary>
+    private static void AddPrefixAliases(
+        IConfiguration configuration,
+        Dictionary<string, string?> values,
+        string aliasPrefix,
+        string canonicalPrefix)
+    {
+        foreach (KeyValuePair<string, string?> pair in configuration.AsEnumerable())
+        {
+            if (string.IsNullOrWhiteSpace(pair.Value)
+                || !pair.Key.StartsWith(aliasPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string canonicalKey = canonicalPrefix + pair.Key[aliasPrefix.Length..];
+            if (!string.IsNullOrWhiteSpace(configuration[canonicalKey]))
+            {
+                continue;
+            }
+
+            values[canonicalKey] = pair.Value;
+        }
     }
 }

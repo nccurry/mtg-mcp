@@ -12,6 +12,8 @@ vars:
   DIST_DIR: '{{.ARTIFACTS_DIR}}/dist'
   PUBLISH_DIR: '{{.ARTIFACTS_DIR}}/publish'
   COVERAGE_DIR: '{{.ARTIFACTS_DIR}}/coverage'
+  LOCAL_INSTALL_PATH: ''
+  LOCAL_VERSION: ''
 
 tasks:
   setup:
@@ -151,6 +153,26 @@ tasks:
     desc: Build the MCP host and verify service registration
     cmds:
       - dotnet run --project {{.APP_PROJECT}} -- --smoke
+
+  install:
+    desc: Install the current branch on this workstation
+    cmds:
+      - task: install:local
+
+  install:local:
+    desc: Pack, globally install, publish, and copy the current branch to the configured local MCP command path
+    deps: [restore]
+    cmds:
+      - >
+        pwsh -NoProfile -File scripts/install-local.ps1
+        -Project "{{.APP_PROJECT}}"
+        -Configuration "{{.CONFIGURATION}}"
+        -PackageId "{{.PACKAGE_ID}}"
+        -PackageDir "{{.PACKAGE_DIR}}"
+        -PublishDir "{{.PUBLISH_DIR}}"
+        -Runtime "{{.RUNTIME}}"
+        -InstallPath "{{.LOCAL_INSTALL_PATH}}"
+        -Version "{{.LOCAL_VERSION}}"
 
   pack:
     desc: Pack the MCP host as a NuGet dotnet tool
