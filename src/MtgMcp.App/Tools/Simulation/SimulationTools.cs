@@ -27,7 +27,7 @@ public sealed class SimulationTools
     /// Runs no-interaction goldfish simulations.
     /// </summary>
     [McpServerTool(Name = "simulate_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Run heuristic no-interaction goldfish simulations with simple mulligans, sequencing, board projection, and win-route estimates.")]
+    [Description("Run heuristic no-interaction goldfish simulations with profile-resolved London mulligans, sequencing, board projection, and win-route estimates.")]
     public Task<GoldfishSimulationResult> SimulateGoldfishAsync(
         string workspaceId,
         int targetTurn = 7,
@@ -104,7 +104,7 @@ public sealed class SimulationTools
     [Description("Run deterministic Stats Lab Monte Carlo analysis for opening hands, mulligans, land drops, colors, castability, commander timing, combo assembly, stranded cards, and named scenarios.")]
     public Task<DeckPerformanceAnalysis> AnalyzeDeckPerformanceAsync(
         string workspaceId,
-        string profile = "commander-default",
+        string profile = "auto",
         int simulations = 50_000,
         int maxTurn = 8,
         int seed = 1337,
@@ -128,7 +128,7 @@ public sealed class SimulationTools
     [Description("Preview a persisted deck edit plan and compare deterministic Stats Lab performance before and after the changes.")]
     public Task<DeckPerformanceComparison> ComparePlanPerformanceAsync(
         string planId,
-        string profile = "commander-default",
+        string profile = "auto",
         int simulations = 50_000,
         int maxTurn = 8,
         int seed = 1337,

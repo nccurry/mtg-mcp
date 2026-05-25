@@ -17,7 +17,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        return SimulateGoldfish(workspace, targetTurn, simulations, seed, mulligan);
+        return SimulateGoldfish(workspace, targetTurn, simulations, seed, mulligan, simulationProfiles);
     }
 
     /// <summary>
@@ -69,14 +69,19 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int targetTurn,
         int simulations,
         int seed,
-        bool mulligan)
+        bool mulligan,
+        SimulationProfileCatalog? simulationProfiles = null)
     {
         int safeTurn = Math.Clamp(targetTurn, 1, 20);
         int safeSimulations = Math.Clamp(simulations, 100, 10_000);
+        DeckIntentResult intentResult = DeckIntentText.Extract(workspace.Description, workspace.Id);
+        DeckIntent? intent = intentResult.Intent;
+        ResolvedSimulationProfile profileResolution = (simulationProfiles ?? SimulationProfileCatalog.CreateDefault())
+            .Resolve(workspace, SimulationProfileIds.Auto, intent);
         List<GoldfishRun> runs = [];
         for (int index = 0; index < safeSimulations; index++)
         {
-            runs.Add(RunGoldfishGame(workspace, safeTurn, seed + index, mulligan));
+            runs.Add(RunGoldfishGame(workspace, safeTurn, seed + index, mulligan, profileResolution));
         }
 
         GoldfishSimulationResult result = new()
@@ -85,6 +90,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             Simulations = safeSimulations,
             TargetTurn = safeTurn,
             Mulligans = runs.Count(run => run.Mulliganed),
+            ProfileResolution = profileResolution,
             WinEstimate = BuildWinEstimate(workspace, runs, safeTurn)
         };
         for (int turn = 1; turn <= safeTurn; turn++)
@@ -98,36 +104,34 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         result.RepresentativeLines = representative.Line.Take(12).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
         result.Notes.Add("Commander is treated as available from the command zone when the deck has a Commander category.");
+        result.Notes.Add($"Resolved simulation profile '{profileResolution.Profile.Id}' from {profileResolution.Source}.");
+        result.Warnings.AddRange(profileResolution.Warnings);
         return result;
     }
 
     /// <summary>
     /// Runs one goldfish game.
     /// </summary>
-    private static GoldfishRun RunGoldfishGame(DeckWorkspace workspace, int targetTurn, int seed, bool mulligan)
+    private static GoldfishRun RunGoldfishGame(
+        DeckWorkspace workspace,
+        int targetTurn,
+        int seed,
+        bool mulligan,
+        ResolvedSimulationProfile profileResolution)
     {
         Random random = new(seed);
-        List<DeckCard> deck = ExpandLibrary(workspace);
-        Shuffle(deck, random);
-        List<DeckCard> hand = deck.Take(7).ToList();
-        deck = deck.Skip(7).ToList();
-        bool mulliganed = false;
-        if (mulligan && !KeepableHand(hand))
-        {
-            deck = ExpandLibrary(workspace);
-            Shuffle(deck, random);
-            hand = deck.Take(6).ToList();
-            deck = deck.Skip(6).ToList();
-            mulliganed = true;
-        }
+        GoldfishOpeningHand opening = DrawGoldfishOpeningHand(workspace, random, mulligan, profileResolution.Profile);
+        List<DeckCard> hand = opening.Hand;
+        List<DeckCard> deck = opening.Library;
 
         DeckCard? commander = IncludedCards(workspace).FirstOrDefault(IsCommanderCard);
         bool commanderCast = false;
         List<DeckCard> battlefield = [];
         List<DeckCard> graveyard = [];
-        GoldfishRun run = new() { Mulliganed = mulliganed };
+        GoldfishRun run = new() { Mulliganed = opening.Mulligans > 0 };
         int tokens = 0;
         int winPressure = 0;
+        int dungeonProgress = 0;
 
         for (int turn = 1; turn <= targetTurn; turn++)
         {
@@ -154,7 +158,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 run.Line.Add($"T{turn}: cast commander {commander.Name}.");
             }
 
-            foreach (DeckCard spell in hand.OrderBy(card => CastPriority(card, turn)).ThenBy(card => GetSnapshot(card).ManaValue ?? 0).ToList())
+            foreach (DeckCard spell in hand.OrderBy(card => CastPriority(card, turn, profileResolution.Profile)).ThenBy(card => GetSnapshot(card).ManaValue ?? 0).ToList())
             {
                 if (DeckRoleClassifier.Classify(spell).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
                     || IsCommanderCard(spell))
@@ -187,6 +191,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     tokens += 2;
                 }
 
+                if (ContainsAny(GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
+                {
+                    dungeonProgress++;
+                }
+
                 if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase) && deck.Count > 0)
                 {
                     hand.Add(deck[0]);
@@ -203,20 +212,64 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             int comboPieces = battlefield.Count(card => DeckRoleClassifier.Classify(card).Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler));
             if (!run.WinTurn.HasValue)
             {
-                if (comboPieces >= 2)
+                List<SimulationRouteEvidence> routeEvidence = SimulationRouteEvaluator.EvaluateRoutes(
+                    profileResolution.Profile.WinRoutes,
+                    new SimulationRouteState
+                    {
+                        Turn = turn,
+                        Battlefield = battlefield,
+                        Hand = hand,
+                        Graveyard = graveyard,
+                        CommanderOnBattlefield = commanderCast,
+                        Tokens = tokens,
+                        AvailableMana = availableMana,
+                        InteractionHeld = CountHeldGoldfishInteraction(hand, availableMana),
+                        DungeonProgress = dungeonProgress,
+                    });
+                SimulationRouteEvidence? matchedRoute = routeEvidence
+                    .Where(route => route.Matched)
+                    .OrderBy(route => route.EarliestTurn)
+                    .ThenBy(route => route.Name, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (matchedRoute is not null)
                 {
-                    run.WinTurn = Math.Max(turn, 5);
+                    run.WinTurn = Math.Max(turn, matchedRoute.EarliestTurn);
+                    run.WinRoute = matchedRoute.Kind;
+                    run.RouteEvidence.Add(matchedRoute);
+                }
+                else if (profileResolution.Profile.WinDetection.AllowFallbackComboWins && comboPieces >= 2)
+                {
+                    run.WinTurn = Math.Max(turn, profileResolution.Profile.WinDetection.FallbackComboEarliestTurn);
                     run.WinRoute = "combo";
+                    run.RouteEvidence.Add(FallbackRouteEvidence(
+                        "fallback combo tags",
+                        "combo",
+                        "fallback",
+                        run.WinTurn.Value,
+                        $"battlefield has {comboPieces} broad combo-piece/enabler tags"));
                 }
-                else if (winPressure >= 8 && power >= 18)
+                else if (winPressure >= profileResolution.Profile.WinDetection.FinisherPressureThreshold
+                    && power >= profileResolution.Profile.WinDetection.FinisherPowerThreshold)
                 {
-                    run.WinTurn = Math.Max(turn, 6);
+                    run.WinTurn = Math.Max(turn, profileResolution.Profile.WinDetection.FinisherEarliestTurn);
                     run.WinRoute = "finisher";
+                    run.RouteEvidence.Add(FallbackRouteEvidence(
+                        "fallback finisher pressure",
+                        "finisher",
+                        "fallback",
+                        run.WinTurn.Value,
+                        $"win pressure {winPressure} and battlefield pressure {power} met fallback thresholds"));
                 }
-                else if (power >= 32)
+                else if (power >= profileResolution.Profile.WinDetection.CombatPowerThreshold)
                 {
-                    run.WinTurn = Math.Max(turn, 7);
+                    run.WinTurn = Math.Max(turn, profileResolution.Profile.WinDetection.CombatEarliestTurn);
                     run.WinRoute = "combat";
+                    run.RouteEvidence.Add(FallbackRouteEvidence(
+                        "fallback combat pressure",
+                        "combat",
+                        "fallback",
+                        run.WinTurn.Value,
+                        $"battlefield pressure {power} met fallback combat threshold"));
                 }
             }
 
@@ -267,34 +320,281 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// <summary>
     /// Checks whether an opening hand is keepable.
     /// </summary>
-    private static bool KeepableHand(IReadOnlyList<DeckCard> hand)
+    private static GoldfishOpeningHand DrawGoldfishOpeningHand(
+        DeckWorkspace workspace,
+        Random random,
+        bool includeMulligans,
+        SimulationProfile profile)
     {
-        int lands = hand.Count(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase));
-        return lands is >= 2 and <= 5;
+        int mulligans = 0;
+        int maximumMulligans = UsesFreeFirstGoldfishMulligan(workspace.Format) ? 3 : 2;
+        while (mulligans <= maximumMulligans)
+        {
+            int targetHandSize = GoldfishTargetHandSize(mulligans, workspace.Format);
+            List<DeckCard> library = ExpandLibrary(workspace);
+            Shuffle(library, random);
+            List<DeckCard> hand = library.Take(Math.Min(7, library.Count)).ToList();
+            library = library.Skip(hand.Count).ToList();
+            bool keep = !includeMulligans
+                || IsKeepableGoldfishHand(hand, targetHandSize, mulligans, workspace, profile)
+                || targetHandSize <= 5;
+            if (keep)
+            {
+                BottomGoldfishCards(hand, targetHandSize);
+                return new GoldfishOpeningHand
+                {
+                    Hand = hand,
+                    Library = library,
+                    Mulligans = mulligans,
+                };
+            }
+
+            mulligans++;
+        }
+
+        throw new InvalidOperationException("Goldfish mulligan heuristic failed to keep a hand by five cards.");
+    }
+
+    /// <summary>
+    /// Determines whether a candidate goldfish opening hand should be kept.
+    /// </summary>
+    private static bool IsKeepableGoldfishHand(
+        IReadOnlyList<DeckCard> hand,
+        int targetHandSize,
+        int mulligans,
+        DeckWorkspace workspace,
+        SimulationProfile profile)
+    {
+        int lands = CountGoldfishRole(hand, DeckRoles.Lands);
+        if (lands == 0 || (targetHandSize >= 6 && lands >= 6))
+        {
+            return false;
+        }
+
+        double score = ScoreGoldfishHand(hand, workspace, profile);
+        double keepScore = targetHandSize <= 5
+            ? profile.Mulligan.FiveCardKeepScore
+            : targetHandSize == 6
+                ? profile.Mulligan.SixCardKeepScore
+                : UsesFreeFirstGoldfishMulligan(workspace.Format) && mulligans == 0
+                    ? profile.Mulligan.SevenCardFreeKeepScore
+                    : profile.Mulligan.SevenCardKeepScore;
+        return score >= keepScore;
+    }
+
+    /// <summary>
+    /// Scores a goldfish hand with the resolved profile's mulligan weights.
+    /// </summary>
+    private static double ScoreGoldfishHand(
+        IReadOnlyList<DeckCard> hand,
+        DeckWorkspace workspace,
+        SimulationProfile profile)
+    {
+        int lands = CountGoldfishRole(hand, DeckRoles.Lands);
+        int ramp = CountCheapGoldfishRole(hand, DeckRoles.Ramp, 2);
+        int draw = CountCheapGoldfishRole(hand, DeckRoles.Draw, 3);
+        int interaction = CountCheapGoldfishRole(hand, DeckRoles.Interaction, 2)
+            + CountCheapGoldfishRole(hand, DeckRoles.Protection, 2);
+        int cheapPlays = hand.Count(card => !IsGoldfishRole(card, DeckRoles.Lands) && GoldfishManaValue(card) <= 2);
+        double score = lands switch
+        {
+            1 => ramp >= 2 ? 2 : -4,
+            2 => 4,
+            3 => 5,
+            4 => 3,
+            5 => 1,
+            _ => -4,
+        };
+        score += Math.Min(ramp, 2) * profile.Mulligan.EarlyRampWeight;
+        score += Math.Min(draw, 2) * profile.Mulligan.EarlyDrawWeight;
+        score += Math.Min(interaction, 2) * profile.Mulligan.EarlyInteractionWeight;
+        score += Math.Min(cheapPlays, 3) * profile.Mulligan.CheapPlayWeight;
+        if (HasGoldfishCommanderPlan(hand, workspace))
+        {
+            score += profile.Mulligan.CommanderPlanWeight;
+        }
+
+        return score;
+    }
+
+    /// <summary>
+    /// Bottoms lower-priority cards after London mulligans.
+    /// </summary>
+    private static void BottomGoldfishCards(List<DeckCard> hand, int targetHandSize)
+    {
+        while (hand.Count > targetHandSize)
+        {
+            DeckCard card = hand
+                .OrderByDescending(GoldfishBottomPriority)
+                .ThenByDescending(GoldfishManaValue)
+                .First();
+            hand.Remove(card);
+        }
+    }
+
+    /// <summary>
+    /// Scores how attractive a card is to bottom after a mulligan.
+    /// </summary>
+    private static int GoldfishBottomPriority(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        if (role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+            || GoldfishManaValue(card) >= 6)
+        {
+            return 5;
+        }
+
+        if (role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase))
+        {
+            return 4;
+        }
+
+        return 3;
+    }
+
+    /// <summary>
+    /// Computes kept hand size after free and paid mulligans.
+    /// </summary>
+    private static int GoldfishTargetHandSize(int mulligans, string format)
+    {
+        int paidMulligans = UsesFreeFirstGoldfishMulligan(format) && mulligans > 0
+            ? mulligans - 1
+            : mulligans;
+        return Math.Max(0, 7 - paidMulligans);
+    }
+
+    /// <summary>
+    /// Checks whether a format normally grants a free first mulligan.
+    /// </summary>
+    private static bool UsesFreeFirstGoldfishMulligan(string format)
+    {
+        return ContainsAny(format, "commander", "brawl");
+    }
+
+    /// <summary>
+    /// Counts cards with a requested primary role.
+    /// </summary>
+    private static int CountGoldfishRole(IEnumerable<DeckCard> cards, string role)
+    {
+        return cards.Count(card => IsGoldfishRole(card, role));
+    }
+
+    /// <summary>
+    /// Counts cheap cards with a requested primary role.
+    /// </summary>
+    private static int CountCheapGoldfishRole(IEnumerable<DeckCard> cards, string role, int maxManaValue)
+    {
+        return cards.Count(card => IsGoldfishRole(card, role) && GoldfishManaValue(card) <= maxManaValue);
+    }
+
+    /// <summary>
+    /// Checks whether a card's primary role matches a requested role.
+    /// </summary>
+    private static bool IsGoldfishRole(DeckCard card, string role)
+    {
+        return DeckRoleClassifier.Classify(card).PrimaryRole.Equals(role, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reads a nonnegative mana value for goldfish heuristics.
+    /// </summary>
+    private static int GoldfishManaValue(DeckCard card)
+    {
+        return Math.Max(0, (int)Math.Ceiling(GetSnapshot(card).ManaValue ?? 2));
+    }
+
+    /// <summary>
+    /// Checks whether an opening hand plausibly casts the commander by turn four.
+    /// </summary>
+    private static bool HasGoldfishCommanderPlan(IReadOnlyList<DeckCard> hand, DeckWorkspace workspace)
+    {
+        DeckCard? commander = IncludedCards(workspace).FirstOrDefault(IsCommanderCard);
+        if (commander is null)
+        {
+            return false;
+        }
+
+        int lands = CountGoldfishRole(hand, DeckRoles.Lands);
+        int ramp = CountCheapGoldfishRole(hand, DeckRoles.Ramp, 2);
+        int expectedManaByTurnFour = Math.Min(4, lands + (lands >= 2 ? 1 : 0)) + Math.Min(ramp, 2);
+        return expectedManaByTurnFour >= GoldfishManaValue(commander);
+    }
+
+    /// <summary>
+    /// Counts interaction or protection that could be held with available mana.
+    /// </summary>
+    private static int CountHeldGoldfishInteraction(IEnumerable<DeckCard> hand, int availableMana)
+    {
+        return hand.Count(card =>
+        {
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            return GoldfishManaValue(card) <= availableMana
+                && (role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+                    || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase)
+                    || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    /// <summary>
+    /// Creates low-confidence evidence for a fallback heuristic win.
+    /// </summary>
+    private static SimulationRouteEvidence FallbackRouteEvidence(
+        string name,
+        string kind,
+        string source,
+        int earliestTurn,
+        string evidence)
+    {
+        return new SimulationRouteEvidence
+        {
+            Name = name,
+            Kind = kind,
+            Source = source,
+            Matched = true,
+            EarliestTurn = earliestTurn,
+            Confidence = 0.35,
+            Evidence = [evidence],
+        };
     }
 
     /// <summary>
     /// Calculates a simple cast priority.
     /// </summary>
-    private static int CastPriority(DeckCard card, int turn)
+    private static int CastPriority(DeckCard card, int turn, SimulationProfile profile)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
         if (turn <= 3 && role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
         {
-            return 0;
+            return profile.Sequencing.EarlyRampPriority;
         }
 
         if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Engines))
         {
-            return 1;
+            return profile.Sequencing.DrawPriority;
+        }
+
+        if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase))
+        {
+            return profile.Sequencing.TutorPriority;
+        }
+
+        if (role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler))
+        {
+            return profile.Sequencing.ComboPriority;
         }
 
         if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Finishers))
         {
-            return 3;
+            return profile.Sequencing.WinconPriority;
         }
 
-        return 2;
+        return profile.Sequencing.DefaultPriority;
     }
 
     /// <summary>
@@ -380,6 +680,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
         foreach (IGrouping<string, GoldfishRun> route in runs.Where(run => run.WinRoute is not null).GroupBy(run => run.WinRoute!))
         {
+            List<SimulationRouteEvidence> evidence = route
+                .SelectMany(run => run.RouteEvidence)
+                .GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .Take(5)
+                .ToList();
             estimate.Routes.Add(new WinRoute
             {
                 Name = route.Key,
@@ -387,9 +693,19 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 EarliestTurn = route.Min(run => run.WinTurn),
                 Probability = route.Count() / (double)runs.Count,
                 Cards = RouteCards(workspace, route.Key),
-                Rationale = $"The simulator found {route.Key} as a likely goldfish win route."
+                Rationale = evidence.Count > 0
+                    ? $"The simulator found {route.Key} through deterministic route evidence."
+                    : $"The simulator found {route.Key} through fallback pressure heuristics.",
+                Evidence = evidence,
             });
         }
+
+        estimate.RouteEvidence = runs
+            .SelectMany(run => run.RouteEvidence)
+            .GroupBy(item => $"{item.Source}:{item.Name}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(10)
+            .ToList();
 
         if (estimate.MedianObservedWinTurn is null)
         {
@@ -452,36 +768,56 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private sealed class GoldfishRun
     {
-        bool mulliganed;
-        int? winTurn;
-        string? winRoute;
-        List<GoldfishTurnSnapshot> turns = [];
-        List<string> line = [];
-
         /// <summary>
         /// Gets or sets whether the run mulliganed.
         /// </summary>
-        public bool Mulliganed { get => mulliganed; set => mulliganed = value; }
+        public bool Mulliganed { get; set; }
 
         /// <summary>
         /// Gets or sets the win turn.
         /// </summary>
-        public int? WinTurn { get => winTurn; set => winTurn = value; }
+        public int? WinTurn { get; set; }
 
         /// <summary>
         /// Gets or sets the win route.
         /// </summary>
-        public string? WinRoute { get => winRoute; set => winRoute = value; }
+        public string? WinRoute { get; set; }
 
         /// <summary>
         /// Gets or sets turn snapshots.
         /// </summary>
-        public List<GoldfishTurnSnapshot> Turns { get => turns; set => turns = value; }
+        public List<GoldfishTurnSnapshot> Turns { get; set; } = [];
 
         /// <summary>
         /// Gets or sets the representative line.
         /// </summary>
-        public List<string> Line { get => line; set => line = value; }
+        public List<string> Line { get; set; } = [];
+
+        /// <summary>
+        /// Gets or sets deterministic route evidence captured during the run.
+        /// </summary>
+        public List<SimulationRouteEvidence> RouteEvidence { get; set; } = [];
+    }
+
+    /// <summary>
+    /// Stores a goldfish opening hand after mulligans.
+    /// </summary>
+    private sealed class GoldfishOpeningHand
+    {
+        /// <summary>
+        /// Gets or sets the kept hand.
+        /// </summary>
+        public List<DeckCard> Hand { get; set; } = [];
+
+        /// <summary>
+        /// Gets or sets the remaining library.
+        /// </summary>
+        public List<DeckCard> Library { get; set; } = [];
+
+        /// <summary>
+        /// Gets or sets how many mulligans were taken.
+        /// </summary>
+        public int Mulligans { get; set; }
     }
 
     /// <summary>
@@ -489,47 +825,39 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private sealed class GoldfishTurnSnapshot
     {
-        int turn;
-        int lands;
-        int manaSources;
-        int nonlandPermanents;
-        int cardsInHand;
-        int power;
-        int tokens;
-
         /// <summary>
         /// Gets or sets the turn number.
         /// </summary>
-        public int Turn { get => turn; set => turn = value; }
+        public int Turn { get; set; }
 
         /// <summary>
         /// Gets or sets lands in play.
         /// </summary>
-        public int Lands { get => lands; set => lands = value; }
+        public int Lands { get; set; }
 
         /// <summary>
         /// Gets or sets mana sources in play.
         /// </summary>
-        public int ManaSources { get => manaSources; set => manaSources = value; }
+        public int ManaSources { get; set; }
 
         /// <summary>
         /// Gets or sets nonland permanents in play.
         /// </summary>
-        public int NonlandPermanents { get => nonlandPermanents; set => nonlandPermanents = value; }
+        public int NonlandPermanents { get; set; }
 
         /// <summary>
         /// Gets or sets cards in hand.
         /// </summary>
-        public int CardsInHand { get => cardsInHand; set => cardsInHand = value; }
+        public int CardsInHand { get; set; }
 
         /// <summary>
         /// Gets or sets battlefield power.
         /// </summary>
-        public int Power { get => power; set => power = value; }
+        public int Power { get; set; }
 
         /// <summary>
         /// Gets or sets token count.
         /// </summary>
-        public int Tokens { get => tokens; set => tokens = value; }
+        public int Tokens { get; set; }
     }
 }

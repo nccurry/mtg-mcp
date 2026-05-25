@@ -56,6 +56,11 @@ internal sealed class PerformanceMulliganContext
     /// Gets or sets the commander available from the command zone.
     /// </summary>
     public DeckCard? Commander { get; set; }
+
+    /// <summary>
+    /// Gets or sets profile-specific mulligan weights and thresholds.
+    /// </summary>
+    public SimulationMulliganSettings Mulligan { get; set; } = new();
 }
 
 /// <summary>

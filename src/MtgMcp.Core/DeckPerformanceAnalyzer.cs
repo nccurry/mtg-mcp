@@ -15,13 +15,16 @@ internal static class DeckPerformanceAnalyzer
         int maxTurn,
         int seed,
         bool includeMulligans,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SimulationProfileCatalog? simulationProfiles = null)
     {
         int safeSimulations = Math.Clamp(simulations, 100, 100_000);
         int safeMaxTurn = Math.Clamp(maxTurn, 1, 20);
         DeckIntentResult intentResult = DeckIntentText.Extract(workspace.Description, workspace.Id);
         DeckIntent? intent = intentResult.Intent;
-        string normalizedProfile = ResolvePerformanceProfile(profile, intent);
+        ResolvedSimulationProfile profileResolution = (simulationProfiles ?? SimulationProfileCatalog.CreateDefault())
+            .Resolve(workspace, profile, intent);
+        SimulationProfile resolvedProfile = profileResolution.Profile;
         List<DeckCard> included = IncludedCards(workspace).ToList();
         int deckSize = included.Sum(card => Math.Max(0, card.Quantity));
         (bool colorIdentityKnown, HashSet<string> deckColors) = GetDeckColorIdentity(workspace);
@@ -37,13 +40,14 @@ internal static class DeckPerformanceAnalyzer
                 safeMaxTurn,
                 seed + index,
                 includeMulligans,
-                normalizedProfile));
+                resolvedProfile));
         }
 
         DeckPerformanceAnalysis analysis = new()
         {
             WorkspaceId = workspace.Id,
-            Profile = normalizedProfile,
+            Profile = resolvedProfile.Id,
+            ProfileResolution = profileResolution,
             Simulations = safeSimulations,
             MaxTurn = safeMaxTurn,
             Seed = seed,
@@ -63,30 +67,11 @@ internal static class DeckPerformanceAnalyzer
             deckColors,
             colorIdentityKnown,
             safeMaxTurn,
-            normalizedProfile,
+            resolvedProfile,
             intent);
-        AddPerformanceNotes(analysis, workspace, included, colorIdentityKnown, normalizedProfile, intent);
+        AddPerformanceNotes(analysis, workspace, included, colorIdentityKnown, profileResolution, intent);
+        analysis.Warnings.AddRange(profileResolution.Warnings);
         return analysis;
-    }
-
-    /// <summary>
-    /// Resolves the active performance profile from the explicit request and saved deck intent.
-    /// </summary>
-    private static string ResolvePerformanceProfile(string profile, DeckIntent? intent)
-    {
-        string requestedProfile = string.IsNullOrWhiteSpace(profile)
-            ? "commander-default"
-            : profile.Trim();
-        if ((requestedProfile.Equals("auto", StringComparison.OrdinalIgnoreCase)
-                || requestedProfile.Equals("commander-default", StringComparison.OrdinalIgnoreCase))
-            && !string.IsNullOrWhiteSpace(intent?.HeuristicProfile))
-        {
-            return DeckIntentVocabulary.TryNormalizeHeuristicProfile(intent.HeuristicProfile, out string normalized)
-                ? normalized
-                : intent.HeuristicProfile.Trim();
-        }
-
-        return requestedProfile;
     }
 
     /// <summary>
@@ -95,13 +80,15 @@ internal static class DeckPerformanceAnalyzer
     private static PerformanceMulliganContext BuildPerformanceMulliganContext(
         DeckWorkspace workspace,
         IReadOnlyList<DeckCard> included,
-        IReadOnlySet<string> deckColors)
+        IReadOnlySet<string> deckColors,
+        SimulationProfile profile)
     {
         return new PerformanceMulliganContext
         {
             FreeFirstMulligan = UsesFreeFirstMulligan(workspace.Format),
             DeckColors = new HashSet<string>(deckColors, StringComparer.OrdinalIgnoreCase),
             Commander = included.FirstOrDefault(IsCommanderCard),
+            Mulligan = profile.Mulligan,
         };
     }
 
@@ -115,13 +102,14 @@ internal static class DeckPerformanceAnalyzer
         int maxTurn,
         int seed,
         bool includeMulligans,
-        string profile)
+        SimulationProfile profile)
     {
         Random random = new(seed);
         PerformanceMulliganContext mulliganContext = BuildPerformanceMulliganContext(
             workspace,
             included,
-            deckColors);
+            deckColors,
+            profile);
         PerformanceOpeningHand opening = DrawPerformanceOpeningHand(
             workspace,
             random,
@@ -208,7 +196,7 @@ internal static class DeckPerformanceAnalyzer
                 .ToList())
             {
                 CardRoleAssignment role = DeckRoleClassifier.Classify(spell);
-                if (ShouldHoldPerformanceSpell(spell, role))
+                if (ShouldHoldPerformanceSpell(spell, role, turn, commanderCast, profile))
                 {
                     continue;
                 }
@@ -450,13 +438,13 @@ internal static class DeckPerformanceAnalyzer
             _ => -4,
         };
 
-        score += Math.Min(earlyRamp, 2) * 2;
-        score += oneManaRamp > 0 ? 1 : 0;
-        score += Math.Min(earlyDraw, 2);
-        score += Math.Min(cheapPlays, 3) * 0.75;
-        score += Math.Min(earlyInteraction, 2) * 0.5;
+        score += Math.Min(earlyRamp, 2) * context.Mulligan.EarlyRampWeight;
+        score += oneManaRamp > 0 ? context.Mulligan.OneManaRampWeight : 0;
+        score += Math.Min(earlyDraw, 2) * context.Mulligan.EarlyDrawWeight;
+        score += Math.Min(cheapPlays, 3) * context.Mulligan.CheapPlayWeight;
+        score += Math.Min(earlyInteraction, 2) * context.Mulligan.EarlyInteractionWeight;
         score += hasCastableEarlySpell ? 1 : -1;
-        score += hasCommanderPlan ? 2 : 0;
+        score += hasCommanderPlan ? context.Mulligan.CommanderPlanWeight : 0;
         score -= Math.Min(expensiveCards, 3);
 
         if (context.DeckColors.Count > 0)
@@ -504,15 +492,17 @@ internal static class DeckPerformanceAnalyzer
     {
         if (targetHandSize <= 5)
         {
-            return 1;
+            return context.Mulligan.FiveCardKeepScore;
         }
 
         if (targetHandSize == 6)
         {
-            return 4.5;
+            return context.Mulligan.SixCardKeepScore;
         }
 
-        return context.FreeFirstMulligan && mulligans == 0 ? 7.5 : 6;
+        return context.FreeFirstMulligan && mulligans == 0
+            ? context.Mulligan.SevenCardFreeKeepScore
+            : context.Mulligan.SevenCardKeepScore;
     }
 
     /// <summary>
@@ -754,62 +744,64 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Scores spell sequencing priority for one turn of heuristic development.
     /// </summary>
-    private static int PerformanceCastPriority(DeckCard card, int turn, string profile)
+    private static int PerformanceCastPriority(DeckCard card, int turn, SimulationProfile profile)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        bool turboOrComboProfile = ContainsAny(profile, "turbo", "combo", "cedh");
-        bool midrangeOrControlProfile = ContainsAny(profile, "midrange", "stax", "tempo", "control");
         if (turn <= 3 && role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
         {
-            return 0;
+            return profile.Sequencing.EarlyRampPriority;
         }
 
-        if (turboOrComboProfile
-            && (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase)
-                || role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler)))
+        if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Engines))
         {
-            return 1;
+            return profile.Sequencing.DrawPriority;
         }
 
-        if (midrangeOrControlProfile
-            && role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase))
+        if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase))
         {
-            return 1;
+            return profile.Sequencing.TutorPriority;
         }
 
-        if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase))
+        if (role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler))
         {
-            return turboOrComboProfile ? 2 : 1;
-        }
-
-        if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase)
-            || role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler))
-        {
-            return midrangeOrControlProfile ? 3 : 2;
+            return profile.Sequencing.ComboPriority;
         }
 
         if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
             || role.Tags.Contains(DeckTags.Finishers))
         {
-            return 4;
+            return profile.Sequencing.WinconPriority;
         }
 
-        return 3;
+        return profile.Sequencing.DefaultPriority;
     }
 
     /// <summary>
     /// Determines whether a nonpermanent spell should be held for interaction or protection.
     /// </summary>
-    private static bool ShouldHoldPerformanceSpell(DeckCard card, CardRoleAssignment role)
+    private static bool ShouldHoldPerformanceSpell(
+        DeckCard card,
+        CardRoleAssignment role,
+        int turn,
+        bool commanderCast,
+        SimulationProfile profile)
     {
         if (IsPermanent(card))
         {
             return false;
         }
 
-        return role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
-            || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase)
-            || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase);
+        bool interaction = role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase);
+        if (interaction && turn >= profile.Sequencing.HoldInteractionFromTurn && profile.Sequencing.MinimumInteractionHeld > 0)
+        {
+            return true;
+        }
+
+        return commanderCast
+            && profile.Sequencing.HoldProtectionWhenCommanderOnline
+            && role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -1283,7 +1275,7 @@ internal static class DeckPerformanceAnalyzer
         IReadOnlySet<string> deckColors,
         bool colorIdentityKnown,
         int maxTurn,
-        string profile,
+        SimulationProfile profile,
         DeckIntent? intent)
     {
         PerformanceScenarioDefaults defaults = BuildScenarioDefaults(maxTurn, profile, intent);
@@ -1392,25 +1384,23 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static PerformanceScenarioDefaults BuildScenarioDefaults(
         int maxTurn,
-        string profile,
+        SimulationProfile profile,
         DeckIntent? intent)
     {
-        bool turbo = ContainsAny(profile, "turbo", "cedh")
-            || ContainsAny(intent?.PowerLevel ?? "", "cedh");
-        bool highPower = turbo
-            || ContainsAny(profile, "high-power", "tempo")
-            || ContainsAny(intent?.PowerLevel ?? "", "high-power");
-        bool stax = ContainsAny(profile, "stax")
-            || ContainsAny(intent?.Archetype ?? "", "stax");
+        bool intentAdjusted = intent is not null
+            && (!string.IsNullOrWhiteSpace(intent.SimulationProfile)
+                || !string.IsNullOrWhiteSpace(intent.PowerTarget)
+                || !string.IsNullOrWhiteSpace(intent.PowerLevel)
+                || intent.TargetGoldfishTurn.HasValue);
         return new PerformanceScenarioDefaults
         {
-            CommanderTurn = ClampScenarioTurn(turbo ? 3 : 4, maxTurn),
-            ProtectionTurn = ClampScenarioTurn(turbo || highPower ? 4 : 5, maxTurn),
-            HateTurn = ClampScenarioTurn(stax ? 2 : 3, maxTurn),
-            ColorTurn = ClampScenarioTurn(highPower ? 2 : 3, maxTurn),
-            InteractionTurn = ClampScenarioTurn(highPower || stax ? 3 : 4, maxTurn),
-            ComboTurn = ClampScenarioTurn(turbo ? 3 : highPower ? 4 : 5, maxTurn),
-            IntentAdjusted = intent is not null && (turbo || highPower || stax),
+            CommanderTurn = ClampScenarioTurn(profile.Scenarios.CommanderTurn, maxTurn),
+            ProtectionTurn = ClampScenarioTurn(profile.Scenarios.ProtectionTurn, maxTurn),
+            HateTurn = ClampScenarioTurn(profile.Scenarios.HateTurn, maxTurn),
+            ColorTurn = ClampScenarioTurn(profile.Scenarios.ColorTurn, maxTurn),
+            InteractionTurn = ClampScenarioTurn(profile.Scenarios.InteractionTurn, maxTurn),
+            ComboTurn = ClampScenarioTurn(profile.Scenarios.ComboTurn, maxTurn),
+            IntentAdjusted = intentAdjusted,
         };
     }
 
@@ -1818,11 +1808,12 @@ internal static class DeckPerformanceAnalyzer
         DeckWorkspace workspace,
         IReadOnlyList<DeckCard> included,
         bool colorIdentityKnown,
-        string profile,
+        ResolvedSimulationProfile profileResolution,
         DeckIntent? intent)
     {
         analysis.Assumptions.Add("Simulation uses cached Scryfall snapshots and local role/tag heuristics.");
-        analysis.Assumptions.Add($"Each run draws one card per turn, plays one land per turn, and sequences spells with the '{profile}' profile.");
+        analysis.Assumptions.Add($"Each run draws one card per turn, plays one land per turn, and sequences spells with the '{profileResolution.Profile.Id}' simulation profile.");
+        analysis.Assumptions.Add($"Simulation profile source: {profileResolution.Source}.");
         analysis.Assumptions.Add("Opponent interaction, stack timing, replacement effects, activated abilities, and full Magic rules are not simulated.");
         analysis.Assumptions.Add("London mulligans draw seven and bottom cards using a deterministic plan-aware keep heuristic.");
         if (UsesFreeFirstMulligan(workspace.Format))

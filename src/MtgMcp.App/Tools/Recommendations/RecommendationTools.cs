@@ -82,4 +82,34 @@ public sealed class RecommendationTools
             cancellationToken);
     }
 
+    /// <summary>
+    /// Scores candidate cards against Playgroup-derived local-meta pressure.
+    /// </summary>
+    [McpServerTool(Name = "score_cards_for_playgroup_meta", ReadOnly = true, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Score explicit candidate cards, or excluded workspace cards when omitted, against ranked Playgroup.gg meta pressure with deterministic plan fit, performance delta, meta coverage, self-harm, price/bracket, and evidence-confidence factors.")]
+    public Task<PlaygroupMetaScoringResult> ScoreCardsForPlaygroupMetaAsync(
+        string workspaceId,
+        string playgroupIdOrUrl,
+        string[]? candidateCards = null,
+        int maxGames = 200,
+        int metaDeckLimit = 6,
+        int simulations = 500,
+        int maxTurn = 6,
+        int seed = 1903,
+        decimal? maxPrice = null,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.ScoreCardsForPlaygroupMetaAsync(
+            workspaceId,
+            playgroupIdOrUrl,
+            candidateCards,
+            maxGames,
+            metaDeckLimit,
+            simulations,
+            maxTurn,
+            seed,
+            maxPrice,
+            cancellationToken);
+    }
+
 }

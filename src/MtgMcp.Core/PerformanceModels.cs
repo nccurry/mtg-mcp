@@ -13,7 +13,12 @@ public sealed class DeckPerformanceAnalysis
     /// <summary>
     /// Gets or sets the simulation profile name.
     /// </summary>
-    public string Profile { get; set; } = "commander-default";
+    public string Profile { get; set; } = SimulationProfileIds.Neutral;
+
+    /// <summary>
+    /// Gets or sets the resolved simulation profile and why it was selected.
+    /// </summary>
+    public ResolvedSimulationProfile ProfileResolution { get; set; } = new();
 
     /// <summary>
     /// Gets or sets the number of Monte Carlo runs used.

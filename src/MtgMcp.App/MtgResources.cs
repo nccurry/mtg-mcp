@@ -246,15 +246,24 @@ public sealed class MtgResources
     {
         return """
             Deck intent captures what the user is aiming for: archetype, budget,
-            power level, heuristic profile, package template, local meta, role
-            targets, cards/packages to protect, and things to avoid.
+            power target, heuristic profile, simulation profile, archetype tags,
+            package template, local meta, build targets, cards/packages to protect,
+            and things to avoid.
             Store it in the deck description as a human-readable section titled
             "MTG MCP Deck Intent" and ending with "End MTG MCP Deck Intent".
             Existing tools consume role targets, budget, preferences, avoided
-            cards, and protected cards; heuristic, package, and local-meta fields
-            are parsed and preserved for profile-aware brewing workflows.
-            Values such as Power Level, Heuristic Profile, and Package Template
-            are case-insensitive; spaces and underscores normalize to hyphens.
+            cards, protected cards, simulation settings, and deck-local win routes;
+            heuristic, simulation, package, and local-meta fields are parsed for
+            profile-aware brewing workflows.
+            Local-meta scoring can use score_cards_for_playgroup_meta to score
+            explicit candidate cards, or excluded workspace cards, against
+            Playgroup-derived pressures. That output reports separate plan-fit,
+            performance-delta, meta-coverage, self-harm, price/bracket, and
+            evidence-confidence factors.
+            Values such as Power Level, Heuristic Profile, Simulation Profile,
+            and Package Template are case-insensitive; spaces and underscores
+            normalize to hyphens. Preferred v2 sections are Build Targets,
+            Simulation, and Win Routes.
             Use get_deck_intent before analysis and recommendations.
             Use suggest_deck_intent to draft an intent section, then ask the user
             before calling set_deck_intent.

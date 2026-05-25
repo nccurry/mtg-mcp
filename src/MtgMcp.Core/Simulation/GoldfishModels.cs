@@ -36,6 +36,11 @@ public sealed class WinRoute
     /// Gets or sets the route rationale.
     /// </summary>
     public string Rationale { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets deterministic route evidence captured during simulation.
+    /// </summary>
+    public List<SimulationRouteEvidence> Evidence { get; set; } = [];
 }
 
 /// <summary>
@@ -105,6 +110,11 @@ public sealed class WinTurnEstimate
     /// Gets or sets likely routes to victory.
     /// </summary>
     public List<WinRoute> Routes { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets representative route evidence across observed wins.
+    /// </summary>
+    public List<SimulationRouteEvidence> RouteEvidence { get; set; } = [];
 
     /// <summary>
     /// Gets or sets win estimate notes.
@@ -189,6 +199,11 @@ public sealed class GoldfishSimulationResult
     public int Mulligans { get; set; }
 
     /// <summary>
+    /// Gets or sets the resolved simulation profile and selection evidence.
+    /// </summary>
+    public ResolvedSimulationProfile ProfileResolution { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets turn-by-turn projections.
     /// </summary>
     public List<ProjectedTurnState> TurnSummaries { get; set; } = [];
@@ -207,6 +222,11 @@ public sealed class GoldfishSimulationResult
     /// Gets or sets simulator notes.
     /// </summary>
     public List<string> Notes { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal simulator warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
 }
 
 /// <summary>

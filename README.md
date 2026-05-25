@@ -65,7 +65,7 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 | Workspaces | Create, import, parse, export, open, validate, summarize, and update local or Archidekt-backed decks. |
 | Deck editing | Add, remove, move, categorize, annotate, and set quantities; create, preview, list, apply, or delete persisted edit plans. |
 | Archidekt | Open decks, list visible decks, write back when enabled, and manage deck checkpoints. |
-| Playgroup.gg | Check auth, get playgroups and decks, list playgroup users/decks, list user decks, and rank decks by power, Elo, win rate, competitive rating, games played, or average win turn. |
+| Playgroup.gg | Check auth, get playgroups and decks, list playgroup users/decks, list user decks, rank decks by power, Elo, win rate, competitive rating, games played, or average win turn, and score candidate cards against local-meta pressure. |
 | Analysis | Mana base, curve, colors, categories, cost, legality, draw odds, consistency, best practices, Commander bracket, card facets, and explicit facet predicates. |
 | Simulation | Goldfish runs, projected board states, win-turn estimates, deterministic performance analysis, plan comparisons, and Archidekt reference comparisons. |
 | Recommendations | New releases, Commander meta context, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, raw source evidence, and Reddit discussion evidence. |
@@ -170,6 +170,7 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
 | `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `JWT` / `REFRESH_TOKEN` / `USER_ID` / `EMAIL` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. Refresh token auth is preferred; email or username plus password is fallback. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
+| `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Commander Spellbook API setting. |
 
@@ -200,6 +201,13 @@ power increases or reductions, Commander bracket reduction, mana-base work,
 consistency, local meta tuning, new releases, goldfishing, goal-focused
 packages, and rules/rulings checks.
 
+For Playgroup-aware tuning, `score_cards_for_playgroup_meta` scores explicit
+candidate names, or cards in excluded workspace categories, with visible factor
+scores for plan fit, deterministic performance delta, local-meta coverage,
+self-harm, price/bracket constraints, and evidence confidence. Playgroup decks
+are ranked from fetched game participations; Archidekt decklists are imported
+read-only when Playgroup exposes an Archidekt URL.
+
 ## Deck Intent
 
 Deck intent is optional text stored in a workspace description, and in the
@@ -210,18 +218,28 @@ Small example:
 
 ```text
 MTG MCP Deck Intent
-Version: 1
+Version: 2
 Format: commander
 Commander: Teysa Karlov
+Goal: Aristocrats value with resilient sacrifice engines
 Power Level: tuned-casual
+Power Target: tuned casual
 Heuristic Profile: command-zone-template
+Simulation Profile: value
+Archetype Tags: aristocrats, tokens, graveyard
 Local Meta: graveyards, go-wide tokens
 Budget: prefer upgrades under $10
 
-Targets
+Build Targets
 Ramp: 8-10
 Draw: 10-12
 Interaction: 10-14
+
+Simulation
+Mulligan Style: multiplayer-london
+Hold Interaction From Turn: 3
+Minimum Interaction Held: 1
+Prefer Commander On Curve: true
 
 Avoid
 - deterministic infinite combos
@@ -233,7 +251,9 @@ and `cedh`. Supported heuristic profiles are `auto`, `commander-baseline`,
 `command-zone-template`, `edhrec-foundation`, `mana-rich-39-land`,
 `fifty-mana-sources`, `package-8x8`, `package-7x9`, `package-9x7`,
 `seventy-five-percent`, `cedh-turbo`, `cedh-midrange`, `cedh-stax`, and
-`cedh-tempo`. Package templates are `none`, `8x8`, `7x9`, and `9x7`.
+`cedh-tempo`. Supported simulation profiles are `auto`, `neutral`, `aggro`,
+`combo`, `control`, `value`, `big-mana`, and `stax`. Package templates are
+`none`, `8x8`, `7x9`, and `9x7`.
 
 For the full syntax, read `mtg://usage/deck-intent`.
 

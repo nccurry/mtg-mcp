@@ -16,6 +16,16 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckSimulationService simulation;
 
     /// <summary>
+    /// Resolves simulation profiles for recommendation-side scoring workflows.
+    /// </summary>
+    private readonly SimulationProfileCatalog simulationProfiles;
+
+    /// <summary>
+    /// Supplies Playgroup-derived local meta context when configured.
+    /// </summary>
+    private readonly PlaygroupService? playgroups;
+
+    /// <summary>
     /// Creates a recommendation service backed by explicit analysis and simulation collaborators.
     /// </summary>
     public DeckRecommendationService(
@@ -29,7 +39,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
+        SimulationProfileCatalog? simulationProfiles = null,
+        PlaygroupService? playgroups = null
     )
         : base(
             repository,
@@ -44,5 +56,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     {
         this.analysis = analysis;
         this.simulation = simulation;
+        this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
+        this.playgroups = playgroups;
     }
 }

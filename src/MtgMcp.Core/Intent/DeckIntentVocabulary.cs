@@ -39,6 +39,21 @@ public static class DeckIntentVocabulary
     ];
 
     /// <summary>
+    /// Stores accepted simulation profile values.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SimulationProfiles =
+    [
+        SimulationProfileIds.Auto,
+        SimulationProfileIds.Neutral,
+        SimulationProfileIds.Aggro,
+        SimulationProfileIds.Combo,
+        SimulationProfileIds.Control,
+        SimulationProfileIds.Value,
+        SimulationProfileIds.BigMana,
+        SimulationProfileIds.Stax
+    ];
+
+    /// <summary>
     /// Stores the accepted package template values.
     /// </summary>
     public static readonly IReadOnlyList<string> PackageTemplates =
@@ -79,6 +94,19 @@ public static class DeckIntentVocabulary
         };
 
     /// <summary>
+    /// Stores supported simulation profile aliases.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> SimulationProfileAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["commander-default"] = SimulationProfileIds.Neutral,
+            ["midrange"] = SimulationProfileIds.Value,
+            ["prison"] = SimulationProfileIds.Stax,
+            ["bigmana"] = SimulationProfileIds.BigMana,
+            ["ramp"] = SimulationProfileIds.BigMana,
+        };
+
+    /// <summary>
     /// Stores supported package template aliases.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> PackageTemplateAliases =
@@ -103,6 +131,14 @@ public static class DeckIntentVocabulary
     public static bool TryNormalizeHeuristicProfile(string value, out string normalized)
     {
         return TryNormalizeKnownValue(value, HeuristicProfiles, HeuristicProfileAliases, out normalized);
+    }
+
+    /// <summary>
+    /// Tries to normalize a simulation profile value.
+    /// </summary>
+    public static bool TryNormalizeSimulationProfile(string value, out string normalized)
+    {
+        return TryNormalizeKnownValue(value, SimulationProfiles, SimulationProfileAliases, out normalized);
     }
 
     /// <summary>

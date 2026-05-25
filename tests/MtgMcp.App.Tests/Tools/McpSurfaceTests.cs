@@ -96,6 +96,7 @@ public sealed class McpSurfaceTests
             "compare_to_commander_meta",
             "find_new_cards_for_deck",
             "query_cards_for_deck",
+            "score_cards_for_playgroup_meta",
             "find_deck_combos",
             "find_near_miss_combos",
             "estimate_combo_pressure",
@@ -253,6 +254,7 @@ public sealed class McpSurfaceTests
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
         CustomAttributeData compareGoldfish = GetToolAttribute(nameof(SimulationTools.CompareArchidektGoldfishAsync));
         CustomAttributeData queryCards = GetToolAttribute(nameof(RecommendationTools.QueryCardsForDeckAsync));
+        CustomAttributeData scoreMeta = GetToolAttribute(nameof(RecommendationTools.ScoreCardsForPlaygroupMetaAsync));
         CustomAttributeData createExplicitPlan = GetToolAttribute(nameof(PlanTools.CreateDeckPlanFromExplicitChangesAsync));
         CustomAttributeData listPlaygroupDecks = GetToolAttribute(nameof(PlaygroupTools.ListPlaygroupDecksAsync));
 
@@ -276,6 +278,8 @@ public sealed class McpSurfaceTests
         GetNamedBool(compareGoldfish, "OpenWorld").Should().BeTrue();
         GetNamedBool(queryCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(queryCards, "OpenWorld").Should().BeTrue();
+        GetNamedBool(scoreMeta, "ReadOnly").Should().BeTrue();
+        GetNamedBool(scoreMeta, "OpenWorld").Should().BeTrue();
         GetNamedBool(createExplicitPlan, "ReadOnly").Should().BeFalse();
         GetNamedBool(createExplicitPlan, "OpenWorld").Should().BeFalse();
         GetNamedBool(listPlaygroupDecks, "ReadOnly").Should().BeTrue();

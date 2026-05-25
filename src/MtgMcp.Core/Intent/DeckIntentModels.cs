@@ -26,9 +26,19 @@ public sealed class DeckIntent
     public string? Archetype { get; set; }
 
     /// <summary>
+    /// Gets or sets the user's plain-language deck goal.
+    /// </summary>
+    public string? Goal { get; set; }
+
+    /// <summary>
     /// Gets or sets the desired power level.
     /// </summary>
     public string? PowerLevel { get; set; }
+
+    /// <summary>
+    /// Gets or sets the plain-language power target.
+    /// </summary>
+    public string? PowerTarget { get; set; }
 
     /// <summary>
     /// Gets or sets the named deckbuilding heuristic profile.
@@ -36,9 +46,24 @@ public sealed class DeckIntent
     public string? HeuristicProfile { get; set; }
 
     /// <summary>
+    /// Gets or sets the named simulation profile.
+    /// </summary>
+    public string? SimulationProfile { get; set; }
+
+    /// <summary>
     /// Gets or sets the named package template.
     /// </summary>
     public string? PackageTemplate { get; set; }
+
+    /// <summary>
+    /// Gets or sets simple archetype/theme tags that modify simulation behavior.
+    /// </summary>
+    public List<string> ArchetypeTags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the desired no-interaction goldfish turn.
+    /// </summary>
+    public int? TargetGoldfishTurn { get; set; }
 
     /// <summary>
     /// Gets or sets the budget guidance.
@@ -52,10 +77,26 @@ public sealed class DeckIntent
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets or sets desired role, tag, or package count targets from v2 intent.
+    /// </summary>
+    public Dictionary<string, DeckIntentTarget> BuildTargets { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets or sets desired package count targets.
     /// </summary>
     public Dictionary<string, DeckIntentTarget> Packages { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets deck-local simulation settings.
+    /// </summary>
+    public DeckIntentSimulationSettings Simulation { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets deck-local win route definitions.
+    /// </summary>
+    public List<DeckIntentWinRoute> WinRoutes { get; set; } = [];
 
     /// <summary>
     /// Gets or sets scoring priorities.
@@ -81,6 +122,78 @@ public sealed class DeckIntent
     /// Gets or sets cards or packages that should not be cut casually.
     /// </summary>
     public List<string> Protect { get; set; } = [];
+}
+
+/// <summary>
+/// Captures deck-local deterministic simulation assumptions.
+/// </summary>
+public sealed class DeckIntentSimulationSettings
+{
+    /// <summary>
+    /// Gets or sets raw simulation settings keyed by normalized field name.
+    /// </summary>
+    public Dictionary<string, string> Values { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets how strongly the deck depends on its commander.
+    /// </summary>
+    public string? CommanderDependency { get; set; }
+
+    /// <summary>
+    /// Gets or sets the mulligan style requested by the deck.
+    /// </summary>
+    public string? MulliganStyle { get; set; }
+
+    /// <summary>
+    /// Gets or sets the first turn where interaction should be held up.
+    /// </summary>
+    public int? HoldInteractionFromTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the minimum interaction count to keep available.
+    /// </summary>
+    public int? MinimumInteractionHeld { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether commander deployment should be prioritized.
+    /// </summary>
+    public bool? PreferCommanderOnCurve { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the simulator may attempt wins without protection.
+    /// </summary>
+    public bool? AcceptShieldDownWinAttempt { get; set; }
+}
+
+/// <summary>
+/// Defines one deck-local win route parsed from deck intent.
+/// </summary>
+public sealed class DeckIntentWinRoute
+{
+    /// <summary>
+    /// Gets or sets the route name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the route kind.
+    /// </summary>
+    public string Kind { get; set; } = "route";
+
+    /// <summary>
+    /// Gets or sets the earliest turn where this route can count as a win.
+    /// </summary>
+    public int? EarliestTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the bounded route requirements.
+    /// </summary>
+    public List<string> Requirements { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the raw parsed route line.
+    /// </summary>
+    public string Raw { get; set; } = "";
 }
 
 /// <summary>

@@ -6,6 +6,11 @@ namespace MtgMcp.Core;
 public sealed partial class DeckSimulationService : DeckServiceBase
 {
     /// <summary>
+    /// Resolves built-in, configured, and deck-local simulation profiles.
+    /// </summary>
+    private readonly SimulationProfileCatalog simulationProfiles;
+
+    /// <summary>
     /// Creates a simulation service backed by workspace storage and card metadata.
     /// </summary>
     public DeckSimulationService(
@@ -17,7 +22,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
+        SimulationProfileCatalog? simulationProfiles = null
     )
         : base(
             repository,
@@ -30,5 +36,6 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             currentDateOverride,
             corpusSignalProviders)
     {
+        this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
     }
 }

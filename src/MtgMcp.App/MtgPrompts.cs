@@ -182,10 +182,12 @@ public sealed class MtgPrompts
             Tune deck workspace {workspaceId} for this local meta: {meta}
             Budget per card: {budget}
 
-            Use analyze_deck_best_practices, query_cards_for_deck when you can produce
-            a precise Scryfall query, estimate_combo_pressure, and source data tools. Create a deck
-            plan only after the query and exact add/remove choices are explicit. Explain which
-            local-meta problem each package addresses.
+            Use analyze_deck_best_practices, score_cards_for_playgroup_meta when a
+            Playgroup URL or ranked candidate list is available, query_cards_for_deck
+            when you can produce a precise Scryfall query, estimate_combo_pressure,
+            and source data tools. Create a deck plan only after the query and exact
+            add/remove choices are explicit. Explain which local-meta problem each
+            package addresses.
             """;
     }
 

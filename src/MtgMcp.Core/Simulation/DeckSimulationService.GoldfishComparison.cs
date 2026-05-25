@@ -32,7 +32,8 @@ public sealed partial class DeckSimulationService
             targetTurn,
             simulations,
             seed,
-            mulligan);
+            mulligan,
+            simulationProfiles);
         GoldfishDeckComparison activeDeck = BuildDeckComparison(
             "active",
             "workspace",
@@ -81,7 +82,8 @@ public sealed partial class DeckSimulationService
                 targetTurn,
                 simulations,
                 seed,
-                mulligan);
+                mulligan,
+                simulationProfiles);
             GoldfishComparisonDelta delta = BuildDelta(activeGoldfish, referenceGoldfish);
             references.Add(BuildDeckComparison(
                 label,

@@ -12,11 +12,16 @@ public static partial class DeckIntentText
     {
         DeckIntent intent = new()
         {
+            Version = 2,
             Format = workspace.Format,
             Commander = FindCommander(workspace),
+            Goal = "Refine the current commander plan with clear card roles, reliable mana, and explainable win routes",
             Archetype = SuggestArchetype(workspace),
+            PowerTarget = "tuned casual to high power, based on user preference",
             PowerLevel = "tuned-casual",
             HeuristicProfile = "auto",
+            SimulationProfile = SimulationProfileIds.Auto,
+            ArchetypeTags = SuggestArchetypeTags(workspace).ToList(),
             Budget = new DeckIntentBudget
             {
                 Text = "prefer cheaper swaps unless a card is core",
@@ -24,11 +29,33 @@ public static partial class DeckIntentText
             }
         };
 
-        intent.Targets[DeckRoles.Lands] = Target("36-37", 36, 37);
-        intent.Targets[DeckRoles.Ramp] = Target("8-10", 8, 10);
-        intent.Targets[DeckRoles.Draw] = Target("9-11", 9, 11);
-        intent.Targets[DeckRoles.Interaction] = Target("10-14", 10, 14);
-        intent.Targets[DeckRoles.BoardWipes] = Target("2-4", 2, 4);
+        intent.BuildTargets[DeckRoles.Lands] = Target("36-37", 36, 37);
+        intent.BuildTargets[DeckRoles.Ramp] = Target("8-10", 8, 10);
+        intent.BuildTargets[DeckRoles.Draw] = Target("9-11", 9, 11);
+        intent.BuildTargets[DeckRoles.Interaction] = Target("10-14", 10, 14);
+        intent.BuildTargets[DeckRoles.BoardWipes] = Target("2-4", 2, 4);
+        foreach (KeyValuePair<string, DeckIntentTarget> target in intent.BuildTargets)
+        {
+            intent.Targets[target.Key] = target.Value;
+        }
+
+        intent.Simulation = new DeckIntentSimulationSettings
+        {
+            MulliganStyle = "multiplayer-london",
+            HoldInteractionFromTurn = 3,
+            MinimumInteractionHeld = 1,
+            PreferCommanderOnCurve = true,
+            AcceptShieldDownWinAttempt = false,
+            Values =
+            {
+                ["Mulligan Style"] = "multiplayer-london",
+                ["Hold Interaction From Turn"] = "3",
+                ["Minimum Interaction Held"] = "1",
+                ["Prefer Commander On Curve"] = "true",
+                ["Accept Shield Down Win Attempt"] = "false",
+            }
+        };
+
         intent.Priorities = new ReplacementWeights();
         intent.Prefer.AddRange(SuggestPreferences(workspace));
         intent.Avoid.AddRange(["infinite combos", "hard stax"]);
@@ -67,6 +94,40 @@ public static partial class DeckIntentText
         }
 
         return "synergy";
+    }
+
+    /// <summary>
+    /// Suggests broad archetype tags from current roles and categories.
+    /// </summary>
+    private static IEnumerable<string> SuggestArchetypeTags(DeckWorkspace workspace)
+    {
+        HashSet<string> tags = new(StringComparer.OrdinalIgnoreCase);
+        string text = string.Join(' ', workspace.Categories.Select(category => category.Name));
+        foreach (DeckCard card in workspace.Cards)
+        {
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            if (role.Tags.Contains(DeckTags.Blink, StringComparer.OrdinalIgnoreCase) || ContainsAny(text, "blink"))
+            {
+                tags.Add("blink");
+            }
+
+            if (role.Tags.Contains(DeckTags.Tokens, StringComparer.OrdinalIgnoreCase) || ContainsAny(text, "tokens"))
+            {
+                tags.Add("tokens");
+            }
+
+            if (role.Tags.Contains(DeckTags.Reanimation, StringComparer.OrdinalIgnoreCase) || ContainsAny(text, "reanimator", "graveyard"))
+            {
+                tags.Add("graveyard");
+            }
+
+            if (role.Tags.Contains(DeckTags.Aristocrats, StringComparer.OrdinalIgnoreCase) || ContainsAny(text, "aristocrats", "sacrifice"))
+            {
+                tags.Add("aristocrats");
+            }
+        }
+
+        return tags.Count == 0 ? ["value"] : tags;
     }
 
     /// <summary>

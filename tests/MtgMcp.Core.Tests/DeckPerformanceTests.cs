@@ -312,7 +312,7 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
-    /// Verifies that deck intent can set profile and tighter scenario target defaults.
+    /// Verifies that deck intent can set simulation profile and tighter scenario target defaults.
     /// </summary>
     [Fact]
     public async Task AnalyzeDeckPerformance_UsesDeckIntentForScenarioDefaults()
@@ -323,9 +323,9 @@ public sealed class DeckPerformanceTests
             deck.Description,
             """
             MTG MCP Deck Intent
-            Version: 1
-            Power Level: cEDH
-            Heuristic Profile: cedh-turbo
+            Version: 2
+            Power Target: strong bracket 3
+            Simulation Profile: combo
             End MTG MCP Deck Intent
             """);
         await repository.SaveAsync(deck, CancellationToken.None);
@@ -340,7 +340,8 @@ public sealed class DeckPerformanceTests
             includeMulligans: true,
             CancellationToken.None);
 
-        analysis.Profile.Should().Be("cedh-turbo");
+        analysis.Profile.Should().Be(SimulationProfileIds.Combo);
+        analysis.ProfileResolution.Source.Should().Be("deck-intent");
         analysis.Scenarios.Single(row => row.Name == "commander-by-turn-4").TargetTurn.Should().Be(3);
         analysis.Scenarios.Single(row => row.Name == "all-colors-by-turn-3").TargetTurn.Should().Be(2);
         analysis.Assumptions.Should().Contain(note => note.Contains("Saved deck intent", StringComparison.OrdinalIgnoreCase));

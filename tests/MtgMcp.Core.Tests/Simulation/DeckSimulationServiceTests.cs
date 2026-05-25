@@ -23,6 +23,7 @@ public sealed partial class DeckIntelligenceTests
         DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
         {
             Name = "Goldfish",
+            Description = DeckIntentText.UpsertDescription(null, "Simulation Profile: combo"),
             Cards =
             [
                 new DeckCard { Name = "Forest", Quantity = 40, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
@@ -64,6 +65,7 @@ public sealed partial class DeckIntelligenceTests
         DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
         {
             Name = "Deterministic Combo Goldfish",
+            Description = DeckIntentText.UpsertDescription(null, "Simulation Profile: combo"),
             Cards =
             [
                 new DeckCard
@@ -121,7 +123,7 @@ public sealed partial class DeckIntelligenceTests
         goldfish.TurnSummaries.Should().HaveCount(5);
         goldfish.TurnSummaries.Select(summary => summary.MedianNonlandPermanents)
             .Should()
-            .Equal(7, 8, 9, 10, 11);
+            .Equal(6, 7, 8, 9, 10);
         goldfish.TurnSummaries.Should().OnlyContain(summary =>
             summary.MedianLands == 0
             && summary.MedianManaSources == 0
@@ -152,8 +154,8 @@ public sealed partial class DeckIntelligenceTests
         route.Cards.Should().BeEquivalentTo(["Combo A", "Combo B"]);
 
         projected.Turn.Should().Be(3);
-        projected.MedianNonlandPermanents.Should().Be(9);
-        projected.LikelyBoard.Should().Be("0 lands, 0 mana sources, 9 nonland permanents, about 0 pressure, 0 cards in hand.");
+        projected.MedianNonlandPermanents.Should().Be(8);
+        projected.LikelyBoard.Should().Be("0 lands, 0 mana sources, 8 nonland permanents, about 0 pressure, 0 cards in hand.");
         winTurn.Routes.Should().ContainSingle(route => route.Kind == "combo" && route.Probability == 1);
     }
 

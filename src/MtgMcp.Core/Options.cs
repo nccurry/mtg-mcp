@@ -23,6 +23,11 @@ public sealed class MtgMcpOptions
     public MtgMcpIntelligenceOptions Intelligence { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets deterministic simulation profile options.
+    /// </summary>
+    public MtgMcpSimulationOptions Simulation { get; set; } = new();
+
+    /// <summary>
     /// Handles default data dir.
     /// </summary>
     private static string DefaultDataDir()
@@ -38,6 +43,22 @@ public sealed class MtgMcpOptions
 
         return Path.Combine(root, "mtg-mcp");
     }
+}
+
+/// <summary>
+/// Configures deterministic simulation profile loading.
+/// </summary>
+public sealed class MtgMcpSimulationOptions
+{
+    /// <summary>
+    /// Gets or sets optional JSON profile files or glob patterns.
+    /// </summary>
+    public List<string> ProfilePaths { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets whether external profiles can replace built-in profile ids.
+    /// </summary>
+    public bool AllowExternalProfileOverrides { get; set; } = true;
 }
 
 /// <summary>

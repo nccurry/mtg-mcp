@@ -106,20 +106,28 @@ public static partial class DeckIntentText
 
         AddValue(lines, "Format", intent.Format);
         AddValue(lines, "Commander", intent.Commander);
+        AddValue(lines, "Goal", intent.Goal);
         AddValue(lines, "Archetype", intent.Archetype);
         AddValue(lines, "Power Level", intent.PowerLevel);
+        AddValue(lines, "Power Target", intent.PowerTarget);
         AddValue(lines, "Heuristic Profile", intent.HeuristicProfile);
+        AddValue(lines, "Simulation Profile", intent.SimulationProfile);
         AddValue(lines, "Package Template", intent.PackageTemplate);
+        AddDelimitedValue(lines, "Archetype Tags", intent.ArchetypeTags);
+        AddValue(lines, "Target Goldfish Turn", intent.TargetGoldfishTurn?.ToString(CultureInfo.InvariantCulture));
         AddDelimitedValue(lines, "Local Meta", intent.LocalMeta);
 
         string? budget = FormatBudget(intent.Budget);
         AddValue(lines, "Budget", budget);
 
-        if (intent.Targets.Count > 0)
+        Dictionary<string, DeckIntentTarget> buildTargets = intent.BuildTargets.Count > 0
+            ? intent.BuildTargets
+            : intent.Targets;
+        if (buildTargets.Count > 0)
         {
             lines.Add("");
-            lines.Add("Targets");
-            foreach (KeyValuePair<string, DeckIntentTarget> target in intent.Targets.OrderBy(target => target.Key))
+            lines.Add("Build Targets");
+            foreach (KeyValuePair<string, DeckIntentTarget> target in buildTargets.OrderBy(target => target.Key))
             {
                 lines.Add($"{target.Key}: {FormatTarget(target.Value)}");
             }
@@ -142,6 +150,53 @@ public static partial class DeckIntentText
             lines.Add($"Role Fit: {intent.Priorities.Role.ToString("0.##", CultureInfo.InvariantCulture)}");
             lines.Add($"Power: {intent.Priorities.Power.ToString("0.##", CultureInfo.InvariantCulture)}");
             lines.Add($"Price: {intent.Priorities.Price.ToString("0.##", CultureInfo.InvariantCulture)}");
+        }
+
+        if (HasSimulationSettings(intent.Simulation))
+        {
+            lines.Add("");
+            lines.Add("Simulation");
+            AddSimulationValue(lines, "Commander Dependency", intent.Simulation.CommanderDependency);
+            AddSimulationValue(lines, "Mulligan Style", intent.Simulation.MulliganStyle);
+            AddSimulationValue(lines, "Hold Interaction From Turn", intent.Simulation.HoldInteractionFromTurn?.ToString(CultureInfo.InvariantCulture));
+            AddSimulationValue(lines, "Minimum Interaction Held", intent.Simulation.MinimumInteractionHeld?.ToString(CultureInfo.InvariantCulture));
+            AddSimulationValue(lines, "Prefer Commander On Curve", intent.Simulation.PreferCommanderOnCurve?.ToString());
+            AddSimulationValue(lines, "Accept Shield Down Win Attempt", intent.Simulation.AcceptShieldDownWinAttempt?.ToString());
+            foreach (KeyValuePair<string, string> value in intent.Simulation.Values.OrderBy(value => value.Key))
+            {
+                if (IsKnownSimulationKey(value.Key))
+                {
+                    continue;
+                }
+
+                lines.Add($"{value.Key}: {value.Value}");
+            }
+        }
+
+        if (intent.WinRoutes.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("Win Routes");
+            foreach (DeckIntentWinRoute route in intent.WinRoutes)
+            {
+                List<string> parts = [];
+                if (route.Requirements.Count > 0)
+                {
+                    parts.Add($"requires {string.Join(", ", route.Requirements)}");
+                }
+
+                if (route.EarliestTurn.HasValue)
+                {
+                    parts.Add($"earliest turn {route.EarliestTurn.Value}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(route.Kind))
+                {
+                    parts.Add($"kind {route.Kind}");
+                }
+
+                lines.Add($"{route.Name}: {string.Join("; ", parts)}");
+            }
         }
 
         AddList(lines, "Prefer", intent.Prefer);
@@ -254,7 +309,16 @@ public static partial class DeckIntentText
     private static bool TryReadSection(string line, out string section)
     {
         section = NormalizeKey(line.TrimEnd(':'));
-        return section is "targets" or "packages" or "prefer" or "avoid" or "protect" or "priorities" or "localmeta";
+        return section is "targets"
+            or "buildtargets"
+            or "packages"
+            or "simulation"
+            or "winroutes"
+            or "prefer"
+            or "avoid"
+            or "protect"
+            or "priorities"
+            or "localmeta";
     }
 
     /// <summary>
@@ -293,9 +357,29 @@ public static partial class DeckIntentText
             return;
         }
 
+        if (section == "buildtargets")
+        {
+            DeckIntentTarget target = ParseTarget(value);
+            intent.BuildTargets[NormalizeRoleName(key)] = target;
+            intent.Targets[NormalizeRoleName(key)] = target;
+            return;
+        }
+
         if (section == "packages")
         {
             intent.Packages[NormalizeRoleName(key)] = ParseTarget(value);
+            return;
+        }
+
+        if (section == "simulation")
+        {
+            ApplySimulationValue(intent.Simulation, normalizedKey, key, value, warnings);
+            return;
+        }
+
+        if (section == "winroutes")
+        {
+            intent.WinRoutes.Add(ParseWinRoute(key, value, warnings));
             return;
         }
 
@@ -323,17 +407,37 @@ public static partial class DeckIntentText
             case "commander":
                 intent.Commander = EmptyToNull(value);
                 break;
+            case "goal":
+                intent.Goal = EmptyToNull(value);
+                break;
             case "archetype":
                 intent.Archetype = EmptyToNull(value);
                 break;
             case "powerlevel":
                 intent.PowerLevel = NormalizePowerLevel(value, warnings);
                 break;
+            case "powertarget":
+                intent.PowerTarget = EmptyToNull(value);
+                break;
             case "heuristicprofile":
                 intent.HeuristicProfile = NormalizeHeuristicProfile(value, warnings);
                 break;
+            case "simulationprofile":
+                intent.SimulationProfile = NormalizeSimulationProfile(value, warnings);
+                break;
             case "packagetemplate":
                 intent.PackageTemplate = NormalizePackageTemplate(value, warnings);
+                break;
+            case "archetypetags":
+                AddDelimitedItems(intent.ArchetypeTags, value);
+                break;
+            case "targetgoldfishturn":
+                intent.TargetGoldfishTurn = TryParseInt(value);
+                if (!intent.TargetGoldfishTurn.HasValue)
+                {
+                    warnings.Add("Target Goldfish Turn was not an integer.");
+                }
+
                 break;
             case "localmeta":
                 AddDelimitedItems(intent.LocalMeta, value);
@@ -500,6 +604,17 @@ public static partial class DeckIntentText
     }
 
     /// <summary>
+    /// Adds one simulation setting when present.
+    /// </summary>
+    private static void AddSimulationValue(List<string> lines, string name, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            lines.Add($"{name}: {value}");
+        }
+    }
+
+    /// <summary>
     /// Adds a named list when present.
     /// </summary>
     private static void AddList(List<string> lines, string name, IReadOnlyList<string> values)
@@ -563,6 +678,19 @@ public static partial class DeckIntentText
     }
 
     /// <summary>
+    /// Normalizes a simulation profile or keeps the raw value with a warning.
+    /// </summary>
+    private static string? NormalizeSimulationProfile(string value, List<string> warnings)
+    {
+        return NormalizeVocabularyValue(
+            value,
+            warnings,
+            DeckIntentVocabulary.TryNormalizeSimulationProfile,
+            "Simulation Profile",
+            DeckIntentVocabulary.SimulationProfiles);
+    }
+
+    /// <summary>
     /// Normalizes a package template or keeps the raw value with a warning.
     /// </summary>
     private static string? NormalizePackageTemplate(string value, List<string> warnings)
@@ -611,6 +739,25 @@ public static partial class DeckIntentText
     }
 
     /// <summary>
+    /// Parses a boolean-like value from text.
+    /// </summary>
+    private static bool? TryParseBool(string value)
+    {
+        if (bool.TryParse(value, out bool parsed))
+        {
+            return parsed;
+        }
+
+        string normalized = DeckIntentVocabulary.NormalizeToken(value);
+        return normalized switch
+        {
+            "yes" or "y" or "true" or "on" => true,
+            "no" or "n" or "false" or "off" => false,
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// Parses the first money-like value from text.
     /// </summary>
     private static decimal? TryParseMoney(string value)
@@ -652,6 +799,137 @@ public static partial class DeckIntentText
         {
             AddUnique(values, value);
         }
+    }
+
+    /// <summary>
+    /// Applies one simulation setting line.
+    /// </summary>
+    private static void ApplySimulationValue(
+        DeckIntentSimulationSettings settings,
+        string normalizedKey,
+        string key,
+        string value,
+        List<string> warnings)
+    {
+        settings.Values[key.Trim()] = value.Trim();
+        switch (normalizedKey)
+        {
+            case "commanderdependency":
+                settings.CommanderDependency = EmptyToNull(value);
+                break;
+            case "mulliganstyle":
+                settings.MulliganStyle = EmptyToNull(value);
+                break;
+            case "holdinteractionfromturn":
+                settings.HoldInteractionFromTurn = TryParseInt(value);
+                if (!settings.HoldInteractionFromTurn.HasValue)
+                {
+                    warnings.Add("Simulation field 'Hold Interaction From Turn' was not an integer.");
+                }
+
+                break;
+            case "minimuminteractionheld":
+                settings.MinimumInteractionHeld = TryParseInt(value);
+                if (!settings.MinimumInteractionHeld.HasValue)
+                {
+                    warnings.Add("Simulation field 'Minimum Interaction Held' was not an integer.");
+                }
+
+                break;
+            case "prefercommanderoncurve":
+                settings.PreferCommanderOnCurve = TryParseBool(value);
+                if (!settings.PreferCommanderOnCurve.HasValue)
+                {
+                    warnings.Add("Simulation field 'Prefer Commander On Curve' was not true or false.");
+                }
+
+                break;
+            case "acceptshielddownwinattempt":
+                settings.AcceptShieldDownWinAttempt = TryParseBool(value);
+                if (!settings.AcceptShieldDownWinAttempt.HasValue)
+                {
+                    warnings.Add("Simulation field 'Accept Shield Down Win Attempt' was not true or false.");
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Parses a deck-local win route line.
+    /// </summary>
+    private static DeckIntentWinRoute ParseWinRoute(string name, string value, List<string> warnings)
+    {
+        DeckIntentWinRoute route = new()
+        {
+            Name = name.Trim(),
+            Raw = value.Trim()
+        };
+        foreach (string part in value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("requires ", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (string requirement in part["requires ".Length..].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    route.Requirements.Add(requirement);
+                    if (!SimulationRouteEvaluator.IsSupportedRequirement(requirement))
+                    {
+                        warnings.Add($"Win route '{route.Name}' has unsupported requirement '{requirement}'.");
+                    }
+                }
+
+                continue;
+            }
+
+            if (part.StartsWith("earliest turn ", StringComparison.OrdinalIgnoreCase))
+            {
+                route.EarliestTurn = TryParseInt(part["earliest turn ".Length..]);
+                if (!route.EarliestTurn.HasValue)
+                {
+                    warnings.Add($"Win route '{route.Name}' earliest turn was not an integer.");
+                }
+
+                continue;
+            }
+
+            if (part.StartsWith("kind ", StringComparison.OrdinalIgnoreCase))
+            {
+                route.Kind = part["kind ".Length..].Trim();
+                continue;
+            }
+
+            warnings.Add($"Win route '{route.Name}' ignored unknown clause '{part}'.");
+        }
+
+        return route;
+    }
+
+    /// <summary>
+    /// Checks whether a normalized simulation key is formatted explicitly elsewhere.
+    /// </summary>
+    private static bool IsKnownSimulationKey(string key)
+    {
+        string normalized = NormalizeKey(key);
+        return normalized is "commanderdependency"
+            or "mulliganstyle"
+            or "holdinteractionfromturn"
+            or "minimuminteractionheld"
+            or "prefercommanderoncurve"
+            or "acceptshielddownwinattempt";
+    }
+
+    /// <summary>
+    /// Checks whether simulation settings contain any explicit value.
+    /// </summary>
+    private static bool HasSimulationSettings(DeckIntentSimulationSettings settings)
+    {
+        return settings.Values.Count > 0
+            || !string.IsNullOrWhiteSpace(settings.CommanderDependency)
+            || !string.IsNullOrWhiteSpace(settings.MulliganStyle)
+            || settings.HoldInteractionFromTurn.HasValue
+            || settings.MinimumInteractionHeld.HasValue
+            || settings.PreferCommanderOnCurve.HasValue
+            || settings.AcceptShieldDownWinAttempt.HasValue;
     }
 
     /// <summary>

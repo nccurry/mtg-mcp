@@ -26,7 +26,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             maxTurn,
             seed,
             includeMulligans,
-            cancellationToken);
+            cancellationToken,
+            simulationProfiles);
     }
 
     /// <summary>
@@ -68,7 +69,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             maxTurn,
             seed,
             includeMulligans: true,
-            cancellationToken);
+            cancellationToken,
+            simulationProfiles);
         DeckPerformanceAnalysis after = DeckPerformanceAnalyzer.Analyze(
             preview,
             profile,
@@ -76,7 +78,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             maxTurn,
             seed,
             includeMulligans: true,
-            cancellationToken);
+            cancellationToken,
+            simulationProfiles);
 
         return new DeckPerformanceComparison
         {
