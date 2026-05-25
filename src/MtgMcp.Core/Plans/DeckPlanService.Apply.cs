@@ -85,6 +85,42 @@ public sealed partial class DeckPlanService : DeckServiceBase
             checkpointId = checkpoint.Id;
         }
 
+        DeckEditPlanApplyAttemptResult attempt = await ApplyPlanOperationsAsync(
+                plan,
+                workspace,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return attempt switch
+        {
+            DeckEditPlanApplySuccess success => await CompleteSuccessfulApplyAsync(
+                    plans,
+                    plan,
+                    checkpointId,
+                    success,
+                    cancellationToken)
+                .ConfigureAwait(false),
+            DeckEditPlanApplyFailure failure => await CompleteFailedApplyAsync(
+                    plans,
+                    plan,
+                    checkpointId,
+                    failure,
+                    cancellationToken)
+                .ConfigureAwait(false),
+            null => throw new InvalidOperationException(
+                "Unable to determine deck edit plan apply result."
+            ),
+        };
+    }
+
+    /// <summary>
+    /// Applies plan operations and reports the closed set of successful or failed attempt states.
+    /// </summary>
+    private async Task<DeckEditPlanApplyAttemptResult> ApplyPlanOperationsAsync(
+        DeckEditPlan plan,
+        DeckWorkspace workspace,
+        CancellationToken cancellationToken)
+    {
         List<string> messages = [];
         int appliedOperations = 0;
         int attemptedOperations = 0;
@@ -97,113 +133,79 @@ public sealed partial class DeckPlanService : DeckServiceBase
                         plan.Operations,
                         cancellationToken)
                     .ConfigureAwait(false);
-                messages.AddRange(batch.Messages);
-                appliedOperations = batch.AppliedOperations;
-                attemptedOperations = batch.AttemptedOperations;
+                return new DeckEditPlanApplySuccess(
+                    batch.AppliedOperations,
+                    batch.AttemptedOperations,
+                    batch.Messages
+                );
             }
-            else
+
+            for (int index = 0; index < plan.Operations.Count; index++)
             {
-                for (int index = 0; index < plan.Operations.Count; index++)
+                DeckEditOperation operation = plan.Operations[index];
+                attemptedOperations = index + 1;
+                try
                 {
-                    DeckEditOperation operation = plan.Operations[index];
-                    attemptedOperations = index + 1;
-                    try
+                    DeckChangeResult? result = await ApplyOperationAsync(
+                            plan.WorkspaceId,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    appliedOperations++;
+                    if (result is not null)
                     {
-                        DeckChangeResult? result = await ApplyOperationAsync(plan.WorkspaceId, operation, cancellationToken).ConfigureAwait(false);
-                        appliedOperations++;
-                        if (result is not null)
-                        {
-                            messages.Add(result.Message);
-                        }
+                        messages.Add(result.Message);
                     }
-                    catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
-                    {
-                        return await CompleteFailedApplyAsync(
-                                plans,
-                                plan,
-                                checkpointId,
-                                appliedOperations,
-                                attemptedOperations,
-                                index,
-                                operation,
-                                exception,
-                                applyStateUnknown: IsRemoteTimeout(workspace, exception),
-                                messages,
-                                cancellationToken)
-                            .ConfigureAwait(false);
-                    }
+                }
+                catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
+                {
+                    return new DeckEditPlanApplyFailure(
+                        appliedOperations,
+                        attemptedOperations,
+                        new DeckEditPlanFailedOperation(index, operation),
+                        exception,
+                        ApplyStateUnknown: IsRemoteTimeout(workspace, exception),
+                        messages
+                    );
                 }
             }
         }
         catch (DeckEditPlanOperationException exception)
         {
-            return await CompleteFailedApplyAsync(
-                plans,
-                plan,
-                checkpointId,
+            return new DeckEditPlanApplyFailure(
                 appliedOperations,
                 exception.OperationIndex + 1,
-                exception.OperationIndex,
-                exception.Operation,
+                new DeckEditPlanFailedOperation(exception.OperationIndex, exception.Operation),
                 exception.InnerException ?? exception,
-                applyStateUnknown: false,
-                messages,
-                cancellationToken)
-            .ConfigureAwait(false);
+                ApplyStateUnknown: false,
+                messages
+            );
         }
         catch (DeckEditPlanPersistenceException exception)
         {
             messages.AddRange(exception.Messages);
-            return await CompleteFailedApplyAsync(
-                    plans,
-                    plan,
-                    checkpointId,
-                    appliedOperations,
-                    exception.AttemptedOperations,
-                    failedOperationIndex: null,
-                    failedOperation: null,
-                    exception.InnerException ?? exception,
-                    applyStateUnknown: true,
-                    messages,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return new DeckEditPlanApplyFailure(
+                appliedOperations,
+                exception.AttemptedOperations,
+                FailedOperation: null,
+                exception.InnerException ?? exception,
+                ApplyStateUnknown: true,
+                messages
+            );
         }
         catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
         {
-            return await CompleteFailedApplyAsync(
-                    plans,
-                    plan,
-                    checkpointId,
-                    appliedOperations,
-                    attemptedOperations,
-                    failedOperationIndex: null,
-                    failedOperation: null,
-                    exception,
-                    applyStateUnknown: IsRemoteTimeout(workspace, exception),
-                    messages,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return new DeckEditPlanApplyFailure(
+                appliedOperations,
+                attemptedOperations,
+                FailedOperation: null,
+                exception,
+                ApplyStateUnknown: IsRemoteTimeout(workspace, exception),
+                messages
+            );
         }
 
-        DeckWorkspace updatedWorkspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
-        plan.Status = DeckEditPlanStatus.Applied;
-        plan.AppliedAt = DateTimeOffset.UtcNow;
-        plan.CheckpointId = checkpointId;
-        await plans.SaveAsync(plan, cancellationToken).ConfigureAwait(false);
-
-        return new DeckEditPlanApplyResult
-        {
-            Success = true,
-            PlanId = plan.PlanId,
-            WorkspaceId = plan.WorkspaceId,
-            Persistence = DeckPersistence.For(updatedWorkspace),
-            CheckpointId = checkpointId,
-            Status = plan.Status,
-            AppliedOperations = appliedOperations,
-            AttemptedOperations = attemptedOperations,
-            Messages = messages,
-            Workspace = updatedWorkspace
-        };
+        return new DeckEditPlanApplySuccess(appliedOperations, attemptedOperations, messages);
     }
 
     /// <summary>
@@ -585,31 +587,64 @@ public sealed partial class DeckPlanService : DeckServiceBase
     }
 
     /// <summary>
+    /// Saves a successfully applied plan and returns the MCP-facing result.
+    /// </summary>
+    private async Task<DeckEditPlanApplyResult> CompleteSuccessfulApplyAsync(
+        IDeckPlanRepository plans,
+        DeckEditPlan plan,
+        string? checkpointId,
+        DeckEditPlanApplySuccess success,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace updatedWorkspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        plan.Status = DeckEditPlanStatus.Applied;
+        plan.AppliedAt = DateTimeOffset.UtcNow;
+        plan.CheckpointId = checkpointId;
+        await plans.SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+
+        return new DeckEditPlanApplyResult
+        {
+            Success = true,
+            PlanId = plan.PlanId,
+            WorkspaceId = plan.WorkspaceId,
+            Persistence = DeckPersistence.For(updatedWorkspace),
+            CheckpointId = checkpointId,
+            Status = plan.Status,
+            AppliedOperations = success.AppliedOperations,
+            AttemptedOperations = success.AttemptedOperations,
+            Messages = success.Messages,
+            Workspace = updatedWorkspace
+        };
+    }
+
+    /// <summary>
     /// Persists failed or partial plan state and returns structured MCP-safe failure details.
     /// </summary>
     private async Task<DeckEditPlanApplyResult> CompleteFailedApplyAsync(
         IDeckPlanRepository plans,
         DeckEditPlan plan,
         string? checkpointId,
-        int appliedOperations,
-        int attemptedOperations,
-        int? failedOperationIndex,
-        DeckEditOperation? failedOperation,
-        Exception exception,
-        bool applyStateUnknown,
-        List<string> messages,
+        DeckEditPlanApplyFailure failure,
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await TryLoadWorkspaceForFailureAsync(plan.WorkspaceId, cancellationToken)
             .ConfigureAwait(false);
-        plan.Status = applyStateUnknown
+        plan.Status = failure.ApplyStateUnknown
             ? DeckEditPlanStatus.ApplyStateUnknown
-            : appliedOperations > 0
+            : failure.AppliedOperations > 0
             ? DeckEditPlanStatus.PartiallyApplied
             : DeckEditPlanStatus.Failed;
         plan.AppliedAt = DateTimeOffset.UtcNow;
         plan.CheckpointId = checkpointId;
-        plan.Warnings.Add(BuildFailureMessage(plan, attemptedOperations, failedOperationIndex, failedOperation, exception));
+        string failureMessage = BuildFailureMessage(
+            plan,
+            failure.AttemptedOperations,
+            failure.FailedOperation?.Index,
+            failure.FailedOperation?.Operation,
+            failure.Cause
+        );
+        plan.Warnings.Add(failureMessage);
         await plans.SaveAsync(plan, cancellationToken).ConfigureAwait(false);
 
         return new DeckEditPlanApplyResult
@@ -620,12 +655,12 @@ public sealed partial class DeckPlanService : DeckServiceBase
             Persistence = DeckPersistence.For(workspace),
             CheckpointId = checkpointId,
             Status = plan.Status,
-            AppliedOperations = appliedOperations,
-            AttemptedOperations = attemptedOperations,
-            FailedOperationIndex = failedOperationIndex,
-            FailedOperation = failedOperation,
-            Error = BuildFailureMessage(plan, attemptedOperations, failedOperationIndex, failedOperation, exception),
-            Messages = messages,
+            AppliedOperations = failure.AppliedOperations,
+            AttemptedOperations = failure.AttemptedOperations,
+            FailedOperationIndex = failure.FailedOperation?.Index,
+            FailedOperation = failure.FailedOperation?.Operation,
+            Error = failureMessage,
+            Messages = failure.Messages,
             Workspace = workspace
         };
     }
@@ -789,6 +824,40 @@ public sealed partial class DeckPlanService : DeckServiceBase
             _ => throw new InvalidOperationException($"Unknown deck edit operation '{operation.Operation}'.")
         };
     }
+
+    /// <summary>
+    /// Represents a successful or failed attempt to apply plan operations.
+    /// </summary>
+    private readonly union DeckEditPlanApplyAttemptResult(
+        DeckEditPlanApplySuccess,
+        DeckEditPlanApplyFailure
+    );
+
+    /// <summary>
+    /// Carries operation counts and messages after all edits were applied.
+    /// </summary>
+    private sealed record DeckEditPlanApplySuccess(
+        int AppliedOperations,
+        int AttemptedOperations,
+        List<string> Messages
+    );
+
+    /// <summary>
+    /// Carries structured failure details before they are translated to the public result.
+    /// </summary>
+    private sealed record DeckEditPlanApplyFailure(
+        int AppliedOperations,
+        int AttemptedOperations,
+        DeckEditPlanFailedOperation? FailedOperation,
+        Exception Cause,
+        bool ApplyStateUnknown,
+        List<string> Messages
+    );
+
+    /// <summary>
+    /// Keeps a failed operation index coupled to the operation payload.
+    /// </summary>
+    private sealed record DeckEditPlanFailedOperation(int Index, DeckEditOperation Operation);
 
     /// <summary>
     /// Captures the result of applying an in-memory card batch.

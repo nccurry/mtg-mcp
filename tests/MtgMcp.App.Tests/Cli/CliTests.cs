@@ -258,6 +258,47 @@ public sealed class CliTests
     }
 
     /// <summary>
+    /// Verifies that auth archidekt prints usage successfully when help is requested.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_PrintsHelp()
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+
+        int exitCode = ArchidektAuthCommand.Run(
+            ["auth", "archidekt", "--help"],
+            output,
+            error
+        );
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("Usage:");
+        error.ToString().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that auth archidekt reports unknown options through the parse-error path.
+    /// </summary>
+    [Fact]
+    public void AuthArchidekt_ReportsUnknownOption()
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+
+        int exitCode = ArchidektAuthCommand.Run(
+            ["auth", "archidekt", "--wat", "value"],
+            output,
+            error
+        );
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().BeEmpty();
+        error.ToString().Should().Contain("Unknown option '--wat'.");
+        error.ToString().Should().Contain("Usage:");
+    }
+
+    /// <summary>
     /// Verifies that auth commands are handled before the MCP host is built.
     /// </summary>
     [Fact]

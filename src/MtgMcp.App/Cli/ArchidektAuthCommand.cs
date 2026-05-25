@@ -33,37 +33,29 @@ public static class ArchidektAuthCommand
     /// </summary>
     public static int Run(IReadOnlyList<string> args, TextWriter output, TextWriter error)
     {
-        ParseResult parse = Parse(args);
-        if (!string.IsNullOrWhiteSpace(parse.Error))
+        return Parse(args) switch
         {
-            error.WriteLine(parse.Error);
-            error.WriteLine();
-            WriteUsage(error);
-            return 1;
-        }
+            ArchidektAuthOptions options => RunWithOptions(options, output, error),
+            ArchidektAuthHelp => WriteHelp(output),
+            ArchidektAuthParseError parseError => WriteParseError(parseError, error),
+            null => WriteParseError(
+                new ArchidektAuthParseError("Unable to parse Archidekt auth arguments."),
+                error
+            ),
+        };
+    }
 
-        if (parse.ShowHelp)
-        {
-            WriteUsage(output);
-            return 0;
-        }
-
-        if (!parse.HasUsableCredential)
-        {
-            error.WriteLine(
-                "Provide --jwt, --access-token, --refresh-token, or --email/--username with --password."
-            );
-            error.WriteLine();
-            WriteUsage(error);
-            return 1;
-        }
-
-        if (!TryGetCredentialsFilePath(parse, error, out string credentialsFile))
+    /// <summary>
+    /// Writes credentials after arguments have parsed into usable options.
+    /// </summary>
+    private static int RunWithOptions(ArchidektAuthOptions options, TextWriter output, TextWriter error)
+    {
+        if (!TryGetCredentialsFilePath(options, error, out string credentialsFile))
         {
             return 1;
         }
 
-        if (File.Exists(credentialsFile) && !parse.Force)
+        if (File.Exists(credentialsFile) && !options.Force)
         {
             error.WriteLine(
                 $"Archidekt credentials file '{credentialsFile}' already exists. "
@@ -80,13 +72,13 @@ public static class ArchidektAuthCommand
 
         ArchidektCredentials credentials = new()
         {
-            AccessToken = parse.AccessToken,
-            Jwt = parse.Jwt,
-            RefreshToken = parse.RefreshToken,
-            UserId = parse.UserId,
-            Email = parse.Email,
-            Username = parse.Username,
-            Password = parse.Password,
+            AccessToken = options.AccessToken,
+            Jwt = options.Jwt,
+            RefreshToken = options.RefreshToken,
+            UserId = options.UserId,
+            Email = options.Email,
+            Username = options.Username,
+            Password = options.Password,
         };
         string json = JsonSerializer.Serialize(credentials, JsonOptions) + Environment.NewLine;
         if (!TryWriteCredentialsFile(credentialsFile, json, error))
@@ -94,8 +86,28 @@ public static class ArchidektAuthCommand
             return 1;
         }
 
-        WriteSuccess(output, credentialsFile, parse.StoredFieldNames);
+        WriteSuccess(output, credentialsFile, options.StoredFieldNames);
         return 0;
+    }
+
+    /// <summary>
+    /// Writes help output and reports success.
+    /// </summary>
+    private static int WriteHelp(TextWriter output)
+    {
+        WriteUsage(output);
+        return 0;
+    }
+
+    /// <summary>
+    /// Writes a parse error and reports failure.
+    /// </summary>
+    private static int WriteParseError(ArchidektAuthParseError parseError, TextWriter error)
+    {
+        error.WriteLine(parseError.Message);
+        error.WriteLine();
+        WriteUsage(error);
+        return 1;
     }
 
     /// <summary>
@@ -116,7 +128,7 @@ public static class ArchidektAuthCommand
     /// Gets the normalized credentials file path.
     /// </summary>
     private static bool TryGetCredentialsFilePath(
-        ParseResult parse,
+        ArchidektAuthOptions options,
         TextWriter error,
         out string credentialsFile
     )
@@ -124,7 +136,7 @@ public static class ArchidektAuthCommand
         try
         {
             credentialsFile = Path.GetFullPath(
-                parse.CredentialsFile ?? GetDefaultCredentialsFile()
+                options.CredentialsFile ?? GetDefaultCredentialsFile()
             );
             return true;
         }
@@ -208,28 +220,26 @@ public static class ArchidektAuthCommand
     /// <summary>
     /// Parses command options.
     /// </summary>
-    private static ParseResult Parse(IReadOnlyList<string> args)
+    private static ArchidektAuthParseResult Parse(IReadOnlyList<string> args)
     {
-        ParseResult result = new();
+        ArchidektAuthOptions options = new();
         for (int index = 2; index < args.Count; index++)
         {
             string argument = args[index];
             if (argument is "--help" or "-h")
             {
-                result.ShowHelp = true;
-                return result;
+                return new ArchidektAuthHelp();
             }
 
             if (argument.Equals("--force", StringComparison.OrdinalIgnoreCase))
             {
-                result.Force = true;
+                options.Force = true;
                 continue;
             }
 
             if (!argument.StartsWith("--", StringComparison.Ordinal))
             {
-                result.Error = $"Unexpected argument '{argument}'.";
-                return result;
+                return new ArchidektAuthParseError($"Unexpected argument '{argument}'.");
             }
 
             string option = argument[2..];
@@ -244,59 +254,61 @@ public static class ArchidektAuthCommand
             {
                 if (index + 1 >= args.Count || args[index + 1].StartsWith("--", StringComparison.Ordinal))
                 {
-                    result.Error = $"Option '--{option}' requires a value.";
-                    return result;
+                    return new ArchidektAuthParseError($"Option '--{option}' requires a value.");
                 }
 
                 value = args[++index];
             }
 
-            ApplyOption(result, option, value);
-            if (!string.IsNullOrWhiteSpace(result.Error))
+            string? applyError = ApplyOption(options, option, value);
+            if (!string.IsNullOrWhiteSpace(applyError))
             {
-                return result;
+                return new ArchidektAuthParseError(applyError);
             }
         }
 
-        return result;
+        return options.HasUsableCredential
+            ? options
+            : new ArchidektAuthParseError(
+                "Provide --jwt, --access-token, --refresh-token, or --email/--username with --password."
+            );
     }
 
     /// <summary>
     /// Applies one parsed option.
     /// </summary>
-    private static void ApplyOption(ParseResult result, string option, string value)
+    private static string? ApplyOption(ArchidektAuthOptions options, string option, string value)
     {
         string normalized = option.Replace("_", "-", StringComparison.Ordinal).ToLowerInvariant();
         switch (normalized)
         {
             case "credentials-file":
             case "file":
-                result.CredentialsFile = value;
-                break;
+                options.CredentialsFile = value;
+                return null;
             case "jwt":
-                result.Jwt = EmptyToNull(value);
-                break;
+                options.Jwt = EmptyToNull(value);
+                return null;
             case "access-token":
-                result.AccessToken = EmptyToNull(value);
-                break;
+                options.AccessToken = EmptyToNull(value);
+                return null;
             case "refresh-token":
-                result.RefreshToken = EmptyToNull(value);
-                break;
+                options.RefreshToken = EmptyToNull(value);
+                return null;
             case "user-id":
-                result.UserId = EmptyToNull(value);
-                break;
+                options.UserId = EmptyToNull(value);
+                return null;
             case "email":
-                result.Email = EmptyToNull(value);
-                break;
+                options.Email = EmptyToNull(value);
+                return null;
             case "username":
-                result.Username = EmptyToNull(value);
-                break;
+                options.Username = EmptyToNull(value);
+                return null;
             case "password":
-                result.Password = EmptyToNull(value);
-                break;
+                options.Password = EmptyToNull(value);
+                return null;
             default:
-                result.Error = $"Unknown option '--{option}'.";
-                break;
+                return $"Unknown option '--{option}'.";
         }
     }
 
@@ -344,15 +356,29 @@ public static class ArchidektAuthCommand
     }
 
     /// <summary>
-    /// Holds parsed command arguments.
+    /// Represents the closed set of outcomes from parsing auth helper arguments.
     /// </summary>
-    private sealed class ParseResult
-    {
-        /// <summary>
-        /// Gets or sets whether to show help.
-        /// </summary>
-        public bool ShowHelp { get; set; }
+    private readonly union ArchidektAuthParseResult(
+        ArchidektAuthOptions,
+        ArchidektAuthHelp,
+        ArchidektAuthParseError
+    );
 
+    /// <summary>
+    /// Indicates that the caller requested command usage.
+    /// </summary>
+    private sealed record ArchidektAuthHelp;
+
+    /// <summary>
+    /// Carries a parse or validation error that should be shown with usage.
+    /// </summary>
+    private sealed record ArchidektAuthParseError(string Message);
+
+    /// <summary>
+    /// Holds parsed command arguments that are ready to write.
+    /// </summary>
+    private sealed class ArchidektAuthOptions
+    {
         /// <summary>
         /// Gets or sets whether to overwrite an existing file.
         /// </summary>
@@ -397,11 +423,6 @@ public static class ArchidektAuthCommand
         /// Gets or sets the password.
         /// </summary>
         public string? Password { get; set; }
-
-        /// <summary>
-        /// Gets or sets the parse error.
-        /// </summary>
-        public string? Error { get; set; }
 
         /// <summary>
         /// Gets whether the parsed options can authenticate to Archidekt.

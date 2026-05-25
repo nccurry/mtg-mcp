@@ -268,14 +268,6 @@ public static class DeckRoleClassifier
     }
 
     /// <summary>
-    /// Checks whether the card has a category.
-    /// </summary>
-    private static bool HasCategory(DeckCard card, string category)
-    {
-        return DeckCategoryOrdering.HasCategory(card, category);
-    }
-
-    /// <summary>
     /// Gets card categories safely.
     /// </summary>
     private static IEnumerable<string> Categories(DeckCard card)
