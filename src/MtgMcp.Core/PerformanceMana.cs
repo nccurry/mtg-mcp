@@ -24,7 +24,19 @@ internal static class PerformanceMana
         out List<PerformanceManaSource> remainingSources)
     {
         PerformanceCostRequirement requirement = BuildCostRequirement(card);
-        int requiredTotal = Math.Max(ManaValue(card), requirement.SymbolGroups.Count);
+        return TryPay(requirement, ManaValue(card), availableSources, out remainingSources);
+    }
+
+    /// <summary>
+    /// Attempts to pay an already-parsed mana requirement from available sources.
+    /// </summary>
+    public static bool TryPay(
+        PerformanceCostRequirement requirement,
+        int manaValue,
+        IReadOnlyList<PerformanceManaSource> availableSources,
+        out List<PerformanceManaSource> remainingSources)
+    {
+        int requiredTotal = Math.Max(Math.Max(0, manaValue), requirement.SymbolGroups.Count);
         remainingSources = [];
         if (requiredTotal > availableSources.Count)
         {
@@ -39,37 +51,52 @@ internal static class PerformanceMana
         int genericToSpend = requiredTotal - usedIndexes.Count;
         if (genericToSpend > 0)
         {
-            List<int> genericIndexes = availableSources
-                .Select((source, index) => (source, index))
-                .Where(item => !usedIndexes.Contains(item.index))
-                .OrderBy(item => GenericSpendPriority(item.source))
-                .ThenBy(item => item.index)
-                .Take(genericToSpend)
-                .Select(item => item.index)
-                .ToList();
+            List<int> genericIndexes = [];
+            for (int index = 0; index < availableSources.Count; index++)
+            {
+                if (!usedIndexes.Contains(index))
+                {
+                    genericIndexes.Add(index);
+                }
+            }
+
+            genericIndexes.Sort((left, right) =>
+            {
+                int priorityComparison = GenericSpendPriority(availableSources[left])
+                    .CompareTo(GenericSpendPriority(availableSources[right]));
+                return priorityComparison != 0 ? priorityComparison : left.CompareTo(right);
+            });
             if (genericIndexes.Count < genericToSpend)
             {
                 return false;
             }
 
-            foreach (int index in genericIndexes)
+            for (int index = 0; index < genericToSpend; index++)
             {
-                usedIndexes.Add(index);
+                usedIndexes.Add(genericIndexes[index]);
             }
         }
 
-        remainingSources = availableSources
-            .Where((_, index) => !usedIndexes.Contains(index))
-            .ToList();
+        for (int index = 0; index < availableSources.Count; index++)
+        {
+            if (!usedIndexes.Contains(index))
+            {
+                remainingSources.Add(availableSources[index]);
+            }
+        }
+
         return true;
     }
 
     /// <summary>
-    /// Checks whether a card can be paid without consuming the provided source list.
+    /// Checks whether an already-parsed mana requirement can be paid without consuming the source list.
     /// </summary>
-    public static bool CanPay(DeckCard card, IReadOnlyList<PerformanceManaSource> availableSources)
+    public static bool CanPay(
+        PerformanceCostRequirement requirement,
+        int manaValue,
+        IReadOnlyList<PerformanceManaSource> availableSources)
     {
-        return TryPay(card, availableSources, out _);
+        return TryPay(requirement, manaValue, availableSources, out _);
     }
 
     /// <summary>
@@ -102,7 +129,7 @@ internal static class PerformanceMana
 
         foreach (string color in snapshot.ColorIdentity)
         {
-            if (ColoredSymbols.Contains(color, StringComparer.OrdinalIgnoreCase))
+            if (IsColoredSymbol(color))
             {
                 requirement.SymbolGroups.Add([color]);
             }
@@ -125,11 +152,15 @@ internal static class PerformanceMana
     public static IReadOnlyList<string> ReadProducedMana(DeckCard card)
     {
         CardSnapshot snapshot = GetSnapshot(card);
-        List<string> produced = snapshot.ProducedMana
-            .Where(symbol => ManaSymbols.Contains(symbol, StringComparer.OrdinalIgnoreCase))
-            .Select(symbol => symbol.ToUpperInvariant())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<string> produced = [];
+        foreach (string symbol in snapshot.ProducedMana)
+        {
+            if (IsManaSymbol(symbol))
+            {
+                AddDistinctSymbol(produced, symbol.ToUpperInvariant());
+            }
+        }
+
         if (produced.Count > 0)
         {
             return produced;
@@ -144,7 +175,7 @@ internal static class PerformanceMana
         AddBasicLandSymbol(colors, text, "Forest", "G");
         AddBasicLandSymbol(colors, text, "Wastes", "C");
         AddModalDoubleFacedLandSymbols(colors, card, snapshot);
-        return colors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return colors;
     }
 
     /// <summary>
@@ -180,10 +211,13 @@ internal static class PerformanceMana
             return false;
         }
 
-        List<IReadOnlyList<string>> orderedGroups = symbolGroups
-            .OrderBy(group => availableSources.Count(source => source.CanProduceAny(group)))
-            .ThenBy(group => group.Count)
-            .ToList();
+        List<IReadOnlyList<string>> orderedGroups = [.. symbolGroups];
+        orderedGroups.Sort((left, right) =>
+        {
+            int sourceComparison = CountMatchingSources(left, availableSources)
+                .CompareTo(CountMatchingSources(right, availableSources));
+            return sourceComparison != 0 ? sourceComparison : left.Count.CompareTo(right.Count);
+        });
         return TryAssignGroup(0, orderedGroups, availableSources, usedIndexes);
     }
 
@@ -202,13 +236,21 @@ internal static class PerformanceMana
         }
 
         IReadOnlyList<string> group = symbolGroups[groupIndex];
-        List<int> candidates = availableSources
-            .Select((source, index) => (source, index))
-            .Where(item => !usedIndexes.Contains(item.index) && item.source.CanProduceAny(group))
-            .OrderBy(item => item.source.Symbols.Count)
-            .ThenBy(item => item.index)
-            .Select(item => item.index)
-            .ToList();
+        List<int> candidates = [];
+        for (int index = 0; index < availableSources.Count; index++)
+        {
+            if (!usedIndexes.Contains(index) && availableSources[index].CanProduceAny(group))
+            {
+                candidates.Add(index);
+            }
+        }
+
+        candidates.Sort((left, right) =>
+        {
+            int symbolComparison = availableSources[left].Symbols.Count
+                .CompareTo(availableSources[right].Symbols.Count);
+            return symbolComparison != 0 ? symbolComparison : left.CompareTo(right);
+        });
         foreach (int candidate in candidates)
         {
             usedIndexes.Add(candidate);
@@ -228,11 +270,40 @@ internal static class PerformanceMana
     /// </summary>
     private static int GenericSpendPriority(PerformanceManaSource source)
     {
-        int coloredOptions = source.Symbols.Count(symbol =>
-            ColoredSymbols.Contains(symbol, StringComparer.OrdinalIgnoreCase));
-        int colorlessOptions = source.Symbols.Count(symbol =>
-            symbol.Equals("C", StringComparison.OrdinalIgnoreCase));
+        int coloredOptions = 0;
+        int colorlessOptions = 0;
+        foreach (string symbol in source.Symbols)
+        {
+            if (IsColoredSymbol(symbol))
+            {
+                coloredOptions++;
+            }
+            else if (symbol.Equals("C", StringComparison.OrdinalIgnoreCase))
+            {
+                colorlessOptions++;
+            }
+        }
+
         return (coloredOptions * 10) + colorlessOptions;
+    }
+
+    /// <summary>
+    /// Counts available sources that can pay a symbol group.
+    /// </summary>
+    private static int CountMatchingSources(
+        IReadOnlyList<string> group,
+        IReadOnlyList<PerformanceManaSource> availableSources)
+    {
+        int count = 0;
+        foreach (PerformanceManaSource source in availableSources)
+        {
+            if (source.CanProduceAny(group))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -291,10 +362,14 @@ internal static class PerformanceMana
     {
         string[] parts = symbol
             .Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        List<string> symbols = parts
-            .Where(part => ManaSymbols.Contains(part, StringComparer.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<string> symbols = [];
+        foreach (string part in parts)
+        {
+            if (IsManaSymbol(part))
+            {
+                AddDistinctSymbol(symbols, part);
+            }
+        }
 
         if (parts.Length == 1 && symbols.Count == 1)
         {
@@ -318,7 +393,7 @@ internal static class PerformanceMana
     {
         if (text.Contains(landName, StringComparison.OrdinalIgnoreCase))
         {
-            colors.Add(color);
+            AddDistinctSymbol(colors, color);
         }
     }
 
@@ -332,11 +407,61 @@ internal static class PerformanceMana
             return;
         }
 
-        foreach (string color in snapshot.ColorIdentity.Where(symbol =>
-            ColoredSymbols.Contains(symbol, StringComparer.OrdinalIgnoreCase)))
+        foreach (string color in snapshot.ColorIdentity)
         {
-            colors.Add(color.ToUpperInvariant());
+            if (IsColoredSymbol(color))
+            {
+                AddDistinctSymbol(colors, color.ToUpperInvariant());
+            }
         }
+    }
+
+    /// <summary>
+    /// Checks whether a symbol is one of the supported Magic color symbols.
+    /// </summary>
+    private static bool IsColoredSymbol(string symbol)
+    {
+        foreach (string coloredSymbol in ColoredSymbols)
+        {
+            if (coloredSymbol.Equals(symbol, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a symbol is one of the supported cost or produced-mana symbols.
+    /// </summary>
+    private static bool IsManaSymbol(string symbol)
+    {
+        foreach (string manaSymbol in ManaSymbols)
+        {
+            if (manaSymbol.Equals(symbol, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Adds a mana symbol to a list once, preserving first-seen order.
+    /// </summary>
+    private static void AddDistinctSymbol(List<string> symbols, string symbol)
+    {
+        foreach (string existing in symbols)
+        {
+            if (existing.Equals(symbol, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        symbols.Add(symbol);
     }
 
     /// <summary>
@@ -387,7 +512,18 @@ internal sealed class PerformanceManaSource
     /// </summary>
     public bool CanProduceAny(IEnumerable<string> requiredSymbols)
     {
-        return requiredSymbols.Any(symbol => Symbols.Contains(symbol, StringComparer.OrdinalIgnoreCase));
+        foreach (string requiredSymbol in requiredSymbols)
+        {
+            foreach (string symbol in Symbols)
+            {
+                if (symbol.Equals(requiredSymbol, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
 

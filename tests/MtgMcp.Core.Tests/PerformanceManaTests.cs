@@ -95,6 +95,25 @@ public sealed class PerformanceManaTests
     }
 
     /// <summary>
+    /// Verifies that fallback text inference keeps produced colors distinct.
+    /// </summary>
+    [Fact]
+    public void ReadProducedMana_DeduplicatesBasicLandFallbacks()
+    {
+        DeckCard dualLand = new()
+        {
+            Name = "Benchmark Plains Forest",
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Land - Plains Forest",
+                OracleText = "Benchmark Plains Forest enters tapped.",
+            },
+        };
+
+        PerformanceMana.ReadProducedMana(dualLand).Should().BeEquivalentTo(["W", "G"]);
+    }
+
+    /// <summary>
     /// Verifies that MDFC land slots use color identity as a conservative back-face mana fallback.
     /// </summary>
     [Fact]

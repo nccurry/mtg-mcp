@@ -5,6 +5,7 @@ obj/
 .vscode/
 TestResults/
 artifacts/
+BenchmarkDotNet.Artifacts/
 coverage/
 coverage.cobertura.xml
 coverage.json

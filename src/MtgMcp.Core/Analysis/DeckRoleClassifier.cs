@@ -1,9 +1,11 @@
+using System.Text.RegularExpressions;
+
 namespace MtgMcp.Core;
 
 /// <summary>
 /// Classifies cards into deck roles and tags.
 /// </summary>
-public static class DeckRoleClassifier
+public static partial class DeckRoleClassifier
 {
     /// <summary>
     /// Classifies the card.
@@ -214,10 +216,33 @@ public static class DeckRoleClassifier
     /// </summary>
     private static void AddTag(List<string> tags, string tag, bool condition)
     {
-        if (condition && !tags.Any(value => value.Equals(tag, StringComparison.OrdinalIgnoreCase)))
+        if (!condition)
         {
-            tags.Add(tag);
+            return;
         }
+
+        foreach (string value in tags)
+        {
+            if (value.Equals(tag, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        tags.Add(tag);
+    }
+
+    /// <summary>
+    /// Selects the highest-priority canonical Tagger rule.
+    /// </summary>
+    private static bool IsBetterTaggerRule(DeckTaggerRule candidate, DeckTaggerRule best)
+    {
+        if (candidate.Priority != best.Priority)
+        {
+            return candidate.Priority > best.Priority;
+        }
+
+        return RolePriority(candidate.Role) < RolePriority(best.Role);
     }
 
     /// <summary>
@@ -241,12 +266,19 @@ public static class DeckRoleClassifier
         IReadOnlyList<string> taggerOracleTags,
         List<string> tags)
     {
-        DeckTaggerRule? best = taggerOracleTags
-            .Select(tag => DeckTaggerTaxonomy.TryGetRule(tag, out DeckTaggerRule rule) ? rule : null)
-            .Where(rule => rule is not null)
-            .OrderByDescending(rule => rule!.Priority)
-            .ThenBy(rule => RolePriority(rule!.Role))
-            .FirstOrDefault();
+        DeckTaggerRule? best = null;
+        foreach (string tag in taggerOracleTags)
+        {
+            if (!DeckTaggerTaxonomy.TryGetRule(tag, out DeckTaggerRule rule))
+            {
+                continue;
+            }
+
+            if (best is null || IsBetterTaggerRule(rule, best))
+            {
+                best = rule;
+            }
+        }
 
         return best is null ? null : Assignment(best.Role, tags, 0.9);
     }
@@ -391,10 +423,7 @@ public static class DeckRoleClassifier
             return true;
         }
 
-        return System.Text.RegularExpressions.Regex.IsMatch(
-            text,
-            @"each opponent loses\s+x\s+life|each opponent loses life equal",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return FinisherLifeLossRegex().IsMatch(text);
     }
 
     /// <summary>
@@ -420,10 +449,26 @@ public static class DeckRoleClassifier
     /// <summary>
     /// Checks whether text contains any needles.
     /// </summary>
-    private static bool ContainsAny(string value, params string[] needles)
+    private static bool ContainsAny(string value, params ReadOnlySpan<string> needles)
     {
-        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+        foreach (string needle in needles)
+        {
+            if (value.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    /// <summary>
+    /// Matches X-life finisher wording that is easier to express as a regex than as fixed phrases.
+    /// </summary>
+    [GeneratedRegex(
+        @"each opponent loses\s+x\s+life|each opponent loses life equal",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex FinisherLifeLossRegex();
 
     /// <summary>
     /// Splits locally stored annotation values using the same separators as facet snapshots.

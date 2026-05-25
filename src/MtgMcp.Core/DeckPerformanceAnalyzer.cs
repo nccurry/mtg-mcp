@@ -26,16 +26,28 @@ internal static class DeckPerformanceAnalyzer
             .Resolve(workspace, profile, intent);
         SimulationProfile resolvedProfile = profileResolution.Profile;
         List<DeckCard> included = IncludedCards(workspace).ToList();
+        PerformanceCardFactsCache cardFacts = new(included);
         int deckSize = included.Sum(card => Math.Max(0, card.Quantity));
-        (bool colorIdentityKnown, HashSet<string> deckColors) = GetDeckColorIdentity(workspace);
+        (bool colorIdentityKnown, HashSet<string> deckColors) = GetDeckColorIdentity(included, cardFacts);
+        List<DeckCard> libraryTemplate = ExpandPerformanceLibrary(included, cardFacts);
+        DeckCard? commander = included.FirstOrDefault(card => cardFacts.Get(card).IsCommander);
+        PerformanceMulliganContext mulliganContext = BuildPerformanceMulliganContext(
+            workspace,
+            included,
+            cardFacts,
+            deckColors,
+            resolvedProfile);
         List<PerformanceRun> runs = [];
 
         for (int index = 0; index < safeSimulations; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             runs.Add(RunPerformanceGame(
-                workspace,
                 included,
+                libraryTemplate,
+                commander,
+                mulliganContext,
+                cardFacts,
                 deckColors,
                 safeMaxTurn,
                 seed + index,
@@ -55,8 +67,8 @@ internal static class DeckPerformanceAnalyzer
             DeckSize = deckSize,
             OpeningHands = BuildOpeningHandPerformance(runs),
             Castability = BuildCastabilityPerformance(runs, deckColors, colorIdentityKnown, safeMaxTurn),
-            Commander = BuildCommanderPerformance(included, runs, safeMaxTurn),
-            ComboAssembly = BuildComboAssemblyPerformance(included, runs, safeMaxTurn),
+            Commander = BuildCommanderPerformance(included, runs, safeMaxTurn, cardFacts),
+            ComboAssembly = BuildComboAssemblyPerformance(included, runs, safeMaxTurn, cardFacts),
             StrandedCards = BuildStrandedCardPerformance(runs),
         };
 
@@ -68,8 +80,9 @@ internal static class DeckPerformanceAnalyzer
             colorIdentityKnown,
             safeMaxTurn,
             resolvedProfile,
-            intent);
-        AddPerformanceNotes(analysis, workspace, included, colorIdentityKnown, profileResolution, intent);
+            intent,
+            cardFacts);
+        AddPerformanceNotes(analysis, workspace, included, colorIdentityKnown, profileResolution, intent, cardFacts);
         analysis.Warnings.AddRange(profileResolution.Warnings);
         return analysis;
     }
@@ -80,6 +93,7 @@ internal static class DeckPerformanceAnalyzer
     private static PerformanceMulliganContext BuildPerformanceMulliganContext(
         DeckWorkspace workspace,
         IReadOnlyList<DeckCard> included,
+        PerformanceCardFactsCache cardFacts,
         IReadOnlySet<string> deckColors,
         SimulationProfile profile)
     {
@@ -87,7 +101,7 @@ internal static class DeckPerformanceAnalyzer
         {
             FreeFirstMulligan = UsesFreeFirstMulligan(workspace.Format),
             DeckColors = new HashSet<string>(deckColors, StringComparer.OrdinalIgnoreCase),
-            Commander = included.FirstOrDefault(IsCommanderCard),
+            Commander = included.FirstOrDefault(card => cardFacts.Get(card).IsCommander),
             Mulligan = profile.Mulligan,
         };
     }
@@ -96,8 +110,11 @@ internal static class DeckPerformanceAnalyzer
     /// Simulates one heuristic game from opening hand through the target turn.
     /// </summary>
     private static PerformanceRun RunPerformanceGame(
-        DeckWorkspace workspace,
         IReadOnlyList<DeckCard> included,
+        IReadOnlyList<DeckCard> libraryTemplate,
+        DeckCard? commander,
+        PerformanceMulliganContext mulliganContext,
+        PerformanceCardFactsCache cardFacts,
         IReadOnlySet<string> deckColors,
         int maxTurn,
         int seed,
@@ -105,27 +122,22 @@ internal static class DeckPerformanceAnalyzer
         SimulationProfile profile)
     {
         Random random = new(seed);
-        PerformanceMulliganContext mulliganContext = BuildPerformanceMulliganContext(
-            workspace,
-            included,
-            deckColors,
-            profile);
         PerformanceOpeningHand opening = DrawPerformanceOpeningHand(
-            workspace,
+            libraryTemplate,
             random,
             includeMulligans,
-            mulliganContext);
+            mulliganContext,
+            cardFacts);
         List<DeckCard> hand = opening.Hand;
         List<DeckCard> library = opening.Library;
         List<PerformancePermanent> battlefield = [];
         List<DeckCard> graveyard = [];
         List<IReadOnlyList<string>> virtualManaSources = [];
-        DeckCard? commander = included.FirstOrDefault(IsCommanderCard);
         PerformanceRun run = new()
         {
             Mulligans = opening.Mulligans,
             KeptHandSize = opening.Hand.Count,
-            KeptOpeningLands = CountPerformanceRole(opening.Hand, DeckRoles.Lands),
+            KeptOpeningLands = CountPerformanceRole(opening.Hand, DeckRoles.Lands, cardFacts),
             OpeningSevenLands = opening.OpeningSevenLands,
         };
         bool rampCastByTurn = false;
@@ -139,14 +151,14 @@ internal static class DeckPerformanceAnalyzer
                 PerformanceDrawOne(hand, library);
             }
 
-            DeckCard? landPlayed = ChoosePerformanceLand(hand, battlefield, virtualManaSources, deckColors);
+            DeckCard? landPlayed = ChoosePerformanceLand(hand, battlefield, virtualManaSources, deckColors, cardFacts);
             PerformancePermanent? unavailablePermanent = null;
             if (landPlayed is not null)
             {
                 hand.Remove(landPlayed);
                 PerformancePermanent permanent = new() { Card = landPlayed };
                 battlefield.Add(permanent);
-                if (PerformanceMana.LooksTapped(PerformanceMana.GetSnapshot(landPlayed)))
+                if (cardFacts.Get(landPlayed).LooksTapped)
                 {
                     unavailablePermanent = permanent;
                 }
@@ -155,19 +167,22 @@ internal static class DeckPerformanceAnalyzer
             List<PerformanceManaSource> availableSources = GetPerformanceManaSources(
                 battlefield,
                 virtualManaSources,
-                unavailablePermanent);
+                unavailablePermanent,
+                cardFacts);
             List<PerformanceManaSource> turnStartSources = availableSources.ToList();
             int totalManaSources = GetPerformanceManaSources(
                     battlefield,
                     virtualManaSources,
-                    unavailablePermanent: null)
+                    unavailablePermanent: null,
+                    cardFacts)
                 .Count;
             PerformanceTurnState state = new()
             {
                 Turn = turn,
                 LandsInPlay = CountPerformanceRole(
                     battlefield.Select(permanent => permanent.Card),
-                    DeckRoles.Lands),
+                    DeckRoles.Lands,
+                    cardFacts),
                 ManaSources = totalManaSources,
                 AvailableMana = availableSources.Count,
                 ColorSources = new HashSet<string>(
@@ -180,7 +195,7 @@ internal static class DeckPerformanceAnalyzer
 
             if (!commanderCast
                 && commander is not null
-                && PerformanceMana.TryPay(commander, availableSources, out List<PerformanceManaSource> afterCommanderSources))
+                && TryPay(cardFacts.Get(commander), availableSources, out List<PerformanceManaSource> afterCommanderSources))
             {
                 commanderCast = true;
                 availableSources = afterCommanderSources;
@@ -189,26 +204,26 @@ internal static class DeckPerformanceAnalyzer
             }
 
             foreach (DeckCard spell in hand
-                .Where(card => !IsCommanderCard(card))
-                .Where(card => !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(card => PerformanceCastPriority(card, turn, profile))
-                .ThenBy(PerformanceManaValue)
+                .Where(card => !cardFacts.Get(card).IsCommander)
+                .Where(card => !cardFacts.Get(card).IsLand)
+                .OrderBy(card => PerformanceCastPriority(cardFacts.Get(card), turn, profile))
+                .ThenBy(card => cardFacts.Get(card).ManaValue)
                 .ToList())
             {
-                CardRoleAssignment role = DeckRoleClassifier.Classify(spell);
-                if (ShouldHoldPerformanceSpell(spell, role, turn, commanderCast, profile))
+                PerformanceCardFacts facts = cardFacts.Get(spell);
+                if (ShouldHoldPerformanceSpell(facts, turn, commanderCast, profile))
                 {
                     continue;
                 }
 
-                if (!PerformanceMana.TryPay(spell, availableSources, out List<PerformanceManaSource> afterSpellSources))
+                if (!TryPay(facts, availableSources, out List<PerformanceManaSource> afterSpellSources))
                 {
                     continue;
                 }
 
                 availableSources = afterSpellSources;
                 hand.Remove(spell);
-                if (IsPermanent(spell))
+                if (facts.IsPermanent)
                 {
                     battlefield.Add(new PerformancePermanent { Card = spell });
                 }
@@ -217,17 +232,17 @@ internal static class DeckPerformanceAnalyzer
                     graveyard.Add(spell);
                 }
 
-                if (role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
+                if (facts.IsRamp)
                 {
                     rampCastByTurn = true;
                     state.RampCastByTurn = true;
-                    if (!IsPermanent(spell))
+                    if (!facts.IsPermanent)
                     {
-                        virtualManaSources.Add(BuildPerformanceRampSource(spell, deckColors));
+                        virtualManaSources.Add(BuildPerformanceRampSource(facts, deckColors));
                     }
                 }
 
-                if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase))
+                if (facts.IsDraw)
                 {
                     drawCastByTurn = true;
                     state.DrawCastByTurn = true;
@@ -241,40 +256,43 @@ internal static class DeckPerformanceAnalyzer
             List<DeckCard> battlefieldCards = battlefield.Select(permanent => permanent.Card).ToList();
             List<DeckCard> seenCards = hand.Concat(battlefieldCards).Concat(graveyard).ToList();
             state.AvailableMana = availableSources.Count;
-            state.RampSeenByTurn = PerformanceHasRole(seenCards, DeckRoles.Ramp);
+            state.RampSeenByTurn = PerformanceHasRole(seenCards, DeckRoles.Ramp, cardFacts);
             state.RampCastByTurn = state.RampCastByTurn || rampCastByTurn;
-            state.DrawSeenByTurn = PerformanceHasRole(seenCards, DeckRoles.Draw);
+            state.DrawSeenByTurn = PerformanceHasRole(seenCards, DeckRoles.Draw, cardFacts);
             state.DrawCastByTurn = state.DrawCastByTurn || drawCastByTurn;
-            state.InteractionSeenByTurn = PerformanceHasAnyRole(seenCards, DeckRoles.Interaction, DeckRoles.BoardWipes);
-            state.ProtectionSeenByTurn = PerformanceHasRole(seenCards, DeckRoles.Protection);
-            state.GraveyardHateSeenByTurn = PerformanceHasTag(seenCards, DeckTags.GraveyardHate);
+            state.InteractionSeenByTurn = PerformanceHasAnyRole(seenCards, cardFacts, DeckRoles.Interaction, DeckRoles.BoardWipes);
+            state.ProtectionSeenByTurn = PerformanceHasRole(seenCards, DeckRoles.Protection, cardFacts);
+            state.GraveyardHateSeenByTurn = PerformanceHasTag(seenCards, DeckTags.GraveyardHate, cardFacts);
             state.InteractionHeldUp = HasHeldPerformanceRole(
                 hand,
                 availableSources,
-                DeckRoles.Interaction);
+                DeckRoles.Interaction,
+                cardFacts);
             state.ProtectionHeldUp = HasHeldPerformanceRole(
                 hand,
                 availableSources,
-                DeckRoles.Protection);
+                DeckRoles.Protection,
+                cardFacts);
             state.CastableHandRate = CalculatePerformanceCastableHandRate(
                 hand,
-                turnStartSources);
+                turnStartSources,
+                cardFacts);
             state.CardsInHand = hand.Count;
             state.AllDeckColorsAvailable = deckColors.Count == 0
                 || deckColors.All(color => state.ColorSources.Contains(color));
             state.CommanderCastByTurn = commanderCast;
             state.CommanderProtectedByTurn = commanderCast
                 && (state.ProtectionHeldUp
-                    || PerformanceHasRole(battlefieldCards, DeckRoles.Protection)
-                    || PerformanceHasTag(battlefieldCards, DeckTags.CombatProtection));
+                    || PerformanceHasRole(battlefieldCards, DeckRoles.Protection, cardFacts)
+                    || PerformanceHasTag(battlefieldCards, DeckTags.CombatProtection, cardFacts));
 
             if (state.CommanderProtectedByTurn && !run.CommanderProtectedTurn.HasValue)
             {
                 run.CommanderProtectedTurn = turn;
             }
 
-            int comboPiecesSeen = CountPerformanceComboCards(seenCards, includeTutors: false);
-            bool tutorSeen = PerformanceHasRole(seenCards, DeckRoles.Tutors);
+            int comboPiecesSeen = CountPerformanceComboCards(seenCards, includeTutors: false, cardFacts);
+            bool tutorSeen = PerformanceHasRole(seenCards, DeckRoles.Tutors, cardFacts);
             state.ComboPiecesSeen = comboPiecesSeen;
             state.ComboAssemblyByTurn = comboPiecesSeen >= 2;
             state.TutorAssistedComboByTurn = comboPiecesSeen >= 1 && tutorSeen;
@@ -292,7 +310,7 @@ internal static class DeckPerformanceAnalyzer
             run.Turns.Add(state);
         }
 
-        AddPerformanceStrandedCards(run, hand, run.Turns.LastOrDefault(), maxTurn);
+        AddPerformanceStrandedCards(run, hand, run.Turns.LastOrDefault(), maxTurn, cardFacts);
         return run;
     }
 
@@ -300,10 +318,11 @@ internal static class DeckPerformanceAnalyzer
     /// Draws an opening hand and applies the London mulligan heuristic.
     /// </summary>
     private static PerformanceOpeningHand DrawPerformanceOpeningHand(
-        DeckWorkspace workspace,
+        IReadOnlyList<DeckCard> libraryTemplate,
         Random random,
         bool includeMulligans,
-        PerformanceMulliganContext context)
+        PerformanceMulliganContext context,
+        PerformanceCardFactsCache cardFacts)
     {
         int mulligans = 0;
         int maximumMulligans = context.FreeFirstMulligan ? 3 : 2;
@@ -311,27 +330,33 @@ internal static class DeckPerformanceAnalyzer
         while (mulligans <= maximumMulligans)
         {
             int targetHandSize = PerformanceTargetHandSize(mulligans, context);
-            List<DeckCard> library = ExpandPerformanceLibrary(workspace);
+            List<DeckCard> library = [.. libraryTemplate];
             Shuffle(library, random);
-            List<DeckCard> hand = library.Take(Math.Min(7, library.Count)).ToList();
-            library = library.Skip(hand.Count).ToList();
+            int handCount = Math.Min(7, library.Count);
+            List<DeckCard> hand = new(handCount);
+            for (int index = 0; index < handCount; index++)
+            {
+                hand.Add(library[index]);
+            }
+
+            library.RemoveRange(0, handCount);
             if (mulligans == 0)
             {
                 firstSeven = hand.ToList();
             }
 
             bool keep = !includeMulligans
-                || IsKeepablePerformanceHand(hand, targetHandSize, mulligans, context)
+                || IsKeepablePerformanceHand(hand, targetHandSize, mulligans, context, cardFacts)
                 || targetHandSize <= 5;
             if (keep)
             {
-                BottomPerformanceCards(hand, targetHandSize, context);
+                BottomPerformanceCards(hand, targetHandSize, context, cardFacts);
                 return new PerformanceOpeningHand
                 {
                     Hand = hand,
                     Library = library,
                     Mulligans = mulligans,
-                    OpeningSevenLands = CountPerformanceRole(firstSeven, DeckRoles.Lands),
+                    OpeningSevenLands = CountPerformanceRole(firstSeven, DeckRoles.Lands, cardFacts),
                 };
             }
 
@@ -344,11 +369,18 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Expands included non-commander cards into individual library entries.
     /// </summary>
-    private static List<DeckCard> ExpandPerformanceLibrary(DeckWorkspace workspace)
+    private static List<DeckCard> ExpandPerformanceLibrary(
+        IReadOnlyList<DeckCard> included,
+        PerformanceCardFactsCache cardFacts)
     {
         List<DeckCard> cards = [];
-        foreach (DeckCard card in IncludedCards(workspace).Where(card => !IsCommanderCard(card)))
+        foreach (DeckCard card in included)
         {
+            if (cardFacts.Get(card).IsCommander)
+            {
+                continue;
+            }
+
             for (int copy = 0; copy < Math.Max(0, card.Quantity); copy++)
             {
                 cards.Add(card);
@@ -378,9 +410,10 @@ internal static class DeckPerformanceAnalyzer
         IReadOnlyList<DeckCard> hand,
         int targetHandSize,
         int mulligans,
-        PerformanceMulliganContext context)
+        PerformanceMulliganContext context,
+        PerformanceCardFactsCache cardFacts)
     {
-        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands, cardFacts);
         if (lands == 0)
         {
             return false;
@@ -391,13 +424,13 @@ internal static class DeckPerformanceAnalyzer
             return false;
         }
 
-        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2);
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2, cardFacts);
         if (targetHandSize >= 6 && lands == 1 && earlyRamp < 2)
         {
             return false;
         }
 
-        double score = ScorePerformanceOpeningHand(hand, context);
+        double score = ScorePerformanceOpeningHand(hand, context, cardFacts);
         return score >= MinimumPerformanceKeepScore(targetHandSize, mulligans, context);
     }
 
@@ -406,21 +439,22 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static double ScorePerformanceOpeningHand(
         IReadOnlyList<DeckCard> hand,
-        PerformanceMulliganContext context)
+        PerformanceMulliganContext context,
+        PerformanceCardFactsCache cardFacts)
     {
-        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
-        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2);
-        int oneManaRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 1);
-        int earlyDraw = CountEarlyPerformanceRole(hand, DeckRoles.Draw, maxManaValue: 3);
-        int cheapPlays = CountCheapPerformancePlays(hand);
-        int earlyInteraction = CountEarlyPerformanceRole(hand, DeckRoles.Interaction, maxManaValue: 2)
-            + CountEarlyPerformanceRole(hand, DeckRoles.Protection, maxManaValue: 2);
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands, cardFacts);
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2, cardFacts);
+        int oneManaRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 1, cardFacts);
+        int earlyDraw = CountEarlyPerformanceRole(hand, DeckRoles.Draw, maxManaValue: 3, cardFacts);
+        int cheapPlays = CountCheapPerformancePlays(hand, cardFacts);
+        int earlyInteraction = CountEarlyPerformanceRole(hand, DeckRoles.Interaction, maxManaValue: 2, cardFacts)
+            + CountEarlyPerformanceRole(hand, DeckRoles.Protection, maxManaValue: 2, cardFacts);
         int expensiveCards = hand.Count(card =>
-            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            && PerformanceManaValue(card) >= 6);
-        HashSet<string> colors = BuildOpeningHandColorAccess(hand);
-        bool hasCastableEarlySpell = HasCastableEarlyPerformanceSpell(hand);
-        bool hasCommanderPlan = HasPerformanceCommanderPlan(hand, context);
+            !cardFacts.Get(card).IsLand
+            && cardFacts.Get(card).ManaValue >= 6);
+        HashSet<string> colors = BuildOpeningHandColorAccess(hand, cardFacts);
+        bool hasCastableEarlySpell = HasCastableEarlyPerformanceSpell(hand, cardFacts);
+        bool hasCommanderPlan = HasPerformanceCommanderPlan(hand, context, cardFacts);
         bool hasEarlyPlan = earlyRamp > 0
             || earlyDraw > 0
             || cheapPlays >= 2
@@ -508,11 +542,13 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Counts cheap cards for opening-hand development.
     /// </summary>
-    private static int CountCheapPerformancePlays(IReadOnlyList<DeckCard> hand)
+    private static int CountCheapPerformancePlays(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceCardFactsCache cardFacts)
     {
         return hand.Count(card =>
-            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            && PerformanceManaValue(card) <= 2);
+            !cardFacts.Get(card).IsLand
+            && cardFacts.Get(card).ManaValue <= 2);
     }
 
     /// <summary>
@@ -521,23 +557,26 @@ internal static class DeckPerformanceAnalyzer
     private static int CountEarlyPerformanceRole(
         IReadOnlyList<DeckCard> hand,
         string roleName,
-        int maxManaValue)
+        int maxManaValue,
+        PerformanceCardFactsCache cardFacts)
     {
         return hand.Count(card =>
-            DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase)
-            && PerformanceManaValue(card) <= maxManaValue);
+            cardFacts.Get(card).HasRole(roleName)
+            && cardFacts.Get(card).ManaValue <= maxManaValue);
     }
 
     /// <summary>
     /// Checks whether the hand can deploy at least one cheap nonland card.
     /// </summary>
-    private static bool HasCastableEarlyPerformanceSpell(IReadOnlyList<DeckCard> hand)
+    private static bool HasCastableEarlyPerformanceSpell(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceCardFactsCache cardFacts)
     {
-        List<PerformanceManaSource> sources = BuildOpeningLandManaSources(hand);
+        List<PerformanceManaSource> sources = BuildOpeningLandManaSources(hand, cardFacts);
         return hand.Any(card =>
-            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            && PerformanceManaValue(card) <= 2
-            && PerformanceMana.CanPay(card, sources));
+            !cardFacts.Get(card).IsLand
+            && cardFacts.Get(card).ManaValue <= 2
+            && CanPay(cardFacts.Get(card), sources));
     }
 
     /// <summary>
@@ -545,42 +584,49 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static bool HasPerformanceCommanderPlan(
         IReadOnlyList<DeckCard> hand,
-        PerformanceMulliganContext context)
+        PerformanceMulliganContext context,
+        PerformanceCardFactsCache cardFacts)
     {
         if (context.Commander is null)
         {
             return false;
         }
 
-        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
-        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2);
+        PerformanceCardFacts commanderFacts = cardFacts.Get(context.Commander);
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands, cardFacts);
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2, cardFacts);
         int expectedLandDropsByTurnFour = lands >= 2 ? Math.Min(4, lands + 1) : lands;
         int expectedManaByTurnFour = expectedLandDropsByTurnFour + Math.Min(earlyRamp, 2);
-        if (expectedManaByTurnFour < PerformanceManaValue(context.Commander))
+        if (expectedManaByTurnFour < commanderFacts.ManaValue)
         {
             return false;
         }
 
-        List<PerformanceManaSource> sources = BuildOpeningHandManaSources(hand);
+        List<PerformanceManaSource> sources = BuildOpeningHandManaSources(hand, cardFacts);
         return PerformanceMana.CanSatisfyRequirement(
-            PerformanceMana.BuildCostRequirement(context.Commander),
+            commanderFacts.CostRequirement,
             sources);
     }
 
     /// <summary>
     /// Builds mana sources available from lands and castable cheap fixing.
     /// </summary>
-    private static List<PerformanceManaSource> BuildOpeningHandManaSources(IReadOnlyList<DeckCard> hand)
+    private static List<PerformanceManaSource> BuildOpeningHandManaSources(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceCardFactsCache cardFacts)
     {
-        List<PerformanceManaSource> sources = BuildOpeningLandManaSources(hand);
-        foreach (DeckCard card in hand.Where(card =>
-            !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            && PerformanceManaValue(card) <= 2
-            && PerformanceMana.ReadProducedMana(card).Count > 0))
+        List<PerformanceManaSource> sources = BuildOpeningLandManaSources(hand, cardFacts);
+        foreach (DeckCard card in hand)
         {
-            if (PerformanceMana.CanPay(card, sources))
+            PerformanceCardFacts facts = cardFacts.Get(card);
+            if (facts.IsLand || facts.ManaValue > 2 || facts.ProducedMana.Count == 0)
             {
-                sources.Add(new PerformanceManaSource(PerformanceMana.ReadProducedMana(card)));
+                continue;
+            }
+
+            if (CanPay(facts, sources))
+            {
+                sources.Add(new PerformanceManaSource(facts.ProducedMana));
             }
         }
 
@@ -590,21 +636,31 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Builds mana sources available from lands in the opening hand.
     /// </summary>
-    private static List<PerformanceManaSource> BuildOpeningLandManaSources(IReadOnlyList<DeckCard> hand)
+    private static List<PerformanceManaSource> BuildOpeningLandManaSources(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceCardFactsCache cardFacts)
     {
-        return hand
-            .Where(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
-            .Select(card => new PerformanceManaSource(PerformanceMana.ReadProducedMana(card)))
-            .Where(source => source.Symbols.Count > 0)
-            .ToList();
+        List<PerformanceManaSource> sources = [];
+        foreach (DeckCard card in hand)
+        {
+            PerformanceCardFacts facts = cardFacts.Get(card);
+            if (facts.IsLand && facts.ProducedMana.Count > 0)
+            {
+                sources.Add(new PerformanceManaSource(facts.ProducedMana));
+            }
+        }
+
+        return sources;
     }
 
     /// <summary>
     /// Reads color symbols reachable from opening lands and castable cheap fixing.
     /// </summary>
-    private static HashSet<string> BuildOpeningHandColorAccess(IReadOnlyList<DeckCard> hand)
+    private static HashSet<string> BuildOpeningHandColorAccess(
+        IReadOnlyList<DeckCard> hand,
+        PerformanceCardFactsCache cardFacts)
     {
-        return BuildOpeningHandManaSources(hand)
+        return BuildOpeningHandManaSources(hand, cardFacts)
             .SelectMany(source => source.Symbols)
             .Where(symbol => PerformanceMana.ColoredSymbols.Contains(symbol, StringComparer.OrdinalIgnoreCase))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -616,7 +672,8 @@ internal static class DeckPerformanceAnalyzer
     private static void BottomPerformanceCards(
         List<DeckCard> hand,
         int targetHandSize,
-        PerformanceMulliganContext context)
+        PerformanceMulliganContext context,
+        PerformanceCardFactsCache cardFacts)
     {
         int removeCount = hand.Count - targetHandSize;
         if (removeCount <= 0)
@@ -633,8 +690,8 @@ internal static class DeckPerformanceAnalyzer
             List<DeckCard> kept = hand
                 .Where((_, index) => !bottomIndexes.Contains(index))
                 .ToList();
-            double score = ScorePerformanceOpeningHand(kept, context);
-            int priority = indexes.Sum(index => PerformanceBottomPriority(hand[index], hand));
+            double score = ScorePerformanceOpeningHand(kept, context, cardFacts);
+            int priority = indexes.Sum(index => PerformanceBottomPriority(hand[index], hand, cardFacts));
             if (score > bestScore || (score.Equals(bestScore) && priority > bestPriority))
             {
                 bestScore = score;
@@ -691,26 +748,29 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Scores a card for bottoming during the mulligan process.
     /// </summary>
-    private static int PerformanceBottomPriority(DeckCard card, IReadOnlyList<DeckCard> hand)
+    private static int PerformanceBottomPriority(
+        DeckCard card,
+        IReadOnlyList<DeckCard> hand,
+        PerformanceCardFactsCache cardFacts)
     {
-        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        int lands = CountPerformanceRole(hand, DeckRoles.Lands);
-        if (role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+        PerformanceCardFacts facts = cardFacts.Get(card);
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands, cardFacts);
+        if (facts.IsLand)
         {
             return lands > 3 ? 5 : 0;
         }
 
-        if (PerformanceManaValue(card) >= 6)
+        if (facts.ManaValue >= 6)
         {
             return 4;
         }
 
-        if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase))
+        if (facts.IsWincon)
         {
             return 3;
         }
 
-        if (role.PrimaryRole.Equals(DeckRoles.Utility, StringComparison.OrdinalIgnoreCase))
+        if (facts.IsUtility)
         {
             return 2;
         }
@@ -725,51 +785,53 @@ internal static class DeckPerformanceAnalyzer
         IReadOnlyList<DeckCard> hand,
         IReadOnlyList<PerformancePermanent> battlefield,
         IReadOnlyList<IReadOnlyList<string>> virtualManaSources,
-        IReadOnlySet<string> deckColors)
+        IReadOnlySet<string> deckColors,
+        PerformanceCardFactsCache cardFacts)
     {
         HashSet<string> existingColors = ExtractColoredSymbols(GetPerformanceManaSources(
             battlefield,
             virtualManaSources,
-            unavailablePermanent: null));
+            unavailablePermanent: null,
+            cardFacts));
         List<DeckCard> lands = hand
-            .Where(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+            .Where(card => cardFacts.Get(card).IsLand)
             .ToList();
         return lands
-            .OrderByDescending(card => PerformanceMana.ReadProducedMana(card).Count(color => deckColors.Contains(color) && !existingColors.Contains(color)))
-            .ThenBy(card => PerformanceMana.LooksTapped(PerformanceMana.GetSnapshot(card)) ? 1 : 0)
-            .ThenByDescending(card => PerformanceMana.ReadProducedMana(card).Count)
+            .OrderByDescending(card => cardFacts.Get(card).ProducedMana.Count(color => deckColors.Contains(color) && !existingColors.Contains(color)))
+            .ThenBy(card => cardFacts.Get(card).LooksTapped ? 1 : 0)
+            .ThenByDescending(card => cardFacts.Get(card).ProducedMana.Count)
             .FirstOrDefault();
     }
 
     /// <summary>
     /// Scores spell sequencing priority for one turn of heuristic development.
     /// </summary>
-    private static int PerformanceCastPriority(DeckCard card, int turn, SimulationProfile profile)
+    private static int PerformanceCastPriority(
+        PerformanceCardFacts facts,
+        int turn,
+        SimulationProfile profile)
     {
-        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        if (turn <= 3 && role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
+        if (turn <= 3 && facts.IsRamp)
         {
             return profile.Sequencing.EarlyRampPriority;
         }
 
-        if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase)
-            || role.Tags.Contains(DeckTags.Engines))
+        if (facts.IsDraw || facts.HasTag(DeckTags.Engines))
         {
             return profile.Sequencing.DrawPriority;
         }
 
-        if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase))
+        if (facts.IsTutor)
         {
             return profile.Sequencing.TutorPriority;
         }
 
-        if (role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler))
+        if (facts.HasComboPieceOrEnabler)
         {
             return profile.Sequencing.ComboPriority;
         }
 
-        if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
-            || role.Tags.Contains(DeckTags.Finishers))
+        if (facts.IsWincon || facts.HasTag(DeckTags.Finishers))
         {
             return profile.Sequencing.WinconPriority;
         }
@@ -781,19 +843,17 @@ internal static class DeckPerformanceAnalyzer
     /// Determines whether a nonpermanent spell should be held for interaction or protection.
     /// </summary>
     private static bool ShouldHoldPerformanceSpell(
-        DeckCard card,
-        CardRoleAssignment role,
+        PerformanceCardFacts facts,
         int turn,
         bool commanderCast,
         SimulationProfile profile)
     {
-        if (IsPermanent(card))
+        if (facts.IsPermanent)
         {
             return false;
         }
 
-        bool interaction = role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
-            || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase);
+        bool interaction = facts.IsInteraction || facts.IsBoardWipe;
         if (interaction && turn >= profile.Sequencing.HoldInteractionFromTurn && profile.Sequencing.MinimumInteractionHeld > 0)
         {
             return true;
@@ -801,15 +861,28 @@ internal static class DeckPerformanceAnalyzer
 
         return commanderCast
             && profile.Sequencing.HoldProtectionWhenCommanderOnline
-            && role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase);
+            && facts.IsProtection;
     }
 
     /// <summary>
-    /// Reads a nonnegative integer mana value from a card snapshot.
+    /// Checks whether cached card facts can be paid from the available sources.
     /// </summary>
-    private static int PerformanceManaValue(DeckCard card)
+    private static bool CanPay(
+        PerformanceCardFacts facts,
+        IReadOnlyList<PerformanceManaSource> availableSources)
     {
-        return PerformanceMana.ManaValue(card);
+        return PerformanceMana.CanPay(facts.CostRequirement, facts.ManaValue, availableSources);
+    }
+
+    /// <summary>
+    /// Attempts to pay cached card facts from the available sources.
+    /// </summary>
+    private static bool TryPay(
+        PerformanceCardFacts facts,
+        IReadOnlyList<PerformanceManaSource> availableSources,
+        out List<PerformanceManaSource> remainingSources)
+    {
+        return PerformanceMana.TryPay(facts.CostRequirement, facts.ManaValue, availableSources, out remainingSources);
     }
 
     /// <summary>
@@ -818,17 +891,19 @@ internal static class DeckPerformanceAnalyzer
     private static List<PerformanceManaSource> GetPerformanceManaSources(
         IReadOnlyList<PerformancePermanent> battlefield,
         IReadOnlyList<IReadOnlyList<string>> virtualManaSources,
-        PerformancePermanent? unavailablePermanent)
+        PerformancePermanent? unavailablePermanent,
+        PerformanceCardFactsCache cardFacts)
     {
         List<PerformanceManaSource> sources = [];
         foreach (PerformancePermanent permanent in battlefield)
         {
-            if (ReferenceEquals(permanent, unavailablePermanent) || !IsPerformanceManaSource(permanent.Card))
+            PerformanceCardFacts facts = cardFacts.Get(permanent.Card);
+            if (ReferenceEquals(permanent, unavailablePermanent) || !facts.IsManaSource)
             {
                 continue;
             }
 
-            sources.Add(new PerformanceManaSource(PerformanceMana.ReadProducedMana(permanent.Card)));
+            sources.Add(new PerformanceManaSource(facts.ProducedMana));
         }
 
         sources.AddRange(virtualManaSources.Select(source => new PerformanceManaSource(source)));
@@ -838,14 +913,6 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Checks whether a card contributes mana in the heuristic simulation.
     /// </summary>
-    private static bool IsPerformanceManaSource(DeckCard card)
-    {
-        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        return role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            || role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase)
-            || PerformanceMana.ReadProducedMana(card).Count > 0;
-    }
-
     /// <summary>
     /// Gets color symbols from currently available mana sources.
     /// </summary>
@@ -861,13 +928,12 @@ internal static class DeckPerformanceAnalyzer
     /// Converts a nonpermanent ramp spell into a future virtual mana source.
     /// </summary>
     private static IReadOnlyList<string> BuildPerformanceRampSource(
-        DeckCard rampCard,
+        PerformanceCardFacts facts,
         IReadOnlySet<string> deckColors)
     {
-        IReadOnlyList<string> produced = PerformanceMana.ReadProducedMana(rampCard);
-        if (produced.Count > 0)
+        if (facts.ProducedMana.Count > 0)
         {
-            return produced;
+            return facts.ProducedMana;
         }
 
         return deckColors.Count > 0 ? deckColors.ToList() : [];
@@ -887,18 +953,32 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static double CalculatePerformanceCastableHandRate(
         IReadOnlyList<DeckCard> hand,
-        IReadOnlyList<PerformanceManaSource> availableSources)
+        IReadOnlyList<PerformanceManaSource> availableSources,
+        PerformanceCardFactsCache cardFacts)
     {
-        List<DeckCard> spells = hand
-            .Where(card => !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
-            .Where(card => !IsCommanderCard(card))
-            .ToList();
-        if (spells.Count == 0)
+        int spells = 0;
+        int castable = 0;
+        foreach (DeckCard card in hand)
+        {
+            PerformanceCardFacts facts = cardFacts.Get(card);
+            if (facts.IsLand || facts.IsCommander)
+            {
+                continue;
+            }
+
+            spells++;
+            if (CanPay(facts, availableSources))
+            {
+                castable++;
+            }
+        }
+
+        if (spells == 0)
         {
             return 1;
         }
 
-        return spells.Count(card => PerformanceMana.CanPay(card, availableSources)) / (double)spells.Count;
+        return castable / (double)spells;
     }
 
     /// <summary>
@@ -907,47 +987,57 @@ internal static class DeckPerformanceAnalyzer
     private static bool HasHeldPerformanceRole(
         IReadOnlyList<DeckCard> hand,
         IReadOnlyList<PerformanceManaSource> availableSources,
-        string roleName)
+        string roleName,
+        PerformanceCardFactsCache cardFacts)
     {
         return hand.Any(card =>
-            DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase)
-            && PerformanceMana.CanPay(card, availableSources));
+            cardFacts.Get(card).HasRole(roleName)
+            && CanPay(cardFacts.Get(card), availableSources));
     }
 
     /// <summary>
     /// Checks whether any card in a zone has the requested primary role.
     /// </summary>
-    private static bool PerformanceHasRole(IEnumerable<DeckCard> cards, string roleName)
+    private static bool PerformanceHasRole(
+        IEnumerable<DeckCard> cards,
+        string roleName,
+        PerformanceCardFactsCache cardFacts)
     {
-        return cards.Any(card =>
-            DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+        return cards.Any(card => cardFacts.Get(card).HasRole(roleName));
     }
 
     /// <summary>
     /// Checks whether any card in a zone has any requested primary role.
     /// </summary>
-    private static bool PerformanceHasAnyRole(IEnumerable<DeckCard> cards, params string[] roleNames)
+    private static bool PerformanceHasAnyRole(
+        IEnumerable<DeckCard> cards,
+        PerformanceCardFactsCache cardFacts,
+        params string[] roleNames)
     {
         return cards.Any(card =>
-            roleNames.Any(roleName =>
-                DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase)));
+            roleNames.Any(roleName => cardFacts.Get(card).HasRole(roleName)));
     }
 
     /// <summary>
     /// Checks whether any card in a zone has the requested tag.
     /// </summary>
-    private static bool PerformanceHasTag(IEnumerable<DeckCard> cards, string tag)
+    private static bool PerformanceHasTag(
+        IEnumerable<DeckCard> cards,
+        string tag,
+        PerformanceCardFactsCache cardFacts)
     {
-        return cards.Any(card => DeckRoleClassifier.Classify(card).Tags.Contains(tag));
+        return cards.Any(card => cardFacts.Get(card).HasTag(tag));
     }
 
     /// <summary>
     /// Counts cards in a zone with the requested primary role.
     /// </summary>
-    private static int CountPerformanceRole(IEnumerable<DeckCard> cards, string roleName)
+    private static int CountPerformanceRole(
+        IEnumerable<DeckCard> cards,
+        string roleName,
+        PerformanceCardFactsCache cardFacts)
     {
-        return cards.Count(card =>
-            DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+        return cards.Count(card => cardFacts.Get(card).HasRole(roleName));
     }
 
     /// <summary>
@@ -955,14 +1045,14 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static int CountPerformanceComboCards(
         IEnumerable<DeckCard> cards,
-        bool includeTutors)
+        bool includeTutors,
+        PerformanceCardFactsCache cardFacts)
     {
         return cards
             .Where(card =>
             {
-                CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-                return role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler)
-                    || (includeTutors && role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase));
+                PerformanceCardFacts facts = cardFacts.Get(card);
+                return facts.HasComboPieceOrEnabler || (includeTutors && facts.IsTutor);
             })
             .Select(card => card.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -976,7 +1066,8 @@ internal static class DeckPerformanceAnalyzer
         PerformanceRun run,
         IReadOnlyList<DeckCard> hand,
         PerformanceTurnState? lastTurn,
-        int maxTurn)
+        int maxTurn,
+        PerformanceCardFactsCache cardFacts)
     {
         if (lastTurn is null)
         {
@@ -985,17 +1076,14 @@ internal static class DeckPerformanceAnalyzer
 
         foreach (DeckCard card in hand)
         {
-            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-            if (role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-                || IsCommanderCard(card)
-                || PerformanceManaValue(card) < 4)
+            PerformanceCardFacts facts = cardFacts.Get(card);
+            if (facts.IsLand || facts.IsCommander || facts.ManaValue < 4)
             {
                 continue;
             }
 
-            PerformanceCostRequirement requirement = PerformanceMana.BuildCostRequirement(card);
-            bool manaStranded = PerformanceManaValue(card) > lastTurn.ManaSources;
-            bool colorStranded = !PerformanceMana.CanSatisfyRequirement(requirement, lastTurn.UntappedManaSources);
+            bool manaStranded = facts.ManaValue > lastTurn.ManaSources;
+            bool colorStranded = !PerformanceMana.CanSatisfyRequirement(facts.CostRequirement, lastTurn.UntappedManaSources);
             if (!manaStranded && !colorStranded)
             {
                 continue;
@@ -1004,7 +1092,7 @@ internal static class DeckPerformanceAnalyzer
             run.StrandedCards[card.Name] = new PerformanceStrandedRun
             {
                 CardName = card.Name,
-                ManaValue = PerformanceManaValue(card),
+                ManaValue = facts.ManaValue,
                 ManaStranded = manaStranded,
                 ColorStranded = colorStranded,
                 FinalTurn = maxTurn,
@@ -1152,12 +1240,13 @@ internal static class DeckPerformanceAnalyzer
     private static CommanderPerformance BuildCommanderPerformance(
         IReadOnlyList<DeckCard> included,
         IReadOnlyList<PerformanceRun> runs,
-        int maxTurn)
+        int maxTurn,
+        PerformanceCardFactsCache cardFacts)
     {
         CommanderPerformance result = new()
         {
             CommanderNames = included
-                .Where(IsCommanderCard)
+                .Where(card => cardFacts.Get(card).IsCommander)
                 .Select(card => card.Name)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
@@ -1196,16 +1285,16 @@ internal static class DeckPerformanceAnalyzer
     private static ComboAssemblyPerformance BuildComboAssemblyPerformance(
         IReadOnlyList<DeckCard> included,
         IReadOnlyList<PerformanceRun> runs,
-        int maxTurn)
+        int maxTurn,
+        PerformanceCardFactsCache cardFacts)
     {
         ComboAssemblyPerformance result = new()
         {
             RelevantCards = included
                 .Where(card =>
                 {
-                    CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-                    return role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler)
-                        || role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase);
+                    PerformanceCardFacts facts = cardFacts.Get(card);
+                    return facts.HasComboPieceOrEnabler || facts.IsTutor;
                 })
                 .Select(card => card.Name)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1276,7 +1365,8 @@ internal static class DeckPerformanceAnalyzer
         bool colorIdentityKnown,
         int maxTurn,
         SimulationProfile profile,
-        DeckIntent? intent)
+        DeckIntent? intent,
+        PerformanceCardFactsCache cardFacts)
     {
         PerformanceScenarioDefaults defaults = BuildScenarioDefaults(maxTurn, profile, intent);
         List<string> commanderDrivers =
@@ -1300,18 +1390,18 @@ internal static class DeckPerformanceAnalyzer
                 defaults.CommanderTurn,
                 runs.Count(run => run.CommanderCastTurn <= defaults.CommanderTurn),
                 runs.Count,
-                RelevantPerformanceCards(included, DeckRoles.Commander),
+                RelevantPerformanceCards(included, DeckRoles.Commander, cardFacts),
                 commanderDrivers,
                 defaults.IntentAdjusted
                     ? ["Commander is treated as always available from the command zone.", "Deck intent adjusted the target turn."]
                     : ["Commander is treated as always available from the command zone."],
-                BuildCommanderFailureDriverCounts(included, runs, defaults.CommanderTurn, commanderDrivers)),
+                BuildCommanderFailureDriverCounts(included, runs, defaults.CommanderTurn, commanderDrivers, cardFacts)),
             BuildScenario(
                 "commander-with-protection-by-turn-5",
                 defaults.ProtectionTurn,
                 runs.Count(run => run.CommanderProtectedTurn <= defaults.ProtectionTurn),
                 runs.Count,
-                RelevantPerformanceCards(included, DeckRoles.Protection),
+                RelevantPerformanceCards(included, DeckRoles.Protection, cardFacts),
                 commanderProtectionDrivers,
                 ["Protection includes held-up protection spells and protection permanents."],
                 BuildProtectionFailureDriverCounts(runs, defaults.ProtectionTurn, commanderProtectionDrivers)),
@@ -1320,10 +1410,10 @@ internal static class DeckPerformanceAnalyzer
                 defaults.HateTurn,
                 runs.Count(run => StateAt(run, defaults.HateTurn)?.GraveyardHateSeenByTurn == true),
                 runs.Count,
-                RelevantPerformanceTaggedCards(included, DeckTags.GraveyardHate),
+                RelevantPerformanceTaggedCards(included, DeckTags.GraveyardHate, cardFacts),
                 graveyardHateDrivers,
                 ["Scenario measures access, not whether the hate is tactically correct to deploy."],
-                BuildGraveyardHateFailureDriverCounts(included, runs, defaults.HateTurn, graveyardHateDrivers)),
+                BuildGraveyardHateFailureDriverCounts(included, runs, defaults.HateTurn, graveyardHateDrivers, cardFacts)),
             BuildScenario(
                 "all-colors-by-turn-3",
                 defaults.ColorTurn,
@@ -1331,7 +1421,7 @@ internal static class DeckPerformanceAnalyzer
                     ? runs.Count(run => StateAt(run, defaults.ColorTurn)?.AllDeckColorsAvailable == true)
                     : 0,
                 runs.Count,
-                ManaSourcePerformanceCards(included, deckColors),
+                ManaSourcePerformanceCards(included, deckColors, cardFacts),
                 colorDrivers,
                 ["Uses cached produced_mana plus basic-land name fallbacks."],
                 BuildColorFailureDriverCounts(runs, defaults.ColorTurn, colorDrivers)),
@@ -1340,7 +1430,7 @@ internal static class DeckPerformanceAnalyzer
                 defaults.InteractionTurn,
                 runs.Count(run => StateAt(run, defaults.InteractionTurn)?.InteractionHeldUp == true),
                 runs.Count,
-                RelevantPerformanceCards(included, DeckRoles.Interaction),
+                RelevantPerformanceCards(included, DeckRoles.Interaction, cardFacts),
                 interactionDrivers,
                 ["Held-up interaction means a classified interaction spell remains in hand and is castable."],
                 BuildInteractionFailureDriverCounts(runs, defaults.InteractionTurn, interactionDrivers)),
@@ -1349,7 +1439,7 @@ internal static class DeckPerformanceAnalyzer
                 defaults.ComboTurn,
                 runs.Count(run => run.TutorAssistedComboTurn <= defaults.ComboTurn),
                 runs.Count,
-                RelevantComboPerformanceCards(included),
+                RelevantComboPerformanceCards(included, cardFacts),
                 comboDrivers,
                 ["Assembly means two combo cards, or a combo card plus a tutor, have been seen."],
                 BuildComboFailureDriverCounts(runs, defaults.ComboTurn, comboDrivers)),
@@ -1449,14 +1539,16 @@ internal static class DeckPerformanceAnalyzer
         IReadOnlyList<DeckCard> included,
         IReadOnlyList<PerformanceRun> runs,
         int targetTurn,
-        IReadOnlyList<string> drivers)
+        IReadOnlyList<string> drivers,
+        PerformanceCardFactsCache cardFacts)
     {
         Dictionary<string, int> counts = EmptyDriverCounts(drivers);
-        DeckCard? commander = included.FirstOrDefault(IsCommanderCard);
-        int commanderCost = commander is null ? 0 : PerformanceManaValue(commander);
+        DeckCard? commander = included.FirstOrDefault(card => cardFacts.Get(card).IsCommander);
+        PerformanceCardFacts? commanderFacts = commander is null ? null : cardFacts.Get(commander);
+        int commanderCost = commanderFacts?.ManaValue ?? 0;
         PerformanceCostRequirement? commanderRequirement = commander is null
             ? null
-            : PerformanceMana.BuildCostRequirement(commander);
+            : commanderFacts!.CostRequirement;
         foreach (PerformanceRun run in runs.Where(run => run.CommanderCastTurn is null || run.CommanderCastTurn > targetTurn))
         {
             PerformanceTurnState? state = StateAt(run, targetTurn);
@@ -1516,10 +1608,11 @@ internal static class DeckPerformanceAnalyzer
         IReadOnlyList<DeckCard> included,
         IReadOnlyList<PerformanceRun> runs,
         int targetTurn,
-        IReadOnlyList<string> drivers)
+        IReadOnlyList<string> drivers,
+        PerformanceCardFactsCache cardFacts)
     {
         Dictionary<string, int> counts = EmptyDriverCounts(drivers);
-        bool hasGraveyardHate = RelevantPerformanceTaggedCards(included, DeckTags.GraveyardHate).Count > 0;
+        bool hasGraveyardHate = RelevantPerformanceTaggedCards(included, DeckTags.GraveyardHate, cardFacts).Count > 0;
         foreach (PerformanceRun run in runs.Where(run => StateAt(run, targetTurn)?.GraveyardHateSeenByTurn != true))
         {
             Increment(counts, hasGraveyardHate ? drivers[1] : drivers[0]);
@@ -1646,10 +1739,11 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static List<string> RelevantPerformanceCards(
         IEnumerable<DeckCard> cards,
-        string roleName)
+        string roleName,
+        PerformanceCardFactsCache cardFacts)
     {
         return cards
-            .Where(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(roleName, StringComparison.OrdinalIgnoreCase))
+            .Where(card => cardFacts.Get(card).HasRole(roleName))
             .Select(card => card.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(10)
@@ -1661,10 +1755,11 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static List<string> RelevantPerformanceTaggedCards(
         IEnumerable<DeckCard> cards,
-        string tag)
+        string tag,
+        PerformanceCardFactsCache cardFacts)
     {
         return cards
-            .Where(card => DeckRoleClassifier.Classify(card).Tags.Contains(tag))
+            .Where(card => cardFacts.Get(card).HasTag(tag))
             .Select(card => card.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(10)
@@ -1674,14 +1769,15 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Lists cards that represent combo pieces, combo enablers, or tutors.
     /// </summary>
-    private static List<string> RelevantComboPerformanceCards(IEnumerable<DeckCard> cards)
+    private static List<string> RelevantComboPerformanceCards(
+        IEnumerable<DeckCard> cards,
+        PerformanceCardFactsCache cardFacts)
     {
         return cards
             .Where(card =>
             {
-                CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-                return role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler)
-                    || role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase);
+                PerformanceCardFacts facts = cardFacts.Get(card);
+                return facts.HasComboPieceOrEnabler || facts.IsTutor;
             })
             .Select(card => card.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1694,11 +1790,12 @@ internal static class DeckPerformanceAnalyzer
     /// </summary>
     private static List<string> ManaSourcePerformanceCards(
         IEnumerable<DeckCard> cards,
-        IReadOnlySet<string> deckColors)
+        IReadOnlySet<string> deckColors,
+        PerformanceCardFactsCache cardFacts)
     {
         return cards
-            .Where(IsPerformanceManaSource)
-            .Where(card => deckColors.Count == 0 || PerformanceMana.ReadProducedMana(card).Any(deckColors.Contains))
+            .Where(card => cardFacts.Get(card).IsManaSource)
+            .Where(card => deckColors.Count == 0 || cardFacts.Get(card).ProducedMana.Any(deckColors.Contains))
             .Select(card => card.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(10)
@@ -1716,14 +1813,22 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Gets the deck color identity from commanders, falling back to included cards.
     /// </summary>
-    private static (bool IsKnown, HashSet<string> Colors) GetDeckColorIdentity(DeckWorkspace workspace)
+    private static (bool IsKnown, HashSet<string> Colors) GetDeckColorIdentity(
+        IReadOnlyList<DeckCard> included,
+        PerformanceCardFactsCache cardFacts)
     {
         HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
         bool foundCommander = false;
-        foreach (DeckCard card in IncludedCards(workspace).Where(IsCommanderCard))
+        foreach (DeckCard card in included)
         {
+            PerformanceCardFacts facts = cardFacts.Get(card);
+            if (!facts.IsCommander)
+            {
+                continue;
+            }
+
             foundCommander = true;
-            AddDeckColors(colors, PerformanceMana.GetSnapshot(card).ColorIdentity);
+            AddDeckColors(colors, facts.Snapshot.ColorIdentity);
         }
 
         if (foundCommander)
@@ -1731,31 +1836,12 @@ internal static class DeckPerformanceAnalyzer
             return (true, colors);
         }
 
-        foreach (DeckCard card in IncludedCards(workspace))
+        foreach (DeckCard card in included)
         {
-            AddDeckColors(colors, PerformanceMana.GetSnapshot(card).ColorIdentity);
+            AddDeckColors(colors, cardFacts.Get(card).Snapshot.ColorIdentity);
         }
 
         return (colors.Count > 0, colors);
-    }
-
-    /// <summary>
-    /// Checks whether a card is in the Commander category.
-    /// </summary>
-    private static bool IsCommanderCard(DeckCard card)
-    {
-        return DeckCategoryOrdering.PrimaryCategory(card).Equals(
-            DeckRoles.Commander,
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Checks whether a card remains on the battlefield after being cast.
-    /// </summary>
-    private static bool IsPermanent(DeckCard card)
-    {
-        string typeLine = PerformanceMana.GetSnapshot(card).TypeLine ?? "";
-        return ContainsAny(typeLine, "Creature", "Artifact", "Enchantment", "Planeswalker", "Battle", "Land");
     }
 
     /// <summary>
@@ -1787,9 +1873,17 @@ internal static class DeckPerformanceAnalyzer
     /// <summary>
     /// Checks whether text contains any supplied phrase.
     /// </summary>
-    private static bool ContainsAny(string value, params string[] needles)
+    private static bool ContainsAny(string value, params ReadOnlySpan<string> needles)
     {
-        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+        foreach (string needle in needles)
+        {
+            if (value.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1818,7 +1912,8 @@ internal static class DeckPerformanceAnalyzer
         IReadOnlyList<DeckCard> included,
         bool colorIdentityKnown,
         ResolvedSimulationProfile profileResolution,
-        DeckIntent? intent)
+        DeckIntent? intent,
+        PerformanceCardFactsCache cardFacts)
     {
         analysis.Assumptions.Add("Simulation uses cached Scryfall snapshots and local role/tag heuristics.");
         analysis.Assumptions.Add($"Each run draws one card per turn, plays one land per turn, and sequences spells with the '{profileResolution.Profile.Id}' simulation profile.");
@@ -1841,7 +1936,7 @@ internal static class DeckPerformanceAnalyzer
             analysis.Warnings.Add("Default scenarios are Commander-oriented; interpret non-Commander output as generic heuristic sampling.");
         }
 
-        if (!included.Any(IsCommanderCard))
+        if (!included.Any(card => cardFacts.Get(card).IsCommander))
         {
             analysis.Warnings.Add("No commander category was detected, so commander timing scenarios will be zero.");
         }
@@ -1860,6 +1955,194 @@ internal static class DeckPerformanceAnalyzer
         if (analysis.DeckSize < 60)
         {
             analysis.Warnings.Add("Included deck size is below most constructed deck sizes; probability estimates may be unusual.");
+        }
+    }
+
+    /// <summary>
+    /// Caches per-card facts that are reused throughout one performance analysis.
+    /// </summary>
+    private sealed class PerformanceCardFactsCache
+    {
+        /// <summary>
+        /// Stores cached facts by the deck card references used during simulation.
+        /// </summary>
+        private readonly Dictionary<DeckCard, PerformanceCardFacts> facts = [];
+
+        /// <summary>
+        /// Initializes the cache with the deck's included cards.
+        /// </summary>
+        public PerformanceCardFactsCache(IEnumerable<DeckCard> cards)
+        {
+            foreach (DeckCard card in cards)
+            {
+                Get(card);
+            }
+        }
+
+        /// <summary>
+        /// Gets cached facts for a card, creating them for late-discovered references when needed.
+        /// </summary>
+        public PerformanceCardFacts Get(DeckCard card)
+        {
+            if (!facts.TryGetValue(card, out PerformanceCardFacts? cardFacts))
+            {
+                cardFacts = new PerformanceCardFacts(card);
+                facts[card] = cardFacts;
+            }
+
+            return cardFacts;
+        }
+    }
+
+    /// <summary>
+    /// Stores expensive role, mana, and text-derived facts for one card.
+    /// </summary>
+    private sealed class PerformanceCardFacts
+    {
+        /// <summary>
+        /// Builds reusable facts for performance simulation and reporting.
+        /// </summary>
+        public PerformanceCardFacts(DeckCard card)
+        {
+            Snapshot = PerformanceMana.GetSnapshot(card);
+            Role = DeckRoleClassifier.Classify(card);
+            ManaValue = PerformanceMana.ManaValue(card);
+            CostRequirement = PerformanceMana.BuildCostRequirement(card);
+            ProducedMana = PerformanceMana.ReadProducedMana(card);
+            IsCommander = DeckCategoryOrdering.PrimaryCategory(card).Equals(
+                DeckRoles.Commander,
+                StringComparison.OrdinalIgnoreCase);
+            IsLand = HasRole(DeckRoles.Lands);
+            IsRamp = HasRole(DeckRoles.Ramp);
+            IsDraw = HasRole(DeckRoles.Draw);
+            IsTutor = HasRole(DeckRoles.Tutors);
+            IsInteraction = HasRole(DeckRoles.Interaction);
+            IsBoardWipe = HasRole(DeckRoles.BoardWipes);
+            IsProtection = HasRole(DeckRoles.Protection);
+            IsWincon = HasRole(DeckRoles.Wincons);
+            IsUtility = HasRole(DeckRoles.Utility);
+            IsPermanent = ContainsAny(
+                Snapshot.TypeLine ?? "",
+                "Creature",
+                "Artifact",
+                "Enchantment",
+                "Planeswalker",
+                "Battle",
+                "Land");
+            IsManaSource = IsLand || IsRamp || ProducedMana.Count > 0;
+            LooksTapped = PerformanceMana.LooksTapped(Snapshot);
+            HasComboPieceOrEnabler = HasTag(DeckTags.ComboPiece) || HasTag(DeckTags.ComboEnabler);
+        }
+
+        /// <summary>
+        /// Gets the cached card snapshot used by performance heuristics.
+        /// </summary>
+        public CardSnapshot Snapshot { get; }
+
+        /// <summary>
+        /// Gets the cached role classifier output.
+        /// </summary>
+        public CardRoleAssignment Role { get; }
+
+        /// <summary>
+        /// Gets the nonnegative mana value used for payment checks.
+        /// </summary>
+        public int ManaValue { get; }
+
+        /// <summary>
+        /// Gets the parsed colored and colorless cost requirements.
+        /// </summary>
+        public PerformanceCostRequirement CostRequirement { get; }
+
+        /// <summary>
+        /// Gets the mana symbols this card can produce.
+        /// </summary>
+        public IReadOnlyList<string> ProducedMana { get; }
+
+        /// <summary>
+        /// Gets whether the card is in the Commander category.
+        /// </summary>
+        public bool IsCommander { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as a land.
+        /// </summary>
+        public bool IsLand { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as ramp.
+        /// </summary>
+        public bool IsRamp { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as card draw.
+        /// </summary>
+        public bool IsDraw { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as a tutor.
+        /// </summary>
+        public bool IsTutor { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as interaction.
+        /// </summary>
+        public bool IsInteraction { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as a board wipe.
+        /// </summary>
+        public bool IsBoardWipe { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as protection.
+        /// </summary>
+        public bool IsProtection { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as a win condition.
+        /// </summary>
+        public bool IsWincon { get; }
+
+        /// <summary>
+        /// Gets whether the card is classified as utility.
+        /// </summary>
+        public bool IsUtility { get; }
+
+        /// <summary>
+        /// Gets whether the card type normally remains on the battlefield after casting.
+        /// </summary>
+        public bool IsPermanent { get; }
+
+        /// <summary>
+        /// Gets whether the card can contribute mana in the simulation.
+        /// </summary>
+        public bool IsManaSource { get; }
+
+        /// <summary>
+        /// Gets whether the card appears to enter tapped.
+        /// </summary>
+        public bool LooksTapped { get; }
+
+        /// <summary>
+        /// Gets whether the card is tagged as a combo piece or enabler.
+        /// </summary>
+        public bool HasComboPieceOrEnabler { get; }
+
+        /// <summary>
+        /// Checks whether the cached primary role matches a role name.
+        /// </summary>
+        public bool HasRole(string role)
+        {
+            return Role.PrimaryRole.Equals(role, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Checks whether the cached secondary tags include a tag name.
+        /// </summary>
+        public bool HasTag(string tag)
+        {
+            return Role.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase);
         }
     }
 

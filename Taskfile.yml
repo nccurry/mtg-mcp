@@ -3,6 +3,7 @@ version: '3'
 vars:
   SOLUTION: mtg-mcp.slnx
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
+  BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
   CONFIGURATION: Release
   RUNTIME: win-x64
   VERSION: 0.0.0-dev
@@ -91,6 +92,73 @@ tasks:
     desc: Run opt-in live tests against a throwaway Archidekt deck
     cmds:
       - dotnet test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"
+
+  bench:
+    desc: Run all benchmarks; pass BenchmarkDotNet args after --
+    cmds:
+      - >
+        dotnet run --project {{.BENCH_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --inProcess
+        --filter "*"
+        {{.CLI_ARGS}}
+
+  bench:dry:
+    desc: Smoke-test benchmarks with BenchmarkDotNet's dry job; pass args after --
+    cmds:
+      - >
+        dotnet run --project {{.BENCH_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --inProcess
+        --job Dry
+        --filter "*"
+        {{.CLI_ARGS}}
+
+  bench:analysis:
+    desc: Run deck analysis and role-classification benchmarks; pass args after --
+    cmds:
+      - >
+        dotnet run --project {{.BENCH_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --inProcess
+        --filter "*DeckAnalysisBenchmarks*" "*DeckRoleClassifierBenchmarks*"
+        {{.CLI_ARGS}}
+
+  bench:performance:
+    desc: Run Stats Lab performance simulation benchmarks; pass args after --
+    cmds:
+      - >
+        dotnet run --project {{.BENCH_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --inProcess
+        --filter "*DeckPerformanceAnalyzerBenchmarks*"
+        {{.CLI_ARGS}}
+
+  bench:mana:
+    desc: Run mana payment and source-reading benchmarks; pass args after --
+    cmds:
+      - >
+        dotnet run --project {{.BENCH_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --inProcess
+        --filter "*PerformanceManaBenchmarks*"
+        {{.CLI_ARGS}}
+
+  bench:facets:
+    desc: Run facet predicate benchmarks; pass args after --
+    cmds:
+      - >
+        dotnet run --project {{.BENCH_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --inProcess
+        --filter "*FacetPredicateBenchmarks*"
+        {{.CLI_ARGS}}
 
   coverage:
     desc: Run coverage gates and generate the Codecov report
