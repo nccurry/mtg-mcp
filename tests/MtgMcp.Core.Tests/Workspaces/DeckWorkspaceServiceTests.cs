@@ -509,6 +509,140 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that retrying a completed create-new migration returns the existing deck.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_CreateNewReturnsCompletedMigration()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            DeckSummaries =
+            [
+                new ArchidektDeckSummary { Id = "existing", Name = "Migrated" },
+            ],
+            ImportedDeck = CreateMigrationDestination(source, "existing", "Migrated", includeCards: true),
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: true,
+            destinationDeckIdOrUrl: null,
+            name: "Migrated",
+            format: "commander",
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        result.CreatedNewDeck.Should().BeFalse();
+        result.DestinationArchidektDeckId.Should().Be("existing");
+        result.Warnings.Should().Contain(warning =>
+            warning.Contains("instead of creating a duplicate", StringComparison.OrdinalIgnoreCase));
+        archidekt.CreatedDeckRequests.Should().Be(0);
+        archidekt.UpsertedCards.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that retrying after deck creation reuses the empty shell.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_CreateNewReusesEmptyMigrationShell()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            DeckSummaries =
+            [
+                new ArchidektDeckSummary { Id = "existing", Name = "Migrated" },
+            ],
+            ImportedDeck = CreateMigrationDestination(source, "existing", "Migrated", includeCards: false),
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: true,
+            destinationDeckIdOrUrl: null,
+            name: "Migrated",
+            format: "commander",
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        result.CreatedNewDeck.Should().BeFalse();
+        result.DestinationArchidektDeckId.Should().Be("existing");
+        result.Warnings.Should().Contain(warning =>
+            warning.Contains("reusing it", StringComparison.OrdinalIgnoreCase));
+        archidekt.CreatedDeckRequests.Should().Be(0);
+        archidekt.UpsertedCards.Should().HaveCount(source.Cards.Count);
+    }
+
+    /// <summary>
+    /// Verifies that retrying a mismatched migration deck fails without creating another deck.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_CreateNewRejectsMismatchedMigration()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace mismatchedDestination = CreateMigrationDestination(
+            source,
+            "existing",
+            "Migrated",
+            includeCards: true);
+        mismatchedDestination.Cards.Add(new DeckCard
+        {
+            Name = "Unexpected Card",
+            Quantity = 1,
+            PrimaryCategory = DeckDefaults.Mainboard,
+            Categories = [DeckDefaults.Mainboard],
+        });
+        FakeArchidektGateway archidekt = new()
+        {
+            DeckSummaries =
+            [
+                new ArchidektDeckSummary { Id = "existing", Name = "Migrated" },
+            ],
+            ImportedDeck = mismatchedDestination,
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        Func<Task> act = () => service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: true,
+            destinationDeckIdOrUrl: null,
+            name: "Migrated",
+            format: "commander",
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*existing*replaceExistingDestination=true*");
+        archidekt.CreatedDeckRequests.Should().Be(0);
+        archidekt.UpsertedCards.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that copying into a non-empty Archidekt deck requires an explicit override.
     /// </summary>
     [Fact]
@@ -1394,6 +1528,47 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that commander singleton validation ignores non-included cards.
+    /// </summary>
+    [Fact]
+    public void CommanderValidation_IgnoresMaybeboardDuplicates()
+    {
+        DeckWorkspace deck = new()
+        {
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                },
+                new DeckCard
+                {
+                    Name = "Arwen, Mortal Queen",
+                    Quantity = 2,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard],
+                },
+            ],
+        };
+
+        DeckValidationResult result = DeckValidator.Validate(deck);
+
+        result.Errors.Should().BeEmpty();
+        result
+            .Warnings.Should()
+            .Contain(warning => warning.Contains("100", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that parser reports invalid lines and normalizes aliases.
     /// </summary>
     [Fact]
@@ -1810,6 +1985,69 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Creates an Archidekt workspace with the migration marker used for retry detection.
+    /// </summary>
+    private static DeckWorkspace CreateMigrationDestination(
+        DeckWorkspace source,
+        string deckId,
+        string name,
+        bool includeCards
+    )
+    {
+        return new DeckWorkspace
+        {
+            Id = $"archidekt-{Guid.NewGuid():N}",
+            Name = name,
+            Format = source.Format,
+            Description = $"MTG MCP Migration Source: moxfield:mox-1; Workspace: {source.Id}",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = deckId,
+            Categories = source.Categories.Select(CloneCategory).ToList(),
+            Cards = includeCards
+                ? source.Cards.Select(CloneCard).ToList()
+                : [],
+        };
+    }
+
+    /// <summary>
+    /// Clones category fields needed by migration retry tests.
+    /// </summary>
+    private static DeckCategory CloneCategory(DeckCategory category)
+    {
+        return new DeckCategory
+        {
+            Name = category.Name,
+            IncludedInDeck = category.IncludedInDeck,
+            IncludedInPrice = category.IncludedInPrice,
+            IsPremier = category.IsPremier,
+        };
+    }
+
+    /// <summary>
+    /// Clones card fields needed by migration retry tests.
+    /// </summary>
+    private static DeckCard CloneCard(DeckCard card)
+    {
+        return new DeckCard
+        {
+            Name = card.Name,
+            Quantity = card.Quantity,
+            PrimaryCategory = card.PrimaryCategory,
+            Categories = card.Categories.ToList(),
+            ScryfallId = card.ScryfallId,
+            ScryfallOracleId = card.ScryfallOracleId,
+            ArchidektCardId = card.ArchidektCardId,
+            ArchidektDeckRelationId = card.ArchidektDeckRelationId,
+            Modifier = card.Modifier,
+            Companion = card.Companion,
+            FlippedDefault = card.FlippedDefault,
+            Snapshot = card.Snapshot,
+            Metadata = new Dictionary<string, string>(card.Metadata, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    /// <summary>
     /// Provides fake card catalog behavior.
     /// </summary>
     private sealed class FakeCardCatalog : ICardCatalog
@@ -2033,6 +2271,19 @@ public sealed class DeckWorkspaceServiceTests
         public DeckWorkspace ImportedDeck { get; set; } = new();
 
         /// <summary>
+        /// Gets or sets deck summaries returned by list requests.
+        /// </summary>
+        public IReadOnlyList<ArchidektDeckSummary> DeckSummaries { get; set; } =
+        [
+            new ArchidektDeckSummary { Id = "123", Name = "Remote" },
+        ];
+
+        /// <summary>
+        /// Gets or sets the created deck requests.
+        /// </summary>
+        public int CreatedDeckRequests { get; private set; }
+
+        /// <summary>
         /// Gets or sets the imported deck requests.
         /// </summary>
         public int ImportedDeckRequests { get; private set; }
@@ -2077,9 +2328,7 @@ public sealed class DeckWorkspaceServiceTests
             CancellationToken cancellationToken
         )
         {
-            return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([
-                new ArchidektDeckSummary { Id = "123", Name = "Remote" },
-            ]);
+            return Task.FromResult(DeckSummaries);
         }
 
         /// <summary>
@@ -2090,6 +2339,7 @@ public sealed class DeckWorkspaceServiceTests
             CancellationToken cancellationToken
         )
         {
+            CreatedDeckRequests++;
             return Task.FromResult(new DeckWorkspace
             {
                 Id = "created-workspace",
@@ -2122,6 +2372,7 @@ public sealed class DeckWorkspaceServiceTests
                 Id = ImportedDeck.Id,
                 Name = ImportedDeck.Name,
                 Format = ImportedDeck.Format,
+                Description = ImportedDeck.Description,
                 Mode = ImportedDeck.Mode,
                 WriteBack = writeBack,
                 ArchidektDeckId = ImportedDeck.ArchidektDeckId,

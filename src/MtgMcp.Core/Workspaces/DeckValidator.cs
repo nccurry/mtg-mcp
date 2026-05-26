@@ -24,12 +24,13 @@ public sealed class DeckValidator
     public static DeckValidationResult Validate(DeckWorkspace workspace)
     {
         DeckValidationResult result = new();
-        int includedCount = CountIncludedCards(workspace);
+        List<DeckCard> includedCards = DeckCategoryInclusion.IncludedCards(workspace).ToList();
+        int includedCount = CountIncludedCards(includedCards);
         string format = workspace.Format.Trim().ToLowerInvariant();
 
         if (format is "commander" or "edh")
         {
-            ValidateCommander(workspace, includedCount, result);
+            ValidateCommander(includedCards, includedCount, result);
         }
         else if (includedCount < 60)
         {
@@ -57,10 +58,10 @@ public sealed class DeckValidator
     /// <summary>
     /// Counts the included cards.
     /// </summary>
-    private static int CountIncludedCards(DeckWorkspace workspace)
+    private static int CountIncludedCards(IEnumerable<DeckCard> includedCards)
     {
         int total = 0;
-        foreach (DeckCard card in DeckCategoryInclusion.IncludedCards(workspace))
+        foreach (DeckCard card in includedCards)
         {
             total += card.Quantity;
         }
@@ -72,7 +73,7 @@ public sealed class DeckValidator
     /// Validates the commander.
     /// </summary>
     private static void ValidateCommander(
-        DeckWorkspace workspace,
+        IEnumerable<DeckCard> includedCards,
         int includedCount,
         DeckValidationResult result
     )
@@ -84,7 +85,7 @@ public sealed class DeckValidator
             );
         }
 
-        foreach (DeckCard card in workspace.Cards)
+        foreach (DeckCard card in includedCards)
         {
             if (card.Quantity > 1 && !BasicLands.Contains(card.Name))
             {

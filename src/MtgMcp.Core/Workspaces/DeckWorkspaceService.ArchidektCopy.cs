@@ -63,6 +63,7 @@ public sealed partial class DeckWorkspaceService
             allowNonEmptyDestination,
             replaceExistingDestination);
 
+        string destinationName = string.IsNullOrWhiteSpace(name) ? source.Name : name.Trim();
         DeckWorkspace? destination = null;
         if (!string.IsNullOrWhiteSpace(destinationDeckIdOrUrl))
         {
@@ -100,20 +101,66 @@ public sealed partial class DeckWorkspaceService
             );
         }
 
-        destination = createNew
-            ? await CreateArchidektDeckAsync(
-                    name ?? source.Name,
+        if (createNew)
+        {
+            destination = await FindExistingMigrationDestinationAsync(
+                    source,
+                    destinationName,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (destination is not null)
+            {
+                result.CreatedNewDeck = false;
+                result.DestinationArchidektDeckId = destination.ArchidektDeckId;
+                result.DestinationName = destination.Name;
+                if (HasSameCopiedCards(source.Cards, destination.Cards))
+                {
+                    destination = await Repository.SaveAsync(destination, cancellationToken)
+                        .ConfigureAwait(false);
+                    result.DestinationWorkspaceId = destination.Id;
+                    result.Warnings.Add(
+                        "Found an existing Archidekt deck created from this source workspace; "
+                            + "returning it instead of creating a duplicate."
+                    );
+                    return result;
+                }
+
+                if (destination.Cards.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        "Found an existing Archidekt deck created from this source workspace, "
+                            + "but its cards do not match the source. Use destinationDeckIdOrUrl="
+                            + $"{destination.ArchidektDeckId} with replaceExistingDestination=true "
+                            + "to replace it intentionally."
+                    );
+                }
+
+                result.Warnings.Add(
+                    "Found an empty Archidekt deck already created from this source workspace; "
+                        + "reusing it instead of creating a duplicate."
+                );
+            }
+        }
+
+        if (createNew)
+        {
+            destination ??= await CreateArchidektDeckAsync(
+                    destinationName,
                     format ?? source.Format,
                     BuildMigrationDescription(description ?? source.Description, source),
                     visibility,
                     cancellationToken)
-                .ConfigureAwait(false)
-            : await OpenArchidektDeckAsync(
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            destination = await OpenArchidektDeckAsync(
                     destinationDeckIdOrUrl
                         ?? throw new InvalidOperationException("Destination Archidekt deck id or URL is required."),
                     writeBack: true,
                     cancellationToken)
                 .ConfigureAwait(false);
+        }
 
         destination.Name = string.IsNullOrWhiteSpace(name) ? destination.Name : name.Trim();
         destination.Format = string.IsNullOrWhiteSpace(format) ? destination.Format : format.Trim();
@@ -271,6 +318,111 @@ public sealed partial class DeckWorkspaceService
                 );
             }
         }
+    }
+
+    /// <summary>
+    /// Finds a previous create-new migration so retries do not create duplicate decks.
+    /// </summary>
+    private async Task<DeckWorkspace?> FindExistingMigrationDestinationAsync(
+        DeckWorkspace source,
+        string destinationName,
+        CancellationToken cancellationToken
+    )
+    {
+        string? marker = BuildMigrationMarker(source);
+        if (string.IsNullOrWhiteSpace(marker))
+        {
+            return null;
+        }
+
+        IArchidektGateway archidekt = RequireArchidektGateway();
+        IReadOnlyList<ArchidektDeckSummary> decks = await archidekt
+            .ListDecksAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (ArchidektDeckSummary deck in decks)
+        {
+            if (
+                string.IsNullOrWhiteSpace(deck.Id)
+                || !destinationName.Equals(deck.Name, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                continue;
+            }
+
+            DeckWorkspace candidate = await archidekt
+                .ImportDeckAsync(deck.Id, writeBack: true, cancellationToken)
+                .ConfigureAwait(false);
+            if (
+                !string.IsNullOrWhiteSpace(candidate.Description)
+                && candidate.Description.Contains(marker, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks whether a previously created deck already contains this copied workspace.
+    /// </summary>
+    private static bool HasSameCopiedCards(
+        IReadOnlyList<DeckCard> sourceCards,
+        IReadOnlyList<DeckCard> destinationCards
+    )
+    {
+        List<string> sourceFingerprints = BuildCardFingerprints(sourceCards);
+        List<string> destinationFingerprints = BuildCardFingerprints(destinationCards);
+        if (sourceFingerprints.Count != destinationFingerprints.Count)
+        {
+            return false;
+        }
+
+        sourceFingerprints.Sort(StringComparer.OrdinalIgnoreCase);
+        destinationFingerprints.Sort(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < sourceFingerprints.Count; index++)
+        {
+            if (
+                !sourceFingerprints[index].Equals(
+                    destinationFingerprints[index],
+                    StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Builds stable card fingerprints for migration retry comparisons.
+    /// </summary>
+    private static List<string> BuildCardFingerprints(IReadOnlyList<DeckCard> cards)
+    {
+        List<string> fingerprints = [];
+        foreach (DeckCard card in cards)
+        {
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            List<string> categories = DeckCategoryOrdering.OrderedDistinct(
+                primaryCategory,
+                card.Categories);
+            categories.Sort(StringComparer.OrdinalIgnoreCase);
+
+            fingerprints.Add(
+                string.Join(
+                    "|",
+                    card.Name,
+                    card.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    primaryCategory,
+                    card.ScryfallId ?? "",
+                    string.Join("\u001F", categories)
+                )
+            );
+        }
+
+        return fingerprints;
     }
 
     /// <summary>
@@ -479,16 +631,12 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static string? BuildMigrationDescription(string? description, DeckWorkspace source)
     {
-        if (source.SourceReferences.Count == 0)
+        string? marker = BuildMigrationMarker(source);
+        if (marker is null)
         {
             return description;
         }
 
-        string sourceText = string.Join(
-            ", ",
-            source.SourceReferences.Select(reference => $"{reference.Provider}:{reference.ExternalId}")
-        );
-        string marker = $"MTG MCP Migration Source: {sourceText}; Workspace: {source.Id}";
         if (!string.IsNullOrWhiteSpace(description)
             && description.Contains(marker, StringComparison.OrdinalIgnoreCase))
         {
@@ -498,5 +646,22 @@ public sealed partial class DeckWorkspaceService
         return string.IsNullOrWhiteSpace(description)
             ? marker
             : $"{description.Trim()}\n\n{marker}";
+    }
+
+    /// <summary>
+    /// Builds the provenance marker used to recognize repeat migration attempts.
+    /// </summary>
+    private static string? BuildMigrationMarker(DeckWorkspace source)
+    {
+        if (source.SourceReferences.Count == 0)
+        {
+            return null;
+        }
+
+        string sourceText = string.Join(
+            ", ",
+            source.SourceReferences.Select(reference => $"{reference.Provider}:{reference.ExternalId}")
+        );
+        return $"MTG MCP Migration Source: {sourceText}; Workspace: {source.Id}";
     }
 }
