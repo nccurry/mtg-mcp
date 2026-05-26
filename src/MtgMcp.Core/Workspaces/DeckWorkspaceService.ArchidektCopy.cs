@@ -294,6 +294,9 @@ public sealed partial class DeckWorkspaceService
                     Name = sourceCategory.Name,
                     IncludedInDeck = sourceCategory.IncludedInDeck,
                     IncludedInPrice = sourceCategory.IncludedInPrice,
+                    IsPremier =
+                        sourceCategory.IsPremier
+                        || DeckDefaults.IsCommanderCategory(sourceCategory.Name),
                 };
                 destination.Categories.Add(destinationCategory);
             }
@@ -301,6 +304,9 @@ public sealed partial class DeckWorkspaceService
             {
                 destinationCategory.IncludedInDeck = sourceCategory.IncludedInDeck;
                 destinationCategory.IncludedInPrice = sourceCategory.IncludedInPrice;
+                destinationCategory.IsPremier =
+                    sourceCategory.IsPremier
+                    || DeckDefaults.IsCommanderCategory(sourceCategory.Name);
             }
 
             await PersistCategoryAsync(destination, destinationCategory, cancellationToken)

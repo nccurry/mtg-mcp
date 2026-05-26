@@ -35,6 +35,11 @@ public sealed partial class ArchidektGateway
                         Name = name,
                         IncludedInDeck = GetBool(item, "includedInDeck", defaultValue: true),
                         IncludedInPrice = GetBool(item, "includedInPrice", defaultValue: true),
+                        IsPremier = GetBool(
+                            item,
+                            "isPremier",
+                            defaultValue: DeckDefaults.IsCommanderCategory(name)
+                        ),
                         ArchidektCategoryId = GetInt(item, "id"),
                     }
                 );

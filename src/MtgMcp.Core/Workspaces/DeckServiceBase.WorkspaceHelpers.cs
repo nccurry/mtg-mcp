@@ -74,6 +74,11 @@ public abstract partial class DeckServiceBase
         );
         if (existing is not null)
         {
+            if (DeckDefaults.IsCommanderCategory(existing.Name))
+            {
+                existing.IsPremier = true;
+            }
+
             return existing;
         }
 
@@ -82,6 +87,7 @@ public abstract partial class DeckServiceBase
             Name = category,
             IncludedInDeck = !DeckDefaults.IsDefaultExcludedCategory(category),
             IncludedInPrice = true,
+            IsPremier = DeckDefaults.IsCommanderCategory(category),
         };
 
         workspace.Categories.Add(created);

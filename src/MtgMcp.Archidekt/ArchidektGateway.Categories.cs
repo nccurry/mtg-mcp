@@ -19,12 +19,14 @@ public sealed partial class ArchidektGateway
     {
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
         string deckId = RequireDeckId(workspace);
+        category.IsPremier = category.IsPremier || DeckDefaults.IsCommanderCategory(category.Name);
         object payload = new
         {
             name = category.Name,
             deck = ParseIntOrString(deckId),
             includedInDeck = category.IncludedInDeck,
             includedInPrice = category.IncludedInPrice,
+            isPremier = category.IsPremier,
         };
 
         if (category.ArchidektCategoryId.HasValue)

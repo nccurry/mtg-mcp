@@ -31,7 +31,8 @@ public sealed class ArchidektGatewayTests
               "deckFormat": "3",
               "categories": [
                 { "id": 1, "name": "Mainboard", "includedInDeck": true, "includedInPrice": true },
-                { "id": 2, "name": "Maybeboard", "includedInDeck": false, "includedInPrice": true }
+                { "id": 2, "name": "Maybeboard", "includedInDeck": false, "includedInPrice": true },
+                { "id": 3, "name": "Commander", "isPremier": true, "includedInDeck": true, "includedInPrice": true }
               ],
               "cards": [
                 {
@@ -77,6 +78,8 @@ public sealed class ArchidektGatewayTests
         deck.Format.Should().Be("commander");
         deck.Categories.Should()
             .Contain(category => category.Name == "Maybeboard" && category.IncludedInDeck == false);
+        deck.Categories.Should()
+            .Contain(category => category.Name == DeckRoles.Commander && category.IsPremier);
         deck.Cards.Should().ContainSingle();
         deck.Cards[0].Name.Should().Be("Lightning Bolt");
         deck.Cards[0].PrimaryCategory.Should().Be(DeckDefaults.Mainboard);
@@ -828,6 +831,35 @@ public sealed class ArchidektGatewayTests
             .Equal("api/decks/createCategory/", "api/decks/category/9/");
         handler.Requests[0].Body.Should().Contain("\"includedInPrice\":false");
         handler.Requests[1].Method.Should().Be(HttpMethod.Patch);
+    }
+
+    /// <summary>
+    /// Verifies that persist category marks the standard Commander category as premier.
+    /// </summary>
+    [Fact]
+    public async Task PersistCategory_SetsPremierForCommanderCategory()
+    {
+        RecordingHandler handler = new();
+        handler.Post("api/decks/createCategory/", """{ "id": 9, "name": "Commander" }""");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCategory category = new()
+        {
+            Name = DeckRoles.Commander,
+            IncludedInDeck = true,
+            IncludedInPrice = true,
+        };
+
+        await gateway.PersistCategoryAsync(deck, category, TestContext.Current.CancellationToken);
+
+        category.IsPremier.Should().BeTrue();
+        handler.Requests[0].Body.Should().Contain("\"isPremier\":true");
     }
 
     /// <summary>

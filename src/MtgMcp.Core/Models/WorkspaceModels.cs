@@ -78,6 +78,11 @@ public sealed class DeckCategory
     public bool IncludedInPrice { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether Archidekt treats this category as the deck's commander zone.
+    /// </summary>
+    public bool IsPremier { get; set; }
+
+    /// <summary>
     /// Gets or sets the archidekt category id.
     /// </summary>
     public int? ArchidektCategoryId { get; set; }
@@ -793,6 +798,14 @@ public static class DeckDefaults
             || category.Equals(Considering, StringComparison.OrdinalIgnoreCase)
             || category.Equals("Maybe", StringComparison.OrdinalIgnoreCase)
             || category.Equals("Consider", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether a category name should represent Archidekt's commander category.
+    /// </summary>
+    public static bool IsCommanderCategory(string category)
+    {
+        return category.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
