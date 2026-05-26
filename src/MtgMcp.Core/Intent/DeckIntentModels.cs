@@ -160,6 +160,21 @@ public sealed class DeckIntentSimulationSettings
     public bool? PreferCommanderOnCurve { get; set; }
 
     /// <summary>
+    /// Gets or sets the preferred turn for deploying the creature commander.
+    /// </summary>
+    public int? PreferredCommanderTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the preferred turn for deploying a command-zone Background.
+    /// </summary>
+    public int? PreferredBackgroundTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the preferred command-zone deployment order.
+    /// </summary>
+    public List<string> CommandZoneOrder { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets whether the simulator may attempt wins without protection.
     /// </summary>
     public bool? AcceptShieldDownWinAttempt { get; set; }

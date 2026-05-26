@@ -71,6 +71,11 @@ public sealed class DeckPerformanceAnalysis
     public CommanderPerformance Commander { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets command-zone timing metrics for commander, Background, and combined online states.
+    /// </summary>
+    public CommandZonePerformance CommandZone { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets combo and tutor assembly metrics.
     /// </summary>
     public ComboAssemblyPerformance ComboAssembly { get; set; } = new();
@@ -295,6 +300,57 @@ public sealed class CommanderPerformance
     /// Gets or sets the average earliest commander cast turn for successful runs.
     /// </summary>
     public double? AverageEarliestCastTurn { get; set; }
+}
+
+/// <summary>
+/// Summarizes command-zone deployment timing.
+/// </summary>
+public sealed class CommandZonePerformance
+{
+    /// <summary>
+    /// Gets or sets command-zone card names detected in the workspace.
+    /// </summary>
+    public List<string> CommandZoneNames { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-Background commander names detected in the workspace.
+    /// </summary>
+    public List<string> CommanderNames { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets Background names detected in the workspace.
+    /// </summary>
+    public List<string> BackgroundNames { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-Background commander cast probability by turn.
+    /// </summary>
+    public List<PerformanceProbability> CommanderCastByTurn { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets Background cast probability by turn.
+    /// </summary>
+    public List<PerformanceProbability> BackgroundCastByTurn { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets commander-plus-Background-online probability by turn.
+    /// </summary>
+    public List<PerformanceProbability> CommanderWithBackgroundOnlineByTurn { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the average earliest non-Background commander cast turn for successful runs.
+    /// </summary>
+    public double? AverageCommanderCastTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the average earliest Background cast turn for successful runs.
+    /// </summary>
+    public double? AverageBackgroundCastTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the average earliest turn where commander and Background were both online.
+    /// </summary>
+    public double? AverageCommanderWithBackgroundOnlineTurn { get; set; }
 }
 
 /// <summary>

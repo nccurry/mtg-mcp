@@ -67,6 +67,135 @@ internal static partial class DeckPerformanceAnalyzer
     }
 
     /// <summary>
+    /// Casts command-zone cards in plan order while mana and target turns allow.
+    /// </summary>
+    private static void CastPerformanceCommandZoneCards(
+        CommandZoneRunState commandZone,
+        int turn,
+        List<PerformancePermanent> battlefield,
+        PerformanceCardFactsCache cardFacts,
+        ref List<PerformanceManaSource> availableSources)
+    {
+        while (true)
+        {
+            CommandZoneCardPlan? next = commandZone.NextPending();
+            if (next is null || turn < next.TargetTurn)
+            {
+                return;
+            }
+
+            if (!TryPay(cardFacts.Get(next.Card), availableSources, out List<PerformanceManaSource> afterSources))
+            {
+                return;
+            }
+
+            availableSources = afterSources;
+            battlefield.Add(new PerformancePermanent { Card = next.Card });
+            commandZone.MarkCast(next, turn);
+        }
+    }
+
+    /// <summary>
+    /// Casts hand spells for one sequencing window.
+    /// </summary>
+    private static void CastPerformanceHandSpells(
+        List<DeckCard> hand,
+        List<DeckCard> library,
+        List<PerformancePermanent> battlefield,
+        List<DeckCard> graveyard,
+        List<IReadOnlyList<string>> virtualManaSources,
+        PerformanceTurnState state,
+        PerformanceCardFactsCache cardFacts,
+        IReadOnlySet<string> deckColors,
+        int turn,
+        SimulationProfile profile,
+        PerformanceSpellWindow window,
+        bool commanderCast,
+        ref List<PerformanceManaSource> availableSources,
+        ref bool rampCastByTurn,
+        ref bool drawCastByTurn)
+    {
+        foreach (DeckCard spell in hand
+            .Where(card => !cardFacts.Get(card).IsCommander)
+            .Where(card => !cardFacts.Get(card).IsLand)
+            .OrderBy(card => PerformanceCastPriority(cardFacts.Get(card), turn, profile))
+            .ThenBy(card => cardFacts.Get(card).ManaValue)
+            .ToList())
+        {
+            PerformanceCardFacts facts = cardFacts.Get(spell);
+            if (!UsePerformanceSpellInWindow(facts, window)
+                || ShouldHoldPerformanceSpell(facts, turn, commanderCast, profile))
+            {
+                continue;
+            }
+
+            if (!TryPay(facts, availableSources, out List<PerformanceManaSource> afterSpellSources))
+            {
+                continue;
+            }
+
+            availableSources = afterSpellSources;
+            hand.Remove(spell);
+            if (facts.IsPermanent)
+            {
+                battlefield.Add(new PerformancePermanent { Card = spell });
+            }
+            else
+            {
+                graveyard.Add(spell);
+            }
+
+            if (facts.IsRamp)
+            {
+                rampCastByTurn = true;
+                state.RampCastByTurn = true;
+                if (!facts.IsPermanent)
+                {
+                    virtualManaSources.Add(BuildPerformanceRampSource(facts, deckColors));
+                }
+            }
+
+            if (facts.IsDraw)
+            {
+                drawCastByTurn = true;
+                state.DrawCastByTurn = true;
+                if (library.Count > 0)
+                {
+                    PerformanceDrawOne(hand, library);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a hand spell belongs in the current delayed-command-zone sequencing window.
+    /// </summary>
+    private static bool UsePerformanceSpellInWindow(
+        PerformanceCardFacts facts,
+        PerformanceSpellWindow window)
+    {
+        return window switch
+        {
+            PerformanceSpellWindow.All => true,
+            PerformanceSpellWindow.SetupOnly => IsPerformanceSetupSpell(facts),
+            PerformanceSpellWindow.NonSetup => !IsPerformanceSetupSpell(facts),
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// Checks whether a hand spell should be sequenced before delayed command-zone deployment.
+    /// </summary>
+    private static bool IsPerformanceSetupSpell(PerformanceCardFacts facts)
+    {
+        return facts.IsRamp
+            || facts.IsDraw
+            || facts.IsTutor
+            || facts.HasTag(DeckTags.Engines)
+            || facts.HasComboPieceOrEnabler;
+    }
+
+    /// <summary>
     /// Determines whether a nonpermanent spell should be held for interaction or protection.
     /// </summary>
     private static bool ShouldHoldPerformanceSpell(
@@ -138,9 +267,6 @@ internal static partial class DeckPerformanceAnalyzer
     }
 
     /// <summary>
-    /// Checks whether a card contributes mana in the heuristic simulation.
-    /// </summary>
-    /// <summary>
     /// Gets color symbols from currently available mana sources.
     /// </summary>
     private static HashSet<string> ExtractColoredSymbols(IEnumerable<PerformanceManaSource> sources)
@@ -173,6 +299,27 @@ internal static partial class DeckPerformanceAnalyzer
     {
         hand.Add(library[0]);
         library.RemoveAt(0);
+    }
+
+    /// <summary>
+    /// Lists hand-spell sequencing windows around delayed command-zone deployment.
+    /// </summary>
+    private enum PerformanceSpellWindow
+    {
+        /// <summary>
+        /// Cast every eligible spell.
+        /// </summary>
+        All,
+
+        /// <summary>
+        /// Cast only setup spells before delayed command-zone deployment.
+        /// </summary>
+        SetupOnly,
+
+        /// <summary>
+        /// Cast only non-setup spells after delayed command-zone deployment.
+        /// </summary>
+        NonSetup,
     }
 
 }

@@ -19,6 +19,7 @@ internal static partial class DeckPerformanceAnalyzer
         PerformanceCardFactsCache cardFacts)
     {
         PerformanceScenarioDefaults defaults = BuildScenarioDefaults(maxTurn, profile, intent);
+        CommandZonePlan commandZonePlan = CommandZonePlanner.Build(included, profile);
         List<string> commanderDrivers =
             ["Missing early land drops", "Missing required commander colors", "Insufficient early ramp"];
         List<string> commanderProtectionDrivers =
@@ -40,12 +41,15 @@ internal static partial class DeckPerformanceAnalyzer
                 defaults.CommanderTurn,
                 runs.Count(run => run.CommanderCastTurn <= defaults.CommanderTurn),
                 runs.Count,
-                RelevantPerformanceCards(included, DeckRoles.Commander, cardFacts),
+                commandZonePlan.Cards
+                    .Where(card => card.Kind == CommandZoneCardKind.Commander)
+                    .Select(card => card.Card.Name)
+                    .ToList(),
                 commanderDrivers,
                 defaults.IntentAdjusted
                     ? ["Commander is treated as always available from the command zone.", "Deck intent adjusted the target turn."]
                     : ["Commander is treated as always available from the command zone."],
-                BuildCommanderFailureDriverCounts(included, runs, defaults.CommanderTurn, commanderDrivers, cardFacts)),
+                BuildCommanderFailureDriverCounts(runs, defaults.CommanderTurn, commanderDrivers, commandZonePlan, cardFacts)),
             BuildScenario(
                 "commander-with-protection-by-turn-5",
                 defaults.ProtectionTurn,
@@ -186,14 +190,14 @@ internal static partial class DeckPerformanceAnalyzer
     /// Counts likely commander deployment failure causes from run states.
     /// </summary>
     private static Dictionary<string, int> BuildCommanderFailureDriverCounts(
-        IReadOnlyList<DeckCard> included,
         IReadOnlyList<PerformanceRun> runs,
         int targetTurn,
         IReadOnlyList<string> drivers,
+        CommandZonePlan commandZonePlan,
         PerformanceCardFactsCache cardFacts)
     {
         Dictionary<string, int> counts = EmptyDriverCounts(drivers);
-        DeckCard? commander = included.FirstOrDefault(card => cardFacts.Get(card).IsCommander);
+        DeckCard? commander = commandZonePlan.PrimaryCommander;
         PerformanceCardFacts? commanderFacts = commander is null ? null : cardFacts.Get(commander);
         int commanderCost = commanderFacts?.ManaValue ?? 0;
         PerformanceCostRequirement? commanderRequirement = commander is null

@@ -117,12 +117,18 @@ internal static partial class DeckPerformanceAnalyzer
             analysis.Assumptions.Add("Saved deck intent can adjust the active heuristic profile and scenario target turns.");
         }
 
+        CommandZonePlan commandZonePlan = CommandZonePlanner.Build(included, profileResolution.Profile);
+        if (commandZonePlan.HasBackground)
+        {
+            analysis.Assumptions.Add("Command-zone Backgrounds are sequenced separately from non-Background commanders.");
+        }
+
         if (!workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
         {
             analysis.Warnings.Add("Default scenarios are Commander-oriented; interpret non-Commander output as generic heuristic sampling.");
         }
 
-        if (!included.Any(card => cardFacts.Get(card).IsCommander))
+        if (!commandZonePlan.HasCommander)
         {
             analysis.Warnings.Add("No commander category was detected, so commander timing scenarios will be zero.");
         }

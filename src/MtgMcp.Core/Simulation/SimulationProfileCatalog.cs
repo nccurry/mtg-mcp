@@ -476,6 +476,26 @@ public sealed class SimulationProfileCatalog
             resolved.Sequencing.PreferCommanderOnCurve = settings.PreferCommanderOnCurve.Value;
         }
 
+        if (settings.PreferredCommanderTurn.HasValue)
+        {
+            int turn = Math.Max(1, settings.PreferredCommanderTurn.Value);
+            resolved.Sequencing.PreferredCommanderTurn = turn;
+            resolved.Scenarios.CommanderTurn = turn;
+        }
+
+        if (settings.PreferredBackgroundTurn.HasValue)
+        {
+            resolved.Sequencing.PreferredBackgroundTurn = Math.Max(1, settings.PreferredBackgroundTurn.Value);
+        }
+
+        if (settings.CommandZoneOrder.Count > 0)
+        {
+            resolved.Sequencing.CommandZoneOrder = settings.CommandZoneOrder
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         if (settings.AcceptShieldDownWinAttempt.HasValue)
         {
             resolved.Sequencing.HoldProtectionWhenCommanderOnline = !settings.AcceptShieldDownWinAttempt.Value;

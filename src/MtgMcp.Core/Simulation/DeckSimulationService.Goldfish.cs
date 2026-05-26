@@ -78,10 +78,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         DeckIntent? intent = intentResult.Intent;
         ResolvedSimulationProfile profileResolution = (simulationProfiles ?? SimulationProfileCatalog.CreateDefault())
             .Resolve(workspace, SimulationProfileIds.Auto, intent);
+        CommandZonePlan commandZonePlan = CommandZonePlanner.Build(
+            IncludedCards(workspace),
+            profileResolution.Profile);
         List<GoldfishRun> runs = [];
         for (int index = 0; index < safeSimulations; index++)
         {
-            runs.Add(RunGoldfishGame(workspace, safeTurn, seed + index, mulligan, profileResolution));
+            runs.Add(RunGoldfishGame(workspace, safeTurn, seed + index, mulligan, profileResolution, commandZonePlan));
         }
 
         GoldfishSimulationResult result = new()
@@ -91,6 +94,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             TargetTurn = safeTurn,
             Mulligans = runs.Count(run => run.Mulliganed),
             ProfileResolution = profileResolution,
+            CommandZone = BuildCommandZonePerformance(runs, safeTurn, commandZonePlan),
             WinEstimate = BuildWinEstimate(workspace, runs, safeTurn)
         };
         for (int turn = 1; turn <= safeTurn; turn++)
@@ -98,10 +102,20 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             result.TurnSummaries.Add(BuildProjectedTurnState(turn, runs));
         }
 
-        GoldfishRun representative = runs
+        IEnumerable<GoldfishRun> representativeCandidates = runs;
+        if (commandZonePlan.HasBackground && runs.Any(run => run.CommanderWithBackgroundOnlineTurn.HasValue))
+        {
+            representativeCandidates = runs.Where(run => run.CommanderWithBackgroundOnlineTurn.HasValue);
+        }
+        else if (commandZonePlan.HasCommander && runs.Any(run => run.CommanderCastTurn.HasValue))
+        {
+            representativeCandidates = runs.Where(run => run.CommanderCastTurn.HasValue);
+        }
+
+        GoldfishRun representative = representativeCandidates
             .OrderBy(run => Math.Abs((run.WinTurn ?? safeTurn + 4) - (result.WinEstimate.MedianObservedWinTurn ?? safeTurn + 4)))
             .First();
-        result.RepresentativeLines = representative.Line.Take(12).ToList();
+        result.RepresentativeLines = representative.Line.Take(16).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
         result.Notes.Add("Commander is treated as available from the command zone when the deck has a Commander category.");
         result.Notes.Add($"Resolved simulation profile '{profileResolution.Profile.Id}' from {profileResolution.Source}.");
@@ -122,15 +136,20 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int targetTurn,
         int seed,
         bool mulligan,
-        ResolvedSimulationProfile profileResolution)
+        ResolvedSimulationProfile profileResolution,
+        CommandZonePlan commandZonePlan)
     {
         Random random = new(seed);
-        GoldfishOpeningHand opening = DrawGoldfishOpeningHand(workspace, random, mulligan, profileResolution.Profile);
+        GoldfishOpeningHand opening = DrawGoldfishOpeningHand(
+            workspace,
+            random,
+            mulligan,
+            profileResolution.Profile,
+            commandZonePlan);
         List<DeckCard> hand = opening.Hand;
         List<DeckCard> deck = opening.Library;
 
-        DeckCard? commander = IncludedCards(workspace).FirstOrDefault(IsCommanderCard);
-        bool commanderCast = false;
+        CommandZoneRunState commandZone = new(commandZonePlan);
         List<DeckCard> battlefield = [];
         List<DeckCard> graveyard = [];
         GoldfishRun run = new() { Mulliganed = opening.Mulligans > 0 };
@@ -155,62 +174,56 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
 
             int availableMana = CountManaSources(battlefield);
-            if (!commanderCast && commander is not null && (GetSnapshot(commander).ManaValue ?? 3) <= availableMana)
+            if (profileResolution.Profile.Sequencing.PreferCommanderOnCurve)
             {
-                commanderCast = true;
-                battlefield.Add(commander);
-                availableMana -= (int)Math.Ceiling(GetSnapshot(commander).ManaValue ?? 3);
-                run.Line.Add($"T{turn}: cast commander {commander.Name}.");
+                CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
             }
 
-            foreach (DeckCard spell in hand.OrderBy(card => CastPriority(card, turn, profileResolution.Profile)).ThenBy(card => GetSnapshot(card).ManaValue ?? 0).ToList())
+            if (profileResolution.Profile.Sequencing.PreferCommanderOnCurve)
             {
-                if (DeckRoleClassifier.Classify(spell).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-                    || IsCommanderCard(spell))
-                {
-                    continue;
-                }
-
-                int cost = Math.Max(0, (int)Math.Ceiling(GetSnapshot(spell).ManaValue ?? 2));
-                if (cost > availableMana)
-                {
-                    continue;
-                }
-
-                availableMana -= cost;
-                hand.Remove(spell);
-                CardRoleAssignment role = DeckRoleClassifier.Classify(spell);
-                if (IsPermanent(spell))
-                {
-                    battlefield.Add(spell);
-                    run.Line.Add($"T{turn}: cast {spell.Name} ({role.PrimaryRole}).");
-                }
-                else
-                {
-                    graveyard.Add(spell);
-                    run.Line.Add($"T{turn}: used {spell.Name} ({role.PrimaryRole}).");
-                }
-
-                if (role.Tags.Contains(DeckTags.Tokens) || role.Tags.Contains(DeckTags.SacrificeFodder))
-                {
-                    tokens += 2;
-                }
-
-                if (ContainsAny(GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
-                {
-                    dungeonProgress++;
-                }
-
-                if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase) && deck.Count > 0)
-                {
-                    hand.Add(deck[0]);
-                    deck.RemoveAt(0);
-                }
-
-                if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Finishers))
-                {
-                    winPressure += 4;
-                }
+                CastGoldfishHandSpells(
+                    hand,
+                    deck,
+                    battlefield,
+                    graveyard,
+                    run,
+                    turn,
+                    profileResolution.Profile,
+                    GoldfishSpellWindow.All,
+                    ref availableMana,
+                    ref tokens,
+                    ref winPressure,
+                    ref dungeonProgress);
+            }
+            else
+            {
+                CastGoldfishHandSpells(
+                    hand,
+                    deck,
+                    battlefield,
+                    graveyard,
+                    run,
+                    turn,
+                    profileResolution.Profile,
+                    GoldfishSpellWindow.SetupOnly,
+                    ref availableMana,
+                    ref tokens,
+                    ref winPressure,
+                    ref dungeonProgress);
+                CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
+                CastGoldfishHandSpells(
+                    hand,
+                    deck,
+                    battlefield,
+                    graveyard,
+                    run,
+                    turn,
+                    profileResolution.Profile,
+                    GoldfishSpellWindow.NonSetup,
+                    ref availableMana,
+                    ref tokens,
+                    ref winPressure,
+                    ref dungeonProgress);
             }
 
             int power = EstimateBattlefieldPower(battlefield, tokens);
@@ -225,7 +238,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                         Battlefield = battlefield,
                         Hand = hand,
                         Graveyard = graveyard,
-                        CommanderOnBattlefield = commanderCast,
+                        CommanderOnBattlefield = commandZone.CommanderOnline,
                         Tokens = tokens,
                         AvailableMana = availableMana,
                         InteractionHeld = CountHeldGoldfishInteraction(hand, availableMana),
@@ -286,10 +299,16 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 NonlandPermanents = battlefield.Count(card => !DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)),
                 CardsInHand = hand.Count,
                 Power = power,
-                Tokens = tokens
+                Tokens = tokens,
+                CommanderCastByTurn = commandZone.CommanderOnline,
+                BackgroundCastByTurn = commandZone.BackgroundOnline,
+                CommanderWithBackgroundOnlineByTurn = commandZone.CommanderWithBackgroundOnlineTurn.HasValue,
             });
         }
 
+        run.CommanderCastTurn = commandZone.CommanderCastTurn;
+        run.BackgroundCastTurn = commandZone.BackgroundCastTurn;
+        run.CommanderWithBackgroundOnlineTurn = commandZone.CommanderWithBackgroundOnlineTurn;
         return run;
     }
 
@@ -329,7 +348,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         DeckWorkspace workspace,
         Random random,
         bool includeMulligans,
-        SimulationProfile profile)
+        SimulationProfile profile,
+        CommandZonePlan commandZonePlan)
     {
         int mulligans = 0;
         int maximumMulligans = MulliganHeuristics.MaximumMulligans(workspace.Format);
@@ -341,7 +361,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             List<DeckCard> hand = library.Take(Math.Min(7, library.Count)).ToList();
             library = library.Skip(hand.Count).ToList();
             bool keep = !includeMulligans
-                || IsKeepableGoldfishHand(hand, targetHandSize, mulligans, workspace, profile)
+                || IsKeepableGoldfishHand(hand, targetHandSize, mulligans, workspace, profile, commandZonePlan)
                 || targetHandSize <= 5;
             if (keep)
             {
@@ -368,7 +388,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int targetHandSize,
         int mulligans,
         DeckWorkspace workspace,
-        SimulationProfile profile)
+        SimulationProfile profile,
+        CommandZonePlan commandZonePlan)
     {
         int lands = CountGoldfishRole(hand, DeckRoles.Lands);
         if (lands == 0 || (targetHandSize >= 6 && lands >= 6))
@@ -376,7 +397,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             return false;
         }
 
-        double score = ScoreGoldfishHand(hand, workspace, profile);
+        double score = ScoreGoldfishHand(hand, profile, commandZonePlan);
         double keepScore = targetHandSize <= 5
             ? profile.Mulligan.FiveCardKeepScore
             : targetHandSize == 6
@@ -392,8 +413,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static double ScoreGoldfishHand(
         IReadOnlyList<DeckCard> hand,
-        DeckWorkspace workspace,
-        SimulationProfile profile)
+        SimulationProfile profile,
+        CommandZonePlan commandZonePlan)
     {
         int lands = CountGoldfishRole(hand, DeckRoles.Lands);
         int ramp = CountCheapGoldfishRole(hand, DeckRoles.Ramp, 2);
@@ -414,7 +435,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         score += Math.Min(draw, 2) * profile.Mulligan.EarlyDrawWeight;
         score += Math.Min(interaction, 2) * profile.Mulligan.EarlyInteractionWeight;
         score += Math.Min(cheapPlays, 3) * profile.Mulligan.CheapPlayWeight;
-        if (HasGoldfishCommanderPlan(hand, workspace))
+        if (HasGoldfishCommanderPlan(hand, commandZonePlan, profile))
         {
             score += profile.Mulligan.CommanderPlanWeight;
         }
@@ -510,11 +531,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
-    /// Checks whether an opening hand plausibly casts the commander by turn four.
+    /// Checks whether an opening hand plausibly casts the commander by the profile target turn.
     /// </summary>
-    private static bool HasGoldfishCommanderPlan(IReadOnlyList<DeckCard> hand, DeckWorkspace workspace)
+    private static bool HasGoldfishCommanderPlan(
+        IReadOnlyList<DeckCard> hand,
+        CommandZonePlan commandZonePlan,
+        SimulationProfile profile)
     {
-        DeckCard? commander = IncludedCards(workspace).FirstOrDefault(IsCommanderCard);
+        DeckCard? commander = commandZonePlan.PrimaryCommander;
         if (commander is null)
         {
             return false;
@@ -522,8 +546,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
         int lands = CountGoldfishRole(hand, DeckRoles.Lands);
         int ramp = CountCheapGoldfishRole(hand, DeckRoles.Ramp, 2);
-        int expectedManaByTurnFour = Math.Min(4, lands + (lands >= 2 ? 1 : 0)) + Math.Min(ramp, 2);
-        return expectedManaByTurnFour >= GoldfishManaValue(commander);
+        int targetTurn = Math.Max(1, profile.Sequencing.PreferredCommanderTurn ?? profile.Scenarios.CommanderTurn);
+        int expectedLandDrops = lands >= 2 ? Math.Min(targetTurn, lands + 1) : lands;
+        int expectedMana = expectedLandDrops + Math.Min(ramp, 2);
+        return expectedMana >= GoldfishManaValue(commander);
     }
 
     /// <summary>
@@ -539,6 +565,142 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase)
                     || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase));
         });
+    }
+
+    /// <summary>
+    /// Casts command-zone cards in plan order while mana and target turns allow.
+    /// </summary>
+    private static void CastGoldfishCommandZoneCards(
+        CommandZoneRunState commandZone,
+        int turn,
+        List<DeckCard> battlefield,
+        GoldfishRun run,
+        ref int availableMana)
+    {
+        while (true)
+        {
+            CommandZoneCardPlan? next = commandZone.NextPending();
+            if (next is null || turn < next.TargetTurn)
+            {
+                return;
+            }
+
+            int cost = GoldfishManaValue(next.Card);
+            if (cost > availableMana)
+            {
+                return;
+            }
+
+            availableMana -= cost;
+            battlefield.Add(next.Card);
+            commandZone.MarkCast(next, turn);
+            run.Line.Add($"T{turn}: cast {CommandZoneLabel(next)} {next.Card.Name}.");
+        }
+    }
+
+    /// <summary>
+    /// Casts hand spells for one sequencing window.
+    /// </summary>
+    private static void CastGoldfishHandSpells(
+        List<DeckCard> hand,
+        List<DeckCard> deck,
+        List<DeckCard> battlefield,
+        List<DeckCard> graveyard,
+        GoldfishRun run,
+        int turn,
+        SimulationProfile profile,
+        GoldfishSpellWindow window,
+        ref int availableMana,
+        ref int tokens,
+        ref int winPressure,
+        ref int dungeonProgress)
+    {
+        foreach (DeckCard spell in hand.OrderBy(card => CastPriority(card, turn, profile)).ThenBy(card => GetSnapshot(card).ManaValue ?? 0).ToList())
+        {
+            CardRoleAssignment role = DeckRoleClassifier.Classify(spell);
+            if (role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+                || IsCommanderCard(spell)
+                || !UseGoldfishSpellInWindow(role, window))
+            {
+                continue;
+            }
+
+            int cost = Math.Max(0, (int)Math.Ceiling(GetSnapshot(spell).ManaValue ?? 2));
+            if (cost > availableMana)
+            {
+                continue;
+            }
+
+            availableMana -= cost;
+            hand.Remove(spell);
+            if (IsPermanent(spell))
+            {
+                battlefield.Add(spell);
+                run.Line.Add($"T{turn}: cast {spell.Name} ({role.PrimaryRole}).");
+            }
+            else
+            {
+                graveyard.Add(spell);
+                run.Line.Add($"T{turn}: used {spell.Name} ({role.PrimaryRole}).");
+            }
+
+            if (role.Tags.Contains(DeckTags.Tokens) || role.Tags.Contains(DeckTags.SacrificeFodder))
+            {
+                tokens += 2;
+            }
+
+            if (ContainsAny(GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
+            {
+                dungeonProgress++;
+            }
+
+            if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase) && deck.Count > 0)
+            {
+                hand.Add(deck[0]);
+                deck.RemoveAt(0);
+            }
+
+            if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Finishers))
+            {
+                winPressure += 4;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a hand spell belongs in the current delayed-command-zone sequencing window.
+    /// </summary>
+    private static bool UseGoldfishSpellInWindow(
+        CardRoleAssignment role,
+        GoldfishSpellWindow window)
+    {
+        return window switch
+        {
+            GoldfishSpellWindow.All => true,
+            GoldfishSpellWindow.SetupOnly => IsGoldfishSetupSpell(role),
+            GoldfishSpellWindow.NonSetup => !IsGoldfishSetupSpell(role),
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// Checks whether a hand spell should be sequenced before delayed command-zone deployment.
+    /// </summary>
+    private static bool IsGoldfishSetupSpell(CardRoleAssignment role)
+    {
+        return role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Engines)
+            || role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler);
+    }
+
+    /// <summary>
+    /// Gets a human-readable command-zone role label for representative lines.
+    /// </summary>
+    private static string CommandZoneLabel(CommandZoneCardPlan card)
+    {
+        return card.Kind == CommandZoneCardKind.Background ? "background" : "commander";
     }
 
     /// <summary>
@@ -569,6 +731,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static int CastPriority(DeckCard card, int turn, SimulationProfile profile)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        return CastPriorityFromRole(role, turn, profile);
+    }
+
+    /// <summary>
+    /// Calculates a simple cast priority from a cached role assignment.
+    /// </summary>
+    private static int CastPriorityFromRole(CardRoleAssignment role, int turn, SimulationProfile profile)
+    {
         if (turn <= 3 && role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
         {
             return profile.Sequencing.EarlyRampPriority;
@@ -655,6 +825,69 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             LikelyBoard = $"{lands} lands, {manaSources} mana sources, {permanents} nonland permanents, about {power} pressure, {hand} cards in hand.",
             Confidence = Math.Clamp(0.45 + Math.Min(0.35, runs.Count / 2000.0), 0, 0.85)
         };
+    }
+
+    /// <summary>
+    /// Builds command-zone timing metrics from goldfish runs.
+    /// </summary>
+    private static CommandZonePerformance BuildCommandZonePerformance(
+        IReadOnlyList<GoldfishRun> runs,
+        int maxTurn,
+        CommandZonePlan plan)
+    {
+        CommandZonePerformance result = new()
+        {
+            CommandZoneNames = plan.Cards.Select(card => card.Card.Name).ToList(),
+            CommanderNames = plan.Cards
+                .Where(card => card.Kind == CommandZoneCardKind.Commander)
+                .Select(card => card.Card.Name)
+                .ToList(),
+            BackgroundNames = plan.Cards
+                .Where(card => card.Kind == CommandZoneCardKind.Background)
+                .Select(card => card.Card.Name)
+                .ToList(),
+            AverageCommanderCastTurn = AverageTurn(runs.Select(run => run.CommanderCastTurn)),
+            AverageBackgroundCastTurn = AverageTurn(runs.Select(run => run.BackgroundCastTurn)),
+            AverageCommanderWithBackgroundOnlineTurn = AverageTurn(runs.Select(run => run.CommanderWithBackgroundOnlineTurn)),
+        };
+
+        if (plan.Cards.Count == 0)
+        {
+            return result;
+        }
+
+        for (int turn = 1; turn <= maxTurn; turn++)
+        {
+            result.CommanderCastByTurn.Add(PerformanceStatistics.BuildProbability(
+                "commander-cast-by-turn",
+                turn,
+                runs.Count(run => run.CommanderCastTurn <= turn),
+                runs.Count));
+            result.BackgroundCastByTurn.Add(PerformanceStatistics.BuildProbability(
+                "background-cast-by-turn",
+                turn,
+                runs.Count(run => run.BackgroundCastTurn <= turn),
+                runs.Count));
+            result.CommanderWithBackgroundOnlineByTurn.Add(PerformanceStatistics.BuildProbability(
+                "commander-with-background-online-by-turn",
+                turn,
+                runs.Count(run => run.CommanderWithBackgroundOnlineTurn <= turn),
+                runs.Count));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Averages observed turn values while ignoring runs where the event did not occur.
+    /// </summary>
+    private static double? AverageTurn(IEnumerable<int?> turns)
+    {
+        List<int> observed = turns
+            .Where(turn => turn.HasValue)
+            .Select(turn => turn!.Value)
+            .ToList();
+        return observed.Count == 0 ? null : observed.Average();
     }
 
     /// <summary>
@@ -784,6 +1017,21 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         public int? WinTurn { get; set; }
 
         /// <summary>
+        /// Gets or sets the earliest non-Background commander cast turn.
+        /// </summary>
+        public int? CommanderCastTurn { get; set; }
+
+        /// <summary>
+        /// Gets or sets the earliest Background cast turn.
+        /// </summary>
+        public int? BackgroundCastTurn { get; set; }
+
+        /// <summary>
+        /// Gets or sets the earliest turn where commander and Background were both online.
+        /// </summary>
+        public int? CommanderWithBackgroundOnlineTurn { get; set; }
+
+        /// <summary>
         /// Gets or sets the win route.
         /// </summary>
         public string? WinRoute { get; set; }
@@ -864,5 +1112,41 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         /// Gets or sets token count.
         /// </summary>
         public int Tokens { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether a non-Background commander had been cast by this turn.
+        /// </summary>
+        public bool CommanderCastByTurn { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether a Background had been cast by this turn.
+        /// </summary>
+        public bool BackgroundCastByTurn { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether a commander and Background were both online by this turn.
+        /// </summary>
+        public bool CommanderWithBackgroundOnlineByTurn { get; set; }
+    }
+
+    /// <summary>
+    /// Lists hand-spell sequencing windows around delayed command-zone deployment.
+    /// </summary>
+    private enum GoldfishSpellWindow
+    {
+        /// <summary>
+        /// Cast every eligible spell.
+        /// </summary>
+        All,
+
+        /// <summary>
+        /// Cast only setup spells before delayed command-zone deployment.
+        /// </summary>
+        SetupOnly,
+
+        /// <summary>
+        /// Cast only non-setup spells after delayed command-zone deployment.
+        /// </summary>
+        NonSetup,
     }
 }

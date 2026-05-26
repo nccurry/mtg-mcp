@@ -161,6 +161,9 @@ public static partial class DeckIntentText
             AddSimulationValue(lines, "Hold Interaction From Turn", intent.Simulation.HoldInteractionFromTurn?.ToString(CultureInfo.InvariantCulture));
             AddSimulationValue(lines, "Minimum Interaction Held", intent.Simulation.MinimumInteractionHeld?.ToString(CultureInfo.InvariantCulture));
             AddSimulationValue(lines, "Prefer Commander On Curve", intent.Simulation.PreferCommanderOnCurve?.ToString());
+            AddSimulationValue(lines, "Preferred Commander Turn", intent.Simulation.PreferredCommanderTurn?.ToString(CultureInfo.InvariantCulture));
+            AddSimulationValue(lines, "Preferred Background Turn", intent.Simulation.PreferredBackgroundTurn?.ToString(CultureInfo.InvariantCulture));
+            AddDelimitedValue(lines, "Command Zone Order", intent.Simulation.CommandZoneOrder);
             AddSimulationValue(lines, "Accept Shield Down Win Attempt", intent.Simulation.AcceptShieldDownWinAttempt?.ToString());
             foreach (KeyValuePair<string, string> value in intent.Simulation.Values.OrderBy(value => value.Key))
             {
@@ -846,6 +849,26 @@ public static partial class DeckIntentText
                 }
 
                 break;
+            case "preferredcommanderturn":
+                settings.PreferredCommanderTurn = TryParseInt(value);
+                if (!settings.PreferredCommanderTurn.HasValue)
+                {
+                    warnings.Add("Simulation field 'Preferred Commander Turn' was not an integer.");
+                }
+
+                break;
+            case "preferredbackgroundturn":
+                settings.PreferredBackgroundTurn = TryParseInt(value);
+                if (!settings.PreferredBackgroundTurn.HasValue)
+                {
+                    warnings.Add("Simulation field 'Preferred Background Turn' was not an integer.");
+                }
+
+                break;
+            case "commandzoneorder":
+                settings.CommandZoneOrder.Clear();
+                AddDelimitedItems(settings.CommandZoneOrder, value);
+                break;
             case "acceptshielddownwinattempt":
                 settings.AcceptShieldDownWinAttempt = TryParseBool(value);
                 if (!settings.AcceptShieldDownWinAttempt.HasValue)
@@ -917,6 +940,9 @@ public static partial class DeckIntentText
             or "holdinteractionfromturn"
             or "minimuminteractionheld"
             or "prefercommanderoncurve"
+            or "preferredcommanderturn"
+            or "preferredbackgroundturn"
+            or "commandzoneorder"
             or "acceptshielddownwinattempt";
     }
 
@@ -931,6 +957,9 @@ public static partial class DeckIntentText
             || settings.HoldInteractionFromTurn.HasValue
             || settings.MinimumInteractionHeld.HasValue
             || settings.PreferCommanderOnCurve.HasValue
+            || settings.PreferredCommanderTurn.HasValue
+            || settings.PreferredBackgroundTurn.HasValue
+            || settings.CommandZoneOrder.Count > 0
             || settings.AcceptShieldDownWinAttempt.HasValue;
     }
 

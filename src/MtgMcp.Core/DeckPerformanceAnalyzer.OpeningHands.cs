@@ -258,7 +258,7 @@ internal static partial class DeckPerformanceAnalyzer
     }
 
     /// <summary>
-    /// Checks whether opening resources plausibly cast the commander by turn four.
+    /// Checks whether opening resources plausibly cast the commander by the profile target turn.
     /// </summary>
     private static bool HasPerformanceCommanderPlan(
         IReadOnlyList<DeckCard> hand,
@@ -273,9 +273,10 @@ internal static partial class DeckPerformanceAnalyzer
         PerformanceCardFacts commanderFacts = cardFacts.Get(context.Commander);
         int lands = CountPerformanceRole(hand, DeckRoles.Lands, cardFacts);
         int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2, cardFacts);
-        int expectedLandDropsByTurnFour = lands >= 2 ? Math.Min(4, lands + 1) : lands;
-        int expectedManaByTurnFour = expectedLandDropsByTurnFour + Math.Min(earlyRamp, 2);
-        if (expectedManaByTurnFour < commanderFacts.ManaValue)
+        int targetTurn = Math.Max(1, context.CommanderTargetTurn);
+        int expectedLandDrops = lands >= 2 ? Math.Min(targetTurn, lands + 1) : lands;
+        int expectedMana = expectedLandDrops + Math.Min(earlyRamp, 2);
+        if (expectedMana < commanderFacts.ManaValue)
         {
             return false;
         }

@@ -30,11 +30,10 @@ internal static partial class DeckPerformanceAnalyzer
         int deckSize = included.Sum(card => Math.Max(0, card.Quantity));
         (bool colorIdentityKnown, HashSet<string> deckColors) = GetDeckColorIdentity(included, cardFacts);
         List<DeckCard> libraryTemplate = ExpandPerformanceLibrary(included, cardFacts);
-        DeckCard? commander = included.FirstOrDefault(card => cardFacts.Get(card).IsCommander);
+        CommandZonePlan commandZonePlan = CommandZonePlanner.Build(included, resolvedProfile);
         PerformanceMulliganContext mulliganContext = BuildPerformanceMulliganContext(
             workspace,
-            included,
-            cardFacts,
+            commandZonePlan,
             deckColors,
             resolvedProfile);
         List<PerformanceRun> runs = [];
@@ -43,9 +42,8 @@ internal static partial class DeckPerformanceAnalyzer
         {
             cancellationToken.ThrowIfCancellationRequested();
             runs.Add(RunPerformanceGame(
-                included,
                 libraryTemplate,
-                commander,
+                commandZonePlan,
                 mulliganContext,
                 cardFacts,
                 deckColors,
@@ -67,7 +65,8 @@ internal static partial class DeckPerformanceAnalyzer
             DeckSize = deckSize,
             OpeningHands = BuildOpeningHandPerformance(runs),
             Castability = BuildCastabilityPerformance(runs, deckColors, colorIdentityKnown, safeMaxTurn),
-            Commander = BuildCommanderPerformance(included, runs, safeMaxTurn, cardFacts),
+            Commander = BuildCommanderPerformance(runs, safeMaxTurn, commandZonePlan),
+            CommandZone = BuildCommandZonePerformance(runs, safeMaxTurn, commandZonePlan),
             ComboAssembly = BuildComboAssemblyPerformance(included, runs, safeMaxTurn, cardFacts),
             StrandedCards = BuildStrandedCardPerformance(runs),
         };

@@ -204,6 +204,11 @@ public sealed class GoldfishSimulationResult
     public ResolvedSimulationProfile ProfileResolution { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets command-zone deployment timing metrics.
+    /// </summary>
+    public CommandZonePerformance CommandZone { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets turn-by-turn projections.
     /// </summary>
     public List<ProjectedTurnState> TurnSummaries { get; set; } = [];

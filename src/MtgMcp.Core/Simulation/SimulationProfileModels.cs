@@ -169,6 +169,21 @@ public sealed class SimulationSequencingSettings
     public bool PreferCommanderOnCurve { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the preferred creature commander deployment turn.
+    /// </summary>
+    public int? PreferredCommanderTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the preferred command-zone Background deployment turn.
+    /// </summary>
+    public int? PreferredBackgroundTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets command-zone deployment order tokens such as Commander, Background, or card names.
+    /// </summary>
+    public List<string> CommandZoneOrder { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the first turn where nonpermanent interaction should usually be held.
     /// </summary>
     public int HoldInteractionFromTurn { get; set; } = 3;

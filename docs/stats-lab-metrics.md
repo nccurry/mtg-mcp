@@ -52,6 +52,11 @@ Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not
 - `commander-cast-by-turn`: probability that a commander-category card was payable and cast by turn.
 - `commander-protected-by-turn`: probability that the commander had been cast and protection was either held up or on board.
 - `averageEarliestCastTurn`: average first commander cast turn among runs where the commander was cast.
+- `background-cast-by-turn`: probability that a command-zone Background was payable and cast by turn.
+- `commander-with-background-online-by-turn`: probability that both a non-Background commander and command-zone Background were online by turn.
+- `commandZone.averageCommanderCastTurn`: average first non-Background commander cast turn among runs where one was cast.
+- `commandZone.averageBackgroundCastTurn`: average first Background cast turn among runs where one was cast.
+- `commandZone.averageCommanderWithBackgroundOnlineTurn`: average first turn where commander plus Background were both online.
 
 ## Combo Assembly
 

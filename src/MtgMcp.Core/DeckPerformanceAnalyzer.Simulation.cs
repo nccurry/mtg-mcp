@@ -10,8 +10,7 @@ internal static partial class DeckPerformanceAnalyzer
     /// </summary>
     private static PerformanceMulliganContext BuildPerformanceMulliganContext(
         DeckWorkspace workspace,
-        IReadOnlyList<DeckCard> included,
-        PerformanceCardFactsCache cardFacts,
+        CommandZonePlan commandZonePlan,
         IReadOnlySet<string> deckColors,
         SimulationProfile profile)
     {
@@ -19,7 +18,8 @@ internal static partial class DeckPerformanceAnalyzer
         {
             FreeFirstMulligan = MulliganHeuristics.UsesFreeFirstMulligan(workspace.Format),
             DeckColors = new HashSet<string>(deckColors, StringComparer.OrdinalIgnoreCase),
-            Commander = included.FirstOrDefault(card => cardFacts.Get(card).IsCommander),
+            Commander = commandZonePlan.PrimaryCommander,
+            CommanderTargetTurn = Math.Max(1, profile.Sequencing.PreferredCommanderTurn ?? profile.Scenarios.CommanderTurn),
             Mulligan = profile.Mulligan,
         };
     }
@@ -28,9 +28,8 @@ internal static partial class DeckPerformanceAnalyzer
     /// Simulates one heuristic game from opening hand through the target turn.
     /// </summary>
     private static PerformanceRun RunPerformanceGame(
-        IReadOnlyList<DeckCard> included,
         IReadOnlyList<DeckCard> libraryTemplate,
-        DeckCard? commander,
+        CommandZonePlan commandZonePlan,
         PerformanceMulliganContext mulliganContext,
         PerformanceCardFactsCache cardFacts,
         IReadOnlySet<string> deckColors,
@@ -60,7 +59,7 @@ internal static partial class DeckPerformanceAnalyzer
         };
         bool rampCastByTurn = false;
         bool drawCastByTurn = false;
-        bool commanderCast = false;
+        CommandZoneRunState commandZone = new(commandZonePlan);
 
         for (int turn = 1; turn <= maxTurn; turn++)
         {
@@ -111,64 +110,75 @@ internal static partial class DeckPerformanceAnalyzer
                 OnCurveUntappedMana = availableSources.Count >= turn,
             };
 
-            if (!commanderCast
-                && commander is not null
-                && TryPay(cardFacts.Get(commander), availableSources, out List<PerformanceManaSource> afterCommanderSources))
+            if (profile.Sequencing.PreferCommanderOnCurve)
             {
-                commanderCast = true;
-                availableSources = afterCommanderSources;
-                battlefield.Add(new PerformancePermanent { Card = commander });
-                run.CommanderCastTurn = turn;
+                CastPerformanceCommandZoneCards(
+                    commandZone,
+                    turn,
+                    battlefield,
+                    cardFacts,
+                    ref availableSources);
             }
 
-            foreach (DeckCard spell in hand
-                .Where(card => !cardFacts.Get(card).IsCommander)
-                .Where(card => !cardFacts.Get(card).IsLand)
-                .OrderBy(card => PerformanceCastPriority(cardFacts.Get(card), turn, profile))
-                .ThenBy(card => cardFacts.Get(card).ManaValue)
-                .ToList())
+            if (profile.Sequencing.PreferCommanderOnCurve)
             {
-                PerformanceCardFacts facts = cardFacts.Get(spell);
-                if (ShouldHoldPerformanceSpell(facts, turn, commanderCast, profile))
-                {
-                    continue;
-                }
-
-                if (!TryPay(facts, availableSources, out List<PerformanceManaSource> afterSpellSources))
-                {
-                    continue;
-                }
-
-                availableSources = afterSpellSources;
-                hand.Remove(spell);
-                if (facts.IsPermanent)
-                {
-                    battlefield.Add(new PerformancePermanent { Card = spell });
-                }
-                else
-                {
-                    graveyard.Add(spell);
-                }
-
-                if (facts.IsRamp)
-                {
-                    rampCastByTurn = true;
-                    state.RampCastByTurn = true;
-                    if (!facts.IsPermanent)
-                    {
-                        virtualManaSources.Add(BuildPerformanceRampSource(facts, deckColors));
-                    }
-                }
-
-                if (facts.IsDraw)
-                {
-                    drawCastByTurn = true;
-                    state.DrawCastByTurn = true;
-                    if (library.Count > 0)
-                    {
-                        PerformanceDrawOne(hand, library);
-                    }
-                }
+                CastPerformanceHandSpells(
+                    hand,
+                    library,
+                    battlefield,
+                    graveyard,
+                    virtualManaSources,
+                    state,
+                    cardFacts,
+                    deckColors,
+                    turn,
+                    profile,
+                    PerformanceSpellWindow.All,
+                    commandZone.CommanderOnline,
+                    ref availableSources,
+                    ref rampCastByTurn,
+                    ref drawCastByTurn);
+            }
+            else
+            {
+                CastPerformanceHandSpells(
+                    hand,
+                    library,
+                    battlefield,
+                    graveyard,
+                    virtualManaSources,
+                    state,
+                    cardFacts,
+                    deckColors,
+                    turn,
+                    profile,
+                    PerformanceSpellWindow.SetupOnly,
+                    commandZone.CommanderOnline,
+                    ref availableSources,
+                    ref rampCastByTurn,
+                    ref drawCastByTurn);
+                CastPerformanceCommandZoneCards(
+                    commandZone,
+                    turn,
+                    battlefield,
+                    cardFacts,
+                    ref availableSources);
+                CastPerformanceHandSpells(
+                    hand,
+                    library,
+                    battlefield,
+                    graveyard,
+                    virtualManaSources,
+                    state,
+                    cardFacts,
+                    deckColors,
+                    turn,
+                    profile,
+                    PerformanceSpellWindow.NonSetup,
+                    commandZone.CommanderOnline,
+                    ref availableSources,
+                    ref rampCastByTurn,
+                    ref drawCastByTurn);
             }
 
             List<DeckCard> battlefieldCards = battlefield.Select(permanent => permanent.Card).ToList();
@@ -198,8 +208,10 @@ internal static partial class DeckPerformanceAnalyzer
             state.CardsInHand = hand.Count;
             state.AllDeckColorsAvailable = deckColors.Count == 0
                 || deckColors.All(color => state.ColorSources.Contains(color));
-            state.CommanderCastByTurn = commanderCast;
-            state.CommanderProtectedByTurn = commanderCast
+            state.CommanderCastByTurn = commandZone.CommanderOnline;
+            state.BackgroundCastByTurn = commandZone.BackgroundOnline;
+            state.CommanderWithBackgroundOnlineByTurn = commandZone.CommanderWithBackgroundOnlineTurn.HasValue;
+            state.CommanderProtectedByTurn = commandZone.CommanderOnline
                 && (state.ProtectionHeldUp
                     || PerformanceHasRole(battlefieldCards, DeckRoles.Protection, cardFacts)
                     || PerformanceHasTag(battlefieldCards, DeckTags.CombatProtection, cardFacts));
@@ -228,6 +240,9 @@ internal static partial class DeckPerformanceAnalyzer
             run.Turns.Add(state);
         }
 
+        run.CommanderCastTurn = commandZone.CommanderCastTurn;
+        run.BackgroundCastTurn = commandZone.BackgroundCastTurn;
+        run.CommanderWithBackgroundOnlineTurn = commandZone.CommanderWithBackgroundOnlineTurn;
         AddPerformanceStrandedCards(run, hand, run.Turns.LastOrDefault(), maxTurn, cardFacts);
         return run;
     }

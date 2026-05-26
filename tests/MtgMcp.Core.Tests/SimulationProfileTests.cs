@@ -34,6 +34,9 @@ public sealed class SimulationProfileTests
             Hold Interaction From Turn: 3
             Minimum Interaction Held: 1
             Prefer Commander On Curve: true
+            Preferred Commander Turn: 5
+            Preferred Background Turn: 4
+            Command Zone Order: Background, Commander
             Accept Shield Down Win Attempt: false
 
             Win Routes
@@ -54,12 +57,17 @@ public sealed class SimulationProfileTests
         intent.Targets["Blink"].Maximum.Should().Be(14);
         intent.Simulation.HoldInteractionFromTurn.Should().Be(3);
         intent.Simulation.PreferCommanderOnCurve.Should().BeTrue();
+        intent.Simulation.PreferredCommanderTurn.Should().Be(5);
+        intent.Simulation.PreferredBackgroundTurn.Should().Be(4);
+        intent.Simulation.CommandZoneOrder.Should().Equal("Background", "Commander");
         intent.Simulation.AcceptShieldDownWinAttempt.Should().BeFalse();
         intent.WinRoutes.Should().ContainSingle();
         intent.WinRoutes[0].Requirements.Should().Contain(["commander", "repeatable-blink", "Altar of the Brood"]);
 
         string formatted = DeckIntentText.Format(intent);
         formatted.Should().Contain("Simulation Profile: combo");
+        formatted.Should().Contain("Preferred Commander Turn: 5");
+        formatted.Should().Contain("Command Zone Order: Background, Commander");
         formatted.Should().Contain("Build Targets");
         formatted.Should().Contain("Win Routes");
         DeckIntentText.Parse(formatted).Warnings.Should().BeEmpty();
@@ -145,6 +153,33 @@ public sealed class SimulationProfileTests
 
         ResolvedSimulationProfile resolved = catalog.Resolve(EmptyWorkspace(), "blink-combo", new DeckIntent());
         resolved.Warnings.Should().Contain("configured profile warning");
+    }
+
+    /// <summary>
+    /// Verifies that intent command-zone settings override the resolved simulation profile.
+    /// </summary>
+    [Fact]
+    public void SimulationProfileResolver_AppliesCommandZoneIntentOverrides()
+    {
+        SimulationProfileCatalog catalog = SimulationProfileCatalog.CreateDefault();
+        DeckIntent intent = new()
+        {
+            Simulation = new DeckIntentSimulationSettings
+            {
+                PreferCommanderOnCurve = false,
+                PreferredCommanderTurn = 6,
+                PreferredBackgroundTurn = 4,
+                CommandZoneOrder = ["Background", "Commander"],
+            },
+        };
+
+        ResolvedSimulationProfile resolved = catalog.Resolve(EmptyWorkspace(), "auto", intent);
+
+        resolved.Profile.Sequencing.PreferCommanderOnCurve.Should().BeFalse();
+        resolved.Profile.Sequencing.PreferredCommanderTurn.Should().Be(6);
+        resolved.Profile.Sequencing.PreferredBackgroundTurn.Should().Be(4);
+        resolved.Profile.Sequencing.CommandZoneOrder.Should().Equal("Background", "Commander");
+        resolved.Profile.Scenarios.CommanderTurn.Should().Be(6);
     }
 
     /// <summary>

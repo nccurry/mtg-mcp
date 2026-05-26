@@ -44,7 +44,19 @@ Simulation fields:
 - `Hold Interaction From Turn`
 - `Minimum Interaction Held`
 - `Prefer Commander On Curve`
+- `Preferred Commander Turn`
+- `Preferred Background Turn`
+- `Command Zone Order`
 - `Accept Shield Down Win Attempt`
+
+`Prefer Commander On Curve: false` delays command-zone deployment until the
+profile or intent target turn and lets setup spells such as ramp, draw, tutors,
+engines, and combo pieces use mana first. `Preferred Commander Turn` and
+`Preferred Background Turn` set those deployment targets directly. `Command
+Zone Order` is a comma-delimited list containing `Background`, `Commander`, or
+exact command-zone card names. When a deck has a Background plus a commander
+with "Choose a Background" and commander-on-curve is false, simulators default
+to Background before the creature commander.
 
 Win route lines use this shape:
 

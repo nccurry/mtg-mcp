@@ -83,6 +83,16 @@ internal static partial class DeckPerformanceAnalyzer
                 turn,
                 states.Count(state => state.OnCurveUntappedMana),
                 states.Count));
+            analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
+                "background-cast-by-turn",
+                turn,
+                states.Count(state => state.BackgroundCastByTurn),
+                states.Count));
+            analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
+                "commander-with-background-online-by-turn",
+                turn,
+                states.Count(state => state.CommanderWithBackgroundOnlineByTurn),
+                states.Count));
             if (colorIdentityKnown && deckColors.Count > 0)
             {
                 analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
@@ -143,17 +153,15 @@ internal static partial class DeckPerformanceAnalyzer
     /// Builds commander cast and protection timing metrics.
     /// </summary>
     private static CommanderPerformance BuildCommanderPerformance(
-        IReadOnlyList<DeckCard> included,
         IReadOnlyList<PerformanceRun> runs,
         int maxTurn,
-        PerformanceCardFactsCache cardFacts)
+        CommandZonePlan commandZonePlan)
     {
         CommanderPerformance result = new()
         {
-            CommanderNames = included
-                .Where(card => cardFacts.Get(card).IsCommander)
-                .Select(card => card.Name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            CommanderNames = commandZonePlan.Cards
+                .Where(card => card.Kind == CommandZoneCardKind.Commander)
+                .Select(card => card.Card.Name)
                 .ToList(),
         };
         if (result.CommanderNames.Count == 0)
@@ -182,6 +190,69 @@ internal static partial class DeckPerformanceAnalyzer
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Builds command-zone timing metrics.
+    /// </summary>
+    private static CommandZonePerformance BuildCommandZonePerformance(
+        IReadOnlyList<PerformanceRun> runs,
+        int maxTurn,
+        CommandZonePlan commandZonePlan)
+    {
+        CommandZonePerformance result = new()
+        {
+            CommandZoneNames = commandZonePlan.Cards.Select(card => card.Card.Name).ToList(),
+            CommanderNames = commandZonePlan.Cards
+                .Where(card => card.Kind == CommandZoneCardKind.Commander)
+                .Select(card => card.Card.Name)
+                .ToList(),
+            BackgroundNames = commandZonePlan.Cards
+                .Where(card => card.Kind == CommandZoneCardKind.Background)
+                .Select(card => card.Card.Name)
+                .ToList(),
+            AverageCommanderCastTurn = AveragePerformanceTurn(runs.Select(run => run.CommanderCastTurn)),
+            AverageBackgroundCastTurn = AveragePerformanceTurn(runs.Select(run => run.BackgroundCastTurn)),
+            AverageCommanderWithBackgroundOnlineTurn = AveragePerformanceTurn(runs.Select(run => run.CommanderWithBackgroundOnlineTurn)),
+        };
+
+        if (commandZonePlan.Cards.Count == 0)
+        {
+            return result;
+        }
+
+        for (int turn = 1; turn <= maxTurn; turn++)
+        {
+            result.CommanderCastByTurn.Add(PerformanceStatistics.BuildProbability(
+                "commander-cast-by-turn",
+                turn,
+                runs.Count(run => run.CommanderCastTurn <= turn),
+                runs.Count));
+            result.BackgroundCastByTurn.Add(PerformanceStatistics.BuildProbability(
+                "background-cast-by-turn",
+                turn,
+                runs.Count(run => run.BackgroundCastTurn <= turn),
+                runs.Count));
+            result.CommanderWithBackgroundOnlineByTurn.Add(PerformanceStatistics.BuildProbability(
+                "commander-with-background-online-by-turn",
+                turn,
+                runs.Count(run => run.CommanderWithBackgroundOnlineTurn <= turn),
+                runs.Count));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Averages observed turn values while ignoring runs where the event did not occur.
+    /// </summary>
+    private static double? AveragePerformanceTurn(IEnumerable<int?> turns)
+    {
+        List<int> observed = turns
+            .Where(turn => turn.HasValue)
+            .Select(turn => turn!.Value)
+            .ToList();
+        return observed.Count == 0 ? null : observed.Average();
     }
 
     /// <summary>

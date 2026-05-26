@@ -377,6 +377,36 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies that performance analysis honors Background-first command-zone sequencing intent.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_SequencesBackgroundBeforeDelayedCommander()
+    {
+        DeckPerformanceAnalysis analysis = AnalyzeDirect(
+            CreateBackgroundFirstPerformanceDeck(),
+            simulations: 300,
+            maxTurn: 7,
+            seed: 73,
+            includeMulligans: false);
+
+        analysis.CommandZone.CommanderNames.Should().ContainSingle("Baeloth Barrityl, Entertainer");
+        analysis.CommandZone.BackgroundNames.Should().ContainSingle("Raised by Giants");
+        analysis.CommandZone.CommandZoneNames.Should().Equal("Raised by Giants", "Baeloth Barrityl, Entertainer");
+        analysis.Commander.CastByTurn.Single(row => row.Turn == 4).Probability.Should().Be(0);
+        analysis.CommandZone.BackgroundCastByTurn.Single(row => row.Turn == 7).Probability.Should().BeGreaterThan(0);
+        analysis.CommandZone.CommanderWithBackgroundOnlineByTurn.Single(row => row.Turn == 7)
+            .Probability.Should().BeGreaterThan(0);
+        analysis.CommandZone.AverageBackgroundCastTurn.Should().NotBeNull();
+        analysis.CommandZone.AverageCommanderCastTurn.Should().NotBeNull();
+        analysis.CommandZone.AverageBackgroundCastTurn.Should()
+            .BeLessThan(analysis.CommandZone.AverageCommanderCastTurn!.Value);
+        analysis.TurnProbabilities.Should().Contain(row =>
+            row.Name == "background-cast-by-turn" && row.Turn == 7);
+        analysis.TurnProbabilities.Should().Contain(row =>
+            row.Name == "commander-with-background-online-by-turn" && row.Turn == 7);
+    }
+
+    /// <summary>
     /// Verifies that scenarios expose observed failure-driver counts.
     /// </summary>
     [Fact]
@@ -1026,6 +1056,57 @@ public sealed class DeckPerformanceTests
                 Card("Combo Engine", 3, DeckDefaults.Mainboard, "Artifact", "{3}", 3, "Combo engine. Untap another artifact. Add {U}.", ["U"], ["U"]),
                 Card("Table Finisher", 3, DeckDefaults.Mainboard, "Sorcery", "{5}{W}{U}", 7, "Each opponent loses half their life.", ["W", "U"]),
                 Card("Utility Spell", utility, DeckDefaults.Mainboard, "Sorcery", "{3}", 3, "Scry 1.", []),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a Baeloth plus Background-style performance fixture with delayed commander intent.
+    /// </summary>
+    private static DeckWorkspace CreateBackgroundFirstPerformanceDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Baeloth Background Performance",
+            Format = "commander",
+            Description = DeckIntentText.UpsertDescription(
+                null,
+                """
+                MTG MCP Deck Intent
+                Version: 2
+
+                Simulation
+                Prefer Commander On Curve: false
+                End MTG MCP Deck Intent
+                """),
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card(
+                    "Baeloth Barrityl, Entertainer",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Elf Shaman",
+                    "{4}{R}",
+                    5,
+                    "Choose a Background. Goaded creatures your opponents control can't block.",
+                    ["R", "G"]),
+                Card(
+                    "Raised by Giants",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Enchantment - Background",
+                    "{5}{G}",
+                    6,
+                    "Commander creatures you own have base power and toughness 10/10 and are Giants.",
+                    ["G"]),
+                Card("Gruul Land Package", 60, DeckDefaults.Mainboard, "Land", null, 0, "{T}: Add {R} or {G}.", [], ["R", "G"]),
+                Card("Ramp Stone", 38, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["R", "G"]),
             ],
         };
     }

@@ -232,6 +232,109 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that Background-first intent delays the creature commander and reports separate command-zone timings.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_SequencesBackgroundBeforeDelayedCommander()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateBackgroundFirstGoldfishDeck(
+                """
+                Prefer Commander On Curve: false
+                Preferred Commander Turn: 6
+                Preferred Background Turn: 4
+                Command Zone Order: Raised by Giants, Baeloth Barrityl, Entertainer
+                """),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 7,
+            simulations: 300,
+            seed: 31,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.CommandZone.CommanderNames.Should().ContainSingle("Baeloth Barrityl, Entertainer");
+        goldfish.CommandZone.BackgroundNames.Should().ContainSingle("Raised by Giants");
+        goldfish.CommandZone.CommandZoneNames.Should().Equal("Raised by Giants", "Baeloth Barrityl, Entertainer");
+        goldfish.CommandZone.CommanderCastByTurn.Single(row => row.Turn == 4)
+            .Probability.Should().Be(0);
+        goldfish.CommandZone.AverageBackgroundCastTurn.Should().NotBeNull();
+        goldfish.CommandZone.AverageCommanderCastTurn.Should().NotBeNull();
+        goldfish.CommandZone.AverageBackgroundCastTurn.Should().BeLessThan(goldfish.CommandZone.AverageCommanderCastTurn!.Value);
+        goldfish.CommandZone.CommanderWithBackgroundOnlineByTurn.Single(row => row.Turn == 7)
+            .Probability.Should().BeGreaterThan(0);
+
+        int backgroundLine = goldfish.RepresentativeLines.FindIndex(line =>
+            line.Contains("cast background Raised by Giants", StringComparison.OrdinalIgnoreCase));
+        int commanderLine = goldfish.RepresentativeLines.FindIndex(line =>
+            line.Contains("cast commander Baeloth Barrityl, Entertainer", StringComparison.OrdinalIgnoreCase));
+        backgroundLine.Should().BeGreaterThanOrEqualTo(0);
+        commanderLine.Should().BeGreaterThan(backgroundLine);
+    }
+
+    /// <summary>
+    /// Verifies that Background decks default to Background-first sequencing when commander-on-curve is disabled.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DefaultsBackgroundBeforeCommanderWhenOnCurveDisabled()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateBackgroundFirstGoldfishDeck(
+                """
+                Prefer Commander On Curve: false
+                """),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 7,
+            simulations: 300,
+            seed: 31,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.CommandZone.CommandZoneNames.Should().Equal("Raised by Giants", "Baeloth Barrityl, Entertainer");
+        goldfish.CommandZone.CommanderCastByTurn.Single(row => row.Turn == 4)
+            .Probability.Should().Be(0);
+        goldfish.CommandZone.AverageBackgroundCastTurn.Should().NotBeNull();
+        goldfish.CommandZone.AverageCommanderCastTurn.Should().NotBeNull();
+        goldfish.CommandZone.AverageBackgroundCastTurn.Should().BeLessThan(goldfish.CommandZone.AverageCommanderCastTurn!.Value);
+    }
+
+    /// <summary>
+    /// Verifies that multiple command-zone cards are not sampled into the library and can both be deployed.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DeploysMultipleCommandZoneCardsFromCommandZone()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(CreatePartnerGoldfishDeck(), TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 3,
+            simulations: 100,
+            seed: 41,
+            mulligan: false,
+            TestContext.Current.CancellationToken);
+
+        goldfish.CommandZone.CommanderNames.Should().Equal("Partner One", "Partner Two");
+        goldfish.CommandZone.CommanderCastByTurn.Single(row => row.Turn == 2).Probability.Should().Be(1);
+        goldfish.TurnSummaries.Single(row => row.Turn == 3).MedianLands.Should().Be(3);
+        goldfish.RepresentativeLines.Should().Contain(line =>
+            line.Contains("cast commander Partner One", StringComparison.OrdinalIgnoreCase));
+        goldfish.RepresentativeLines.Should().Contain(line =>
+            line.Contains("cast commander Partner Two", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that Archidekt goldfish comparison imports reference decks read-only and returns raw deltas.
     /// </summary>
     [Fact]
@@ -358,6 +461,158 @@ public sealed partial class DeckIntelligenceTests
         estimate.MedianWinTurn.Should().BeNull();
         estimate.Routes.Should().BeEmpty();
         estimate.Notes.Should().Contain(note => note.Contains("No likely win", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Creates a Baeloth plus Background-style goldfish fixture with delayed commander intent.
+    /// </summary>
+    private static DeckWorkspace CreateBackgroundFirstGoldfishDeck(string simulationSettings)
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Baeloth Background Goldfish",
+            Format = "commander",
+            Description = DeckIntentText.UpsertDescription(
+                null,
+                $"""
+                MTG MCP Deck Intent
+                Version: 2
+
+                Simulation
+                {simulationSettings}
+                End MTG MCP Deck Intent
+                """),
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Baeloth Barrityl, Entertainer",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Elf Shaman",
+                        ManaCost = "{4}{R}",
+                        ManaValue = 5,
+                        OracleText = "Choose a Background. Goaded creatures your opponents control can't block.",
+                        ColorIdentity = ["R", "G"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Raised by Giants",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Enchantment - Background",
+                        ManaCost = "{5}{G}",
+                        ManaValue = 6,
+                        OracleText = "Commander creatures you own have base power and toughness 10/10 and are Giants.",
+                        ColorIdentity = ["G"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 60,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Forest",
+                        ManaValue = 0,
+                        OracleText = "{T}: Add {G}.",
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Ramp Stone",
+                    Quantity = 38,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        ManaCost = "{2}",
+                        ManaValue = 2,
+                        OracleText = "{T}: Add one mana of any color.",
+                    },
+                },
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a Partner-style goldfish fixture with inflated commander quantities to prove they stay out of the library.
+    /// </summary>
+    private static DeckWorkspace CreatePartnerGoldfishDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Partner Goldfish",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Partner One",
+                    Quantity = 30,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Human",
+                        ManaCost = "{G}",
+                        ManaValue = 1,
+                        OracleText = "Partner",
+                        ColorIdentity = ["G"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Partner Two",
+                    Quantity = 30,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Elf",
+                        ManaCost = "{1}{G}",
+                        ManaValue = 2,
+                        OracleText = "Partner",
+                        ColorIdentity = ["G"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 3,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Forest",
+                        ManaValue = 0,
+                        OracleText = "{T}: Add {G}.",
+                    },
+                },
+            ],
+        };
     }
 
     /// <summary>

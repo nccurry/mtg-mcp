@@ -271,6 +271,10 @@ public sealed class MtgResources
             deck intent value, auto inference, then neutral. Built-ins are
             neutral, aggro, combo, control, value, big-mana, and stax; auto asks
             the resolver to choose from deck facts.
+            Simulation can also set Prefer Commander On Curve, Preferred
+            Commander Turn, Preferred Background Turn, and Command Zone Order.
+            Command Zone Order accepts Background, Commander, or exact card
+            names for Background and Partner-style decks.
             Win Routes use lines such as:
             Altar Loop: requires commander, repeatable-blink, card:Altar of the Brood; earliest turn 5; kind combo
             Supported route requirements are commander, repeatable-blink,

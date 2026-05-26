@@ -58,6 +58,11 @@ internal sealed class PerformanceMulliganContext
     public DeckCard? Commander { get; set; }
 
     /// <summary>
+    /// Gets or sets the preferred turn for evaluating commander deployment plans.
+    /// </summary>
+    public int CommanderTargetTurn { get; set; } = 4;
+
+    /// <summary>
     /// Gets or sets profile-specific mulligan weights and thresholds.
     /// </summary>
     public SimulationMulliganSettings Mulligan { get; set; } = new();
@@ -133,6 +138,16 @@ internal sealed class PerformanceRun
     /// Gets or sets the earliest commander cast turn.
     /// </summary>
     public int? CommanderCastTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the earliest Background cast turn.
+    /// </summary>
+    public int? BackgroundCastTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the earliest turn where commander and Background were both online.
+    /// </summary>
+    public int? CommanderWithBackgroundOnlineTurn { get; set; }
 
     /// <summary>
     /// Gets or sets the earliest commander protected turn.
@@ -270,6 +285,16 @@ internal sealed class PerformanceTurnState
     /// Gets or sets whether the commander has been cast by this turn.
     /// </summary>
     public bool CommanderCastByTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a Background has been cast by this turn.
+    /// </summary>
+    public bool BackgroundCastByTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a commander and Background are both online by this turn.
+    /// </summary>
+    public bool CommanderWithBackgroundOnlineByTurn { get; set; }
 
     /// <summary>
     /// Gets or sets whether the commander is protected by this turn.
