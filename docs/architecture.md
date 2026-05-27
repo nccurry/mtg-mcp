@@ -38,6 +38,30 @@ These tools answer questions like "how much ramp do I have?" or "what are my odd
 - Avoid presenting abstract simulation as full Magic rules enforcement.
 - Keep normal tests offline, deterministic, and free of real Archidekt mutations.
 
+## Recommendation Source Boundaries
+
+Recommendation sources, called corpus sources in older internal APIs, are
+runtime data providers, not roadmap entries. Normal source listings should
+include implemented providers only, and each provider should report whether it
+is available, disabled, missing required configuration, or failed during a
+lookup.
+
+New recommendation source providers should fit one of these categories:
+
+- Official or documented APIs with terms that allow deckbuilding evidence,
+  recommendations, and attribution.
+- Permissioned or permission-sensitive structured JSON endpoints where the
+  integration is opt-in, bounded, clearly labeled unofficial, and cached.
+- Local snapshots or fixtures that are checked into `docs/reference` for
+  deterministic offline behavior.
+
+Do not add providers that require HTML scraping, browser automation, private
+web app contracts, or bulk crawling. Reverse-engineered structured endpoints
+must stay disabled by default, report permission sensitivity, and use fixture
+tests instead of live network tests. Deck import/writeback support, such as
+Archidekt and Moxfield workspaces, is a separate integration surface from
+corpus-scale deck search or recommendation evidence.
+
 ## Stats Lab Design
 
 The first performance layer should live in Core as pure C# analysis over `DeckWorkspace`, card snapshots, deck intent, roles, tags, and deck edit plans.

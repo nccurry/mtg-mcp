@@ -6,23 +6,23 @@ using MtgMcp.Core;
 namespace MtgMcp.App;
 
 /// <summary>
-/// Exposes corpus-backed recommendation and source-inspection MCP tools.
+/// Exposes source-backed recommendation and source-inspection MCP tools.
 /// </summary>
 [McpServerToolType]
 public sealed class CorpusTools
 {
     /// <summary>
-    /// Creates corpus-backed recommendation reports.
+    /// Creates source-backed recommendation reports.
     /// </summary>
     private readonly DeckRecommendationService recommendations;
 
     /// <summary>
-    /// Supplies default corpus analysis settings.
+    /// Supplies default source-backed recommendation settings.
     /// </summary>
     private readonly IOptions<MtgMcpOptions> options;
 
     /// <summary>
-    /// Creates corpus MCP tools from recommendation services and host options.
+    /// Creates recommendation source MCP tools from recommendation services and host options.
     /// </summary>
     public CorpusTools(
         DeckRecommendationService recommendations,
@@ -33,10 +33,10 @@ public sealed class CorpusTools
     }
 
     /// <summary>
-    /// Analyzes commander and deck-context trends from enabled corpus providers.
+    /// Analyzes commander and deck-context trends from enabled recommendation sources.
     /// </summary>
     [McpServerTool(Name = "analyze_commander_trends", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Analyze commander or deck-context card trends using enabled API-backed corpus providers. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache. Use search_corpus_evidence or search_reddit_discussions when raw deterministic source rows are needed instead of ranked recommendations.")]
+    [Description("Analyze commander or deck-context card trends using enabled API-backed recommendation sources. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache. Use search_corpus_evidence or search_reddit_discussions when raw deterministic source rows are needed instead of ranked recommendations.")]
     public Task<CorpusRecommendationResult> AnalyzeCommanderTrendsAsync(
         string workspaceId,
         int limit = 10,
@@ -53,10 +53,10 @@ public sealed class CorpusTools
     }
 
     /// <summary>
-    /// Finds lower-known cards with useful corpus evidence for a deck goal.
+    /// Finds lower-known cards with useful source evidence for a deck goal.
     /// </summary>
     [McpServerTool(Name = "find_lesser_known_cards", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Find lower-known cards that fit a deck goal using API-backed corpus evidence. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache. Use source-specific evidence tools before mutating a deck.")]
+    [Description("Find lower-known cards that fit a deck goal using API-backed source evidence. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache. Use source-specific evidence tools before mutating a deck.")]
     public Task<CorpusRecommendationResult> FindLesserKnownCardsAsync(
         string workspaceId,
         string goal = "",
@@ -77,10 +77,10 @@ public sealed class CorpusTools
     }
 
     /// <summary>
-    /// Finds high-signal exemplar decks from enabled corpus providers.
+    /// Finds high-signal exemplar decks from enabled recommendation sources.
     /// </summary>
     [McpServerTool(Name = "find_top_exemplar_decks", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Find top exemplar decks for a deck context from enabled API-backed corpus providers. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    [Description("Find top exemplar decks for a deck context from enabled API-backed recommendation sources. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
     public Task<TopExemplarDecksResult> FindTopExemplarDecksAsync(
         string workspaceId,
         int limit = 10,
@@ -97,10 +97,10 @@ public sealed class CorpusTools
     }
 
     /// <summary>
-    /// Explains corpus evidence for one card in a deck context.
+    /// Explains source evidence for one card in a deck context.
     /// </summary>
     [McpServerTool(Name = "explain_card_corpus_signal", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Explain why enabled API-backed corpus sources do or do not support one card in this deck context. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
+    [Description("Explain why enabled API-backed recommendation sources do or do not support one card in this deck context. AnalysisDepth can be minimal, balanced, or best; refresh bypasses source-fact cache.")]
     public Task<CorpusRecommendationResult> ExplainCardCorpusSignalAsync(
         string workspaceId,
         string cardName,
@@ -117,10 +117,10 @@ public sealed class CorpusTools
     }
 
     /// <summary>
-    /// Searches one corpus source for raw evidence rows.
+    /// Searches one recommendation source for raw evidence rows.
     /// </summary>
     [McpServerTool(Name = "search_corpus_evidence", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Search one enabled corpus source by sourceKey and return deterministic card evidence rows plus raw discussions or exemplar decks. This tool does not infer card quality or choose cuts.")]
+    [Description("Search one enabled recommendation source by sourceKey and return deterministic card evidence rows plus raw discussions or exemplar decks. This tool does not infer card quality or choose cuts.")]
     public Task<CorpusEvidenceSearchResult> SearchCorpusEvidenceAsync(
         string workspaceId,
         string sourceKey,
@@ -164,10 +164,10 @@ public sealed class CorpusTools
     }
 
     /// <summary>
-    /// Lists enabled and planned corpus sources.
+    /// Lists configured recommendation source providers.
     /// </summary>
     [McpServerTool(Name = "list_corpus_sources", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("List enabled, disabled, planned, and unsupported deck corpus sources with API stability and permission notes.")]
+    [Description("List configured deck recommendation source providers with enablement, API stability, configuration, and permission notes.")]
     public CorpusSourceStatusResult ListCorpusSources()
     {
         return recommendations.ListCorpusSources();

@@ -45,11 +45,6 @@ public static class CorpusSourceApiTypes
     /// Indicates an unofficial structured endpoint.
     /// </summary>
     public const string UnofficialApi = "unofficial-api";
-
-    /// <summary>
-    /// Indicates no supported structured API is available.
-    /// </summary>
-    public const string Unsupported = "unsupported";
 }
 
 /// <summary>
@@ -71,11 +66,6 @@ public static class CorpusSourceStatuses
     /// Indicates a source needs a configured API key.
     /// </summary>
     public const string MissingConfig = "missing-config";
-
-    /// <summary>
-    /// Indicates a source is intentionally unsupported.
-    /// </summary>
-    public const string Unsupported = "unsupported";
 
     /// <summary>
     /// Indicates a source query failed.

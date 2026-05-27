@@ -129,6 +129,165 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
+    /// Verifies that EDHREC maps commander aggregate cardlists and uses cache.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_MapsSignalsAndUsesCache()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        MockedRequest request = mockHttp.When(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
+            .Respond("application/json", EdhrecCommanderResponseJson);
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = null;
+
+        CorpusSignalReport first = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+        CorpusSignalReport second = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        first.ExemplarDecks.Should().BeEmpty();
+        CardCorpusSignal wasteNot = first.Signals.Should().ContainSingle(signal =>
+            signal.CardName == "Waste Not").Subject;
+        wasteNot.Source.Should().Be("EDHREC");
+        wasteNot.SignalType.Should().Be(CorpusSignalTypes.Inclusion);
+        wasteNot.InclusionRate.Should().BeApproximately(0.80, 0.0001);
+        wasteNot.SynergyScore.Should().BeApproximately(0.81, 0.0001);
+        wasteNot.DeckCount.Should().Be(80);
+        wasteNot.Uri.Should().Be("https://edhrec.com/commanders/tinybones-trinket-thief");
+        first.Signals.Should().Contain(signal =>
+            signal.CardName == "Pox Plague"
+            && signal.SignalType == CorpusSignalTypes.Trend);
+        first.Sources.Should().ContainSingle(source =>
+            source.Key == "edhrec"
+            && source.Status == CorpusSourceStatuses.Available
+            && source.UnofficialApi
+            && source.PermissionSensitive
+            && source.AttributionRequired);
+        second.Notes.Should().Contain(note => note.Contains("cache", StringComparison.OrdinalIgnoreCase));
+        mockHttp.GetMatchCount(request).Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that refresh bypasses EDHREC cache.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_RefreshBypassesCache()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        MockedRequest request = mockHttp.When(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
+            .Respond("application/json", EdhrecCommanderResponseJson);
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = null;
+
+        await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+        query.Refresh = true;
+        await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        mockHttp.GetMatchCount(request).Should().Be(2);
+    }
+
+    /// <summary>
+    /// Verifies that EDHREC requires explicit unofficial endpoint opt-in.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_RequiresUnofficialApiOptIn()
+    {
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "")));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "edhrec"
+            && !source.Enabled
+            && source.UnofficialApi
+            && source.Status == CorpusSourceStatuses.Disabled);
+    }
+
+    /// <summary>
+    /// Verifies that EDHREC theme lookups use commander theme pages.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_UsesThemePageWhenThemeIsAvailable()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief/discard.json")
+            .Respond("application/json", EdhrecThemeResponseJson);
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = "discard";
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().Contain(signal =>
+            signal.CardName == "Dark Deal"
+            && signal.Uri == "https://edhrec.com/commanders/tinybones-trinket-thief/discard");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that missing EDHREC theme pages fall back to commander aggregates.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_FallsBackWhenThemePageIsMissing()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief/discard.json")
+            .Respond(HttpStatusCode.NotFound);
+        mockHttp.Expect(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
+            .Respond("application/json", EdhrecCommanderResponseJson);
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = "discard";
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().Contain(signal =>
+            signal.CardName == "Waste Not"
+            && signal.Uri == "https://edhrec.com/commanders/tinybones-trinket-thief");
+        report.Notes.Should().Contain(note => note.Contains("falling back", StringComparison.OrdinalIgnoreCase));
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that missing EDHREC commander pages return empty evidence with a note.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_ReturnsEmptyReportWhenCommanderPageIsMissing()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
+            .Respond(HttpStatusCode.NotFound);
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = null;
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().BeEmpty();
+        report.Notes.Should().Contain(note => note.Contains("commander page", StringComparison.OrdinalIgnoreCase));
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that Reddit maps bounded raw discussions and explicit card references.
     /// </summary>
     [Fact]
@@ -293,6 +452,28 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
+    /// Verifies that EDHREC rejects HTML payloads instead of scraping them.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_RejectsHtmlPayloads()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
+            .Respond("text/html", "<html><body>nope</body></html>");
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = null;
+
+        Func<Task> act = () => provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*HTML*");
+    }
+
+    /// <summary>
     /// Verifies that malformed TopDeck JSON is surfaced as a contract failure.
     /// </summary>
     [Fact]
@@ -326,6 +507,27 @@ public sealed class DecklistCorpusProviderTests
             Options.Create(OptionsWithSource("Spicerack", "key")));
 
         Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<JsonException>();
+    }
+
+    /// <summary>
+    /// Verifies that malformed EDHREC JSON is surfaced as a contract failure.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_ThrowsForMalformedJson()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
+            .Respond("application/json", "{ nope");
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Theme = null;
+
+        Func<Task> act = () => provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<JsonException>();
     }
@@ -483,6 +685,7 @@ public sealed class DecklistCorpusProviderTests
                         {
                             "TopDeck" => new Uri("https://topdeck.test/"),
                             "Spicerack" => new Uri("https://spicerack.test/"),
+                            "Edhrec" => new Uri("https://edhrec.test/pages/"),
                             "EdhTop16" => new Uri("https://edhtop16.test/"),
                             "Reddit" => new Uri("https://reddit.test/"),
                             _ => new Uri("https://decklist-source.test/")
@@ -555,6 +758,84 @@ public sealed class DecklistCorpusProviderTests
           "decklist_text": "1 Tinybones, Trinket Thief\n1 Waste Not\n1 Dark Deal\n1 Geier Reach Sanitarium"
         }
       ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides a representative EDHREC commander aggregate response.
+    /// </summary>
+    private const string EdhrecCommanderResponseJson = """
+    {
+      "container": {
+        "json_dict": {
+          "cardlists": [
+            {
+              "header": "High Synergy Cards",
+              "tag": "highsynergycards",
+              "cardviews": [
+                {
+                  "name": "Waste Not",
+                  "url": "/cards/waste-not",
+                  "synergy": 0.81,
+                  "num_decks": 80,
+                  "potential_decks": 100,
+                  "trend_zscore": 0.1
+                },
+                {
+                  "name": "Dark Deal",
+                  "url": "/cards/dark-deal",
+                  "synergy": 0.54,
+                  "num_decks": 40,
+                  "potential_decks": 100,
+                  "trend_zscore": 0.2
+                }
+              ]
+            },
+            {
+              "header": "New Cards",
+              "tag": "newcards",
+              "cardviews": [
+                {
+                  "name": "Pox Plague",
+                  "url": "/cards/pox-plague",
+                  "synergy": 0.06,
+                  "num_decks": 11,
+                  "potential_decks": 100,
+                  "trend_zscore": 8.1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+    """;
+
+    /// <summary>
+    /// Provides a representative EDHREC commander theme response.
+    /// </summary>
+    private const string EdhrecThemeResponseJson = """
+    {
+      "container": {
+        "json_dict": {
+          "cardlists": [
+            {
+              "header": "Top Cards",
+              "tag": "topcards",
+              "cardviews": [
+                {
+                  "name": "Dark Deal",
+                  "url": "/cards/dark-deal",
+                  "synergy": 0.62,
+                  "num_decks": 31,
+                  "potential_decks": 50,
+                  "trend_zscore": 0.2
+                }
+              ]
+            }
+          ]
+        }
+      }
     }
     """;
 

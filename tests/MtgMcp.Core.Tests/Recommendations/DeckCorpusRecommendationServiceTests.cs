@@ -189,7 +189,7 @@ public sealed partial class DeckIntelligenceTests
 
         result.Recommendations.Should().BeEmpty();
         result.Sources.Should().BeEmpty();
-        result.Notes.Should().Contain(note => note.Contains("No API-backed corpus providers", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("No API-backed recommendation sources", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -282,6 +282,35 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that removed roadmap-only sources no longer appear as disabled providers.
+    /// </summary>
+    [Fact]
+    public async Task SearchCorpusEvidence_UnconfiguredRoadmapSourceReportsNoMatch()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new FakeCorpusSignalProvider()]);
+
+        CorpusEvidenceSearchResult result = await service.SearchCorpusEvidenceAsync(
+            workspace.Id,
+            sourceKey: "edhrec-commander",
+            goal: "discard",
+            limit: 5,
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Sources.Should().BeEmpty();
+        result.CardEvidence.Should().BeEmpty();
+        result.ExemplarDecks.Should().BeEmpty();
+        result.Discussions.Should().BeEmpty();
+        result.Notes.Should().Contain("No configured recommendation source matched 'edhrec-commander'.");
+    }
+
+    /// <summary>
     /// Verifies that lesser-known recommendations filter out popular corpus signals.
     /// </summary>
     [Fact]
@@ -337,10 +366,10 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
-    /// Verifies that source listing exposes enabled and planned corpus providers.
+    /// Verifies that source listing exposes only configured corpus providers.
     /// </summary>
     [Fact]
-    public void ListCorpusSources_IncludesEnabledAndPlannedProviders()
+    public void ListCorpusSources_OnlyIncludesConfiguredProviders()
     {
         DeckRecommendationService service = CreateRecommendationService(
             new InMemoryRepository(),
@@ -349,10 +378,9 @@ public sealed partial class DeckIntelligenceTests
 
         CorpusSourceStatusResult result = service.ListCorpusSources();
 
-        result.Sources.Should().Contain(source => source.Key == "fake-corpus" && source.Enabled);
-        result.Sources.Should().Contain(source => source.Key == "edhrec-commander" && !source.Enabled);
-        result.Sources.Should().Contain(source => source.Key == "archidekt-exemplars" && source.UnofficialApi);
-        result.Sources.Should().Contain(source => source.Key == "mtgstocks" && source.ApiType == CorpusSourceApiTypes.Unsupported);
+        CorpusSourceStatus source = result.Sources.Should().ContainSingle().Subject;
+        source.Key.Should().Be("fake-corpus");
+        source.Enabled.Should().BeTrue();
     }
 
     /// <summary>
@@ -424,7 +452,7 @@ public sealed partial class DeckIntelligenceTests
         recommendation.CardName.Should().Be("Illness in the Ranks");
         recommendation.Evidence.Should().ContainSingle(evidence =>
             evidence.Source == "Fake corpus" && evidence.SignalType == CorpusSignalTypes.Novelty);
-        result.Notes.Should().NotContain(note => note.Contains("No matching corpus evidence", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().NotContain(note => note.Contains("No matching source evidence", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -451,7 +479,7 @@ public sealed partial class DeckIntelligenceTests
         recommendation.CardName.Should().Be("Hero's Downfall");
         recommendation.Evidence.Should().BeEmpty();
         recommendation.Rationale.Should().Contain("local card metadata");
-        result.Notes.Should().Contain(note => note.Contains("No matching corpus evidence", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("No matching source evidence", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

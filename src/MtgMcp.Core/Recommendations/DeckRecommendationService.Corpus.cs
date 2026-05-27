@@ -163,7 +163,7 @@ public sealed partial class DeckRecommendationService
         result.Notes.AddRange(report.Notes);
         if (result.ExemplarDecks.Count == 0)
         {
-            result.Notes.Add("No exemplar-deck provider is enabled yet; enable a stable or permissioned deck corpus source to populate this result.");
+            result.Notes.Add("No exemplar-deck provider is enabled yet; enable a stable or permissioned deck recommendation source to populate this result.");
         }
 
         return result;
@@ -206,11 +206,11 @@ public sealed partial class DeckRecommendationService
                     goal: cardName,
                     budget,
                     replaceCard: null);
-                recommendation.Rationale = "No enabled corpus source returned direct evidence for this card; showing local card metadata only.";
+                recommendation.Rationale = "No enabled recommendation source returned direct evidence for this card; showing local card metadata only.";
                 result.Recommendations.Add(recommendation);
             }
 
-            result.Notes.Add("No matching corpus evidence was found for the requested card.");
+            result.Notes.Add("No matching source evidence was found for the requested card.");
         }
 
         return result;
@@ -230,7 +230,7 @@ public sealed partial class DeckRecommendationService
     {
         if (string.IsNullOrWhiteSpace(sourceKey))
         {
-            throw new ArgumentException("A corpus source key or name is required.", nameof(sourceKey));
+            throw new ArgumentException("A recommendation source key or name is required.", nameof(sourceKey));
         }
 
         int boundedLimit = Math.Clamp(limit, 1, 100);
@@ -272,20 +272,20 @@ public sealed partial class DeckRecommendationService
         result.Notes.AddRange(report.Notes);
         if (result.CardEvidence.Count == 0 && result.Discussions.Count == 0 && result.ExemplarDecks.Count == 0)
         {
-            result.Notes.Add("The requested corpus source returned no raw evidence for this deck context.");
+            result.Notes.Add("The requested recommendation source returned no raw evidence for this deck context.");
         }
 
         return result;
     }
 
     /// <summary>
-    /// Lists configured and planned corpus sources.
+    /// Lists configured corpus sources with real provider implementations.
     /// </summary>
     public CorpusSourceStatusResult ListCorpusSources()
     {
         return new CorpusSourceStatusResult
         {
-            Sources = MergeSourceStatuses(corpusSignalProviders.Select(provider => provider.GetStatus()).Concat(KnownCorpusSources()))
+            Sources = MergeSourceStatuses(corpusSignalProviders.Select(provider => provider.GetStatus()))
         };
     }
 
@@ -359,7 +359,7 @@ public sealed partial class DeckRecommendationService
         result.Notes.AddRange(report.Notes);
         if (corpusSignalProviders.Count == 0)
         {
-            result.Notes.Add("No API-backed corpus providers are configured, so no corpus recommendations were generated.");
+            result.Notes.Add("No API-backed recommendation sources are configured, so no source-backed recommendations were generated.");
         }
 
         return result;
@@ -391,11 +391,6 @@ public sealed partial class DeckRecommendationService
         };
         CorpusSignalReport combined = new();
         bool sourceFilterActive = !string.IsNullOrWhiteSpace(sourceKey);
-        if (!sourceFilterActive && budget.AnalysisDepth.Equals(AnalysisDepths.Best, StringComparison.OrdinalIgnoreCase))
-        {
-            combined.Sources.AddRange(KnownCorpusSources());
-        }
-
         int queriedSources = 0;
         bool matchedSource = false;
         foreach (ICorpusSignalProvider provider in corpusSignalProviders)
@@ -433,25 +428,19 @@ public sealed partial class DeckRecommendationService
             {
                 status.Status = CorpusSourceStatuses.Failed;
                 status.Notes.Add($"Timed out after {budget.SourceTimeoutSeconds} second(s).");
-                combined.Notes.Add($"{status.Name} timed out; continuing with remaining corpus sources.");
+                combined.Notes.Add($"{status.Name} timed out; continuing with remaining recommendation sources.");
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {
                 status.Status = CorpusSourceStatuses.Failed;
                 status.Notes.Add($"{exception.GetType().Name}: {exception.Message}");
-                combined.Notes.Add($"{status.Name} failed; continuing with remaining corpus sources.");
+                combined.Notes.Add($"{status.Name} failed; continuing with remaining recommendation sources.");
             }
         }
 
         if (sourceFilterActive && !matchedSource)
         {
-            List<CorpusSourceStatus> knownMatches = KnownCorpusSources()
-                .Where(source => MatchesSourceFilter(source, sourceKey))
-                .ToList();
-            combined.Sources.AddRange(knownMatches);
-            combined.Notes.Add(knownMatches.Count == 0
-                ? $"No configured corpus source matched '{sourceKey}'."
-                : $"Corpus source '{sourceKey}' is known but no enabled provider is configured for it.");
+            combined.Notes.Add($"No configured recommendation source matched '{sourceKey}'.");
         }
 
         combined.Signals = DeduplicateSignals(combined.Signals)
@@ -648,57 +637,6 @@ public sealed partial class DeckRecommendationService
         return string.IsNullOrWhiteSpace(sourceKey)
             || source.Key.Equals(sourceKey, StringComparison.OrdinalIgnoreCase)
             || source.Name.Equals(sourceKey, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Lists corpus sources that need a structured API adapter or explicit permission before use.
-    /// </summary>
-    private static List<CorpusSourceStatus> KnownCorpusSources()
-    {
-        return
-        [
-            SourceStatus("edhrec-commander", "EDHREC commander aggregates", "unofficial-api", "https://edhrec.com/", stableApi: false, attributionRequired: true, apiType: CorpusSourceApiTypes.UnofficialApi, status: CorpusSourceStatuses.Disabled, permissionSensitive: true),
-            SourceStatus("archidekt-exemplars", "Archidekt structured public endpoints", "unofficial-api", "https://archidekt.com/", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.UnofficialApi, status: CorpusSourceStatuses.Disabled, permissionSensitive: true),
-            SourceStatus("moxfield-exemplars", "Moxfield structured public endpoints", "unofficial-api", "https://www.moxfield.com/", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.UnofficialApi, status: CorpusSourceStatuses.Disabled, permissionSensitive: true),
-            SourceStatus("mtggoldfish", "MTGGoldfish metagame", "unsupported", "https://www.mtggoldfish.com/metagame/commander", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.Unsupported, status: CorpusSourceStatuses.Unsupported, permissionSensitive: true),
-            SourceStatus("mtgdecks", "MTGDecks.net", "unsupported", "https://mtgdecks.net/", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.Unsupported, status: CorpusSourceStatuses.Unsupported, permissionSensitive: true),
-            SourceStatus("magicgg", "Magic.gg decklists", "unsupported", "https://magic.gg/decklists", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.Unsupported, status: CorpusSourceStatuses.Unsupported, permissionSensitive: false),
-            SourceStatus("mtgstocks", "MTGStocks market movers", "unsupported", "https://www.mtgstocks.com/", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.Unsupported, status: CorpusSourceStatuses.Unsupported, permissionSensitive: true),
-            SourceStatus("aetherhub", "AetherHub DeckHub", "unsupported", "https://aetherhub.com/Docs/DeckHub", stableApi: false, attributionRequired: false, apiType: CorpusSourceApiTypes.Unsupported, status: CorpusSourceStatuses.Unsupported, permissionSensitive: true)
-        ];
-    }
-
-    /// <summary>
-    /// Creates one source status row.
-    /// </summary>
-    private static CorpusSourceStatus SourceStatus(
-        string key,
-        string name,
-        string kind,
-        string uri,
-        bool stableApi,
-        bool attributionRequired,
-        string apiType,
-        string status,
-        bool permissionSensitive)
-    {
-        return new CorpusSourceStatus
-        {
-            Key = key,
-            Name = name,
-            Kind = kind,
-            Enabled = false,
-            StableApi = stableApi,
-            ApiType = apiType,
-            UnofficialApi = apiType.Equals(CorpusSourceApiTypes.UnofficialApi, StringComparison.OrdinalIgnoreCase),
-            PermissionSensitive = permissionSensitive,
-            AttributionRequired = attributionRequired,
-            Status = status,
-            Uri = uri,
-            Notes = [apiType == CorpusSourceApiTypes.Unsupported
-                ? "No supported structured API/feed is configured; HTML scraping is out of scope."
-                : "Structured API adapter is not enabled in this build or by configuration."]
-        };
     }
 
     /// <summary>

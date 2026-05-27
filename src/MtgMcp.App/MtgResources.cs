@@ -26,7 +26,7 @@ public sealed class MtgResources
     private readonly DeckWorkspaceService decks;
 
     /// <summary>
-    /// Supplies corpus source status.
+    /// Supplies recommendation source status.
     /// </summary>
     private readonly DeckRecommendationService recommendations;
 
@@ -311,10 +311,10 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets deck corpus source status.
+    /// Gets deck recommendation source status.
     /// </summary>
-    [McpServerResource(UriTemplate = "mtg://corpus/sources", Name = "Corpus Sources")]
-    [Description("Enabled and planned deck-corpus sources with stability, attribution, and permission notes.")]
+    [McpServerResource(UriTemplate = "mtg://corpus/sources", Name = "Recommendation Sources")]
+    [Description("Configured deck recommendation source providers with stability, attribution, and permission notes.")]
     public string GetCorpusSources()
     {
         return JsonSerializer.Serialize(recommendations.ListCorpusSources(), JsonOptions);

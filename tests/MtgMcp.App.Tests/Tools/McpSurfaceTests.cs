@@ -484,6 +484,9 @@ public sealed class McpSurfaceTests
             ["INTELLIGENCE:SOURCES:COMMANDERSPELLBOOK:ENABLED"] = "false",
             ["INTELLIGENCE:SOURCES:TOPDECK:API_KEY"] = "topdeck-key",
             ["INTELLIGENCE:SOURCES:TOPDECK:BASE_ADDRESS"] = "https://topdeck.test/api/",
+            ["INTELLIGENCE:SOURCES:EDHREC:ENABLED"] = "true",
+            ["INTELLIGENCE:SOURCES:EDHREC:ALLOW_UNOFFICIAL_API"] = "true",
+            ["INTELLIGENCE:SOURCES:EDHREC:BASE_ADDRESS"] = "https://edhrec.test/pages/",
             ["INTELLIGENCE:SOURCES:EDHTOP16:ENABLED"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS"] = "https://edhtop16.test/",
@@ -531,6 +534,9 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Intelligence:Sources:CommanderSpellbook:Enabled"].Should().Be("false");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:ApiKey"].Should().Be("topdeck-key");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:BaseAddress"].Should().Be("https://topdeck.test/api/");
+        aliases["MtgMcp:Intelligence:Sources:Edhrec:Enabled"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:Edhrec:AllowUnofficialApi"].Should().Be("true");
+        aliases["MtgMcp:Intelligence:Sources:Edhrec:BaseAddress"].Should().Be("https://edhrec.test/pages/");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:Enabled"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"].Should().Be("https://edhtop16.test/");
@@ -648,6 +654,11 @@ public sealed class McpSurfaceTests
             source.Key == "topdeck"
             && source.Status == CorpusSourceStatuses.MissingConfig
             && source.RequiresKey);
+        host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
+            source.Key == "edhrec"
+            && source.Status == CorpusSourceStatuses.Disabled
+            && source.UnofficialApi
+            && source.PermissionSensitive);
         host.Services.GetRequiredService<IOptions<MtgMcpOptions>>()
             .Value.DataDir.Should()
             .NotBeNullOrWhiteSpace();

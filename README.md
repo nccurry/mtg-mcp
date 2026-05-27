@@ -179,10 +179,10 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__CACHE__MODE` | Source-fact cache: `persisted`, `memory`, or `off`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` / `MAX_ENTRIES` | Persisted cache limits. |
 | `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` / `SCRYFALL_SEARCH` / `COMMANDERSPELLBOOK` / `DECK_SEARCH` / `DECK_DETAILS` / `CORPUS_SIGNALS` | Per-source cache TTLs such as `24h` or `7d`. |
-| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` / `SCRYFALL_TAGGER__ENABLED` / `COMMANDERSPELLBOOK__ENABLED` / `TOPDECK__ENABLED` / `SPICERACK__ENABLED` / `EDHTOP16__ENABLED` / `REDDIT__ENABLED` | Enable or disable corpus sources. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` / `SCRYFALL_TAGGER__ENABLED` / `COMMANDERSPELLBOOK__ENABLED` / `TOPDECK__ENABLED` / `SPICERACK__ENABLED` / `EDHREC__ENABLED` / `EDHTOP16__ENABLED` / `REDDIT__ENABLED` | Enable or disable recommendation sources. |
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` / `SPICERACK__API_KEY` / `REDDIT__API_KEY` | Optional source API keys. |
-| `MTGMCP__INTELLIGENCE__SOURCES__EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
+| `MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API` / `EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHREC__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
 | `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `JWT` / `REFRESH_TOKEN` / `USER_ID` / `EMAIL` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. Refresh token auth is preferred; email or username plus password is fallback. |
 | `MTGMCP__ARCHIDEKT__RATE_LIMIT__MAX_REQUESTS` / `WINDOW_SECONDS` | Optional process-local Archidekt pacing. For example, `30` requests per `60` seconds leaves room for browser activity; `0` max requests disables proactive pacing. |
 | `MTGMCP__MOXFIELD__BASE_ADDRESS` / `USER_AGENT` / `CURL_FALLBACK_ENABLED` / `CURL_PATH` | Moxfield import endpoint settings. Imports use an anonymous, unofficial endpoint; when Moxfield blocks .NET HTTP requests, the adapter can retry through `curl` if available. |
@@ -190,6 +190,107 @@ each abbreviated suffix.
 | `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `MTGMCP__SIMULATION__ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Commander Spellbook API setting. |
+
+### Recommendation sources
+
+Recommendation source providers give deckbuilding tools source-backed evidence
+beyond the local decklist. The MCP tool and resource names still use `corpus`
+for compatibility, so `list_corpus_sources` or `mtg://corpus/sources` reports
+the current source status:
+
+- `available`: the provider can be queried.
+- `missing-config`: the provider is implemented, but needs a configured key.
+- `disabled`: the provider is implemented, but disabled by configuration.
+- `failed`: the provider failed during a lookup; other sources still run.
+
+TopDeck.gg and Spicerack are API-backed decklist recommendation sources. They are
+enabled by default, but they do not make network calls until an API key is
+configured.
+
+```powershell
+$env:MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY = "..."
+$env:MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__API_KEY = "..."
+```
+
+Equivalent `mtg-mcp.json`:
+
+```json
+{
+  "MtgMcp": {
+    "Intelligence": {
+      "Sources": {
+        "TopDeck": {
+          "ApiKey": "..."
+        },
+        "Spicerack": {
+          "ApiKey": "..."
+        }
+      }
+    }
+  }
+}
+```
+
+Set `Enabled` to `false` for either source to exclude it:
+
+```json
+{
+  "MtgMcp": {
+    "Intelligence": {
+      "Sources": {
+        "TopDeck": {
+          "Enabled": false
+        }
+      }
+    }
+  }
+}
+```
+
+TopDeck.gg uses the documented tournaments v2 API for tournament standings and
+decklists. Get a key from TopDeck.gg and keep visible attribution when using
+its data in user-facing output. Spicerack uses the documented public decklist
+database API for recent tournament results and decklist text.
+
+EDHREC is an opt-in unofficial source for broad Commander aggregate inclusion
+and synergy evidence. It uses structured JSON pages only, never HTML scraping
+or browser automation, and remains disabled until explicitly allowed:
+
+```powershell
+$env:MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API = "true"
+```
+
+Equivalent `mtg-mcp.json`:
+
+```json
+{
+  "MtgMcp": {
+    "Intelligence": {
+      "Sources": {
+        "Edhrec": {
+          "AllowUnofficialApi": true
+        }
+      }
+    }
+  }
+}
+```
+
+EDHREC evidence is cached, attribution-sensitive, and not backed by a stable
+public API contract. Treat it as popularity and synergy context, not tournament
+performance or source decklist evidence.
+
+These tools consume recommendation sources:
+
+- `find_top_exemplar_decks`: returns high-signal source decks.
+- `analyze_commander_trends`: ranks card candidates from enabled sources.
+- `find_lesser_known_cards`: finds lower-known candidates with source evidence.
+- `search_corpus_evidence`: inspects one source by key, such as `topdeck`,
+  `spicerack`, or `edhrec`, without making deckbuilding choices.
+
+TopDeck and Spicerack evidence is tournament and event decklist evidence. It is
+not broad casual Commander inclusion data. Use `refresh=true` on source-backed
+recommendation tools to bypass fresh source-fact cache entries for one call.
 
 Use these resources inside an MCP client to verify setup without exposing
 secrets:
