@@ -5,6 +5,12 @@ obj/
 .vscode/
 TestResults/
 artifacts/
+.dotnet/
+.dotnet-home/
+.local/
+.msbuild/
+.nuget/
+.tools/
 /plans/
 BenchmarkDotNet.Artifacts/
 coverage/

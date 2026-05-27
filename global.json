@@ -1,6 +1,9 @@
 {
   "sdk": {
     "version": "11.0.100-preview.4.26230.115",
-    "rollForward": "latestFeature"
+    "allowPrerelease": true,
+    "rollForward": "latestFeature",
+    "paths": [".dotnet", "$host$"],
+    "errorMessage": "Required .NET SDK not found. On Linux, run ./scripts/setup-linux.sh or install the .NET 11 preview SDK listed in global.json."
   }
 }

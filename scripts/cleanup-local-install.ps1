@@ -6,8 +6,40 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+function Get-UserHome {
+    if (-not [string]::IsNullOrWhiteSpace($HOME)) {
+        return $HOME
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        return $env:USERPROFILE
+    }
+
+    throw "Could not determine the current user's home directory."
+}
+
+function Get-CodexConfigPath {
+    return Join-Path (Join-Path (Get-UserHome) ".codex") "config.toml"
+}
+
+function Expand-InstallPath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $expandedPath = [System.Environment]::ExpandEnvironmentVariables($Path)
+    if ($expandedPath.Equals("~", [System.StringComparison]::Ordinal)) {
+        return Get-UserHome
+    }
+
+    if ($expandedPath.StartsWith("~/", [System.StringComparison]::Ordinal) `
+        -or $expandedPath.StartsWith("~\", [System.StringComparison]::Ordinal)) {
+        return Join-Path (Get-UserHome) $expandedPath.Substring(2)
+    }
+
+    return $expandedPath
+}
+
 function Get-ConfiguredMcpCommandPath {
-    $configPath = Join-Path $env:USERPROFILE ".codex\config.toml"
+    $configPath = Get-CodexConfigPath
     if (-not (Test-Path -LiteralPath $configPath)) {
         return ""
     }
@@ -41,7 +73,7 @@ function Get-InstallDirectory {
     param([string] $ConfiguredCommandPath)
 
     if (-not [string]::IsNullOrWhiteSpace($InstallPath)) {
-        $expandedPath = [System.Environment]::ExpandEnvironmentVariables($InstallPath)
+        $expandedPath = Expand-InstallPath $InstallPath
         $fullPath = [System.IO.Path]::GetFullPath($expandedPath)
         if (Test-Path -LiteralPath $fullPath -PathType Container) {
             return $fullPath
@@ -54,7 +86,7 @@ function Get-InstallDirectory {
         return Split-Path -Parent $ConfiguredCommandPath
     }
 
-    return Join-Path $env:USERPROFILE ".local\bin"
+    return Join-Path (Join-Path (Get-UserHome) ".local") "bin"
 }
 
 function Remove-OldLocalBinary {

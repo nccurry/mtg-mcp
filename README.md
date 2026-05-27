@@ -23,7 +23,7 @@ Scryfall, Moxfield, Archidekt, Playgroup.gg, or Commander Spellbook.
 
 ## Quickstart
 
-```powershell
+```bash
 dotnet tool install --global Nccurry.MtgMcp
 mtg-mcp --smoke
 ```
@@ -33,9 +33,9 @@ and local deck analysis work without account credentials.
 
 Codex example:
 
-```powershell
-codex mcp add mtg-mcp `
-  --env MTGMCP__OPERATION_MODE=plan `
+```bash
+codex mcp add mtg-mcp \
+  --env MTGMCP__OPERATION_MODE=plan \
   -- mtg-mcp
 ```
 
@@ -160,6 +160,15 @@ Common credential config:
 ```
 
 You can also create an Archidekt credentials file with:
+
+```bash
+mtg-mcp auth archidekt \
+  --credentials-file "$HOME/.mtg-mcp/archidekt.json" \
+  --refresh-token "..." \
+  --user-id "..."
+```
+
+PowerShell equivalent:
 
 ```powershell
 mtg-mcp auth archidekt `
@@ -408,9 +417,49 @@ HTML, parse page markup, or use browser automation for corpus data.
 
 ## Development
 
+### Linux
+
+Linux development is supported without installing prerequisites globally. The
+bootstrap script installs the pinned .NET SDK under `.dotnet`, Task and
+PowerShell from pinned Linux release tarballs under `.tools`, keeps .NET/NuGet
+caches under `.dotnet-home` and `.nuget`, restores the repository, and leaves
+those directories ignored by git:
+
+```bash
+./scripts/setup-linux.sh
+source scripts/env-linux.sh
+```
+
+After that, use the same Task workflows as CI:
+
+```bash
+task test
+task lint
+task install:local
+task install:local:cleanup
+```
+
+`task install:local` publishes the current host runtime by default, so Linux
+uses `linux-x64` or `linux-arm64` depending on the machine. Override it only
+when cross-publishing:
+
+```bash
+task publish:runtime RUNTIME=linux-x64
+```
+
+For a system-wide setup instead of the local bootstrap, install these
+prerequisites yourself and then run `task setup`:
+
+- .NET SDK `11.0.100-preview.4.26230.115` or a compatible .NET 11 preview SDK.
+- Task CLI 3.48 or newer.
+- PowerShell 7 `pwsh`.
+- `curl`, used by the setup script and optional Moxfield HTTP fallback.
+
+### Common Workflows
+
 Use `Taskfile.yml` for common workflows:
 
-```powershell
+```bash
 task test
 task lint
 task install:local

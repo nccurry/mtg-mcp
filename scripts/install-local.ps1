@@ -4,7 +4,7 @@ param(
     [string] $PackageId = "Nccurry.MtgMcp",
     [string] $PackageDir = "artifacts/packages",
     [string] $PublishDir = "artifacts/publish",
-    [string] $Runtime = "win-x64",
+    [string] $Runtime = "",
     [string] $InstallPath = "",
     [string] $Version = ""
 )
@@ -20,6 +20,78 @@ function Resolve-RepoPath {
     }
 
     return [System.IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $Path))
+}
+
+function Get-UserHome {
+    if (-not [string]::IsNullOrWhiteSpace($HOME)) {
+        return $HOME
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        return $env:USERPROFILE
+    }
+
+    throw "Could not determine the current user's home directory."
+}
+
+function Get-DotnetCliHome {
+    if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_CLI_HOME)) {
+        return $env:DOTNET_CLI_HOME
+    }
+
+    return Get-UserHome
+}
+
+function Get-CodexConfigPath {
+    return Join-Path (Join-Path (Get-UserHome) ".codex") "config.toml"
+}
+
+function Expand-InstallPath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    $expandedPath = [System.Environment]::ExpandEnvironmentVariables($Path)
+    if ($expandedPath.Equals("~", [System.StringComparison]::Ordinal)) {
+        return Get-UserHome
+    }
+
+    if ($expandedPath.StartsWith("~/", [System.StringComparison]::Ordinal) `
+        -or $expandedPath.StartsWith("~\", [System.StringComparison]::Ordinal)) {
+        return Join-Path (Get-UserHome) $expandedPath.Substring(2)
+    }
+
+    return $expandedPath
+}
+
+function Get-DefaultRuntime {
+    $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+        "X64" { "x64" }
+        "Arm64" { "arm64" }
+        default { throw "Unsupported OS architecture: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" }
+    }
+
+    if ($IsWindows) {
+        return "win-$architecture"
+    }
+
+    if ($IsMacOS) {
+        return "osx-$architecture"
+    }
+
+    if ($IsLinux) {
+        return "linux-$architecture"
+    }
+
+    throw "Unsupported OS platform."
+}
+
+function Set-ExecutableBit {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    if ($IsWindows) {
+        return
+    }
+
+    Invoke-Checked chmod "+x" $Path
 }
 
 function Invoke-Checked {
@@ -52,7 +124,7 @@ function New-LocalVersion {
 }
 
 function Get-ConfiguredMcpCommandPath {
-    $configPath = Join-Path $env:USERPROFILE ".codex\config.toml"
+    $configPath = Get-CodexConfigPath
     if (-not (Test-Path -LiteralPath $configPath)) {
         return ""
     }
@@ -85,7 +157,7 @@ function Get-ConfiguredMcpCommandPath {
 function Set-ConfiguredMcpCommandPath {
     param([Parameter(Mandatory = $true)][string] $CommandPath)
 
-    $configPath = Join-Path $env:USERPROFILE ".codex\config.toml"
+    $configPath = Get-CodexConfigPath
     if (-not (Test-Path -LiteralPath $configPath)) {
         return $false
     }
@@ -125,7 +197,8 @@ function Get-DefaultInstallPath {
     }
 
     $fileName = if ($IsWindows) { "mtg-mcp.exe" } else { "mtg-mcp" }
-    return Join-Path $env:USERPROFILE ".local\bin\$fileName"
+    $installDirectory = Join-Path (Join-Path (Get-UserHome) ".local") "bin"
+    return Join-Path $installDirectory $fileName
 }
 
 function Test-GlobalToolInstalled {
@@ -142,6 +215,10 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = New-LocalVersion
 }
 
+if ([string]::IsNullOrWhiteSpace($Runtime)) {
+    $Runtime = Get-DefaultRuntime
+}
+
 $projectPath = Resolve-RepoPath $Project
 $packageDirPath = Resolve-RepoPath $PackageDir
 $publishRoot = Resolve-RepoPath $PublishDir
@@ -151,9 +228,7 @@ if ([string]::IsNullOrWhiteSpace($InstallPath)) {
     $InstallPath = Get-DefaultInstallPath
 }
 
-$installPathFull = [System.IO.Path]::GetFullPath(
-    [System.Environment]::ExpandEnvironmentVariables($InstallPath)
-)
+$installPathFull = [System.IO.Path]::GetFullPath((Expand-InstallPath $InstallPath))
 $installDirectory = Split-Path -Parent $installPathFull
 
 New-Item -ItemType Directory -Force -Path $packageDirPath | Out-Null
@@ -206,21 +281,19 @@ if (-not (Test-Path -LiteralPath $publishedExecutable)) {
     throw "Published executable not found: $publishedExecutable"
 }
 
-$globalToolPath = if ($IsWindows) {
-    Join-Path $env:USERPROFILE ".dotnet\tools\$publishedName"
-}
-else {
-    Join-Path $HOME ".dotnet/tools/$publishedName"
-}
+$globalToolDirectory = Join-Path (Join-Path (Get-DotnetCliHome) ".dotnet") "tools"
+$globalToolPath = Join-Path $globalToolDirectory $publishedName
 
 $installedCommandPath = $installPathFull
 try {
     Copy-Item -LiteralPath $publishedExecutable -Destination $installPathFull -Force
+    Set-ExecutableBit $installPathFull
 }
 catch [System.IO.IOException] {
     $sideBySideName = if ($IsWindows) { "mtg-mcp-$Version.exe" } else { "mtg-mcp-$Version" }
     $sideBySidePath = Join-Path $installDirectory $sideBySideName
     Copy-Item -LiteralPath $publishedExecutable -Destination $sideBySidePath -Force
+    Set-ExecutableBit $sideBySidePath
     if (-not (Set-ConfiguredMcpCommandPath -CommandPath $sideBySidePath)) {
         throw "Could not overwrite locked MCP command path '$installPathFull', and no Codex mtg-mcp command could be updated. New binary is at '$sideBySidePath'."
     }

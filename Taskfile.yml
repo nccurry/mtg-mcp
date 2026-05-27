@@ -5,7 +5,8 @@ vars:
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
   BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
   CONFIGURATION: Release
-  RUNTIME: win-x64
+  RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
+  RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
   VERSION: 0.0.0-dev
   PACKAGE_ID: Nccurry.MtgMcp
   ARTIFACTS_DIR: artifacts
@@ -23,6 +24,11 @@ tasks:
     cmds:
       - dotnet tool restore
       - dotnet restore {{.SOLUTION}}
+
+  setup:linux:
+    desc: Install local Linux prerequisites and restore the repo
+    cmds:
+      - bash scripts/setup-linux.sh
 
   tools:restore:
     desc: Restore local .NET tools
