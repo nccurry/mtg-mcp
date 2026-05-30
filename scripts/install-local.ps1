@@ -12,6 +12,21 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+if (-not (Test-Path variable:IsWindows)) {
+    $script:IsWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+if (-not (Test-Path variable:IsMacOS)) {
+    $script:IsMacOS = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::OSX)
+}
+
+if (-not (Test-Path variable:IsLinux)) {
+    $script:IsLinux = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Linux)
+}
+
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string] $Path)
 
@@ -40,6 +55,38 @@ function Get-DotnetCliHome {
     }
 
     return Get-UserHome
+}
+
+function Get-DotnetCommand {
+    $localName = if ($IsWindows) { "dotnet.exe" } else { "dotnet" }
+    $localPath = Join-Path (Join-Path (Get-Location).ProviderPath ".dotnet") $localName
+    if (Test-Path -LiteralPath $localPath) {
+        return $localPath
+    }
+
+    $command = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    throw "Could not find dotnet. Run task setup or install the .NET SDK listed in global.json."
+}
+
+function Use-LocalDotnetRootForAppHosts {
+    $localName = if ($IsWindows) { "dotnet.exe" } else { "dotnet" }
+    $localRoot = Join-Path (Get-Location).ProviderPath ".dotnet"
+    $localDotnet = Join-Path $localRoot $localName
+    if (-not (Test-Path -LiteralPath $localDotnet)) {
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+        $env:DOTNET_ROOT = $localRoot
+    }
+
+    if ($IsWindows -and [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT_X64)) {
+        $env:DOTNET_ROOT_X64 = $localRoot
+    }
 }
 
 function Get-CodexConfigPath {
@@ -106,7 +153,36 @@ function Invoke-Checked {
     }
 }
 
+function Get-LocalVersionBase {
+    $serverJsonPath = Resolve-RepoPath "server.json"
+    if (-not (Test-Path -LiteralPath $serverJsonPath)) {
+        return "0.0.0"
+    }
+
+    try {
+        $serverJson = Get-Content -LiteralPath $serverJsonPath -Raw | ConvertFrom-Json
+        foreach ($package in @($serverJson.packages)) {
+            $matchesPackage = $package.identifier -eq $PackageId
+            $hasVersion = -not [string]::IsNullOrWhiteSpace($package.version)
+            if ($matchesPackage -and $hasVersion) {
+                return [string] $package.version
+            }
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($serverJson.version)) {
+            return [string] $serverJson.version
+        }
+    }
+    catch {
+        Write-Host "Could not read server.json version; falling back to 0.0.0."
+    }
+
+    return "0.0.0"
+}
+
 function New-LocalVersion {
+    param([Parameter(Mandatory = $true)][string] $BaseVersion)
+
     $day = Get-Date -Format "yyyyMMdd"
     $time = Get-Date -Format "HHmmss"
     $shortSha = "nogit"
@@ -120,7 +196,17 @@ function New-LocalVersion {
         $shortSha = "nogit"
     }
 
-    return "0.0.0-local.$day.t$time.$shortSha"
+    $versionCore = $BaseVersion
+    $buildMetadataIndex = $versionCore.IndexOf('+')
+    if ($buildMetadataIndex -ge 0) {
+        $versionCore = $versionCore.Substring(0, $buildMetadataIndex)
+    }
+
+    if ($versionCore.Contains("-")) {
+        return "$versionCore.local.$day.t$time.$shortSha"
+    }
+
+    return "$versionCore-local.$day.t$time.$shortSha"
 }
 
 function Get-ConfiguredMcpCommandPath {
@@ -203,7 +289,7 @@ function Get-DefaultInstallPath {
 
 function Test-GlobalToolInstalled {
     $escapedPackageId = [System.Text.RegularExpressions.Regex]::Escape($PackageId)
-    $installed = dotnet tool list --global
+    $installed = & $DotnetCommand tool list --global
     if ($LASTEXITCODE -ne 0) {
         throw "Could not list global dotnet tools."
     }
@@ -211,8 +297,32 @@ function Test-GlobalToolInstalled {
     return [bool]($installed | Select-String -Pattern "^\s*$escapedPackageId\s" -CaseSensitive:$false)
 }
 
+function Install-GlobalToolPackage {
+    if (Test-GlobalToolInstalled) {
+        Write-Host "Updating global dotnet tool $PackageId to $Version"
+        & $DotnetCommand `
+            "tool" "update" "--global" $PackageId `
+            "--add-source" $packageDirPath `
+            "--version" $Version
+        if ($LASTEXITCODE -eq 0) {
+            return
+        }
+
+        Write-Host "Update failed; reinstalling global dotnet tool $PackageId $Version"
+        Invoke-Checked $DotnetCommand "tool" "uninstall" "--global" $PackageId
+    }
+    else {
+        Write-Host "Installing global dotnet tool $PackageId $Version"
+    }
+
+    Invoke-Checked $DotnetCommand `
+        "tool" "install" "--global" $PackageId `
+        "--add-source" $packageDirPath `
+        "--version" $Version
+}
+
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = New-LocalVersion
+    $Version = New-LocalVersion -BaseVersion (Get-LocalVersionBase)
 }
 
 if ([string]::IsNullOrWhiteSpace($Runtime)) {
@@ -223,6 +333,7 @@ $projectPath = Resolve-RepoPath $Project
 $packageDirPath = Resolve-RepoPath $PackageDir
 $publishRoot = Resolve-RepoPath $PublishDir
 $publishOutput = Join-Path $publishRoot "local-install\$Runtime\$Version"
+$DotnetCommand = Get-DotnetCommand
 
 if ([string]::IsNullOrWhiteSpace($InstallPath)) {
     $InstallPath = Get-DefaultInstallPath
@@ -236,7 +347,7 @@ New-Item -ItemType Directory -Force -Path $publishOutput | Out-Null
 New-Item -ItemType Directory -Force -Path $installDirectory | Out-Null
 
 Write-Host "Packing $PackageId $Version"
-Invoke-Checked dotnet `
+Invoke-Checked $DotnetCommand `
     "pack" $projectPath `
     "--configuration" $Configuration `
     "--output" $packageDirPath `
@@ -244,23 +355,10 @@ Invoke-Checked dotnet `
     "-p:PackageVersion=$Version" `
     "-p:ContinuousIntegrationBuild=true"
 
-if (Test-GlobalToolInstalled) {
-    Write-Host "Updating global dotnet tool $PackageId to $Version"
-    Invoke-Checked dotnet `
-        "tool" "update" "--global" $PackageId `
-        "--add-source" $packageDirPath `
-        "--version" $Version
-}
-else {
-    Write-Host "Installing global dotnet tool $PackageId $Version"
-    Invoke-Checked dotnet `
-        "tool" "install" "--global" $PackageId `
-        "--add-source" $packageDirPath `
-        "--version" $Version
-}
+Install-GlobalToolPackage
 
 Write-Host "Publishing self-contained $Runtime binary"
-Invoke-Checked dotnet `
+Invoke-Checked $DotnetCommand `
     "publish" $projectPath `
     "--configuration" $Configuration `
     "--runtime" $Runtime `
@@ -303,6 +401,7 @@ catch [System.IO.IOException] {
 }
 
 Write-Host "Smoke-testing global tool shim"
+Use-LocalDotnetRootForAppHosts
 if (Test-Path -LiteralPath $globalToolPath) {
     Invoke-Checked $globalToolPath "--smoke"
 }

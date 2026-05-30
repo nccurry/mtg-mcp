@@ -76,7 +76,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
         return new StdioClientTransportOptions
         {
             Name = "mtg-mcp-e2e",
-            Command = "dotnet",
+            Command = ResolveDotnetCommand(repoRoot),
             Arguments = ["run", "--project", appProjectPath, "--configuration", configuration, "--no-build"],
             WorkingDirectory = repoRoot,
             EnvironmentVariables = new Dictionary<string, string?>
@@ -86,10 +86,29 @@ internal sealed class McpProcessSession : IAsyncDisposable
                 ["MTGMCP__SCRYFALL__BASE_ADDRESS"] = scryfallBaseAddress.ToString(),
                 ["MTGMCP__SCRYFALL__USER_AGENT"] = "mtg-mcp-e2e/1.0",
                 ["MTGMCP__ARCHIDEKT__BASE_ADDRESS"] = archidektBaseAddress.ToString(),
-                ["MTGMCP__ARCHIDEKT__JWT"] = "test-jwt",
+                ["MTGMCP__ARCHIDEKT__USERNAME"] = "test-user",
+                ["MTGMCP__ARCHIDEKT__PASSWORD"] = "test-password",
                 ["MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS"] = (commanderSpellbookBaseAddress ?? new Uri("http://127.0.0.1:9/")).ToString()
             }
         };
+    }
+
+    /// <summary>
+    /// Finds the same repo-local dotnet host used by bootstrap and Taskfile workflows.
+    /// </summary>
+    private static string ResolveDotnetCommand(string repoRoot)
+    {
+        string localDotnetFileName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        string localDotnet = Path.Combine(
+            repoRoot,
+            ".dotnet",
+            localDotnetFileName);
+        if (File.Exists(localDotnet))
+        {
+            return Path.Combine(".dotnet", localDotnetFileName);
+        }
+
+        return "dotnet";
     }
 
     /// <summary>

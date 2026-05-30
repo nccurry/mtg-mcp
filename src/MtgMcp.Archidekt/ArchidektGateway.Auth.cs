@@ -17,12 +17,6 @@ public sealed partial class ArchidektGateway
         ArchidektCredentials loaded = LoadCredentials();
         AuthStatus status = new()
         {
-            HasJwt = !string.IsNullOrWhiteSpace(loaded.Jwt),
-            HasRefreshToken = !string.IsNullOrWhiteSpace(loaded.RefreshToken),
-            HasUserId = !string.IsNullOrWhiteSpace(loaded.UserId),
-            HasEmailPassword =
-                !string.IsNullOrWhiteSpace(loaded.Email)
-                && !string.IsNullOrWhiteSpace(loaded.Password),
             HasUsernamePassword =
                 !string.IsNullOrWhiteSpace(loaded.Username)
                 && !string.IsNullOrWhiteSpace(loaded.Password),
@@ -47,19 +41,6 @@ public sealed partial class ArchidektGateway
 
         ArchidektCredentials loaded = new()
         {
-            Jwt = FirstNonEmpty(options.Jwt, Environment.GetEnvironmentVariable("ARCHIDEKT_JWT")),
-            RefreshToken = FirstNonEmpty(
-                options.RefreshToken,
-                Environment.GetEnvironmentVariable("ARCHIDEKT_REFRESH_TOKEN")
-            ),
-            UserId = FirstNonEmpty(
-                options.UserId,
-                Environment.GetEnvironmentVariable("ARCHIDEKT_USER_ID")
-            ),
-            Email = FirstNonEmpty(
-                options.Email,
-                Environment.GetEnvironmentVariable("ARCHIDEKT_EMAIL")
-            ),
             Username = FirstNonEmpty(
                 options.Username,
                 Environment.GetEnvironmentVariable("ARCHIDEKT_USERNAME")
@@ -79,10 +60,6 @@ public sealed partial class ArchidektGateway
             try
             {
                 ArchidektCredentials fromFile = LoadCredentialsFile(credentialsFile);
-                loaded.Jwt = FirstNonEmpty(loaded.Jwt, fromFile.Jwt, fromFile.AccessToken);
-                loaded.RefreshToken = FirstNonEmpty(loaded.RefreshToken, fromFile.RefreshToken);
-                loaded.UserId = FirstNonEmpty(loaded.UserId, fromFile.UserId);
-                loaded.Email = FirstNonEmpty(loaded.Email, fromFile.Email);
                 loaded.Username = FirstNonEmpty(loaded.Username, fromFile.Username);
                 loaded.Password = FirstNonEmpty(loaded.Password, fromFile.Password);
             }
@@ -102,12 +79,8 @@ public sealed partial class ArchidektGateway
     private async Task EnsureAuthenticatedAsync(bool required, CancellationToken cancellationToken)
     {
         ArchidektCredentials loaded = LoadCredentials();
-        if (!string.IsNullOrWhiteSpace(loaded.Jwt))
+        if (httpClient.DefaultRequestHeaders.Authorization is not null)
         {
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                options.AuthScheme,
-                loaded.Jwt
-            );
             return;
         }
 
@@ -115,52 +88,32 @@ public sealed partial class ArchidektGateway
         try
         {
             // The gateway may receive parallel requests, so only one request should
-            // refresh or create a token while the rest reuse the cached result.
-            if (!string.IsNullOrWhiteSpace(loaded.Jwt))
+            // create a token while the rest reuse the cached result.
+            if (!string.IsNullOrWhiteSpace(sessionJwt))
             {
                 httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                     options.AuthScheme,
-                    loaded.Jwt
+                    sessionJwt
                 );
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(loaded.RefreshToken))
-            {
-                // Prefer refresh tokens over username/password credentials so
-                // configured secrets stay dormant unless the refresh path fails.
-                string? refreshed = await TryRefreshJwtAsync(loaded.RefreshToken, cancellationToken)
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(refreshed))
-                {
-                    loaded.Jwt = refreshed;
-                    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                        options.AuthScheme,
-                        refreshed
-                    );
-                    return;
-                }
-            }
-
             if (
-                options.EnableUsernamePasswordLogin
-                && (
-                    !string.IsNullOrWhiteSpace(loaded.Email)
-                    || !string.IsNullOrWhiteSpace(loaded.Username)
-                )
+                required
+                && options.EnableUsernamePasswordLogin
+                && !string.IsNullOrWhiteSpace(loaded.Username)
                 && !string.IsNullOrWhiteSpace(loaded.Password)
             )
             {
-                string loginIdentifier = FirstNonEmpty(loaded.Email, loaded.Username)!;
                 string? jwt = await TryLoginAsync(
-                        loginIdentifier,
+                        loaded.Username,
                         loaded.Password,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(jwt))
                 {
-                    loaded.Jwt = jwt;
+                    sessionJwt = jwt;
                     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                         options.AuthScheme,
                         jwt
@@ -188,36 +141,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Attempts to refresh the jwt.
-    /// </summary>
-    private async Task<string?> TryRefreshJwtAsync(
-        string refreshToken,
-        CancellationToken cancellationToken
-    )
-    {
-        try
-        {
-            using JsonDocument document = await SendJsonAsync(
-                    HttpMethod.Post,
-                    "api/rest-auth/token/refresh/",
-                    new { refresh = refreshToken },
-                    cancellationToken,
-                    authenticate: false
-                )
-                .ConfigureAwait(false);
-
-            return GetString(document.RootElement, "access")
-                ?? GetString(document.RootElement, "token")
-                ?? GetString(document.RootElement, "jwt");
-        }
-        catch (HttpRequestException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Attempts to log in with an email or username password pair.
+    /// Attempts to log in with a username or account email and password.
     /// </summary>
     private async Task<string?> TryLoginAsync(
         string usernameOrEmail,
@@ -238,11 +162,7 @@ public sealed partial class ArchidektGateway
             )
             .ConfigureAwait(false);
 
-        ArchidektCredentials loaded = LoadCredentials();
-        loaded.RefreshToken = GetString(document.RootElement, "refresh_token")
-            ?? GetString(document.RootElement, "refresh")
-            ?? loaded.RefreshToken;
-        loaded.UserId = GetNestedString(document.RootElement, "user", "id") ?? loaded.UserId;
+        sessionUserId = GetNestedString(document.RootElement, "user", "id") ?? sessionUserId;
         return GetString(document.RootElement, "access_token")
             ?? GetString(document.RootElement, "access")
             ?? GetString(document.RootElement, "token")
@@ -278,8 +198,7 @@ public sealed partial class ArchidektGateway
         {
             try
             {
-                return JsonSerializer.Deserialize<ArchidektCredentials>(text, SerializerOptions)
-                    ?? new ArchidektCredentials();
+                return LoadJsonCredentialsFile(credentialsFile, text);
             }
             catch (JsonException exception)
             {
@@ -293,6 +212,42 @@ public sealed partial class ArchidektGateway
         }
 
         return ParseKeyValueCredentials(credentialsFile, text);
+    }
+
+    /// <summary>
+    /// Loads username/password credentials from a JSON credentials file.
+    /// </summary>
+    private static ArchidektCredentials LoadJsonCredentialsFile(string credentialsFile, string text)
+    {
+        using JsonDocument document = JsonDocument.Parse(text);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidDataException(
+                $"Archidekt credentials file '{credentialsFile}' must contain a JSON object."
+            );
+        }
+
+        ArchidektCredentials credentials = new();
+        foreach (JsonProperty property in document.RootElement.EnumerateObject())
+        {
+            string value = property.Value.ValueKind == JsonValueKind.String
+                ? property.Value.GetString()
+                    ?? throw new InvalidDataException(
+                        $"Archidekt credentials file '{credentialsFile}' fields must be strings."
+                    )
+                : throw new InvalidDataException(
+                    $"Archidekt credentials file '{credentialsFile}' fields must be strings."
+                );
+
+            if (!ApplyCredentialValue(credentials, property.Name, value))
+            {
+                throw new InvalidDataException(
+                    $"Archidekt credentials file '{credentialsFile}' only supports username and password fields."
+                );
+            }
+        }
+
+        return credentials;
     }
 
     /// <summary>
@@ -317,14 +272,18 @@ public sealed partial class ArchidektGateway
             {
                 throw new InvalidDataException(
                     $"Archidekt credentials file '{credentialsFile}' is not valid JSON or key=value format. "
-                        + $"Line {lineNumber} must look like username=value, password=value, jwt=value, "
-                        + "accessToken=value, or refreshToken=value."
+                        + $"Line {lineNumber} must look like username=value or password=value."
                 );
             }
 
             string key = line[..separator].Trim();
             string value = line[(separator + 1)..].Trim();
-            ApplyCredentialValue(credentials, key, value);
+            if (!ApplyCredentialValue(credentials, key, value))
+            {
+                throw new InvalidDataException(
+                    $"Archidekt credentials file '{credentialsFile}' only supports username and password fields."
+                );
+            }
         }
 
         return credentials;
@@ -333,7 +292,7 @@ public sealed partial class ArchidektGateway
     /// <summary>
     /// Applies a credential file key-value pair to credentials.
     /// </summary>
-    private static void ApplyCredentialValue(
+    private static bool ApplyCredentialValue(
         ArchidektCredentials credentials,
         string key,
         string value
@@ -341,44 +300,19 @@ public sealed partial class ArchidektGateway
     {
         string normalized = key.Replace("_", "", StringComparison.Ordinal)
             .Replace("-", "", StringComparison.Ordinal);
-        if (normalized.Equals("jwt", StringComparison.OrdinalIgnoreCase))
-        {
-            credentials.Jwt = value;
-        }
-        else if (
-            normalized.Equals("accesstoken", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("access", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("token", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            credentials.AccessToken = value;
-        }
-        else if (
-            normalized.Equals("refreshtoken", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("refresh", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            credentials.RefreshToken = value;
-        }
-        else if (
-            normalized.Equals("userid", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("user", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            credentials.UserId = value;
-        }
-        else if (normalized.Equals("email", StringComparison.OrdinalIgnoreCase))
-        {
-            credentials.Email = value;
-        }
-        else if (normalized.Equals("username", StringComparison.OrdinalIgnoreCase))
+        if (normalized.Equals("username", StringComparison.OrdinalIgnoreCase))
         {
             credentials.Username = value;
+            return true;
         }
-        else if (normalized.Equals("password", StringComparison.OrdinalIgnoreCase))
+
+        if (normalized.Equals("password", StringComparison.OrdinalIgnoreCase))
         {
             credentials.Password = value;
+            return true;
         }
+
+        return false;
     }
 
     /// <summary>

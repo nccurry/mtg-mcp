@@ -102,7 +102,7 @@ public sealed partial class DeckIntelligenceTests
         /// </summary>
         public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult(new AuthStatus { HasJwt = true });
+            return Task.FromResult(new AuthStatus { HasUsernamePassword = true });
         }
 
         /// <summary>

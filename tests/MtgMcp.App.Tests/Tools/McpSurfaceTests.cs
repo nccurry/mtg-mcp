@@ -214,14 +214,14 @@ public sealed class McpSurfaceTests
     {
         Dictionary<string, object?> values = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["MtgMcp:Archidekt:Jwt"] = "secret",
+            ["MtgMcp:Archidekt:Password"] = "secret",
             ["MtgMcp:Playgroup:ApiKey"] = "playgroup-secret",
             ["MtgMcp:DataDir"] = "C:/data",
         };
 
         Dictionary<string, object?> redacted = SecretRedactor.Redact(values);
 
-        redacted["MtgMcp:Archidekt:Jwt"].Should().Be("***REDACTED***");
+        redacted["MtgMcp:Archidekt:Password"].Should().Be("***REDACTED***");
         redacted["MtgMcp:Playgroup:ApiKey"].Should().Be("***REDACTED***");
         redacted["MtgMcp:DataDir"].Should().Be("C:/data");
     }
@@ -494,10 +494,8 @@ public sealed class McpSurfaceTests
             ["INTELLIGENCE:SOURCES:REDDIT:API_KEY"] = "reddit-token",
             ["INTELLIGENCE:SOURCES:REDDIT:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:REDDIT:BASE_ADDRESS"] = "https://reddit.test/",
-            ["ARCHIDEKT:JWT"] = "jwt-token",
-            ["ARCHIDEKT:REFRESH_TOKEN"] = "refresh-token",
-            ["ARCHIDEKT:USER_ID"] = "278245",
-            ["ARCHIDEKT:EMAIL"] = "archidekt@example.com",
+            ["ARCHIDEKT:USERNAME"] = "archidekt-user",
+            ["ARCHIDEKT:PASSWORD"] = "archidekt-password",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
             ["ARCHIDEKT:RATE_LIMIT:MAX_REQUESTS"] = "30",
             ["ARCHIDEKT:RATE_LIMIT:WINDOW_SECONDS"] = "60",
@@ -544,10 +542,8 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Intelligence:Sources:Reddit:ApiKey"].Should().Be("reddit-token");
         aliases["MtgMcp:Intelligence:Sources:Reddit:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:Reddit:BaseAddress"].Should().Be("https://reddit.test/");
-        aliases["MtgMcp:Archidekt:Jwt"].Should().Be("jwt-token");
-        aliases["MtgMcp:Archidekt:RefreshToken"].Should().Be("refresh-token");
-        aliases["MtgMcp:Archidekt:UserId"].Should().Be("278245");
-        aliases["MtgMcp:Archidekt:Email"].Should().Be("archidekt@example.com");
+        aliases["MtgMcp:Archidekt:Username"].Should().Be("archidekt-user");
+        aliases["MtgMcp:Archidekt:Password"].Should().Be("archidekt-password");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
         aliases["MtgMcp:Archidekt:RateLimit:MaxRequests"].Should().Be("30");
         aliases["MtgMcp:Archidekt:RateLimit:WindowSeconds"].Should().Be("60");
@@ -899,7 +895,7 @@ public sealed class McpSurfaceTests
         /// </summary>
         public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult(new AuthStatus { HasJwt = true });
+            return Task.FromResult(new AuthStatus { HasUsernamePassword = true });
         }
 
         /// <summary>

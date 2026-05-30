@@ -72,11 +72,6 @@ public static class ArchidektAuthCommand
 
         ArchidektCredentials credentials = new()
         {
-            AccessToken = options.AccessToken,
-            Jwt = options.Jwt,
-            RefreshToken = options.RefreshToken,
-            UserId = options.UserId,
-            Email = options.Email,
             Username = options.Username,
             Password = options.Password,
         };
@@ -270,7 +265,7 @@ public static class ArchidektAuthCommand
         return options.HasUsableCredential
             ? options
             : new ArchidektAuthParseError(
-                "Provide --jwt, --access-token, --refresh-token, or --email/--username with --password."
+                "Provide --username with --password."
             );
     }
 
@@ -285,21 +280,6 @@ public static class ArchidektAuthCommand
             case "credentials-file":
             case "file":
                 options.CredentialsFile = value;
-                return null;
-            case "jwt":
-                options.Jwt = EmptyToNull(value);
-                return null;
-            case "access-token":
-                options.AccessToken = EmptyToNull(value);
-                return null;
-            case "refresh-token":
-                options.RefreshToken = EmptyToNull(value);
-                return null;
-            case "user-id":
-                options.UserId = EmptyToNull(value);
-                return null;
-            case "email":
-                options.Email = EmptyToNull(value);
                 return null;
             case "username":
                 options.Username = EmptyToNull(value);
@@ -341,9 +321,7 @@ public static class ArchidektAuthCommand
         writer.WriteLine("Usage:");
         writer.WriteLine(
             "  mtg-mcp auth archidekt [--credentials-file <path>] "
-                + "[--jwt <token> | --access-token <token> | --refresh-token <token> "
-                + "| --email <email> --password <password> | --username <name> --password <password>] "
-                + "[--user-id <id>] [--force]"
+                + "--username <name-or-email> --password <password> [--force]"
         );
     }
 
@@ -390,32 +368,7 @@ public static class ArchidektAuthCommand
         public string? CredentialsFile { get; set; }
 
         /// <summary>
-        /// Gets or sets the jwt.
-        /// </summary>
-        public string? Jwt { get; set; }
-
-        /// <summary>
-        /// Gets or sets the access token.
-        /// </summary>
-        public string? AccessToken { get; set; }
-
-        /// <summary>
-        /// Gets or sets the refresh token.
-        /// </summary>
-        public string? RefreshToken { get; set; }
-
-        /// <summary>
-        /// Gets or sets the user id.
-        /// </summary>
-        public string? UserId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the email.
-        /// </summary>
-        public string? Email { get; set; }
-
-        /// <summary>
-        /// Gets or sets the username.
+        /// Gets or sets the Archidekt username or account email used for login.
         /// </summary>
         public string? Username { get; set; }
 
@@ -428,16 +381,8 @@ public static class ArchidektAuthCommand
         /// Gets whether the parsed options can authenticate to Archidekt.
         /// </summary>
         public bool HasUsableCredential =>
-            !string.IsNullOrWhiteSpace(Jwt)
-            || !string.IsNullOrWhiteSpace(AccessToken)
-            || !string.IsNullOrWhiteSpace(RefreshToken)
-            || (
-                !string.IsNullOrWhiteSpace(Password)
-                && (
-                    !string.IsNullOrWhiteSpace(Email)
-                    || !string.IsNullOrWhiteSpace(Username)
-                )
-            );
+            !string.IsNullOrWhiteSpace(Password)
+            && !string.IsNullOrWhiteSpace(Username);
 
         /// <summary>
         /// Gets the names of fields that will be stored.
@@ -447,11 +392,6 @@ public static class ArchidektAuthCommand
             get
             {
                 List<string> fields = [];
-                AddField(fields, "jwt", Jwt);
-                AddField(fields, "accessToken", AccessToken);
-                AddField(fields, "refreshToken", RefreshToken);
-                AddField(fields, "userId", UserId);
-                AddField(fields, "email", Email);
                 AddField(fields, "username", Username);
                 AddField(fields, "password", Password);
                 return fields;

@@ -6,6 +6,11 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+if (-not (Test-Path variable:IsWindows)) {
+    $script:IsWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
 function Get-UserHome {
     if (-not [string]::IsNullOrWhiteSpace($HOME)) {
         return $HOME

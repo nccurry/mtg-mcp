@@ -31,12 +31,10 @@ public sealed class CliTests
                     "archidekt",
                     "--credentials-file",
                     credentialsFile,
-                    "--jwt",
-                    "secret-jwt",
-                    "--refresh-token",
-                    "secret-refresh",
-                    "--user-id",
-                    "278245",
+                    "--username",
+                    "test-user",
+                    "--password",
+                    "secret-password",
                 ],
                 output,
                 error
@@ -48,17 +46,15 @@ public sealed class CliTests
 
             using JsonDocument document = JsonDocument.Parse(File.ReadAllText(credentialsFile));
             JsonElement root = document.RootElement;
-            root.GetProperty("jwt").GetString().Should().Be("secret-jwt");
-            root.GetProperty("refreshToken").GetString().Should().Be("secret-refresh");
-            root.GetProperty("userId").GetString().Should().Be("278245");
+            root.GetProperty("username").GetString().Should().Be("test-user");
+            root.GetProperty("password").GetString().Should().Be("secret-password");
 
             string text = output.ToString();
             text.Should().Contain("MTGMCP__ARCHIDEKT__CREDENTIALS_FILE");
             text.Should().Contain(credentialsFile);
-            text.Should().Contain("jwt");
-            text.Should().Contain("refreshToken");
-            text.Should().NotContain("secret-jwt");
-            text.Should().NotContain("secret-refresh");
+            text.Should().Contain("username");
+            text.Should().Contain("password");
+            text.Should().NotContain("secret-password");
         }
         finally
         {
@@ -85,12 +81,10 @@ public sealed class CliTests
                     "archidekt",
                     "--credentials-file",
                     credentialsFile,
-                    "--jwt",
-                    "secret-jwt",
-                    "--refresh-token",
-                    "secret-refresh",
-                    "--user-id",
-                    "278245",
+                    "--username",
+                    "test-user",
+                    "--password",
+                    "secret-password",
                 ],
                 output,
                 error
@@ -112,10 +106,8 @@ public sealed class CliTests
 
             exitCode.Should().Be(0);
             status.HasCredentialsFile.Should().BeTrue();
-            status.HasJwt.Should().BeTrue();
-            status.HasRefreshToken.Should().BeTrue();
-            status.HasUserId.Should().BeTrue();
-            status.Mode.Should().Be("jwt");
+            status.HasUsernamePassword.Should().BeTrue();
+            status.Mode.Should().Be("username-password");
         }
         finally
         {
@@ -138,7 +130,16 @@ public sealed class CliTests
             using StringWriter error = new();
 
             int exitCode = ArchidektAuthCommand.Run(
-                ["auth", "archidekt", "--credentials-file", credentialsFile, "--jwt", "secret-jwt"],
+                [
+                    "auth",
+                    "archidekt",
+                    "--credentials-file",
+                    credentialsFile,
+                    "--username",
+                    "test-user",
+                    "--password",
+                    "secret-password",
+                ],
                 output,
                 error
             );
@@ -146,7 +147,7 @@ public sealed class CliTests
             exitCode.Should().Be(1);
             output.ToString().Should().BeEmpty();
             error.ToString().Should().Contain("could not be written");
-            error.ToString().Should().NotContain("secret-jwt");
+            error.ToString().Should().NotContain("secret-password");
         }
         finally
         {
@@ -173,7 +174,16 @@ public sealed class CliTests
             using StringWriter error = new();
 
             int exitCode = ArchidektAuthCommand.Run(
-                ["auth", "archidekt", "--credentials-file", credentialsFile, "--jwt", "secret-jwt"],
+                [
+                    "auth",
+                    "archidekt",
+                    "--credentials-file",
+                    credentialsFile,
+                    "--username",
+                    "test-user",
+                    "--password",
+                    "secret-password",
+                ],
                 output,
                 error
             );
@@ -211,7 +221,16 @@ public sealed class CliTests
             using StringWriter error = new();
 
             int exitCode = ArchidektAuthCommand.Run(
-                ["auth", "archidekt", "--credentials-file", credentialsFile, "--jwt", "secret-jwt"],
+                [
+                    "auth",
+                    "archidekt",
+                    "--credentials-file",
+                    credentialsFile,
+                    "--username",
+                    "test-user",
+                    "--password",
+                    "secret-password",
+                ],
                 output,
                 error
             );
@@ -220,7 +239,7 @@ public sealed class CliTests
             File.ReadAllText(credentialsFile).Should().Be("original");
             output.ToString().Should().BeEmpty();
             error.ToString().Should().Contain("already exists");
-            error.ToString().Should().NotContain("secret-jwt");
+            error.ToString().Should().NotContain("secret-password");
         }
         finally
         {
@@ -242,14 +261,14 @@ public sealed class CliTests
             using StringWriter error = new();
 
             int exitCode = ArchidektAuthCommand.Run(
-                ["auth", "archidekt", "--credentials-file", credentialsFile, "--user-id", "278245"],
+                ["auth", "archidekt", "--credentials-file", credentialsFile, "--username", "test-user"],
                 output,
                 error
             );
 
             exitCode.Should().Be(1);
             File.Exists(credentialsFile).Should().BeFalse();
-            error.ToString().Should().Contain("Provide --jwt");
+            error.ToString().Should().Contain("Provide --username with --password");
         }
         finally
         {
@@ -318,8 +337,10 @@ public sealed class CliTests
                         "archidekt",
                         "--credentials-file",
                         credentialsFile,
-                        "--jwt",
-                        "secret-jwt",
+                        "--username",
+                        "test-user",
+                        "--password",
+                        "secret-password",
                     ],
                     output,
                     error,

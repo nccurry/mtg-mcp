@@ -201,6 +201,15 @@ internal sealed class FakeHttpServer : IAsyncDisposable
             {
                 response = route(request);
             }
+            else if (
+                request.Method == HttpMethod.Post.Method
+                && NormalizeRouteKey(request.PathAndQuery) == "api/rest-auth/login/"
+            )
+            {
+                response = FakeHttpResponse.Json(
+                    """{ "key": "test-jwt", "user": { "id": 278245 } }"""
+                );
+            }
             else
             {
                 response = FakeHttpResponse.Json(

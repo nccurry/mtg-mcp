@@ -4,6 +4,6 @@
     "allowPrerelease": true,
     "rollForward": "latestFeature",
     "paths": [".dotnet", "$host$"],
-    "errorMessage": "Required .NET SDK not found. On Linux, run ./scripts/setup-linux.sh or install the .NET 11 preview SDK listed in global.json."
+    "errorMessage": "Required .NET SDK not found. Run ./bootstrap.sh, .\\bootstrap.ps1, or install the .NET 11 preview SDK listed in global.json."
   }
 }

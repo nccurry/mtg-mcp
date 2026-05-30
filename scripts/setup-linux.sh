@@ -20,7 +20,16 @@ nuget_plugins_cache="${NUGET_PLUGINS_CACHE_PATH:-$repo_root/.nuget/plugins-cache
 xdg_cache_home="${XDG_CACHE_HOME:-$repo_root/.local/cache}"
 xdg_config_home="${XDG_CONFIG_HOME:-$repo_root/.local/config}"
 xdg_data_home="${XDG_DATA_HOME:-$repo_root/.local/share}"
-task_version="${TASK_VERSION:-3.48.0}"
+versions_file="$repo_root/versions.env"
+default_task_version="3.51.1"
+if [[ -f "$versions_file" ]]; then
+    configured_task_version="$(sed -n 's/^GO_TASK_VERSION=//p' "$versions_file" | head -n 1)"
+    if [[ -n "$configured_task_version" ]]; then
+        default_task_version="$configured_task_version"
+    fi
+fi
+
+task_version="${TASK_VERSION:-$default_task_version}"
 powershell_version="${POWERSHELL_VERSION:-7.6.2}"
 sdk_version="${DOTNET_SDK_VERSION:-}"
 

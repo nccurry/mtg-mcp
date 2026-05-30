@@ -28,7 +28,7 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     private readonly ArchidektOptions options;
 
     /// <summary>
-    /// Serializes refresh and login attempts so concurrent requests share one token update.
+    /// Serializes login attempts so concurrent requests share one token update.
     /// </summary>
     private readonly SemaphoreSlim authLock = new(1, 1);
 
@@ -36,6 +36,16 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     /// Caches credentials loaded from configuration or the credentials file.
     /// </summary>
     private ArchidektCredentials? credentials;
+
+    /// <summary>
+    /// Caches the access token returned by Archidekt login for this process.
+    /// </summary>
+    private string? sessionJwt;
+
+    /// <summary>
+    /// Caches the logged-in Archidekt user id when the login response includes it.
+    /// </summary>
+    private string? sessionUserId;
 
     /// <summary>
     /// Keeps a sanitized credentials-file parse error for auth status reporting.

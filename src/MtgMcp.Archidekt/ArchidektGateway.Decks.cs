@@ -83,9 +83,8 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private string GetDeckListPath()
     {
-        ArchidektCredentials loaded = LoadCredentials();
-        return !string.IsNullOrWhiteSpace(loaded.UserId)
-            ? $"api/users/{loaded.UserId}/decks/"
+        return !string.IsNullOrWhiteSpace(sessionUserId)
+            ? $"api/users/{sessionUserId}/decks/"
             : "api/decks/";
     }
 }

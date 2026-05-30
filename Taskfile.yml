@@ -5,6 +5,10 @@ vars:
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
   BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
   CONFIGURATION: Release
+  DOTNET: '{{if eq OS "windows"}}.dotnet/dotnet.exe{{else}}./.dotnet/dotnet{{end}}'
+  DOTNET_SDK_VERSION: 11.0.100-preview.4.26230.115
+  GO_TASK_VERSION: 3.51.1
+  POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}pwsh -NoProfile{{end}}'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
   VERSION: 0.0.0-dev
@@ -18,69 +22,133 @@ vars:
   LOCAL_VERSION: ''
   LOCAL_CLEANUP_DRY_RUN: 'false'
 
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+  PATH: '{{if eq OS "windows"}}{{.TASKFILE_DIR}}/.dotnet;{{.TASKFILE_DIR}}/.tools/bin;{{.PATH}}{{else}}{{.TASKFILE_DIR}}/.dotnet:{{.TASKFILE_DIR}}/.tools/bin:{{.PATH}}{{end}}'
+  Path: '{{if eq OS "windows"}}{{.TASKFILE_DIR}}/.dotnet;{{.TASKFILE_DIR}}/.tools/bin;{{.PATH}}{{else}}{{.PATH}}{{end}}'
+
 tasks:
   setup:
-    desc: Restore tools and packages
+    desc: Install local development dependencies and restore the repo
     cmds:
-      - dotnet tool restore
-      - dotnet restore {{.SOLUTION}}
+      - task: setup:dotnet
+      - task: tools:restore
+      - task: restore
+      - task: setup:verify
 
   setup:linux:
     desc: Install local Linux prerequisites and restore the repo
     cmds:
       - bash scripts/setup-linux.sh
 
+  setup:windows:
+    desc: Install local Windows development dependencies and restore the repo
+    cmds:
+      - task: setup
+
+  setup:darwin:
+    desc: Install local macOS development dependencies and restore the repo
+    cmds:
+      - task: setup
+
+  setup:dotnet:
+    desc: Install the pinned .NET SDK under .dotnet when missing
+    cmds:
+      - cmd: '{{.POWERSHELL}} -File scripts/install-dotnet.ps1 -Version "{{.DOTNET_SDK_VERSION}}" -InstallDir ".dotnet"'
+        platforms: [windows]
+      - cmd: |
+          expected="{{.DOTNET_SDK_VERSION}}"
+          install_dir=".dotnet"
+          dotnet_path="$install_dir/dotnet"
+
+          if [ -x "$dotnet_path" ]; then
+            actual="$($dotnet_path --version 2>/dev/null || true)"
+            if [ "$actual" = "$expected" ]; then
+              echo ".NET SDK $actual is already installed under $install_dir."
+              exit 0
+            fi
+          fi
+
+          mkdir -p "$install_dir"
+          installer="$(mktemp)"
+          if command -v curl >/dev/null 2>&1; then
+            curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$installer"
+          elif command -v wget >/dev/null 2>&1; then
+            wget -q https://dot.net/v1/dotnet-install.sh -O "$installer"
+          else
+            echo "curl or wget is required to install the .NET SDK." >&2
+            exit 1
+          fi
+
+          chmod +x "$installer"
+          "$installer" --version "$expected" --install-dir "$install_dir" --no-path
+          rm -f "$installer"
+          echo ".NET SDK $expected installed under $install_dir."
+        platforms: [linux, darwin]
+
+  setup:verify:
+    desc: Verify the bootstrapped development tools
+    deps: [setup:dotnet]
+    cmds:
+      - '{{.DOTNET}} --version'
+      - '{{.DOTNET}} tool list --local'
+
   tools:restore:
     desc: Restore local .NET tools
+    deps: [setup:dotnet]
     cmds:
-      - dotnet tool restore
+      - '{{.DOTNET}} tool restore'
 
   restore:
     desc: Restore NuGet packages
+    deps: [setup:dotnet]
     cmds:
-      - dotnet restore {{.SOLUTION}}
+      - '{{.DOTNET}} restore {{.SOLUTION}}'
 
   build:
     desc: Build the solution
     deps: [restore]
     cmds:
-      - dotnet build {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-restore
+      - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-restore'
 
   test:
     desc: Run all non-live tests
     deps: [build]
     cmds:
-      - dotnet test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build --filter "Category!=Live"
+      - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build --filter "Category!=Live"'
 
   test:unit:
     desc: Run unit tests
+    deps: [restore]
     cmds:
       - >
-        dotnet test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
 
   test:integration:
     desc: Run fixture-based adapter tests
+    deps: [restore]
     cmds:
       - >
-        dotnet test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
       - >
-        dotnet test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
       - >
-        dotnet test tests/MtgMcp.Moxfield.Tests/MtgMcp.Moxfield.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Moxfield.Tests/MtgMcp.Moxfield.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
       - >
-        dotnet test tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
       - >
-        dotnet test tests/MtgMcp.CommanderSpellbook.Tests/MtgMcp.CommanderSpellbook.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.CommanderSpellbook.Tests/MtgMcp.CommanderSpellbook.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
 
@@ -89,21 +157,23 @@ tasks:
     deps: [build]
     cmds:
       - >
-        dotnet test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
         --filter "Category=E2E"
 
   test:live:
     desc: Run opt-in live tests against a throwaway Archidekt deck
+    deps: [restore]
     cmds:
-      - dotnet test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"
+      - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"'
 
   bench:
     desc: Run all benchmarks; pass BenchmarkDotNet args after --
+    deps: [restore]
     cmds:
       - >
-        dotnet run --project {{.BENCH_PROJECT}}
+        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --
         --inProcess
@@ -112,9 +182,10 @@ tasks:
 
   bench:dry:
     desc: Smoke-test benchmarks with BenchmarkDotNet's dry job; pass args after --
+    deps: [restore]
     cmds:
       - >
-        dotnet run --project {{.BENCH_PROJECT}}
+        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --
         --inProcess
@@ -124,9 +195,10 @@ tasks:
 
   bench:analysis:
     desc: Run deck analysis and role-classification benchmarks; pass args after --
+    deps: [restore]
     cmds:
       - >
-        dotnet run --project {{.BENCH_PROJECT}}
+        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --
         --inProcess
@@ -135,9 +207,10 @@ tasks:
 
   bench:performance:
     desc: Run Stats Lab performance simulation benchmarks; pass args after --
+    deps: [restore]
     cmds:
       - >
-        dotnet run --project {{.BENCH_PROJECT}}
+        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --
         --inProcess
@@ -146,9 +219,10 @@ tasks:
 
   bench:mana:
     desc: Run mana payment and source-reading benchmarks; pass args after --
+    deps: [restore]
     cmds:
       - >
-        dotnet run --project {{.BENCH_PROJECT}}
+        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --
         --inProcess
@@ -157,9 +231,10 @@ tasks:
 
   bench:facets:
     desc: Run facet predicate benchmarks; pass args after --
+    deps: [restore]
     cmds:
       - >
-        dotnet run --project {{.BENCH_PROJECT}}
+        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --
         --inProcess
@@ -176,13 +251,13 @@ tasks:
     desc: Generate a source-only Cobertura report for Codecov
     deps: [tools:restore, build]
     cmds:
-      - pwsh -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.COVERAGE_DIR}}' | Out-Null"
+      - '{{.POWERSHELL}} -Command "New-Item -ItemType Directory -Force -Path ''{{.COVERAGE_DIR}}'' | Out-Null"'
       - >
-        dotnet tool run dotnet-coverage -- collect
+        {{.DOTNET}} tool run dotnet-coverage -- collect
         --settings CodeCoverage.runsettings
         --output {{.COVERAGE_DIR}}/codecov.cobertura.xml
         --output-format cobertura
-        dotnet test {{.SOLUTION}}
+        {{.DOTNET}} test {{.SOLUTION}}
         --configuration {{.CONFIGURATION}}
         --no-build
         --filter "Category!=Live"
@@ -190,35 +265,37 @@ tasks:
   coverage:gates:
     desc: Enforce 85 percent line coverage gates using the Codecov report
     cmds:
-      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85'
 
   coverage:core:
     desc: Enforce 85 percent line coverage for core deck services using the Codecov report
     deps: [coverage:report]
     cmds:
-      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Core
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Core'
 
   coverage:scryfall:
     desc: Enforce 85 percent line coverage for the Scryfall client using the Codecov report
     deps: [coverage:report]
     cmds:
-      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Scryfall
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Scryfall'
 
   coverage:archidekt:
     desc: Enforce 85 percent line coverage for the Archidekt client using the Codecov report
     deps: [coverage:report]
     cmds:
-      - pwsh -NoProfile -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Archidekt
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Archidekt'
 
   format:
     desc: Format source
+    deps: [setup:dotnet]
     cmds:
-      - dotnet format {{.SOLUTION}}
+      - '{{.DOTNET}} format {{.SOLUTION}}'
 
   lint:
     desc: Build with analyzers
+    deps: [setup:dotnet]
     cmds:
-      - dotnet build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror
+      - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror'
 
   ci:
     desc: Run the CI validation suite
@@ -230,8 +307,9 @@ tasks:
 
   smoke:mcp:
     desc: Build the MCP host and verify service registration
+    deps: [restore]
     cmds:
-      - dotnet run --project {{.APP_PROJECT}} -- --smoke
+      - '{{.DOTNET}} run --project {{.APP_PROJECT}} -- --smoke'
 
   install:
     desc: Install the current branch on this workstation
@@ -240,10 +318,13 @@ tasks:
 
   install:local:
     desc: Pack, globally install, publish, and copy the current branch to the configured local MCP command path
-    deps: [restore]
+    deps: [setup:dotnet, restore]
+    env:
+      DOTNET_ROOT: '{{.TASKFILE_DIR}}/.dotnet'
+      DOTNET_ROOT_X64: '{{.TASKFILE_DIR}}/.dotnet'
     cmds:
       - >
-        pwsh -NoProfile -File scripts/install-local.ps1
+        {{.POWERSHELL}} -File scripts/install-local.ps1
         -Project "{{.APP_PROJECT}}"
         -Configuration "{{.CONFIGURATION}}"
         -PackageId "{{.PACKAGE_ID}}"
@@ -257,7 +338,7 @@ tasks:
     desc: Remove old unlocked versioned local MCP binaries while keeping the configured one
     cmds:
       - >
-        pwsh -NoProfile -File scripts/cleanup-local-install.ps1
+        {{.POWERSHELL}} -File scripts/cleanup-local-install.ps1
         -InstallPath "{{.LOCAL_INSTALL_PATH}}"
         {{if eq .LOCAL_CLEANUP_DRY_RUN "true"}}-DryRun{{end}}
 
@@ -266,7 +347,7 @@ tasks:
     deps: [restore]
     cmds:
       - >
-        dotnet pack {{.APP_PROJECT}}
+        {{.DOTNET}} pack {{.APP_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --output {{.PACKAGE_DIR}}
         -p:Version={{.VERSION}}
@@ -282,9 +363,10 @@ tasks:
 
   publish:runtime:
     desc: Publish a single self-contained binary for RUNTIME
+    deps: [setup:dotnet]
     cmds:
       - >
-        dotnet publish {{.APP_PROJECT}}
+        {{.DOTNET}} publish {{.APP_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --runtime {{.RUNTIME}}
         --self-contained true
@@ -309,12 +391,12 @@ tasks:
   release:clean:
     desc: Remove release artifacts
     cmds:
-      - pwsh -NoProfile -File scripts/release.ps1 Clean -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -DistDir "{{.DIST_DIR}}" -PublishDir "{{.PUBLISH_DIR}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Clean -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -DistDir "{{.DIST_DIR}}" -PublishDir "{{.PUBLISH_DIR}}"'
 
   release:validate-version:
     desc: Validate VERSION as a stable release tag
     cmds:
-      - pwsh -NoProfile -File scripts/release.ps1 ValidateVersion -Version "{{.VERSION}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 ValidateVersion -Version "{{.VERSION}}"'
 
   release:archives:
     desc: Publish and archive all release runtimes
@@ -322,25 +404,26 @@ tasks:
       - task: publish:runtime
         vars:
           RUNTIME: win-x64
-      - pwsh -NoProfile -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime win-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime win-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
       - task: publish:runtime
         vars:
           RUNTIME: linux-x64
-      - pwsh -NoProfile -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime linux-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime linux-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
       - task: publish:runtime
         vars:
           RUNTIME: osx-arm64
-      - pwsh -NoProfile -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime osx-arm64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime osx-arm64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
 
   release:checksums:
     desc: Generate SHA256 checksums for release archives
     cmds:
-      - pwsh -NoProfile -File scripts/release.ps1 Checksums -DistDir "{{.DIST_DIR}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Checksums -DistDir "{{.DIST_DIR}}"'
 
   release:tool-smoke:
     desc: Install the local NuGet tool package and smoke-run it
+    deps: [setup:dotnet]
     cmds:
-      - pwsh -NoProfile -File scripts/release.ps1 ToolSmoke -Version "{{.VERSION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"
+      - '{{.POWERSHELL}} -File scripts/release.ps1 ToolSmoke -Version "{{.VERSION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
 
   release:verify:
     desc: Run CI, package, archive, checksum, and smoke-install checks
@@ -354,15 +437,18 @@ tasks:
 
   deps:check:
     desc: List outdated NuGet packages
+    deps: [restore]
     cmds:
-      - dotnet list {{.SOLUTION}} package --outdated
+      - '{{.DOTNET}} list {{.SOLUTION}} package --outdated'
 
   deps:update:
     desc: Restore after editing Directory.Packages.props
+    deps: [setup:dotnet]
     cmds:
-      - dotnet restore {{.SOLUTION}}
+      - '{{.DOTNET}} restore {{.SOLUTION}}'
 
   clean:
     desc: Remove build outputs
+    deps: [setup:dotnet]
     cmds:
-      - dotnet clean {{.SOLUTION}}
+      - '{{.DOTNET}} clean {{.SOLUTION}}'

@@ -146,10 +146,14 @@ Common credential config:
 
 ```json
 {
-  "refreshToken": "...",
-  "userId": "..."
+  "username": "you-or-you@example.com",
+  "password": "..."
 }
 ```
+
+Archidekt does not expose a public self-service page for generating refresh
+tokens, so Archidekt credentials are configured as username and password only.
+The `username` value can be your Archidekt username or account email address.
 
 `playgroup.json`:
 
@@ -164,8 +168,8 @@ You can also create an Archidekt credentials file with:
 ```bash
 mtg-mcp auth archidekt \
   --credentials-file "$HOME/.mtg-mcp/archidekt.json" \
-  --refresh-token "..." \
-  --user-id "..."
+  --username "you-or-you@example.com" \
+  --password "..."
 ```
 
 PowerShell equivalent:
@@ -173,8 +177,8 @@ PowerShell equivalent:
 ```powershell
 mtg-mcp auth archidekt `
   --credentials-file "$env:USERPROFILE\.mtg-mcp\archidekt.json" `
-  --refresh-token "..." `
-  --user-id "..."
+  --username "you-or-you@example.com" `
+  --password "..."
 ```
 
 Supported environment settings. In rows with slashes, repeat the full prefix for
@@ -192,7 +196,7 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` / `SPICERACK__API_KEY` / `REDDIT__API_KEY` | Optional source API keys. |
 | `MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API` / `EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHREC__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
-| `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `JWT` / `REFRESH_TOKEN` / `USER_ID` / `EMAIL` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. Refresh token auth is preferred; email or username plus password is fallback. |
+| `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. The username value may be an Archidekt username or account email. |
 | `MTGMCP__ARCHIDEKT__RATE_LIMIT__MAX_REQUESTS` / `WINDOW_SECONDS` | Optional process-local Archidekt pacing. For example, `30` requests per `60` seconds leaves room for browser activity; `0` max requests disables proactive pacing. |
 | `MTGMCP__MOXFIELD__BASE_ADDRESS` / `USER_AGENT` / `CURL_FALLBACK_ENABLED` / `CURL_PATH` | Moxfield import endpoint settings. Imports use an anonymous, unofficial endpoint; when Moxfield blocks .NET HTTP requests, the adapter can retry through `curl` if available. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
@@ -417,20 +421,29 @@ HTML, parse page markup, or use browser automation for corpus data.
 
 ## Development
 
-### Linux
+### Fresh Checkout
 
-Linux development is supported without installing prerequisites globally. The
-bootstrap script installs the pinned .NET SDK under `.dotnet`, Task and
-PowerShell from pinned Linux release tarballs under `.tools`, keeps .NET/NuGet
-caches under `.dotnet-home` and `.nuget`, restores the repository, and leaves
-those directories ignored by git:
+Development is supported without installing the pinned SDK globally. From a
+fresh checkout, run the bootstrap script for your platform. It installs Go Task
+under `.tools` when needed, then delegates to `task setup`, which installs the
+pinned .NET SDK under `.dotnet`, restores dotnet tools, and restores NuGet
+packages:
 
 ```bash
-./scripts/setup-linux.sh
-source scripts/env-linux.sh
+./bootstrap.sh
 ```
 
-After that, use the same Task workflows as CI:
+```powershell
+.\bootstrap.ps1
+```
+
+You can pass any Task workflow through bootstrap:
+
+```bash
+./bootstrap.sh test
+```
+
+After setup, use the same Task workflows as CI:
 
 ```bash
 task test
@@ -438,6 +451,10 @@ task lint
 task install:local
 task install:local:cleanup
 ```
+
+On Linux, `scripts/setup-linux.sh` remains available when you also want local
+PowerShell and repo-local .NET/NuGet cache paths. Source `scripts/env-linux.sh`
+after using it to carry those paths into future shells.
 
 `task install:local` publishes the current host runtime by default, so Linux
 uses `linux-x64` or `linux-arm64` depending on the machine. Override it only
@@ -451,8 +468,8 @@ For a system-wide setup instead of the local bootstrap, install these
 prerequisites yourself and then run `task setup`:
 
 - .NET SDK `11.0.100-preview.4.26230.115` or a compatible .NET 11 preview SDK.
-- Task CLI 3.48 or newer.
-- PowerShell 7 `pwsh`.
+- Task CLI `3.51.1` or newer.
+- PowerShell 7 `pwsh` on Linux/macOS, or Windows PowerShell on Windows.
 - `curl`, used by the setup script and optional Moxfield HTTP fallback.
 
 ### Common Workflows
@@ -466,11 +483,12 @@ task install:local
 task install:local:cleanup
 ```
 
-`task install:local` packs a unique local prerelease version, updates the global
-`.NET` tool, publishes a self-contained binary, and copies it to the configured
-local MCP command path when one is found. If that executable is locked by a
-running MCP process, it writes a versioned binary beside it and updates the
-Codex MCP config for the next server start.
+`task install:local` packs a unique local prerelease version derived from
+`server.json`, such as `0.3.0-local.<date>.<sha>`, updates the global `.NET`
+tool, publishes a self-contained binary, and copies it to the configured local
+MCP command path when one is found. If that executable is locked by a running
+MCP process, it writes a versioned binary beside it and updates the Codex MCP
+config for the next server start.
 
 `task install:local:cleanup` removes old unlocked versioned local binaries while
 keeping the currently configured MCP command path.

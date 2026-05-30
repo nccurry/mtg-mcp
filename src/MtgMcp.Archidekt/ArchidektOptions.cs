@@ -16,27 +16,7 @@ public sealed class ArchidektOptions
     public string AuthScheme { get; set; } = "JWT";
 
     /// <summary>
-    /// Gets or sets the jwt.
-    /// </summary>
-    public string? Jwt { get; set; }
-
-    /// <summary>
-    /// Gets or sets the refresh token.
-    /// </summary>
-    public string? RefreshToken { get; set; }
-
-    /// <summary>
-    /// Gets or sets the Archidekt user id for user-scoped deck listing.
-    /// </summary>
-    public string? UserId { get; set; }
-
-    /// <summary>
-    /// Gets or sets the email used for Archidekt login.
-    /// </summary>
-    public string? Email { get; set; }
-
-    /// <summary>
-    /// Gets or sets the username.
+    /// Gets or sets the Archidekt username or account email used for login.
     /// </summary>
     public string? Username { get; set; }
 
@@ -83,32 +63,7 @@ public sealed class ArchidektRateLimitOptions
 public sealed class ArchidektCredentials
 {
     /// <summary>
-    /// Gets or sets the jwt.
-    /// </summary>
-    public string? Jwt { get; set; }
-
-    /// <summary>
-    /// Gets or sets an access token alias loaded from credentials.
-    /// </summary>
-    public string? AccessToken { get; set; }
-
-    /// <summary>
-    /// Gets or sets the refresh token.
-    /// </summary>
-    public string? RefreshToken { get; set; }
-
-    /// <summary>
-    /// Gets or sets the Archidekt user id.
-    /// </summary>
-    public string? UserId { get; set; }
-
-    /// <summary>
-    /// Gets or sets the email used for Archidekt login.
-    /// </summary>
-    public string? Email { get; set; }
-
-    /// <summary>
-    /// Gets or sets the username.
+    /// Gets or sets the Archidekt username or account email used for login.
     /// </summary>
     public string? Username { get; set; }
 

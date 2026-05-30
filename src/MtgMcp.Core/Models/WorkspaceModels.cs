@@ -530,34 +530,9 @@ public sealed class DeckCheckpoint
 public sealed class AuthStatus
 {
     /// <summary>
-    /// Gets or sets the has jwt.
-    /// </summary>
-    public bool HasJwt { get; set; }
-
-    /// <summary>
-    /// Gets or sets the has refresh token.
-    /// </summary>
-    public bool HasRefreshToken { get; set; }
-
-    /// <summary>
-    /// Gets or sets whether a user id is configured.
-    /// </summary>
-    public bool HasUserId { get; set; }
-
-    /// <summary>
-    /// Gets or sets whether an email and password are configured.
-    /// </summary>
-    public bool HasEmailPassword { get; set; }
-
-    /// <summary>
-    /// Gets or sets the has username password.
+    /// Gets or sets whether an Archidekt username and password are configured.
     /// </summary>
     public bool HasUsernamePassword { get; set; }
-
-    /// <summary>
-    /// Gets whether any login password credentials are configured.
-    /// </summary>
-    public bool HasLoginPassword => HasEmailPassword || HasUsernamePassword;
 
     /// <summary>
     /// Gets or sets the has credentials file.
@@ -579,8 +554,7 @@ public sealed class AuthStatus
     /// </summary>
     public string Mode =>
         HasCredentialsFileError ? "credentials-file-error"
-        : HasJwt ? "jwt"
-        : HasLoginPassword ? "username-password"
+        : HasUsernamePassword ? "username-password"
         : "anonymous";
 }
 

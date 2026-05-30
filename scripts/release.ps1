@@ -16,12 +16,28 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+if (-not (Test-Path variable:IsWindows)) {
+    $script:IsWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
 function Normalize-Path {
     param([Parameter(Mandatory = $true)][string] $Path)
 
-    return [System.IO.Path]::TrimEndingDirectorySeparator(
-        [System.IO.Path]::GetFullPath($Path)
-    )
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $rootPath = [System.IO.Path]::GetPathRoot($fullPath)
+    while ($fullPath.Length -gt $rootPath.Length) {
+        $lastCharacter = $fullPath[$fullPath.Length - 1]
+        $isSeparator = $lastCharacter -eq [System.IO.Path]::DirectorySeparatorChar `
+            -or $lastCharacter -eq [System.IO.Path]::AltDirectorySeparatorChar
+        if (-not $isSeparator) {
+            break
+        }
+
+        $fullPath = $fullPath.Substring(0, $fullPath.Length - 1)
+    }
+
+    return $fullPath
 }
 
 function Resolve-RepoPath {
@@ -32,6 +48,45 @@ function Resolve-RepoPath {
     }
 
     return Normalize-Path (Join-Path (Get-Location).ProviderPath $Path)
+}
+
+function Get-DotnetCommand {
+    $localName = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::Windows)) {
+        "dotnet.exe"
+    }
+    else {
+        "dotnet"
+    }
+
+    $localPath = Join-Path (Join-Path (Get-Location).ProviderPath ".dotnet") $localName
+    if (Test-Path -LiteralPath $localPath) {
+        return $localPath
+    }
+
+    $command = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    throw "Could not find dotnet. Run task setup or install the .NET SDK listed in global.json."
+}
+
+function Use-LocalDotnetRootForAppHosts {
+    $localName = if ($IsWindows) { "dotnet.exe" } else { "dotnet" }
+    $localRoot = Join-Path (Get-Location).ProviderPath ".dotnet"
+    $localDotnet = Join-Path $localRoot $localName
+    if (-not (Test-Path -LiteralPath $localDotnet)) {
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+        $env:DOTNET_ROOT = $localRoot
+    }
+
+    if ($IsWindows -and [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT_X64)) {
+        $env:DOTNET_ROOT_X64 = $localRoot
+    }
 }
 
 function Test-SameOrChildPath {
@@ -211,7 +266,8 @@ function Invoke-ToolSmoke {
     }
 
     $toolPath = New-CleanDirectory (Join-Path $ArtifactsDir "tool-smoke")
-    Invoke-Checked dotnet "tool" "install" $PackageId "--tool-path" $toolPath "--add-source" $packageSource "--version" $Version
+    $dotnetCommand = Get-DotnetCommand
+    Invoke-Checked $dotnetCommand "tool" "install" $PackageId "--tool-path" $toolPath "--add-source" $packageSource "--version" $Version
 
     $toolExecutable = if ($IsWindows) {
         Join-Path $toolPath "mtg-mcp.exe"
@@ -224,6 +280,7 @@ function Invoke-ToolSmoke {
         throw "Installed tool executable not found: $toolExecutable"
     }
 
+    Use-LocalDotnetRootForAppHosts
     Invoke-Checked $toolExecutable "--smoke"
 }
 
