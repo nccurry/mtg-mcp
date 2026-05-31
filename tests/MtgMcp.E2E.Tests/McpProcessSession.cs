@@ -105,7 +105,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
             localDotnetFileName);
         if (File.Exists(localDotnet))
         {
-            return Path.Combine(".dotnet", localDotnetFileName);
+            return OperatingSystem.IsWindows()
+                ? Path.Combine(".dotnet", localDotnetFileName)
+                : localDotnet;
         }
 
         return "dotnet";
