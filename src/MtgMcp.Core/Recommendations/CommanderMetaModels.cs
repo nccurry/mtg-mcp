@@ -65,6 +65,11 @@ public sealed class CommanderMetaCard
     /// Gets or sets a source page for the card when available.
     /// </summary>
     public string? Uri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for linking this card.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
 }
 
 /// <summary>

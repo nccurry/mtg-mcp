@@ -56,7 +56,8 @@ public sealed partial class DeckIntelligenceTests
             && row.Source == "Fake corpus"
             && row.Section == "top-cards"
             && row.DeckCount == 300
-            && row.EligibleDeckCount == 600);
+            && row.EligibleDeckCount == 600
+            && row.ScryfallUri!.EndsWith(Uri.EscapeDataString("Arcane Signet"), StringComparison.Ordinal));
         result.Notes.Should().Contain(note => note.Contains("grouped by source", StringComparison.OrdinalIgnoreCase));
         provider.LastQuery?.Commander.Should().Be("Tinybones, Trinket Thief");
         provider.LastQuery?.Theme.Should().Be("discard");
@@ -301,6 +302,7 @@ public sealed partial class DeckIntelligenceTests
         result.Recommendations.Should().Contain(recommendation => recommendation.CardName == "Illness in the Ranks");
         CorpusRecommendation illness = result.Recommendations
             .Single(recommendation => recommendation.CardName == "Illness in the Ranks");
+        illness.ScryfallUri.Should().EndWith(Uri.EscapeDataString("Illness in the Ranks"));
         CorpusEvidence evidence = illness.Evidence.Should().ContainSingle().Subject;
         evidence.Source.Should().Be("Fake corpus");
         evidence.SignalType.Should().Be(CorpusSignalTypes.Novelty);
@@ -414,6 +416,7 @@ public sealed partial class DeckIntelligenceTests
             && row.Source == "Fake corpus"
             && row.SignalType == CorpusSignalTypes.Novelty
             && row.EvidenceCount == 12
+            && row.ScryfallUri!.EndsWith(Uri.EscapeDataString("Illness in the Ranks"), StringComparison.Ordinal)
             && !row.AlreadyInDeck);
         result.Notes.Should().NotContain(note => note.Contains("Failing corpus", StringComparison.OrdinalIgnoreCase));
     }
@@ -561,6 +564,8 @@ public sealed partial class DeckIntelligenceTests
             .Which;
         recommendation.CardName.Should().Be("Arcane Signet");
         recommendation.ReplaceCard.Should().Be("Mana Crypt");
+        recommendation.ScryfallUri.Should().EndWith(Uri.EscapeDataString("Arcane Signet"));
+        recommendation.ReplaceCardScryfallUri.Should().EndWith(Uri.EscapeDataString("Mana Crypt"));
         recommendation.Evidence.Should().ContainSingle(evidence =>
             evidence.Source == "Fake corpus" && evidence.SignalType == CorpusSignalTypes.Budget);
     }
@@ -587,6 +592,7 @@ public sealed partial class DeckIntelligenceTests
 
         CorpusRecommendation recommendation = result.Recommendations.Should().ContainSingle().Which;
         recommendation.CardName.Should().Be("Illness in the Ranks");
+        recommendation.ScryfallUri.Should().EndWith(Uri.EscapeDataString("Illness in the Ranks"));
         recommendation.Evidence.Should().ContainSingle(evidence =>
             evidence.Source == "Fake corpus" && evidence.SignalType == CorpusSignalTypes.Novelty);
         result.Notes.Should().NotContain(note => note.Contains("No matching source evidence", StringComparison.OrdinalIgnoreCase));
@@ -614,6 +620,7 @@ public sealed partial class DeckIntelligenceTests
 
         CorpusRecommendation recommendation = result.Recommendations.Should().ContainSingle().Which;
         recommendation.CardName.Should().Be("Hero's Downfall");
+        recommendation.ScryfallUri.Should().EndWith(Uri.EscapeDataString("Hero's Downfall"));
         recommendation.Evidence.Should().BeEmpty();
         recommendation.Rationale.Should().Contain("local card metadata");
         result.Notes.Should().Contain(note => note.Contains("No matching source evidence", StringComparison.OrdinalIgnoreCase));

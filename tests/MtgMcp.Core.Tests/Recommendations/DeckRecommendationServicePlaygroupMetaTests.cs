@@ -101,6 +101,7 @@ public sealed partial class DeckIntelligenceTests
         PlaygroupMetaCandidateScore swords = result.CandidateScores.Single(score => score.CardName == "Swords to Plowshares");
         swords.MetaCoverageScore.Should().BeGreaterThan(0.5);
         swords.PriceBracketScore.Should().BeGreaterThan(0.7);
+        swords.ScryfallUri.Should().EndWith(Uri.EscapeDataString("Swords to Plowshares"));
         swords.Evidence.Should().Contain(line => line.Contains("meta pressure", StringComparison.OrdinalIgnoreCase));
         archidekt.ImportRequests.Should().Contain(request =>
             request.DeckIdOrUrl == "https://archidekt.com/decks/999/raggadragga"
@@ -400,7 +401,7 @@ public sealed partial class DeckIntelligenceTests
         /// </summary>
         private static CardInfo? CreateCard(string name)
         {
-            return name switch
+            CardInfo? card = name switch
             {
                 "Swords to Plowshares" => new CardInfo
                 {
@@ -448,6 +449,13 @@ public sealed partial class DeckIntelligenceTests
                 },
                 _ => null,
             };
+
+            if (card is not null)
+            {
+                card.ScryfallUri ??= $"https://scryfall.test/card/{Uri.EscapeDataString(card.Name)}";
+            }
+
+            return card;
         }
     }
 

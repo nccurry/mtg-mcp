@@ -195,6 +195,7 @@ public sealed partial class DeckIntelligenceTests
                 TypeLine = "Artifact",
                 OracleText = "{T}: Add two colorless mana.",
                 ManaValue = 0,
+                ScryfallUri = "https://scryfall.test/card/Mana%20Crypt",
                 EdhrecRank = 20,
                 Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {

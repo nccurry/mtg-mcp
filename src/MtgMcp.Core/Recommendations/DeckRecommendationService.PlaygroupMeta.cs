@@ -400,6 +400,7 @@ public sealed partial class DeckRecommendationService
             PriceBracketScore = priceBracket,
             EvidenceConfidence = confidence,
             Price = ReadUsdPrice(card),
+            ScryfallUri = card.ScryfallUri,
             IsGameChanger = isGameChanger,
             Rationale = BuildMetaCandidateRationale(card.Name, role.PrimaryRole, metaCoverage, selfHarmPenalty),
             Evidence = evidence,

@@ -447,6 +447,11 @@ public sealed class CardCorpusSignal
     public string? Uri { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for the signaled card when the provider supplied it.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets a compact human-readable source rationale.
     /// </summary>
     public string Rationale { get; set; } = "";
@@ -646,6 +651,11 @@ public sealed class CardEvidenceTableRow
     public string? Uri { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking this evidence row.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Summarizes the source rationale without adding LLM interpretation.
     /// </summary>
     public string Rationale { get; set; } = "";
@@ -792,6 +802,16 @@ public sealed class CorpusRecommendation
     /// Gets or sets EDHREC rank when known.
     /// </summary>
     public int? EdhrecRank { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for linking the recommended card.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for the replaced card when applicable.
+    /// </summary>
+    public string? ReplaceCardScryfallUri { get; set; }
 
     /// <summary>
     /// Gets or sets the concise rationale.

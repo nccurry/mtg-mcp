@@ -206,6 +206,14 @@ function New-LocalVersion {
         return "$versionCore.local.$day.t$time.$shortSha"
     }
 
+    $stableMatch = [regex]::Match($versionCore, "^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)$")
+    if ($stableMatch.Success) {
+        $major = $stableMatch.Groups["major"].Value
+        $minor = $stableMatch.Groups["minor"].Value
+        $patch = [int] $stableMatch.Groups["patch"].Value + 1
+        return "$major.$minor.$patch-local.$day.t$time.$shortSha"
+    }
+
     return "$versionCore-local.$day.t$time.$shortSha"
 }
 

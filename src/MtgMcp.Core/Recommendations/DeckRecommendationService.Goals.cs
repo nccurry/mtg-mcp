@@ -50,6 +50,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 Tags = candidate.Tags,
                 FitScore = candidate.Score,
                 Price = candidate.Price,
+                ScryfallUri = candidate.ScryfallUri,
                 Rationale = candidate.Rationale
             }).ToList()
         };

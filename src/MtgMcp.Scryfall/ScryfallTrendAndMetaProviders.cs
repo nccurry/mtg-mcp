@@ -74,6 +74,7 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
             ReleasedAt = suggestion.ReleasedAt,
             Set = suggestion.Set,
             Price = suggestion.Price,
+            ScryfallUri = suggestion.ScryfallUri,
             Score = suggestion.Score,
             Rationale = suggestion.Rationale
         };
@@ -116,6 +117,7 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
             ReleasedAt = searchResult?.ReleasedAt ?? card.ReleasedAt,
             Set = searchResult?.Set ?? card.Set,
             Price = ReadUsdPrice(card),
+            ScryfallUri = card.ScryfallUri ?? searchResult?.ScryfallUri,
             Score = Math.Clamp((themeScore * 0.45) + (rankScore * 0.35) + 0.20, 0, 1),
             Rationale = $"{card.Name} matched the recent-release Scryfall search and was classified as {role.PrimaryRole}."
         };
@@ -285,7 +287,8 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
                 SynergyScore = 0,
                 EdhrecRank = card.EdhrecRank,
                 Source = "scryfall-edhrec-rank",
-                Uri = card.ScryfallUri
+                Uri = card.ScryfallUri,
+                ScryfallUri = card.ScryfallUri
             });
         }
 
@@ -325,7 +328,8 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
             SynergyScore = card.SynergyScore,
             EdhrecRank = card.EdhrecRank,
             Source = card.Source,
-            Uri = card.Uri
+            Uri = card.Uri,
+            ScryfallUri = card.ScryfallUri
         };
     }
 

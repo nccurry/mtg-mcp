@@ -143,6 +143,7 @@ public sealed class ScryfallCorpusSignalProvider : ICorpusSignalProvider
                 ReleasedAt = card.ReleasedAt,
                 EdhrecRank = card.EdhrecRank,
                 Uri = card.ScryfallUri,
+                ScryfallUri = card.ScryfallUri,
                 Rationale = $"{card.Name} matched Scryfall search for {DescribeQuery(query)} and is classified as {role.PrimaryRole}."
             });
 
@@ -160,6 +161,7 @@ public sealed class ScryfallCorpusSignalProvider : ICorpusSignalProvider
                     ReleasedAt = card.ReleasedAt,
                     EdhrecRank = card.EdhrecRank,
                     Uri = card.ScryfallUri,
+                    ScryfallUri = card.ScryfallUri,
                     Rationale = $"{card.Name} was released recently and fits the current deck context."
                 });
             }

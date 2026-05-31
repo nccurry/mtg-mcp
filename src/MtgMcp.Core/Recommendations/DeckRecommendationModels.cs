@@ -77,6 +77,16 @@ public sealed class ReplacementSuggestion
     public decimal? EstimatedSavings { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for the card being replaced.
+    /// </summary>
+    public string? ReplaceCardScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for the replacement card.
+    /// </summary>
+    public string? WithCardScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets the rationale.
     /// </summary>
     public string Rationale { get; set; } = "";
@@ -122,6 +132,11 @@ public sealed class CategorySuggestion
     /// Gets or sets the tags.
     /// </summary>
     public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for linking the card.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
 
     /// <summary>
     /// Gets or sets the confidence.

@@ -77,6 +77,11 @@ public sealed class CommanderAggregateCardRow
     public double Score { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking this aggregate card.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets source and determinism metadata.
     /// </summary>
     public SourceEvidenceMetadata Metadata { get; set; } = new();
@@ -184,4 +189,3 @@ public sealed class CommanderWinConditionEvidenceResult
     /// </summary>
     public List<string> Notes { get; set; } = [];
 }
-

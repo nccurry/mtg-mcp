@@ -113,6 +113,8 @@ public sealed partial class DeckRecommendationService
                 Confidence = Math.Clamp(0.45 + (evidence.Count * 0.10), 0, 0.90),
                 Price = suggestion.CandidatePrice,
                 EdhrecRank = card?.EdhrecRank,
+                ScryfallUri = card?.ScryfallUri ?? suggestion.WithCardScryfallUri,
+                ReplaceCardScryfallUri = suggestion.ReplaceCardScryfallUri,
                 Rationale = evidence.Count == 0
                     ? suggestion.Rationale
                     : $"{suggestion.Rationale} Corpus evidence adds {evidence.Count} supporting signal(s).",
@@ -248,6 +250,9 @@ public sealed partial class DeckRecommendationService
             refresh,
             cancellationToken,
             sourceKey).ConfigureAwait(false);
+        IReadOnlyDictionary<string, string?> scryfallUris = await ResolveScryfallUrisAsync(
+            report.Signals.Select(signal => signal.CardName),
+            cancellationToken).ConfigureAwait(false);
 
         CorpusEvidenceSearchResult result = new()
         {
@@ -257,7 +262,7 @@ public sealed partial class DeckRecommendationService
             SourceKey = sourceKey,
             AnalysisDepth = budget.AnalysisDepth,
             Budget = budget,
-            CardEvidence = BuildCardEvidenceTable(report.Signals, workspace, boundedLimit),
+            CardEvidence = BuildCardEvidenceTable(report.Signals, workspace, boundedLimit, scryfallUris),
             Discussions = report.Discussions
                 .OrderByDescending(discussion => discussion.Score ?? 0)
                 .ThenByDescending(discussion => discussion.CreatedAt ?? DateTimeOffset.MinValue)
@@ -462,7 +467,8 @@ public sealed partial class DeckRecommendationService
     private static List<CardEvidenceTableRow> BuildCardEvidenceTable(
         IReadOnlyList<CardCorpusSignal> signals,
         DeckWorkspace workspace,
-        int limit)
+        int limit,
+        IReadOnlyDictionary<string, string?> scryfallUris)
     {
         HashSet<string> existing = workspace.Cards
             .Select(card => card.Name)
@@ -507,6 +513,10 @@ public sealed partial class DeckRecommendationService
                         .OrderByDescending(signal => signal.Score)
                         .Select(signal => signal.Uri)
                         .FirstOrDefault(uri => !string.IsNullOrWhiteSpace(uri)),
+                    ScryfallUri = ResolveScryfallUri(
+                        best.CardName,
+                        group.Select(signal => signal.ScryfallUri).FirstOrDefault(uri => !string.IsNullOrWhiteSpace(uri)),
+                        scryfallUris),
                     Rationale = rationales.Count == 0
                         ? $"{best.SignalType} evidence from {best.Source}."
                         : string.Join(" ", rationales)
@@ -550,6 +560,7 @@ public sealed partial class DeckRecommendationService
             Confidence = Math.Clamp(0.35 + (evidence.Count * 0.10) + (sourceAgreement * 0.20), 0, 0.95),
             Price = ReadUsdPrice(card),
             EdhrecRank = card.EdhrecRank,
+            ScryfallUri = card.ScryfallUri,
             Rationale = BuildCorpusRationale(card.Name, role.PrimaryRole, recommendationKind, evidence.Count, goal),
             Evidence = evidence
         };
@@ -683,5 +694,64 @@ public sealed partial class DeckRecommendationService
         return evidenceCount == 0
             ? $"{cardName} is a {role} candidate for {goalText}."
             : $"{cardName} is a {role} candidate for {goalText} with {evidenceCount} corpus signal(s) supporting the {kind} recommendation.";
+    }
+
+    /// <summary>
+    /// Resolves Scryfall pages for source-only card rows without making the source lookup fail on catalog outages.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string?>> ResolveScryfallUrisAsync(
+        IEnumerable<string> cardNames,
+        CancellationToken cancellationToken)
+    {
+        List<string> names = cardNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (names.Count == 0)
+        {
+            return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        IReadOnlyDictionary<string, CardInfo> cards;
+        try
+        {
+            cards = await CardCatalog.GetCardsByNamesAsync(names, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (!IsCancellation(exception))
+        {
+            return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        Dictionary<string, string?> scryfallUris = new(StringComparer.OrdinalIgnoreCase);
+        foreach (KeyValuePair<string, CardInfo> item in cards)
+        {
+            if (string.IsNullOrWhiteSpace(item.Value.ScryfallUri))
+            {
+                continue;
+            }
+
+            scryfallUris[item.Key] = item.Value.ScryfallUri;
+            scryfallUris[item.Value.Name] = item.Value.ScryfallUri;
+        }
+
+        return scryfallUris;
+    }
+
+    /// <summary>
+    /// Chooses the best available Scryfall page for a card row.
+    /// </summary>
+    private static string? ResolveScryfallUri(
+        string cardName,
+        string? preferredUri,
+        IReadOnlyDictionary<string, string?> scryfallUris)
+    {
+        if (!string.IsNullOrWhiteSpace(preferredUri))
+        {
+            return preferredUri;
+        }
+
+        return scryfallUris.TryGetValue(cardName, out string? uri) && !string.IsNullOrWhiteSpace(uri)
+            ? uri
+            : null;
     }
 }

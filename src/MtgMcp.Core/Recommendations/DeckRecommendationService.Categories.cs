@@ -47,6 +47,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 CurrentPrimaryCategory = card.PrimaryCategory,
                 SuggestedPrimaryRole = assignment.PrimaryRole,
                 Tags = assignment.Tags,
+                ScryfallUri = GetSnapshot(card).ScryfallUri,
                 Confidence = assignment.Confidence
             });
 

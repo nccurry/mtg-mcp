@@ -31,6 +31,11 @@ public sealed class GoalCardSuggestion
     public decimal? Price { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking the suggested card.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets the recommendation rationale.
     /// </summary>
     public string Rationale { get; set; } = "";

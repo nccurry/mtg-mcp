@@ -25,11 +25,19 @@ Scryfall, Moxfield, Archidekt, Playgroup.gg, or Commander Spellbook.
 
 ```bash
 dotnet tool install --global Nccurry.MtgMcp
+mtg-mcp --version
 mtg-mcp --smoke
 ```
 
 Configure your MCP client to run the `mtg-mcp` stdio command. Scryfall lookup
 and local deck analysis work without account credentials.
+
+PowerShell note: when invoking the executable by a quoted full path, prefix it
+with the call operator:
+
+```powershell
+& "C:\Users\you\.dotnet\tools\mtg-mcp.exe" --version
+```
 
 Codex example:
 
@@ -65,7 +73,7 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 
 | Area | What the MCP exposes |
 | --- | --- |
-| Card data | Scryfall search, fuzzy card lookup, prints, rulings, suggestions, and Scryfall query syntax guidance. |
+| Card data | Scryfall search with optional format legality filtering, fuzzy card lookup, prints, rulings, and Scryfall query syntax guidance. |
 | Workspaces | Create, import, parse, export, open, validate, summarize, migrate, and update local or Archidekt-backed decks. |
 | Deck editing | Add, remove, move, categorize, annotate, and set quantities; create, preview, list, apply, or delete persisted edit plans. |
 | Moxfield | Import public or unlisted decks as generic local workspaces while preserving boards, tags, and print metadata when available. |
@@ -318,13 +326,24 @@ source to disable public JSON discussion search. EDHTop16 remains opt-in because
 it uses an unofficial cEDH-focused endpoint rather than broad casual Commander
 data.
 
-These tools consume recommendation sources:
+These tools consume recommendation sources or source-backed catalog evidence:
 
+- `commander_get_aggregate_cards`: returns commander card rows grouped by
+  source. It does not merge unlike populations when `source` is omitted.
+- `commander_get_tags`: returns source-backed commander tags and themes.
+- `commander_get_win_condition_evidence`: bundles aggregate cards, tags,
+  commander-containing combos, route classifications, and payoff candidates as
+  structured evidence only.
+- `deck_review_new_card_swaps`: returns new-card swap evidence plus
+  deterministic cut evidence, not automatic edits.
 - `deck_find_exemplar_decks`: returns high-signal source decks.
 - `deck_analyze_commander_trends`: ranks card candidates from enabled sources.
 - `deck_find_lesser_known_cards`: finds lower-known candidates with source evidence.
+- `source_explain_card_signal`: explains one card's source signal in a deck context.
 - `source_search_evidence`: inspects one source by key, such as `topdeck`,
   `spicerack`, or `edhrec`, without making deckbuilding choices.
+- `source_search_reddit_discussions`: returns bounded raw discussion rows and
+  card mentions; Reddit is never treated as prevalence evidence.
 
 TopDeck and Spicerack evidence is tournament and event decklist evidence. It is
 not broad casual Commander inclusion data. Use `bypassCache=true` on source-backed
@@ -344,10 +363,17 @@ secrets:
 Workflow-first tools:
 
 - Start or open workspaces with `workspace_start`, `workspace_list`, and
-  `workspace_open`.
+  `workspace_open`; parse, export, and validate with `workspace_parse_decklist`,
+  `workspace_export`, and `workspace_validate`.
+- Search cards with `card_search`, `card_get`, `card_get_prints`, and
+  `card_get_rulings`.
 - Inspect decks with `deck_summarize`, `deck_analyze_structure`,
   `deck_analyze_mana`, `deck_analyze_consistency`, and
-  `deck_analyze_performance`.
+  `deck_analyze_performance`; use `deck_analyze_land_drop_odds` for the
+  turn-by-turn land-drop question.
+- Inspect combos and win routes with `deck_analyze_combos`,
+  `combo_search_by_card`, `combo_get_details`, `card_classify_win_routes`, and
+  `wincon_find_payoffs`.
 - Research changes with `deck_query_cards`, `deck_review_new_card_swaps`,
   `commander_get_aggregate_cards`, `commander_get_win_condition_evidence`,
   source tools, and Playgroup tools.
@@ -356,6 +382,10 @@ Workflow-first tools:
 - Use provider tools such as `archidekt_copy_workspace`,
   `archidekt_checkpoint_create`, and `playgroup_rank_decks` when the workflow
   needs provider-specific behavior.
+
+Public tool prefixes are `archidekt_`, `card_`, `commander_`, `combo_`,
+`deck_`, `playgroup_`, `server_`, `source_`, `wincon_`, and `workspace_`.
+Compatibility aliases from older 0.x releases are intentionally not exposed.
 
 Useful resources:
 
@@ -528,11 +558,13 @@ task install:local:cleanup
 ```
 
 `task install:local` packs a unique local prerelease version derived from
-`server.json`, such as `0.4.0-local.<date>.<sha>`, updates the global `.NET`
-tool, publishes a self-contained binary, and copies it to the configured local
-MCP command path when one is found. If that executable is locked by a running
-MCP process, it writes a versioned binary beside it and updates the Codex MCP
-config for the next server start.
+`server.json`. For a stable base such as `0.4.0`, the local package uses the
+next patch prerelease form, such as `0.4.1-local.<date>.<sha>`, so it can update
+over the installed stable release. It then updates the global `.NET` tool,
+publishes a self-contained binary, and copies it to the configured local MCP
+command path when one is found. If that executable is locked by a running MCP
+process, it writes a versioned binary beside it and updates the Codex MCP config
+for the next server start.
 
 `task install:local:cleanup` removes old unlocked versioned local binaries while
 keeping the currently configured MCP command path.

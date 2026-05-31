@@ -1,6 +1,6 @@
 # Reference Data
 
-This folder stores source snapshots that are useful for later corpus-provider work but are not loaded by mtg-mcp at runtime.
+This folder stores source snapshots that are useful for later source-provider work but are not loaded by mtg-mcp at runtime.
 
 ## Scryfall Tagger
 

@@ -29,21 +29,24 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             budget,
             refresh,
             cancellationToken).ConfigureAwait(false);
+        List<CardCorpusSignal> aggregateSignals = report.Signals
+            .Where(signal => !string.IsNullOrWhiteSpace(signal.CardName))
+            .OrderBy(signal => signal.Source, StringComparer.OrdinalIgnoreCase)
+            .ThenByDescending(signal => signal.Score)
+            .ThenByDescending(signal => signal.DeckCount ?? 0)
+            .ThenBy(signal => signal.CardName, StringComparer.OrdinalIgnoreCase)
+            .Take(boundedLimit)
+            .ToList();
+        IReadOnlyDictionary<string, string?> scryfallUris = await ResolveScryfallUrisAsync(
+            aggregateSignals.Select(signal => signal.CardName),
+            cancellationToken).ConfigureAwait(false);
 
         CommanderAggregateCardsResult result = new()
         {
             CommanderName = normalizedCommander,
             Theme = normalizedTheme,
             Sources = MergeSourceStatuses(report.Sources),
-            Cards = report.Signals
-                .Where(signal => !string.IsNullOrWhiteSpace(signal.CardName))
-                .OrderBy(signal => signal.Source, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(signal => signal.Score)
-                .ThenByDescending(signal => signal.DeckCount ?? 0)
-                .ThenBy(signal => signal.CardName, StringComparer.OrdinalIgnoreCase)
-                .Take(boundedLimit)
-                .Select(BuildAggregateRow)
-                .ToList()
+            Cards = aggregateSignals.Select(signal => BuildAggregateRow(signal, scryfallUris)).ToList()
         };
         result.Notes.AddRange(report.Notes);
         if (!string.IsNullOrWhiteSpace(normalizedTheme) && result.Cards.Count == 0)
@@ -315,12 +318,13 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 ReleasedAt = suggestion.ReleasedAt,
                 Set = suggestion.Set,
                 Price = suggestion.Price,
+                ScryfallUri = candidateInfo?.ScryfallUri ?? suggestion.ScryfallUri,
                 Score = suggestion.Score,
                 Rationale = suggestion.Rationale,
                 CutCandidates = BuildCutEvidence(workspace, intent, candidateRole, candidateInfo, suggestion.Price)
                     .Take(5)
                     .ToList(),
-                Metadata = BuildMetadata("scryfall", "recent-card-swap-review", candidateInfo?.ScryfallUri, confidence: 0.70)
+                Metadata = BuildMetadata("scryfall", "recent-card-swap-review", candidateInfo?.ScryfallUri ?? suggestion.ScryfallUri, confidence: 0.70)
             });
         }
 
@@ -533,7 +537,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// <summary>
     /// Converts one corpus signal into a public commander aggregate row.
     /// </summary>
-    private static CommanderAggregateCardRow BuildAggregateRow(CardCorpusSignal signal)
+    private static CommanderAggregateCardRow BuildAggregateRow(
+        CardCorpusSignal signal,
+        IReadOnlyDictionary<string, string?> scryfallUris)
     {
         return new CommanderAggregateCardRow
         {
@@ -545,6 +551,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             InclusionRate = signal.InclusionRate,
             SynergyScore = signal.SynergyScore,
             Score = signal.Score,
+            ScryfallUri = ResolveScryfallUri(signal.CardName, signal.ScryfallUri, scryfallUris),
             Metadata = BuildMetadata(signal.Source, "commander-aggregate-card", signal.Uri, signal.Score)
         };
     }
@@ -607,6 +614,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 DuplicateEffectDensity = duplicateDensity,
                 ThemeMismatch = themeMismatch,
                 PriceDelta = priceDelta,
+                ScryfallUri = GetSnapshot(card).ScryfallUri,
                 ProtectedCardWarnings = protectedWarnings,
                 Score = Math.Clamp(score, 0, 1)
             };

@@ -92,17 +92,42 @@ This layer is an abstract scenario simulator, not a rules engine. It should make
 
 ## MCP Tool Shape
 
-Implemented tools are high-level and deckbuilder-facing:
+The public MCP surface is evidence-first and workflow-oriented. Tools return
+structured rows, counts, labels, source metadata, assumptions, warnings, and
+deterministic sort keys. The calling LLM is expected to do the judgment and
+synthesis for the user.
 
-- `deck_simulate_goldfish`
-- `deck_project_board_state`
-- `deck_estimate_win_turn`
-- `archidekt_compare_goldfish`
-- `deck_analyze_performance`
-- `deck_plan_compare_performance`
-- `deck_score_cards_for_playgroup_meta`
+Core workflow groups are:
 
-These tools return compact structured summaries that an LLM can explain without guessing. Results include the analysis profile, simulation count, seed, assumptions, confidence, warnings, and key metrics.
+- Card facts: `card_search`, `card_get`, `card_get_prints`, and
+  `card_get_rulings`.
+- Workspace lifecycle: `workspace_start`, `workspace_list`, `workspace_open`,
+  `workspace_parse_decklist`, `workspace_export`, and `workspace_validate`.
+- Deck structure and simulation: `deck_summarize`,
+  `deck_analyze_structure`, `deck_analyze_mana`,
+  `deck_analyze_consistency`, `deck_analyze_land_drop_odds`,
+  `deck_analyze_performance`, `deck_simulate_goldfish`,
+  `deck_project_board_state`, `deck_estimate_win_turn`, and
+  `deck_plan_compare_performance`.
+- Combo and win-condition evidence: `deck_analyze_combos`,
+  `combo_search_by_card`, `combo_get_details`,
+  `card_classify_win_routes`, `wincon_find_payoffs`,
+  `commander_get_aggregate_cards`, `commander_get_tags`, and
+  `commander_get_win_condition_evidence`.
+- Source-backed recommendation evidence: `deck_review_new_card_swaps`,
+  `deck_query_cards`, `deck_find_lesser_known_cards`,
+  `deck_find_exemplar_decks`, `deck_analyze_commander_trends`,
+  `source_list`, `source_search_evidence`,
+  `source_search_reddit_discussions`, and
+  `source_explain_card_signal`.
+- Provider-local evidence and actions: `archidekt_*` provider tools and
+  `playgroup_*` tools, including `deck_score_cards_for_playgroup_meta` for
+  Playgroup.gg-scoped pressure.
+
+Performance results include the selected analysis or simulation profile,
+simulation count, seed, assumptions, confidence, warnings, and key metrics.
+Source-backed results preserve source, source kind, source URI, cache status,
+retrieval time, confidence, determinism, and notes where available.
 
 No external matchup simulation tools are currently exposed.
 

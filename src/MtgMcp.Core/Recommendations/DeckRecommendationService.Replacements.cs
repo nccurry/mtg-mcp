@@ -473,6 +473,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             CurrentPrice = currentPrice,
             CandidatePrice = candidatePrice,
             EstimatedSavings = estimatedSavings,
+            ReplaceCardScryfallUri = GetSnapshot(currentCard).ScryfallUri,
+            WithCardScryfallUri = candidate.ScryfallUri,
             Rationale = $"{candidate.Name} fits {currentRole.PrimaryRole} at score {score:0.00}."
         };
     }

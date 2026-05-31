@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
 using MtgMcp.App;
 using MtgMcp.Core;
 
@@ -866,6 +867,20 @@ public sealed class McpSurfaceTests
         host.Services.GetRequiredService<IOptions<MtgMcpOptions>>()
             .Value.DataDir.Should()
             .NotBeNullOrWhiteSpace();
+    }
+
+    /// <summary>
+    /// Verifies that MCP initialization includes recommendation presentation guidance.
+    /// </summary>
+    [Fact]
+    public void HostBuild_ConfiguresRecommendationPresentationInstructions()
+    {
+        using IHost host = MtgMcpHost.Build(["--smoke"]);
+
+        McpServerOptions options = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value;
+
+        options.ServerInstructions.Should().Be(MtgMcpHost.RecommendationPresentationInstructions);
+        options.ServerInstructions.Should().Contain("Scryfall URI");
     }
 
     /// <summary>

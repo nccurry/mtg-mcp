@@ -199,6 +199,11 @@ public sealed class DeckQueryCandidate
     public decimal? Price { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking the candidate.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets concise fit reasons.
     /// </summary>
     public List<string> Reasons { get; set; } = [];
@@ -233,6 +238,11 @@ public sealed class DeckQueryRejectedCandidate
     /// Gets or sets the card price when available.
     /// </summary>
     public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for rejected cards when catalog metadata was available.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
 
     /// <summary>
     /// Gets or sets exact rejection reasons.

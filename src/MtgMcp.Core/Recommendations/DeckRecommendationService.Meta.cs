@@ -107,6 +107,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 Tags = role.Tags,
                 FitScore = Math.Clamp(0.60 + metaCard.InclusionRate + metaCard.SynergyScore, 0, 1),
                 Price = ReadUsdPrice(card),
+                ScryfallUri = card.ScryfallUri,
                 Rationale = $"{card.Name} is a popular {metaCard.Category} candidate from {report.Source}."
             });
             plan.Operations.Add(CreateAddOperation(card, role.PrimaryRole, $"Add popular card from {report.Source}: {metaCard.Category}."));

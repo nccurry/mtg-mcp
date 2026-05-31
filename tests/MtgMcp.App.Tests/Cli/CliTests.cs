@@ -581,9 +581,30 @@ public sealed class CliTests
         );
 
         exitCode.Should().Be(0);
-        output.ToString().Should().Contain("mtg-mcp [--smoke]");
+        output.ToString().Should().Contain("mtg-mcp [--smoke|--version]");
         output.ToString().Should().Contain("auth archidekt");
         output.ToString().Should().Contain("auth playgroup");
+        error.ToString().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that version output does not start the MCP host.
+    /// </summary>
+    [Fact]
+    public async Task CliRunAsync_PrintsVersion()
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+
+        int exitCode = await MtgMcpCli.RunAsync(
+            ["--version"],
+            output,
+            error,
+            _ => throw new InvalidOperationException("Host should not be built.")
+        );
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().StartWith("mtg-mcp ");
         error.ToString().Should().BeEmpty();
     }
 

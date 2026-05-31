@@ -166,10 +166,14 @@ public sealed partial class DeckIntelligenceTests
 
         result.Cards.Should().Contain(candidate => candidate.CardName == "Geth's Grimoire");
         result.Cards.Should().Contain(candidate => candidate.CardName == "Syphon Mind");
+        result.Cards.Should().Contain(candidate =>
+            candidate.CardName == "Geth's Grimoire"
+            && candidate.ScryfallUri!.EndsWith(Uri.EscapeDataString("Geth's Grimoire"), StringComparison.Ordinal));
         result.Cards.Should().NotContain(candidate => candidate.CardName == "Zulaport Cutthroat");
         result.Rejected.Should().Contain(rejected =>
             rejected.CardName == "Zulaport Cutthroat"
-            && rejected.Reasons.Any(reason => reason.Contains("Excluded tag", StringComparison.OrdinalIgnoreCase)));
+            && rejected.Reasons.Any(reason => reason.Contains("Excluded tag", StringComparison.OrdinalIgnoreCase))
+            && rejected.ScryfallUri!.EndsWith(Uri.EscapeDataString("Zulaport Cutthroat"), StringComparison.Ordinal));
         result.Rejected.Should().Contain(rejected =>
             rejected.CardName == "Torment of Hailfire"
             && rejected.Reasons.Any(reason => reason.Contains("Excluded role", StringComparison.OrdinalIgnoreCase)));
@@ -211,6 +215,9 @@ public sealed partial class DeckIntelligenceTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Waste Not");
+        result.Suggestions.Should().Contain(suggestion =>
+            suggestion.CardName == "Waste Not"
+            && suggestion.ScryfallUri!.EndsWith(Uri.EscapeDataString("Waste Not"), StringComparison.Ordinal));
         result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Zulaport Cutthroat");
         result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Torment of Hailfire");
         result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Zulaport Cutthroat");
@@ -249,7 +256,9 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         catalog.SearchQueries.Should().Contain(query => query.Contains("RecentCards:2026-01-01", StringComparison.OrdinalIgnoreCase));
-        result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Season of Loss");
+        result.Suggestions.Should().Contain(suggestion =>
+            suggestion.CardName == "Season of Loss"
+            && suggestion.ScryfallUri!.EndsWith(Uri.EscapeDataString("Season of Loss"), StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -284,6 +293,7 @@ public sealed partial class DeckIntelligenceTests
                         OracleText = "Each other player discards a card. You draw a card for each card discarded this way.",
                         ManaValue = 4,
                         ColorIdentity = ["B"],
+                        ScryfallUri = "https://scryfall.test/card/Syphon%20Mind",
                         Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
                     }
                 },
@@ -301,7 +311,11 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         NewCardSwapCandidate candidate = result.Candidates.Should().ContainSingle(card => card.CardName == "Season of Loss").Subject;
-        candidate.CutCandidates.Should().Contain(cut => cut.CardName == "Syphon Mind" && cut.Reasons.Count > 0);
+        candidate.ScryfallUri.Should().EndWith(Uri.EscapeDataString("Season of Loss"));
+        candidate.CutCandidates.Should().Contain(cut =>
+            cut.CardName == "Syphon Mind"
+            && cut.ScryfallUri == "https://scryfall.test/card/Syphon%20Mind"
+            && cut.Reasons.Count > 0);
         result.Notes.Should().Contain(note => note.Contains("role overlap", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -628,7 +642,9 @@ public sealed partial class DeckIntelligenceTests
             weights: null,
             TestContext.Current.CancellationToken);
 
-        result.Suggestions.Should().ContainSingle();
+        ReplacementSuggestion suggestion = result.Suggestions.Should().ContainSingle().Subject;
+        suggestion.WithCardScryfallUri.Should().EndWith(Uri.EscapeDataString("Arcane Signet"));
+        suggestion.ReplaceCardScryfallUri.Should().EndWith(Uri.EscapeDataString("Mana Crypt"));
         result.Plan.Operations.Should().HaveCount(2);
         result.Plan.Operations[0].Operation.Should().Be(DeckEditOperations.RemoveCard);
         result.Plan.Operations[1].Operation.Should().Be(DeckEditOperations.AddCard);
@@ -708,7 +724,9 @@ public sealed partial class DeckIntelligenceTests
             weights: new ReplacementWeights { Role = 2, Power = 1, Price = 1 },
             TestContext.Current.CancellationToken);
 
-        result.Suggestions.Should().ContainSingle().Which.WithCard.Should().Be("Phyrexian Arena");
+        ReplacementSuggestion suggestion = result.Suggestions.Should().ContainSingle().Subject;
+        suggestion.WithCard.Should().Be("Phyrexian Arena");
+        suggestion.WithCardScryfallUri.Should().EndWith(Uri.EscapeDataString("Phyrexian Arena"));
         result.Plan.Operations.Should().Contain(operation => operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Phyrexian Arena");
     }
 

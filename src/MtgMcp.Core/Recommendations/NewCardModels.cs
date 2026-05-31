@@ -72,6 +72,11 @@ public sealed class NewCardSuggestion
     public decimal? Price { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking the suggested card.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets the fit score.
     /// </summary>
     public double Score { get; set; }
@@ -160,6 +165,11 @@ public sealed class NewCardSwapCandidate
     public decimal? Price { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking the candidate.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets deterministic candidate score.
     /// </summary>
     public double Score { get; set; }
@@ -219,6 +229,11 @@ public sealed class NewCardCutEvidence
     /// Gets or sets current card price minus candidate price.
     /// </summary>
     public decimal? PriceDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page for linking the existing cut candidate.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
 
     /// <summary>
     /// Gets or sets protected-card warnings.

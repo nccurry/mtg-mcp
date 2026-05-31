@@ -15,7 +15,7 @@ public sealed partial class DeckIntelligenceTests
         /// </summary>
         private static CardInfo CreateCard(string name)
         {
-            return name switch
+            CardInfo card = name switch
             {
                 "Arcane Signet" => new CardInfo
                 {
@@ -326,6 +326,9 @@ public sealed partial class DeckIntelligenceTests
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.25" }
                 }
             };
+
+            card.ScryfallUri ??= $"https://scryfall.test/card/{Uri.EscapeDataString(card.Name)}";
+            return card;
         }
     }
 }

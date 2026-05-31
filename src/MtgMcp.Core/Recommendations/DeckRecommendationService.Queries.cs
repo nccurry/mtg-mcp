@@ -127,6 +127,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     rejected.Add(new DeckQueryRejectedCandidate
                     {
                         CardName = searchResult.Name,
+                        ScryfallUri = searchResult.ScryfallUri,
                         Reasons = ["Card details were not available from the catalog."]
                     });
                     continue;
@@ -261,6 +262,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     rejected.Add(new DeckQueryRejectedCandidate
                     {
                         CardName = searchResult.Name,
+                        ScryfallUri = searchResult.ScryfallUri,
                         Reasons = ["Card details were not available from the catalog."]
                     });
                     continue;

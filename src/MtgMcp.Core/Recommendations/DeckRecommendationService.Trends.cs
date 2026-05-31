@@ -151,6 +151,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             localFit.ReleasedAt = releasedAt;
             localFit.Set = set;
             localFit.Price = price;
+            localFit.ScryfallUri = item.Value.ScryfallUri ?? providerSuggestion.ScryfallUri;
             localFit.Score = Math.Max(localFit.Score, providerSuggestion.Score);
             localFit.Rationale = string.IsNullOrWhiteSpace(providerSuggestion.Rationale)
                 ? localFit.Rationale
@@ -230,6 +231,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             ReleasedAt = searchResult?.ReleasedAt ?? card.ReleasedAt,
             Set = searchResult?.Set ?? card.Set,
             Price = ReadUsdPrice(card),
+            ScryfallUri = card.ScryfallUri ?? searchResult?.ScryfallUri,
             Score = Math.Clamp((themeScore * 0.40) + (roleScore * 0.35) + (rankScore * 0.25), 0, 1),
             Rationale = $"{card.Name} is a recent {role.PrimaryRole} candidate for {workspace.Name}."
         };

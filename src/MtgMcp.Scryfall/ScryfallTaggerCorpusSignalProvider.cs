@@ -140,6 +140,7 @@ public sealed class ScryfallTaggerCorpusSignalProvider : ICorpusSignalProvider
                     ReleasedAt = card?.ReleasedAt,
                     EdhrecRank = card?.EdhrecRank,
                     Uri = card?.ScryfallUri ?? BuildScryfallSearchUri(searchQuery),
+                    ScryfallUri = card?.ScryfallUri,
                     Rationale = BuildRationale(cardName, rule)
                 });
             }

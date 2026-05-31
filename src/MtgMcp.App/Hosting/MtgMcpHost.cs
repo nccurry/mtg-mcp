@@ -20,6 +20,12 @@ namespace MtgMcp.App;
 public static class MtgMcpHost
 {
     /// <summary>
+    /// Guides MCP clients to use Scryfall links included on recommendation rows.
+    /// </summary>
+    public const string RecommendationPresentationInstructions =
+        "When presenting card recommendations, link card names to their Scryfall URI when available.";
+
+    /// <summary>
     /// Builds the args.
     /// </summary>
     public static IHost Build(string[] args)
@@ -112,7 +118,10 @@ public static class MtgMcpHost
         builder.Services.AddDecklistCorpusSources();
 
         builder
-            .Services.AddMcpServer()
+            .Services.AddMcpServer(options =>
+            {
+                options.ServerInstructions = RecommendationPresentationInstructions;
+            })
             .WithStdioServerTransport()
             .WithToolsFromAssembly()
             .WithResourcesFromAssembly()

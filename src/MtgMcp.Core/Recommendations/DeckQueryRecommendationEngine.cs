@@ -83,6 +83,7 @@ internal static class DeckQueryRecommendationEngine
                 Role = role.PrimaryRole,
                 Tags = role.Tags,
                 Price = price,
+                ScryfallUri = card.ScryfallUri,
                 Reasons = reasons
             };
     }
@@ -120,6 +121,7 @@ internal static class DeckQueryRecommendationEngine
             RankScore = rankScore,
             PriceScore = priceScore,
             Price = price,
+            ScryfallUri = card.ScryfallUri,
             Reasons = reasons,
             Rationale = string.IsNullOrWhiteSpace(goal)
                 ? $"{card.Name} matched the supplied query and deck constraints."

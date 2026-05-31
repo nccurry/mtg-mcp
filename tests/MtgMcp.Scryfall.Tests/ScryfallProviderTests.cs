@@ -67,8 +67,10 @@ public sealed class ScryfallProviderTests
         first.Should().ContainSingle();
         first[0].CardName.Should().Be("Fresh Token Maker");
         first[0].Tags.Should().Contain(DeckTags.Tokens);
+        first[0].ScryfallUri.Should().Be("https://scryfall.test/card/abc/Fresh%20Token%20Maker");
         second.Should().ContainSingle();
         second[0].Tags.Should().NotContain("mutated");
+        second[0].ScryfallUri.Should().Be("https://scryfall.test/card/abc/Fresh%20Token%20Maker");
         catalog.SearchCalls.Should().Be(1);
         catalog.LastSearchQuery.Should().Contain("legal:commander");
         catalog.LastSearchQuery.Should().Contain("date>=2026-01-01");
@@ -118,6 +120,7 @@ public sealed class ScryfallProviderTests
         second.PopularCards[0].EdhrecRank.Should().Be(250);
         second.PopularCards[0].InclusionRate.Should().Be(0);
         second.PopularCards[0].SynergyScore.Should().Be(0);
+        second.PopularCards[0].ScryfallUri.Should().Be("https://scryfall.test/card/clu/Blood%20Artist");
         second.PopularCards.Should().Contain(card => card.Category == DeckRoles.Draw);
         second.Notes.Should().Contain(note => note.Contains("does not expose commander-specific", StringComparison.OrdinalIgnoreCase));
         catalog.SearchCalls.Should().Be(1);

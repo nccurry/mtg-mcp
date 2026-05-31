@@ -199,6 +199,11 @@ public sealed class PlaygroupMetaCandidateScore
     public decimal? Price { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall card page for linking the scored candidate.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
     /// Gets or sets whether the card appears on the current Commander Game Changer list.
     /// </summary>
     public bool IsGameChanger { get; set; }
