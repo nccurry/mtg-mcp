@@ -73,8 +73,8 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 | Playgroup.gg | Check auth, get playgroups and decks, list playgroup users/decks, list user decks, rank decks by power, Elo, win rate, competitive rating, games played, or average win turn, and score candidate cards against local-meta pressure. |
 | Analysis | Mana base, curve, colors, categories, cost, legality, draw odds, consistency, best practices, Commander bracket, card facets, and explicit facet predicates. |
 | Simulation | Goldfish runs, projected board states, win-turn estimates, deterministic performance analysis, plan comparisons, and Archidekt reference comparisons. |
-| Recommendations | New releases, Commander meta context, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, raw source evidence, and Reddit discussion evidence. |
-| Combos | Completed combos, near-misses, and combo pressure using Commander Spellbook or local heuristics. |
+| Recommendations | New-card swap evidence, Commander aggregate cards/tags, win-condition evidence, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, raw source evidence, and Reddit discussion evidence. |
+| Combos | Catalog-backed combo search/details, deck combo analysis, route labels, terminal/needs-payoff flags, near-misses, and clearly separated local heuristics. |
 | Deck intent | Optional human-readable deck goals, budgets, local meta, role targets, simulation profiles, win routes, preferences, avoided cards, and protected cards. |
 
 Most users can ask naturally instead of naming tools:
@@ -91,7 +91,7 @@ Moxfield role tags import as secondary workspace categories. When copied to
 Archidekt, those tag categories are marked as not included in deck totals so
 Mainboard, Commander, and other board categories still control legality and
 deck size. Existing Archidekt copies can be repaired or refreshed with
-`copy_workspace_to_archidekt` using `replaceExistingDestination=true`.
+`archidekt_copy_workspace` using `replaceExistingDestination=true`.
 
 ```text
 Find budget replacements for cards over $20 and preview the plan before changing anything.
@@ -181,14 +181,30 @@ mtg-mcp auth archidekt `
   --password "..."
 ```
 
+You can create a Playgroup credentials file the same way:
+
+```bash
+mtg-mcp auth playgroup \
+  --credentials-file "$HOME/.mtg-mcp/playgroup.json" \
+  --api-key "..."
+```
+
+PowerShell equivalent:
+
+```powershell
+mtg-mcp auth playgroup `
+  --credentials-file "$env:USERPROFILE\.mtg-mcp\playgroup.json" `
+  --api-key "..."
+```
+
 Supported environment settings. In rows with slashes, repeat the full prefix for
 each abbreviated suffix.
 
 | Setting | Use |
 | --- | --- |
 | `MTGMCP__OPERATION_MODE` | `read-only`, `plan`, or `apply`. Set explicitly; the app default is `apply`. |
-| `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, and corpus cache. |
-| `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Corpus depth: `minimal`, `balanced`, or `best`. |
+| `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, and source-fact cache. |
+| `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Recommendation source depth: `minimal`, `balanced`, or `best`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MODE` | Source-fact cache: `persisted`, `memory`, or `off`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` / `MAX_ENTRIES` | Persisted cache limits. |
 | `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` / `SCRYFALL_SEARCH` / `COMMANDERSPELLBOOK` / `DECK_SEARCH` / `DECK_DETAILS` / `CORPUS_SIGNALS` | Per-source cache TTLs such as `24h` or `7d`. |
@@ -207,9 +223,8 @@ each abbreviated suffix.
 ### Recommendation sources
 
 Recommendation source providers give deckbuilding tools source-backed evidence
-beyond the local decklist. The MCP tool and resource names still use `corpus`
-for compatibility, so `list_corpus_sources` or `mtg://corpus/sources` reports
-the current source status:
+beyond the local decklist. Use `source_list` or `mtg://sources/status` to
+report the current source status:
 
 - `available`: the provider can be queried.
 - `missing-config`: the provider is implemented, but needs a configured key.
@@ -265,12 +280,13 @@ decklists. Get a key from TopDeck.gg and keep visible attribution when using
 its data in user-facing output. Spicerack uses the documented public decklist
 database API for recent tournament results and decklist text.
 
-EDHREC is an opt-in unofficial source for broad Commander aggregate inclusion
-and synergy evidence. It uses structured JSON pages only, never HTML scraping
-or browser automation, and remains disabled until explicitly allowed:
+EDHREC is enabled by default as an unofficial source for broad Commander
+aggregate inclusion and synergy evidence. It uses structured JSON pages only,
+never HTML scraping or browser automation. Set `AllowUnofficialApi` to `false`
+to exclude it:
 
 ```powershell
-$env:MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API = "true"
+$env:MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API = "false"
 ```
 
 Equivalent `mtg-mcp.json`:
@@ -281,7 +297,7 @@ Equivalent `mtg-mcp.json`:
     "Intelligence": {
       "Sources": {
         "Edhrec": {
-          "AllowUnofficialApi": true
+          "AllowUnofficialApi": false
         }
       }
     }
@@ -291,18 +307,27 @@ Equivalent `mtg-mcp.json`:
 
 EDHREC evidence is cached, attribution-sensitive, and not backed by a stable
 public API contract. Treat it as popularity and synergy context, not tournament
-performance or source decklist evidence.
+performance or source decklist evidence. Commander theme filters are used only
+when a source exposes deterministic theme slugs; other sources return an
+`unsupported-theme` note instead of silently falling back to broader rows.
+
+Reddit discussion evidence is also enabled by default through bounded public
+JSON lookups over Commander-focused subreddits. Configure a bearer token to use
+Reddit's OAuth API path, or set `AllowUnofficialApi` to `false` for the Reddit
+source to disable public JSON discussion search. EDHTop16 remains opt-in because
+it uses an unofficial cEDH-focused endpoint rather than broad casual Commander
+data.
 
 These tools consume recommendation sources:
 
-- `find_top_exemplar_decks`: returns high-signal source decks.
-- `analyze_commander_trends`: ranks card candidates from enabled sources.
-- `find_lesser_known_cards`: finds lower-known candidates with source evidence.
-- `search_corpus_evidence`: inspects one source by key, such as `topdeck`,
+- `deck_find_exemplar_decks`: returns high-signal source decks.
+- `deck_analyze_commander_trends`: ranks card candidates from enabled sources.
+- `deck_find_lesser_known_cards`: finds lower-known candidates with source evidence.
+- `source_search_evidence`: inspects one source by key, such as `topdeck`,
   `spicerack`, or `edhrec`, without making deckbuilding choices.
 
 TopDeck and Spicerack evidence is tournament and event decklist evidence. It is
-not broad casual Commander inclusion data. Use `refresh=true` on source-backed
+not broad casual Commander inclusion data. Use `bypassCache=true` on source-backed
 recommendation tools to bypass fresh source-fact cache entries for one call.
 
 Use these resources inside an MCP client to verify setup without exposing
@@ -310,34 +335,53 @@ secrets:
 
 - `mtg://config/effective`
 - `mtg://server/info`
-- `mtg://archidekt/auth-status`
-- `mtg://playgroup/auth-status`
-- `mtg://corpus/sources`
+- `mtg://providers/archidekt/auth-status`
+- `mtg://providers/playgroup/auth-status`
+- `mtg://sources/status`
 
 ## MCP Surface
 
+Workflow-first tools:
+
+- Start or open workspaces with `workspace_start`, `workspace_list`, and
+  `workspace_open`.
+- Inspect decks with `deck_summarize`, `deck_analyze_structure`,
+  `deck_analyze_mana`, `deck_analyze_consistency`, and
+  `deck_analyze_performance`.
+- Research changes with `deck_query_cards`, `deck_review_new_card_swaps`,
+  `commander_get_aggregate_cards`, `commander_get_win_condition_evidence`,
+  source tools, and Playgroup tools.
+- Preview edits with `deck_plan_create`, `deck_plan_preview`, and
+  `deck_plan_compare_performance`; apply only with `deck_plan_apply`.
+- Use provider tools such as `archidekt_copy_workspace`,
+  `archidekt_checkpoint_create`, and `playgroup_rank_decks` when the workflow
+  needs provider-specific behavior.
+
 Useful resources:
 
-- Deck data: `mtg://deck/{deckId}`, `mtg://deck/{deckId}/summary`,
-  `mtg://deck/{deckId}/intent`.
+- Workspace data: `mtg://workspace/{workspaceId}`,
+  `mtg://workspace/{workspaceId}/summary`,
+  `mtg://workspace/{workspaceId}/intent`.
 - Usage guides: `mtg://scryfall/syntax-cheatsheet`,
   `mtg://formats/{format}/deck-rules`, `mtg://usage/workspace-selection`,
   `mtg://usage/operation-modes`, `mtg://usage/deck-intent`.
-- Status: `mtg://config/effective`, `mtg://corpus/sources`,
-  `mtg://server/info`, `mtg://archidekt/auth-status`,
-  `mtg://playgroup/auth-status`.
+- Status: `mtg://config/effective`, `mtg://sources/status`,
+  `mtg://server/info`, `mtg://providers/{provider}/auth-status`.
 
-Built-in prompts cover brewing, tuning, budget replacements, cost reduction,
-power increases or reductions, Commander bracket reduction, mana-base work,
-consistency, local meta tuning, new releases, goldfishing, goal-focused
-packages, and rules/rulings checks.
+Built-in prompts cover brewing, tuning, Commander common-card and win-condition
+evidence, cost reduction, power increases or reductions, Commander bracket
+reduction, mana-base work, land-drop risk, consistency, local meta tuning,
+new-card swaps, missing combo pieces, goldfishing, goal-focused packages, and
+rules/rulings checks.
 
-For Playgroup-aware tuning, `score_cards_for_playgroup_meta` scores explicit
-candidate names, or cards in excluded workspace categories, with visible factor
-scores for plan fit, deterministic performance delta, local-meta coverage,
-self-harm, price/bracket constraints, and evidence confidence. Playgroup decks
-are ranked from fetched game participations; Archidekt decklists are imported
-read-only when Playgroup exposes an Archidekt URL.
+For Playgroup-aware tuning, `deck_score_cards_for_playgroup_meta` scores
+explicit candidate names with `candidateSource=explicit-cards`, or cards in
+excluded workspace categories with `candidateSource=excluded-workspace-cards`,
+with visible factor scores for plan fit, deterministic performance delta,
+local-meta coverage, self-harm, price/bracket constraints, and evidence
+confidence. Playgroup decks are ranked from fetched game participations;
+Archidekt decklists are imported read-only when Playgroup exposes an Archidekt
+URL.
 
 Simulation results include the resolved simulation profile, why that profile was
 chosen, route evidence, and warnings when a claim comes from fallback
@@ -347,8 +391,8 @@ for the compact profile, deck-intent, and route syntax reference.
 ## Deck Intent
 
 Deck intent is optional text stored in a workspace description, and in the
-Archidekt deck description when writeback is enabled. Use `suggest_deck_intent`,
-`get_deck_intent`, `set_deck_intent`, and `clear_deck_intent`.
+Archidekt deck description when writeback is enabled. Use `deck_intent_suggest`,
+`deck_intent_get`, `deck_intent_set`, and `deck_intent_clear`.
 
 Small example:
 
@@ -410,14 +454,14 @@ Card-only edit plans are applied as a single batch. Commander deck-size checks
 use the final included card count, so equal add/remove swaps can add before
 cutting as long as the finished deck remains legal.
 
-Corpus recommendations query structured APIs on demand and cache source facts
-under `DataDir/corpus-cache`. The cache stores source facts, not final
-recommendations or prompt rationale. Pass `refresh=true` to supported tools to
-bypass fresh cache entries for one call.
+Source-backed recommendations query structured APIs on demand and cache source
+facts under the recommendation source cache directory. The cache stores source
+facts, not final recommendations or prompt rationale. Pass `bypassCache=true`
+to supported tools to bypass fresh cache entries for one call.
 
-The corpus policy is API-only: official/documented APIs and explicitly allowed
+The source policy is API-only: official/documented APIs and explicitly allowed
 unofficial structured JSON endpoints may be used, but mtg-mcp does not scrape
-HTML, parse page markup, or use browser automation for corpus data.
+HTML, parse page markup, or use browser automation for source data.
 
 ## Development
 
@@ -484,7 +528,7 @@ task install:local:cleanup
 ```
 
 `task install:local` packs a unique local prerelease version derived from
-`server.json`, such as `0.3.0-local.<date>.<sha>`, updates the global `.NET`
+`server.json`, such as `0.4.0-local.<date>.<sha>`, updates the global `.NET`
 tool, publishes a self-contained binary, and copies it to the configured local
 MCP command path when one is found. If that executable is locked by a running
 MCP process, it writes a versioned binary beside it and updates the Codex MCP

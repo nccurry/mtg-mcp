@@ -36,19 +36,19 @@ public sealed class McpE2ETests
 
         tools.Select(tool => tool.Name).Should().Contain(
         [
-            "search_cards",
-            "start_deck_workspace",
-            "add_card",
-            "analyze_deck",
-            "analyze_deck_performance",
-            "compare_plan_performance",
-            "compare_archidekt_goldfish",
-            "get_server_info"
+            "card_search",
+            "workspace_start",
+            "deck_add_card",
+            "deck_analyze_structure",
+            "deck_analyze_performance",
+            "deck_plan_compare_performance",
+            "archidekt_compare_goldfish",
+            "server_get_info"
         ]);
 
         JsonElement serverInfo = await CallJsonAsync(
             session.Client,
-            "get_server_info",
+            "server_get_info",
             new Dictionary<string, object?>());
         GetString(serverInfo, "assemblyName").Should().Be("MtgMcp.App");
         GetString(serverInfo, "operationMode").Should().Be("apply");
@@ -73,7 +73,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -84,7 +84,7 @@ public sealed class McpE2ETests
 
         JsonElement change = await CallJsonAsync(
             session.Client,
-            "add_card",
+            "deck_add_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -94,11 +94,11 @@ public sealed class McpE2ETests
             });
         string export = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement analysis = await CallJsonAsync(
             session.Client,
-            "analyze_deck",
+            "deck_analyze_structure",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
 
         GetString(change, "persistence").Should().Be("local-only");
@@ -134,9 +134,10 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "import_decklist",
+            "workspace_start",
             new Dictionary<string, object?>
             {
+                ["mode"] = "local",
                 ["name"] = "E2E Performance",
                 ["format"] = "commander",
                 ["decklist"] = """
@@ -148,7 +149,7 @@ public sealed class McpE2ETests
 
         JsonElement analysis = await CallJsonAsync(
             session.Client,
-            "analyze_deck_performance",
+            "deck_analyze_performance",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -159,7 +160,7 @@ public sealed class McpE2ETests
             });
         JsonElement planResult = await CallJsonAsync(
             session.Client,
-            "create_deck_plan_from_explicit_changes",
+            "deck_plan_create",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -170,7 +171,7 @@ public sealed class McpE2ETests
         string planId = GetString(planResult, "planId");
         JsonElement comparison = await CallJsonAsync(
             session.Client,
-            "compare_plan_performance",
+            "deck_plan_compare_performance",
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
@@ -180,11 +181,11 @@ public sealed class McpE2ETests
             });
         JsonElement goldfishComparison = await CallJsonAsync(
             session.Client,
-            "compare_archidekt_goldfish",
+            "archidekt_compare_goldfish",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
-                ["archidektDeckUrl1"] = "456",
+                ["deckIdOrUrl1"] = "456",
                 ["targetTurn"] = 3,
                 ["simulations"] = 100,
                 ["seed"] = 2026
@@ -232,7 +233,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -246,14 +247,14 @@ public sealed class McpE2ETests
             ["workspaceId"] = workspaceId,
             ["goal"] = "Improve Tinybones draw/discard engine",
             ["scryfallQuery"] = query,
-            ["count"] = 3,
+            ["limit"] = 3,
             ["maxPrice"] = 10,
             ["requiredRoles"] = new[] { "Draw" },
             ["requiredTags"] = new[] { "Discard" },
             ["excludedRoles"] = new[] { "Wincons" },
             ["excludedTags"] = new[] { "Aristocrats", "Drain" }
         };
-        JsonElement data = await CallJsonAsync(session.Client, "query_cards_for_deck", args);
+        JsonElement data = await CallJsonAsync(session.Client, "deck_query_cards", args);
         JsonElement gethsGrimoire = FindNamed(GetArray(data, "cards"), "Geth's Grimoire", "cardName");
         JsonElement rejected = FindNamed(GetArray(data, "rejected"), "Zulaport Cutthroat", "cardName");
         JsonElement rejectedWincon = FindNamed(GetArray(data, "rejected"), "Torment of Hailfire", "cardName");
@@ -270,7 +271,7 @@ public sealed class McpE2ETests
 
         JsonElement planResult = await CallJsonAsync(
             session.Client,
-            "create_deck_plan_from_explicit_changes",
+            "deck_plan_create",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -279,7 +280,7 @@ public sealed class McpE2ETests
                 ["addCards"] = new[] { ExplicitCardChange("Geth's Grimoire", 1, "Draw", "Caller-selected draw/discard engine.") }
             });
         JsonElement addOperation = GetArray(planResult, "operations")
-            .Single(operation => GetString(operation, "operation") == "add_card");
+            .Single(operation => GetString(operation, "operation") == "deck_add_card");
 
         GetString(addOperation, "cardName").Should().Be("Geth's Grimoire");
         GetString(addOperation, "category").Should().Be("Draw");
@@ -309,7 +310,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -325,23 +326,23 @@ public sealed class McpE2ETests
 
         JsonElement analysis = await CallJsonAsync(
             session.Client,
-            "analyze_deck",
+            "deck_analyze_structure",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement cost = await CallJsonAsync(
             session.Client,
-            "analyze_deck_cost",
+            "deck_analyze_cost",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement mana = await CallJsonAsync(
             session.Client,
-            "analyze_mana_base",
+            "deck_analyze_mana",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement consistency = await CallJsonAsync(
             session.Client,
-            "analyze_deck_consistency",
+            "deck_analyze_consistency",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement odds = await CallJsonAsync(
             session.Client,
-            "analyze_draw_odds",
+            "deck_analyze_draw_odds",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -353,11 +354,11 @@ public sealed class McpE2ETests
             });
         JsonElement bracket = await CallJsonAsync(
             session.Client,
-            "estimate_commander_bracket",
+            "deck_estimate_commander_bracket",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement goldfish = await CallJsonAsync(
             session.Client,
-            "simulate_goldfish",
+            "deck_simulate_goldfish",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -428,7 +429,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -442,7 +443,7 @@ public sealed class McpE2ETests
 
         await CallJsonAsync(
             session.Client,
-            "update_deck_metadata",
+            "deck_update_metadata",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -450,7 +451,7 @@ public sealed class McpE2ETests
             });
         JsonElement setResult = await CallJsonAsync(
             session.Client,
-            "set_deck_intent",
+            "deck_intent_set",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -466,7 +467,7 @@ public sealed class McpE2ETests
 
         JsonElement clearResult = await CallJsonAsync(
             session.Client,
-            "clear_deck_intent",
+            "deck_intent_clear",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         string clearedDescription = GetString(GetObject(clearResult, "workspace"), "description");
 
@@ -497,7 +498,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -508,7 +509,7 @@ public sealed class McpE2ETests
 
         await CallJsonAsync(
             session.Client,
-            "create_category",
+            "deck_create_category",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -518,7 +519,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "add_card",
+            "deck_add_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -528,7 +529,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "set_card_quantity",
+            "deck_set_card_quantity",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -538,7 +539,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "add_card_category",
+            "deck_add_card_category",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -547,7 +548,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "set_primary_card_category",
+            "deck_set_primary_card_category",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -556,7 +557,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "remove_card_category",
+            "deck_remove_card_category",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -565,7 +566,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "rename_category",
+            "deck_rename_category",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -574,7 +575,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "add_card",
+            "deck_add_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -584,7 +585,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "move_card",
+            "deck_move_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -594,7 +595,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "delete_category",
+            "deck_delete_category",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -603,7 +604,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "remove_card",
+            "deck_remove_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -613,7 +614,7 @@ public sealed class McpE2ETests
             });
         await CallJsonAsync(
             session.Client,
-            "set_card_quantity",
+            "deck_set_card_quantity",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -624,15 +625,15 @@ public sealed class McpE2ETests
 
         string export = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement resource = await CallJsonAsync(
             session.Client,
-            "open_local_deck",
+            "workspace_open",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement analysis = await CallJsonAsync(
             session.Client,
-            "analyze_deck",
+            "deck_analyze_structure",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
 
         export.Should().Contain("Interaction");
@@ -678,7 +679,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -689,7 +690,7 @@ public sealed class McpE2ETests
 
         await CallJsonAsync(
             session.Client,
-            "add_card",
+            "deck_add_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -699,7 +700,7 @@ public sealed class McpE2ETests
             });
         JsonElement replacement = await CallJsonAsync(
             session.Client,
-            "create_deck_plan_from_explicit_changes",
+            "deck_plan_create",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -711,7 +712,7 @@ public sealed class McpE2ETests
 
         JsonElement preview = await CallJsonAsync(
             session.Client,
-            "preview_deck_plan",
+            "deck_plan_preview",
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
@@ -719,11 +720,11 @@ public sealed class McpE2ETests
             });
         string beforeApplyExport = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement apply = await CallJsonAsync(
             session.Client,
-            "apply_deck_plan",
+            "deck_plan_apply",
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
@@ -731,7 +732,7 @@ public sealed class McpE2ETests
             });
         string afterApplyExport = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
 
         JsonElement beforeSnapshot = GetObject(preview, "before");
@@ -754,11 +755,11 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
-    /// Verifies that corpus refresh bypasses cached source facts through MCP.
+    /// Verifies that source refresh bypasses cached source facts through MCP.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
-    public async Task CorpusRefreshFlow_UsesCacheAndRefreshesSourceFacts()
+    public async Task SourceRefreshFlow_UsesCacheAndBypassesSourceFacts()
     {
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
@@ -774,11 +775,11 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
-                ["name"] = "E2E Corpus Refresh",
+                ["name"] = "E2E Source Refresh",
                 ["format"] = "commander"
             });
         string workspaceId = GetString(workspace, "id");
@@ -790,10 +791,10 @@ public sealed class McpE2ETests
             ["maxPrice"] = 5,
             ["analysisDepth"] = "balanced"
         };
-        JsonElement first = await CallJsonAsync(session.Client, "find_lesser_known_cards", args);
-        JsonElement second = await CallJsonAsync(session.Client, "find_lesser_known_cards", args);
-        args["refresh"] = true;
-        JsonElement refreshed = await CallJsonAsync(session.Client, "find_lesser_known_cards", args);
+        JsonElement first = await CallJsonAsync(session.Client, "deck_find_lesser_known_cards", args);
+        JsonElement second = await CallJsonAsync(session.Client, "deck_find_lesser_known_cards", args);
+        args["bypassCache"] = true;
+        JsonElement refreshed = await CallJsonAsync(session.Client, "deck_find_lesser_known_cards", args);
 
         GetProperty(first, "recommendations").GetArrayLength().Should().Be(1);
         GetProperty(second, "notes").EnumerateArray()
@@ -852,7 +853,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "local",
@@ -863,22 +864,22 @@ public sealed class McpE2ETests
 
         JsonElement goal = await CallJsonAsync(
             session.Client,
-            "query_cards_for_deck",
+            "deck_query_cards",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
                 ["goal"] = "add a few cards that interact with the whole table",
                 ["scryfallQuery"] = "o:goad or o:monarch or o:vote or o:\"tempting offer\" or o:\"each opponent\"",
-                ["count"] = 1,
+                ["limit"] = 1,
                 ["maxPrice"] = 5
             });
         JsonElement best = await CallJsonAsync(
             session.Client,
-            "analyze_deck_best_practices",
+            "deck_analyze_best_practices",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement goldfish = await CallJsonAsync(
             session.Client,
-            "simulate_goldfish",
+            "deck_simulate_goldfish",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -887,11 +888,11 @@ public sealed class McpE2ETests
             });
         JsonElement combos = await CallJsonAsync(
             session.Client,
-            "find_deck_combos",
+            "deck_analyze_combos",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
         JsonElement newCards = await CallJsonAsync(
             session.Client,
-            "find_new_cards_for_deck",
+            "deck_review_new_card_swaps",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -903,7 +904,7 @@ public sealed class McpE2ETests
         GetString(best, "recommendedProfile").Should().Be("commander-baseline");
         GetInt32(goldfish, "targetTurn").Should().Be(3);
         GetObject(combos, "pressure").ValueKind.Should().Be(JsonValueKind.Object);
-        GetProperty(newCards, "suggestions").GetArrayLength().Should().BeGreaterThan(0);
+        GetProperty(newCards, "candidates").GetArrayLength().Should().BeGreaterThan(0);
         scryfall.Requests.Should().Contain(request => request.PathAndQuery.Contains("date%3E%3D", StringComparison.OrdinalIgnoreCase)
             || DecodeRepeatedly(request.PathAndQuery).Contains("date>=", StringComparison.OrdinalIgnoreCase));
         spellbook.Requests.Should().ContainSingle(request => request.Method == "POST" && request.PathAndQuery == "find-my-combos");
@@ -948,7 +949,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "archidekt",
@@ -958,7 +959,7 @@ public sealed class McpE2ETests
         string workspaceId = GetString(workspace, "id");
         JsonElement change = await CallJsonAsync(
             session.Client,
-            "add_card",
+            "deck_add_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -1039,7 +1040,7 @@ public sealed class McpE2ETests
 
         JsonElement workspace = await CallJsonAsync(
             session.Client,
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "archidekt",
@@ -1049,12 +1050,12 @@ public sealed class McpE2ETests
         string workspaceId = GetString(workspace, "id");
         string beforePreviewExport = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
 
         JsonElement planResult = await CallJsonAsync(
             session.Client,
-            "create_deck_plan_from_explicit_changes",
+            "deck_plan_create",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -1065,7 +1066,7 @@ public sealed class McpE2ETests
         string planId = GetString(planResult, "planId");
         JsonElement preview = await CallJsonAsync(
             session.Client,
-            "preview_deck_plan",
+            "deck_plan_preview",
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
@@ -1073,7 +1074,7 @@ public sealed class McpE2ETests
             });
         string afterPreviewExport = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
 
         GetInt32(GetObject(GetObject(preview, "before"), "consistency"), "rampCount").Should().Be(0);
@@ -1084,7 +1085,7 @@ public sealed class McpE2ETests
 
         JsonElement apply = await CallJsonAsync(
             session.Client,
-            "apply_deck_plan",
+            "deck_plan_apply",
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
@@ -1092,7 +1093,7 @@ public sealed class McpE2ETests
             });
         string afterApplyExport = await CallTextAsync(
             session.Client,
-            "export_deck",
+            "workspace_export",
             new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
 
         GetInt32(apply, "appliedOperations").Should().Be(1);
@@ -1124,7 +1125,7 @@ public sealed class McpE2ETests
             TestContext.Current.CancellationToken);
 
         CallToolResult result = await session.Client.CallToolAsync(
-            "start_deck_workspace",
+            "workspace_start",
             new Dictionary<string, object?>
             {
                 ["mode"] = "archidekt",
@@ -1134,7 +1135,7 @@ public sealed class McpE2ETests
             cancellationToken: TestContext.Current.CancellationToken);
 
         result.IsError.Should().BeTrue();
-        ReadText(result).Should().Contain("start_deck_workspace");
+        ReadText(result).Should().Contain("workspace_start");
         archidekt.Requests.Should().BeEmpty();
     }
 
@@ -1180,7 +1181,7 @@ public sealed class McpE2ETests
     {
         await CallJsonAsync(
             client,
-            "add_card",
+            "deck_add_card",
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
@@ -1607,7 +1608,7 @@ public sealed class McpE2ETests
     """;
 
     /// <summary>
-    /// Provides a Scryfall card payload for corpus budget replacement E2E tests.
+    /// Provides a Scryfall card payload for source-backed budget replacement E2E tests.
     /// </summary>
     private const string ManaCryptJson = """
     {
@@ -1667,7 +1668,7 @@ public sealed class McpE2ETests
     """;
 
     /// <summary>
-    /// Provides a Scryfall search payload for corpus refresh E2E tests.
+    /// Provides a Scryfall search payload for source refresh E2E tests.
     /// </summary>
     private const string HiddenGemSearchJson = """
     {
@@ -1686,7 +1687,7 @@ public sealed class McpE2ETests
     """;
 
     /// <summary>
-    /// Provides a Scryfall collection payload for corpus refresh E2E tests.
+    /// Provides a Scryfall collection payload for source refresh E2E tests.
     /// </summary>
     private const string HiddenGemCollectionJson = """
     {

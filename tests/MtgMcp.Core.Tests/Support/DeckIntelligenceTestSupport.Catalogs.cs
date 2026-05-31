@@ -281,6 +281,26 @@ public sealed partial class DeckIntelligenceTests
         {
             throw new HttpRequestException("combo unavailable");
         }
+
+        /// <summary>
+        /// Throws for combo card search.
+        /// </summary>
+        public Task<IReadOnlyList<ComboEvidence>> SearchCombosByCardAsync(
+            ComboCardSearchQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("combo unavailable");
+        }
+
+        /// <summary>
+        /// Throws for combo detail lookup.
+        /// </summary>
+        public Task<ComboEvidence?> GetComboDetailsAsync(
+            ComboDetailsQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("combo unavailable");
+        }
     }
 
 }

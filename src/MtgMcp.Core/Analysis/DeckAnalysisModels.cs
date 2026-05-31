@@ -193,6 +193,103 @@ public sealed class DeckOddsRow
 }
 
 /// <summary>
+/// Reports turn-by-turn land drop odds for a deck.
+/// </summary>
+public sealed class LandDropOddsAnalysis
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deck size used for the calculation.
+    /// </summary>
+    public int DeckSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of cards treated as lands or land slots.
+    /// </summary>
+    public int LandCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of effective early land sources.
+    /// </summary>
+    public int EffectiveLandSources { get; set; }
+
+    /// <summary>
+    /// Gets or sets the requested target turn.
+    /// </summary>
+    public int Turn { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the simulation is on the play.
+    /// </summary>
+    public bool OnThePlay { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether deterministic mulligan simulation was included.
+    /// </summary>
+    public bool IncludeMulligans { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of Monte Carlo simulations used.
+    /// </summary>
+    public int Simulations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the turn-by-turn odds rows.
+    /// </summary>
+    public List<LandDropOddsRow> Rows { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets deterministic assumptions used by the calculation.
+    /// </summary>
+    public List<string> Assumptions { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets likely reasons for missed land drops.
+    /// </summary>
+    public List<string> FailureDrivers { get; set; } = [];
+}
+
+/// <summary>
+/// Reports land drop odds for one turn.
+/// </summary>
+public sealed class LandDropOddsRow
+{
+    /// <summary>
+    /// Gets or sets the turn being evaluated.
+    /// </summary>
+    public int Turn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of cards seen by this turn.
+    /// </summary>
+    public int CardsSeen { get; set; }
+
+    /// <summary>
+    /// Gets or sets exact no-mulligan odds of making this land drop.
+    /// </summary>
+    public double HypergeometricMakeLandDrop { get; set; }
+
+    /// <summary>
+    /// Gets or sets exact no-mulligan odds of missing this land drop.
+    /// </summary>
+    public double HypergeometricMissLandDrop { get; set; }
+
+    /// <summary>
+    /// Gets or sets deterministic Monte Carlo odds with the configured mulligan assumption.
+    /// </summary>
+    public double MonteCarloMakeLandDrop { get; set; }
+
+    /// <summary>
+    /// Gets or sets deterministic Monte Carlo miss odds.
+    /// </summary>
+    public double MonteCarloMissLandDrop { get; set; }
+}
+
+/// <summary>
 /// Provides deck cost analysis behavior.
 /// </summary>
 public sealed class DeckCostAnalysis

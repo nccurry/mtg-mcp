@@ -51,6 +51,75 @@ public static class DeckStatistics
     }
 
     /// <summary>
+    /// Analyzes the odds of making each land drop through a target turn.
+    /// </summary>
+    public static LandDropOddsAnalysis AnalyzeLandDropOdds(
+        DeckWorkspace workspace,
+        int turn,
+        int openingHandSize,
+        bool onThePlay,
+        bool includeMulligans,
+        int simulations,
+        int seed)
+    {
+        List<DeckCard> includedCards = IncludedCards(workspace).ToList();
+        int deckSize = includedCards.Sum(card => Math.Max(0, card.Quantity));
+        int landCount = includedCards
+            .Where(IsLandSource)
+            .Sum(card => Math.Max(0, card.Quantity));
+        int targetTurn = Math.Clamp(turn, 1, 12);
+        int safeOpeningHandSize = Math.Clamp(openingHandSize, 1, Math.Max(1, deckSize));
+        int safeSimulations = Math.Clamp(simulations, 100, 100_000);
+        LandDropOddsAnalysis analysis = new()
+        {
+            WorkspaceId = workspace.Id,
+            DeckSize = deckSize,
+            LandCount = landCount,
+            EffectiveLandSources = landCount,
+            Turn = targetTurn,
+            OnThePlay = onThePlay,
+            IncludeMulligans = includeMulligans,
+            Simulations = safeSimulations,
+            Assumptions =
+            [
+                "Exact rows use hypergeometric no-mulligan odds.",
+                onThePlay
+                    ? "On the play: no draw step is counted on turn 1."
+                    : "On the draw: the turn 1 draw step is counted.",
+                includeMulligans
+                    ? "Monte Carlo uses one deterministic London-style mulligan for hands with 0-1 or 6-7 lands, then evaluates the kept hand after one bottomed card."
+                    : "Monte Carlo uses the opening hand with no mulligan."
+            ]
+        };
+
+        for (int currentTurn = 1; currentTurn <= targetTurn; currentTurn++)
+        {
+            int cardsSeen = Math.Clamp(safeOpeningHandSize + CardsDrawnByTurn(currentTurn, onThePlay), 0, deckSize);
+            double makeExact = HypergeometricAtLeast(deckSize, landCount, cardsSeen, currentTurn);
+            double makeMonteCarlo = MonteCarloMakeLandDrop(
+                includedCards,
+                currentTurn,
+                safeOpeningHandSize,
+                onThePlay,
+                includeMulligans,
+                safeSimulations,
+                seed);
+            analysis.Rows.Add(new LandDropOddsRow
+            {
+                Turn = currentTurn,
+                CardsSeen = cardsSeen,
+                HypergeometricMakeLandDrop = makeExact,
+                HypergeometricMissLandDrop = 1 - makeExact,
+                MonteCarloMakeLandDrop = makeMonteCarlo,
+                MonteCarloMissLandDrop = 1 - makeMonteCarlo
+            });
+        }
+
+        AddLandDropFailureDrivers(analysis);
+        return analysis;
+    }
+
+    /// <summary>
     /// Calculates hypergeometric odds of at least the requested successes.
     /// </summary>
     public static double HypergeometricAtLeast(
@@ -149,6 +218,151 @@ public static class DeckStatistics
         }
 
         return hits / (double)simulations;
+    }
+
+    /// <summary>
+    /// Runs deterministic Monte Carlo for making one land drop by a turn.
+    /// </summary>
+    private static double MonteCarloMakeLandDrop(
+        IReadOnlyList<DeckCard> includedCards,
+        int turn,
+        int openingHandSize,
+        bool onThePlay,
+        bool includeMulligans,
+        int simulations,
+        int seed)
+    {
+        List<bool> deck = [];
+        foreach (DeckCard card in includedCards)
+        {
+            bool isLand = IsLandSource(card);
+            for (int count = 0; count < Math.Max(0, card.Quantity); count++)
+            {
+                deck.Add(isLand);
+            }
+        }
+
+        if (deck.Count == 0)
+        {
+            return 0;
+        }
+
+        Random random = new(StableSeed(seed, $"land-drop-{turn}-{onThePlay}-{includeMulligans}"));
+        int hits = 0;
+        for (int simulation = 0; simulation < simulations; simulation++)
+        {
+            List<bool> shuffled = Shuffle(deck, random);
+            int handSize = Math.Min(openingHandSize, shuffled.Count);
+            List<bool> hand = shuffled.Take(handSize).ToList();
+            int nextIndex = handSize;
+            if (includeMulligans && ShouldMulliganByLandCount(hand))
+            {
+                shuffled = Shuffle(deck, random);
+                handSize = Math.Min(openingHandSize, shuffled.Count);
+                hand = shuffled.Take(handSize).ToList();
+                nextIndex = handSize;
+                if (hand.Count > 0)
+                {
+                    bool bottomLand = CountLands(hand) >= 4;
+                    int bottomIndex = bottomLand ? hand.FindIndex(card => card) : hand.FindIndex(card => !card);
+                    if (bottomIndex < 0)
+                    {
+                        bottomIndex = hand.Count - 1;
+                    }
+
+                    hand.RemoveAt(bottomIndex);
+                }
+            }
+
+            int draws = CardsDrawnByTurn(turn, onThePlay);
+            for (int draw = 0; draw < draws && nextIndex < shuffled.Count; draw++)
+            {
+                hand.Add(shuffled[nextIndex]);
+                nextIndex++;
+            }
+
+            if (CountLands(hand) >= turn)
+            {
+                hits++;
+            }
+        }
+
+        return hits / (double)simulations;
+    }
+
+    /// <summary>
+    /// Counts card draws by a turn under play/draw assumptions.
+    /// </summary>
+    private static int CardsDrawnByTurn(int turn, bool onThePlay)
+    {
+        return onThePlay ? Math.Max(0, turn - 1) : Math.Max(0, turn);
+    }
+
+    /// <summary>
+    /// Checks whether a card is treated as an early land source.
+    /// </summary>
+    private static bool IsLandSource(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string typeLine = card.Snapshot?.TypeLine ?? "";
+        return role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            || typeLine.Contains("Land", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Applies a simple deterministic mulligan rule based on opening land count.
+    /// </summary>
+    private static bool ShouldMulliganByLandCount(IReadOnlyList<bool> hand)
+    {
+        int lands = CountLands(hand);
+        return lands <= 1 || lands >= 6;
+    }
+
+    /// <summary>
+    /// Counts land cards in a sampled hand.
+    /// </summary>
+    private static int CountLands(IEnumerable<bool> cards)
+    {
+        return cards.Count(card => card);
+    }
+
+    /// <summary>
+    /// Shuffles a boolean deck using a caller-owned deterministic random source.
+    /// </summary>
+    private static List<bool> Shuffle(IReadOnlyList<bool> deck, Random random)
+    {
+        List<bool> shuffled = deck.ToList();
+        for (int index = shuffled.Count - 1; index > 0; index--)
+        {
+            int swapIndex = random.Next(index + 1);
+            (shuffled[index], shuffled[swapIndex]) = (shuffled[swapIndex], shuffled[index]);
+        }
+
+        return shuffled;
+    }
+
+    /// <summary>
+    /// Adds high-level deterministic failure-driver notes.
+    /// </summary>
+    private static void AddLandDropFailureDrivers(LandDropOddsAnalysis analysis)
+    {
+        if (analysis.DeckSize <= 0)
+        {
+            analysis.FailureDrivers.Add("The deck has no included cards.");
+            return;
+        }
+
+        double landRate = analysis.LandCount / (double)analysis.DeckSize;
+        if (landRate < 0.34)
+        {
+            analysis.FailureDrivers.Add("Land density is below 34%, which raises early land-drop miss risk.");
+        }
+
+        LandDropOddsRow? targetRow = analysis.Rows.LastOrDefault();
+        if (targetRow is not null && targetRow.MonteCarloMissLandDrop >= 0.25)
+        {
+            analysis.FailureDrivers.Add($"The simulated miss rate for turn {targetRow.Turn} is at least 25%.");
+        }
     }
 
     /// <summary>

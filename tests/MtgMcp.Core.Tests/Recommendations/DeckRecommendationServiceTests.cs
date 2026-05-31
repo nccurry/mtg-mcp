@@ -253,6 +253,59 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that new-card swap review returns deterministic cut evidence.
+    /// </summary>
+    [Fact]
+    public async Task ReviewNewCardSwaps_ReturnsDeterministicCutEvidence()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "New Card Swaps",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ayara, First of Locthwain",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { ColorIdentity = ["B"] }
+                },
+                new DeckCard
+                {
+                    Name = "Syphon Mind",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Draw,
+                    Categories = [DeckRoles.Draw],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        OracleText = "Each other player discards a card. You draw a card for each card discarded this way.",
+                        ManaValue = 4,
+                        ColorIdentity = ["B"],
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                    }
+                },
+                new DeckCard { Name = "Swamp", Quantity = 37, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        NewCardSwapReviewResult result = await service.ReviewNewCardSwapsAsync(
+            workspace.Id,
+            since: "2026-01-01",
+            setCode: "tst",
+            maxPrice: 5,
+            limit: 3,
+            TestContext.Current.CancellationToken);
+
+        NewCardSwapCandidate candidate = result.Candidates.Should().ContainSingle(card => card.CardName == "Season of Loss").Subject;
+        candidate.CutCandidates.Should().Contain(cut => cut.CardName == "Syphon Mind" && cut.Reasons.Count > 0);
+        result.Notes.Should().Contain(note => note.Contains("role overlap", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that release radar defaults to a recent window when since is omitted.
     /// </summary>
     [Fact]

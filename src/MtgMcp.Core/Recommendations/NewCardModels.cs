@@ -102,3 +102,136 @@ public sealed class NewCardsForDeckResult
     /// </summary>
     public List<string> Notes { get; set; } = [];
 }
+
+/// <summary>
+/// Reports new-card candidates with deterministic swap evidence.
+/// </summary>
+public sealed class NewCardSwapReviewResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets new-card swap candidates.
+    /// </summary>
+    public List<NewCardSwapCandidate> Candidates { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets source and scoring notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one new-card candidate and possible cuts.
+/// </summary>
+public sealed class NewCardSwapCandidate
+{
+    /// <summary>
+    /// Gets or sets the candidate card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the candidate role.
+    /// </summary>
+    public string Role { get; set; } = DeckRoles.Utility;
+
+    /// <summary>
+    /// Gets or sets candidate tags.
+    /// </summary>
+    public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets release date when known.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets set code when known.
+    /// </summary>
+    public string? Set { get; set; }
+
+    /// <summary>
+    /// Gets or sets known USD price.
+    /// </summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets deterministic candidate score.
+    /// </summary>
+    public double Score { get; set; }
+
+    /// <summary>
+    /// Gets or sets candidate rationale.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets deterministic cut candidates.
+    /// </summary>
+    public List<NewCardCutEvidence> CutCandidates { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets source and determinism metadata.
+    /// </summary>
+    public SourceEvidenceMetadata Metadata { get; set; } = new();
+}
+
+/// <summary>
+/// Describes deterministic evidence for cutting one existing card.
+/// </summary>
+public sealed class NewCardCutEvidence
+{
+    /// <summary>
+    /// Gets or sets the existing card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the card's current role.
+    /// </summary>
+    public string Role { get; set; } = DeckRoles.Utility;
+
+    /// <summary>
+    /// Gets or sets whether the role overlaps the new card.
+    /// </summary>
+    public bool RoleOverlap { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether mana value is in the same curve slot.
+    /// </summary>
+    public bool ManaCurveSlot { get; set; }
+
+    /// <summary>
+    /// Gets or sets duplicate effect density for the current role.
+    /// </summary>
+    public double DuplicateEffectDensity { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether local tags suggest a theme mismatch.
+    /// </summary>
+    public bool ThemeMismatch { get; set; }
+
+    /// <summary>
+    /// Gets or sets current card price minus candidate price.
+    /// </summary>
+    public decimal? PriceDelta { get; set; }
+
+    /// <summary>
+    /// Gets or sets protected-card warnings.
+    /// </summary>
+    public List<string> ProtectedCardWarnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets deterministic cut score.
+    /// </summary>
+    public double Score { get; set; }
+
+    /// <summary>
+    /// Gets or sets exact scoring reasons.
+    /// </summary>
+    public List<string> Reasons { get; set; } = [];
+}

@@ -392,6 +392,11 @@ public sealed class CardCorpusSignal
     public string SignalType { get; set; } = CorpusSignalTypes.Inclusion;
 
     /// <summary>
+    /// Gets or sets the source section, tag, or theme bucket when provided.
+    /// </summary>
+    public string? Section { get; set; }
+
+    /// <summary>
     /// Gets or sets source-specific confidence from 0 to 1.
     /// </summary>
     public double Score { get; set; }
@@ -410,6 +415,11 @@ public sealed class CardCorpusSignal
     /// Gets or sets the number of decks behind the signal.
     /// </summary>
     public int? DeckCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the eligible deck count when provided by the source.
+    /// </summary>
+    public int? EligibleDeckCount { get; set; }
 
     /// <summary>
     /// Gets or sets performance or win-rate relevance from 0 to 1.

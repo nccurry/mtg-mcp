@@ -33,7 +33,7 @@ public sealed class CategoryTools
     /// Adds the card category.
     /// </summary>
     [McpServerTool(
-        Name = "add_card_category",
+        Name = "deck_add_card_category",
         ReadOnly = false,
         Destructive = false,
         Idempotent = true,
@@ -47,7 +47,7 @@ public sealed class CategoryTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("add_card_category");
+        operationMode.EnsureCanMutate("deck_add_card_category");
         return decks.AddCardCategoryAsync(workspaceId, cardName, category, cancellationToken);
     }
 
@@ -55,7 +55,7 @@ public sealed class CategoryTools
     /// Removes the card category.
     /// </summary>
     [McpServerTool(
-        Name = "remove_card_category",
+        Name = "deck_remove_card_category",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -69,7 +69,7 @@ public sealed class CategoryTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("remove_card_category");
+        operationMode.EnsureCanMutate("deck_remove_card_category");
         return decks.RemoveCardCategoryAsync(workspaceId, cardName, category, cancellationToken);
     }
 
@@ -77,7 +77,7 @@ public sealed class CategoryTools
     /// Sets the primary card category.
     /// </summary>
     [McpServerTool(
-        Name = "set_primary_card_category",
+        Name = "deck_set_primary_card_category",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -93,7 +93,7 @@ public sealed class CategoryTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("set_primary_card_category");
+        operationMode.EnsureCanMutate("deck_set_primary_card_category");
         return decks.SetPrimaryCardCategoryAsync(
             workspaceId,
             cardName,
@@ -106,7 +106,7 @@ public sealed class CategoryTools
     /// Creates the category.
     /// </summary>
     [McpServerTool(
-        Name = "create_category",
+        Name = "deck_create_category",
         ReadOnly = false,
         Destructive = false,
         Idempotent = true,
@@ -121,7 +121,7 @@ public sealed class CategoryTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("create_category");
+        operationMode.EnsureCanMutate("deck_create_category");
         return decks.CreateCategoryAsync(
             workspaceId,
             category,
@@ -135,7 +135,7 @@ public sealed class CategoryTools
     /// Renames the category.
     /// </summary>
     [McpServerTool(
-        Name = "rename_category",
+        Name = "deck_rename_category",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -149,7 +149,7 @@ public sealed class CategoryTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("rename_category");
+        operationMode.EnsureCanMutate("deck_rename_category");
         return decks.RenameCategoryAsync(workspaceId, oldName, newName, cancellationToken);
     }
 
@@ -157,7 +157,7 @@ public sealed class CategoryTools
     /// Deletes the category.
     /// </summary>
     [McpServerTool(
-        Name = "delete_category",
+        Name = "deck_delete_category",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -171,7 +171,7 @@ public sealed class CategoryTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("delete_category");
+        operationMode.EnsureCanMutate("deck_delete_category");
         return decks.DeleteCategoryAsync(
             workspaceId,
             category,

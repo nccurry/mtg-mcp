@@ -58,7 +58,8 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
     public CorpusSourceStatus GetStatus()
     {
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
-        bool enabled = sourceOptions.Enabled && sourceOptions.AllowUnofficialApi;
+        bool enabled = sourceOptions.Enabled
+            && DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: true);
         return new CorpusSourceStatus
         {
             Key = "edhrec",
@@ -78,7 +79,7 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
             Notes =
             [
                 "Uses EDHREC's structured aggregate JSON pages for broad Commander inclusion and synergy evidence.",
-                "Set AllowUnofficialApi=true for the Edhrec source before querying this permission-sensitive endpoint."
+                "Enabled by default; set AllowUnofficialApi=false for the Edhrec source to disable this permission-sensitive endpoint."
             ]
         };
     }
@@ -159,7 +160,13 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
                 }
                 else if (themeStatus is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
                 {
-                    report.Notes.Add("EDHREC theme page was unavailable; falling back to the commander aggregate page.");
+                    report.Notes.Add($"unsupported-theme: EDHREC did not expose theme slug '{themeSlug}' for this commander.");
+                    return report;
+                }
+                else
+                {
+                    report.Notes.Add($"unsupported-theme: EDHREC theme slug '{themeSlug}' was unavailable for this lookup.");
+                    return report;
                 }
             }
 
@@ -317,10 +324,12 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
             CardName = name,
             Source = status.Name,
             SignalType = isTrend ? CorpusSignalTypes.Trend : CorpusSignalTypes.Inclusion,
+            Section = tag,
             Score = score,
             InclusionRate = inclusionRate,
             SynergyScore = synergy.HasValue ? Math.Clamp(synergy.Value, 0, 1) : null,
             DeckCount = numDecks,
+            EligibleDeckCount = potentialDecks,
             Uri = evidenceUri,
             Rationale = BuildRationale(name, commanderName, numDecks, potentialDecks, inclusionRate, synergy)
         };

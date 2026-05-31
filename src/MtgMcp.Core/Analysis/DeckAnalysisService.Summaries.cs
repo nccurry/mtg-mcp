@@ -93,4 +93,28 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             simulations,
             seed);
     }
+
+    /// <summary>
+    /// Analyzes turn-by-turn odds of making land drops.
+    /// </summary>
+    public async Task<LandDropOddsAnalysis> AnalyzeLandDropOddsAsync(
+        string workspaceId,
+        int turn,
+        int openingHandSize,
+        bool onThePlay,
+        bool includeMulligans,
+        int simulations,
+        int seed,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        return DeckStatistics.AnalyzeLandDropOdds(
+            workspace,
+            turn,
+            Math.Clamp(openingHandSize, 1, 20),
+            onThePlay,
+            includeMulligans,
+            simulations,
+            seed);
+    }
 }

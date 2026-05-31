@@ -294,55 +294,55 @@ public static class DeckEditOperations
     /// <summary>
     /// Stores the add card edit name.
     /// </summary>
-    public const string AddCard = "add_card";
+    public const string AddCard = "deck_add_card";
 
     /// <summary>
     /// Stores the remove card edit name.
     /// </summary>
-    public const string RemoveCard = "remove_card";
+    public const string RemoveCard = "deck_remove_card";
 
     /// <summary>
     /// Stores the set card quantity edit name.
     /// </summary>
-    public const string SetCardQuantity = "set_card_quantity";
+    public const string SetCardQuantity = "deck_set_card_quantity";
 
     /// <summary>
     /// Stores the move card edit name.
     /// </summary>
-    public const string MoveCard = "move_card";
+    public const string MoveCard = "deck_move_card";
 
     /// <summary>
     /// Stores the add card category edit name.
     /// </summary>
-    public const string AddCardCategory = "add_card_category";
+    public const string AddCardCategory = "deck_add_card_category";
 
     /// <summary>
     /// Stores the remove card category edit name.
     /// </summary>
-    public const string RemoveCardCategory = "remove_card_category";
+    public const string RemoveCardCategory = "deck_remove_card_category";
 
     /// <summary>
     /// Stores the set primary card category edit name.
     /// </summary>
-    public const string SetPrimaryCardCategory = "set_primary_card_category";
+    public const string SetPrimaryCardCategory = "deck_set_primary_card_category";
 
     /// <summary>
     /// Stores the create category edit name.
     /// </summary>
-    public const string CreateCategory = "create_category";
+    public const string CreateCategory = "deck_create_category";
 
     /// <summary>
     /// Stores the rename category edit name.
     /// </summary>
-    public const string RenameCategory = "rename_category";
+    public const string RenameCategory = "deck_rename_category";
 
     /// <summary>
     /// Stores the delete category edit name.
     /// </summary>
-    public const string DeleteCategory = "delete_category";
+    public const string DeleteCategory = "deck_delete_category";
 
     /// <summary>
     /// Stores the update deck metadata edit name.
     /// </summary>
-    public const string UpdateDeckMetadata = "update_deck_metadata";
+    public const string UpdateDeckMetadata = "deck_update_metadata";
 }

@@ -19,6 +19,14 @@ internal static class DecklistCorpusProviderSupport
     }
 
     /// <summary>
+    /// Resolves the unofficial API setting while preserving an explicit opt-out.
+    /// </summary>
+    public static bool AllowsUnofficialApi(MtgMcpCorpusSourceOptions sourceOptions, bool defaultAllowed)
+    {
+        return sourceOptions.AllowUnofficialApi ?? defaultAllowed;
+    }
+
+    /// <summary>
     /// Gets whether a response payload appears to be HTML.
     /// </summary>
     public static bool LooksLikeHtml(string payload)

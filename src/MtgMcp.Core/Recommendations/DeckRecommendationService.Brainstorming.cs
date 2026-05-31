@@ -67,8 +67,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(12)
             .ToList();
-        result.Notes.Add($"Created previewable goal-package plan {package.Plan.PlanId}; inspect it with get_deck_plan or preview_deck_plan before applying.");
-        result.Notes.Add("Brainstorming uses previewable deck plans; only apply_deck_plan mutates deck contents.");
+        result.Notes.Add($"Created previewable goal-package plan {package.Plan.PlanId}; inspect it with deck_plan_get or deck_plan_preview before applying.");
+        result.Notes.Add("Brainstorming uses previewable deck plans; only deck_plan_apply mutates deck contents.");
         return result;
     }
 }

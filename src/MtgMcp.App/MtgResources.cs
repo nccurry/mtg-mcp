@@ -80,15 +80,15 @@ public sealed class MtgResources
     /// <summary>
     /// Returns the full JSON representation for a saved workspace.
     /// </summary>
-    [McpServerResource(UriTemplate = "mtg://deck/{deckId}", Name = "Deck Workspace")]
+    [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}", Name = "Workspace")]
     [Description("Full JSON representation of a saved deck workspace.")]
     public async Task<string> GetDeckAsync(
-        string deckId,
+        string workspaceId,
         CancellationToken cancellationToken = default
     )
     {
         DeckWorkspace workspace = await decks
-            .GetDeckResourceAsync(deckId, cancellationToken)
+            .GetDeckResourceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         return JsonSerializer.Serialize(workspace, JsonOptions);
     }
@@ -96,15 +96,15 @@ public sealed class MtgResources
     /// <summary>
     /// Returns a compact JSON summary for a saved workspace.
     /// </summary>
-    [McpServerResource(UriTemplate = "mtg://deck/{deckId}/summary", Name = "Deck Summary")]
+    [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}/summary", Name = "Workspace Summary")]
     [Description("Summary, counts, validation status, and category list for a deck workspace.")]
     public async Task<string> GetDeckSummaryAsync(
-        string deckId,
+        string workspaceId,
         CancellationToken cancellationToken = default
     )
     {
         object summary = await decks
-            .GetDeckSummaryAsync(deckId, cancellationToken)
+            .GetDeckSummaryAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         return JsonSerializer.Serialize(summary, JsonOptions);
     }
@@ -112,15 +112,15 @@ public sealed class MtgResources
     /// <summary>
     /// Returns parsed deck intent stored in a workspace description.
     /// </summary>
-    [McpServerResource(UriTemplate = "mtg://deck/{deckId}/intent", Name = "Deck Intent")]
+    [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}/intent", Name = "Workspace Deck Intent")]
     [Description("Parsed MTG MCP Deck Intent stored in the workspace description.")]
     public async Task<string> GetDeckIntentAsync(
-        string deckId,
+        string workspaceId,
         CancellationToken cancellationToken = default
     )
     {
         DeckIntentResult intent = await decks
-            .GetDeckIntentAsync(deckId, cancellationToken)
+            .GetDeckIntentAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         return JsonSerializer.Serialize(intent, JsonOptions);
     }
@@ -196,13 +196,13 @@ public sealed class MtgResources
             asks to update an online deck, or asks for Archidekt checkpoints.
             If local, Moxfield import, and Archidekt are each plausible, ask the user which workspace mode to use
             before creating or opening a workspace.
-            To migrate an imported or local workspace to Archidekt, dry-run copy_workspace_to_archidekt first,
+            To migrate an imported or local workspace to Archidekt, dry-run archidekt_copy_workspace first,
             then apply it only after the user confirms the destination and warnings.
             Never enable Archidekt writeback unless the user explicitly asks to update,
             organize, tag, move cards, checkpoint, or otherwise persist changes to Archidekt.
             If Archidekt writeback intent is unclear, ask whether edits should write back
             to Archidekt or stay local-only.
-            Prefer start_deck_workspace as the first deck workspace tool because it requires
+            Prefer workspace_start as the first deck workspace tool because it requires
             an explicit mode and writeback choice.
             """;
     }
@@ -258,7 +258,7 @@ public sealed class MtgResources
             cards, protected cards, simulation settings, and deck-local win routes;
             heuristic, simulation, package, and local-meta fields are parsed for
             profile-aware brewing workflows.
-            Local-meta scoring can use score_cards_for_playgroup_meta to score
+            Local-meta scoring can use deck_score_cards_for_playgroup_meta to score
             explicit candidate cards, or excluded workspace cards, against
             Playgroup-derived pressures. That output reports separate plan-fit,
             performance-delta, meta-coverage, self-harm, price/bracket, and
@@ -280,10 +280,10 @@ public sealed class MtgResources
             Supported route requirements are commander, repeatable-blink,
             card:<name>, role:<role>, tag:<tag>, mana>=N, tokens>=N,
             interactionHeld>=N, dungeonProgress>=N, turn>=N, or a bare card name.
-            Use get_deck_intent before analysis and recommendations.
-            Use suggest_deck_intent to draft an intent section, then ask the user
-            before calling set_deck_intent.
-            set_deck_intent updates the workspace description and writes back to
+            Use deck_intent_get before analysis and recommendations.
+            Use deck_intent_suggest to draft an intent section, then ask the user
+            before calling deck_intent_set.
+            deck_intent_set updates the workspace description and writes back to
             Archidekt only when the workspace has writeBack=true.
             """;
     }
@@ -313,7 +313,7 @@ public sealed class MtgResources
     /// <summary>
     /// Gets deck recommendation source status.
     /// </summary>
-    [McpServerResource(UriTemplate = "mtg://corpus/sources", Name = "Recommendation Sources")]
+    [McpServerResource(UriTemplate = "mtg://sources/status", Name = "Recommendation Sources")]
     [Description("Configured deck recommendation source providers with stability, attribution, and permission notes.")]
     public string GetCorpusSources()
     {
@@ -331,32 +331,38 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Returns redacted Archidekt credential availability.
+    /// Returns redacted provider credential availability.
     /// </summary>
-    [McpServerResource(UriTemplate = "mtg://archidekt/auth-status", Name = "Archidekt Auth Status")]
-    [Description("Redacted Archidekt credential availability status.")]
-    public async Task<string> GetArchidektAuthStatusAsync(
+    [McpServerResource(UriTemplate = "mtg://providers/{provider}/auth-status", Name = "Provider Auth Status")]
+    [Description("Redacted provider credential availability status for archidekt or playgroup.")]
+    public async Task<string> GetProviderAuthStatusAsync(
+        [Description("Provider key: archidekt or playgroup.")]
+        string provider,
         CancellationToken cancellationToken = default
     )
     {
-        AuthStatus status = await archidektGateway
-            .GetAuthStatusAsync(cancellationToken)
-            .ConfigureAwait(false);
-        return JsonSerializer.Serialize(status, JsonOptions);
-    }
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            throw new ArgumentException(
+                "Provider must be archidekt or playgroup.",
+                nameof(provider)
+            );
+        }
 
-    /// <summary>
-    /// Returns redacted Playgroup.gg credential availability.
-    /// </summary>
-    [McpServerResource(UriTemplate = "mtg://playgroup/auth-status", Name = "Playgroup Auth Status")]
-    [Description("Redacted Playgroup.gg API-key and credentials-file availability status.")]
-    public async Task<string> GetPlaygroupAuthStatusAsync(
-        CancellationToken cancellationToken = default
-    )
-    {
-        PlaygroupAuthStatus status = await playgroups
-            .GetAuthStatusAsync(cancellationToken)
-            .ConfigureAwait(false);
-        return JsonSerializer.Serialize(status, JsonOptions);
+        return provider.Trim().ToLowerInvariant() switch
+        {
+            "archidekt" => JsonSerializer.Serialize(
+                await archidektGateway.GetAuthStatusAsync(cancellationToken).ConfigureAwait(false),
+                JsonOptions
+            ),
+            "playgroup" => JsonSerializer.Serialize(
+                await playgroups.GetAuthStatusAsync(cancellationToken).ConfigureAwait(false),
+                JsonOptions
+            ),
+            _ => throw new ArgumentException(
+                "Provider must be archidekt or playgroup.",
+                nameof(provider)
+            ),
+        };
     }
 }

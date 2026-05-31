@@ -63,7 +63,8 @@ public sealed class EdhTop16CorpusSignalProvider : ICorpusSignalProvider
     public CorpusSourceStatus GetStatus()
     {
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
-        bool enabled = sourceOptions.Enabled && sourceOptions.AllowUnofficialApi;
+        bool enabled = sourceOptions.Enabled
+            && DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: false);
         return new CorpusSourceStatus
         {
             Key = "edhtop16",

@@ -74,6 +74,62 @@ public sealed class CommanderSpellbookComboCatalogTests
     }
 
     /// <summary>
+    /// Verifies that card-scoped combo search preserves raw catalog fields.
+    /// </summary>
+    [Fact]
+    public async Task SearchCombosByCard_MapsRawCatalogEvidence()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://spellbook.test/variants*")
+            .Respond("application/json", VariantSearchJson);
+        CommanderSpellbookComboCatalog catalog = CreateCatalog(mockHttp);
+
+        IReadOnlyList<ComboEvidence> combos = await catalog.SearchCombosByCardAsync(
+            new ComboCardSearchQuery
+            {
+                CardName = "Basalt Monolith",
+                Format = "commander",
+                Limit = 5
+            },
+            TestContext.Current.CancellationToken);
+
+        ComboEvidence combo = combos.Should().ContainSingle().Subject;
+        combo.ComboId.Should().Be("4131-4235");
+        combo.Cards.Should().Contain(["Rings of Brighthearth", "Basalt Monolith"]);
+        combo.ProducedFeatures.Should().Contain("Infinite colorless mana");
+        combo.Templates.Should().Contain("mana rock");
+        combo.Prerequisites.Should().Contain("Basalt Monolith can tap.");
+        combo.Prerequisites.Should().Contain("No summoning sickness.");
+        combo.Steps.Should().Contain("Activate Basalt Monolith.");
+        combo.Steps.Should().Contain("Repeat the untap loop.");
+        combo.BracketTag.Should().Be("bracket-3");
+        combo.Legalities.Should().ContainKey("commander").WhoseValue.Should().BeTrue();
+        combo.RouteClassifications.Single().RouteTypes.Should().Contain(WinRouteLabels.InfiniteMana);
+        combo.Metadata.Notes.Should().Contain(note => note.Contains("catalog evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that combo detail lookup maps one variant object.
+    /// </summary>
+    [Fact]
+    public async Task GetComboDetails_MapsVariantObject()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://spellbook.test/variants/4131-4235")
+            .Respond("application/json", VariantObjectJson);
+        CommanderSpellbookComboCatalog catalog = CreateCatalog(mockHttp);
+
+        ComboEvidence? combo = await catalog.GetComboDetailsAsync(
+            new ComboDetailsQuery { ComboId = "4131-4235" },
+            TestContext.Current.CancellationToken);
+
+        combo.Should().NotBeNull();
+        combo!.ComboId.Should().Be("4131-4235");
+        combo.ColorIdentity.Should().BeEmpty();
+        combo.SourceUri.Should().Contain("4131-4235");
+    }
+
+    /// <summary>
     /// Creates a catalog with a mocked HTTP client.
     /// </summary>
     private static CommanderSpellbookComboCatalog CreateCatalog(MockHttpMessageHandler mockHttp)
@@ -123,6 +179,85 @@ public sealed class CommanderSpellbookComboCatalogTests
               }
             ]
           }
+        }
+        """;
+
+    /// <summary>
+    /// Stores a representative Commander Spellbook variants response.
+    /// </summary>
+    private const string VariantSearchJson =
+        """
+        {
+          "count": null,
+          "next": null,
+          "previous": null,
+          "results": [
+            {
+              "id": "4131-4235",
+              "identity": ["C"],
+              "bracketTag": { "name": "bracket-3" },
+              "popularity": 18,
+              "uses": [
+                { "card": { "name": "Rings of Brighthearth" } },
+                { "card": { "name": "Basalt Monolith" } }
+              ],
+              "produces": [
+                { "feature": { "name": "Infinite colorless mana" } }
+              ],
+              "requires": [
+                { "template": { "name": "mana rock" } }
+              ],
+              "legalities": {
+                "commander": true,
+                "modern": false
+              },
+              "prerequisites": [
+                { "description": "Basalt Monolith can tap." }
+              ],
+              "steps": [
+                { "instruction": "Activate Basalt Monolith." }
+              ],
+              "easyPrerequisites": "No summoning sickness.",
+              "description": "Repeat the untap loop."
+            },
+            {
+              "id": "illegal-modern-only",
+              "identity": "C",
+              "uses": [
+                { "card": { "name": "Rings of Brighthearth" } },
+                { "card": { "name": "Basalt Monolith" } }
+              ],
+              "produces": [
+                { "feature": { "name": "Infinite colorless mana" } }
+              ],
+              "requires": [],
+              "legalities": {
+                "commander": false,
+                "modern": true
+              },
+              "description": "This row should be filtered for Commander searches."
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// Stores a representative Commander Spellbook variant object.
+    /// </summary>
+    private const string VariantObjectJson =
+        """
+        {
+          "id": "4131-4235",
+          "identity": "C",
+          "uses": [
+            { "card": { "name": "Rings of Brighthearth" } },
+            { "card": { "name": "Basalt Monolith" } }
+          ],
+          "produces": [
+            { "feature": { "name": "Infinite colorless mana" } }
+          ],
+          "requires": [],
+          "description": "Repeat the untap loop."
         }
         """;
 }

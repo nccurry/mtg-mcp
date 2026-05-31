@@ -25,7 +25,7 @@ public sealed class ServerTools
     /// <summary>
     /// Gets version, git, operation mode, and runtime identity for this MCP server.
     /// </summary>
-    [McpServerTool(Name = "get_server_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "server_get_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get mtg-mcp version, git commit, git branch, operation mode, data directory, and runtime details for the running server.")]
     public ServerInfo GetServerInfo()
     {

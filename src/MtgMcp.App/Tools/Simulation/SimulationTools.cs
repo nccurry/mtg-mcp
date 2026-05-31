@@ -26,7 +26,7 @@ public sealed class SimulationTools
     /// <summary>
     /// Runs no-interaction goldfish simulations.
     /// </summary>
-    [McpServerTool(Name = "simulate_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_simulate_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run heuristic no-interaction goldfish simulations with profile-resolved London mulligans, command-zone sequencing, board projection, and win-route estimates.")]
     public Task<GoldfishSimulationResult> SimulateGoldfishAsync(
         string workspaceId,
@@ -42,13 +42,13 @@ public sealed class SimulationTools
     /// <summary>
     /// Compares active deck goldfish output against caller-supplied Archidekt decks.
     /// </summary>
-    [McpServerTool(Name = "compare_archidekt_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "archidekt_compare_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Import up to three Archidekt deck ids or URLs read-only and compare deterministic goldfish simulation outputs against the active workspace. Non-Archidekt references are reported without aborting other comparisons.")]
     public Task<ArchidektGoldfishComparisonResult> CompareArchidektGoldfishAsync(
         string workspaceId,
-        string archidektDeckUrl1,
-        string? archidektDeckUrl2 = null,
-        string? archidektDeckUrl3 = null,
+        string deckIdOrUrl1,
+        string? deckIdOrUrl2 = null,
+        string? deckIdOrUrl3 = null,
         int targetTurn = 7,
         int simulations = 1_000,
         int seed = 1337,
@@ -57,9 +57,9 @@ public sealed class SimulationTools
     {
         return simulation.CompareArchidektGoldfishAsync(
             workspaceId,
-            archidektDeckUrl1,
-            archidektDeckUrl2,
-            archidektDeckUrl3,
+            deckIdOrUrl1,
+            deckIdOrUrl2,
+            deckIdOrUrl3,
             targetTurn,
             simulations,
             seed,
@@ -70,7 +70,7 @@ public sealed class SimulationTools
     /// <summary>
     /// Projects likely board state by a turn.
     /// </summary>
-    [McpServerTool(Name = "project_board_state", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_project_board_state", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Project the likely board state by a turn if the deck is not interacted with.")]
     public Task<ProjectedTurnState> ProjectBoardStateAsync(
         string workspaceId,
@@ -85,7 +85,7 @@ public sealed class SimulationTools
     /// <summary>
     /// Estimates likely goldfish win turns and win routes.
     /// </summary>
-    [McpServerTool(Name = "estimate_win_turn", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_estimate_win_turn", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Estimate likely goldfish win turns and routes such as combat, finishers, or combo.")]
     public Task<WinTurnEstimate> EstimateWinTurnAsync(
         string workspaceId,
@@ -100,11 +100,12 @@ public sealed class SimulationTools
     /// <summary>
     /// Runs deterministic whole-deck performance analysis.
     /// </summary>
-    [McpServerTool(Name = "analyze_deck_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_analyze_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run deterministic Stats Lab Monte Carlo analysis for opening hands, mulligans, land drops, colors, castability, command-zone timing, combo assembly, stranded cards, and named scenarios.")]
     public Task<DeckPerformanceAnalysis> AnalyzeDeckPerformanceAsync(
         string workspaceId,
-        string profile = "auto",
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int simulations = 50_000,
         int maxTurn = 8,
         int seed = 1337,
@@ -113,7 +114,7 @@ public sealed class SimulationTools
     {
         return simulation.AnalyzeDeckPerformanceAsync(
             workspaceId,
-            profile,
+            simulationProfile,
             simulations,
             maxTurn,
             seed,
@@ -124,11 +125,12 @@ public sealed class SimulationTools
     /// <summary>
     /// Compares performance before and after a persisted deck plan.
     /// </summary>
-    [McpServerTool(Name = "compare_plan_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "deck_plan_compare_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Preview a persisted deck edit plan and compare deterministic Stats Lab performance before and after the changes.")]
     public Task<DeckPerformanceComparison> ComparePlanPerformanceAsync(
         string planId,
-        string profile = "auto",
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int simulations = 50_000,
         int maxTurn = 8,
         int seed = 1337,
@@ -136,7 +138,7 @@ public sealed class SimulationTools
     {
         return simulation.ComparePlanPerformanceAsync(
             planId,
-            profile,
+            simulationProfile,
             simulations,
             maxTurn,
             seed,

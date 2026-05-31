@@ -89,7 +89,7 @@ Each scenario includes relevant cards, assumptions, failure drivers, and observe
 
 ## Plan Comparison
 
-`compare_plan_performance` applies a persisted edit plan to an in-memory preview, analyzes before and after with the same seed and simulation count, and reports:
+`deck_plan_compare_performance` applies a persisted edit plan to an in-memory preview, analyzes before and after with the same seed and simulation count, and reports:
 
 - `before`: baseline performance.
 - `after`: preview performance.

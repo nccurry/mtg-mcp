@@ -33,7 +33,7 @@ public sealed class CheckpointTools
     /// Creates an Archidekt checkpoint for a bound workspace.
     /// </summary>
     [McpServerTool(
-        Name = "checkpoint_deck",
+        Name = "archidekt_checkpoint_create",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
@@ -47,7 +47,7 @@ public sealed class CheckpointTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("checkpoint_deck");
+        operationMode.EnsureCanMutate("archidekt_checkpoint_create");
         return decks.CheckpointDeckAsync(workspaceId, name, description, cancellationToken);
     }
 
@@ -55,7 +55,7 @@ public sealed class CheckpointTools
     /// Lists the deck checkpoints.
     /// </summary>
     [McpServerTool(
-        Name = "list_deck_checkpoints",
+        Name = "archidekt_checkpoint_list",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
@@ -74,7 +74,7 @@ public sealed class CheckpointTools
     /// Gets the deck checkpoint.
     /// </summary>
     [McpServerTool(
-        Name = "get_deck_checkpoint",
+        Name = "archidekt_checkpoint_get",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
@@ -94,7 +94,7 @@ public sealed class CheckpointTools
     /// Renames the deck checkpoint.
     /// </summary>
     [McpServerTool(
-        Name = "rename_deck_checkpoint",
+        Name = "archidekt_checkpoint_rename",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -109,7 +109,7 @@ public sealed class CheckpointTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("rename_deck_checkpoint");
+        operationMode.EnsureCanMutate("archidekt_checkpoint_rename");
         return decks.RenameDeckCheckpointAsync(
             workspaceId,
             checkpointId,
@@ -123,7 +123,7 @@ public sealed class CheckpointTools
     /// Deletes the deck checkpoint.
     /// </summary>
     [McpServerTool(
-        Name = "delete_deck_checkpoint",
+        Name = "archidekt_checkpoint_delete",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -136,7 +136,7 @@ public sealed class CheckpointTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("delete_deck_checkpoint");
+        operationMode.EnsureCanMutate("archidekt_checkpoint_delete");
         return decks.DeleteDeckCheckpointAsync(workspaceId, checkpointId, cancellationToken);
     }
 }

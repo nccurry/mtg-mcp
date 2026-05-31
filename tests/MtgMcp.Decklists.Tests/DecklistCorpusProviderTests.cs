@@ -193,15 +193,34 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that EDHREC requires explicit unofficial endpoint opt-in.
+    /// Verifies that EDHREC is enabled by default for broad Commander aggregate evidence.
     /// </summary>
     [Fact]
-    public async Task EdhrecProvider_RequiresUnofficialApiOptIn()
+    public void EdhrecProvider_IsEnabledByDefault()
     {
         EdhrecCorpusSignalProvider provider = new(
             CreateClient(new MockHttpMessageHandler(), "https://edhrec.test/pages/"),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Edhrec", "")));
+            Options.Create(new MtgMcpOptions()));
+
+        CorpusSourceStatus status = provider.GetStatus();
+
+        status.Enabled.Should().BeTrue();
+        status.Status.Should().Be(CorpusSourceStatuses.Available);
+        status.UnofficialApi.Should().BeTrue();
+        status.PermissionSensitive.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that EDHREC respects an explicit unofficial endpoint opt-out.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_RespectsUnofficialApiOptOut()
+    {
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: false)));
 
         CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
 
@@ -238,16 +257,14 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that missing EDHREC theme pages fall back to commander aggregates.
+    /// Verifies that missing EDHREC theme pages return an unsupported-theme note.
     /// </summary>
     [Fact]
-    public async Task EdhrecProvider_FallsBackWhenThemePageIsMissing()
+    public async Task EdhrecProvider_ReturnsUnsupportedThemeWhenThemePageIsMissing()
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp.Expect(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief/discard.json")
             .Respond(HttpStatusCode.NotFound);
-        mockHttp.Expect(HttpMethod.Get, "https://edhrec.test/pages/commanders/tinybones-trinket-thief.json")
-            .Respond("application/json", EdhrecCommanderResponseJson);
         EdhrecCorpusSignalProvider provider = new(
             CreateClient(mockHttp, "https://edhrec.test/pages/"),
             new NullCorpusCache(),
@@ -257,10 +274,8 @@ public sealed class DecklistCorpusProviderTests
 
         CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
 
-        report.Signals.Should().Contain(signal =>
-            signal.CardName == "Waste Not"
-            && signal.Uri == "https://edhrec.com/commanders/tinybones-trinket-thief");
-        report.Notes.Should().Contain(note => note.Contains("falling back", StringComparison.OrdinalIgnoreCase));
+        report.Signals.Should().BeEmpty();
+        report.Notes.Should().Contain(note => note.Contains("unsupported-theme", StringComparison.OrdinalIgnoreCase));
         mockHttp.VerifyNoOutstandingExpectation();
     }
 
@@ -371,16 +386,36 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that Reddit requires explicit unofficial endpoint opt-in.
+    /// Verifies that Reddit public discussion evidence is enabled by default.
     /// </summary>
     [Fact]
-    public async Task RedditProvider_RequiresUnofficialApiOptIn()
+    public void RedditProvider_IsEnabledByDefault()
     {
         RedditDiscussionCorpusSignalProvider provider = new(
             CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
             new FakeCardCatalog(),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "")));
+            Options.Create(new MtgMcpOptions()));
+
+        CorpusSourceStatus status = provider.GetStatus();
+
+        status.Enabled.Should().BeTrue();
+        status.Status.Should().Be(CorpusSourceStatuses.Available);
+        status.ApiType.Should().Be(CorpusSourceApiTypes.UnofficialApi);
+        status.UnofficialApi.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that Reddit public discussion evidence respects an explicit unofficial endpoint opt-out.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_RespectsUnofficialApiOptOut()
+    {
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)));
 
         CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
 
@@ -668,7 +703,7 @@ public sealed class DecklistCorpusProviderTests
     private static MtgMcpOptions OptionsWithSource(
         string source,
         string apiKey,
-        bool allowUnofficialApi = false)
+        bool? allowUnofficialApi = null)
     {
         return new MtgMcpOptions
         {

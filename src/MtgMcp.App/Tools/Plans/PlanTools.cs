@@ -32,7 +32,7 @@ public sealed class PlanTools
     /// <summary>
     /// Creates a plan from exact card adds and removals supplied by the caller.
     /// </summary>
-    [McpServerTool(Name = "create_deck_plan_from_explicit_changes", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
+    [McpServerTool(Name = "deck_plan_create", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false)]
     [Description("Create a persisted non-mutating deck edit plan from caller-supplied add/remove operations. The MCP does not choose cards or cuts.")]
     public Task<DeckEditPlan> CreateDeckPlanFromExplicitChangesAsync(
         string workspaceId,
@@ -42,7 +42,7 @@ public sealed class PlanTools
         ExplicitDeckPlanCardChange[]? removeCards = null,
         CancellationToken cancellationToken = default)
     {
-        operationMode.EnsureCanWritePlanningState("create_deck_plan_from_explicit_changes");
+        operationMode.EnsureCanWritePlanningState("deck_plan_create");
         return plans.CreateDeckPlanFromExplicitChangesAsync(
             workspaceId,
             name,
@@ -55,7 +55,7 @@ public sealed class PlanTools
     /// <summary>
     /// Previews a persisted plan without mutating local or remote state.
     /// </summary>
-    [McpServerTool(Name = "preview_deck_plan", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "deck_plan_preview", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Preview a persisted deck edit plan without mutating local or Archidekt state. Returns before and after cost, validation, roles, mana, consistency, and bracket metrics.")]
     public Task<DeckPlanPreviewResult> PreviewDeckPlanAsync(
         string planId,
@@ -68,7 +68,7 @@ public sealed class PlanTools
     /// <summary>
     /// Lists saved deck edit plans.
     /// </summary>
-    [McpServerTool(Name = "list_deck_plans", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_plan_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("List persisted deck edit plans, optionally filtered by workspace id.")]
     public Task<IReadOnlyList<DeckEditPlan>> ListDeckPlansAsync(
         string? workspaceId = null,
@@ -80,7 +80,7 @@ public sealed class PlanTools
     /// <summary>
     /// Gets one saved deck edit plan.
     /// </summary>
-    [McpServerTool(Name = "get_deck_plan", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_plan_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get a persisted deck edit plan by plan id.")]
     public Task<DeckEditPlan> GetDeckPlanAsync(string planId, CancellationToken cancellationToken = default)
     {
@@ -90,18 +90,18 @@ public sealed class PlanTools
     /// <summary>
     /// Deletes a saved deck edit plan.
     /// </summary>
-    [McpServerTool(Name = "delete_deck_plan", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_plan_delete", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Delete a persisted deck edit plan. This does not change deck contents.")]
     public Task<DeckEditPlanDeleteResult> DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken = default)
     {
-        operationMode.EnsureCanWritePlanningState("delete_deck_plan");
+        operationMode.EnsureCanWritePlanningState("deck_plan_delete");
         return plans.DeleteDeckPlanAsync(planId, cancellationToken);
     }
 
     /// <summary>
     /// Applies a saved deck edit plan.
     /// </summary>
-    [McpServerTool(Name = "apply_deck_plan", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
+    [McpServerTool(Name = "deck_plan_apply", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
     [Description("Apply a persisted deck edit plan, returning structured success or failed-operation details. Archidekt writeback workspaces require or create a checkpoint before multi-card edits.")]
     public Task<DeckEditPlanApplyResult> ApplyDeckPlanAsync(
         string planId,
@@ -109,7 +109,7 @@ public sealed class PlanTools
         string? checkpointName = null,
         CancellationToken cancellationToken = default)
     {
-        operationMode.EnsureCanMutate("apply_deck_plan");
+        operationMode.EnsureCanMutate("deck_plan_apply");
         return plans.ApplyDeckPlanAsync(planId, createCheckpoint, checkpointName, cancellationToken);
     }
 }

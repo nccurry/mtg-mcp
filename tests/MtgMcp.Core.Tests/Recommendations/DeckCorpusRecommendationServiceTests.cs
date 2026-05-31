@@ -32,6 +32,143 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that commander aggregate rows preserve source grouping and counts.
+    /// </summary>
+    [Fact]
+    public async Task GetCommanderAggregateCardsAsync_ReturnsSourceBackedRowsWithoutMergingSources()
+    {
+        FakeCorpusSignalProvider provider = new();
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            corpusSignalProviders: [provider]);
+
+        CommanderAggregateCardsResult result = await service.GetCommanderAggregateCardsAsync(
+            "Tinybones, Trinket Thief",
+            theme: "discard",
+            source: null,
+            limit: 5,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.CommanderName.Should().Be("Tinybones, Trinket Thief");
+        result.Cards.Should().Contain(row => row.CardName == "Arcane Signet"
+            && row.Source == "Fake corpus"
+            && row.Section == "top-cards"
+            && row.DeckCount == 300
+            && row.EligibleDeckCount == 600);
+        result.Notes.Should().Contain(note => note.Contains("grouped by source", StringComparison.OrdinalIgnoreCase));
+        provider.LastQuery?.Commander.Should().Be("Tinybones, Trinket Thief");
+        provider.LastQuery?.Theme.Should().Be("discard");
+    }
+
+    /// <summary>
+    /// Verifies that sources without deterministic theme support are skipped for theme lookups.
+    /// </summary>
+    [Fact]
+    public async Task GetCommanderAggregateCardsAsync_SkipsSourcesWithoutThemeSupport()
+    {
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            corpusSignalProviders:
+            [
+                new FakeCorpusSignalProvider(
+                    key: "decklist-sample",
+                    sourceName: "Decklist Sample",
+                    primaryCard: "Thought Vessel",
+                    kind: "decklist-api")
+            ]);
+
+        CommanderAggregateCardsResult result = await service.GetCommanderAggregateCardsAsync(
+            "Tinybones, Trinket Thief",
+            theme: "discard",
+            source: "decklist-sample",
+            limit: 5,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.Cards.Should().BeEmpty();
+        result.Notes.Should().Contain(note => note.Contains("unsupported-theme", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that commander tags are derived from source-backed sections.
+    /// </summary>
+    [Fact]
+    public async Task GetCommanderTagsAsync_ReturnsSourceBackedSections()
+    {
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new FakeCorpusSignalProvider()]);
+
+        CommanderTagsResult result = await service.GetCommanderTagsAsync(
+            "Tinybones, Trinket Thief",
+            source: "fake-corpus",
+            limit: 5,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.Tags.Should().Contain(row => row.TagName == "top-cards"
+            && row.ThemeSlug == "top-cards"
+            && row.Source == "Fake corpus");
+    }
+
+    /// <summary>
+    /// Verifies that the win-condition bundle honors multiple requested aggregate sources separately.
+    /// </summary>
+    [Fact]
+    public async Task GetCommanderWinConditionEvidenceAsync_RestrictsRequestedSourcesWithoutMerging()
+    {
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            corpusSignalProviders:
+            [
+                new FakeCorpusSignalProvider(),
+                new FakeCorpusSignalProvider("other-source", "Other Source", "Thought Vessel")
+            ]);
+
+        CommanderWinConditionEvidenceResult result = await service.GetCommanderWinConditionEvidenceAsync(
+            "Tinybones, Trinket Thief",
+            theme: null,
+            strictColorIdentity: true,
+            sources: ["fake-corpus", "other-source"],
+            limit: 10,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.AggregateCards.Cards.Should().Contain(row => row.Source == "Fake corpus");
+        result.AggregateCards.Cards.Should().Contain(row => row.Source == "Other Source");
+        result.AggregateCards.Notes.Should().Contain(note =>
+            note.Contains("not merged", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that payoff finder labels candidates as Scryfall-query-derived evidence.
+    /// </summary>
+    [Fact]
+    public async Task FindWinconPayoffsAsync_ReturnsScryfallQueryDerivedCandidates()
+    {
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog());
+
+        WinconPayoffSearchResult result = await service.FindWinconPayoffsAsync(
+            WinRouteLabels.Aristocrats,
+            "B",
+            "commander",
+            maxPrice: 5,
+            limit: 2,
+            TestContext.Current.CancellationToken);
+
+        result.Candidates.Should().NotBeEmpty();
+        result.Candidates.Should().OnlyContain(candidate => candidate.Metadata.SourceKind == "payoff-candidate-search");
+        result.Notes.Should().Contain(note => note.Contains("not popularity evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that cache duration parsing supports compact configured values.
     /// </summary>
     [Fact]
@@ -550,6 +687,41 @@ public sealed partial class DeckIntelligenceTests
     private sealed class FakeCorpusSignalProvider : ICorpusSignalProvider
     {
         /// <summary>
+        /// Stores the fake source key.
+        /// </summary>
+        private readonly string key;
+
+        /// <summary>
+        /// Stores the fake source display name.
+        /// </summary>
+        private readonly string sourceName;
+
+        /// <summary>
+        /// Stores the primary fake card returned by this source.
+        /// </summary>
+        private readonly string primaryCard;
+
+        /// <summary>
+        /// Stores the fake source kind.
+        /// </summary>
+        private readonly string kind;
+
+        /// <summary>
+        /// Creates a fake corpus provider.
+        /// </summary>
+        public FakeCorpusSignalProvider(
+            string key = "fake-corpus",
+            string sourceName = "Fake corpus",
+            string primaryCard = "Arcane Signet",
+            string kind = "commander-aggregate")
+        {
+            this.key = key;
+            this.sourceName = sourceName;
+            this.primaryCard = primaryCard;
+            this.kind = kind;
+        }
+
+        /// <summary>
         /// Gets the last query received by the fake provider.
         /// </summary>
         public CorpusSignalQuery? LastQuery { get; private set; }
@@ -566,13 +738,13 @@ public sealed partial class DeckIntelligenceTests
         {
             return new CorpusSourceStatus
             {
-                Key = "fake-corpus",
-                Name = "Fake corpus",
-                Kind = "test",
+                Key = key,
+                Name = sourceName,
+                Kind = kind,
                 Enabled = true,
                 StableApi = true,
                 Status = CorpusSourceStatuses.Available,
-                Uri = "https://example.test/corpus"
+                Uri = $"https://example.test/{key}"
             };
         }
 
@@ -593,22 +765,25 @@ public sealed partial class DeckIntelligenceTests
                 [
                     new CardCorpusSignal
                     {
-                        CardName = "Arcane Signet",
-                        Source = "Fake corpus",
+                        CardName = primaryCard,
+                        Source = sourceName,
                         SignalType = CorpusSignalTypes.Budget,
+                        Section = "top-cards",
                         Score = 0.88,
                         InclusionRate = 0.50,
                         DeckCount = 300,
+                        EligibleDeckCount = 600,
                         Price = 1.00m,
                         EdhrecRank = 5,
-                        Uri = "https://example.test/cards/arcane-signet",
+                        Uri = $"https://example.test/cards/{primaryCard.Replace(' ', '-').ToLowerInvariant()}",
                         Rationale = "Cheap ramp replacement appears in budget Tinybones lists."
                     },
                     new CardCorpusSignal
                     {
                         CardName = "Illness in the Ranks",
-                        Source = "Fake corpus",
+                        Source = sourceName,
                         SignalType = CorpusSignalTypes.Novelty,
+                        Section = "spicy-tech",
                         Score = 0.92,
                         InclusionRate = 0.03,
                         DeckCount = 12,
@@ -620,8 +795,9 @@ public sealed partial class DeckIntelligenceTests
                     new CardCorpusSignal
                     {
                         CardName = "Lightning Greaves",
-                        Source = "Fake corpus",
+                        Source = sourceName,
                         SignalType = CorpusSignalTypes.Inclusion,
+                        Section = "top-cards",
                         Score = 0.74,
                         InclusionRate = 0.42,
                         DeckCount = 200,
@@ -641,7 +817,7 @@ public sealed partial class DeckIntelligenceTests
                     new DeckExemplarSignal
                     {
                         Name = "High Vote Tinybones",
-                        Source = "Fake corpus",
+                        Source = sourceName,
                         Commander = query.Commander,
                         PopularityMetric = "votes",
                         PopularityValue = 42,
@@ -651,7 +827,7 @@ public sealed partial class DeckIntelligenceTests
                     new DeckExemplarSignal
                     {
                         Name = "Budget Tinybones",
-                        Source = "Fake corpus",
+                        Source = sourceName,
                         Commander = query.Commander,
                         PopularityMetric = "views",
                         PopularityValue = 20,

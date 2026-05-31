@@ -33,7 +33,7 @@ public sealed class DeckMutationTools
     /// Adds the card.
     /// </summary>
     [McpServerTool(
-        Name = "add_card",
+        Name = "deck_add_card",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
@@ -49,7 +49,7 @@ public sealed class DeckMutationTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("add_card");
+        operationMode.EnsureCanMutate("deck_add_card");
         return decks.AddCardAsync(workspaceId, cardName, quantity, category, force, cancellationToken);
     }
 
@@ -57,7 +57,7 @@ public sealed class DeckMutationTools
     /// Removes the card.
     /// </summary>
     [McpServerTool(
-        Name = "remove_card",
+        Name = "deck_remove_card",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
@@ -72,7 +72,7 @@ public sealed class DeckMutationTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("remove_card");
+        operationMode.EnsureCanMutate("deck_remove_card");
         return decks.RemoveCardAsync(workspaceId, cardName, quantity, category, cancellationToken);
     }
 
@@ -80,7 +80,7 @@ public sealed class DeckMutationTools
     /// Sets the card quantity.
     /// </summary>
     [McpServerTool(
-        Name = "set_card_quantity",
+        Name = "deck_set_card_quantity",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -95,7 +95,7 @@ public sealed class DeckMutationTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("set_card_quantity");
+        operationMode.EnsureCanMutate("deck_set_card_quantity");
         return decks.SetCardQuantityAsync(
             workspaceId,
             cardName,
@@ -109,7 +109,7 @@ public sealed class DeckMutationTools
     /// Moves the card.
     /// </summary>
     [McpServerTool(
-        Name = "move_card",
+        Name = "deck_move_card",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -126,7 +126,7 @@ public sealed class DeckMutationTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("move_card");
+        operationMode.EnsureCanMutate("deck_move_card");
         return decks.MoveCardAsync(
             workspaceId,
             cardName,
@@ -140,7 +140,7 @@ public sealed class DeckMutationTools
     /// Updates the deck metadata.
     /// </summary>
     [McpServerTool(
-        Name = "update_deck_metadata",
+        Name = "deck_update_metadata",
         ReadOnly = false,
         Destructive = true,
         Idempotent = true,
@@ -155,7 +155,7 @@ public sealed class DeckMutationTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("update_deck_metadata");
+        operationMode.EnsureCanMutate("deck_update_metadata");
         return decks.UpdateDeckMetadataAsync(
             workspaceId,
             name,

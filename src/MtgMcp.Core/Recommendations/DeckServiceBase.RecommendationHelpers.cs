@@ -170,7 +170,7 @@ public abstract partial class DeckServiceBase
             summary.Risks.Add("Interaction and board wipe density may be low.");
         }
 
-        summary.NextSteps.Add("Run analyze_draw_odds for lands, ramp, draw, discard, interaction, and board wipes.");
+        summary.NextSteps.Add("Run deck_analyze_draw_odds for lands, ramp, draw, discard, interaction, and board wipes.");
         summary.NextSteps.Add("Review category counts and card facets before applying category changes.");
     }
 

@@ -32,21 +32,22 @@ public sealed class AnalysisTools
     /// <summary>
     /// Refreshes cached Scryfall snapshots for workspace cards.
     /// </summary>
-    [McpServerTool(Name = "refresh_deck_card_snapshots", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "deck_refresh_card_metadata", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Refresh Scryfall snapshot metadata for workspace cards without changing deck contents or writing card changes to Archidekt. Scope: all, included, maybeboard, or missing.")]
     public Task<DeckNormalizationResult> RefreshDeckCardSnapshotsAsync(
         string workspaceId,
+        [Description("Metadata refresh scope: all, included, maybeboard, or missing.")]
         string scope = "missing",
         CancellationToken cancellationToken = default)
     {
-        operationMode.EnsureCanWritePlanningState("refresh_deck_card_snapshots");
+        operationMode.EnsureCanWritePlanningState("deck_refresh_card_metadata");
         return analysis.RefreshDeckCardSnapshotsAsync(workspaceId, scope, cancellationToken);
     }
 
     /// <summary>
     /// Summarizes workspace plan, categories, strengths, risks, and next analysis steps.
     /// </summary>
-    [McpServerTool(Name = "summarize_deck_workspace", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_summarize", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Summarize a deck workspace's plan, role distribution, category map, strengths, risks, and suggested next analysis steps.")]
     public Task<DeckPlanSummary> SummarizeDeckWorkspaceAsync(
         string workspaceId,
@@ -58,7 +59,7 @@ public sealed class AnalysisTools
     /// <summary>
     /// Calculates hypergeometric and Monte Carlo odds for requested roles or tags.
     /// </summary>
-    [McpServerTool(Name = "analyze_draw_odds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_analyze_draw_odds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Calculate hypergeometric and Monte Carlo odds of seeing roles or tags by a turn. Targets is a comma-separated list such as 'Lands,Ramp,Draw,Discard'.")]
     public Task<DeckOddsAnalysis> AnalyzeDrawOddsAsync(
         string workspaceId,
@@ -80,9 +81,35 @@ public sealed class AnalysisTools
     }
 
     /// <summary>
+    /// Analyzes turn-by-turn odds of making land drops.
+    /// </summary>
+    [McpServerTool(Name = "deck_analyze_land_drop_odds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Analyze turn-by-turn odds of making land drops. Uses exact no-mulligan hypergeometric odds and deterministic seeded Monte Carlo for mulligans. onThePlay controls turn-1 draw assumptions.")]
+    public Task<LandDropOddsAnalysis> AnalyzeLandDropOddsAsync(
+        string workspaceId,
+        int turn = 3,
+        int openingHandSize = 7,
+        bool onThePlay = false,
+        bool includeMulligans = true,
+        int simulations = 10_000,
+        int seed = 1337,
+        CancellationToken cancellationToken = default)
+    {
+        return analysis.AnalyzeLandDropOddsAsync(
+            workspaceId,
+            turn,
+            openingHandSize,
+            onThePlay,
+            includeMulligans,
+            simulations,
+            seed,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Analyzes cached deck prices and top cost drivers.
     /// </summary>
-    [McpServerTool(Name = "analyze_deck_cost", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_analyze_cost", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Analyze cached deck prices, included total, maybeboard total, missing prices, and top cost drivers.")]
     public Task<DeckCostAnalysis> AnalyzeDeckCostAsync(
         string workspaceId,
@@ -94,7 +121,7 @@ public sealed class AnalysisTools
     /// <summary>
     /// Estimates the Commander bracket for a deck.
     /// </summary>
-    [McpServerTool(Name = "estimate_commander_bracket", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "deck_estimate_commander_bracket", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Estimate Commander bracket using live Scryfall Game Changer data plus fast mana, tutor, stax, combo, extra-turn, and mass-land-denial signals.")]
     public Task<CommanderBracketEstimate> EstimateCommanderBracketAsync(
         string workspaceId,
@@ -106,7 +133,7 @@ public sealed class AnalysisTools
     /// <summary>
     /// Analyzes land count, color sources, fixing, and tapped-land pressure.
     /// </summary>
-    [McpServerTool(Name = "analyze_mana_base", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_analyze_mana", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Analyze land count, color sources, produced mana, tapped-land pressure, fixing, and mana-base risks.")]
     public Task<ManaBaseAnalysis> AnalyzeManaBaseAsync(
         string workspaceId,
@@ -118,7 +145,7 @@ public sealed class AnalysisTools
     /// <summary>
     /// Analyzes ramp, draw, tutor, selection, and low-curve density.
     /// </summary>
-    [McpServerTool(Name = "analyze_deck_consistency", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_analyze_consistency", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Analyze ramp, draw, tutor, card-selection, low-curve density, and key draw odds for consistency.")]
     public Task<DeckConsistencyAnalysis> AnalyzeDeckConsistencyAsync(
         string workspaceId,
@@ -130,49 +157,94 @@ public sealed class AnalysisTools
     /// <summary>
     /// Compares a deck against Commander construction heuristics.
     /// </summary>
-    [McpServerTool(Name = "analyze_deck_best_practices", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Analyze a deck against Commander best-practice heuristics, intent targets, role gaps, interaction coverage, wincon clarity, and cited rationale. Profile can be auto or a documented Heuristic Profile value.")]
+    [McpServerTool(Name = "deck_analyze_best_practices", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Analyze a deck against Commander best-practice heuristics, intent targets, role gaps, interaction coverage, wincon clarity, and cited rationale. AnalysisProfile can be auto or a documented Heuristic Profile value.")]
     public Task<DeckBestPracticeAnalysis> AnalyzeDeckBestPracticesAsync(
         string workspaceId,
-        string profile = "auto",
+        [Description("Heuristic analysis profile: auto or a documented deck intent Heuristic Profile value.")]
+        string analysisProfile = "auto",
         CancellationToken cancellationToken = default)
     {
-        return analysis.AnalyzeDeckBestPracticesAsync(workspaceId, profile, cancellationToken);
+        return analysis.AnalyzeDeckBestPracticesAsync(workspaceId, analysisProfile, cancellationToken);
     }
 
     /// <summary>
-    /// Finds completed combos in a deck.
+    /// Analyzes completed combos, near misses, and pressure in one evidence report.
     /// </summary>
-    [McpServerTool(Name = "find_deck_combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Find completed combos using a configured combo catalog or local combo heuristics.")]
-    public Task<DeckComboReport> FindDeckCombosAsync(
+    [McpServerTool(Name = "deck_analyze_combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Analyze completed combos, near misses, missing cards/templates, produced features, route labels, terminal/needs-payoff flags, and combo pressure. Local heuristics are separated from catalog evidence.")]
+    public Task<DeckComboReport> AnalyzeCombosAsync(
         string workspaceId,
+        bool includeNearMisses = true,
+        bool includeHeuristics = true,
+        bool bypassCache = false,
         CancellationToken cancellationToken = default)
     {
-        return analysis.FindDeckCombosAsync(workspaceId, cancellationToken);
+        return analysis.AnalyzeCombosAsync(
+            workspaceId,
+            includeNearMisses,
+            includeHeuristics,
+            bypassCache,
+            cancellationToken);
     }
 
     /// <summary>
-    /// Finds one-card-away or partial combo routes.
+    /// Searches combo catalog evidence containing one card.
     /// </summary>
-    [McpServerTool(Name = "find_near_miss_combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Find one-card-away or partial combo routes using a configured combo catalog or local combo heuristics.")]
-    public Task<DeckComboReport> FindNearMissCombosAsync(
-        string workspaceId,
+    [McpServerTool(Name = "combo_search_by_card", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Search Commander Spellbook catalog evidence for combos containing one card. strictColorIdentity filters combos to the supplied commander's Scryfall color identity when commanderName is provided.")]
+    public Task<ComboEvidenceSearchResult> SearchCombosByCardAsync(
+        string cardNameOrId,
+        string format = "commander",
+        string? commanderName = null,
+        bool strictColorIdentity = true,
+        int limit = 50,
+        bool bypassCache = false,
         CancellationToken cancellationToken = default)
     {
-        return analysis.FindNearMissCombosAsync(workspaceId, cancellationToken);
+        return analysis.SearchCombosByCardAsync(
+            cardNameOrId,
+            format,
+            commanderName,
+            strictColorIdentity,
+            limit,
+            bypassCache,
+            cancellationToken);
     }
 
     /// <summary>
-    /// Estimates combo pressure from combo candidates, tutors, and tags.
+    /// Gets raw-preserving combo catalog details.
     /// </summary>
-    [McpServerTool(Name = "estimate_combo_pressure", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Estimate combo pressure from completed combos, near misses, tutors, and combo-piece density.")]
-    public Task<ComboPressureEstimate> EstimateComboPressureAsync(
-        string workspaceId,
+    [McpServerTool(Name = "combo_get_details", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Get raw-preserving Commander Spellbook combo details: combo id, cards, produces, requires, templates, prerequisites, steps, bracket tag, prevalence/popularity fields, source URI, and route labels.")]
+    public Task<ComboEvidence?> GetComboDetailsAsync(
+        string comboId,
+        bool bypassCache = false,
         CancellationToken cancellationToken = default)
     {
-        return analysis.EstimateComboPressureAsync(workspaceId, cancellationToken);
+        return analysis.GetComboDetailsAsync(comboId, bypassCache, cancellationToken);
+    }
+
+    /// <summary>
+    /// Classifies cards, combos, workspaces, or produced features into route labels.
+    /// </summary>
+    [McpServerTool(Name = "card_classify_win_routes", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Classify exactly one evidence input into approved win-route labels. Provide exactly one of cardNames, workspaceId, comboId, or producedFeatures. Route labels include combat, tokens, storm, infinite-mana, self-mill, opponent-mill, extra-turns, aristocrats, alternate-win, value-combat, etb, and draw-deck.")]
+    public Task<WinRouteClassificationResult> ClassifyWinRoutesAsync(
+        string[]? cardNames = null,
+        string? workspaceId = null,
+        string? comboId = null,
+        [Description("Normalized combo produced features to classify. Approved route labels include combat, tokens, storm, infinite-mana, self-mill, opponent-mill, extra-turns, aristocrats, alternate-win, value-combat, etb, and draw-deck.")]
+        string[]? producedFeatures = null,
+        string format = "commander",
+        CancellationToken cancellationToken = default)
+    {
+        return analysis.ClassifyWinRoutesAsync(
+            cardNames,
+            workspaceId,
+            comboId,
+            producedFeatures,
+            format,
+            cancellationToken);
     }
 }

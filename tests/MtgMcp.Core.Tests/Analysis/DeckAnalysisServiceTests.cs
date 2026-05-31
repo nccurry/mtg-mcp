@@ -591,6 +591,128 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that land-drop odds include exact and deterministic simulation rows.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeLandDropOddsAsync_ReturnsTurnByTurnMissRisk()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 30, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Spell", Quantity = 69, PrimaryCategory = DeckRoles.Utility, Categories = [DeckRoles.Utility] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        LandDropOddsAnalysis analysis = await service.AnalyzeLandDropOddsAsync(
+            workspace.Id,
+            turn: 3,
+            openingHandSize: 7,
+            onThePlay: true,
+            includeMulligans: true,
+            simulations: 500,
+            seed: 42,
+            TestContext.Current.CancellationToken);
+
+        analysis.LandCount.Should().Be(30);
+        analysis.Rows.Should().HaveCount(3);
+        analysis.Rows.Single(row => row.Turn == 3).CardsSeen.Should().Be(9);
+        analysis.Rows.Single(row => row.Turn == 3).MonteCarloMissLandDrop.Should().BeGreaterThan(0);
+        analysis.FailureDrivers.Should().Contain(driver => driver.Contains("Land density", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that route classification emits only approved route labels.
+    /// </summary>
+    [Fact]
+    public async Task ClassifyWinRoutesAsync_EmitsOnlyApprovedRouteLabels()
+    {
+        DeckAnalysisService service = CreateAnalysisService(new InMemoryRepository(), new FakeCardCatalog());
+
+        WinRouteClassificationResult result = await service.ClassifyWinRoutesAsync(
+            cardNames: null,
+            workspaceId: null,
+            comboId: null,
+            producedFeatures:
+            [
+                "Infinite colorless mana",
+                "Infinite storm count",
+                "Draw your deck"
+            ],
+            format: "commander",
+            TestContext.Current.CancellationToken);
+
+        WinRouteClassification classification = result.Classifications.Single();
+        classification.RouteTypes.Should().OnlyContain(route => WinRouteLabels.All.Contains(route));
+        classification.RouteTypes.Should().Contain([WinRouteLabels.InfiniteMana, WinRouteLabels.Storm, WinRouteLabels.DrawDeck]);
+        classification.NeedsPayoff.Should().BeTrue();
+        classification.PayoffKindsNeeded.Should().Contain("mana-sink");
+    }
+
+    /// <summary>
+    /// Verifies that unrecognized produced features do not get a fuzzy fallback route.
+    /// </summary>
+    [Fact]
+    public async Task ClassifyWinRoutesAsync_DoesNotInventFallbackRoutes()
+    {
+        DeckAnalysisService service = CreateAnalysisService(new InMemoryRepository(), new FakeCardCatalog());
+
+        WinRouteClassificationResult result = await service.ClassifyWinRoutesAsync(
+            cardNames: null,
+            workspaceId: null,
+            comboId: null,
+            producedFeatures: ["Untap target permanent"],
+            format: "commander",
+            TestContext.Current.CancellationToken);
+
+        WinRouteClassification classification = result.Classifications.Single();
+        classification.RouteTypes.Should().BeEmpty();
+        classification.Terminal.Should().BeFalse();
+        classification.NeedsPayoff.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that route classification requires one deterministic evidence input.
+    /// </summary>
+    [Fact]
+    public async Task ClassifyWinRoutesAsync_RequiresExactlyOneInput()
+    {
+        DeckAnalysisService service = CreateAnalysisService(new InMemoryRepository(), new FakeCardCatalog());
+
+        Func<Task> act = () => service.ClassifyWinRoutesAsync(
+            cardNames: ["Blood Artist"],
+            workspaceId: "workspace-1",
+            comboId: null,
+            producedFeatures: null,
+            format: "commander",
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<ArgumentException>()
+            .WithMessage("*exactly one*");
+    }
+
+    /// <summary>
+    /// Verifies that prevention text is not treated as an alternate win condition.
+    /// </summary>
+    [Fact]
+    public void WinRouteClassifier_DoesNotTreatCantLoseTextAsTerminal()
+    {
+        WinRouteClassification classification = WinRouteClassifier.ClassifyCard(new CardInfo
+        {
+            Name = "Platinum Angel",
+            TypeLine = "Artifact Creature",
+            OracleText = "You can't lose the game and your opponents can't win the game."
+        });
+
+        classification.RouteTypes.Should().NotContain(WinRouteLabels.AlternateWin);
+        classification.Terminal.Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies that analyze deck cost returns totals and drivers from cached prices.
     /// </summary>
     [Fact]

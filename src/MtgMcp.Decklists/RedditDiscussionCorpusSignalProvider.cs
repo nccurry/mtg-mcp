@@ -118,7 +118,8 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
     {
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
         bool hasBearerToken = !string.IsNullOrWhiteSpace(sourceOptions.ApiKey);
-        bool enabled = sourceOptions.Enabled && (hasBearerToken || sourceOptions.AllowUnofficialApi);
+        bool enabled = sourceOptions.Enabled
+            && (hasBearerToken || DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: true));
         return new CorpusSourceStatus
         {
             Key = "reddit-discussions",
@@ -139,7 +140,7 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
                 "Queries bounded Reddit post and comment JSON for exact card-reference evidence.",
                 "Searches a fixed EDH/Commander subreddit allowlist for popular commander discussions.",
                 "Reports linked decklist URLs from discussion text without fetching those sites.",
-                "ApiKey may hold an OAuth bearer token; otherwise set AllowUnofficialApi=true before querying public JSON endpoints."
+                "ApiKey may hold an OAuth bearer token; otherwise the bounded public JSON path is enabled by default and can be disabled with AllowUnofficialApi=false."
             ]
         };
     }

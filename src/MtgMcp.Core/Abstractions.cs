@@ -103,6 +103,22 @@ public interface IComboCatalog
         ComboCatalogQuery query,
         CancellationToken cancellationToken
     );
+
+    /// <summary>
+    /// Finds catalog combo evidence containing one card.
+    /// </summary>
+    Task<IReadOnlyList<ComboEvidence>> SearchCombosByCardAsync(
+        ComboCardSearchQuery query,
+        CancellationToken cancellationToken
+    );
+
+    /// <summary>
+    /// Gets raw-preserving combo evidence for one catalog combo id.
+    /// </summary>
+    Task<ComboEvidence?> GetComboDetailsAsync(
+        ComboDetailsQuery query,
+        CancellationToken cancellationToken
+    );
 }
 
 /// <summary>

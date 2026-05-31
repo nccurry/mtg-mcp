@@ -16,12 +16,12 @@ Existing capabilities include:
 - Local and Archidekt-backed deck workspaces.
 - Factual card facets and explicit predicate counts over Scryfall snapshots, workspace categories, and local annotations.
 - Role and tag classification for deck cards.
-- Hypergeometric and Monte Carlo draw odds for roles or tags.
+- Hypergeometric and Monte Carlo draw odds for roles, tags, and turn-by-turn land drops.
 - Heuristic no-opponent goldfish projection.
 - Commander best-practice profiles, simulation profiles, and deck intent guidance.
 - Deck-local win routes with deterministic route predicate evidence.
-- Commander Spellbook combo and near-miss detection.
-- Corpus/context signals from Scryfall, Commander Spellbook, TopDeck, and Spicerack.
+- Commander Spellbook catalog combo search, raw combo details, and near-miss detection.
+- Evidence-first source signals from Scryfall card facts, Commander Spellbook combo catalog rows, TopDeck/Spicerack decklist samples, EDHREC-style aggregate JSON, and bounded Reddit discussion search.
 - Playgroup.gg deck ranking and local-meta candidate scoring.
 - Previewable deck edit plans before any local or Archidekt mutation.
 - Stats Lab whole-deck performance analysis for opening hands, land drops, colors, castability, commander timing, combo/tutor assembly, stranded-card risk, and named scenarios.
@@ -40,11 +40,10 @@ These tools answer questions like "how much ramp do I have?" or "what are my odd
 
 ## Recommendation Source Boundaries
 
-Recommendation sources, called corpus sources in older internal APIs, are
-runtime data providers, not roadmap entries. Normal source listings should
-include implemented providers only, and each provider should report whether it
-is available, disabled, missing required configuration, or failed during a
-lookup.
+Recommendation sources are runtime data providers, not roadmap entries. Normal
+source listings should include implemented providers only, and each provider
+should report whether it is available, disabled, missing required configuration,
+or failed during a lookup.
 
 New recommendation source providers should fit one of these categories:
 
@@ -57,10 +56,11 @@ New recommendation source providers should fit one of these categories:
 
 Do not add providers that require HTML scraping, browser automation, private
 web app contracts, or bulk crawling. Reverse-engineered structured endpoints
-must stay disabled by default, report permission sensitivity, and use fixture
-tests instead of live network tests. Deck import/writeback support, such as
-Archidekt and Moxfield workspaces, is a separate integration surface from
-corpus-scale deck search or recommendation evidence.
+must report permission sensitivity, be bounded and cached, provide an opt-out
+when default-enabled, and use fixture tests instead of live network tests.
+Deck import/writeback support, such as Archidekt and Moxfield workspaces, is a
+separate integration surface from source-scale deck search or recommendation
+evidence.
 
 ## Stats Lab Design
 
@@ -94,13 +94,13 @@ This layer is an abstract scenario simulator, not a rules engine. It should make
 
 Implemented tools are high-level and deckbuilder-facing:
 
-- `simulate_goldfish`
-- `project_board_state`
-- `estimate_win_turn`
-- `compare_archidekt_goldfish`
-- `analyze_deck_performance`
-- `compare_plan_performance`
-- `score_cards_for_playgroup_meta`
+- `deck_simulate_goldfish`
+- `deck_project_board_state`
+- `deck_estimate_win_turn`
+- `archidekt_compare_goldfish`
+- `deck_analyze_performance`
+- `deck_plan_compare_performance`
+- `deck_score_cards_for_playgroup_meta`
 
 These tools return compact structured summaries that an LLM can explain without guessing. Results include the analysis profile, simulation count, seed, assumptions, confidence, warnings, and key metrics.
 

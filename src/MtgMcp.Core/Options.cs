@@ -160,9 +160,9 @@ public sealed class MtgMcpCorpusSourceOptions
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// Gets or sets whether unofficial structured APIs are allowed.
+    /// Gets or sets whether unofficial structured APIs are allowed; null uses the source-specific default.
     /// </summary>
-    public bool AllowUnofficialApi { get; set; }
+    public bool? AllowUnofficialApi { get; set; }
 
     /// <summary>
     /// Gets or sets an optional source base address override.

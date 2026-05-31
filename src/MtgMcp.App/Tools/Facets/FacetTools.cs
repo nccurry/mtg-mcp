@@ -32,7 +32,7 @@ public sealed class FacetTools
     /// <summary>
     /// Gets normalized factual facets for one workspace card.
     /// </summary>
-    [McpServerTool(Name = "get_card_facets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "card_facets_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get factual facets for one workspace card, including Scryfall snapshot fields, workspace categories, local user annotations, and locally cached Tagger annotations.")]
     public Task<CardFacetSnapshot> GetCardFacetsAsync(
         string workspaceId,
@@ -45,7 +45,7 @@ public sealed class FacetTools
     /// <summary>
     /// Gets normalized factual facets for cards in a workspace.
     /// </summary>
-    [McpServerTool(Name = "get_deck_facets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_facets_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Get factual facets for workspace cards. IncludedOnly defaults to true so counts follow active deck categories.")]
     public Task<DeckFacetSnapshot> GetDeckFacetsAsync(
         string workspaceId,
@@ -58,7 +58,7 @@ public sealed class FacetTools
     /// <summary>
     /// Counts deck cards matching an explicit JSON facet predicate.
     /// </summary>
-    [McpServerTool(Name = "count_deck_cards_matching", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "deck_facets_count", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Count workspace cards that match a caller-supplied JSON facet predicate. The predicate defines the category; mtg-mcp only evaluates it.")]
     public Task<DeckFacetCountResult> CountDeckCardsMatchingAsync(
         string workspaceId,
@@ -72,7 +72,7 @@ public sealed class FacetTools
     /// <summary>
     /// Explains whether one card matches an explicit JSON facet predicate.
     /// </summary>
-    [McpServerTool(Name = "explain_card_match", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "card_facets_explain_match", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Explain whether one workspace card matches a caller-supplied JSON facet predicate, returning the exact facet evidence inspected.")]
     public Task<CardFacetMatchResult> ExplainCardMatchAsync(
         string workspaceId,
@@ -86,7 +86,7 @@ public sealed class FacetTools
     /// <summary>
     /// Saves local annotations that later appear as card facets.
     /// </summary>
-    [McpServerTool(Name = "set_card_facet_annotations", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "card_facets_set_annotations", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Set local user or Tagger facet annotations for one workspace card. This writes mtg-mcp workspace metadata only and does not write back to Archidekt.")]
     public Task<CardFacetAnnotationResult> SetCardFacetAnnotationsAsync(
         string workspaceId,
@@ -97,7 +97,7 @@ public sealed class FacetTools
         string[]? taggerArtTags = null,
         CancellationToken cancellationToken = default)
     {
-        operationMode.EnsureCanWritePlanningState("set_card_facet_annotations");
+        operationMode.EnsureCanWritePlanningState("card_facets_set_annotations");
         return facets.SetCardAnnotationsAsync(
             workspaceId,
             cardName,

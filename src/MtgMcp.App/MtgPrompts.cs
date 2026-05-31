@@ -21,8 +21,8 @@ public sealed class MtgPrompts
             Theme: {theme}
             Budget: {budget}
 
-            Use mtg-mcp tools to search Scryfall, validate color identity,
-            create a local workspace, refresh card snapshots, summarize the deck workspace,
+            Use mtg-mcp tools to card_search, validate color identity,
+            workspace_start a local workspace, deck_refresh_card_metadata, deck_summarize,
             add cards by role, and explain the key packages before finalizing.
             """;
     }
@@ -38,28 +38,45 @@ public sealed class MtgPrompts
             Tune deck workspace {workspaceId}.
             Goal: {goal}
 
-            Read get_deck_intent first. If no intent exists, use suggest_deck_intent and ask the user
-            whether to save it. Refresh deck card snapshots if needed, summarize the deck workspace, analyze draw odds,
-            identify weak roles or curve issues, gather candidate data with explicit Scryfall queries,
+            Read deck_intent_get first. If no intent exists, use deck_intent_suggest and ask the user
+            whether to save it. Run deck_refresh_card_metadata if needed, deck_summarize, deck_analyze_draw_odds,
+            identify weak roles or curve issues, gather candidate data with deck_query_cards,
             and only create or apply deck plans after the user approves the exact change direction.
             """;
     }
 
     /// <summary>
-    /// Researches budget replacement data.
+    /// Builds a prompt for commander aggregate card research.
     /// </summary>
-    [McpServerPrompt(Name = "research_budget_replacements")]
-    [Description("Gather cheaper card replacement data for a deck workspace.")]
-    public string ResearchBudgetReplacements(string workspaceId, string budgetTarget = "")
+    [McpServerPrompt(Name = "research_commander_common_cards")]
+    [Description("Gather source-backed cards commonly associated with a commander.")]
+    public string ResearchCommanderCommonCards(string commander, string theme = "", string source = "")
     {
         return $"""
-            Find budget replacements for deck workspace {workspaceId}.
-            Budget target: {budgetTarget}
+            Research common cards for commander {commander}.
+            Theme: {theme}
+            Source: {source}
 
-            Use get_deck_intent, refresh_deck_card_snapshots, analyze_deck_cost, and explicit
-            query_cards_for_deck lookups. Preserve color identity, role, protected cards/packages,
-            mana curve, and format legality. Return candidate data first; create a plan only after
-            the replacement query and target cards are explicit.
+            Use commander_get_aggregate_cards and commander_get_tags. Keep source populations separate,
+            cite source metadata, and do not merge counts across unlike sources. Treat Reddit as raw
+            discussion evidence and TopDeck as tournament/decklist sample evidence.
+            """;
+    }
+
+    /// <summary>
+    /// Builds a prompt for commander win-condition evidence research.
+    /// </summary>
+    [McpServerPrompt(Name = "research_commander_win_conditions")]
+    [Description("Gather structured win-condition evidence for a commander.")]
+    public string ResearchCommanderWinConditions(string commander, string theme = "")
+    {
+        return $"""
+            Research win-condition evidence for commander {commander}.
+            Theme: {theme}
+
+            Use commander_get_win_condition_evidence, combo_get_details when a combo needs inspection,
+            card_classify_win_routes for route labels, and wincon_find_payoffs for non-terminal routes.
+            Return structured evidence first; write any conclusions separately and label source caveats.
             """;
     }
 
@@ -74,8 +91,8 @@ public sealed class MtgPrompts
             Reduce the cost of deck workspace {workspaceId}.
             Budget target: {budgetTarget}
 
-            Use refresh_deck_card_snapshots, analyze_deck_cost, summarize_deck_workspace, and explicit
-            query_cards_for_deck lookups. Preserve color identity, role coverage, format legality, and
+            Use deck_refresh_card_metadata, deck_analyze_cost, deck_summarize, and explicit
+            deck_query_cards lookups. Preserve color identity, role coverage, format legality, and
             the deck's stated game plan. Return source data and candidate swaps; create and preview a plan
             only after the user approves the proposed query and targets.
             """;
@@ -93,8 +110,8 @@ public sealed class MtgPrompts
             Focus: {focus}
             Max price: {maxPrice}
 
-            Use refresh_deck_card_snapshots, summarize_deck_workspace, analyze_deck_consistency,
-            and query_cards_for_deck with explicit Scryfall syntax. Preserve color identity and legality.
+            Use deck_refresh_card_metadata, deck_summarize, deck_analyze_consistency,
+            and deck_query_cards with explicit Scryfall syntax. Preserve color identity and legality.
             Return source data first; create and preview a plan only after the user approves the targets.
             """;
     }
@@ -110,8 +127,8 @@ public sealed class MtgPrompts
             Reduce the power of deck workspace {workspaceId}.
             Target power: {targetPower}
 
-            Use refresh_deck_card_snapshots, summarize_deck_workspace, estimate_commander_bracket,
-            and query_cards_for_deck with explicit replacement searches. Prefer gentler replacements over
+            Use deck_refresh_card_metadata, deck_summarize, deck_estimate_commander_bracket,
+            and deck_query_cards with explicit replacement searches. Prefer gentler replacements over
             removing core identity cards. Return source data and likely gameplay impact; create a plan only
             after the user approves the exact changes.
             """;
@@ -127,8 +144,8 @@ public sealed class MtgPrompts
         return $"""
             Lower deck workspace {workspaceId} toward Commander bracket {targetBracket}.
 
-            Use refresh_deck_card_snapshots, estimate_commander_bracket, get_deck_facets, and explicit
-            query_cards_for_deck lookups for replacement data. Treat bracket output as an advisory estimate
+            Use deck_refresh_card_metadata, deck_estimate_commander_bracket, deck_facets_get, and explicit
+            deck_query_cards lookups for replacement data. Treat bracket output as an advisory estimate
             for pregame discussion, not an official ruling. Game Changer data comes live from Scryfall.
             Create a plan only after the user approves exact changes.
 
@@ -147,7 +164,7 @@ public sealed class MtgPrompts
             Optimize the mana base for deck workspace {workspaceId}.
             Max price: {maxPrice}
 
-            Use refresh_deck_card_snapshots, analyze_mana_base, and explicit query_cards_for_deck
+            Use deck_refresh_card_metadata, deck_analyze_mana, and explicit deck_query_cards
             lookups for lands or fixing. Preserve color identity, legality, and budget. Return
             land-count, color-source, tapped-land, and fixing data before creating any plan.
             """;
@@ -165,8 +182,8 @@ public sealed class MtgPrompts
             Focus: {focus}
             Max price: {maxPrice}
 
-            Use refresh_deck_card_snapshots, analyze_deck_consistency, analyze_draw_odds, and
-            explicit query_cards_for_deck lookups. Preserve color identity, legality, and the deck's
+            Use deck_refresh_card_metadata, deck_analyze_consistency, deck_analyze_draw_odds, and
+            explicit deck_query_cards lookups. Preserve color identity, legality, and the deck's
             core plan. Return source data and role-density changes before creating any plan.
             """;
     }
@@ -182,9 +199,9 @@ public sealed class MtgPrompts
             Tune deck workspace {workspaceId} for this local meta: {meta}
             Budget per card: {budget}
 
-            Use analyze_deck_best_practices, score_cards_for_playgroup_meta when a
-            Playgroup URL or ranked candidate list is available, query_cards_for_deck
-            when you can produce a precise Scryfall query, estimate_combo_pressure,
+            Use deck_analyze_best_practices, deck_score_cards_for_playgroup_meta when a
+            Playgroup URL or ranked candidate list is available, deck_query_cards
+            when you can produce a precise Scryfall query, deck_analyze_combos,
             and source data tools. Create a deck plan only after the query and exact
             add/remove choices are explicit. Explain which local-meta problem each
             package addresses.
@@ -194,18 +211,52 @@ public sealed class MtgPrompts
     /// <summary>
     /// Builds a prompt for reviewing new card releases against a workspace.
     /// </summary>
-    [McpServerPrompt(Name = "review_new_releases_for_deck")]
-    [Description("Review newly released cards that fit a deck.")]
-    public string ReviewNewReleasesForDeck(string workspaceId, string since = "", string setCode = "", string maxPrice = "")
+    [McpServerPrompt(Name = "review_new_card_swaps")]
+    [Description("Review new card candidates and deterministic cuts for a deck.")]
+    public string ReviewNewCardSwaps(string workspaceId, string since = "", string setCode = "", string maxPrice = "")
     {
         return $"""
-            Review new cards for deck workspace {workspaceId}.
+            Review new-card swaps for deck workspace {workspaceId}.
             Since: {since}
             Set: {setCode}
             Max price: {maxPrice}
 
-            Use find_new_cards_for_deck, compare_to_commander_meta, and summarize_deck_workspace.
-            Return cards by role, theme fit, price, and likely cuts when relevant.
+            Use deck_review_new_card_swaps and deck_summarize. Return candidate rows and deterministic
+            cut evidence before suggesting any edits. Create a deck plan only after the user approves
+            exact adds and cuts.
+            """;
+    }
+
+    /// <summary>
+    /// Builds a prompt for checking early land-drop risk.
+    /// </summary>
+    [McpServerPrompt(Name = "check_land_drop_risk")]
+    [Description("Check whether a deck is likely to miss early land drops.")]
+    public string CheckLandDropRisk(string workspaceId, int turn = 3, bool onThePlay = false)
+    {
+        return $"""
+            Check land-drop risk for deck workspace {workspaceId}.
+            Turn: {turn}
+            On the play: {onThePlay}
+
+            Use deck_analyze_land_drop_odds and deck_analyze_mana. Explain exact no-mulligan odds
+            separately from deterministic mulligan simulation, including assumptions and failure drivers.
+            """;
+    }
+
+    /// <summary>
+    /// Builds a prompt for finding missing combo pieces.
+    /// </summary>
+    [McpServerPrompt(Name = "find_missing_combo_pieces")]
+    [Description("Find missing combo pieces and payoff needs for a deck.")]
+    public string FindMissingComboPieces(string workspaceId)
+    {
+        return $"""
+            Find missing combo pieces for deck workspace {workspaceId}.
+
+            Use deck_analyze_combos with near misses enabled, combo_get_details for catalog ids,
+            and card_classify_win_routes to separate terminal routes from loops that need payoffs.
+            Use wincon_find_payoffs only for non-terminal route labels.
             """;
     }
 
@@ -221,7 +272,7 @@ public sealed class MtgPrompts
             Target turn: {targetTurn}
             Simulations: {simulations}
 
-            Use simulate_goldfish, project_board_state, and estimate_win_turn. Explain that the
+            Use deck_simulate_goldfish, deck_project_board_state, and deck_estimate_win_turn. Explain that the
             output assumes no opponent interaction and uses heuristics rather than a full rules engine.
             """;
     }
@@ -229,7 +280,7 @@ public sealed class MtgPrompts
     /// <summary>
     /// Builds a prompt for improving a deck toward a natural-language goal.
     /// </summary>
-    [McpServerPrompt(Name = "make_deck_do_goal_better")]
+    [McpServerPrompt(Name = "improve_deck_for_goal")]
     [Description("Find a previewable package that makes a deck better at a stated goal.")]
     public string MakeDeckDoGoalBetter(string workspaceId, string goal, string budget = "10")
     {
@@ -237,9 +288,9 @@ public sealed class MtgPrompts
             Make deck workspace {workspaceId} better at: {goal}
             Budget per card: {budget}
 
-            Prefer query_cards_for_deck when you can produce a precise Scryfall query. Create a deck
+            Prefer deck_query_cards when you can produce a precise Scryfall query. Create a deck
             plan only after the query and exact add/remove choices are explicit. Also run
-            analyze_deck_best_practices. Return candidate source data, likely tradeoffs, and any
+            deck_analyze_best_practices. Return candidate source data, likely tradeoffs, and any
             plan id only after explicit approval.
             """;
     }
@@ -255,7 +306,7 @@ public sealed class MtgPrompts
             Check Magic rules and card rulings for: {cardsOrWorkspace}
             Question: {question}
 
-            Use get_card and get_rulings for the named cards. Separate official rulings from strategic interpretation.
+            Use card_get and card_get_rulings for the named cards. Separate official rulings from strategic interpretation.
             """;
     }
 }

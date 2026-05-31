@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.ComponentModel;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,98 +56,147 @@ public sealed class McpSurfaceTests
     {
         string[] expected =
         [
-            "search_cards",
-            "get_card",
-            "get_rulings",
-            "get_prints",
-            "suggest_cards",
-            "create_local_deck",
-            "start_deck_workspace",
-            "list_local_decks",
-            "open_local_deck",
-            "open_archidekt_deck",
-            "open_moxfield_deck",
-            "create_archidekt_deck",
-            "copy_workspace_to_archidekt",
-            "list_archidekt_decks",
-            "get_playgroup_auth_status",
-            "get_playgroup",
-            "get_playgroup_deck",
-            "list_playgroup_decks",
-            "list_playgroup_users",
-            "list_playgroup_user_decks",
-            "rank_playgroup_decks",
-            "import_decklist",
-            "export_deck",
-            "add_card",
-            "remove_card",
-            "set_card_quantity",
-            "move_card",
-            "add_card_category",
-            "remove_card_category",
-            "set_primary_card_category",
-            "create_category",
-            "rename_category",
-            "delete_category",
-            "update_deck_metadata",
-            "checkpoint_deck",
-            "list_deck_checkpoints",
-            "get_deck_checkpoint",
-            "rename_deck_checkpoint",
-            "delete_deck_checkpoint",
-            "parse_decklist",
-            "validate_deck",
-            "analyze_deck",
-            "refresh_deck_card_snapshots",
-            "summarize_deck_workspace",
-            "analyze_draw_odds",
-            "analyze_deck_cost",
-            "preview_deck_plan",
-            "estimate_commander_bracket",
-            "analyze_mana_base",
-            "analyze_deck_consistency",
-            "analyze_deck_performance",
-            "compare_plan_performance",
-            "analyze_deck_best_practices",
-            "compare_to_commander_meta",
-            "find_new_cards_for_deck",
-            "query_cards_for_deck",
-            "score_cards_for_playgroup_meta",
-            "find_deck_combos",
-            "find_near_miss_combos",
-            "estimate_combo_pressure",
-            "simulate_goldfish",
-            "compare_archidekt_goldfish",
-            "project_board_state",
-            "estimate_win_turn",
-            "analyze_commander_trends",
-            "find_lesser_known_cards",
-            "find_top_exemplar_decks",
-            "explain_card_corpus_signal",
-            "search_corpus_evidence",
-            "search_reddit_discussions",
-            "list_corpus_sources",
-            "create_deck_plan_from_explicit_changes",
-            "list_deck_plans",
-            "get_deck_plan",
-            "delete_deck_plan",
-            "apply_deck_plan",
-            "get_deck_intent",
-            "suggest_deck_intent",
-            "set_deck_intent",
-            "clear_deck_intent",
-            "get_card_facets",
-            "get_deck_facets",
-            "count_deck_cards_matching",
-            "explain_card_match",
-            "set_card_facet_annotations",
-            "get_server_info",
+            "archidekt_checkpoint_create",
+            "archidekt_checkpoint_delete",
+            "archidekt_checkpoint_get",
+            "archidekt_checkpoint_list",
+            "archidekt_checkpoint_rename",
+            "archidekt_compare_goldfish",
+            "archidekt_copy_workspace",
+            "archidekt_create_deck",
+            "archidekt_list_decks",
+            "card_facets_explain_match",
+            "card_facets_get",
+            "card_facets_set_annotations",
+            "card_get",
+            "card_get_prints",
+            "card_get_rulings",
+            "card_search",
+            "card_classify_win_routes",
+            "commander_get_aggregate_cards",
+            "commander_get_tags",
+            "commander_get_win_condition_evidence",
+            "combo_get_details",
+            "combo_search_by_card",
+            "deck_add_card",
+            "deck_add_card_category",
+            "deck_analyze_best_practices",
+            "deck_analyze_combos",
+            "deck_analyze_commander_trends",
+            "deck_analyze_consistency",
+            "deck_analyze_cost",
+            "deck_analyze_draw_odds",
+            "deck_analyze_land_drop_odds",
+            "deck_analyze_mana",
+            "deck_analyze_performance",
+            "deck_analyze_structure",
+            "deck_create_category",
+            "deck_delete_category",
+            "deck_estimate_commander_bracket",
+            "deck_estimate_win_turn",
+            "deck_facets_count",
+            "deck_facets_get",
+            "deck_find_exemplar_decks",
+            "deck_find_lesser_known_cards",
+            "deck_intent_clear",
+            "deck_intent_get",
+            "deck_intent_set",
+            "deck_intent_suggest",
+            "deck_move_card",
+            "deck_plan_apply",
+            "deck_plan_compare_performance",
+            "deck_plan_create",
+            "deck_plan_delete",
+            "deck_plan_get",
+            "deck_plan_list",
+            "deck_plan_preview",
+            "deck_project_board_state",
+            "deck_query_cards",
+            "deck_refresh_card_metadata",
+            "deck_remove_card",
+            "deck_remove_card_category",
+            "deck_rename_category",
+            "deck_review_new_card_swaps",
+            "deck_score_cards_for_playgroup_meta",
+            "deck_set_card_quantity",
+            "deck_set_primary_card_category",
+            "deck_simulate_goldfish",
+            "deck_summarize",
+            "deck_update_metadata",
+            "playgroup_get",
+            "playgroup_get_auth_status",
+            "playgroup_get_deck",
+            "playgroup_list_observed_decks",
+            "playgroup_list_observed_users",
+            "playgroup_list_user_decks",
+            "playgroup_rank_decks",
+            "server_get_info",
+            "source_explain_card_signal",
+            "source_list",
+            "source_search_evidence",
+            "source_search_reddit_discussions",
+            "workspace_export",
+            "workspace_list",
+            "workspace_open",
+            "workspace_parse_decklist",
+            "workspace_start",
+            "workspace_validate",
+            "wincon_find_payoffs",
         ];
 
         ToolTypes
             .SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
             .Should()
             .BeEquivalentTo(expected);
+    }
+
+    /// <summary>
+    /// Verifies that the breaking cleanup exposes a coherent domain-prefixed tool surface.
+    /// </summary>
+    [Fact]
+    public void ToolNames_UseDomainPrefixesAndRemoveLegacyNames()
+    {
+        string[] names = ToolTypes
+            .SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
+            .ToArray();
+        string[] approvedPrefixes =
+        [
+            "archidekt_",
+            "card_",
+            "commander_",
+            "combo_",
+            "deck_",
+            "playgroup_",
+            "server_",
+            "source_",
+            "wincon_",
+            "workspace_",
+        ];
+        string[] legacyNames =
+        [
+            "search_cards",
+            "get_card",
+            "suggest_cards",
+            "start_deck_workspace",
+            "create_local_deck",
+            "open_archidekt_deck",
+            "open_moxfield_deck",
+            "copy_workspace_to_archidekt",
+            "list_corpus_sources",
+            "search_corpus_evidence",
+            "score_cards_for_playgroup_meta",
+            "make_deck_do_goal_better",
+            "deck_compare_commander_meta",
+            "deck_estimate_combo_pressure",
+            "deck_find_combos",
+            "deck_find_near_miss_combos",
+            "deck_find_new_cards",
+        ];
+
+        names.Should().OnlyContain(name =>
+            approvedPrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)));
+        names.Should().OnlyContain(name => !name.Contains("corpus", StringComparison.OrdinalIgnoreCase));
+        names.Should().NotIntersectWith(legacyNames);
     }
 
     /// <summary>
@@ -157,9 +207,9 @@ public sealed class McpSurfaceTests
     {
         string[] expected =
         [
-            "mtg://deck/{deckId}",
-            "mtg://deck/{deckId}/summary",
-            "mtg://deck/{deckId}/intent",
+            "mtg://workspace/{workspaceId}",
+            "mtg://workspace/{workspaceId}/summary",
+            "mtg://workspace/{workspaceId}/intent",
             "mtg://scryfall/syntax-cheatsheet",
             "mtg://formats/{format}/deck-rules",
             "mtg://usage/workspace-selection",
@@ -167,9 +217,8 @@ public sealed class McpSurfaceTests
             "mtg://usage/deck-intent",
             "mtg://config/effective",
             "mtg://server/info",
-            "mtg://corpus/sources",
-            "mtg://archidekt/auth-status",
-            "mtg://playgroup/auth-status",
+            "mtg://sources/status",
+            "mtg://providers/{provider}/auth-status",
         ];
 
         GetNamedAttributeValues(typeof(MtgResources), "McpServerResourceAttribute", "UriTemplate")
@@ -187,7 +236,8 @@ public sealed class McpSurfaceTests
         [
             "brew_commander_deck",
             "tune_existing_deck",
-            "research_budget_replacements",
+            "research_commander_common_cards",
+            "research_commander_win_conditions",
             "reduce_deck_cost",
             "upgrade_deck_power",
             "reduce_deck_power",
@@ -195,15 +245,162 @@ public sealed class McpSurfaceTests
             "optimize_mana_base",
             "improve_deck_consistency",
             "tune_for_local_meta",
-            "review_new_releases_for_deck",
+            "review_new_card_swaps",
+            "check_land_drop_risk",
+            "find_missing_combo_pieces",
             "goldfish_deck",
-            "make_deck_do_goal_better",
+            "improve_deck_for_goal",
             "rules_and_rulings_check",
         ];
 
         GetNamedAttributeValues(typeof(MtgPrompts), "McpServerPromptAttribute", "Name")
             .Should()
             .BeEquivalentTo(expected);
+    }
+
+    /// <summary>
+    /// Verifies that built-in prompt bodies do not reference removed public tools.
+    /// </summary>
+    [Fact]
+    public void PromptBodies_DoNotReferenceRemovedToolNames()
+    {
+        MtgPrompts prompts = new();
+        string[] bodies =
+        [
+            prompts.BrewCommanderDeck("Tinybones"),
+            prompts.TuneExistingDeck("workspace-1"),
+            prompts.ResearchCommanderCommonCards("Tinybones"),
+            prompts.ResearchCommanderWinConditions("Tinybones"),
+            prompts.ReduceDeckCost("workspace-1"),
+            prompts.UpgradeDeckPower("workspace-1"),
+            prompts.ReduceDeckPower("workspace-1"),
+            prompts.LowerCommanderBracket("workspace-1"),
+            prompts.OptimizeManaBase("workspace-1"),
+            prompts.ImproveDeckConsistency("workspace-1"),
+            prompts.TuneForLocalMeta("workspace-1", "tokens"),
+            prompts.ReviewNewCardSwaps("workspace-1"),
+            prompts.CheckLandDropRisk("workspace-1"),
+            prompts.FindMissingComboPieces("workspace-1"),
+            prompts.GoldfishDeck("workspace-1"),
+            prompts.MakeDeckDoGoalBetter("workspace-1", "draw more cards"),
+            prompts.RulesAndRulingsCheck("Sol Ring", "Can I tap it immediately?")
+        ];
+        string[] removedToolNames =
+        [
+            "deck_compare_commander_meta",
+            "deck_estimate_combo_pressure",
+            "deck_find_combos",
+            "deck_find_near_miss_combos",
+            "deck_find_new_cards",
+            "research_budget_replacements",
+            "review_new_releases_for_deck"
+        ];
+
+        bodies.Should().OnlyContain(body =>
+            !removedToolNames.Any(tool => body.Contains(tool, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// Verifies that important magic-string parameters include public schema guidance.
+    /// </summary>
+    [Fact]
+    public void PublicParameters_DescribeImportantMagicStringValues()
+    {
+        GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.StartDeckWorkspaceAsync), "mode")
+            .Should()
+            .Contain("local")
+            .And.Contain("archidekt")
+            .And.Contain("moxfield");
+        GetParameterDescription(typeof(AnalysisTools), nameof(AnalysisTools.RefreshDeckCardSnapshotsAsync), "scope")
+            .Should()
+            .Contain("included")
+            .And.Contain("maybeboard")
+            .And.Contain("missing");
+        GetParameterDescription(typeof(CorpusTools), nameof(CorpusTools.SearchCorpusEvidenceAsync), "sourceKey")
+            .Should()
+            .Contain("topdeck")
+            .And.Contain("reddit-discussions");
+        GetParameterDescription(typeof(CorpusTools), nameof(CorpusTools.SearchCorpusEvidenceAsync), "analysisDepth")
+            .Should()
+            .Contain("minimal")
+            .And.Contain("balanced")
+            .And.Contain("best");
+        GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.AnalyzeDeckPerformanceAsync), "simulationProfile")
+            .Should()
+            .Contain("auto")
+            .And.Contain("neutral")
+            .And.Contain("stax");
+        GetParameterDescription(typeof(PlaygroupTools), nameof(PlaygroupTools.RankPlaygroupDecksAsync), "metric")
+            .Should()
+            .Contain("estimated_power")
+            .And.Contain("average_win_turn");
+        GetParameterDescription(typeof(RecommendationTools), nameof(RecommendationTools.ScoreCardsForPlaygroupMetaAsync), "candidateSource")
+            .Should()
+            .Contain("explicit-cards")
+            .And.Contain("excluded-workspace-cards");
+        GetParameterDescription(typeof(AnalysisTools), nameof(AnalysisTools.ClassifyWinRoutesAsync), "producedFeatures")
+            .Should()
+            .Contain("combat")
+            .And.Contain("infinite-mana")
+            .And.Contain("draw-deck");
+        GetParameterDescription(typeof(RecommendationTools), nameof(RecommendationTools.FindWinconPayoffsAsync), "route")
+            .Should()
+            .Contain("combat")
+            .And.Contain("infinite-mana")
+            .And.Contain("draw-deck");
+        GetParameterDescription(typeof(MtgResources), nameof(MtgResources.GetProviderAuthStatusAsync), "provider")
+            .Should()
+            .Contain("archidekt")
+            .And.Contain("playgroup");
+    }
+
+    /// <summary>
+    /// Verifies that workspace resources expose workspaceId rather than legacy deckId.
+    /// </summary>
+    [Fact]
+    public void WorkspaceResources_UseWorkspaceIdParameter()
+    {
+        MethodInfo[] workspaceResourceMethods = typeof(MtgResources)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.CustomAttributes.Any(attribute =>
+                attribute.AttributeType.Name == "McpServerResourceAttribute"
+                && GetNamedString(attribute, "UriTemplate")?.StartsWith("mtg://workspace/", StringComparison.Ordinal) == true))
+            .ToArray();
+
+        workspaceResourceMethods.Should().NotBeEmpty();
+        workspaceResourceMethods.Should().OnlyContain(method =>
+            method.GetParameters().Any(parameter => parameter.Name == "workspaceId"));
+        workspaceResourceMethods.Should().OnlyContain(method =>
+            method.GetParameters().All(parameter => parameter.Name != "deckId"));
+    }
+
+    /// <summary>
+    /// Verifies that public tool schemas use normalized parameter names from the API cleanup.
+    /// </summary>
+    [Fact]
+    public void ToolParameters_UseNormalizedPublicNames()
+    {
+        string[] legacyParameterNames =
+        [
+            "archidektDeckUrl1",
+            "archidektDeckUrl2",
+            "archidektDeckUrl3",
+            "count",
+            "deckId",
+            "nameOrId",
+            "profile",
+            "refresh",
+        ];
+
+        string[] publicParameterNames = ToolTypes
+            .SelectMany(type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+            .Where(method => TryGetToolAttribute(method) is not null)
+            .SelectMany(method => method.GetParameters())
+            .Where(parameter => parameter.ParameterType != typeof(CancellationToken))
+            .Select(parameter => parameter.Name ?? "")
+            .ToArray();
+
+        publicParameterNames.Should().NotIntersectWith(legacyParameterNames);
     }
 
     /// <summary>
@@ -327,13 +524,13 @@ public sealed class McpSurfaceTests
         OperationModeGuard planMode = new(Options.Create(new MtgMcpOptions { OperationMode = "plan" }));
         OperationModeGuard readOnlyMode = new(Options.Create(new MtgMcpOptions { OperationMode = "read-only" }));
 
-        planMode.Invoking(guard => guard.EnsureCanWritePlanningState("create_deck_plan_from_explicit_changes"))
+        planMode.Invoking(guard => guard.EnsureCanWritePlanningState("deck_plan_create"))
             .Should()
             .NotThrow();
-        readOnlyMode.Invoking(guard => guard.EnsureCanWritePlanningState("create_deck_plan_from_explicit_changes"))
+        readOnlyMode.Invoking(guard => guard.EnsureCanWritePlanningState("deck_plan_create"))
             .Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("*read-only mode*create_deck_plan_from_explicit_changes*");
+            .WithMessage("*read-only mode*deck_plan_create*");
     }
 
     /// <summary>
@@ -376,14 +573,15 @@ public sealed class McpSurfaceTests
         WorkspaceTools tools = new(deckService, operationMode);
 
         Func<Task> act = () =>
-            tools.CreateLocalDeckAsync(
-                "Blocked",
+            tools.StartDeckWorkspaceAsync(
+                mode: "local",
+                name: "Blocked",
                 cancellationToken: TestContext.Current.CancellationToken
             );
 
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
-            .WithMessage("*read-only mode*create_local_deck*");
+            .WithMessage("*read-only mode*workspace_start*");
     }
 
     /// <summary>
@@ -652,6 +850,16 @@ public sealed class McpSurfaceTests
             && source.RequiresKey);
         host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
             source.Key == "edhrec"
+            && source.Status == CorpusSourceStatuses.Available
+            && source.UnofficialApi
+            && source.PermissionSensitive);
+        host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
+            source.Key == "reddit-discussions"
+            && source.Status == CorpusSourceStatuses.Available
+            && source.UnofficialApi
+            && source.PermissionSensitive);
+        host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
+            source.Key == "edhtop16"
             && source.Status == CorpusSourceStatuses.Disabled
             && source.UnofficialApi
             && source.PermissionSensitive);
@@ -728,6 +936,25 @@ public sealed class McpSurfaceTests
     {
         return TryGetToolAttribute(method)
             ?? throw new InvalidOperationException($"{method.Name} is not an MCP tool method.");
+    }
+
+    /// <summary>
+    /// Gets a parameter description for public schema guidance assertions.
+    /// </summary>
+    private static string GetParameterDescription(
+        Type type,
+        string methodName,
+        string parameterName
+    )
+    {
+        MethodInfo method = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Single(method => method.Name == methodName);
+        ParameterInfo parameter = method.GetParameters()
+            .Single(parameter => parameter.Name == parameterName);
+        return parameter.GetCustomAttribute<DescriptionAttribute>()?.Description
+            ?? throw new InvalidOperationException(
+                $"{type.Name}.{methodName} parameter {parameterName} does not have a description."
+            );
     }
 
     /// <summary>

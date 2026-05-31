@@ -1,13 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MtgMcp.Archidekt;
+using MtgMcp.Playgroup;
 
 namespace MtgMcp.App;
 
 /// <summary>
-/// Writes local Archidekt credentials for MCP client configuration.
+/// Writes local Playgroup.gg credentials for MCP client configuration.
 /// </summary>
-public static class ArchidektAuthCommand
+public static class PlaygroupAuthCommand
 {
     /// <summary>
     /// Stores JSON options for credential files.
@@ -19,27 +19,27 @@ public static class ArchidektAuthCommand
     };
 
     /// <summary>
-    /// Determines whether the arguments target the Archidekt auth helper.
+    /// Determines whether the arguments target the Playgroup auth helper.
     /// </summary>
     public static bool IsCommand(IReadOnlyList<string> args)
     {
         return args.Count >= 2
             && args[0].Equals("auth", StringComparison.OrdinalIgnoreCase)
-            && args[1].Equals("archidekt", StringComparison.OrdinalIgnoreCase);
+            && args[1].Equals("playgroup", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// Runs the Archidekt auth helper.
+    /// Runs the Playgroup auth helper.
     /// </summary>
     public static int Run(IReadOnlyList<string> args, TextWriter output, TextWriter error)
     {
         return Parse(args) switch
         {
-            ArchidektAuthOptions options => RunWithOptions(options, output, error),
-            ArchidektAuthHelp => WriteHelp(output),
-            ArchidektAuthParseError parseError => WriteParseError(parseError, error),
+            PlaygroupAuthOptions options => RunWithOptions(options, output, error),
+            PlaygroupAuthHelp => WriteHelp(output),
+            PlaygroupAuthParseError parseError => WriteParseError(parseError, error),
             null => WriteParseError(
-                new ArchidektAuthParseError("Unable to parse Archidekt auth arguments."),
+                new PlaygroupAuthParseError("Unable to parse Playgroup auth arguments."),
                 error
             ),
         };
@@ -48,7 +48,7 @@ public static class ArchidektAuthCommand
     /// <summary>
     /// Writes credentials after arguments have parsed into usable options.
     /// </summary>
-    private static int RunWithOptions(ArchidektAuthOptions options, TextWriter output, TextWriter error)
+    private static int RunWithOptions(PlaygroupAuthOptions options, TextWriter output, TextWriter error)
     {
         if (!TryGetCredentialsFilePath(options, error, out string credentialsFile))
         {
@@ -58,16 +58,15 @@ public static class ArchidektAuthCommand
         if (File.Exists(credentialsFile) && !options.Force)
         {
             error.WriteLine(
-                $"Archidekt credentials file '{credentialsFile}' already exists. "
+                $"Playgroup credentials file '{credentialsFile}' already exists. "
                     + "Use --force to overwrite it."
             );
             return 1;
         }
 
-        ArchidektCredentials credentials = new()
+        PlaygroupCredentials credentials = new()
         {
-            Username = options.Username,
-            Password = options.Password,
+            ApiKey = options.ApiKey,
         };
         string json = JsonSerializer.Serialize(credentials, JsonOptions) + Environment.NewLine;
         if (!TryWriteCredentialsFile(credentialsFile, json, error))
@@ -91,7 +90,7 @@ public static class ArchidektAuthCommand
     /// <summary>
     /// Writes a parse error and reports failure.
     /// </summary>
-    private static int WriteParseError(ArchidektAuthParseError parseError, TextWriter error)
+    private static int WriteParseError(PlaygroupAuthParseError parseError, TextWriter error)
     {
         error.WriteLine(parseError.Message);
         error.WriteLine();
@@ -110,14 +109,14 @@ public static class ArchidektAuthCommand
             home = Directory.GetCurrentDirectory();
         }
 
-        return Path.Combine(home, ".mtg-mcp", "archidekt.json");
+        return Path.Combine(home, ".mtg-mcp", "playgroup.json");
     }
 
     /// <summary>
     /// Gets the normalized credentials file path.
     /// </summary>
     private static bool TryGetCredentialsFilePath(
-        ArchidektAuthOptions options,
+        PlaygroupAuthOptions options,
         TextWriter error,
         out string credentialsFile
     )
@@ -134,7 +133,7 @@ public static class ArchidektAuthCommand
         )
         {
             credentialsFile = "";
-            error.WriteLine($"Archidekt credentials path is invalid: {exception.Message}");
+            error.WriteLine($"Playgroup credentials path is invalid: {exception.Message}");
             return false;
         }
     }
@@ -171,7 +170,7 @@ public static class ArchidektAuthCommand
         )
         {
             error.WriteLine(
-                $"Archidekt credentials file '{credentialsFile}' could not be written: "
+                $"Playgroup credentials file '{credentialsFile}' could not be written: "
                     + exception.Message
             );
             return false;
@@ -209,15 +208,15 @@ public static class ArchidektAuthCommand
     /// <summary>
     /// Parses command options.
     /// </summary>
-    private static ArchidektAuthParseResult Parse(IReadOnlyList<string> args)
+    private static PlaygroupAuthParseResult Parse(IReadOnlyList<string> args)
     {
-        ArchidektAuthOptions options = new();
+        PlaygroupAuthOptions options = new();
         for (int index = 2; index < args.Count; index++)
         {
             string argument = args[index];
             if (argument is "--help" or "-h")
             {
-                return new ArchidektAuthHelp();
+                return new PlaygroupAuthHelp();
             }
 
             if (argument.Equals("--force", StringComparison.OrdinalIgnoreCase))
@@ -228,7 +227,7 @@ public static class ArchidektAuthCommand
 
             if (!argument.StartsWith("--", StringComparison.Ordinal))
             {
-                return new ArchidektAuthParseError($"Unexpected argument '{argument}'.");
+                return new PlaygroupAuthParseError($"Unexpected argument '{argument}'.");
             }
 
             string option = argument[2..];
@@ -243,7 +242,7 @@ public static class ArchidektAuthCommand
             {
                 if (index + 1 >= args.Count || args[index + 1].StartsWith("--", StringComparison.Ordinal))
                 {
-                    return new ArchidektAuthParseError($"Option '--{option}' requires a value.");
+                    return new PlaygroupAuthParseError($"Option '--{option}' requires a value.");
                 }
 
                 value = args[++index];
@@ -252,21 +251,19 @@ public static class ArchidektAuthCommand
             string? applyError = ApplyOption(options, option, value);
             if (!string.IsNullOrWhiteSpace(applyError))
             {
-                return new ArchidektAuthParseError(applyError);
+                return new PlaygroupAuthParseError(applyError);
             }
         }
 
         return options.HasUsableCredential
             ? options
-            : new ArchidektAuthParseError(
-                "Provide --username with --password."
-            );
+            : new PlaygroupAuthParseError("Provide --api-key.");
     }
 
     /// <summary>
     /// Applies one parsed option.
     /// </summary>
-    private static string? ApplyOption(ArchidektAuthOptions options, string option, string value)
+    private static string? ApplyOption(PlaygroupAuthOptions options, string option, string value)
     {
         string normalized = option.Replace("_", "-", StringComparison.Ordinal).ToLowerInvariant();
         switch (normalized)
@@ -275,11 +272,8 @@ public static class ArchidektAuthCommand
             case "file":
                 options.CredentialsFile = value;
                 return null;
-            case "username":
-                options.Username = EmptyToNull(value);
-                return null;
-            case "password":
-                options.Password = EmptyToNull(value);
+            case "api-key":
+                options.ApiKey = EmptyToNull(value);
                 return null;
             default:
                 return $"Unknown option '--{option}'.";
@@ -295,13 +289,13 @@ public static class ArchidektAuthCommand
         IReadOnlyList<string> storedFieldNames
     )
     {
-        output.WriteLine($"Archidekt credentials file written: {credentialsFile}");
+        output.WriteLine($"Playgroup credentials file written: {credentialsFile}");
         output.WriteLine($"Stored credential fields: {string.Join(", ", storedFieldNames)}");
         output.WriteLine();
         output.WriteLine("Add this environment variable to your MCP server configuration:");
         output.WriteLine("\"env\": {");
         output.WriteLine(
-            "  \"MTGMCP__ARCHIDEKT__CREDENTIALS_FILE\": "
+            "  \"MTGMCP__PLAYGROUP__CREDENTIALS_FILE\": "
                 + JsonSerializer.Serialize(credentialsFile)
         );
         output.WriteLine("}");
@@ -314,8 +308,8 @@ public static class ArchidektAuthCommand
     {
         writer.WriteLine("Usage:");
         writer.WriteLine(
-            "  mtg-mcp auth archidekt [--credentials-file <path>] "
-                + "--username <name-or-email> --password <password> [--force]"
+            "  mtg-mcp auth playgroup [--credentials-file <path>] "
+                + "--api-key <key> [--force]"
         );
     }
 
@@ -330,26 +324,26 @@ public static class ArchidektAuthCommand
     /// <summary>
     /// Represents the closed set of outcomes from parsing auth helper arguments.
     /// </summary>
-    private readonly union ArchidektAuthParseResult(
-        ArchidektAuthOptions,
-        ArchidektAuthHelp,
-        ArchidektAuthParseError
+    private readonly union PlaygroupAuthParseResult(
+        PlaygroupAuthOptions,
+        PlaygroupAuthHelp,
+        PlaygroupAuthParseError
     );
 
     /// <summary>
     /// Indicates that the caller requested command usage.
     /// </summary>
-    private sealed record ArchidektAuthHelp;
+    private sealed record PlaygroupAuthHelp;
 
     /// <summary>
     /// Carries a parse or validation error that should be shown with usage.
     /// </summary>
-    private sealed record ArchidektAuthParseError(string Message);
+    private sealed record PlaygroupAuthParseError(string Message);
 
     /// <summary>
     /// Holds parsed command arguments that are ready to write.
     /// </summary>
-    private sealed class ArchidektAuthOptions
+    private sealed class PlaygroupAuthOptions
     {
         /// <summary>
         /// Gets or sets whether to overwrite an existing file.
@@ -362,21 +356,14 @@ public static class ArchidektAuthCommand
         public string? CredentialsFile { get; set; }
 
         /// <summary>
-        /// Gets or sets the Archidekt username or account email used for login.
+        /// Gets or sets the Playgroup API key used for authenticated requests.
         /// </summary>
-        public string? Username { get; set; }
+        public string? ApiKey { get; set; }
 
         /// <summary>
-        /// Gets or sets the password.
+        /// Gets whether the parsed options can authenticate to Playgroup.
         /// </summary>
-        public string? Password { get; set; }
-
-        /// <summary>
-        /// Gets whether the parsed options can authenticate to Archidekt.
-        /// </summary>
-        public bool HasUsableCredential =>
-            !string.IsNullOrWhiteSpace(Password)
-            && !string.IsNullOrWhiteSpace(Username);
+        public bool HasUsableCredential => !string.IsNullOrWhiteSpace(ApiKey);
 
         /// <summary>
         /// Gets the names of fields that will be stored.
@@ -386,8 +373,7 @@ public static class ArchidektAuthCommand
             get
             {
                 List<string> fields = [];
-                AddField(fields, "username", Username);
-                AddField(fields, "password", Password);
+                AddField(fields, "apiKey", ApiKey);
                 return fields;
             }
         }

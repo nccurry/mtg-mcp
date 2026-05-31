@@ -32,17 +32,6 @@ public sealed class WorkspaceTools
     /// <summary>
     /// Creates the local deck.
     /// </summary>
-    [McpServerTool(
-        Name = "create_local_deck",
-        ReadOnly = false,
-        Destructive = false,
-        Idempotent = false,
-        OpenWorld = false
-    )]
-    [Description(
-        "Create an offline local deck workspace. "
-            + "If local versus Archidekt is ambiguous, ask the user first or use start_deck_workspace."
-    )]
     public Task<DeckWorkspace> CreateLocalDeckAsync(
         string name,
         string format = "commander",
@@ -50,7 +39,7 @@ public sealed class WorkspaceTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("create_local_deck");
+        operationMode.EnsureCanMutate("workspace_start");
         return decks.CreateLocalDeckAsync(name, format, description, cancellationToken);
     }
 
@@ -58,7 +47,7 @@ public sealed class WorkspaceTools
     /// Starts a workspace from the explicitly selected source mode.
     /// </summary>
     [McpServerTool(
-        Name = "start_deck_workspace",
+        Name = "workspace_start",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
@@ -70,18 +59,22 @@ public sealed class WorkspaceTools
             + "Archidekt mode also requires an explicit writeBack choice."
     )]
     public Task<DeckWorkspace> StartDeckWorkspaceAsync(
+        [Description("Workspace source mode: local, archidekt, or moxfield.")]
         string? mode = null,
         string? name = null,
         string format = "commander",
         string? description = null,
+        [Description("Archidekt deck id or URL when mode is archidekt.")]
         string? archidektDeckIdOrUrl = null,
+        [Description("Moxfield deck id or URL when mode is moxfield.")]
         string? moxfieldDeckIdOrUrl = null,
+        [Description("Required for Archidekt mode: true to persist edits to Archidekt, false to keep a local cached workspace.")]
         bool? writeBack = null,
         string? decklist = null,
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("start_deck_workspace");
+        operationMode.EnsureCanMutate("workspace_start");
         return decks.StartDeckWorkspaceAsync(
             mode,
             name,
@@ -99,13 +92,13 @@ public sealed class WorkspaceTools
     /// Lists the local decks.
     /// </summary>
     [McpServerTool(
-        Name = "list_local_decks",
+        Name = "workspace_list",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false
     )]
-    [Description("List saved local-only deck workspaces.")]
+    [Description("List saved local deck workspaces.")]
     public Task<IReadOnlyList<DeckWorkspace>> ListLocalDecksAsync(
         CancellationToken cancellationToken = default
     )
@@ -117,13 +110,13 @@ public sealed class WorkspaceTools
     /// Opens the local deck.
     /// </summary>
     [McpServerTool(
-        Name = "open_local_deck",
+        Name = "workspace_open",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false
     )]
-    [Description("Open a saved local or cached Archidekt workspace by workspace id.")]
+    [Description("Open a saved workspace by workspace id.")]
     public Task<DeckWorkspace> OpenLocalDeckAsync(
         string workspaceId,
         CancellationToken cancellationToken = default
@@ -135,25 +128,13 @@ public sealed class WorkspaceTools
     /// <summary>
     /// Opens the archidekt deck.
     /// </summary>
-    [McpServerTool(
-        Name = "open_archidekt_deck",
-        ReadOnly = false,
-        Destructive = false,
-        Idempotent = false,
-        OpenWorld = true
-    )]
-    [Description(
-        "Open an Archidekt deck by id or URL. "
-            + "Requires explicit writeBack true or false; ask the user when writeback intent is unclear. "
-            + "Returns a compact workspace summary; use export_deck, analyze_deck, or get_deck_facets for details."
-    )]
     public async Task<DeckOpenResult> OpenArchidektDeckAsync(
         string deckIdOrUrl,
         bool? writeBack = null,
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("open_archidekt_deck");
+        operationMode.EnsureCanMutate("workspace_start");
         if (!writeBack.HasValue)
         {
             throw new InvalidOperationException(
@@ -170,23 +151,12 @@ public sealed class WorkspaceTools
     /// <summary>
     /// Imports a Moxfield deck.
     /// </summary>
-    [McpServerTool(
-        Name = "open_moxfield_deck",
-        ReadOnly = false,
-        Destructive = false,
-        Idempotent = false,
-        OpenWorld = true
-    )]
-    [Description(
-        "Import a public or unlisted Moxfield deck by id or URL as a generic local workspace. "
-            + "Moxfield writeback is not supported; use copy_workspace_to_archidekt to migrate later."
-    )]
     public async Task<DeckOpenResult> OpenMoxfieldDeckAsync(
         string deckIdOrUrl,
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("open_moxfield_deck");
+        operationMode.EnsureCanMutate("workspace_start");
         DeckWorkspace workspace = await decks.ImportMoxfieldDeckAsync(deckIdOrUrl, cancellationToken)
             .ConfigureAwait(false);
         return CreateOpenResult(workspace);
@@ -196,7 +166,7 @@ public sealed class WorkspaceTools
     /// Creates an Archidekt deck.
     /// </summary>
     [McpServerTool(
-        Name = "create_archidekt_deck",
+        Name = "archidekt_create_deck",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
@@ -214,7 +184,7 @@ public sealed class WorkspaceTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("create_archidekt_deck");
+        operationMode.EnsureCanMutate("archidekt_create_deck");
         DeckWorkspace workspace = await decks.CreateArchidektDeckAsync(
                 name,
                 format,
@@ -229,7 +199,7 @@ public sealed class WorkspaceTools
     /// Copies a workspace into Archidekt.
     /// </summary>
     [McpServerTool(
-        Name = "copy_workspace_to_archidekt",
+        Name = "archidekt_copy_workspace",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
@@ -256,11 +226,11 @@ public sealed class WorkspaceTools
     {
         if (dryRun)
         {
-            operationMode.EnsureCanWritePlanningState("copy_workspace_to_archidekt");
+            operationMode.EnsureCanWritePlanningState("archidekt_copy_workspace");
         }
         else
         {
-            operationMode.EnsureCanMutate("copy_workspace_to_archidekt");
+            operationMode.EnsureCanMutate("archidekt_copy_workspace");
         }
 
         return decks.CopyWorkspaceToArchidektAsync(
@@ -281,7 +251,7 @@ public sealed class WorkspaceTools
     /// Lists the archidekt decks.
     /// </summary>
     [McpServerTool(
-        Name = "list_archidekt_decks",
+        Name = "archidekt_list_decks",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
@@ -298,14 +268,6 @@ public sealed class WorkspaceTools
     /// <summary>
     /// Imports the decklist.
     /// </summary>
-    [McpServerTool(
-        Name = "import_decklist",
-        ReadOnly = false,
-        Destructive = false,
-        Idempotent = false,
-        OpenWorld = true
-    )]
-    [Description("Parse and import a decklist into a new local workspace.")]
     public Task<DeckWorkspace> ImportDecklistAsync(
         string decklist,
         string name,
@@ -313,7 +275,7 @@ public sealed class WorkspaceTools
         CancellationToken cancellationToken = default
     )
     {
-        operationMode.EnsureCanMutate("import_decklist");
+        operationMode.EnsureCanMutate("workspace_start");
         return decks.ImportDecklistAsync(decklist, name, format, cancellationToken);
     }
 
@@ -321,7 +283,7 @@ public sealed class WorkspaceTools
     /// Exports the deck.
     /// </summary>
     [McpServerTool(
-        Name = "export_deck",
+        Name = "workspace_export",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
@@ -340,7 +302,7 @@ public sealed class WorkspaceTools
     /// Parses the decklist.
     /// </summary>
     [McpServerTool(
-        Name = "parse_decklist",
+        Name = "workspace_parse_decklist",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
@@ -356,7 +318,7 @@ public sealed class WorkspaceTools
     /// Validates the deck.
     /// </summary>
     [McpServerTool(
-        Name = "validate_deck",
+        Name = "workspace_validate",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
@@ -375,7 +337,7 @@ public sealed class WorkspaceTools
     /// Analyzes the deck.
     /// </summary>
     [McpServerTool(
-        Name = "analyze_deck",
+        Name = "deck_analyze_structure",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
