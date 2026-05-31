@@ -180,43 +180,6 @@ function Get-LocalVersionBase {
     return "0.0.0"
 }
 
-function New-LocalVersion {
-    param([Parameter(Mandatory = $true)][string] $BaseVersion)
-
-    $day = Get-Date -Format "yyyyMMdd"
-    $time = Get-Date -Format "HHmmss"
-    $shortSha = "nogit"
-    try {
-        $candidate = (& git rev-parse --short HEAD 2>$null)
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidate)) {
-            $shortSha = "g$candidate"
-        }
-    }
-    catch {
-        $shortSha = "nogit"
-    }
-
-    $versionCore = $BaseVersion
-    $buildMetadataIndex = $versionCore.IndexOf('+')
-    if ($buildMetadataIndex -ge 0) {
-        $versionCore = $versionCore.Substring(0, $buildMetadataIndex)
-    }
-
-    if ($versionCore.Contains("-")) {
-        return "$versionCore.local.$day.t$time.$shortSha"
-    }
-
-    $stableMatch = [regex]::Match($versionCore, "^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)$")
-    if ($stableMatch.Success) {
-        $major = $stableMatch.Groups["major"].Value
-        $minor = $stableMatch.Groups["minor"].Value
-        $patch = [int] $stableMatch.Groups["patch"].Value + 1
-        return "$major.$minor.$patch-local.$day.t$time.$shortSha"
-    }
-
-    return "$versionCore-local.$day.t$time.$shortSha"
-}
-
 function Get-ConfiguredMcpCommandPath {
     $configPath = Get-CodexConfigPath
     if (-not (Test-Path -LiteralPath $configPath)) {
@@ -305,32 +268,40 @@ function Test-GlobalToolInstalled {
     return [bool]($installed | Select-String -Pattern "^\s*$escapedPackageId\s" -CaseSensitive:$false)
 }
 
-function Install-GlobalToolPackage {
-    if (Test-GlobalToolInstalled) {
-        Write-Host "Updating global dotnet tool $PackageId to $Version"
-        & $DotnetCommand `
-            "tool" "update" "--global" $PackageId `
-            "--add-source" $packageDirPath `
-            "--version" $Version
-        if ($LASTEXITCODE -eq 0) {
-            return
-        }
+function New-LocalToolNuGetConfig {
+    $configPath = Join-Path $packageDirPath "local-tool.NuGet.config"
+    $escapedPackageDir = [System.Security.SecurityElement]::Escape($packageDirPath)
+    $content = @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="local" value="$escapedPackageDir" />
+  </packageSources>
+</configuration>
+"@
+    Set-Content -LiteralPath $configPath -Value $content
+    return $configPath
+}
 
-        Write-Host "Update failed; reinstalling global dotnet tool $PackageId $Version"
+function Install-GlobalToolPackage {
+    $nugetConfigPath = New-LocalToolNuGetConfig
+    if (Test-GlobalToolInstalled) {
+        Write-Host "Reinstalling global dotnet tool $PackageId $Version from local package"
         Invoke-Checked $DotnetCommand "tool" "uninstall" "--global" $PackageId
     }
     else {
-        Write-Host "Installing global dotnet tool $PackageId $Version"
+        Write-Host "Installing global dotnet tool $PackageId $Version from local package"
     }
 
     Invoke-Checked $DotnetCommand `
         "tool" "install" "--global" $PackageId `
-        "--add-source" $packageDirPath `
+        "--configfile" $nugetConfigPath `
         "--version" $Version
 }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = New-LocalVersion -BaseVersion (Get-LocalVersionBase)
+    $Version = Get-LocalVersionBase
 }
 
 if ([string]::IsNullOrWhiteSpace($Runtime)) {
