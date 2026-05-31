@@ -288,7 +288,16 @@ function Install-GlobalToolPackage {
     $nugetConfigPath = New-LocalToolNuGetConfig
     if (Test-GlobalToolInstalled) {
         Write-Host "Reinstalling global dotnet tool $PackageId $Version from local package"
-        Invoke-Checked $DotnetCommand "tool" "uninstall" "--global" $PackageId
+        try {
+            Invoke-Checked $DotnetCommand "tool" "uninstall" "--global" $PackageId
+        }
+        catch {
+            if (Test-GlobalToolInstalled) {
+                throw
+            }
+
+            Write-Host "Global dotnet tool uninstall reported an error after removing $PackageId; continuing."
+        }
     }
     else {
         Write-Host "Installing global dotnet tool $PackageId $Version from local package"
