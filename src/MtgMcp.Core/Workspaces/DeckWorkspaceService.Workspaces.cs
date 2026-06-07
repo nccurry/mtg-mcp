@@ -270,14 +270,13 @@ public sealed partial class DeckWorkspaceService
         foreach (ParsedDecklistLine line in parsed.Cards)
         {
             EnsureCategory(workspace, line.Category);
-            DeckCard card = await CreateDeckCardAsync(
-                    line.Name,
-                    line.Quantity,
-                    line.Category,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            workspace.Cards.Add(card);
+            workspace.Cards.Add(new DeckCard
+            {
+                Name = line.Name.Trim(),
+                Quantity = Math.Max(1, line.Quantity),
+                PrimaryCategory = line.Category,
+                Categories = [line.Category],
+            });
         }
 
         await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken).ConfigureAwait(false);

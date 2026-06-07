@@ -1289,6 +1289,28 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that full decklist imports use one batched metadata refresh instead of per-card mutation lookups.
+    /// </summary>
+    [Fact]
+    public async Task ImportDecklist_UsesBatchedMetadataRefresh()
+    {
+        InMemoryRepository repository = new();
+        FakeCardCatalog catalog = new();
+        DeckWorkspaceService service = new(repository, catalog);
+
+        DeckWorkspace imported = await service.ImportDecklistAsync(
+            CreateDeckTextComponentDecklist(),
+            "Imported",
+            "modern",
+            TestContext.Current.CancellationToken);
+
+        catalog.SingleLookupRequests.Should().Be(0);
+        catalog.BatchLookupRequests.Should().Be(1);
+        imported.Cards.Single(card => card.Name == "Lightning Bolt").Snapshot.ManaValue.Should().Be(1);
+        imported.Cards.Single(card => card.Name == "Missing Card").Snapshot.TypeLine.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies that deck summaries and resources expose imported workspace details.
     /// </summary>
     [Fact]
@@ -2263,6 +2285,16 @@ public sealed class DeckWorkspaceServiceTests
     private sealed class FakeCardCatalog : ICardCatalog
     {
         /// <summary>
+        /// Gets the single-card lookup request count.
+        /// </summary>
+        public int SingleLookupRequests { get; private set; }
+
+        /// <summary>
+        /// Gets the batched card lookup request count.
+        /// </summary>
+        public int BatchLookupRequests { get; private set; }
+
+        /// <summary>
         /// Gets or sets whether single-card lookup should simulate caller cancellation.
         /// </summary>
         public bool CancelGetCard { get; init; }
@@ -2295,6 +2327,15 @@ public sealed class DeckWorkspaceServiceTests
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
+            SingleLookupRequests++;
+            return Task.FromResult(BuildCard(nameOrId));
+        }
+
+        /// <summary>
+        /// Builds deterministic fake card metadata for a name.
+        /// </summary>
+        private CardInfo? BuildCard(string nameOrId)
+        {
             if (CancelGetCard)
             {
                 throw new TaskCanceledException("Caller cancelled card lookup.");
@@ -2319,28 +2360,29 @@ public sealed class DeckWorkspaceServiceTests
                 CollectorNumber = "1",
                 ScryfallUri = $"https://scryfall.test/{Uri.EscapeDataString(nameOrId)}",
             };
-            return Task.FromResult<CardInfo?>(card);
+            return card;
         }
 
         /// <summary>
         /// Returns fake metadata for each requested name that resolves.
         /// </summary>
-        public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
             IReadOnlyList<string> names,
             CancellationToken cancellationToken
         )
         {
+            BatchLookupRequests++;
             Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
             foreach (string name in names)
             {
-                CardInfo? card = await GetCardAsync(name, cancellationToken).ConfigureAwait(false);
+                CardInfo? card = BuildCard(name);
                 if (card is not null)
                 {
                     cards[name] = card;
                 }
             }
 
-            return cards;
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(cards);
         }
 
         /// <summary>

@@ -98,19 +98,26 @@ public sealed partial class ArchidektGateway
                 return;
             }
 
-            if (
-                required
-                && options.EnableUsernamePasswordLogin
+            bool canLogin = options.EnableUsernamePasswordLogin
                 && !string.IsNullOrWhiteSpace(loaded.Username)
-                && !string.IsNullOrWhiteSpace(loaded.Password)
-            )
+                && !string.IsNullOrWhiteSpace(loaded.Password);
+            if (canLogin)
             {
-                string? jwt = await TryLoginAsync(
-                        loaded.Username,
-                        loaded.Password,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                string? jwt = null;
+                try
+                {
+                    jwt = await TryLoginAsync(
+                            loaded.Username,
+                            loaded.Password,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                }
+                catch (Exception exception) when (!required && exception is not OperationCanceledException)
+                {
+                    jwt = null;
+                }
+
                 if (!string.IsNullOrWhiteSpace(jwt))
                 {
                     sessionJwt = jwt;

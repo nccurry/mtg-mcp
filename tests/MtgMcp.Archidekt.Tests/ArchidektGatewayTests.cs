@@ -1020,6 +1020,83 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that read-only imports attempt configured credentials for private Archidekt decks.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AuthenticatesReadOnlyImportWhenCredentialsAreConfigured()
+    {
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "access_token": "login-jwt", "user": { "id": 42 } }""");
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Private Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """);
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Username = "user",
+                Password = "pass",
+                EnableUsernamePasswordLogin = true,
+            });
+
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken);
+
+        deck.Name.Should().Be("Private Deck");
+        handler.Requests.Select(request => request.Path).Should().Equal(
+            "api/rest-auth/login/",
+            "api/decks/123/");
+        handler.Requests[1].Authorization.Should().Be("JWT login-jwt");
+    }
+
+    /// <summary>
+    /// Verifies that public read-only imports still work anonymously when no credentials are configured.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AllowsAnonymousReadOnlyImportWithoutCredentials()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Public Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """);
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions { BaseAddress = new Uri("https://archidekt.test/") });
+
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken);
+
+        deck.Name.Should().Be("Public Deck");
+        handler.Requests.Should().ContainSingle();
+        handler.Requests[0].Authorization.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies that email-shaped usernames use Archidekt's browser login payload shape.
     /// </summary>
     [Fact]
