@@ -74,12 +74,13 @@ public sealed partial class DeckAnalysisService
         bool heuristicMatch = assignment.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase);
         bool oddsMatch = DeckRoleClassifier.MatchesTarget(card, target);
         CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
+        List<string> categories = DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories).ToList();
         DeckRoleCountCardEvidence evidence = new()
         {
             CardName = card.Name,
             Quantity = card.Quantity,
             PrimaryCategory = primaryCategory,
-            Categories = (card.Categories ?? []).ToList(),
+            Categories = categories,
             IncludedInDeck = included,
             ClassifierPrimaryRole = assignment.PrimaryRole,
             Tags = assignment.Tags.ToList(),
@@ -103,7 +104,7 @@ public sealed partial class DeckAnalysisService
                 tag.Equals(target, StringComparison.OrdinalIgnoreCase));
         }
 
-        foreach (string category in card.Categories ?? [])
+        foreach (string category in categories)
         {
             AddRoleEvidence(
                 evidence.MatchingEvidence,

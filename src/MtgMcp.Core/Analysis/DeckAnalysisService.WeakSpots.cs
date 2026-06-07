@@ -42,9 +42,15 @@ public sealed partial class DeckAnalysisService
         {
             SourceKey = "external-recommendation-sources",
             Status = "not-queried",
-            Notes = ["Call source_search_evidence, source_search_reddit_discussions, or commander_get_aggregate_cards when source-backed popularity evidence is needed."]
+            Notes =
+            [
+                "Call source_search_evidence, source_search_reddit_discussions, "
+                    + "or commander_get_aggregate_cards when source-backed popularity evidence is needed."
+            ]
         });
-        review.Notes.Add("Evidence-only review: rows identify pressure points and candidates, but the assistant should synthesize final cuts and replacements.");
+        review.Notes.Add(
+            "Evidence-only review: rows identify pressure points and candidates, "
+                + "but the assistant should synthesize final cuts and replacements.");
         review.Notes.Add($"Using best-practice profile {bestPractices.RecommendedProfile}.");
         return review;
     }

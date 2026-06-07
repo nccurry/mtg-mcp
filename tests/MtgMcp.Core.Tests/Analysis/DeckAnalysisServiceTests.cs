@@ -229,6 +229,53 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that role-count explanations expose the effective primary category even for sparse card records.
+    /// </summary>
+    [Fact]
+    public async Task ExplainRoleCounts_IncludesPrimaryCategoryWhenCategoriesAreEmpty()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Sparse categories",
+                Format = "commander",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true }
+                ],
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Legacy Llanowar",
+                        Quantity = 1,
+                        PrimaryCategory = DeckRoles.Ramp,
+                        Categories = [],
+                        Snapshot = new CardSnapshot
+                        {
+                            TypeLine = "Creature - Elf Druid",
+                            OracleText = "{T}: Add {G}.",
+                            ScryfallUri = "https://scryfall.test/card/legacy-llanowar"
+                        }
+                    }
+                ]
+            },
+            TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckRoleCountExplanation explanation = await service.ExplainRoleCountsAsync(
+            workspace.Id,
+            DeckRoles.Ramp,
+            TestContext.Current.CancellationToken);
+
+        DeckRoleCountCardEvidence row = explanation.Cards.Should().ContainSingle().Subject;
+        row.PrimaryCategory.Should().Be(DeckRoles.Ramp);
+        row.Categories.Should().ContainSingle().Which.Should().Be(DeckRoles.Ramp);
+        row.MatchingEvidence.Should().Contain("workspace category: Ramp");
+    }
+
+    /// <summary>
     /// Verifies that compact workspace state exposes deck-tuning context without a full workspace dump.
     /// </summary>
     [Fact]

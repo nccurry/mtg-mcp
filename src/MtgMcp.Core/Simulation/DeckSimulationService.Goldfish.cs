@@ -143,7 +143,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .First();
         result.RepresentativeLines = representative.Line.Take(16).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
-        result.Notes.Add("Model label optimistic-goldfish-model: this tool projects board development and fallback win pressure, so commander timing can differ from deck_analyze_performance's strict-sequencing-model scenarios.");
+        result.Notes.Add(
+            "Model label optimistic-goldfish-model: this tool projects board development and fallback win pressure, "
+                + "so commander timing can differ from deck_analyze_performance's strict-sequencing-model scenarios.");
         result.Notes.Add("Commander is treated as available from the command zone when the deck has a Commander category.");
         result.Notes.Add($"Resolved simulation profile '{profileResolution.Profile.Id}' from {profileResolution.Source}.");
         result.Notes.AddRange(commanderRules.Assumptions);
@@ -1226,9 +1228,15 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         }
 
         estimate.Notes.Add("Win timing is probabilistic and assumes no interaction.");
-        estimate.Notes.Add("Model label optimistic-goldfish-model: route evidence combines deterministic route predicates with fallback board-pressure heuristics.");
-        estimate.Notes.Add("deck_analyze_performance can report different timing because it uses strict-sequencing-model scenario probabilities instead of heuristic win-pressure detection.");
-        estimate.Notes.Add("Observed win-turn percentiles only include runs that reached a heuristic win; winByTurnRates and observedWinRate are measured against all runs.");
+        estimate.Notes.Add(
+            "Model label optimistic-goldfish-model: route evidence combines deterministic route predicates "
+                + "with fallback board-pressure heuristics.");
+        estimate.Notes.Add(
+            "deck_analyze_performance can report different timing because it uses strict-sequencing-model "
+                + "scenario probabilities instead of heuristic win-pressure detection.");
+        estimate.Notes.Add(
+            "Observed win-turn percentiles only include runs that reached a heuristic win; winByTurnRates "
+                + "and observedWinRate are measured against all runs.");
         return estimate;
     }
 

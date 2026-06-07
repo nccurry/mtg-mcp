@@ -102,10 +102,16 @@ internal static partial class DeckPerformanceAnalyzer
         PerformanceCardFactsCache cardFacts)
     {
         analysis.Assumptions.Add("Simulation uses cached Scryfall snapshots and local role/tag heuristics.");
-        analysis.Assumptions.Add("Model label strict-sequencing-model: Stats Lab tracks castability, named scenario success, and command-zone timing under deterministic sequencing assumptions.");
-        analysis.Assumptions.Add($"Each run draws one card per turn, plays one land per turn, and sequences spells with the '{profileResolution.Profile.Id}' simulation profile.");
+        analysis.Assumptions.Add(
+            "Model label strict-sequencing-model: Stats Lab tracks castability, named scenario success, "
+                + "and command-zone timing under deterministic sequencing assumptions.");
+        analysis.Assumptions.Add(
+            $"Each run draws one card per turn, plays one land per turn, and sequences spells with the "
+                + $"'{profileResolution.Profile.Id}' simulation profile.");
         analysis.Assumptions.Add($"Simulation profile source: {profileResolution.Source}.");
-        analysis.Assumptions.Add("deck_simulate_goldfish can report different timing because it projects heuristic board development and fallback win pressure rather than named scenario success.");
+        analysis.Assumptions.Add(
+            "deck_simulate_goldfish can report different timing because it projects heuristic board development "
+                + "and fallback win pressure rather than named scenario success.");
         analysis.Assumptions.Add("Opponent interaction, stack timing, replacement effects, activated abilities, and full Magic rules are not simulated.");
         analysis.Assumptions.Add("London mulligans draw seven and bottom cards using a deterministic plan-aware keep heuristic.");
         if (MulliganHeuristics.UsesFreeFirstMulligan(workspace.Format))
@@ -145,7 +151,9 @@ internal static partial class DeckPerformanceAnalyzer
         if (MulliganHeuristics.UsesCommanderDeckConstruction(workspace.Format) && analysis.DeckSize != 100)
         {
             analysis.Warnings.Add(
-                $"Commander workspace has {analysis.DeckSize} included cards instead of 100; excluded categories such as Sideboard and Maybeboard are not sampled, so performance probabilities reflect a partial active deck.");
+                $"Commander workspace has {analysis.DeckSize} included cards instead of 100; excluded categories "
+                    + "such as Sideboard and Maybeboard are not sampled, so performance probabilities reflect "
+                    + "a partial active deck.");
         }
 
         if (analysis.DeckSize < 60)

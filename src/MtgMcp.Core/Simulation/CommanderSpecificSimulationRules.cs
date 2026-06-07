@@ -38,9 +38,15 @@ internal sealed class CommanderSpecificSimulationRules
         List<string> assumptions = [];
         if (hasIngaAndEsika)
         {
-            assumptions.Add("Inga and Esika detected: goldfish treats Inga-granted creature mana as usable only for creature spells while the commander is online.");
-            assumptions.Add("Inga and Esika detected: goldfish draws a card from the commander only when a creature spell spends at least three modeled creature mana.");
-            assumptions.Add("Inga and Esika assumption: native creature mana abilities, summoning sickness, tapping choices, and replacement effects are approximated rather than fully rules-modeled.");
+            assumptions.Add(
+                "Inga and Esika detected: goldfish treats Inga-granted creature mana as usable only for "
+                    + "creature spells while the commander is online.");
+            assumptions.Add(
+                "Inga and Esika detected: goldfish draws a card from the commander only when a creature spell "
+                    + "spends at least three modeled creature mana.");
+            assumptions.Add(
+                "Inga and Esika assumption: native creature mana abilities, summoning sickness, tapping choices, "
+                    + "and replacement effects are approximated rather than fully rules-modeled.");
         }
 
         return new CommanderSpecificSimulationRules

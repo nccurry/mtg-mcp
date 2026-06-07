@@ -74,7 +74,9 @@ public sealed class AnalysisTools
     /// Reviews weak-slot evidence without selecting final cuts.
     /// </summary>
     [McpServerTool(Name = "deck_review_weak_spots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Return evidence-only weak-slot rows, role/category balance, existing excluded-card candidates, source statuses, and notes. The assistant should synthesize final recommendations.")]
+    [Description(
+        "Return evidence-only weak-slot rows, role/category balance, existing excluded-card candidates, "
+            + "source statuses, and notes. The assistant should synthesize final recommendations.")]
     public Task<DeckWeakSpotReview> ReviewWeakSpotsAsync(
         string workspaceId,
         [Description("Heuristic analysis profile: auto or a documented deck intent Heuristic Profile value.")]

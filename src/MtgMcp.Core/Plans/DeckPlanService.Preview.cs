@@ -258,7 +258,8 @@ public sealed partial class DeckPlanService
                 Status = "not-evaluated",
                 Notes =
                 [
-                    "Transient package preview keeps source-provider research separate; use source_explain_card_signal or source_search_evidence for source-backed support."
+                    "Transient package preview keeps source-provider research separate; use source_explain_card_signal "
+                        + "or source_search_evidence for source-backed support."
                 ],
             });
         }

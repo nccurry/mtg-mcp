@@ -28,6 +28,29 @@ public sealed class DeckExporter
         bool markdown = format is "markdown" or "markdown-links";
         bool markdownLinks = format is "markdown-links";
 
+        if (!options.IncludeCategories)
+        {
+            List<DeckCard> cards = [];
+            foreach (DeckCard card in workspace.Cards)
+            {
+                string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+                if (options.IncludedOnly && !DeckCategoryInclusion.IsIncludedInDeck(categories, primaryCategory))
+                {
+                    continue;
+                }
+
+                cards.Add(card);
+            }
+
+            cards.Sort((left, right) => string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
+            foreach (DeckCard card in cards)
+            {
+                AppendCardLine(builder, card, markdown, markdownLinks);
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
         foreach (DeckCategory category in workspace.Categories)
         {
             List<DeckCard> cards = [];

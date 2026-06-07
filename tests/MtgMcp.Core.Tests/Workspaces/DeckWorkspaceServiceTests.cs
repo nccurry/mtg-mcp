@@ -1193,6 +1193,7 @@ public sealed class DeckWorkspaceServiceTests
         markdownLinks.Should().NotContain("Maybeboard");
         ungroupedMarkdown.Should().NotContain("## Mainboard");
         ungroupedMarkdown.Should().Contain("- 1 Sol Ring");
+        ungroupedMarkdown.Should().NotContain($"{Environment.NewLine}{Environment.NewLine}");
     }
 
     /// <summary>
