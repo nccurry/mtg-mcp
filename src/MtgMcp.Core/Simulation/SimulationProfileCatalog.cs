@@ -851,7 +851,8 @@ public sealed class SimulationProfileCatalog
                     FinisherPressureThreshold = 8,
                     FinisherPowerThreshold = 18,
                     CombatPowerThreshold = 36,
-                }
+                },
+                WinRoutes = GraveyardEngineRoutes()
             },
             new SimulationProfile
             {
@@ -883,7 +884,8 @@ public sealed class SimulationProfileCatalog
                     ColorTurn = 3,
                     InteractionTurn = 3,
                     ComboTurn = 6,
-                }
+                },
+                WinRoutes = [ReanimatorControlRoute()]
             },
             new SimulationProfile
             {
@@ -900,7 +902,8 @@ public sealed class SimulationProfileCatalog
                     ComboPriority = 3,
                     WinconPriority = 4,
                     DefaultPriority = 2,
-                }
+                },
+                WinRoutes = GraveyardEngineRoutes()
             },
             new SimulationProfile
             {
@@ -965,5 +968,39 @@ public sealed class SimulationProfileCatalog
                 }
             }
         ];
+    }
+
+    /// <summary>
+    /// Builds deterministic graveyard-engine routes shared by value and combo profiles.
+    /// </summary>
+    private static List<SimulationRouteDefinition> GraveyardEngineRoutes()
+    {
+        return
+        [
+            ReanimatorControlRoute(),
+            new SimulationRouteDefinition
+            {
+                Name = "Aristocrats Engine",
+                Kind = "aristocrats",
+                EarliestTurn = 5,
+                Source = "profile",
+                Requirements = ["sac-outlet", "drain-payoff", "recursive-creature"]
+            }
+        ];
+    }
+
+    /// <summary>
+    /// Builds a conservative reanimator-control route that requires both setup and protection.
+    /// </summary>
+    private static SimulationRouteDefinition ReanimatorControlRoute()
+    {
+        return new SimulationRouteDefinition
+        {
+            Name = "Reanimator Control",
+            Kind = "reanimator-control",
+            EarliestTurn = 5,
+            Source = "profile",
+            Requirements = ["graveyardcount>=2", "reanimation-target", "tag:Reanimation", "interactionheld>=1"]
+        };
     }
 }

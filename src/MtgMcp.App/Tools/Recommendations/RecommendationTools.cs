@@ -103,6 +103,35 @@ public sealed class RecommendationTools
     }
 
     /// <summary>
+    /// Finds bounded underplayed Commander candidates with eligible deck counts.
+    /// </summary>
+    [McpServerTool(Name = "commander_search_candidates", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Search bounded Commander candidates from catalog results, then check EDHREC eligible deck counts through cached corpus evidence. Returns partial results and source notes when EDHREC lookups fail.")]
+    public Task<CommanderCandidateSearchResult> SearchCommanderCandidatesAsync(
+        [Description("Optional commander color identity such as WUBRG, UB, G, or empty/colorless.")]
+        string? colorIdentity = null,
+        bool exactColorIdentity = false,
+        int minEligibleDecks = 1_500,
+        int? maxEligibleDecks = 3_500,
+        int limit = 20,
+        int scryfallCandidateCap = 80,
+        int edhrecFetchCap = 24,
+        bool bypassCache = false,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.SearchCommanderCandidatesAsync(
+            colorIdentity,
+            exactColorIdentity,
+            minEligibleDecks,
+            maxEligibleDecks,
+            limit,
+            scryfallCandidateCap,
+            edhrecFetchCap,
+            bypassCache,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Finds payoff candidates for a route using Scryfall query templates.
     /// </summary>
     [McpServerTool(Name = "wincon_find_payoffs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
@@ -145,6 +174,28 @@ public sealed class RecommendationTools
             setCode,
             maxPrice,
             limit,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds a batch tuning report for one to eight local workspaces.
+    /// </summary>
+    [McpServerTool(Name = "deck_batch_tuning_report", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Run validation, cost, bracket, mana, consistency, best practices, and goldfish reports for 1-8 local workspaces. Per-workspace failures are returned without stopping the batch.")]
+    public Task<DeckBatchTuningReport> BuildBatchTuningReportAsync(
+        string[] workspaceIds,
+        decimal? maxBudget = null,
+        int targetTurn = 7,
+        int simulations = 1_000,
+        int seed = 1337,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.BuildBatchTuningReportAsync(
+            workspaceIds,
+            maxBudget,
+            targetTurn,
+            simulations,
+            seed,
             cancellationToken);
     }
 

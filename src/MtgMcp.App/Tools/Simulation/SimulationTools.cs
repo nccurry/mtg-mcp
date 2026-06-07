@@ -68,6 +68,30 @@ public sealed class SimulationTools
     }
 
     /// <summary>
+    /// Compares multiple local workspaces and optional Archidekt references.
+    /// </summary>
+    [McpServerTool(Name = "deck_compare_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Compare 2 to 8 local workspace ids and optional Archidekt deck ids or URLs with the same deterministic goldfish settings. Failed references are reported without aborting successful decks.")]
+    public Task<DeckGoldfishComparisonResult> CompareGoldfishAsync(
+        string[]? workspaceIds = null,
+        string[]? archidektDeckIdsOrUrls = null,
+        int targetTurn = 7,
+        int simulations = 1_000,
+        int seed = 1337,
+        bool mulligan = true,
+        CancellationToken cancellationToken = default)
+    {
+        return simulation.CompareGoldfishAsync(
+            workspaceIds,
+            archidektDeckIdsOrUrls,
+            targetTurn,
+            simulations,
+            seed,
+            mulligan,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Projects likely board state by a turn.
     /// </summary>
     [McpServerTool(Name = "deck_project_board_state", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]

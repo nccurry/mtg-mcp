@@ -268,6 +268,17 @@ public sealed class DeckSourceReference
 }
 
 /// <summary>
+/// Stores workspace card metadata keys shared by provider adapters and reports.
+/// </summary>
+public static class DeckCardMetadataKeys
+{
+    /// <summary>
+    /// Identifies whether Archidekt card-id lookup used cache or live search during copy.
+    /// </summary>
+    public const string ArchidektCardIdResolution = "archidektCardIdResolution";
+}
+
+/// <summary>
 /// Provides well-known deck import provider keys.
 /// </summary>
 public static class DeckImportProviders
@@ -486,6 +497,31 @@ public sealed class ArchidektCopyResult
     /// Gets or sets commander names detected in the source workspace.
     /// </summary>
     public List<string> Commanders { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the current or final copy phase.
+    /// </summary>
+    public string CopyPhase { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the estimated Archidekt requests needed for the card-copy phase.
+    /// </summary>
+    public int EstimatedArchidektRequests { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of card ids read from the local Archidekt card-id cache.
+    /// </summary>
+    public int CardIdCacheHits { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of card ids resolved from Archidekt card search.
+    /// </summary>
+    public int CardIdsResolved { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of cards still missing Archidekt card ids before copy.
+    /// </summary>
+    public int MissingArchidektCardIds { get; set; }
 
     /// <summary>
     /// Gets or sets warnings that should be reviewed before applying a copy.

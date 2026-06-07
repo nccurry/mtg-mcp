@@ -36,9 +36,9 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Analyzes deck cost from local snapshots.
     /// </summary>
-    protected static DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace)
+    protected static DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace, decimal? maxBudget = null)
     {
-        DeckCostAnalysis analysis = new() { WorkspaceId = workspace.Id };
+        DeckCostAnalysis analysis = new() { WorkspaceId = workspace.Id, MaxBudget = maxBudget };
         List<DeckCostDriver> drivers = [];
 
         foreach (DeckCard card in workspace.Cards)
@@ -86,10 +86,9 @@ public abstract partial class DeckServiceBase
             }
         }
 
-        analysis.TopCostDrivers = drivers
-            .OrderByDescending(driver => driver.TotalPrice)
-            .Take(10)
-            .ToList();
+        drivers.Sort((left, right) => right.TotalPrice.CompareTo(left.TotalPrice));
+        analysis.TopCostDrivers = drivers.Take(10).ToList();
+        ApplyBudgetStatus(analysis, maxBudget);
         return analysis;
     }
 
@@ -129,8 +128,15 @@ public abstract partial class DeckServiceBase
                     analysis.ManaProducingLandCount += quantity;
                 }
 
-                if (LooksTapped(snapshot))
+                LandTapTiming tapTiming = PerformanceMana.ClassifyTapTiming(card);
+                if (tapTiming == LandTapTiming.AlwaysTapped)
                 {
+                    analysis.AlwaysTappedLandCount += quantity;
+                    analysis.TappedLandCount += quantity;
+                }
+                else if (tapTiming == LandTapTiming.ConditionalTapped)
+                {
+                    analysis.ConditionalTappedLandCount += quantity;
                     analysis.TappedLandCount += quantity;
                 }
                 else
@@ -408,10 +414,53 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static bool LooksTapped(CardSnapshot snapshot)
     {
-        string oracleText = snapshot.OracleText ?? "";
-        return oracleText.Contains("enters tapped", StringComparison.OrdinalIgnoreCase)
-            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase)
-            || HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
+        return PerformanceMana.ClassifyTapTiming(snapshot) != LandTapTiming.Untapped;
+    }
+
+    /// <summary>
+    /// Applies budget annotations without changing raw known-price totals.
+    /// </summary>
+    private static void ApplyBudgetStatus(DeckCostAnalysis analysis, decimal? maxBudget)
+    {
+        if (!maxBudget.HasValue)
+        {
+            analysis.BudgetStatus = "not-requested";
+            if (analysis.MissingPriceCards.Count > 0)
+            {
+                analysis.MissingPriceRiskNotes.Add(
+                    $"{analysis.MissingPriceCards.Count} included or maybeboard cards are missing cached prices; totals are known-price totals only.");
+            }
+
+            return;
+        }
+
+        decimal budget = Math.Max(0, maxBudget.Value);
+        if (analysis.IncludedTotal > budget)
+        {
+            analysis.BudgetStatus = "over-budget";
+            analysis.KnownBudgetOverage = analysis.IncludedTotal - budget;
+            analysis.KnownBudgetRemaining = 0;
+            if (analysis.MissingPriceCards.Count > 0)
+            {
+                analysis.MissingPriceRiskNotes.Add(
+                    $"{analysis.MissingPriceCards.Count} missing prices may increase the known overage.");
+            }
+
+            return;
+        }
+
+        decimal remaining = budget - analysis.IncludedTotal;
+        analysis.KnownBudgetRemaining = remaining;
+        analysis.KnownBudgetOverage = 0;
+        if (analysis.MissingPriceCards.Count == 0)
+        {
+            analysis.BudgetStatus = "within-budget";
+            return;
+        }
+
+        analysis.BudgetStatus = "unknown-risk";
+        analysis.MissingPriceRiskNotes.Add(
+            $"Known priced cards are within budget by {remaining:0.##}, but {analysis.MissingPriceCards.Count} cards are missing prices.");
     }
 
     /// <summary>

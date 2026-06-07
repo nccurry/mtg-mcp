@@ -33,9 +33,19 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     private readonly SemaphoreSlim authLock = new(1, 1);
 
     /// <summary>
+    /// Serializes reads and writes to the local Archidekt card-id cache.
+    /// </summary>
+    private readonly SemaphoreSlim cardIdCacheLock = new(1, 1);
+
+    /// <summary>
     /// Caches credentials loaded from configuration or the credentials file.
     /// </summary>
     private ArchidektCredentials? credentials;
+
+    /// <summary>
+    /// Caches Archidekt card-id lookups in memory after the cache file is loaded.
+    /// </summary>
+    private Dictionary<string, string>? cardIdCache;
 
     /// <summary>
     /// Caches the access token returned by Archidekt login for this process.
@@ -71,5 +81,6 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     public void Dispose()
     {
         authLock.Dispose();
+        cardIdCacheLock.Dispose();
     }
 }

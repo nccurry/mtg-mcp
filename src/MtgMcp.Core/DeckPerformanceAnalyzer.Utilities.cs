@@ -234,7 +234,7 @@ internal static partial class DeckPerformanceAnalyzer
                 "Battle",
                 "Land");
             IsManaSource = IsLand || IsRamp || ProducedMana.Count > 0;
-            LooksTapped = PerformanceMana.LooksTapped(Snapshot);
+            LooksTapped = PerformanceMana.LooksTapped(card);
             HasComboPieceOrEnabler = HasTag(DeckTags.ComboPiece) || HasTag(DeckTags.ComboEnabler);
         }
 

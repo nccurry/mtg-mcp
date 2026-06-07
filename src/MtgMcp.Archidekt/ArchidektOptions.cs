@@ -39,6 +39,11 @@ public sealed class ArchidektOptions
     /// Gets or sets optional client-side pacing for Archidekt requests.
     /// </summary>
     public ArchidektRateLimitOptions RateLimit { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the local cache file used to remember Archidekt card ids by Scryfall print.
+    /// </summary>
+    public string? CardIdCacheFile { get; set; }
 }
 
 /// <summary>

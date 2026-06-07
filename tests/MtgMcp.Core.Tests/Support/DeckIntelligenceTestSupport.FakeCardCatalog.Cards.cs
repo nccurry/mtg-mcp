@@ -310,6 +310,62 @@ public sealed partial class DeckIntelligenceTests
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
                 },
+                "Underplayed Captain" => new CardInfo
+                {
+                    Id = "underplayed-captain",
+                    OracleId = "oracle-underplayed-captain",
+                    Name = "Underplayed Captain",
+                    ManaCost = "{2}{G}{U}",
+                    ManaValue = 4,
+                    TypeLine = "Legendary Creature - Human Advisor",
+                    OracleText = "Whenever you draw your second card each turn, create a Treasure token.",
+                    ColorIdentity = ["G", "U"],
+                    EdhrecRank = 8_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
+                "Failing Captain" => new CardInfo
+                {
+                    Id = "failing-captain",
+                    OracleId = "oracle-failing-captain",
+                    Name = "Failing Captain",
+                    ManaCost = "{1}{B}{G}",
+                    ManaValue = 3,
+                    TypeLine = "Legendary Creature - Elf Noble",
+                    OracleText = "Whenever a creature card leaves your graveyard, each opponent loses 1 life.",
+                    ColorIdentity = ["B", "G"],
+                    EdhrecRank = 9_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
+                "Popular Captain" => new CardInfo
+                {
+                    Id = "popular-captain",
+                    OracleId = "oracle-popular-captain",
+                    Name = "Popular Captain",
+                    ManaCost = "{1}{R}{W}",
+                    ManaValue = 3,
+                    TypeLine = "Legendary Creature - Dwarf Soldier",
+                    OracleText = "Other attacking creatures you control get +1/+0.",
+                    ColorIdentity = ["R", "W"],
+                    EdhrecRank = 900,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
+                "Too Obscure Captain" => new CardInfo
+                {
+                    Id = "too-obscure-captain",
+                    OracleId = "oracle-too-obscure-captain",
+                    Name = "Too Obscure Captain",
+                    ManaCost = "{2}{U}",
+                    ManaValue = 3,
+                    TypeLine = "Legendary Creature - Merfolk Wizard",
+                    OracleText = "Whenever you cast your second spell each turn, scry 1.",
+                    ColorIdentity = ["U"],
+                    EdhrecRank = 12_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
                 _ => new CardInfo
                 {
                     Id = name.ToLowerInvariant().Replace(' ', '-'),

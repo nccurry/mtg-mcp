@@ -189,3 +189,85 @@ public sealed class CommanderWinConditionEvidenceResult
     /// </summary>
     public List<string> Notes { get; set; } = [];
 }
+
+/// <summary>
+/// Reports bounded Commander candidates with source-backed EDHREC sample sizes.
+/// </summary>
+public sealed class CommanderCandidateSearchResult
+{
+    /// <summary>
+    /// Gets or sets the requested color identity filter.
+    /// </summary>
+    public string ColorIdentity { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether the color identity filter was exact.
+    /// </summary>
+    public bool ExactColorIdentity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the lower eligible-deck bound.
+    /// </summary>
+    public int MinEligibleDecks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the upper eligible-deck bound when supplied.
+    /// </summary>
+    public int? MaxEligibleDecks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of Scryfall candidates inspected.
+    /// </summary>
+    public int ScryfallCandidatesInspected { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum EDHREC aggregate fetches allowed.
+    /// </summary>
+    public int EdhrecFetchCap { get; set; }
+
+    /// <summary>
+    /// Gets or sets matching commander rows.
+    /// </summary>
+    public List<CommanderCandidateRow> Commanders { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets source status rows from inspected commander evidence.
+    /// </summary>
+    public List<CorpusSourceStatus> Sources { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal lookup notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one Commander candidate row.
+/// </summary>
+public sealed class CommanderCandidateRow
+{
+    /// <summary>
+    /// Gets or sets the Commander name.
+    /// </summary>
+    public string CommanderName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the color identity read from card metadata.
+    /// </summary>
+    public List<string> ColorIdentity { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the EDHREC eligible deck count when available.
+    /// </summary>
+    public int? EligibleDeckCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the EDHREC commander page inferred from source evidence.
+    /// </summary>
+    public string? EdhrecUri { get; set; }
+}

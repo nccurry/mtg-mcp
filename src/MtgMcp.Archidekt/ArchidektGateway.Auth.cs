@@ -84,6 +84,10 @@ public sealed partial class ArchidektGateway
             return;
         }
 
+        bool hasLoginCredentials =
+            options.EnableUsernamePasswordLogin
+            && !string.IsNullOrWhiteSpace(loaded.Username)
+            && !string.IsNullOrWhiteSpace(loaded.Password);
         await authLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -98,19 +102,25 @@ public sealed partial class ArchidektGateway
                 return;
             }
 
-            if (
-                required
-                && options.EnableUsernamePasswordLogin
-                && !string.IsNullOrWhiteSpace(loaded.Username)
-                && !string.IsNullOrWhiteSpace(loaded.Password)
-            )
+            if (hasLoginCredentials)
             {
-                string? jwt = await TryLoginAsync(
-                        loaded.Username,
-                        loaded.Password,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                string? jwt = null;
+                try
+                {
+                    jwt = await TryLoginAsync(
+                            loaded.Username!,
+                            loaded.Password!,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                }
+                catch (Exception exception) when (
+                    !required
+                    && exception is HttpRequestException or InvalidOperationException)
+                {
+                    jwt = null;
+                }
+
                 if (!string.IsNullOrWhiteSpace(jwt))
                 {
                     sessionJwt = jwt;

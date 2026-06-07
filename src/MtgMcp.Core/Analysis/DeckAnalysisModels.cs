@@ -310,6 +310,26 @@ public sealed class DeckCostAnalysis
     public decimal MaybeboardTotal { get; set; }
 
     /// <summary>
+    /// Gets or sets the optional budget used to annotate the known-price total.
+    /// </summary>
+    public decimal? MaxBudget { get; set; }
+
+    /// <summary>
+    /// Gets or sets the budget status for the known-price total.
+    /// </summary>
+    public string BudgetStatus { get; set; } = "not-requested";
+
+    /// <summary>
+    /// Gets or sets known remaining budget before missing prices are resolved.
+    /// </summary>
+    public decimal? KnownBudgetRemaining { get; set; }
+
+    /// <summary>
+    /// Gets or sets known budget overage from priced included cards.
+    /// </summary>
+    public decimal? KnownBudgetOverage { get; set; }
+
+    /// <summary>
     /// Gets or sets the priced included cards.
     /// </summary>
     public int PricedIncludedCards { get; set; }
@@ -318,6 +338,11 @@ public sealed class DeckCostAnalysis
     /// Gets or sets the missing price cards.
     /// </summary>
     public List<string> MissingPriceCards { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets notes that explain how missing prices affect budget confidence.
+    /// </summary>
+    public List<string> MissingPriceRiskNotes { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the top cost drivers.
@@ -554,6 +579,16 @@ public sealed class ManaBaseAnalysis
     /// Gets or sets the tapped land count.
     /// </summary>
     public int TappedLandCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets land count that appears to always enter tapped.
+    /// </summary>
+    public int AlwaysTappedLandCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets land count that appears conditionally tapped.
+    /// </summary>
+    public int ConditionalTappedLandCount { get; set; }
 
     /// <summary>
     /// Gets or sets the untapped land count.

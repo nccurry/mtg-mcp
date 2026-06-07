@@ -941,11 +941,18 @@ public sealed partial class DeckIntelligenceTests
 
         DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
             workspace.Id,
+            maxBudget: 200,
             TestContext.Current.CancellationToken);
 
         analysis.IncludedTotal.Should().Be(180);
         analysis.MaybeboardTotal.Should().Be(6);
+        analysis.MaxBudget.Should().Be(200);
+        analysis.BudgetStatus.Should().Be("unknown-risk");
+        analysis.KnownBudgetRemaining.Should().Be(20);
+        analysis.KnownBudgetOverage.Should().Be(0);
         analysis.MissingPriceCards.Should().Contain("Unknown Price");
+        analysis.MissingPriceRiskNotes.Should().Contain(note =>
+            note.Contains("missing prices", StringComparison.OrdinalIgnoreCase));
         analysis.TopCostDrivers.Should().ContainSingle().Which.CardName.Should().Be("Mana Crypt");
     }
 
@@ -1010,9 +1017,71 @@ public sealed partial class DeckIntelligenceTests
         manaBase.LandCount.Should().Be(36);
         manaBase.ColorSources["B"].Should().Be(36);
         manaBase.TappedLandCount.Should().Be(4);
+        manaBase.AlwaysTappedLandCount.Should().Be(4);
+        manaBase.ConditionalTappedLandCount.Should().Be(0);
         consistency.RampCount.Should().Be(2);
         consistency.Risks.Should().Contain(note => note.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
         consistency.KeyOdds.Rows.Should().Contain(row => row.Target == DeckRoles.Ramp);
+    }
+
+    /// <summary>
+    /// Verifies that mana base analysis separates always-tapped and conditional tapland pressure.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBase_SplitsAlwaysAndConditionalTappedLands()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Tap Timing",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Island",
+                    Quantity = 30,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Island" }
+                },
+                TappedLand(
+                    "Temple of Deceit",
+                    "Land",
+                    "Temple of Deceit enters the battlefield tapped.",
+                    ["U", "B"]),
+                TappedLand(
+                    "Watery Grave",
+                    "Land - Island Swamp",
+                    "As Watery Grave enters, you may pay 2 life. If you don't, it enters tapped.",
+                    ["U", "B"]),
+                TappedLand(
+                    "Drowned Catacomb",
+                    "Land",
+                    "Drowned Catacomb enters the battlefield tapped unless you control an Island or a Swamp.",
+                    ["U", "B"]),
+                TappedLand(
+                    "Shipwreck Marsh",
+                    "Land",
+                    "Shipwreck Marsh enters the battlefield tapped unless you control two or more other lands.",
+                    ["U", "B"]),
+                TappedLand(
+                    "Clearwater Pathway // Murkwater Pathway",
+                    "Land // Land",
+                    "",
+                    ["U", "B"]),
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis analysis = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.LandCount.Should().Be(35);
+        analysis.TappedLandCount.Should().Be(4);
+        analysis.AlwaysTappedLandCount.Should().Be(1);
+        analysis.ConditionalTappedLandCount.Should().Be(3);
+        analysis.UntappedLandCount.Should().Be(31);
     }
 
     /// <summary>
@@ -1244,5 +1313,29 @@ public sealed partial class DeckIntelligenceTests
             cancellation.Token);
 
         await estimate.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    /// <summary>
+    /// Creates a land fixture with produced mana.
+    /// </summary>
+    private static DeckCard TappedLand(
+        string name,
+        string typeLine,
+        string oracleText,
+        List<string> producedMana)
+    {
+        return new DeckCard
+        {
+            Name = name,
+            Quantity = 1,
+            PrimaryCategory = DeckRoles.Lands,
+            Categories = [DeckRoles.Lands],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = typeLine,
+                OracleText = oracleText,
+                ProducedMana = producedMana,
+            },
+        };
     }
 }

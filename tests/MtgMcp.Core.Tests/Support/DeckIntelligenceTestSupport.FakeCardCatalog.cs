@@ -165,6 +165,16 @@ public sealed partial class DeckIntelligenceTests
             {
                 results = [new CardSearchResult { Name = "Season of Loss" }];
             }
+            else if (query.Contains("commander-candidates", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Underplayed Captain" },
+                    new CardSearchResult { Name = "Failing Captain" },
+                    new CardSearchResult { Name = "Popular Captain" },
+                    new CardSearchResult { Name = "Too Obscure Captain" }
+                ];
+            }
             else if (query.Contains("legal:commander", StringComparison.OrdinalIgnoreCase))
             {
                 results = [new CardSearchResult { Name = "Lightning Greaves" }];
@@ -205,6 +215,7 @@ public sealed partial class DeckIntelligenceTests
                 CardSearchPreset.BroadUseful => "legal:commander",
                 CardSearchPreset.BroadUsefulFallback => "draw destroy target add",
                 CardSearchPreset.RecentCards => $"date>={request.Since:yyyy-MM-dd} set:{request.SetCode}",
+                CardSearchPreset.CommanderCandidates => "commander-candidates",
                 _ => ""
             };
         }
@@ -237,6 +248,7 @@ public sealed partial class DeckIntelligenceTests
                 CardSearchPreset.RawQuery => request.RawQuery ?? "",
                 CardSearchPreset.Role => $"Role:{request.Role}",
                 CardSearchPreset.RecentCards => $"RecentCards:{request.Since:yyyy-MM-dd}",
+                CardSearchPreset.CommanderCandidates => $"CommanderCandidates:{request.ColorIdentity}",
                 _ => request.Preset.ToString()
             };
         }

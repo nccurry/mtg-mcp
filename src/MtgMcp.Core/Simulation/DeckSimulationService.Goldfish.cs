@@ -710,6 +710,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
 
             int cost = Math.Max(0, (int)Math.Ceiling(GetSnapshot(spell).ManaValue ?? 2));
+            if (ShouldHoldGoldfishInteraction(spell, role, hand, availableMana, turn, profile))
+            {
+                continue;
+            }
+
             bool creatureSpell = IsCreatureSpell(spell);
             int generalMana = Math.Max(0, availableMana - restrictedCreatureMana);
             if (!creatureSpell && cost > generalMana)
@@ -790,6 +795,38 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             GoldfishSpellWindow.NonSetup => !IsGoldfishSetupSpell(role),
             _ => true,
         };
+    }
+
+    /// <summary>
+    /// Keeps the profile's requested amount of cheap interaction in hand for route evidence.
+    /// </summary>
+    private static bool ShouldHoldGoldfishInteraction(
+        DeckCard spell,
+        CardRoleAssignment role,
+        IReadOnlyList<DeckCard> hand,
+        int availableMana,
+        int turn,
+        SimulationProfile profile)
+    {
+        if (turn < profile.Sequencing.HoldInteractionFromTurn
+            || profile.Sequencing.MinimumInteractionHeld <= 0
+            || GoldfishManaValue(spell) > availableMana
+            || !IsGoldfishInteraction(role))
+        {
+            return false;
+        }
+
+        return CountHeldGoldfishInteraction(hand, availableMana) <= profile.Sequencing.MinimumInteractionHeld;
+    }
+
+    /// <summary>
+    /// Checks whether a spell is the kind of answer a profile may hold up.
+    /// </summary>
+    private static bool IsGoldfishInteraction(CardRoleAssignment role)
+    {
+        return role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

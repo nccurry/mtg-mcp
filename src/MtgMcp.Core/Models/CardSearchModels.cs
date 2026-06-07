@@ -16,6 +16,11 @@ public enum CardSearchPreset
     CommanderGameChangers,
 
     /// <summary>
+    /// Finds legal legendary creature or planeswalker commanders.
+    /// </summary>
+    CommanderCandidates,
+
+    /// <summary>
     /// Finds cards by deck role or tag.
     /// </summary>
     Role,
@@ -157,6 +162,16 @@ public sealed class CardSearchRequest
     public string? Theme { get; init; }
 
     /// <summary>
+    /// Gets or initializes a Commander color identity filter such as W, UB, or WUBRG.
+    /// </summary>
+    public string? ColorIdentity { get; init; }
+
+    /// <summary>
+    /// Gets or initializes whether the Commander color identity filter must match exactly.
+    /// </summary>
+    public bool ExactColorIdentity { get; init; }
+
+    /// <summary>
     /// Creates a request for a caller-supplied provider query.
     /// </summary>
     public static CardSearchRequest Raw(string query, string? format = null, decimal? maxPrice = null)
@@ -197,6 +212,22 @@ public sealed class CardSearchRequest
             Preset = preset,
             Format = format,
             MaxPrice = maxPrice
+        };
+    }
+
+    /// <summary>
+    /// Creates a request for legal Commander candidates in a color identity.
+    /// </summary>
+    public static CardSearchRequest CommanderCandidates(
+        string? colorIdentity,
+        bool exactColorIdentity)
+    {
+        return new CardSearchRequest
+        {
+            Preset = CardSearchPreset.CommanderCandidates,
+            Format = "commander",
+            ColorIdentity = colorIdentity,
+            ExactColorIdentity = exactColorIdentity
         };
     }
 

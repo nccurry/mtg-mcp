@@ -149,7 +149,8 @@ public sealed class SimulationProfileTests
         catalog.TryGet("blink-combo", out SimulationProfile profile).Should().BeTrue();
         profile.Sequencing.TutorPriority.Should().Be(1);
         profile.ThemeTags.Should().Contain(["storm", "blink"]);
-        profile.WinRoutes.Should().BeEmpty();
+        profile.WinRoutes.Should().Contain(route => route.Name == "Reanimator Control");
+        profile.WinRoutes.Should().NotContain(route => route.Name == "Bad Route");
 
         ResolvedSimulationProfile resolved = catalog.Resolve(EmptyWorkspace(), "blink-combo", new DeckIntent());
         resolved.Warnings.Should().Contain("configured profile warning");
@@ -216,6 +217,51 @@ public sealed class SimulationProfileTests
     }
 
     /// <summary>
+    /// Verifies that graveyard and aristocrats predicates are supported and evaluated.
+    /// </summary>
+    [Fact]
+    public void SimulationRouteEvaluator_DetectsGraveyardAndAristocratsPredicates()
+    {
+        SimulationRouteDefinition aristocrats = new()
+        {
+            Name = "Aristocrats",
+            Kind = "aristocrats",
+            EarliestTurn = 5,
+            Requirements = ["sac-outlet", "drain-payoff", "recursive-creature"]
+        };
+        SimulationRouteDefinition reanimator = new()
+        {
+            Name = "Reanimator",
+            Kind = "reanimator-control",
+            EarliestTurn = 5,
+            Requirements = ["graveyard-count>=2", "reanimation-target", "interaction-held>=1"]
+        };
+
+        List<SimulationRouteEvidence> evidence = SimulationRouteEvaluator.EvaluateRoutes(
+            [aristocrats, reanimator],
+            new SimulationRouteState
+            {
+                Turn = 5,
+                InteractionHeld = 1,
+                Battlefield =
+                [
+                    Card("Carrion Feeder", DeckRoles.Synergy, "Creature", "Sacrifice a creature: Put a +1/+1 counter on Carrion Feeder."),
+                    Card("Blood Artist", DeckRoles.Payoffs, "Creature", "Whenever a creature dies, target player loses 1 life and you gain 1 life."),
+                    Card("Reassembling Skeleton", DeckRoles.Synergy, "Creature", "{1}{B}: Return Reassembling Skeleton from your graveyard to the battlefield tapped.")
+                ],
+                Graveyard =
+                [
+                    Card("Archon of Cruelty", DeckRoles.Wincons, "Creature", "Flying. Whenever Archon attacks, target opponent sacrifices a creature.", manaValue: 8),
+                    Card("Mulch", DeckRoles.Synergy, "Sorcery", "Reveal the top four cards of your library.")
+                ]
+            });
+
+        evidence.Should().OnlyContain(route => route.Matched);
+        SimulationRouteEvaluator.IsSupportedRequirement("graveyard-count>=2").Should().BeTrue();
+        SimulationRouteEvaluator.IsSupportedRequirement("interaction-held>=1").Should().BeTrue();
+    }
+
+    /// <summary>
     /// Creates a minimal Commander workspace for resolver tests.
     /// </summary>
     private static DeckWorkspace EmptyWorkspace()
@@ -231,7 +277,12 @@ public sealed class SimulationProfileTests
     /// <summary>
     /// Creates a one-card fixture with snapshot text for route evaluation.
     /// </summary>
-    private static DeckCard Card(string name, string category, string typeLine, string oracleText)
+    private static DeckCard Card(
+        string name,
+        string category,
+        string typeLine,
+        string oracleText,
+        double manaValue = 2)
     {
         return new DeckCard
         {
@@ -242,7 +293,7 @@ public sealed class SimulationProfileTests
             Snapshot = new CardSnapshot
             {
                 TypeLine = typeLine,
-                ManaValue = 2,
+                ManaValue = manaValue,
                 OracleText = oracleText,
             }
         };

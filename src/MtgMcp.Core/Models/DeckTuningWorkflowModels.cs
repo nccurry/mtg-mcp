@@ -1002,3 +1002,116 @@ public sealed class DeckWeakSpotSourceStatus
     /// </summary>
     public List<string> Notes { get; set; } = [];
 }
+
+/// <summary>
+/// Reports read-only tuning diagnostics for several workspaces.
+/// </summary>
+public sealed class DeckBatchTuningReport
+{
+    /// <summary>
+    /// Gets or sets the number of simulations requested for each goldfish run.
+    /// </summary>
+    public int Simulations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum turn used for goldfish projection.
+    /// </summary>
+    public int TargetTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the shared random seed.
+    /// </summary>
+    public int Seed { get; set; }
+
+    /// <summary>
+    /// Gets or sets the budget target when one was supplied.
+    /// </summary>
+    public decimal? MaxBudget { get; set; }
+
+    /// <summary>
+    /// Gets or sets per-workspace tuning rows.
+    /// </summary>
+    public List<DeckBatchTuningDeckReport> Decks { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets workspace failures that did not stop the whole batch.
+    /// </summary>
+    public List<DeckBatchTuningFailure> Failures { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal batch notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Reports read-only tuning diagnostics for one workspace.
+/// </summary>
+public sealed class DeckBatchTuningDeckReport
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deck name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets validation output.
+    /// </summary>
+    public DeckValidationResult Validation { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets cached deck cost analysis.
+    /// </summary>
+    public DeckCostAnalysis Cost { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets Commander bracket estimate.
+    /// </summary>
+    public CommanderBracketEstimate Bracket { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets mana-base analysis.
+    /// </summary>
+    public ManaBaseAnalysis Mana { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets deck consistency analysis.
+    /// </summary>
+    public DeckConsistencyAnalysis Consistency { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets best-practice analysis.
+    /// </summary>
+    public DeckBestPracticeAnalysis BestPractices { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets goldfish projection for this workspace.
+    /// </summary>
+    public GoldfishSimulationResult Goldfish { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets concise high-priority risks for tuning.
+    /// </summary>
+    public List<string> Risks { get; set; } = [];
+}
+
+/// <summary>
+/// Reports one workspace that failed during a batch tuning run.
+/// </summary>
+public sealed class DeckBatchTuningFailure
+{
+    /// <summary>
+    /// Gets or sets the workspace id that failed.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deterministic failure reason.
+    /// </summary>
+    public string Reason { get; set; } = "";
+}

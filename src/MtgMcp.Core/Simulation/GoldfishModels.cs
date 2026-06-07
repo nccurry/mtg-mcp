@@ -457,3 +457,49 @@ public sealed class ArchidektGoldfishComparisonResult
     /// </summary>
     public List<string> Warnings { get; set; } = [];
 }
+
+/// <summary>
+/// Reports a general goldfish comparison across local workspaces and optional Archidekt decks.
+/// </summary>
+public sealed class DeckGoldfishComparisonResult
+{
+    /// <summary>
+    /// Gets or sets the projected target turn.
+    /// </summary>
+    public int TargetTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of simulations actually run for each deck.
+    /// </summary>
+    public int Simulations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the shared random seed used for every compared deck.
+    /// </summary>
+    public int Seed { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether simple mulligans were enabled.
+    /// </summary>
+    public bool Mulligan { get; set; }
+
+    /// <summary>
+    /// Gets or sets compared deck rows in caller order.
+    /// </summary>
+    public List<GoldfishDeckComparison> Decks { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets references that could not be imported or simulated.
+    /// </summary>
+    public List<GoldfishReferenceImportFailure> Failures { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets comparison notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal comparison warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+}

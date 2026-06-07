@@ -6,6 +6,137 @@ namespace MtgMcp.Core;
 public sealed partial class DeckSimulationService
 {
     /// <summary>
+    /// Compares local workspaces and optional Archidekt references in one goldfish report.
+    /// </summary>
+    public async Task<DeckGoldfishComparisonResult> CompareGoldfishAsync(
+        IReadOnlyList<string>? workspaceIds,
+        IReadOnlyList<string>? archidektDeckIdsOrUrls,
+        int targetTurn,
+        int simulations,
+        int seed,
+        bool mulligan,
+        CancellationToken cancellationToken)
+    {
+        List<string> workspaceInputs = CollectReferenceInputs(workspaceIds?.ToArray() ?? []);
+        List<string> archidektInputs = CollectReferenceInputs(archidektDeckIdsOrUrls?.ToArray() ?? []);
+        int totalInputs = workspaceInputs.Count + archidektInputs.Count;
+        if (totalInputs < 2 || totalInputs > 8)
+        {
+            throw new InvalidOperationException("Goldfish comparison requires 2 to 8 total workspace or Archidekt decks.");
+        }
+
+        List<GoldfishDeckComparison> decks = [];
+        List<GoldfishReferenceImportFailure> failures = [];
+        for (int index = 0; index < workspaceInputs.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string input = workspaceInputs[index];
+            try
+            {
+                DeckWorkspace workspace = await LoadWorkspaceAsync(input, cancellationToken)
+                    .ConfigureAwait(false);
+                GoldfishSimulationResult goldfish = SimulateGoldfish(
+                    workspace,
+                    targetTurn,
+                    simulations,
+                    seed,
+                    mulligan,
+                    simulationProfiles);
+                decks.Add(BuildDeckComparison(
+                    $"workspace-{index + 1}",
+                    "workspace",
+                    input,
+                    workspace,
+                    goldfish,
+                    delta: null));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failures.Add(BuildImportFailure(
+                    $"workspace-{index + 1}",
+                    input,
+                    "workspace",
+                    exception.Message));
+            }
+        }
+
+        if (archidektInputs.Count > 0)
+        {
+            IArchidektGateway gateway = RequireArchidektGateway();
+            for (int index = 0; index < archidektInputs.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string input = archidektInputs[index];
+                string label = $"archidekt-{index + 1}";
+                if (!IsArchidektReference(input))
+                {
+                    failures.Add(BuildImportFailure(
+                        label,
+                        input,
+                        DetectReferenceSource(input),
+                        "Only Archidekt deck ids and URLs can be imported by this tool today."));
+                    continue;
+                }
+
+                try
+                {
+                    DeckWorkspace referenceWorkspace = await gateway
+                        .ImportDeckAsync(input, writeBack: false, cancellationToken)
+                        .ConfigureAwait(false);
+                    GoldfishSimulationResult goldfish = SimulateGoldfish(
+                        referenceWorkspace,
+                        targetTurn,
+                        simulations,
+                        seed,
+                        mulligan,
+                        simulationProfiles);
+                    decks.Add(BuildDeckComparison(
+                        label,
+                        "archidekt",
+                        input,
+                        referenceWorkspace,
+                        goldfish,
+                        delta: null));
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    failures.Add(BuildImportFailure(label, input, "archidekt", exception.Message));
+                }
+            }
+        }
+
+        if (decks.Count == 0)
+        {
+            throw new InvalidOperationException("No decks could be loaded for goldfish comparison.");
+        }
+
+        GoldfishSimulationResult baseline = decks[0].Goldfish;
+        foreach (GoldfishDeckComparison deck in decks.Skip(1))
+        {
+            deck.DeltaFromActive = BuildDelta(baseline, deck.Goldfish);
+        }
+
+        return new DeckGoldfishComparisonResult
+        {
+            TargetTurn = decks[0].Goldfish.TargetTurn,
+            Simulations = decks[0].Goldfish.Simulations,
+            Seed = seed,
+            Mulligan = mulligan,
+            Decks = decks,
+            Failures = failures,
+            Notes =
+            [
+                "Every deck uses the same target turn, simulation count, seed, and mulligan setting.",
+                "Deltas are compared against the first successfully loaded deck.",
+                "Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine."
+            ],
+            Warnings = failures
+                .Select(failure => $"{failure.Label}: {failure.Reason}")
+                .ToList(),
+        };
+    }
+
+    /// <summary>
     /// Compares the active workspace against up to three read-only Archidekt reference decks.
     /// </summary>
     public async Task<ArchidektGoldfishComparisonResult> CompareArchidektGoldfishAsync(
@@ -19,91 +150,57 @@ public sealed partial class DeckSimulationService
         bool mulligan,
         CancellationToken cancellationToken)
     {
-        List<string> referenceInputs = CollectReferenceInputs(archidektDeckUrl1, archidektDeckUrl2, archidektDeckUrl3);
+        List<string> referenceInputs = CollectReferenceInputs(
+            archidektDeckUrl1,
+            archidektDeckUrl2,
+            archidektDeckUrl3);
         if (referenceInputs.Count == 0)
         {
             throw new InvalidOperationException("At least one Archidekt reference deck id or URL is required.");
         }
 
-        DeckWorkspace activeWorkspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
-            .ConfigureAwait(false);
-        GoldfishSimulationResult activeGoldfish = SimulateGoldfish(
-            activeWorkspace,
-            targetTurn,
-            simulations,
-            seed,
-            mulligan,
-            simulationProfiles);
-        GoldfishDeckComparison activeDeck = BuildDeckComparison(
-            "active",
-            "workspace",
-            input: null,
-            activeWorkspace,
-            activeGoldfish,
-            delta: null);
-
-        IArchidektGateway gateway = RequireArchidektGateway();
-        List<GoldfishDeckComparison> references = [];
-        List<GoldfishReferenceImportFailure> failures = [];
-        for (int index = 0; index < referenceInputs.Count; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            string input = referenceInputs[index];
-            string label = $"reference-{index + 1}";
-            if (!IsArchidektReference(input))
-            {
-                failures.Add(BuildImportFailure(
-                    label,
-                    input,
-                    DetectReferenceSource(input),
-                    "Only Archidekt deck ids and URLs can be imported by this tool today."));
-                continue;
-            }
-
-            DeckWorkspace referenceWorkspace;
-            try
-            {
-                referenceWorkspace = await gateway
-                    .ImportDeckAsync(input, writeBack: false, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                failures.Add(BuildImportFailure(
-                    label,
-                    input,
-                    "archidekt",
-                    exception.Message));
-                continue;
-            }
-
-            GoldfishSimulationResult referenceGoldfish = SimulateGoldfish(
-                referenceWorkspace,
+        DeckGoldfishComparisonResult comparison = await CompareGoldfishAsync(
+                [workspaceId],
+                referenceInputs,
                 targetTurn,
                 simulations,
                 seed,
                 mulligan,
-                simulationProfiles);
-            GoldfishComparisonDelta delta = BuildDelta(activeGoldfish, referenceGoldfish);
-            references.Add(BuildDeckComparison(
-                label,
-                "archidekt",
-                input,
-                referenceWorkspace,
-                referenceGoldfish,
-                delta));
+                cancellationToken)
+            .ConfigureAwait(false);
+        GoldfishDeckComparison activeDeck = comparison.Decks.FirstOrDefault(deck => deck.Source == "workspace")
+            ?? throw new InvalidOperationException(
+                comparison.Failures.FirstOrDefault(failure => failure.Source == "workspace")?.Reason
+                ?? "Active workspace could not be loaded for goldfish comparison.");
+        activeDeck.Label = "active";
+        List<GoldfishDeckComparison> references = comparison.Decks
+            .Where(deck => deck.Source == "archidekt")
+            .ToList();
+        foreach (GoldfishDeckComparison reference in references)
+        {
+            if (reference.Label.StartsWith("archidekt-", StringComparison.OrdinalIgnoreCase))
+            {
+                reference.Label = "reference-" + reference.Label["archidekt-".Length..];
+            }
+        }
+        foreach (GoldfishReferenceImportFailure failure in comparison.Failures)
+        {
+            if (failure.Label.StartsWith("archidekt-", StringComparison.OrdinalIgnoreCase))
+            {
+                failure.Label = "reference-" + failure.Label["archidekt-".Length..];
+            }
         }
 
         return new ArchidektGoldfishComparisonResult
         {
-            WorkspaceId = activeWorkspace.Id,
-            TargetTurn = activeGoldfish.TargetTurn,
-            Simulations = activeGoldfish.Simulations,
-            Seed = seed,
-            Mulligan = mulligan,
+            WorkspaceId = activeDeck.WorkspaceId,
+            TargetTurn = comparison.TargetTurn,
+            Simulations = comparison.Simulations,
+            Seed = comparison.Seed,
+            Mulligan = comparison.Mulligan,
             ActiveDeck = activeDeck,
             ReferenceDecks = references,
-            ReferenceFailures = failures,
+            ReferenceFailures = comparison.Failures,
             Notes =
             [
                 "Archidekt reference decks are imported read-only with writeBack=false.",
@@ -111,7 +208,7 @@ public sealed partial class DeckSimulationService
                 "Deltas are reference minus active; negative medianObservedWinTurnDelta means the reference's observed wins were faster.",
                 "Non-Archidekt references are returned in referenceFailures without aborting other comparisons."
             ],
-            Warnings = failures
+            Warnings = comparison.Failures
                 .Select(failure => $"{failure.Label}: {failure.Reason}")
                 .ToList(),
         };

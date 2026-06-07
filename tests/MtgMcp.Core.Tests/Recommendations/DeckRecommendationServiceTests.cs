@@ -1145,4 +1145,175 @@ public sealed partial class DeckIntelligenceTests
             operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Command Tower").Should().Be(1);
         result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Temple of Silence");
     }
+
+    /// <summary>
+    /// Verifies that batch tuning returns partial failures without aborting valid workspaces.
+    /// </summary>
+    [Fact]
+    public async Task BuildBatchTuningReport_ReturnsPartialFailures()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        DeckBatchTuningReport report = await service.BuildBatchTuningReportAsync(
+            [workspace.Id, "missing-workspace"],
+            maxBudget: 300,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 91,
+            TestContext.Current.CancellationToken);
+
+        DeckBatchTuningDeckReport deckReport = report.Decks.Should().ContainSingle().Subject;
+        deckReport.WorkspaceId.Should().Be(workspace.Id);
+        deckReport.Cost.IncludedTotal.Should().BeGreaterThan(0);
+        deckReport.Goldfish.TargetTurn.Should().Be(5);
+        report.Failures.Should().ContainSingle(failure =>
+            failure.WorkspaceId == "missing-workspace"
+            && failure.Reason.Contains("not found", StringComparison.OrdinalIgnoreCase));
+        report.Notes.Should().Contain(note => note.Contains("without aborting", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies bounded Commander discovery and EDHREC partial-result notes.
+    /// </summary>
+    [Fact]
+    public async Task SearchCommanderCandidates_FiltersByEligibleDeckCountAndReturnsFailureNotes()
+    {
+        InMemoryRepository workspaces = new();
+        FakeCardCatalog catalog = new();
+        FakeEdhrecCommanderProvider provider = new(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Underplayed Captain"] = 2_000,
+                ["Popular Captain"] = 6_000,
+                ["Too Obscure Captain"] = 500
+            },
+            failingCommander: "Failing Captain");
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            catalog,
+            corpusSignalProviders: [provider]);
+
+        CommanderCandidateSearchResult result = await service.SearchCommanderCandidatesAsync(
+            colorIdentity: "UG",
+            exactColorIdentity: true,
+            minEligibleDecks: 1_500,
+            maxEligibleDecks: 3_500,
+            limit: 3,
+            scryfallCandidateCap: 4,
+            edhrecFetchCap: 3,
+            refresh: true,
+            TestContext.Current.CancellationToken);
+
+        result.ColorIdentity.Should().Be("UG");
+        result.ExactColorIdentity.Should().BeTrue();
+        result.ScryfallCandidatesInspected.Should().Be(4);
+        result.EdhrecFetchCap.Should().Be(3);
+        CommanderCandidateRow candidate = result.Commanders.Should().ContainSingle().Subject;
+        candidate.CommanderName.Should().Be("Underplayed Captain");
+        candidate.EligibleDeckCount.Should().Be(2_000);
+        candidate.ColorIdentity.Should().Equal("G", "U");
+        candidate.EdhrecUri.Should().Be("https://edhrec.test/commanders/underplayed-captain");
+        result.Sources.Should().ContainSingle(source => source.Key == "edhrec");
+        result.Notes.Should().Contain(note => note.Contains("EDHREC failed", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("fetch cap", StringComparison.OrdinalIgnoreCase));
+        provider.Queries.Select(query => query.Commander).Should().Equal(
+            "Underplayed Captain",
+            "Failing Captain",
+            "Popular Captain");
+        catalog.SearchQueries.Should().Contain("CommanderCandidates:UG");
+    }
+
+    /// <summary>
+    /// Provides deterministic EDHREC-style commander aggregate signals.
+    /// </summary>
+    private sealed class FakeEdhrecCommanderProvider : ICorpusSignalProvider
+    {
+        /// <summary>
+        /// Stores eligible deck counts by commander name.
+        /// </summary>
+        private readonly IReadOnlyDictionary<string, int> eligibleDeckCounts;
+
+        /// <summary>
+        /// Stores an optional commander name that should fail.
+        /// </summary>
+        private readonly string? failingCommander;
+
+        /// <summary>
+        /// Captures provider queries in caller order.
+        /// </summary>
+        public List<CorpusSignalQuery> Queries { get; } = [];
+
+        /// <summary>
+        /// Creates a deterministic EDHREC provider.
+        /// </summary>
+        public FakeEdhrecCommanderProvider(
+            IReadOnlyDictionary<string, int> eligibleDeckCounts,
+            string? failingCommander = null)
+        {
+            this.eligibleDeckCounts = eligibleDeckCounts;
+            this.failingCommander = failingCommander;
+        }
+
+        /// <summary>
+        /// Describes an enabled EDHREC commander aggregate source.
+        /// </summary>
+        public CorpusSourceStatus GetStatus()
+        {
+            return new CorpusSourceStatus
+            {
+                Key = "edhrec",
+                Name = "EDHREC",
+                Kind = "commander-aggregate",
+                Enabled = true,
+                StableApi = false,
+                ApiType = CorpusSourceApiTypes.UnofficialApi,
+                UnofficialApi = true,
+                Uri = "https://edhrec.test"
+            };
+        }
+
+        /// <summary>
+        /// Returns one aggregate inclusion signal for the requested commander.
+        /// </summary>
+        public Task<CorpusSignalReport> GetSignalsAsync(
+            CorpusSignalQuery query,
+            RecommendationAnalysisBudget budget,
+            CancellationToken cancellationToken)
+        {
+            Queries.Add(query);
+            if (query.Commander is not null
+                && failingCommander is not null
+                && query.Commander.Equals(failingCommander, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new HttpRequestException("EDHREC unavailable");
+            }
+
+            CorpusSignalReport report = new()
+            {
+                Sources = [GetStatus()]
+            };
+            if (query.Commander is not null
+                && eligibleDeckCounts.TryGetValue(query.Commander, out int eligibleDeckCount))
+            {
+                string slug = query.Commander.ToLowerInvariant().Replace(' ', '-');
+                report.Signals.Add(new CardCorpusSignal
+                {
+                    CardName = "Signature Spell",
+                    Source = "EDHREC",
+                    SignalType = CorpusSignalTypes.Inclusion,
+                    Score = 0.8,
+                    DeckCount = Math.Min(eligibleDeckCount, 1_000),
+                    EligibleDeckCount = eligibleDeckCount,
+                    Uri = $"https://edhrec.test/commanders/{slug}",
+                    Rationale = "Fixture aggregate row."
+                });
+            }
+
+            return Task.FromResult(report);
+        }
+    }
 }

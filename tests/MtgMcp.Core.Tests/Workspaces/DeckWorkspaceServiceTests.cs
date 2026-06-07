@@ -509,6 +509,9 @@ public sealed class DeckWorkspaceServiceTests
         result.Categories.Should().Contain(DeckDefaults.Maybeboard);
         result.Categories.Should().Contain("Ramp");
         result.Commanders.Should().ContainSingle().Which.Should().Be("Atraxa, Praetors' Voice");
+        result.CopyPhase.Should().Be("dry-run");
+        result.MissingArchidektCardIds.Should().Be(3);
+        result.EstimatedArchidektRequests.Should().Be(4);
         result.Warnings.Should().Contain(warning => warning.Contains("no Scryfall id", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -540,6 +543,7 @@ public sealed class DeckWorkspaceServiceTests
 
         result.DryRun.Should().BeFalse();
         result.DestinationArchidektDeckId.Should().Be("created");
+        result.CopyPhase.Should().Be("completed");
         archidekt.UpsertedCards.Should().Contain(card =>
             card.Name == "Sol Ring"
             && card.Categories.SequenceEqual(new[] { DeckDefaults.Mainboard, "Ramp" }));
@@ -1286,6 +1290,40 @@ public sealed class DeckWorkspaceServiceTests
         validation
             .Errors.Should()
             .Contain(error => error.Contains("60", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that decklist import refreshes metadata in one batch instead of looking up each card twice.
+    /// </summary>
+    [Fact]
+    public async Task ImportDecklist_UsesBatchedMetadataRefresh()
+    {
+        InMemoryRepository repository = new();
+        FakeCardCatalog catalog = new();
+        DeckWorkspaceService service = new(repository, catalog);
+
+        DeckWorkspace imported = await service.ImportDecklistAsync(
+            CreateDeckTextComponentDecklist(),
+            "Imported",
+            "modern",
+            TestContext.Current.CancellationToken
+        );
+
+        catalog.SingleCardLookupCount.Should().Be(0);
+        catalog.BatchLookupCount.Should().Be(1);
+        catalog.BatchLookupNames.Should().Equal(
+            "Lightning Bolt",
+            "Sol Ring",
+            "Island",
+            "Missing Card");
+        imported
+            .Cards.Single(card => card.Name == "Lightning Bolt")
+            .Snapshot.TypeLine.Should()
+            .Be("Instant");
+        imported
+            .Cards.Single(card => card.Name == "Missing Card")
+            .Snapshot.TypeLine.Should()
+            .BeNull();
     }
 
     /// <summary>
@@ -2263,6 +2301,21 @@ public sealed class DeckWorkspaceServiceTests
     private sealed class FakeCardCatalog : ICardCatalog
     {
         /// <summary>
+        /// Gets the number of direct card lookups.
+        /// </summary>
+        public int SingleCardLookupCount { get; private set; }
+
+        /// <summary>
+        /// Gets the number of batch card lookups.
+        /// </summary>
+        public int BatchLookupCount { get; private set; }
+
+        /// <summary>
+        /// Gets the names supplied to the latest batch lookup.
+        /// </summary>
+        public List<string> BatchLookupNames { get; } = [];
+
+        /// <summary>
         /// Gets or sets whether single-card lookup should simulate caller cancellation.
         /// </summary>
         public bool CancelGetCard { get; init; }
@@ -2295,17 +2348,51 @@ public sealed class DeckWorkspaceServiceTests
         /// </summary>
         public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
         {
+            SingleCardLookupCount++;
             if (CancelGetCard)
             {
                 throw new TaskCanceledException("Caller cancelled card lookup.");
             }
 
-            if (nameOrId.Contains("Missing", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(CreateCardInfo(nameOrId));
+        }
+
+        /// <summary>
+        /// Returns fake metadata for each requested name that resolves.
+        /// </summary>
+        public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken
+        )
+        {
+            BatchLookupCount++;
+            BatchLookupNames.Clear();
+            BatchLookupNames.AddRange(names);
+            Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
+            foreach (string name in names)
             {
-                return Task.FromResult<CardInfo?>(null);
+                await Task.Yield();
+                CardInfo? card = CreateCardInfo(name);
+                if (card is not null)
+                {
+                    cards[name] = card;
+                }
             }
 
-            CardInfo card = new()
+            return cards;
+        }
+
+        /// <summary>
+        /// Creates deterministic fake card metadata for one card name.
+        /// </summary>
+        private static CardInfo? CreateCardInfo(string nameOrId)
+        {
+            if (nameOrId.Contains("Missing", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return new CardInfo
             {
                 Id = $"scryfall-{nameOrId}",
                 OracleId = $"oracle-{nameOrId}",
@@ -2319,28 +2406,6 @@ public sealed class DeckWorkspaceServiceTests
                 CollectorNumber = "1",
                 ScryfallUri = $"https://scryfall.test/{Uri.EscapeDataString(nameOrId)}",
             };
-            return Task.FromResult<CardInfo?>(card);
-        }
-
-        /// <summary>
-        /// Returns fake metadata for each requested name that resolves.
-        /// </summary>
-        public async Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
-            IReadOnlyList<string> names,
-            CancellationToken cancellationToken
-        )
-        {
-            Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
-            foreach (string name in names)
-            {
-                CardInfo? card = await GetCardAsync(name, cancellationToken).ConfigureAwait(false);
-                if (card is not null)
-                {
-                    cards[name] = card;
-                }
-            }
-
-            return cards;
         }
 
         /// <summary>

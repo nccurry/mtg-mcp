@@ -141,6 +141,40 @@ public sealed class PerformanceManaTests
     }
 
     /// <summary>
+    /// Verifies that conditional taplands are tap-pressure for analysis but not always unavailable in simulation.
+    /// </summary>
+    [Fact]
+    public void ClassifyTapTiming_SplitsAlwaysConditionalAndUntappedLands()
+    {
+        DeckCard temple = Land("Temple of Deceit", "Land", "");
+        DeckCard gate = Land("Dimir Guildgate", "Land - Gate", "");
+        DeckCard triome = Land("Indatha Triome", "Land - Plains Swamp Forest", "");
+        DeckCard shock = Land(
+            "Watery Grave",
+            "Land - Island Swamp",
+            "As Watery Grave enters, you may pay 2 life. If you don't, it enters tapped.");
+        DeckCard check = Land(
+            "Drowned Catacomb",
+            "Land",
+            "Drowned Catacomb enters the battlefield tapped unless you control an Island or a Swamp.");
+        DeckCard slow = Land(
+            "Shipwreck Marsh",
+            "Land",
+            "Shipwreck Marsh enters the battlefield tapped unless you control two or more other lands.");
+        DeckCard pathway = Land("Clearwater Pathway // Murkwater Pathway", "Land // Land", "");
+
+        PerformanceMana.ClassifyTapTiming(temple).Should().Be(LandTapTiming.AlwaysTapped);
+        PerformanceMana.ClassifyTapTiming(gate).Should().Be(LandTapTiming.AlwaysTapped);
+        PerformanceMana.ClassifyTapTiming(triome).Should().Be(LandTapTiming.AlwaysTapped);
+        PerformanceMana.ClassifyTapTiming(shock).Should().Be(LandTapTiming.ConditionalTapped);
+        PerformanceMana.ClassifyTapTiming(check).Should().Be(LandTapTiming.ConditionalTapped);
+        PerformanceMana.ClassifyTapTiming(slow).Should().Be(LandTapTiming.ConditionalTapped);
+        PerformanceMana.ClassifyTapTiming(pathway).Should().Be(LandTapTiming.Untapped);
+        PerformanceMana.LooksTapped(shock).Should().BeFalse();
+        PerformanceMana.LooksTapped(pathway).Should().BeFalse();
+    }
+
+    /// <summary>
     /// Creates a nonland test card with cached mana data.
     /// </summary>
     private static DeckCard Spell(
@@ -159,6 +193,24 @@ public sealed class PerformanceManaTests
                 ManaValue = manaValue,
                 TypeLine = "Instant",
                 ColorIdentity = colorIdentity,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Creates a land card with cached text.
+    /// </summary>
+    private static DeckCard Land(string name, string typeLine, string oracleText)
+    {
+        return new DeckCard
+        {
+            Name = name,
+            PrimaryCategory = DeckRoles.Lands,
+            Categories = [DeckRoles.Lands],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = typeLine,
+                OracleText = oracleText,
             },
         };
     }

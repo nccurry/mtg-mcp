@@ -1,6 +1,27 @@
 namespace MtgMcp.Core;
 
 /// <summary>
+/// Represents how a land's tap timing should be modeled.
+/// </summary>
+internal enum LandTapTiming
+{
+    /// <summary>
+    /// The land is modeled as available on the turn it enters.
+    /// </summary>
+    Untapped,
+
+    /// <summary>
+    /// The land has a common deck-building condition that may make it enter tapped.
+    /// </summary>
+    ConditionalTapped,
+
+    /// <summary>
+    /// The land is modeled as unavailable on the turn it enters.
+    /// </summary>
+    AlwaysTapped
+}
+
+/// <summary>
 /// Models mana symbols, produced mana options, and one-source-per-payment spending for Stats Lab.
 /// </summary>
 internal static class PerformanceMana
@@ -187,14 +208,63 @@ internal static class PerformanceMana
     }
 
     /// <summary>
-    /// Checks whether a land appears to enter tapped.
+    /// Classifies a land card's tap timing using card name, type line, and oracle text.
+    /// </summary>
+    public static LandTapTiming ClassifyTapTiming(DeckCard card)
+    {
+        CardSnapshot snapshot = GetSnapshot(card);
+        return ClassifyTapTiming(card.Name, snapshot.TypeLine ?? "", snapshot.OracleText ?? "");
+    }
+
+    /// <summary>
+    /// Classifies a land snapshot's tap timing when the card name is unavailable.
+    /// </summary>
+    public static LandTapTiming ClassifyTapTiming(CardSnapshot snapshot)
+    {
+        return ClassifyTapTiming("", snapshot.TypeLine ?? "", snapshot.OracleText ?? "");
+    }
+
+    /// <summary>
+    /// Checks whether a land should be unavailable on the turn it enters during simulation.
+    /// </summary>
+    public static bool LooksTapped(DeckCard card)
+    {
+        return ClassifyTapTiming(card) == LandTapTiming.AlwaysTapped;
+    }
+
+    /// <summary>
+    /// Checks whether a land should be unavailable on the turn it enters during simulation.
     /// </summary>
     public static bool LooksTapped(CardSnapshot snapshot)
     {
-        string oracleText = snapshot.OracleText ?? "";
-        return oracleText.Contains("enters tapped", StringComparison.OrdinalIgnoreCase)
-            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase)
-            || HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
+        return ClassifyTapTiming(snapshot) == LandTapTiming.AlwaysTapped;
+    }
+
+    /// <summary>
+    /// Classifies tap timing from stable Scryfall text patterns.
+    /// </summary>
+    private static LandTapTiming ClassifyTapTiming(string name, string typeLine, string oracleText)
+    {
+        if (IsPathway(name, typeLine))
+        {
+            return LandTapTiming.Untapped;
+        }
+
+        if (HasNonPrimaryLandFace(typeLine))
+        {
+            return LandTapTiming.AlwaysTapped;
+        }
+
+        if (HasTappedEntryText(oracleText))
+        {
+            return HasConditionalTappedEntryText(oracleText)
+                ? LandTapTiming.ConditionalTapped
+                : LandTapTiming.AlwaysTapped;
+        }
+
+        return IsAlwaysTappedLandFamily(name, typeLine)
+            ? LandTapTiming.AlwaysTapped
+            : LandTapTiming.Untapped;
     }
 
     /// <summary>
@@ -483,6 +553,74 @@ internal static class PerformanceMana
         return faces.Length > 1
             && !faces[0].Contains("Land", StringComparison.OrdinalIgnoreCase)
             && faces.Skip(1).Any(face => face.Contains("Land", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks whether a modal pathway should be modeled as untapped.
+    /// </summary>
+    private static bool IsPathway(string name, string typeLine)
+    {
+        return name.Contains("Pathway", StringComparison.OrdinalIgnoreCase)
+            && typeLine.Contains("Land", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks land families whose tap timing is useful even without full oracle text.
+    /// </summary>
+    private static bool IsAlwaysTappedLandFamily(string name, string typeLine)
+    {
+        if (name.Equals("Temple of the False God", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return typeLine.Contains("Gate", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Triome", StringComparison.OrdinalIgnoreCase)
+            || typeLine.Contains("Triome", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("Temple of ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks for oracle text that says a land can enter tapped.
+    /// </summary>
+    private static bool HasTappedEntryText(string oracleText)
+    {
+        return ContainsAny(
+            oracleText,
+            "enters tapped",
+            "enter tapped",
+            "enters the battlefield tapped",
+            "enter the battlefield tapped");
+    }
+
+    /// <summary>
+    /// Checks for common shock, check, reveal, and slow-land conditions.
+    /// </summary>
+    private static bool HasConditionalTappedEntryText(string oracleText)
+    {
+        return ContainsAny(
+            oracleText,
+            "unless",
+            "you may pay",
+            "if you don't",
+            "if you control",
+            "you may reveal");
+    }
+
+    /// <summary>
+    /// Checks whether text contains any provided token.
+    /// </summary>
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        foreach (string needle in needles)
+        {
+            if (value.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

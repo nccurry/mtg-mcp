@@ -141,12 +141,14 @@ public sealed class AnalysisTools
     /// Analyzes cached deck prices and top cost drivers.
     /// </summary>
     [McpServerTool(Name = "deck_analyze_cost", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Analyze cached deck prices, included total, maybeboard total, missing prices, and top cost drivers.")]
+    [Description("Analyze cached deck prices, included total, optional max budget status, maybeboard total, missing prices, and top cost drivers.")]
     public Task<DeckCostAnalysis> AnalyzeDeckCostAsync(
         string workspaceId,
+        [Description("Optional maximum budget for included cards. Missing prices are reported as budget risk instead of reducing the known total.")]
+        decimal? maxBudget = null,
         CancellationToken cancellationToken = default)
     {
-        return analysis.AnalyzeDeckCostAsync(workspaceId, cancellationToken);
+        return analysis.AnalyzeDeckCostAsync(workspaceId, maxBudget, cancellationToken);
     }
 
     /// <summary>

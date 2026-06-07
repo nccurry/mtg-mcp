@@ -98,6 +98,83 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that read-only deck imports use configured Archidekt credentials when available.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AuthenticatesReadOnlyImportWhenCredentialsAreConfigured()
+    {
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "key": "login-jwt", "user": { "id": 42 } }"""
+        );
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Private Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Username = "user",
+                Password = "pass",
+                EnableUsernamePasswordLogin = true,
+            });
+
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken);
+
+        deck.Name.Should().Be("Private Deck");
+        handler.Requests[0].Path.Should().Be("api/rest-auth/login/");
+        handler.Requests[1].Path.Should().Be("api/decks/123/");
+        handler.Requests[1].Authorization.Should().Be("JWT login-jwt");
+    }
+
+    /// <summary>
+    /// Verifies that public deck imports still work anonymously when no credentials are configured.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AllowsAnonymousReadOnlyImportWithoutCredentials()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Public Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions { BaseAddress = new Uri("https://archidekt.test/") });
+
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken);
+
+        deck.Name.Should().Be("Public Deck");
+        handler.Requests.Should().ContainSingle();
+        handler.Requests[0].Authorization.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies that import deck tolerates Archidekt's live bracket-era card shape.
     /// </summary>
     [Fact]
@@ -472,6 +549,210 @@ public sealed class ArchidektGatewayTests
         card.ArchidektCardId.Should().Be("151147");
         card.PrimaryCategory.Should().Be("Testing");
         card.ArchidektDeckRelationId.Should().Be(991);
+    }
+
+    /// <summary>
+    /// Verifies that resolved Archidekt card ids are written to the local cache.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_CachesResolvedArchidektCardIds()
+    {
+        string cacheFile = CreateTempCacheFile();
+        try
+        {
+            RecordingHandler handler = new();
+            handler.Get(
+                "api/cards/v2/?name=Lightning%20Bolt&pageSize=25",
+                """
+                { "results": [ { "id": 151147, "uid": "scryfall-bolt", "oracleCard": { "name": "Lightning Bolt" } } ] }
+                """
+            );
+            handler.Patch(
+                "api/decks/123/modifyCards/v2/",
+                """
+                {
+                  "cards": [
+                    {
+                      "id": 991,
+                      "quantity": 1,
+                      "categories": ["Mainboard"],
+                      "card": {
+                        "id": 151147,
+                        "uid": "scryfall-bolt",
+                        "oracleCard": { "name": "Lightning Bolt" }
+                      }
+                    }
+                  ]
+                }
+                """
+            );
+            ArchidektGateway gateway = CreateAuthorizedGateway(
+                handler,
+                new ArchidektOptions
+                {
+                    BaseAddress = new Uri("https://archidekt.test/"),
+                    CardIdCacheFile = cacheFile,
+                });
+            DeckWorkspace deck = new()
+            {
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+            };
+            DeckCard card = new()
+            {
+                Name = "Lightning Bolt",
+                Quantity = 1,
+                ScryfallId = "scryfall-bolt",
+                Categories = [DeckDefaults.Mainboard],
+                PrimaryCategory = DeckDefaults.Mainboard,
+            };
+
+            await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+            handler.Requests.Should().Contain(request => request.Path.StartsWith("api/cards/v2/", StringComparison.Ordinal));
+            card.ArchidektCardId.Should().Be("151147");
+            card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
+            File.ReadAllText(cacheFile).Should().Contain("Lightning Bolt|scryfall-bolt");
+        }
+        finally
+        {
+            DeleteTempCacheFile(cacheFile);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that cached Archidekt card ids avoid card-search requests.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_UsesCachedArchidektCardIds()
+    {
+        string cacheFile = CreateTempCacheFile();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+            await File.WriteAllTextAsync(
+                cacheFile,
+                """{ "Lightning Bolt|scryfall-bolt": "151147" }""",
+                TestContext.Current.CancellationToken);
+            RecordingHandler handler = new();
+            handler.Patch(
+                "api/decks/123/modifyCards/v2/",
+                """
+                {
+                  "cards": [
+                    {
+                      "id": 991,
+                      "quantity": 1,
+                      "categories": ["Mainboard"],
+                      "card": {
+                        "id": 151147,
+                        "uid": "scryfall-bolt",
+                        "oracleCard": { "name": "Lightning Bolt" }
+                      }
+                    }
+                  ]
+                }
+                """
+            );
+            ArchidektGateway gateway = CreateAuthorizedGateway(
+                handler,
+                new ArchidektOptions
+                {
+                    BaseAddress = new Uri("https://archidekt.test/"),
+                    CardIdCacheFile = cacheFile,
+                });
+            DeckWorkspace deck = new()
+            {
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+            };
+            DeckCard card = new()
+            {
+                Name = "Lightning Bolt",
+                Quantity = 1,
+                ScryfallId = "scryfall-bolt",
+                Categories = [DeckDefaults.Mainboard],
+                PrimaryCategory = DeckDefaults.Mainboard,
+            };
+
+            await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+            handler.Requests.Should().NotContain(request => request.Path.StartsWith("api/cards/v2/", StringComparison.Ordinal));
+            card.ArchidektCardId.Should().Be("151147");
+            card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("cache");
+        }
+        finally
+        {
+            DeleteTempCacheFile(cacheFile);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that duplicate imported prints share one Archidekt card-id lookup.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_ResolvesDuplicatePrintOnce()
+    {
+        string cacheFile = CreateTempCacheFile();
+        try
+        {
+            RecordingHandler handler = new();
+            handler.Get(
+                "api/cards/v2/?name=Lightning%20Bolt&pageSize=25",
+                """
+                { "results": [ { "id": 151147, "uid": "scryfall-bolt", "oracleCard": { "name": "Lightning Bolt" } } ] }
+                """
+            );
+            handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+            ArchidektGateway gateway = CreateAuthorizedGateway(
+                handler,
+                new ArchidektOptions
+                {
+                    BaseAddress = new Uri("https://archidekt.test/"),
+                    CardIdCacheFile = cacheFile,
+                });
+            DeckWorkspace deck = new()
+            {
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+            };
+            DeckCard first = new()
+            {
+                Name = "Lightning Bolt",
+                Quantity = 1,
+                ScryfallId = "scryfall-bolt",
+                ArchidektDeckRelationId = 10,
+                Categories = [DeckDefaults.Mainboard],
+                PrimaryCategory = DeckDefaults.Mainboard,
+            };
+            DeckCard second = new()
+            {
+                Name = "Lightning Bolt",
+                Quantity = 1,
+                ScryfallId = "scryfall-bolt",
+                ArchidektDeckRelationId = 11,
+                Categories = [DeckDefaults.Sideboard],
+                PrimaryCategory = DeckDefaults.Sideboard,
+            };
+
+            await gateway.PersistCardsAsync(deck, [first, second], [], TestContext.Current.CancellationToken);
+
+            handler.Requests
+                .Where(request => request.Path.StartsWith("api/cards/v2/", StringComparison.Ordinal))
+                .Should()
+                .ContainSingle();
+            first.ArchidektCardId.Should().Be("151147");
+            second.ArchidektCardId.Should().Be("151147");
+            first.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
+            second.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
+        }
+        finally
+        {
+            DeleteTempCacheFile(cacheFile);
+        }
     }
 
     /// <summary>
@@ -1424,6 +1705,42 @@ public sealed class ArchidektGatewayTests
         HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://archidekt.test/") };
 
         return new ArchidektGateway(httpClient, Options.Create(options));
+    }
+
+    /// <summary>
+    /// Creates an authorized gateway with supplied test options.
+    /// </summary>
+    private static ArchidektGateway CreateAuthorizedGateway(
+        RecordingHandler handler,
+        ArchidektOptions options
+    )
+    {
+        HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://archidekt.test/") };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("JWT", "test-jwt");
+
+        return new ArchidektGateway(httpClient, Options.Create(options));
+    }
+
+    /// <summary>
+    /// Creates a unique temp cache file path for Archidekt card-id cache tests.
+    /// </summary>
+    private static string CreateTempCacheFile()
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            "mtg-mcp-tests",
+            $"{Guid.NewGuid():N}-archidekt-card-cache.json");
+    }
+
+    /// <summary>
+    /// Deletes a temp cache file when it exists.
+    /// </summary>
+    private static void DeleteTempCacheFile(string cacheFile)
+    {
+        if (File.Exists(cacheFile))
+        {
+            File.Delete(cacheFile);
+        }
     }
 
     /// <summary>

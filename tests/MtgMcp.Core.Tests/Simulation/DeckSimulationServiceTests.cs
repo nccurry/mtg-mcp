@@ -431,6 +431,69 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that wrapper labels preserve original reference slots when earlier references fail.
+    /// </summary>
+    [Fact]
+    public async Task CompareArchidektGoldfish_PreservesReferenceSlotLabelsAfterFailure()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace active = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Active Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new();
+        string nonArchidektUrl = "https://example.com/decks/reference-one";
+        string archidektUrl = "https://archidekt.com/decks/222/reference_two";
+        archidekt.ImportedDecksByInput[archidektUrl] = CreateGoldfishFixtureDeck("Reference Two", "222", wincons: 5);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog(), archidekt);
+
+        ArchidektGoldfishComparisonResult comparison = await service.CompareArchidektGoldfishAsync(
+            active.Id,
+            nonArchidektUrl,
+            archidektUrl,
+            archidektDeckUrl3: null,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 44,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        comparison.ReferenceDecks.Should().ContainSingle().Which.Label.Should().Be("reference-2");
+        comparison.ReferenceFailures.Should().ContainSingle().Which.Label.Should().Be("reference-1");
+    }
+
+    /// <summary>
+    /// Verifies that local workspace comparisons return deltas without Archidekt imports.
+    /// </summary>
+    [Fact]
+    public async Task CompareGoldfish_ComparesLocalWorkspaces()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace first = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("First Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace second = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Second Goldfish", archidektDeckId: null, ramp: 16, wincons: 5),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        DeckGoldfishComparisonResult comparison = await service.CompareGoldfishAsync(
+            [first.Id, second.Id],
+            archidektDeckIdsOrUrls: null,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 77,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        comparison.Decks.Select(deck => deck.Label).Should().Equal("workspace-1", "workspace-2");
+        comparison.Decks.Should().OnlyContain(deck => deck.Source == "workspace");
+        comparison.Decks[0].DeltaFromActive.Should().BeNull();
+        comparison.Decks[1].DeltaFromActive.Should().NotBeNull();
+        comparison.Failures.Should().BeEmpty();
+        comparison.Notes.Should().Contain(note => note.Contains("first successfully loaded deck", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that weak decks report no likely goldfish win route.
     /// </summary>
     [Fact]
@@ -461,6 +524,60 @@ public sealed partial class DeckIntelligenceTests
         estimate.MedianWinTurn.Should().BeNull();
         estimate.Routes.Should().BeEmpty();
         estimate.Notes.Should().Contain(note => note.Contains("No likely win", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that reanimator-control fixtures can surface a graveyard route instead of looking inert.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DetectsReanimatorControlRoute()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateReanimatorControlGoldfishDeck(),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 300,
+            seed: 57,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.WinEstimate.Routes.Should().Contain(route => route.Kind == "reanimator-control");
+        WinRoute route = goldfish.WinEstimate.Routes.Single(route => route.Kind == "reanimator-control");
+        route.Probability.Should().BeGreaterThan(0);
+        route.Evidence.Should().Contain(evidence =>
+            evidence.Evidence.Any(line => line.Contains("reanimation target", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// Verifies that aristocrats fixtures can surface a drain-and-sacrifice route.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DetectsAristocratsRoute()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateAristocratsGoldfishDeck(),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 300,
+            seed: 61,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.WinEstimate.Routes.Should().Contain(route => route.Kind == "aristocrats");
+        WinRoute route = goldfish.WinEstimate.Routes.Single(route => route.Kind == "aristocrats");
+        route.Probability.Should().BeGreaterThan(0.5);
+        route.Evidence.Should().Contain(evidence =>
+            evidence.Evidence.Any(line => line.Contains("sacrifice outlet", StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>
@@ -548,6 +665,144 @@ public sealed partial class DeckIntelligenceTests
                     },
                 },
             ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a compact reanimator-control fixture with graveyard setup and held interaction.
+    /// </summary>
+    private static DeckWorkspace CreateReanimatorControlGoldfishDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Reanimator Control Goldfish",
+            Format = "commander",
+            Description = DeckIntentText.UpsertDescription(null, "Simulation Profile: value"),
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 40,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Swamp",
+                        ManaValue = 0,
+                        OracleText = "{T}: Add {B}."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Self Mill Setup",
+                    Quantity = 30,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        ManaValue = 0,
+                        OracleText = "Mill three cards."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Animate Engine",
+                    Quantity = 30,
+                    PrimaryCategory = DeckRoles.Recursion,
+                    Categories = [DeckRoles.Recursion],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Enchantment",
+                        ManaValue = 0,
+                        OracleText = "Return target creature card from your graveyard to the battlefield."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Archon Target",
+                    Quantity = 30,
+                    PrimaryCategory = DeckRoles.Wincons,
+                    Categories = [DeckRoles.Wincons],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Archon",
+                        ManaValue = 8,
+                        OracleText = "Flying. Whenever Archon Target attacks, each opponent sacrifices a creature."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Held Counterspell",
+                    Quantity = 20,
+                    PrimaryCategory = DeckRoles.Interaction,
+                    Categories = [DeckRoles.Interaction],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Instant",
+                        ManaValue = 3,
+                        OracleText = "Counter target spell."
+                    }
+                }
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Creates a compact aristocrats fixture with outlet, drain payoff, and recursive creature pieces.
+    /// </summary>
+    private static DeckWorkspace CreateAristocratsGoldfishDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Aristocrats Goldfish",
+            Format = "commander",
+            Description = DeckIntentText.UpsertDescription(null, "Simulation Profile: value"),
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Free Sac Outlet",
+                    Quantity = 40,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Vampire",
+                        ManaValue = 0,
+                        OracleText = "Sacrifice a creature: Put a +1/+1 counter on Free Sac Outlet."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Drain Payoff",
+                    Quantity = 40,
+                    PrimaryCategory = DeckRoles.Payoffs,
+                    Categories = [DeckRoles.Payoffs],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Vampire",
+                        ManaValue = 0,
+                        OracleText = "Whenever a creature dies, each opponent loses 1 life and you gain 1 life."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Recursive Creature",
+                    Quantity = 40,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Skeleton",
+                        ManaValue = 0,
+                        OracleText = "{1}{B}: Return Recursive Creature from your graveyard to the battlefield tapped."
+                    }
+                }
+            ]
         };
     }
 

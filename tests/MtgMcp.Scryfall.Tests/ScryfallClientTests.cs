@@ -348,6 +348,38 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that Commander candidate requests are translated inside the Scryfall adapter.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_TranslatesCommanderCandidateRequest()
+    {
+        string query = "(is:commander or (t:legendary t:creature)) legal:commander ci=UG";
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect($"https://api.scryfall.test/cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "1", "name": "Underplayed Captain", "type_line": "Legendary Creature - Human Advisor" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            CardSearchRequest.CommanderCandidates("GU", exactColorIdentity: true),
+            80,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Underplayed Captain");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that get rulings fetches named card then rulings.
     /// </summary>
     [Fact]
