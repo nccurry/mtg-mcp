@@ -198,6 +198,20 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Reopens an Archidekt-sourced workspace with writeback enabled using its explicit source reference.
+    /// </summary>
+    public async Task<DeckWorkspace> ReopenWorkspaceWithWritebackAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace existing = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        string deckIdOrUrl = ResolveArchidektSourceReference(existing);
+        return await OpenArchidektDeckAsync(deckIdOrUrl, writeBack: true, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Imports a Moxfield deck as a generic local workspace.
     /// </summary>
     public async Task<DeckWorkspace> ImportMoxfieldDeckAsync(
@@ -278,9 +292,34 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        return await ExportDeckAsync(
+                workspaceId,
+                format: "text",
+                includedOnly: false,
+                includeCategories: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Exports the deck using caller-selected rendering options.
+    /// </summary>
+    public async Task<string> ExportDeckAsync(
+        string workspaceId,
+        string format,
+        bool includedOnly,
+        bool includeCategories,
+        CancellationToken cancellationToken
+    )
+    {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
-        return DeckExporter.Export(workspace);
+        return DeckExporter.Export(workspace, new DeckExportOptions
+        {
+            Format = format,
+            IncludedOnly = includedOnly,
+            IncludeCategories = includeCategories
+        });
     }
 
     /// <summary>
@@ -307,6 +346,36 @@ public sealed partial class DeckWorkspaceService
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         return DeckAnalyzer.Analyze(workspace);
+    }
+
+    /// <summary>
+    /// Builds compact reusable state for a saved workspace.
+    /// </summary>
+    public async Task<DeckWorkspaceState> GetWorkspaceStateAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return BuildWorkspaceState(workspace);
+    }
+
+    /// <summary>
+    /// Builds assistant-facing context from compact state and existing deck intent storage.
+    /// </summary>
+    public async Task<DeckAssistantContext> GetAssistantContextAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspaceState state = await GetWorkspaceStateAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        DeckIntentResult intent = await GetDeckIntentAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return new DeckAssistantContext
+        {
+            State = state,
+            Intent = intent
+        };
     }
 
     /// <summary>
@@ -347,6 +416,136 @@ public sealed partial class DeckWorkspaceService
 
         await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
         return Change(workspace, DeckMutationKind.MetadataChanged, "Updated deck metadata.");
+    }
+
+    /// <summary>
+    /// Builds compact state from a loaded workspace.
+    /// </summary>
+    internal static DeckWorkspaceState BuildWorkspaceState(DeckWorkspace workspace)
+    {
+        DeckAnalysis analysis = DeckAnalyzer.Analyze(workspace);
+        DeckValidationResult validation = DeckValidator.Validate(workspace);
+        DeckWorkspaceState state = new()
+        {
+            WorkspaceId = workspace.Id,
+            WorkspaceResourceUri = $"mtg://workspace/{workspace.Id}",
+            Name = workspace.Name,
+            Format = workspace.Format,
+            Persistence = DeckPersistence.For(workspace),
+            IncludedCount = analysis.IncludedCards,
+            CategoryCounts = new Dictionary<string, int>(analysis.CategoryCounts, StringComparer.OrdinalIgnoreCase),
+            RoleCounts = new Dictionary<string, int>(analysis.RoleCounts, StringComparer.OrdinalIgnoreCase),
+            Validation = validation
+        };
+
+        foreach (DeckCard card in workspace.Cards)
+        {
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
+            bool included = DeckCategoryInclusion.IsIncludedInDeck(workspace, card);
+            bool creature = (snapshot.TypeLine ?? "").Contains("Creature", StringComparison.OrdinalIgnoreCase);
+
+            if (role.PrimaryRole.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase))
+            {
+                state.Commanders.Add(card.Name);
+            }
+
+            if (included && !creature && !role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+            {
+                state.ActiveNoncreatureSpells += Math.Max(0, card.Quantity);
+            }
+
+            DeckWorkspaceStateCard row = new()
+            {
+                CardName = card.Name,
+                Quantity = card.Quantity,
+                PrimaryCategory = primaryCategory,
+                ManaValue = snapshot.ManaValue,
+                TypeLine = snapshot.TypeLine,
+                ScryfallUri = snapshot.ScryfallUri
+            };
+
+            if (included && snapshot.ManaValue >= 6)
+            {
+                state.HighManaValueCards.Add(row);
+            }
+
+            if (primaryCategory.Equals(DeckDefaults.Sideboard, StringComparison.OrdinalIgnoreCase))
+            {
+                state.SideboardCards.Add(row);
+            }
+            else if (primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+            {
+                state.MaybeboardCards.Add(row);
+            }
+        }
+
+        state.Commanders = state.Commanders
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        state.HighManaValueCards.Sort(CompareStateCardsByManaValueThenName);
+        state.SideboardCards.Sort(CompareStateCardsByName);
+        state.MaybeboardCards.Sort(CompareStateCardsByName);
+        state.TopWarnings.AddRange(validation.Errors.Take(3));
+        state.TopWarnings.AddRange(validation.Warnings.Take(Math.Max(0, 5 - state.TopWarnings.Count)));
+        state.TopWarnings.AddRange(workspace.Warnings.Take(Math.Max(0, 5 - state.TopWarnings.Count)));
+        return state;
+    }
+
+    /// <summary>
+    /// Sorts state cards by descending mana value, then name.
+    /// </summary>
+    private static int CompareStateCardsByManaValueThenName(
+        DeckWorkspaceStateCard left,
+        DeckWorkspaceStateCard right)
+    {
+        int manaValue = Nullable.Compare(right.ManaValue, left.ManaValue);
+        return manaValue != 0
+            ? manaValue
+            : CompareStateCardsByName(left, right);
+    }
+
+    /// <summary>
+    /// Sorts state cards by name.
+    /// </summary>
+    private static int CompareStateCardsByName(DeckWorkspaceStateCard left, DeckWorkspaceStateCard right)
+    {
+        return string.Compare(left.CardName, right.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves the Archidekt deck id or URL for writeback reopen operations.
+    /// </summary>
+    private static string ResolveArchidektSourceReference(DeckWorkspace workspace)
+    {
+        if (workspace.Mode == WorkspaceMode.Archidekt && !string.IsNullOrWhiteSpace(workspace.ArchidektDeckId))
+        {
+            return workspace.ArchidektDeckId;
+        }
+
+        foreach (DeckSourceReference reference in workspace.SourceReferences)
+        {
+            if (!reference.Provider.Equals(DeckImportProviders.Archidekt, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(reference.Url))
+            {
+                return reference.Url;
+            }
+
+            if (!string.IsNullOrWhiteSpace(reference.ExternalId))
+            {
+                return reference.ExternalId;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "workspace_reopen_with_writeback requires an Archidekt-sourced workspace with a clear Archidekt deck id or URL."
+        );
     }
 
     /// <summary>

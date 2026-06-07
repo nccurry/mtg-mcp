@@ -37,7 +37,7 @@ internal static partial class DeckPerformanceAnalyzer
         List<ScenarioPerformance> scenarios =
         [
             BuildScenario(
-                "commander-by-turn-4",
+                $"commander-by-turn-{defaults.CommanderTurn}",
                 defaults.CommanderTurn,
                 runs.Count(run => run.CommanderCastTurn <= defaults.CommanderTurn),
                 runs.Count,

@@ -41,7 +41,12 @@ public sealed class McpE2ETests
             "deck_add_card",
             "deck_analyze_structure",
             "deck_analyze_performance",
+            "deck_review_weak_spots",
             "deck_plan_compare_performance",
+            "deck_plan_clone",
+            "deck_preview_card_package",
+            "workspace_diff",
+            "workspace_reopen_with_writeback",
             "archidekt_compare_goldfish",
             "server_get_info"
         ]);
@@ -706,10 +711,26 @@ public sealed class McpE2ETests
                 ["workspaceId"] = workspaceId,
                 ["name"] = "Add cheaper ramp consideration",
                 ["rationale"] = "The caller selected Arcane Signet to consider alongside Mana Crypt.",
-                ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") }
+                ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") },
+                ["moveCards"] = new[] { ExplicitMoveChange("Mana Crypt", "Ramp", "Mainboard", "Caller-selected category move.") }
             });
         string planId = GetString(replacement, "planId");
 
+        JsonElement transientPackage = await CallJsonAsync(
+            session.Client,
+            "deck_preview_card_package",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["name"] = "Transient ramp package",
+                ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") },
+                ["moveCards"] = new[] { ExplicitMoveChange("Mana Crypt", "Ramp", "Mainboard", "Caller-selected category move.") },
+                ["resolveAddedCards"] = true,
+                ["simulationProfile"] = "neutral",
+                ["simulations"] = 100,
+                ["maxTurn"] = 3,
+                ["seed"] = 44
+            });
         JsonElement preview = await CallJsonAsync(
             session.Client,
             "deck_plan_preview",
@@ -728,7 +749,8 @@ public sealed class McpE2ETests
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
-                ["createCheckpoint"] = false
+                ["createCheckpoint"] = false,
+                ["includeWorkspace"] = false
             });
         string afterApplyExport = await CallTextAsync(
             session.Client,
@@ -746,12 +768,236 @@ public sealed class McpE2ETests
         GetProperty(GetObject(afterSnapshot, "cost"), "includedTotal").GetDecimal()
             .Should()
             .BeGreaterThan(GetProperty(GetObject(beforeSnapshot, "cost"), "includedTotal").GetDecimal());
+        GetArray(transientPackage, "sourceSupport")
+            .Select(row => GetString(row, "status"))
+            .Should()
+            .OnlyContain(status => status == "not-evaluated");
+        GetArray(GetObject(transientPackage, "performance"), "deltas")
+            .Should()
+            .NotBeEmpty();
         beforeApplyExport.Should().Contain("1 Mana Crypt");
         beforeApplyExport.Should().NotContain("Arcane Signet");
-        GetInt32(apply, "appliedOperations").Should().Be(1);
+        GetInt32(apply, "added").Should().Be(1);
+        GetInt32(apply, "moved").Should().Be(1);
+        GetString(apply, "workspaceResourceUri").Should().StartWith("mtg://workspace/");
         afterApplyExport.Should().Contain("1 Arcane Signet");
         afterApplyExport.Should().Contain("1 Mana Crypt");
         archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that deck-tuning workflow primitives compose around a small Inga and Esika fixture.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task DeckTuningWorkflowFlow_ExercisesEvidenceDiffAndPackageTools()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        RegisterIngaWorkflowCards(scryfall);
+        scryfall.PostJson("cards/collection", IngaWorkflowCollectionJson);
+        archidekt.GetJson("api/decks/23097041/", IngaArchidektDeckJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        IList<McpClientPrompt> prompts = await session.Client.ListPromptsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+        prompts.Select(prompt => prompt.Name).Should().Contain("iterative_deck_review");
+
+        string baselineWorkspaceId = await CreateIngaWorkflowWorkspaceAsync(session.Client, "E2E Inga Baseline");
+        string currentWorkspaceId = await CreateIngaWorkflowWorkspaceAsync(session.Client, "E2E Inga Current");
+        JsonElement remoteWorkspace = await CallJsonAsync(
+            session.Client,
+            "workspace_start",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "archidekt",
+                ["archidektDeckIdOrUrl"] = "https://archidekt.com/decks/23097041/inga_and_esika",
+                ["writeBack"] = false
+            });
+        string remoteWorkspaceId = GetString(remoteWorkspace, "id");
+
+        string stateText = await ReadResourceTextAsync(session.Client, $"mtg://workspace/{baselineWorkspaceId}/state");
+        JsonElement state = JsonElement.Parse(stateText);
+        string contextText = await ReadResourceTextAsync(
+            session.Client,
+            $"mtg://workspace/{baselineWorkspaceId}/assistant-context");
+        JsonElement context = JsonElement.Parse(contextText);
+        string textExport = await CallTextAsync(
+            session.Client,
+            "workspace_export",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["format"] = "text"
+            });
+        string markdownExport = await CallTextAsync(
+            session.Client,
+            "workspace_export",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["format"] = "markdown"
+            });
+        string linkedExport = await CallTextAsync(
+            session.Client,
+            "workspace_export",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["format"] = "markdown-links"
+            });
+        JsonElement rampExplanation = await CallJsonAsync(
+            session.Client,
+            "deck_explain_role_counts",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["role"] = "Ramp"
+            });
+        JsonElement drawExplanation = await CallJsonAsync(
+            session.Client,
+            "deck_explain_role_counts",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["role"] = "Draw"
+            });
+        JsonElement interactionExplanation = await CallJsonAsync(
+            session.Client,
+            "deck_explain_role_counts",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["role"] = "Interaction"
+            });
+        JsonElement winconExplanation = await CallJsonAsync(
+            session.Client,
+            "deck_explain_role_counts",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["role"] = "Wincons"
+            });
+        JsonElement weakSpots = await CallJsonAsync(
+            session.Client,
+            "deck_review_weak_spots",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["limit"] = 5
+            });
+        JsonElement goldfish = await CallJsonAsync(
+            session.Client,
+            "deck_simulate_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["targetTurn"] = 4,
+                ["simulations"] = 100,
+                ["seed"] = 2026
+            });
+        JsonElement performance = await CallJsonAsync(
+            session.Client,
+            "deck_analyze_performance",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = baselineWorkspaceId,
+                ["maxTurn"] = 4,
+                ["simulations"] = 100,
+                ["seed"] = 2026
+            });
+
+        JsonElement package = await CallJsonAsync(
+            session.Client,
+            "deck_preview_card_package",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = currentWorkspaceId,
+                ["name"] = "Move overrun to maybe",
+                ["moveCards"] = new[] { ExplicitMoveChange("Overrun", "Wincons", "Maybeboard", "Caller moved a finisher out.") },
+                ["simulations"] = 100,
+                ["maxTurn"] = 4,
+                ["seed"] = 2026
+            });
+        JsonElement plan = await CallJsonAsync(
+            session.Client,
+            "deck_plan_create",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = currentWorkspaceId,
+                ["name"] = "Move overrun to maybe",
+                ["moveCards"] = new[] { ExplicitMoveChange("Overrun", "Wincons", "Maybeboard", "Caller moved a finisher out.") }
+            });
+        string planId = GetString(plan, "planId");
+        JsonElement preview = await CallJsonAsync(
+            session.Client,
+            "deck_plan_preview",
+            new Dictionary<string, object?> { ["planId"] = planId });
+        JsonElement apply = await CallJsonAsync(
+            session.Client,
+            "deck_plan_apply",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["createCheckpoint"] = false,
+                ["includeWorkspace"] = false
+            });
+        JsonElement diff = await CallJsonAsync(
+            session.Client,
+            "workspace_diff",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = currentWorkspaceId,
+                ["previousWorkspaceId"] = baselineWorkspaceId
+            });
+
+        GetString(state, "workspaceId").Should().Be(baselineWorkspaceId);
+        GetArray(state, "commanders").Select(value => value.GetString()).Should().Contain("Inga and Esika");
+        GetString(GetObject(context, "state"), "workspaceId").Should().Be(baselineWorkspaceId);
+        GetString(remoteWorkspace, "mode").Should().Be("Archidekt");
+        GetProperty(remoteWorkspace, "writeBack").GetBoolean().Should().BeFalse();
+        GetString(remoteWorkspace, "archidektDeckId").Should().Be("23097041");
+        remoteWorkspaceId.Should().NotBeEmpty();
+        textExport.Should().Contain("1 Inga and Esika");
+        markdownExport.Should().Contain("## Commander");
+        linkedExport.Should().Contain("[Inga and Esika](");
+        GetInt32(rampExplanation, "categoryCount").Should().BeGreaterThan(0);
+        GetString(drawExplanation, "role").Should().Be("Draw");
+        GetArray(drawExplanation, "cards").Should().NotBeEmpty();
+        GetArray(interactionExplanation, "cards").Should().NotBeEmpty();
+        GetArray(winconExplanation, "cards").Should().NotBeEmpty();
+        GetArray(weakSpots, "sourceStatuses")
+            .Select(row => GetString(row, "sourceKey"))
+            .Should()
+            .Contain("workspace");
+        GetString(goldfish, "modelLabel").Should().Be("optimistic-goldfish-model");
+        GetArray(goldfish, "notes")
+            .Select(note => note.GetString())
+            .Should()
+            .Contain(note => note != null && note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase));
+        GetString(performance, "modelLabel").Should().Be("strict-sequencing-model");
+        GetArray(performance, "assumptions")
+            .Select(note => note.GetString())
+            .Should()
+            .Contain(note => note != null && note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase));
+        GetArray(package, "roleDeltas").Should().NotBeEmpty();
+        GetInt32(GetObject(GetObject(preview, "before"), "analysis"), "includedCards")
+            .Should()
+            .BeGreaterThan(GetInt32(GetObject(GetObject(preview, "after"), "analysis"), "includedCards"));
+        GetInt32(apply, "moved").Should().Be(1);
+        GetString(apply, "workspaceResourceUri").Should().StartWith("mtg://workspace/");
+        GetInt32(diff, "includedCountDelta").Should().Be(-1);
+        GetArray(diff, "primaryMoves")
+            .Select(row => GetString(row, "cardName"))
+            .Should()
+            .Contain("Overrun");
+        archidekt.Requests.Should().ContainSingle(request => request.Method == "GET" && request.PathAndQuery == "api/decks/23097041/");
+        archidekt.Requests.Should().NotContain(request => request.Method == "PATCH");
     }
 
     /// <summary>
@@ -1192,6 +1438,58 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
+    /// Builds a small local Inga and Esika workspace through the public MCP surface.
+    /// </summary>
+    private static async Task<string> CreateIngaWorkflowWorkspaceAsync(McpClient client, string name)
+    {
+        JsonElement workspace = await CallJsonAsync(
+            client,
+            "workspace_start",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = name,
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+        await AddCardAsync(client, workspaceId, "Inga and Esika", 1, "Commander");
+        await AddCardAsync(client, workspaceId, "Forest", 10, "Lands");
+        await AddCardAsync(client, workspaceId, "Llanowar Elves", 1, "Ramp");
+        await AddCardAsync(client, workspaceId, "Elvish Mystic", 1, "Ramp");
+        await AddCardAsync(client, workspaceId, "Beast Within", 1, "Interaction");
+        await AddCardAsync(client, workspaceId, "Reclamation Sage", 1, "Interaction");
+        await AddCardAsync(client, workspaceId, "Overrun", 1, "Wincons");
+        return workspaceId;
+    }
+
+    /// <summary>
+    /// Registers fake Scryfall named-card routes for the Inga workflow fixture.
+    /// </summary>
+    private static void RegisterIngaWorkflowCards(FakeHttpServer scryfall)
+    {
+        scryfall.GetJson("cards/named?fuzzy=Inga%20and%20Esika", IngaAndEsikaJson);
+        scryfall.GetJson("cards/named?fuzzy=Forest", ForestJson);
+        scryfall.GetJson("cards/named?fuzzy=Llanowar%20Elves", LlanowarElvesJson);
+        scryfall.GetJson("cards/named?fuzzy=Elvish%20Mystic", ElvishMysticJson);
+        scryfall.GetJson("cards/named?fuzzy=Beast%20Within", BeastWithinJson);
+        scryfall.GetJson("cards/named?fuzzy=Reclamation%20Sage", ReclamationSageJson);
+        scryfall.GetJson("cards/named?fuzzy=Overrun", OverrunJson);
+    }
+
+    /// <summary>
+    /// Reads one MCP resource text payload.
+    /// </summary>
+    private static async Task<string> ReadResourceTextAsync(McpClient client, string uri)
+    {
+        ReadResourceResult result = await client.ReadResourceAsync(
+            uri,
+            cancellationToken: TestContext.Current.CancellationToken);
+        object block = result.Contents.Single();
+        return block.GetType().GetProperty("Text")?.GetValue(block) as string
+            ?? throw new InvalidOperationException($"Resource {uri} did not return text content.");
+    }
+
+    /// <summary>
     /// Builds an explicit card change payload for plan-creation tool calls.
     /// </summary>
     private static Dictionary<string, object?> ExplicitCardChange(
@@ -1205,6 +1503,24 @@ public sealed class McpE2ETests
             ["cardName"] = cardName,
             ["quantity"] = quantity,
             ["category"] = category,
+            ["rationale"] = rationale
+        };
+    }
+
+    /// <summary>
+    /// Builds an explicit card move payload for plan-creation tool calls.
+    /// </summary>
+    private static Dictionary<string, object?> ExplicitMoveChange(
+        string cardName,
+        string fromCategory,
+        string toCategory,
+        string rationale)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["cardName"] = cardName,
+            ["fromCategory"] = fromCategory,
+            ["toCategory"] = toCategory,
             ["rationale"] = rationale
         };
     }
@@ -1380,6 +1696,226 @@ public sealed class McpE2ETests
       "legalities": { "commander": "legal" },
       "prices": { "usd": "0.05" },
       "color_identity": []
+    }
+    """;
+
+    /// <summary>
+    /// Provides an Inga and Esika payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string IngaAndEsikaJson = """
+    {
+      "id": "inga-and-esika",
+      "oracle_id": "oracle-inga-and-esika",
+      "name": "Inga and Esika",
+      "mana_cost": "{2}{G}{U}",
+      "cmc": 4,
+      "type_line": "Legendary Creature - Human God",
+      "oracle_text": "Creatures you control have vigilance and \"{T}: Add one mana of any color. Spend this mana only to cast a creature spell.\" Whenever you cast a creature spell, if three or more mana from creatures was spent to cast it, draw a card.",
+      "color_identity": ["G", "U"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.50" },
+      "scryfall_uri": "https://scryfall.com/card/mom/229/inga-and-esika"
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Forest payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string ForestJson = """
+    {
+      "id": "forest",
+      "oracle_id": "oracle-forest",
+      "name": "Forest",
+      "cmc": 0,
+      "type_line": "Basic Land - Forest",
+      "oracle_text": "({T}: Add {G}.)",
+      "produced_mana": ["G"],
+      "color_identity": [],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.05" },
+      "scryfall_uri": "https://scryfall.com/card/forest"
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Llanowar Elves payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string LlanowarElvesJson = """
+    {
+      "id": "llanowar-elves",
+      "oracle_id": "oracle-llanowar-elves",
+      "name": "Llanowar Elves",
+      "mana_cost": "{G}",
+      "cmc": 1,
+      "type_line": "Creature - Elf Druid",
+      "oracle_text": "{T}: Add {G}.",
+      "produced_mana": ["G"],
+      "color_identity": ["G"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.25" },
+      "scryfall_uri": "https://scryfall.com/card/dom/168/llanowar-elves"
+    }
+    """;
+
+    /// <summary>
+    /// Provides an Elvish Mystic payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string ElvishMysticJson = """
+    {
+      "id": "elvish-mystic",
+      "oracle_id": "oracle-elvish-mystic",
+      "name": "Elvish Mystic",
+      "mana_cost": "{G}",
+      "cmc": 1,
+      "type_line": "Creature - Elf Druid",
+      "oracle_text": "{T}: Add {G}.",
+      "produced_mana": ["G"],
+      "color_identity": ["G"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.20" },
+      "scryfall_uri": "https://scryfall.com/card/m14/169/elvish-mystic"
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Beast Within payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string BeastWithinJson = """
+    {
+      "id": "beast-within",
+      "oracle_id": "oracle-beast-within",
+      "name": "Beast Within",
+      "mana_cost": "{2}{G}",
+      "cmc": 3,
+      "type_line": "Instant",
+      "oracle_text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
+      "color_identity": ["G"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "1.25" },
+      "scryfall_uri": "https://scryfall.com/card/c21/186/beast-within"
+    }
+    """;
+
+    /// <summary>
+    /// Provides a Reclamation Sage payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string ReclamationSageJson = """
+    {
+      "id": "reclamation-sage",
+      "oracle_id": "oracle-reclamation-sage",
+      "name": "Reclamation Sage",
+      "mana_cost": "{2}{G}",
+      "cmc": 3,
+      "type_line": "Creature - Elf Shaman",
+      "oracle_text": "When Reclamation Sage enters the battlefield, you may destroy target artifact or enchantment.",
+      "color_identity": ["G"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.30" },
+      "scryfall_uri": "https://scryfall.com/card/m15/194/reclamation-sage"
+    }
+    """;
+
+    /// <summary>
+    /// Provides an Overrun payload for deck-tuning workflow E2E tests.
+    /// </summary>
+    private const string OverrunJson = """
+    {
+      "id": "overrun",
+      "oracle_id": "oracle-overrun",
+      "name": "Overrun",
+      "mana_cost": "{2}{G}{G}{G}",
+      "cmc": 5,
+      "type_line": "Sorcery",
+      "oracle_text": "Creatures you control get +3/+3 and gain trample until end of turn.",
+      "color_identity": ["G"],
+      "legalities": { "commander": "legal" },
+      "prices": { "usd": "0.15" },
+      "scryfall_uri": "https://scryfall.com/card/10e/288/overrun"
+    }
+    """;
+
+    /// <summary>
+    /// Provides a tiny fake Archidekt response for the public Inga and Esika deck URL path.
+    /// </summary>
+    private const string IngaArchidektDeckJson = """
+    {
+      "id": 23097041,
+      "name": "Inga and Esika",
+      "deckFormat": "commander",
+      "categories": [
+        { "id": 1, "name": "Commander", "includedInDeck": true, "includedInPrice": true },
+        { "id": 2, "name": "Lands", "includedInDeck": true, "includedInPrice": true },
+        { "id": 3, "name": "Ramp", "includedInDeck": true, "includedInPrice": true },
+        { "id": 4, "name": "Interaction", "includedInDeck": true, "includedInPrice": true },
+        { "id": 5, "name": "Wincons", "includedInDeck": true, "includedInPrice": true }
+      ],
+      "cards": [
+        {
+          "id": 1,
+          "quantity": 1,
+          "categories": ["Commander"],
+          "card": {
+            "oracleCard": {
+              "name": "Inga and Esika",
+              "manaCost": "{2}{G}{U}",
+              "cmc": 4,
+              "types": ["Legendary", "Creature"],
+              "oracleText": "Creatures you control have vigilance and creature-spell mana.",
+              "colorIdentity": ["G", "U"]
+            }
+          }
+        },
+        {
+          "id": 2,
+          "quantity": 10,
+          "categories": ["Lands"],
+          "card": {
+            "oracleCard": {
+              "name": "Forest",
+              "cmc": 0,
+              "types": ["Basic", "Land"],
+              "oracleText": "{T}: Add {G}.",
+              "colorIdentity": []
+            }
+          }
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides Scryfall collection hydration for the fake Archidekt Inga import.
+    /// </summary>
+    private const string IngaWorkflowCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "inga-and-esika",
+          "oracle_id": "oracle-inga-and-esika",
+          "name": "Inga and Esika",
+          "mana_cost": "{2}{G}{U}",
+          "cmc": 4,
+          "type_line": "Legendary Creature - Human God",
+          "oracle_text": "Creatures you control have vigilance and \"{T}: Add one mana of any color. Spend this mana only to cast a creature spell.\" Whenever you cast a creature spell, if three or more mana from creatures was spent to cast it, draw a card.",
+          "color_identity": ["G", "U"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "0.50" },
+          "scryfall_uri": "https://scryfall.com/card/mom/229/inga-and-esika"
+        },
+        {
+          "id": "forest",
+          "oracle_id": "oracle-forest",
+          "name": "Forest",
+          "cmc": 0,
+          "type_line": "Basic Land - Forest",
+          "oracle_text": "({T}: Add {G}.)",
+          "produced_mana": ["G"],
+          "color_identity": [],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "0.05" },
+          "scryfall_uri": "https://scryfall.com/card/forest"
+        }
+      ]
     }
     """;
 

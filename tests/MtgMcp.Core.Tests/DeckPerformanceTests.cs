@@ -29,6 +29,7 @@ public sealed class DeckPerformanceTests
             CancellationToken.None);
 
         analysis.Simulations.Should().Be(500);
+        analysis.ModelLabel.Should().Be("strict-sequencing-model");
         analysis.OpeningHands.SevenCardKeepRate.Should().BeGreaterThan(0.50);
         analysis.TurnProbabilities.Should().Contain(row =>
             row.Name == "land-drop-by-turn"
@@ -69,6 +70,45 @@ public sealed class DeckPerformanceTests
             warning.Contains("89 included cards", StringComparison.OrdinalIgnoreCase)
             && warning.Contains("Sideboard", StringComparison.OrdinalIgnoreCase)
             && warning.Contains("not sampled", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that Inga and Esika commander-specific assumptions are surfaced by both simulator models.
+    /// </summary>
+    [Fact]
+    public async Task SimulationOutputs_SurfaceIngaAndEsikaAssumptions()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace deck = CreateIngaAndEsikaPerformanceDeck();
+        await repository.SaveAsync(deck, CancellationToken.None);
+        DeckSimulationService service = new(repository, new EmptyCardCatalog());
+
+        DeckPerformanceAnalysis performance = await service.AnalyzeDeckPerformanceAsync(
+            deck.Id,
+            SimulationProfileIds.Neutral,
+            simulations: 100,
+            maxTurn: 5,
+            seed: 101,
+            includeMulligans: true,
+            CancellationToken.None);
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            deck.Id,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 101,
+            mulligan: true,
+            CancellationToken.None);
+
+        performance.Assumptions.Should().Contain(note =>
+            note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase)
+            && note.Contains("creature mana", StringComparison.OrdinalIgnoreCase));
+        goldfish.Notes.Should().Contain(note =>
+            note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase)
+            && note.Contains("creature spells", StringComparison.OrdinalIgnoreCase));
+        goldfish.WinEstimate.Notes.Should().Contain(note =>
+            note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase));
+        goldfish.TurnSummaries.SelectMany(summary => summary.Notes).Should().Contain(note =>
+            note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -132,9 +172,9 @@ public sealed class DeckPerformanceTests
             delta.Metric == "seven-card-keep-rate"
             && delta.After > delta.Before
             && delta.Delta > 0);
-        comparison.Deltas.Single(delta => delta.Metric == "commander-by-turn-4")
+        comparison.Deltas.Single(delta => delta.Metric == "commander-by-target-turn")
             .BeforeLowConfidenceInterval.Should().NotBeNull();
-        comparison.Deltas.Single(delta => delta.Metric == "commander-by-turn-4")
+        comparison.Deltas.Single(delta => delta.Metric == "commander-by-target-turn")
             .ConfidenceIntervalsOverlap.Should().NotBeNull();
     }
 
@@ -371,7 +411,7 @@ public sealed class DeckPerformanceTests
 
         analysis.Profile.Should().Be(SimulationProfileIds.Combo);
         analysis.ProfileResolution.Source.Should().Be("deck-intent");
-        analysis.Scenarios.Single(row => row.Name == "commander-by-turn-4").TargetTurn.Should().Be(3);
+        analysis.Scenarios.Single(row => row.Name == "commander-by-turn-3").TargetTurn.Should().Be(3);
         analysis.Scenarios.Single(row => row.Name == "all-colors-by-turn-3").TargetTurn.Should().Be(2);
         analysis.Assumptions.Should().Contain(note => note.Contains("Saved deck intent", StringComparison.OrdinalIgnoreCase));
     }
@@ -1546,6 +1586,45 @@ public sealed class DeckPerformanceTests
                 Card("Wastes", 70, DeckDefaults.Mainboard, "Basic Land", null, 0, "", [], ["C"]),
                 Card("Azorius Answer", 28, DeckDefaults.Mainboard, "Instant", "{W}{U}", 2, "Counter target spell.", ["W", "U"]),
             ],
+        };
+    }
+
+    /// <summary>
+    /// Creates an Inga and Esika fixture for commander-specific simulation assumptions.
+    /// </summary>
+    private static DeckWorkspace CreateIngaAndEsikaPerformanceDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Inga and Esika Performance",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card(
+                    "Inga and Esika",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Human God",
+                    "{2}{G}{U}",
+                    4,
+                    "Creatures you control have vigilance and \"{T}: Add one mana of any color. Spend this mana only to cast a creature spell.\" Whenever you cast a creature spell, if three or more mana from creatures was spent to cast it, draw a card.",
+                    ["G", "U"],
+                    ["G", "U"]),
+                Card("Forest", 20, DeckDefaults.Mainboard, "Basic Land - Forest", null, 0, "{T}: Add {G}.", [], ["G"]),
+                Card("Island", 16, DeckDefaults.Mainboard, "Basic Land - Island", null, 0, "{T}: Add {U}.", [], ["U"]),
+                Card("Elvish Mystic", 4, DeckRoles.Ramp, "Creature - Elf Druid", "{G}", 1, "{T}: Add {G}.", ["G"], ["G"]),
+                Card("Wood Elves", 10, DeckRoles.Ramp, "Creature - Elf Scout", "{2}{G}", 3, "Search your library for a Forest card.", ["G"]),
+                Card("Beast Whisperer", 10, DeckRoles.Draw, "Creature - Elf Druid", "{2}{G}{G}", 4, "Whenever you cast a creature spell, draw a card.", ["G"]),
+                Card("Utility Elf", 49, DeckDefaults.Mainboard, "Creature - Elf", "{2}{G}", 3, "A helpful creature.", ["G"]),
+            ]
         };
     }
 

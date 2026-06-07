@@ -57,6 +57,35 @@ public sealed class AnalysisTools
     }
 
     /// <summary>
+    /// Explains why cards are counted for a role, tag, or category target.
+    /// </summary>
+    [McpServerTool(Name = "deck_explain_role_counts", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Explain role-count evidence card-by-card for one workspace target such as Ramp, Draw, Interaction, or Wincons.")]
+    public Task<DeckRoleCountExplanation> ExplainRoleCountsAsync(
+        string workspaceId,
+        [Description("Role, tag, or category target to explain, such as Ramp, Draw, Interaction, or Wincons.")]
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        return analysis.ExplainRoleCountsAsync(workspaceId, role, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reviews weak-slot evidence without selecting final cuts.
+    /// </summary>
+    [McpServerTool(Name = "deck_review_weak_spots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Return evidence-only weak-slot rows, role/category balance, existing excluded-card candidates, source statuses, and notes. The assistant should synthesize final recommendations.")]
+    public Task<DeckWeakSpotReview> ReviewWeakSpotsAsync(
+        string workspaceId,
+        [Description("Heuristic analysis profile: auto or a documented deck intent Heuristic Profile value.")]
+        string analysisProfile = "auto",
+        int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        return analysis.ReviewWeakSpotsAsync(workspaceId, analysisProfile, limit, cancellationToken);
+    }
+
+    /// <summary>
     /// Calculates hypergeometric and Monte Carlo odds for requested roles or tags.
     /// </summary>
     [McpServerTool(Name = "deck_analyze_draw_odds", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]

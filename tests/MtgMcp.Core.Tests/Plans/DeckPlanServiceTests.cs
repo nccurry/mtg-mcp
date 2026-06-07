@@ -581,12 +581,22 @@ public sealed partial class DeckIntelligenceTests
                     Rationale = "Caller-supplied cut."
                 }
             ],
+            moveCards:
+            [
+                new ExplicitDeckPlanMoveCardChange
+                {
+                    CardName = "Finale of Devastation",
+                    FromCategory = DeckDefaults.Mainboard,
+                    ToCategory = DeckDefaults.Sideboard,
+                    Rationale = "Caller wants this outside the active package."
+                }
+            ],
             cancellationToken: TestContext.Current.CancellationToken);
 
         plan.Kind.Should().Be("explicit-changes");
         plan.Rationale.Should().Be("The caller decided these exact changes.");
         plan.Confidence.Should().Be(1);
-        plan.Operations.Should().HaveCount(2);
+        plan.Operations.Should().HaveCount(3);
         plan.Operations[0].Should().Match<DeckEditOperation>(operation =>
             operation.Operation == DeckEditOperations.AddCard
             && operation.CardName == "Arcane Signet"
@@ -597,6 +607,12 @@ public sealed partial class DeckIntelligenceTests
             && operation.CardName == "Mind Stone"
             && operation.Category == DeckRoles.Ramp
             && operation.Rationale == "Caller-supplied cut.");
+        plan.Operations[2].Should().Match<DeckEditOperation>(operation =>
+            operation.Operation == DeckEditOperations.MoveCard
+            && operation.CardName == "Finale of Devastation"
+            && operation.FromCategory == DeckDefaults.Mainboard
+            && operation.ToCategory == DeckDefaults.Sideboard
+            && operation.Rationale == "Caller wants this outside the active package.");
         (await plans.GetAsync(plan.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
     }
 
@@ -617,11 +633,158 @@ public sealed partial class DeckIntelligenceTests
             rationale: null,
             addCards: [],
             removeCards: [],
+            moveCards: [],
             cancellationToken: TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*At least one explicit card add or remove is required*");
+            .WithMessage("*At least one explicit card add, remove, or move is required*");
         (await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that package preview uses a transient plan and returns deltas without saving planning state.
+    /// </summary>
+    [Fact]
+    public async Task PreviewCardPackage_ReturnsTransientDeltasWithoutSavingPlan()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckCardPackagePreviewResult result = await service.PreviewCardPackageAsync(
+            workspace.Id,
+            "Creature package test",
+            "Try a small package without saving it.",
+            addCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Arcane Signet",
+                    Category = DeckRoles.Ramp,
+                    Rationale = "Package add."
+                }
+            ],
+            removeCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Counterspell",
+                    Category = DeckRoles.Interaction,
+                    Rationale = "Package cut."
+                }
+            ],
+            moveCards:
+            [
+                new ExplicitDeckPlanMoveCardChange
+                {
+                    CardName = "Overwhelming Stampede",
+                    FromCategory = DeckRoles.Wincons,
+                    ToCategory = DeckDefaults.Sideboard,
+                    Rationale = "Package sideboard move."
+                }
+            ],
+            resolveAddedCards: false,
+            simulationProfile: SimulationProfileIds.Neutral,
+            simulations: 100,
+            maxTurn: 4,
+            seed: 22,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Plan.Kind.Should().Be("transient-card-package");
+        result.Plan.Operations.Should().HaveCount(3);
+        result.Preview.Before.Analysis.IncludedCards.Should().BeGreaterThan(result.Preview.After.Analysis.IncludedCards);
+        result.RoleDeltas.Should().Contain(delta => delta.Role == DeckRoles.Interaction && delta.Delta < 0);
+        result.ValidationChanges.Should().NotBeNull();
+        result.SourceSupport.Should().OnlyContain(row => row.Status == "not-evaluated");
+        result.Performance.Deltas.Should().NotBeEmpty();
+        (await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that plan cloning creates a new draft after compatibility validation.
+    /// </summary>
+    [Fact]
+    public async Task CloneDeckPlanAsync_CreatesDraftForCompatibleWorkspace()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace source = await workspaces.SaveAsync(CreatePlanCloneWorkspace("source", "23097041"), TestContext.Current.CancellationToken);
+        DeckWorkspace target = await workspaces.SaveAsync(CreatePlanCloneWorkspace("target", "23097041"), TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = source.Id,
+            Name = "Move parked card",
+            Kind = "explicit-changes",
+            Rationale = "Try the same category move on the writeback import.",
+            Confidence = 1,
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.MoveCard,
+                    CardName = "Beast Whisperer",
+                    FromCategory = DeckRoles.Draw,
+                    ToCategory = DeckDefaults.Maybeboard,
+                    Rationale = "Caller-approved move."
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckEditPlan clone = await service.CloneDeckPlanAsync(
+            plan.PlanId,
+            target.Id,
+            TestContext.Current.CancellationToken);
+
+        clone.PlanId.Should().NotBe(plan.PlanId);
+        clone.WorkspaceId.Should().Be(target.Id);
+        clone.Status.Should().Be(DeckEditPlanStatus.Draft);
+        clone.Persistence.Should().Be(DeckPersistence.LocalOnly);
+        clone.Operations.Should().ContainSingle().Which.Should().Match<DeckEditOperation>(operation =>
+            operation.Operation == DeckEditOperations.MoveCard
+            && operation.CardName == "Beast Whisperer"
+            && operation.FromCategory == DeckRoles.Draw
+            && operation.ToCategory == DeckDefaults.Maybeboard);
+        (await plans.GetAsync(clone.PlanId, TestContext.Current.CancellationToken)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that plan cloning refuses a workspace imported from a different source deck.
+    /// </summary>
+    [Fact]
+    public async Task CloneDeckPlanAsync_RejectsDifferentSourceReference()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace source = await workspaces.SaveAsync(CreatePlanCloneWorkspace("source", "23097041"), TestContext.Current.CancellationToken);
+        DeckWorkspace target = await workspaces.SaveAsync(CreatePlanCloneWorkspace("target", "different"), TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = source.Id,
+            Name = "Move parked card",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.MoveCard,
+                    CardName = "Beast Whisperer",
+                    FromCategory = DeckRoles.Draw,
+                    ToCategory = DeckDefaults.Maybeboard
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        Func<Task> act = () => service.CloneDeckPlanAsync(
+            plan.PlanId,
+            target.Id,
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*source references differ*");
     }
 
     /// <summary>

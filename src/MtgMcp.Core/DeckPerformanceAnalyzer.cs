@@ -56,6 +56,7 @@ internal static partial class DeckPerformanceAnalyzer
         DeckPerformanceAnalysis analysis = new()
         {
             WorkspaceId = workspace.Id,
+            ModelLabel = "strict-sequencing-model",
             Profile = resolvedProfile.Id,
             ProfileResolution = profileResolution,
             Simulations = safeSimulations,

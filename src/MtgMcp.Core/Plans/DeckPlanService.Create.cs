@@ -14,6 +14,7 @@ public sealed partial class DeckPlanService
         string? rationale,
         IReadOnlyList<ExplicitDeckPlanCardChange>? addCards,
         IReadOnlyList<ExplicitDeckPlanCardChange>? removeCards,
+        IReadOnlyList<ExplicitDeckPlanMoveCardChange>? moveCards,
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
@@ -26,9 +27,10 @@ public sealed partial class DeckPlanService
 
         AddCardOperations(plan, addCards);
         AddRemoveOperations(plan, removeCards);
+        AddMoveOperations(plan, moveCards);
         if (plan.Operations.Count == 0)
         {
-            throw new InvalidOperationException("At least one explicit card add or remove is required.");
+            throw new InvalidOperationException("At least one explicit card add, remove, or move is required.");
         }
 
         return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
@@ -75,6 +77,26 @@ public sealed partial class DeckPlanService
     }
 
     /// <summary>
+    /// Adds caller-selected move-card operations to a plan.
+    /// </summary>
+    private static void AddMoveOperations(
+        DeckEditPlan plan,
+        IReadOnlyList<ExplicitDeckPlanMoveCardChange>? changes)
+    {
+        foreach (ExplicitDeckPlanMoveCardChange change in changes ?? [])
+        {
+            plan.Operations.Add(new DeckEditOperation
+            {
+                Operation = DeckEditOperations.MoveCard,
+                CardName = RequireMoveCardName(change),
+                FromCategory = NormalizeChangeCategory(change.FromCategory),
+                ToCategory = RequireMoveDestination(change),
+                Rationale = change.Rationale?.Trim() ?? ""
+            });
+        }
+    }
+
+    /// <summary>
     /// Validates the caller-supplied card name before the plan is saved.
     /// </summary>
     private static string RequireChangeCardName(ExplicitDeckPlanCardChange change)
@@ -82,6 +104,26 @@ public sealed partial class DeckPlanService
         return !string.IsNullOrWhiteSpace(change.CardName)
             ? change.CardName.Trim()
             : throw new InvalidOperationException("Explicit deck plan changes require a cardName.");
+    }
+
+    /// <summary>
+    /// Validates the caller-supplied move card name before the plan is saved.
+    /// </summary>
+    private static string RequireMoveCardName(ExplicitDeckPlanMoveCardChange change)
+    {
+        return !string.IsNullOrWhiteSpace(change.CardName)
+            ? change.CardName.Trim()
+            : throw new InvalidOperationException("Explicit deck plan moves require a cardName.");
+    }
+
+    /// <summary>
+    /// Validates the caller-supplied move destination before the plan is saved.
+    /// </summary>
+    private static string RequireMoveDestination(ExplicitDeckPlanMoveCardChange change)
+    {
+        return !string.IsNullOrWhiteSpace(change.ToCategory)
+            ? change.ToCategory.Trim()
+            : throw new InvalidOperationException("Explicit deck plan moves require a toCategory.");
     }
 
     /// <summary>

@@ -11,6 +11,11 @@ public sealed class DeckPerformanceAnalysis
     public string WorkspaceId { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the simulation model label shown to MCP clients.
+    /// </summary>
+    public string ModelLabel { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the simulation profile name.
     /// </summary>
     public string Profile { get; set; } = SimulationProfileIds.Neutral;

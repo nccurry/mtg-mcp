@@ -158,7 +158,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     ColorIdentity = card.ColorIdentity.ToList(),
                     EdhrecRank = card.EdhrecRank,
                     Price = price,
-                    ScryfallUri = card.ScryfallUri
+                    ScryfallUri = card.ScryfallUri,
+                    MatchRationale = BuildQueryMatchRationale(card, role, price, evaluationContext)
                 });
             }
         }
@@ -433,5 +434,38 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         {
             result.Warnings.Add("Many search hits were rejected; the query may be too broad for the requested filters.");
         }
+    }
+
+    /// <summary>
+    /// Builds a concise explanation for accepted query rows.
+    /// </summary>
+    private static string BuildQueryMatchRationale(
+        CardInfo card,
+        CardRoleAssignment role,
+        decimal? price,
+        DeckQueryEvaluationContext context)
+    {
+        List<string> reasons = [$"Matched role {role.PrimaryRole}"];
+        if (role.Tags.Count > 0)
+        {
+            reasons.Add($"tags {string.Join(", ", role.Tags.Take(3))}");
+        }
+
+        if (price.HasValue && context.MaxPrice.HasValue)
+        {
+            reasons.Add($"price {price.Value:0.##} <= {context.MaxPrice.Value:0.##}");
+        }
+
+        if (context.ColorIdentityKnown)
+        {
+            reasons.Add("within deck color identity");
+        }
+
+        if (IsLegalInFormat(card, context.Format))
+        {
+            reasons.Add($"legal in {context.Format}");
+        }
+
+        return string.Join("; ", reasons) + ".";
     }
 }

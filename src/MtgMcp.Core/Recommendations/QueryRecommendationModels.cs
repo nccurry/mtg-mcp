@@ -100,6 +100,11 @@ public sealed class DeckQueryDataCard
     /// Gets or sets the Scryfall card page when available.
     /// </summary>
     public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets a concise reason the card survived the query and deck filters.
+    /// </summary>
+    public string MatchRationale { get; set; } = "";
 }
 
 /// <summary>

@@ -46,6 +46,28 @@ public sealed class MtgPrompts
     }
 
     /// <summary>
+    /// Builds a prompt for iterative evidence-first deck review after edits or re-imports.
+    /// </summary>
+    [McpServerPrompt(Name = "iterative_deck_review")]
+    [Description("Review what changed, current holes, role evidence, weak-slot rows, and previewable packages for an iterative deck-tuning pass.")]
+    public string IterativeDeckReview(string workspaceId, string previousWorkspaceId = "", string goal = "")
+    {
+        return $"""
+            Iteratively review deck workspace {workspaceId}.
+            Previous workspace: {previousWorkspaceId}
+            Goal: {goal}
+
+            Read mtg://workspace/{workspaceId}/state and mtg://workspace/{workspaceId}/assistant-context.
+            If previousWorkspaceId is provided, call workspace_diff with that explicit baseline and cite
+            the returned baseline id, source, and timestamp. Use deck_review_weak_spots for evidence-only
+            weak-slot rows, deck_explain_role_counts for any disputed role totals, and source tools when
+            popularity or discussion evidence matters. For candidate packages, use deck_preview_card_package
+            before creating a persistent plan. Keep deterministic evidence separate from final synthesis,
+            and do not apply mutations without explicit user approval.
+            """;
+    }
+
+    /// <summary>
     /// Builds a prompt for commander aggregate card research.
     /// </summary>
     [McpServerPrompt(Name = "research_commander_common_cards")]

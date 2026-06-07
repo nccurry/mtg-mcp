@@ -6,6 +6,16 @@ namespace MtgMcp.Core;
 public sealed partial class DeckSimulationService : DeckServiceBase
 {
     /// <summary>
+    /// Labels heuristic no-interaction simulations that favor smooth sequencing.
+    /// </summary>
+    private const string GoldfishModelLabel = "optimistic-goldfish-model";
+
+    /// <summary>
+    /// Labels board projection output derived from heuristic goldfish snapshots.
+    /// </summary>
+    private const string BoardProjectionModelLabel = "heuristic-board-projection";
+
+    /// <summary>
     /// Runs a heuristic no-interaction goldfish simulation.
     /// </summary>
     public async Task<GoldfishSimulationResult> SimulateGoldfishAsync(
@@ -38,7 +48,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             mulligan: true,
             cancellationToken).ConfigureAwait(false);
         return result.TurnSummaries.LastOrDefault()
-            ?? new ProjectedTurnState { Turn = Math.Max(1, turn), LikelyBoard = "No projection could be produced." };
+            ?? new ProjectedTurnState
+            {
+                Turn = Math.Max(1, turn),
+                ModelLabel = BoardProjectionModelLabel,
+                LikelyBoard = "No projection could be produced.",
+                Notes = ["Projection is derived from the optimistic goldfish model and does not model opponent interaction."],
+            };
     }
 
     /// <summary>
@@ -81,15 +97,25 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         CommandZonePlan commandZonePlan = CommandZonePlanner.Build(
             IncludedCards(workspace),
             profileResolution.Profile);
+        CommanderSpecificSimulationRules commanderRules = CommanderSpecificSimulationRules.Build(
+            IncludedCards(workspace));
         List<GoldfishRun> runs = [];
         for (int index = 0; index < safeSimulations; index++)
         {
-            runs.Add(RunGoldfishGame(workspace, safeTurn, seed + index, mulligan, profileResolution, commandZonePlan));
+            runs.Add(RunGoldfishGame(
+                workspace,
+                safeTurn,
+                seed + index,
+                mulligan,
+                profileResolution,
+                commandZonePlan,
+                commanderRules));
         }
 
         GoldfishSimulationResult result = new()
         {
             WorkspaceId = workspace.Id,
+            ModelLabel = GoldfishModelLabel,
             Simulations = safeSimulations,
             TargetTurn = safeTurn,
             Mulligans = runs.Count(run => run.Mulliganed),
@@ -117,8 +143,16 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .First();
         result.RepresentativeLines = representative.Line.Take(16).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
+        result.Notes.Add("Model label optimistic-goldfish-model: this tool projects board development and fallback win pressure, so commander timing can differ from deck_analyze_performance's strict-sequencing-model scenarios.");
         result.Notes.Add("Commander is treated as available from the command zone when the deck has a Commander category.");
         result.Notes.Add($"Resolved simulation profile '{profileResolution.Profile.Id}' from {profileResolution.Source}.");
+        result.Notes.AddRange(commanderRules.Assumptions);
+        result.WinEstimate.Notes.AddRange(commanderRules.Assumptions);
+        foreach (ProjectedTurnState summary in result.TurnSummaries)
+        {
+            summary.Notes.AddRange(commanderRules.Assumptions);
+        }
+
         if (BuildPartialCommanderDeckWarning(workspace) is string partialDeckWarning)
         {
             result.Warnings.Add(partialDeckWarning);
@@ -137,7 +171,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int seed,
         bool mulligan,
         ResolvedSimulationProfile profileResolution,
-        CommandZonePlan commandZonePlan)
+        CommandZonePlan commandZonePlan,
+        CommanderSpecificSimulationRules commanderRules)
     {
         Random random = new(seed);
         GoldfishOpeningHand opening = DrawGoldfishOpeningHand(
@@ -174,9 +209,18 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
 
             int availableMana = CountManaSources(battlefield);
+            int restrictedCreatureMana = 0;
+            bool restrictedCreatureManaInitialized = false;
             if (profileResolution.Profile.Sequencing.PreferCommanderOnCurve)
             {
                 CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
+                RefreshIngaGrantedCreatureMana(
+                    battlefield,
+                    commandZone.CommanderOnline,
+                    commanderRules,
+                    ref restrictedCreatureManaInitialized,
+                    ref availableMana,
+                    ref restrictedCreatureMana);
             }
 
             if (profileResolution.Profile.Sequencing.PreferCommanderOnCurve)
@@ -190,6 +234,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     turn,
                     profileResolution.Profile,
                     GoldfishSpellWindow.All,
+                    commandZone.CommanderOnline,
+                    commanderRules,
+                    ref restrictedCreatureMana,
                     ref availableMana,
                     ref tokens,
                     ref winPressure,
@@ -197,6 +244,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
             else
             {
+                RefreshIngaGrantedCreatureMana(
+                    battlefield,
+                    commandZone.CommanderOnline,
+                    commanderRules,
+                    ref restrictedCreatureManaInitialized,
+                    ref availableMana,
+                    ref restrictedCreatureMana);
                 CastGoldfishHandSpells(
                     hand,
                     deck,
@@ -206,11 +260,21 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     turn,
                     profileResolution.Profile,
                     GoldfishSpellWindow.SetupOnly,
+                    commandZone.CommanderOnline,
+                    commanderRules,
+                    ref restrictedCreatureMana,
                     ref availableMana,
                     ref tokens,
                     ref winPressure,
                     ref dungeonProgress);
                 CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
+                RefreshIngaGrantedCreatureMana(
+                    battlefield,
+                    commandZone.CommanderOnline,
+                    commanderRules,
+                    ref restrictedCreatureManaInitialized,
+                    ref availableMana,
+                    ref restrictedCreatureMana);
                 CastGoldfishHandSpells(
                     hand,
                     deck,
@@ -220,6 +284,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     turn,
                     profileResolution.Profile,
                     GoldfishSpellWindow.NonSetup,
+                    commandZone.CommanderOnline,
+                    commanderRules,
+                    ref restrictedCreatureMana,
                     ref availableMana,
                     ref tokens,
                     ref winPressure,
@@ -276,7 +343,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                         "finisher",
                         "fallback",
                         run.WinTurn.Value,
-                        $"win pressure {winPressure} and battlefield pressure {power} met fallback thresholds"));
+                        BuildFallbackPressureEvidence(
+                            battlefield,
+                            tokens,
+                            power,
+                            winPressure,
+                            profileResolution.Profile.WinDetection.FinisherPowerThreshold,
+                            "finisher")));
                 }
                 else if (power >= profileResolution.Profile.WinDetection.CombatPowerThreshold)
                 {
@@ -287,7 +360,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                         "combat",
                         "fallback",
                         run.WinTurn.Value,
-                        $"battlefield pressure {power} met fallback combat threshold"));
+                        BuildFallbackPressureEvidence(
+                            battlefield,
+                            tokens,
+                            power,
+                            winPressure,
+                            profileResolution.Profile.WinDetection.CombatPowerThreshold,
+                            "combat")));
                 }
             }
 
@@ -610,6 +689,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int turn,
         SimulationProfile profile,
         GoldfishSpellWindow window,
+        bool commanderOnline,
+        CommanderSpecificSimulationRules commanderRules,
+        ref int restrictedCreatureMana,
         ref int availableMana,
         ref int tokens,
         ref int winPressure,
@@ -626,9 +708,23 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
 
             int cost = Math.Max(0, (int)Math.Ceiling(GetSnapshot(spell).ManaValue ?? 2));
+            bool creatureSpell = IsCreatureSpell(spell);
+            int generalMana = Math.Max(0, availableMana - restrictedCreatureMana);
+            if (!creatureSpell && cost > generalMana)
+            {
+                continue;
+            }
+
             if (cost > availableMana)
             {
                 continue;
+            }
+
+            int creatureManaSpent = 0;
+            if (creatureSpell && restrictedCreatureMana > 0)
+            {
+                creatureManaSpent = Math.Min(cost, restrictedCreatureMana);
+                restrictedCreatureMana -= creatureManaSpent;
             }
 
             availableMana -= cost;
@@ -658,6 +754,17 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             {
                 hand.Add(deck[0]);
                 deck.RemoveAt(0);
+            }
+
+            if (commanderOnline
+                && commanderRules.HasIngaAndEsika
+                && creatureSpell
+                && creatureManaSpent >= 3
+                && deck.Count > 0)
+            {
+                hand.Add(deck[0]);
+                deck.RemoveAt(0);
+                run.Line.Add($"T{turn}: drew a card from Inga and Esika after spending {creatureManaSpent} creature mana.");
             }
 
             if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Finishers))
@@ -711,8 +818,17 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         string kind,
         string source,
         int earliestTurn,
-        string evidence)
+        params string[] evidence)
     {
+        List<string> evidenceLines = [];
+        foreach (string line in evidence)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                evidenceLines.Add(line);
+            }
+        }
+
         return new SimulationRouteEvidence
         {
             Name = name,
@@ -721,8 +837,104 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             Matched = true,
             EarliestTurn = earliestTurn,
             Confidence = 0.35,
-            Evidence = [evidence],
+            Evidence = evidenceLines,
         };
+    }
+
+    /// <summary>
+    /// Builds human-readable combat or finisher evidence without listing incidental utility creatures as closers.
+    /// </summary>
+    private static string[] BuildFallbackPressureEvidence(
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens,
+        int power,
+        int winPressure,
+        int threshold,
+        string route)
+    {
+        List<string> evidence =
+        [
+            $"battlefield pressure {power} met fallback {route} threshold {threshold}",
+            $"token count {tokens}",
+        ];
+        if (winPressure > 0)
+        {
+            evidence.Add($"finisher pressure score {winPressure}");
+        }
+
+        AddNamedCardEvidence(evidence, "closers", battlefield.Where(IsFinisherRouteCard));
+        AddNamedCardEvidence(evidence, "trample or evasion sources", battlefield.Where(IsEvasionRouteCard));
+        AddNamedCardEvidence(evidence, "pump or overrun sources", battlefield.Where(IsPumpRouteCard));
+        evidence.Add($"lethal pressure threshold used by this heuristic: {threshold}");
+        return evidence.ToArray();
+    }
+
+    /// <summary>
+    /// Adds a labeled card-name evidence row when matching cards exist.
+    /// </summary>
+    private static void AddNamedCardEvidence(List<string> evidence, string label, IEnumerable<DeckCard> cards)
+    {
+        List<string> names = cards
+            .Select(card => card.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(5)
+            .ToList();
+        if (names.Count > 0)
+        {
+            evidence.Add($"{label}: {string.Join(", ", names)}");
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a card should be named as a likely closer for fallback win evidence.
+    /// </summary>
+    private static bool IsFinisherRouteCard(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        return role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether a card supplies combat evasion or trample-like reach.
+    /// </summary>
+    private static bool IsEvasionRouteCard(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = GetSnapshot(card).OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Evasion, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(text, "trample", "flying", "menace", "can't be blocked", "unblockable");
+    }
+
+    /// <summary>
+    /// Checks whether a card looks like an anthem, pump, or overrun effect.
+    /// </summary>
+    private static bool IsPumpRouteCard(DeckCard card)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        return ContainsAny(
+            text,
+            "creatures you control get",
+            "gets +",
+            "get +",
+            "+1/+1",
+            "+2/+2",
+            "double strike",
+            "until end of turn and gains trample",
+            "gain trample",
+            "gains trample");
+    }
+
+    /// <summary>
+    /// Checks whether a card is specific enough to represent a combat route.
+    /// </summary>
+    private static bool IsCombatRouteCard(DeckCard card)
+    {
+        return IsFinisherRouteCard(card)
+            || IsEvasionRouteCard(card)
+            || IsPumpRouteCard(card)
+            || (ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature")
+                && GoldfishManaValue(card) >= 5);
     }
 
     /// <summary>
@@ -777,6 +989,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Checks whether a card is a creature spell for commander-specific mana rules.
+    /// </summary>
+    private static bool IsCreatureSpell(DeckCard card)
+    {
+        return ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature");
+    }
+
+    /// <summary>
     /// Counts battlefield mana sources.
     /// </summary>
     private static int CountManaSources(IReadOnlyList<DeckCard> battlefield)
@@ -787,6 +1007,54 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             return role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
                 || role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    /// <summary>
+    /// Adds newly available Inga-granted creature mana to the restricted pool for the current turn.
+    /// </summary>
+    private static void RefreshIngaGrantedCreatureMana(
+        IReadOnlyList<DeckCard> battlefield,
+        bool commanderOnline,
+        CommanderSpecificSimulationRules commanderRules,
+        ref bool initialized,
+        ref int availableMana,
+        ref int restrictedCreatureMana)
+    {
+        if (initialized || !commanderOnline || !commanderRules.HasIngaAndEsika)
+        {
+            return;
+        }
+
+        int detectedCreatureMana = CountIngaGrantedCreatureManaSources(battlefield);
+        availableMana += detectedCreatureMana;
+        restrictedCreatureMana += detectedCreatureMana;
+        initialized = true;
+    }
+
+    /// <summary>
+    /// Counts creature permanents that become creature-spell-only mana sources from Inga and Esika.
+    /// </summary>
+    private static int CountIngaGrantedCreatureManaSources(IReadOnlyList<DeckCard> battlefield)
+    {
+        int count = 0;
+        foreach (DeckCard card in battlefield)
+        {
+            if (!IsCreatureSpell(card))
+            {
+                continue;
+            }
+
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            if (role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase)
+                || role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -816,6 +1084,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         return new ProjectedTurnState
         {
             Turn = turn,
+            ModelLabel = BoardProjectionModelLabel,
             MedianLands = lands,
             MedianManaSources = manaSources,
             MedianNonlandPermanents = permanents,
@@ -823,7 +1092,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             MedianPower = power,
             MedianTokens = tokens,
             LikelyBoard = $"{lands} lands, {manaSources} mana sources, {permanents} nonland permanents, about {power} pressure, {hand} cards in hand.",
-            Confidence = Math.Clamp(0.45 + Math.Min(0.35, runs.Count / 2000.0), 0, 0.85)
+            Confidence = Math.Clamp(0.45 + Math.Min(0.35, runs.Count / 2000.0), 0, 0.85),
+            Notes =
+            [
+                "Model label heuristic-board-projection: derived from optimistic goldfish runs and intended for board-state shape, not strict castability proof.",
+                "Opponent interaction and full Magic rules are not simulated.",
+            ],
         };
     }
 
@@ -899,6 +1173,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         WinTurnEstimate estimate = new()
         {
             WorkspaceId = workspace.Id,
+            ModelLabel = GoldfishModelLabel,
             Simulations = runs.Count,
             ObservedWins = wins.Count,
             ObservedWinRate = runs.Count == 0 ? 0 : wins.Count / (double)runs.Count,
@@ -951,6 +1226,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         }
 
         estimate.Notes.Add("Win timing is probabilistic and assumes no interaction.");
+        estimate.Notes.Add("Model label optimistic-goldfish-model: route evidence combines deterministic route predicates with fallback board-pressure heuristics.");
+        estimate.Notes.Add("deck_analyze_performance can report different timing because it uses strict-sequencing-model scenario probabilities instead of heuristic win-pressure detection.");
         estimate.Notes.Add("Observed win-turn percentiles only include runs that reached a heuristic win; winByTurnRates and observedWinRate are measured against all runs.");
         return estimate;
     }
@@ -968,7 +1245,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 {
                     "combo" => role.Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler),
                     "finisher" => role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Finishers),
-                    "combat" => ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"),
+                    "combat" => IsCombatRouteCard(card),
                     _ => false
                 };
             })

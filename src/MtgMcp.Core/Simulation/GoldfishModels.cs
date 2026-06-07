@@ -54,6 +54,11 @@ public sealed class WinTurnEstimate
     public string WorkspaceId { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the simulation model label shown to MCP clients.
+    /// </summary>
+    public string ModelLabel { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the number of simulations.
     /// </summary>
     public int Simulations { get; set; }
@@ -133,6 +138,11 @@ public sealed class ProjectedTurnState
     public int Turn { get; set; }
 
     /// <summary>
+    /// Gets or sets the projection model label shown to MCP clients.
+    /// </summary>
+    public string ModelLabel { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the median lands on the battlefield.
     /// </summary>
     public int MedianLands { get; set; }
@@ -171,6 +181,11 @@ public sealed class ProjectedTurnState
     /// Gets or sets confidence in this projection.
     /// </summary>
     public double Confidence { get; set; }
+
+    /// <summary>
+    /// Gets or sets notes explaining what this board projection does and does not model.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
 }
 
 /// <summary>
@@ -182,6 +197,11 @@ public sealed class GoldfishSimulationResult
     /// Gets or sets the workspace id.
     /// </summary>
     public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the simulation model label shown to MCP clients.
+    /// </summary>
+    public string ModelLabel { get; set; } = "";
 
     /// <summary>
     /// Gets or sets the number of simulations.

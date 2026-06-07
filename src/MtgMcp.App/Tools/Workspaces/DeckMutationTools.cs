@@ -40,17 +40,27 @@ public sealed class DeckMutationTools
         OpenWorld = true
     )]
     [Description("Add a card to a deck workspace and write back to Archidekt when bound. Included Commander additions that exceed 100 cards are refused unless force=true.")]
-    public Task<DeckChangeResult> AddCardAsync(
+    public Task<object> AddCardAsync(
         string workspaceId,
         string cardName,
         int quantity = 1,
         string category = DeckDefaults.Mainboard,
         bool force = false,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_add_card");
-        return decks.AddCardAsync(workspaceId, cardName, quantity, category, force, cancellationToken);
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            () => decks.AddCardAsync(workspaceId, cardName, quantity, category, force, cancellationToken),
+            added: Math.Max(1, quantity),
+            removed: 0,
+            moved: 0,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -64,16 +74,26 @@ public sealed class DeckMutationTools
         OpenWorld = true
     )]
     [Description("Remove some or all copies of a card from a deck workspace.")]
-    public Task<DeckChangeResult> RemoveCardAsync(
+    public Task<object> RemoveCardAsync(
         string workspaceId,
         string cardName,
         int quantity = 1,
         string? category = null,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_remove_card");
-        return decks.RemoveCardAsync(workspaceId, cardName, quantity, category, cancellationToken);
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            () => decks.RemoveCardAsync(workspaceId, cardName, quantity, category, cancellationToken),
+            added: 0,
+            removed: Math.Max(1, quantity),
+            moved: 0,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -87,22 +107,31 @@ public sealed class DeckMutationTools
         OpenWorld = true
     )]
     [Description("Set a card quantity, removing it when quantity is zero.")]
-    public Task<DeckChangeResult> SetCardQuantityAsync(
+    public Task<object> SetCardQuantityAsync(
         string workspaceId,
         string cardName,
         int quantity,
         string? category = null,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_set_card_quantity");
-        return decks.SetCardQuantityAsync(
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
             workspaceId,
-            cardName,
-            quantity,
-            category,
-            cancellationToken
-        );
+            includeWorkspace,
+            () => decks.SetCardQuantityAsync(
+                workspaceId,
+                cardName,
+                quantity,
+                category,
+                cancellationToken),
+            added: 0,
+            removed: quantity == 0 ? 1 : 0,
+            moved: 0,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -118,22 +147,31 @@ public sealed class DeckMutationTools
     [Description(
         "Move a card by making the target the first Archidekt category, such as Mainboard, Sideboard, or Maybeboard."
     )]
-    public Task<DeckChangeResult> MoveCardAsync(
+    public Task<object> MoveCardAsync(
         string workspaceId,
         string cardName,
         string toCategory,
         string? fromCategory = null,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_move_card");
-        return decks.MoveCardAsync(
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
             workspaceId,
-            cardName,
-            toCategory,
-            fromCategory,
-            cancellationToken
-        );
+            includeWorkspace,
+            () => decks.MoveCardAsync(
+                workspaceId,
+                cardName,
+                toCategory,
+                fromCategory,
+                cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 1,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -147,21 +185,30 @@ public sealed class DeckMutationTools
         OpenWorld = true
     )]
     [Description("Update deck name, format, or description.")]
-    public Task<DeckChangeResult> UpdateDeckMetadataAsync(
+    public Task<object> UpdateDeckMetadataAsync(
         string workspaceId,
         string? name = null,
         string? format = null,
         string? description = null,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_update_metadata");
-        return decks.UpdateDeckMetadataAsync(
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
             workspaceId,
-            name,
-            format,
-            description,
-            cancellationToken
-        );
+            includeWorkspace,
+            () => decks.UpdateDeckMetadataAsync(
+                workspaceId,
+                name,
+                format,
+                description,
+                cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 0,
+            changedCards: [],
+            cancellationToken);
     }
 }

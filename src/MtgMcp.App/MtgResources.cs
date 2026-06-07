@@ -110,6 +110,22 @@ public sealed class MtgResources
     }
 
     /// <summary>
+    /// Returns compact current state for a saved workspace.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}/state", Name = "Workspace State")]
+    [Description("Compact workspace state: included count, commanders, category counts, role counts, sideboard/maybeboard cards, validation, and top warnings.")]
+    public async Task<string> GetDeckStateAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        DeckWorkspaceState state = await decks
+            .GetWorkspaceStateAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return JsonSerializer.Serialize(state, JsonOptions);
+    }
+
+    /// <summary>
     /// Returns parsed deck intent stored in a workspace description.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}/intent", Name = "Workspace Deck Intent")]
@@ -123,6 +139,22 @@ public sealed class MtgResources
             .GetDeckIntentAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         return JsonSerializer.Serialize(intent, JsonOptions);
+    }
+
+    /// <summary>
+    /// Returns compact state plus parsed deck intent for assistant workflows.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}/assistant-context", Name = "Workspace Assistant Context")]
+    [Description("Assistant-facing context derived from compact workspace state and the existing deck intent section.")]
+    public async Task<string> GetAssistantContextAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        DeckAssistantContext context = await decks
+            .GetAssistantContextAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return JsonSerializer.Serialize(context, JsonOptions);
     }
 
     /// <summary>

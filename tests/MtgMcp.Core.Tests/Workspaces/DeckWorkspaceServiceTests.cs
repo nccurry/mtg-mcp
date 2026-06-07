@@ -364,6 +364,52 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that an Archidekt-sourced cached workspace can be reopened with writeback enabled.
+    /// </summary>
+    [Fact]
+    public async Task ReopenWorkspaceWithWriteback_UsesArchidektSourceReference()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace cached = await repository.SaveAsync(new DeckWorkspace
+        {
+            Id = "cached",
+            Name = "Cached Import",
+            Mode = WorkspaceMode.Local,
+            WriteBack = false,
+            SourceReferences =
+            [
+                new DeckSourceReference
+                {
+                    Provider = DeckImportProviders.Archidekt,
+                    ExternalId = "23097041",
+                    Url = "https://archidekt.com/decks/23097041/inga_and_esika"
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        FakeArchidektGateway gateway = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Id = "remote-writeback",
+                Name = "Remote Writeback",
+                Mode = WorkspaceMode.Archidekt,
+                ArchidektDeckId = "23097041",
+                Categories = [new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true }]
+            }
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), gateway);
+
+        DeckWorkspace reopened = await service.ReopenWorkspaceWithWritebackAsync(
+            cached.Id,
+            TestContext.Current.CancellationToken);
+
+        reopened.Mode.Should().Be(WorkspaceMode.Archidekt);
+        reopened.WriteBack.Should().BeTrue();
+        reopened.ArchidektDeckId.Should().Be("23097041");
+        gateway.ImportedDeckRequests.Should().Be(1);
+    }
+
+    /// <summary>
     /// Verifies that start deck workspace imports Moxfield decks as local workspaces.
     /// </summary>
     [Fact]
@@ -1106,6 +1152,100 @@ public sealed class DeckWorkspaceServiceTests
         exported.Should().Contain("Sideboard");
         exported.Should().Contain("Maybeboard");
         exported.Should().Contain("1 Missing Card");
+    }
+
+    /// <summary>
+    /// Verifies that export options add markdown formats without changing the grouped text default.
+    /// </summary>
+    [Fact]
+    public async Task ExportDeckAsync_SupportsMarkdownOptionsWithoutChangingDefault()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        DeckWorkspace imported = await service.ImportDecklistAsync(
+            CreateDeckTextComponentDecklist(),
+            "Imported",
+            "modern",
+            TestContext.Current.CancellationToken
+        );
+
+        string defaultText = await service.ExportDeckAsync(
+            imported.Id,
+            TestContext.Current.CancellationToken);
+        string markdownLinks = await service.ExportDeckAsync(
+            imported.Id,
+            "markdown-links",
+            includedOnly: true,
+            includeCategories: true,
+            cancellationToken: TestContext.Current.CancellationToken);
+        string ungroupedMarkdown = await service.ExportDeckAsync(
+            imported.Id,
+            "markdown",
+            includedOnly: true,
+            includeCategories: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        defaultText.Should().Contain("Mainboard");
+        defaultText.Should().Contain("2 Lightning Bolt");
+        markdownLinks.Should().Contain("## Mainboard");
+        markdownLinks.Should().Contain("- 2 [Lightning Bolt](https://scryfall.test/Lightning%20Bolt)");
+        markdownLinks.Should().NotContain("Maybeboard");
+        ungroupedMarkdown.Should().NotContain("## Mainboard");
+        ungroupedMarkdown.Should().Contain("- 1 Sol Ring");
+    }
+
+    /// <summary>
+    /// Verifies that workspace diff uses an explicit baseline and reports card/category changes.
+    /// </summary>
+    [Fact]
+    public async Task DiffWorkspacesAsync_ReportsExplicitBaselineAndCardChanges()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace previous = await repository.SaveAsync(CreateDiffWorkspace("baseline"), TestContext.Current.CancellationToken);
+        DeckWorkspace current = CreateDiffWorkspace("current");
+        current.Cards.RemoveAll(card => card.Name == "Brainstorm");
+        DeckCategoryOrdering.SetPrimary(current.Cards.Single(card => card.Name == "Counterspell"), DeckDefaults.Maybeboard);
+        DeckCategoryOrdering.SetPrimary(current.Cards.Single(card => card.Name == "Finale of Devastation"), DeckDefaults.Mainboard);
+        DeckCategoryOrdering.AddSecondary(current.Cards.Single(card => card.Name == "Sol Ring"), "Protected");
+        current.Cards.Add(new DeckCard
+        {
+            Name = "Beast Whisperer",
+            Quantity = 1,
+            PrimaryCategory = DeckRoles.Draw,
+            Categories = [DeckRoles.Draw],
+            ScryfallOracleId = "oracle-beast-whisperer",
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Creature - Elf",
+                OracleText = "Whenever you cast a creature spell, draw a card.",
+                ScryfallUri = "https://scryfall.test/beast-whisperer"
+            }
+        });
+        current = await repository.SaveAsync(current, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        WorkspaceDiffResult diff = await service.DiffWorkspacesAsync(
+            current.Id,
+            previous.Id,
+            TestContext.Current.CancellationToken);
+
+        diff.Baseline.WorkspaceId.Should().Be(previous.Id);
+        diff.Baseline.Source.Should().Contain("archidekt:23097041");
+        diff.Notes.Should().Contain(note => note.Contains(previous.Id, StringComparison.OrdinalIgnoreCase));
+        diff.AddedCards.Should().ContainSingle(card => card.CardName == "Beast Whisperer");
+        diff.RemovedCards.Should().ContainSingle(card => card.CardName == "Brainstorm");
+        diff.PrimaryMoves.Should().Contain(card =>
+            card.CardName == "Counterspell"
+            && card.PrimaryCategoryBefore == DeckDefaults.Mainboard
+            && card.PrimaryCategoryAfter == DeckDefaults.Maybeboard);
+        diff.PrimaryMoves.Should().Contain(card =>
+            card.CardName == "Finale of Devastation"
+            && card.PrimaryCategoryBefore == DeckDefaults.Sideboard
+            && card.PrimaryCategoryAfter == DeckDefaults.Mainboard);
+        diff.SecondaryTagChanges.Should().ContainSingle(card =>
+            card.CardName == "Sol Ring"
+            && card.SecondaryCategoriesAfter.Contains("Protected"));
     }
 
     /// <summary>
@@ -1981,6 +2121,75 @@ public sealed class DeckWorkspaceServiceTests
                     Snapshot = new CardSnapshot { TypeLine = "Instant" },
                 },
             ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a small pairable workspace for diff tests.
+    /// </summary>
+    private static DeckWorkspace CreateDiffWorkspace(string id)
+    {
+        return new DeckWorkspace
+        {
+            Id = id,
+            Name = $"Diff {id}",
+            Format = "commander",
+            UpdatedAt = DateTimeOffset.Parse("2026-06-07T10:00:00Z", System.Globalization.CultureInfo.InvariantCulture),
+            SourceReferences =
+            [
+                new DeckSourceReference
+                {
+                    Provider = DeckImportProviders.Archidekt,
+                    ExternalId = "23097041",
+                    Url = "https://archidekt.com/decks/23097041/inga_and_esika"
+                }
+            ],
+            Categories =
+            [
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    ScryfallOracleId = "oracle-sol-ring",
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", ScryfallUri = "https://scryfall.test/sol-ring" }
+                },
+                new DeckCard
+                {
+                    Name = "Counterspell",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    ScryfallOracleId = "oracle-counterspell",
+                    Snapshot = new CardSnapshot { TypeLine = "Instant", ScryfallUri = "https://scryfall.test/counterspell" }
+                },
+                new DeckCard
+                {
+                    Name = "Brainstorm",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    ScryfallOracleId = "oracle-brainstorm",
+                    Snapshot = new CardSnapshot { TypeLine = "Instant", ScryfallUri = "https://scryfall.test/brainstorm" }
+                },
+                new DeckCard
+                {
+                    Name = "Finale of Devastation",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Sideboard,
+                    Categories = [DeckDefaults.Sideboard],
+                    ScryfallOracleId = "oracle-finale",
+                    Snapshot = new CardSnapshot { TypeLine = "Sorcery", ScryfallUri = "https://scryfall.test/finale" }
+                }
+            ]
         };
     }
 

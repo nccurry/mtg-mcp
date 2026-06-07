@@ -17,7 +17,7 @@ internal static class DeckPerformanceComparisonBuilder
             BuildDelta("seven-card-keep-rate", before.OpeningHands.SevenCardKeepRate, after.OpeningHands.SevenCardKeepRate),
             BuildDelta("average-mulligans", before.OpeningHands.AverageMulligans, after.OpeningHands.AverageMulligans),
             BuildDelta("average-kept-hand-size", before.OpeningHands.AverageKeptHandSize, after.OpeningHands.AverageKeptHandSize),
-            BuildScenarioDelta("commander-by-turn-4", before, after, "commander-by-turn-4"),
+            BuildScenarioPrefixDelta("commander-by-target-turn", before, after, "commander-by-turn-"),
             BuildScenarioDelta("all-colors-by-turn-3", before, after, "all-colors-by-turn-3"),
             BuildProbabilityDelta("ramp-cast-by-turn-3", before, after, "ramp-cast-by-turn", 3),
             BuildProbabilityDelta("draw-cast-by-turn-4", before, after, "draw-cast-by-turn", 4),
@@ -77,6 +77,27 @@ internal static class DeckPerformanceComparisonBuilder
     }
 
     /// <summary>
+    /// Creates a delta row for a scenario whose label includes its resolved target turn.
+    /// </summary>
+    private static PerformanceDelta BuildScenarioPrefixDelta(
+        string metric,
+        DeckPerformanceAnalysis before,
+        DeckPerformanceAnalysis after,
+        string scenarioPrefix)
+    {
+        ScenarioPerformance? beforeScenario = FindScenarioByPrefix(before, scenarioPrefix);
+        ScenarioPerformance? afterScenario = FindScenarioByPrefix(after, scenarioPrefix);
+        return BuildDelta(
+            metric,
+            beforeScenario?.SuccessRate ?? 0,
+            afterScenario?.SuccessRate ?? 0,
+            beforeScenario?.LowConfidenceInterval,
+            beforeScenario?.HighConfidenceInterval,
+            afterScenario?.LowConfidenceInterval,
+            afterScenario?.HighConfidenceInterval);
+    }
+
+    /// <summary>
     /// Creates a delta row for a named turn probability metric.
     /// </summary>
     private static PerformanceDelta BuildProbabilityDelta(
@@ -122,6 +143,15 @@ internal static class DeckPerformanceComparisonBuilder
     {
         return analysis.Scenarios
             .FirstOrDefault(scenario => scenario.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Reads the first scenario row matching a stable prefix.
+    /// </summary>
+    private static ScenarioPerformance? FindScenarioByPrefix(DeckPerformanceAnalysis analysis, string prefix)
+    {
+        return analysis.Scenarios
+            .FirstOrDefault(scenario => scenario.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

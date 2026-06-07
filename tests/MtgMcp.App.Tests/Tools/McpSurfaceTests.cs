@@ -95,6 +95,7 @@ public sealed class McpSurfaceTests
             "deck_delete_category",
             "deck_estimate_commander_bracket",
             "deck_estimate_win_turn",
+            "deck_explain_role_counts",
             "deck_facets_count",
             "deck_facets_get",
             "deck_find_exemplar_decks",
@@ -105,18 +106,21 @@ public sealed class McpSurfaceTests
             "deck_intent_suggest",
             "deck_move_card",
             "deck_plan_apply",
+            "deck_plan_clone",
             "deck_plan_compare_performance",
             "deck_plan_create",
             "deck_plan_delete",
             "deck_plan_get",
             "deck_plan_list",
             "deck_plan_preview",
+            "deck_preview_card_package",
             "deck_project_board_state",
             "deck_query_cards",
             "deck_refresh_card_metadata",
             "deck_remove_card",
             "deck_remove_card_category",
             "deck_rename_category",
+            "deck_review_weak_spots",
             "deck_review_new_card_swaps",
             "deck_score_cards_for_playgroup_meta",
             "deck_set_card_quantity",
@@ -137,9 +141,11 @@ public sealed class McpSurfaceTests
             "source_search_evidence",
             "source_search_reddit_discussions",
             "workspace_export",
+            "workspace_diff",
             "workspace_list",
             "workspace_open",
             "workspace_parse_decklist",
+            "workspace_reopen_with_writeback",
             "workspace_start",
             "workspace_validate",
             "wincon_find_payoffs",
@@ -211,6 +217,8 @@ public sealed class McpSurfaceTests
             "mtg://workspace/{workspaceId}",
             "mtg://workspace/{workspaceId}/summary",
             "mtg://workspace/{workspaceId}/intent",
+            "mtg://workspace/{workspaceId}/state",
+            "mtg://workspace/{workspaceId}/assistant-context",
             "mtg://scryfall/syntax-cheatsheet",
             "mtg://formats/{format}/deck-rules",
             "mtg://usage/workspace-selection",
@@ -237,6 +245,7 @@ public sealed class McpSurfaceTests
         [
             "brew_commander_deck",
             "tune_existing_deck",
+            "iterative_deck_review",
             "research_commander_common_cards",
             "research_commander_win_conditions",
             "reduce_deck_cost",
@@ -270,6 +279,7 @@ public sealed class McpSurfaceTests
         [
             prompts.BrewCommanderDeck("Tinybones"),
             prompts.TuneExistingDeck("workspace-1"),
+            prompts.IterativeDeckReview("workspace-1", "workspace-0"),
             prompts.ResearchCommanderCommonCards("Tinybones"),
             prompts.ResearchCommanderWinConditions("Tinybones"),
             prompts.ReduceDeckCost("workspace-1"),
@@ -312,6 +322,14 @@ public sealed class McpSurfaceTests
             .Contain("local")
             .And.Contain("archidekt")
             .And.Contain("moxfield");
+        GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.ExportDeckAsync), "format")
+            .Should()
+            .Contain("text")
+            .And.Contain("markdown")
+            .And.Contain("markdown-links");
+        GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.DiffWorkspacesAsync), "previousWorkspaceId")
+            .Should()
+            .Contain("Explicit baseline");
         GetParameterDescription(typeof(AnalysisTools), nameof(AnalysisTools.RefreshDeckCardSnapshotsAsync), "scope")
             .Should()
             .Contain("included")
@@ -327,6 +345,11 @@ public sealed class McpSurfaceTests
             .And.Contain("balanced")
             .And.Contain("best");
         GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.AnalyzeDeckPerformanceAsync), "simulationProfile")
+            .Should()
+            .Contain("auto")
+            .And.Contain("neutral")
+            .And.Contain("stax");
+        GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "simulationProfile")
             .Should()
             .Contain("auto")
             .And.Contain("neutral")
@@ -462,13 +485,19 @@ public sealed class McpSurfaceTests
         );
         CustomAttributeData openLocal = GetToolAttribute(nameof(WorkspaceTools.OpenLocalDeckAsync));
         CustomAttributeData previewPlan = GetToolAttribute(nameof(PlanTools.PreviewDeckPlanAsync));
+        CustomAttributeData previewPackage = GetToolAttribute(nameof(PlanTools.PreviewCardPackageAsync));
         CustomAttributeData bracket = GetToolAttribute(nameof(AnalysisTools.EstimateCommanderBracketAsync));
+        CustomAttributeData roleCounts = GetToolAttribute(nameof(AnalysisTools.ExplainRoleCountsAsync));
+        CustomAttributeData weakSpots = GetToolAttribute(nameof(AnalysisTools.ReviewWeakSpotsAsync));
+        CustomAttributeData workspaceDiff = GetToolAttribute(nameof(WorkspaceTools.DiffWorkspacesAsync));
+        CustomAttributeData reopenWriteback = GetToolAttribute(nameof(WorkspaceTools.ReopenWorkspaceWithWritebackAsync));
         CustomAttributeData performance = GetToolAttribute(nameof(SimulationTools.AnalyzeDeckPerformanceAsync));
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
         CustomAttributeData compareGoldfish = GetToolAttribute(nameof(SimulationTools.CompareArchidektGoldfishAsync));
         CustomAttributeData queryCards = GetToolAttribute(nameof(RecommendationTools.QueryCardsForDeckAsync));
         CustomAttributeData scoreMeta = GetToolAttribute(nameof(RecommendationTools.ScoreCardsForPlaygroupMetaAsync));
         CustomAttributeData createExplicitPlan = GetToolAttribute(nameof(PlanTools.CreateDeckPlanFromExplicitChangesAsync));
+        CustomAttributeData clonePlan = GetToolAttribute(nameof(PlanTools.CloneDeckPlanAsync));
         CustomAttributeData listPlaygroupDecks = GetToolAttribute(nameof(PlaygroupTools.ListPlaygroupDecksAsync));
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
@@ -481,8 +510,18 @@ public sealed class McpSurfaceTests
         GetNamedBool(openLocal, "OpenWorld").Should().BeFalse();
         GetNamedBool(previewPlan, "ReadOnly").Should().BeTrue();
         GetNamedBool(previewPlan, "OpenWorld").Should().BeTrue();
+        GetNamedBool(previewPackage, "ReadOnly").Should().BeTrue();
+        GetNamedBool(previewPackage, "OpenWorld").Should().BeTrue();
         GetNamedBool(bracket, "ReadOnly").Should().BeTrue();
         GetNamedBool(bracket, "OpenWorld").Should().BeTrue();
+        GetNamedBool(roleCounts, "ReadOnly").Should().BeTrue();
+        GetNamedBool(roleCounts, "OpenWorld").Should().BeFalse();
+        GetNamedBool(weakSpots, "ReadOnly").Should().BeTrue();
+        GetNamedBool(weakSpots, "OpenWorld").Should().BeTrue();
+        GetNamedBool(workspaceDiff, "ReadOnly").Should().BeTrue();
+        GetNamedBool(workspaceDiff, "OpenWorld").Should().BeFalse();
+        GetNamedBool(reopenWriteback, "ReadOnly").Should().BeFalse();
+        GetNamedBool(reopenWriteback, "OpenWorld").Should().BeTrue();
         GetNamedBool(performance, "ReadOnly").Should().BeTrue();
         GetNamedBool(performance, "OpenWorld").Should().BeFalse();
         GetNamedBool(comparePerformance, "ReadOnly").Should().BeTrue();
@@ -495,6 +534,8 @@ public sealed class McpSurfaceTests
         GetNamedBool(scoreMeta, "OpenWorld").Should().BeTrue();
         GetNamedBool(createExplicitPlan, "ReadOnly").Should().BeFalse();
         GetNamedBool(createExplicitPlan, "OpenWorld").Should().BeFalse();
+        GetNamedBool(clonePlan, "ReadOnly").Should().BeFalse();
+        GetNamedBool(clonePlan, "OpenWorld").Should().BeFalse();
         GetNamedBool(listPlaygroupDecks, "ReadOnly").Should().BeTrue();
         GetNamedBool(listPlaygroupDecks, "OpenWorld").Should().BeTrue();
     }

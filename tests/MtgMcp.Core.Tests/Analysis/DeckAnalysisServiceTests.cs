@@ -200,6 +200,111 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that role-count explanations expose card-by-card evidence for the Inga and Esika fixture.
+    /// </summary>
+    [Fact]
+    public async Task ExplainRoleCounts_ReturnsEvidenceRowsForFixture()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckRoleCountExplanation explanation = await service.ExplainRoleCountsAsync(
+            workspace.Id,
+            DeckRoles.Ramp,
+            TestContext.Current.CancellationToken);
+
+        explanation.Role.Should().Be(DeckRoles.Ramp);
+        explanation.Cards.Should().Contain(row =>
+            row.CardName == "Circle of Dreams Druid"
+            && row.CountedByHeuristic
+            && (row.ScryfallUri ?? "").Contains("scryfall.com", StringComparison.OrdinalIgnoreCase));
+        explanation.Cards.Single(row => row.CardName == "Circle of Dreams Druid")
+            .MatchingEvidence.Should()
+            .Contain(evidence => evidence.Contains("oracle text", StringComparison.OrdinalIgnoreCase));
+        explanation.Notes.Should().Contain(note =>
+            note.Contains("diverge", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that compact workspace state exposes deck-tuning context without a full workspace dump.
+    /// </summary>
+    [Fact]
+    public async Task GetWorkspaceState_ReturnsCompactDeckTuningContext()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = CreateWorkspaceService(workspaces, new FakeCardCatalog());
+
+        DeckWorkspaceState state = await service.GetWorkspaceStateAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        state.Commanders.Should().Contain("Inga and Esika");
+        state.IncludedCount.Should().BeGreaterThan(20);
+        state.RoleCounts.Should().ContainKey(DeckRoles.Ramp);
+        state.ActiveNoncreatureSpells.Should().Be(2);
+        state.HighManaValueCards.Should().Contain(card => card.CardName == "Craterhoof Behemoth");
+        state.SideboardCards.Should().Contain(card => card.CardName == "Finale of Devastation");
+        state.MaybeboardCards.Should().Contain(card => card.CardName == "Hydroid Krasis");
+    }
+
+    /// <summary>
+    /// Verifies that weak-spot review returns evidence rows without choosing final cuts.
+    /// </summary>
+    [Fact]
+    public async Task ReviewWeakSpots_ReturnsEvidenceOnlyRowsAndExistingCandidates()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace fixture = CreateIngaAndEsikaFixtureWorkspace();
+        fixture.Categories.Add(new DeckCategory { Name = DeckRoles.Utility, IncludedInDeck = true });
+        fixture.Cards.Add(IngaFixtureCard(
+            "Boundless Realms",
+            1,
+            DeckRoles.Utility,
+            "Sorcery",
+            7,
+            "Search your library for up to X basic land cards, where X is the number of lands you control.",
+            ["G"],
+            "https://scryfall.com/card/m13/164/boundless-realms"));
+        fixture.Cards.Add(IngaFixtureCard(
+            "Heroic Intervention",
+            1,
+            DeckDefaults.Maybeboard,
+            "Instant",
+            2,
+            "Permanents you control gain hexproof and indestructible until end of turn.",
+            ["G"],
+            "https://scryfall.com/card/m21/188/heroic-intervention",
+            extraCategories: [DeckRoles.Protection]));
+        DeckWorkspace workspace = await workspaces.SaveAsync(fixture, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckWeakSpotReview review = await service.ReviewWeakSpotsAsync(
+            workspace.Id,
+            "auto",
+            limit: 10,
+            TestContext.Current.CancellationToken);
+
+        review.State.Commanders.Should().Contain("Inga and Esika");
+        review.RoleBalance.Should().Contain(row => row.Status == "low");
+        review.WeakSlots.Should().Contain(row =>
+            row.CardName == "Boundless Realms"
+            && row.Signals.Any(signal => signal.Contains("High mana value", StringComparison.OrdinalIgnoreCase)));
+        review.CandidateRows.Should().Contain(row =>
+            row.CardName == "Heroic Intervention"
+            && row.SourceCategory == DeckDefaults.Maybeboard);
+        review.SourceStatuses.Should().Contain(row =>
+            row.SourceKey == "external-recommendation-sources"
+            && row.Status == "not-queried");
+        review.Notes.Should().Contain(note => note.Contains("Evidence-only", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that the runtime Tagger taxonomy only names slugs present as oracle-card tags in the saved snapshot.
     /// </summary>
     [Fact]

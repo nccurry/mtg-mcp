@@ -8,19 +8,46 @@ namespace MtgMcp.Core;
 public sealed class DeckExporter
 {
     /// <summary>
-    /// Exports the workspace.
+    /// Exports the workspace using the existing grouped plain-text format.
     /// </summary>
     public static string Export(DeckWorkspace workspace)
     {
+        return Export(workspace, new DeckExportOptions());
+    }
+
+    /// <summary>
+    /// Exports the workspace in text or Markdown while preserving grouped text defaults.
+    /// </summary>
+    public static string Export(DeckWorkspace workspace, DeckExportOptions options)
+    {
         StringBuilder builder = new();
+        Dictionary<string, DeckCategory> categories = DeckCategoryInclusion.BuildCategoryMap(workspace);
+        string format = string.IsNullOrWhiteSpace(options.Format)
+            ? "text"
+            : options.Format.Trim().ToLowerInvariant();
+        bool markdown = format is "markdown" or "markdown-links";
+        bool markdownLinks = format is "markdown-links";
+
         foreach (DeckCategory category in workspace.Categories)
         {
-            List<DeckCard> cards = workspace
-                .Cards.Where(card =>
-                    DeckCategoryOrdering.PrimaryCategory(card).Equals(category.Name, StringComparison.OrdinalIgnoreCase)
-                )
-                .OrderBy(card => card.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            List<DeckCard> cards = [];
+            foreach (DeckCard card in workspace.Cards)
+            {
+                string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+                if (!primaryCategory.Equals(category.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (options.IncludedOnly && !DeckCategoryInclusion.IsIncludedInDeck(categories, primaryCategory))
+                {
+                    continue;
+                }
+
+                cards.Add(card);
+            }
+
+            cards.Sort((left, right) => string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
 
             if (cards.Count == 0)
             {
@@ -32,15 +59,49 @@ public sealed class DeckExporter
                 builder.AppendLine();
             }
 
-            builder.AppendLine(category.Name);
+            if (options.IncludeCategories)
+            {
+                builder.AppendLine(markdown ? $"## {category.Name}" : category.Name);
+            }
+
             foreach (DeckCard card in cards)
             {
-                builder.Append(card.Quantity);
-                builder.Append(' ');
-                builder.AppendLine(card.Name);
+                AppendCardLine(builder, card, markdown, markdownLinks);
             }
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Appends one card row in plain text or Markdown.
+    /// </summary>
+    private static void AppendCardLine(
+        StringBuilder builder,
+        DeckCard card,
+        bool markdown,
+        bool markdownLinks)
+    {
+        if (markdown)
+        {
+            builder.Append("- ");
+        }
+
+        builder.Append(card.Quantity);
+        builder.Append(' ');
+        if (markdownLinks && !string.IsNullOrWhiteSpace(card.Snapshot?.ScryfallUri))
+        {
+            builder.Append('[');
+            builder.Append(card.Name);
+            builder.Append("](");
+            builder.Append(card.Snapshot.ScryfallUri);
+            builder.Append(')');
+        }
+        else
+        {
+            builder.Append(card.Name);
+        }
+
+        builder.AppendLine();
     }
 }

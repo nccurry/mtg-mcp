@@ -40,15 +40,25 @@ public sealed class CategoryTools
         OpenWorld = true
     )]
     [Description("Append an Archidekt-style secondary category tag without changing categories[0], the primary category.")]
-    public Task<DeckChangeResult> AddCardCategoryAsync(
+    public Task<object> AddCardCategoryAsync(
         string workspaceId,
         string cardName,
         string category,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_add_card_category");
-        return decks.AddCardCategoryAsync(workspaceId, cardName, category, cancellationToken);
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            () => decks.AddCardCategoryAsync(workspaceId, cardName, category, cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 0,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -62,15 +72,25 @@ public sealed class CategoryTools
         OpenWorld = true
     )]
     [Description("Remove an Archidekt-style category tag; if it was first, the next category becomes primary.")]
-    public Task<DeckChangeResult> RemoveCardCategoryAsync(
+    public Task<object> RemoveCardCategoryAsync(
         string workspaceId,
         string cardName,
         string category,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_remove_card_category");
-        return decks.RemoveCardCategoryAsync(workspaceId, cardName, category, cancellationToken);
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            () => decks.RemoveCardCategoryAsync(workspaceId, cardName, category, cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 0,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -86,20 +106,29 @@ public sealed class CategoryTools
     [Description(
         "Set the first Archidekt category, which is the card's primary category for deck organization."
     )]
-    public Task<DeckChangeResult> SetPrimaryCardCategoryAsync(
+    public Task<object> SetPrimaryCardCategoryAsync(
         string workspaceId,
         string cardName,
         string category,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_set_primary_card_category");
-        return decks.SetPrimaryCardCategoryAsync(
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
             workspaceId,
-            cardName,
-            category,
-            cancellationToken
-        );
+            includeWorkspace,
+            () => decks.SetPrimaryCardCategoryAsync(
+                workspaceId,
+                cardName,
+                category,
+                cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 1,
+            changedCards: [cardName],
+            cancellationToken);
     }
 
     /// <summary>
@@ -113,22 +142,31 @@ public sealed class CategoryTools
         OpenWorld = true
     )]
     [Description("Create or update a deck category.")]
-    public Task<DeckChangeResult> CreateCategoryAsync(
+    public Task<object> CreateCategoryAsync(
         string workspaceId,
         string category,
         bool includedInDeck = true,
         bool includedInPrice = true,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_create_category");
-        return decks.CreateCategoryAsync(
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
             workspaceId,
-            category,
-            includedInDeck,
-            includedInPrice,
-            cancellationToken
-        );
+            includeWorkspace,
+            () => decks.CreateCategoryAsync(
+                workspaceId,
+                category,
+                includedInDeck,
+                includedInPrice,
+                cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 0,
+            changedCards: [],
+            cancellationToken);
     }
 
     /// <summary>
@@ -142,15 +180,25 @@ public sealed class CategoryTools
         OpenWorld = true
     )]
     [Description("Rename a deck category and update card category references.")]
-    public Task<DeckChangeResult> RenameCategoryAsync(
+    public Task<object> RenameCategoryAsync(
         string workspaceId,
         string oldName,
         string newName,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_rename_category");
-        return decks.RenameCategoryAsync(workspaceId, oldName, newName, cancellationToken);
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            () => decks.RenameCategoryAsync(workspaceId, oldName, newName, cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 0,
+            changedCards: [],
+            cancellationToken);
     }
 
     /// <summary>
@@ -164,19 +212,28 @@ public sealed class CategoryTools
         OpenWorld = true
     )]
     [Description("Delete a category and move affected cards to a replacement category.")]
-    public Task<DeckChangeResult> DeleteCategoryAsync(
+    public Task<object> DeleteCategoryAsync(
         string workspaceId,
         string category,
         string replacementCategory = DeckDefaults.Mainboard,
+        bool includeWorkspace = true,
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("deck_delete_category");
-        return decks.DeleteCategoryAsync(
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
             workspaceId,
-            category,
-            replacementCategory,
-            cancellationToken
-        );
+            includeWorkspace,
+            () => decks.DeleteCategoryAsync(
+                workspaceId,
+                category,
+                replacementCategory,
+                cancellationToken),
+            added: 0,
+            removed: 0,
+            moved: 0,
+            changedCards: [],
+            cancellationToken);
     }
 }

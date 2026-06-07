@@ -149,6 +149,28 @@ public sealed class WorkspaceTools
     }
 
     /// <summary>
+    /// Reopens an Archidekt-sourced workspace with writeback enabled.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_reopen_with_writeback",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description("Reopen an Archidekt-sourced workspace with writeback enabled using its explicit source deck id or URL.")]
+    public async Task<DeckOpenResult> ReopenWorkspaceWithWritebackAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        operationMode.EnsureCanMutate("workspace_reopen_with_writeback");
+        DeckWorkspace workspace = await decks.ReopenWorkspaceWithWritebackAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return CreateOpenResult(workspace);
+    }
+
+    /// <summary>
     /// Imports a Moxfield deck.
     /// </summary>
     public async Task<DeckOpenResult> OpenMoxfieldDeckAsync(
@@ -289,13 +311,19 @@ public sealed class WorkspaceTools
         Idempotent = true,
         OpenWorld = false
     )]
-    [Description("Export a deck workspace as a grouped text decklist.")]
+    [Description("Export a deck workspace as a grouped decklist. format supports text, markdown, and markdown-links; defaults preserve grouped text output.")]
     public Task<string> ExportDeckAsync(
         string workspaceId,
+        [Description("Export format: text, markdown, or markdown-links.")]
+        string format = "text",
+        [Description("When true, export only cards in categories included in the active deck.")]
+        bool includedOnly = false,
+        [Description("When true, group cards by category; keep true to preserve current grouped text behavior.")]
+        bool includeCategories = true,
         CancellationToken cancellationToken = default
     )
     {
-        return decks.ExportDeckAsync(workspaceId, cancellationToken);
+        return decks.ExportDeckAsync(workspaceId, format, includedOnly, includeCategories, cancellationToken);
     }
 
     /// <summary>
@@ -331,6 +359,27 @@ public sealed class WorkspaceTools
     )
     {
         return decks.ValidateDeckAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Compares two explicitly selected saved workspaces.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_diff",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("Compare a workspace against an explicit baseline workspace id; baseline id/source/timestamp are returned prominently.")]
+    public Task<WorkspaceDiffResult> DiffWorkspacesAsync(
+        string workspaceId,
+        [Description("Explicit baseline workspace id to compare against. Hidden latest-baseline selection is not used.")]
+        string previousWorkspaceId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return decks.DiffWorkspacesAsync(workspaceId, previousWorkspaceId, cancellationToken);
     }
 
     /// <summary>

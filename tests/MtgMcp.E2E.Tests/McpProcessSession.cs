@@ -66,18 +66,27 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string dataDirectory,
         string operationMode)
     {
-        string configuration = GetCurrentConfiguration();
-        string appProjectPath = Path.Combine(
-            repoRoot,
-            "src",
-            "MtgMcp.App",
-            "MtgMcp.App.csproj");
+        string? installedCommand = Environment.GetEnvironmentVariable("MTGMCP_E2E_COMMAND");
+        string[] commandArguments = [];
+        string command = string.IsNullOrWhiteSpace(installedCommand)
+            ? ResolveDotnetCommand(repoRoot)
+            : installedCommand.Trim();
+        if (string.IsNullOrWhiteSpace(installedCommand))
+        {
+            string configuration = GetCurrentConfiguration();
+            string appProjectPath = Path.Combine(
+                repoRoot,
+                "src",
+                "MtgMcp.App",
+                "MtgMcp.App.csproj");
+            commandArguments = ["run", "--project", appProjectPath, "--configuration", configuration, "--no-build"];
+        }
 
         return new StdioClientTransportOptions
         {
             Name = "mtg-mcp-e2e",
-            Command = ResolveDotnetCommand(repoRoot),
-            Arguments = ["run", "--project", appProjectPath, "--configuration", configuration, "--no-build"],
+            Command = command,
+            Arguments = commandArguments,
             WorkingDirectory = repoRoot,
             EnvironmentVariables = new Dictionary<string, string?>
             {
