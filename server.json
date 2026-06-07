@@ -3,7 +3,7 @@
   "name": "io.github.nccurry/mtg-mcp",
   "title": "MTG MCP",
   "description": "A .NET MCP server for MTG deckbuilding with Scryfall data and Archidekt writeback.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "repository": {
     "url": "https://github.com/nccurry/mtg-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "nuget",
       "identifier": "Nccurry.MtgMcp",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "transport": {
         "type": "stdio"
       }

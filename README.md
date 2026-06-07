@@ -21,7 +21,11 @@ Spellbook combos, and API-backed deckbuilding evidence.
 It is not affiliated with Hasbro, Wizards of the Coast, Magic: The Gathering,
 Scryfall, Moxfield, Archidekt, Playgroup.gg, or Commander Spellbook.
 
-## Quickstart
+## Install
+
+### NuGet .NET Tool
+
+The easiest manual install is the published NuGet tool package:
 
 ```bash
 dotnet tool install --global Nccurry.MtgMcp
@@ -29,8 +33,11 @@ mtg-mcp --version
 mtg-mcp --smoke
 ```
 
-Configure your MCP client to run the `mtg-mcp` stdio command. Scryfall lookup
-and local deck analysis work without account credentials.
+To upgrade an existing install:
+
+```bash
+dotnet tool update --global Nccurry.MtgMcp
+```
 
 PowerShell note: when invoking the executable by a quoted full path, prefix it
 with the call operator:
@@ -38,6 +45,60 @@ with the call operator:
 ```powershell
 & "C:\Users\you\.dotnet\tools\mtg-mcp.exe" --version
 ```
+
+### MCP Registry
+
+Registry-aware MCP clients can discover the server by its registry name:
+
+```text
+io.github.nccurry/mtg-mcp
+```
+
+The registry entry points to the NuGet package `Nccurry.MtgMcp` and uses stdio
+transport. You can also inspect it in the
+[official MCP Registry](https://registry.modelcontextprotocol.io/?q=io.github.nccurry%2Fmtg-mcp).
+
+### GitHub Release Archive
+
+Release archives are attached to
+[GitHub Releases](https://github.com/nccurry/mtg-mcp/releases/latest) for the
+published desktop runtimes:
+
+- `win-x64`: download `mtg-mcp-<version>-win-x64.zip`.
+- `linux-x64`: download `mtg-mcp-<version>-linux-x64.tar.gz`.
+- `osx-arm64`: download `mtg-mcp-<version>-osx-arm64.tar.gz`.
+
+Extract the archive and configure your MCP client to run the extracted
+`mtg-mcp` executable.
+
+### From Source
+
+For local development or testing an unreleased branch:
+
+```bash
+git clone https://github.com/nccurry/mtg-mcp.git
+cd mtg-mcp
+./bootstrap.sh
+task install:local
+```
+
+On Windows:
+
+```powershell
+git clone https://github.com/nccurry/mtg-mcp.git
+cd mtg-mcp
+.\bootstrap.ps1
+task install:local
+```
+
+`task install:local` packs the current checkout, publishes a self-contained
+binary for the current machine, and updates the configured local MCP command
+path when possible.
+
+### MCP Client Configuration
+
+Configure your MCP client to run the `mtg-mcp` stdio command. Scryfall lookup
+and local deck analysis work without account credentials.
 
 Codex example:
 
