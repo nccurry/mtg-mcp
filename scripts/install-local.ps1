@@ -12,6 +12,8 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$script:GlobalToolSmokeEnabled = $true
+
 if (-not (Test-Path variable:IsWindows)) {
     $script:IsWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
         [System.Runtime.InteropServices.OSPlatform]::Windows)
@@ -284,19 +286,78 @@ function New-LocalToolNuGetConfig {
     return $configPath
 }
 
+function Invoke-CapturedProcess {
+    param(
+        [Parameter(Mandatory = $true)][string] $Command,
+        [Parameter(ValueFromRemainingArguments = $true)][string[]] $Arguments
+    )
+
+    $captureId = [System.Guid]::NewGuid().ToString("N")
+    $stdoutPath = Join-Path $packageDirPath "process-$captureId.stdout.log"
+    $stderrPath = Join-Path $packageDirPath "process-$captureId.stderr.log"
+    try {
+        $process = Start-Process `
+            -FilePath $Command `
+            -ArgumentList $Arguments `
+            -NoNewWindow `
+            -PassThru `
+            -Wait `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $output = New-Object System.Collections.Generic.List[string]
+        if (Test-Path -LiteralPath $stdoutPath) {
+            foreach ($line in Get-Content -LiteralPath $stdoutPath) {
+                $output.Add($line)
+            }
+        }
+
+        if (Test-Path -LiteralPath $stderrPath) {
+            foreach ($line in Get-Content -LiteralPath $stderrPath) {
+                $output.Add($line)
+            }
+        }
+
+        return [PSCustomObject]@{
+            ExitCode = $process.ExitCode
+            Output = $output
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Uninstall-GlobalToolPackage {
+    $result = Invoke-CapturedProcess $DotnetCommand "tool" "uninstall" "--global" $PackageId
+    if ($result.ExitCode -eq 0) {
+        return $true
+    }
+
+    if (Test-GlobalToolInstalled) {
+        $message = ($result.Output | Out-String).Trim()
+        if ([string]::IsNullOrWhiteSpace($message)) {
+            $message = "dotnet tool uninstall failed with exit code $($result.ExitCode)."
+        }
+
+        Write-Host "Global dotnet tool uninstall could not remove the existing $PackageId package; leaving it in place."
+        Write-Host "Reason: $message"
+        Write-Host "Continuing with the self-contained MCP command install. Close running MCP processes and rerun task install to refresh the global tool."
+        return $false
+    }
+
+    Write-Host "Global dotnet tool uninstall reported an error after removing $PackageId; continuing."
+    return $true
+}
+
 function Install-GlobalToolPackage {
     $nugetConfigPath = New-LocalToolNuGetConfig
     if (Test-GlobalToolInstalled) {
         Write-Host "Reinstalling global dotnet tool $PackageId $Version from local package"
-        try {
-            Invoke-Checked $DotnetCommand "tool" "uninstall" "--global" $PackageId
-        }
-        catch {
-            if (Test-GlobalToolInstalled) {
-                throw
-            }
-
-            Write-Host "Global dotnet tool uninstall reported an error after removing $PackageId; continuing."
+        if (-not (Uninstall-GlobalToolPackage)) {
+            $script:GlobalToolSmokeEnabled = $false
+            return
         }
     }
     else {
@@ -390,7 +451,10 @@ catch [System.IO.IOException] {
 
 Write-Host "Smoke-testing global tool shim"
 Use-LocalDotnetRootForAppHosts
-if (Test-Path -LiteralPath $globalToolPath) {
+if (-not $script:GlobalToolSmokeEnabled) {
+    Write-Host "Skipping global tool shim smoke because the existing global tool could not be refreshed."
+}
+elseif (Test-Path -LiteralPath $globalToolPath) {
     Invoke-Checked $globalToolPath "--smoke"
 }
 else {

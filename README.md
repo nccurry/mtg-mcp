@@ -558,12 +558,13 @@ task install:local:cleanup
 ```
 
 `task install:local` packs the current checkout using the package version in
-`server.json`. It reinstalls the global `.NET` tool from that freshly packed
-local package, publishes a self-contained binary, and copies it to the configured
-local MCP command path when one is found. If that executable is locked by a
-running MCP process, it writes a versioned binary beside it and updates the Codex
-MCP config for the next server start. Pass `LOCAL_VERSION=...` only when you need
-an explicit one-off package version.
+`server.json`. It refreshes the global `.NET` tool from that freshly packed local
+package when the existing tool store is unlocked, publishes a self-contained
+binary, and copies it to the configured local MCP command path when one is found.
+If the global tool or configured executable is locked by a running MCP process,
+it leaves the locked file in place, writes a versioned binary beside it, and
+updates the Codex MCP config for the next server start. Pass `LOCAL_VERSION=...`
+only when you need an explicit one-off package version.
 
 `task install:local:cleanup` removes old unlocked versioned local binaries while
 keeping the currently configured MCP command path.
