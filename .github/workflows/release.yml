@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate release tag
         shell: pwsh
@@ -24,12 +24,12 @@ jobs:
           "VERSION=${env:GITHUB_REF_NAME}" >> "${env:GITHUB_ENV}"
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
 
       - name: Set up Task
-        uses: go-task/setup-task@v1
+        uses: go-task/setup-task@v2
 
       - name: Verify release artifacts
         run: task release:verify VERSION="${VERSION}"
@@ -60,7 +60,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
