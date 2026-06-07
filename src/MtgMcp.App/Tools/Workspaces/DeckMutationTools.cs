@@ -56,10 +56,6 @@ public sealed class DeckMutationTools
             workspaceId,
             includeWorkspace,
             () => decks.AddCardAsync(workspaceId, cardName, quantity, category, force, cancellationToken),
-            added: Math.Max(1, quantity),
-            removed: 0,
-            moved: 0,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -89,10 +85,6 @@ public sealed class DeckMutationTools
             workspaceId,
             includeWorkspace,
             () => decks.RemoveCardAsync(workspaceId, cardName, quantity, category, cancellationToken),
-            added: 0,
-            removed: Math.Max(1, quantity),
-            moved: 0,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -127,10 +119,6 @@ public sealed class DeckMutationTools
                 quantity,
                 category,
                 cancellationToken),
-            added: 0,
-            removed: quantity == 0 ? 1 : 0,
-            moved: 0,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -167,10 +155,6 @@ public sealed class DeckMutationTools
                 toCategory,
                 fromCategory,
                 cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 1,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -205,10 +189,6 @@ public sealed class DeckMutationTools
                 format,
                 description,
                 cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 0,
-            changedCards: [],
             cancellationToken);
     }
 }

@@ -589,7 +589,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 ? currentPrice.Value - candidatePrice.Value
                 : null;
             List<string> protectedWarnings = [];
-            if (IsProtectedCard(card, intent))
+            if (DeckIntentProtection.IsProtectedCard(card, intent))
             {
                 protectedWarnings.Add("Card is protected by deck intent.");
             }

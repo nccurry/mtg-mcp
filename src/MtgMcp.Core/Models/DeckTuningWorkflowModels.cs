@@ -322,17 +322,17 @@ public sealed class CompactMutationResult
     public string? CheckpointId { get; set; }
 
     /// <summary>
-    /// Gets or sets the count of add-card operations represented by the mutation.
+    /// Gets or sets aggregate card-copy quantity increases represented by the mutation.
     /// </summary>
     public int Added { get; set; }
 
     /// <summary>
-    /// Gets or sets the count of remove-card operations represented by the mutation.
+    /// Gets or sets aggregate card-copy quantity decreases represented by the mutation.
     /// </summary>
     public int Removed { get; set; }
 
     /// <summary>
-    /// Gets or sets the count of move-card or primary-category operations represented by the mutation.
+    /// Gets or sets card identities whose primary category changed while still present.
     /// </summary>
     public int Moved { get; set; }
 
@@ -929,6 +929,11 @@ public sealed class DeckWeakSlotEvidenceRow
     /// Gets or sets Scryfall page when known.
     /// </summary>
     public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets warnings when deck intent marks the card as protected from casual cuts.
+    /// </summary>
+    public List<string> ProtectedCardWarnings { get; set; } = [];
 
     /// <summary>
     /// Gets or sets weak-slot evidence signals.

@@ -54,10 +54,6 @@ public sealed class CategoryTools
             workspaceId,
             includeWorkspace,
             () => decks.AddCardCategoryAsync(workspaceId, cardName, category, cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 0,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -86,10 +82,6 @@ public sealed class CategoryTools
             workspaceId,
             includeWorkspace,
             () => decks.RemoveCardCategoryAsync(workspaceId, cardName, category, cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 0,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -124,10 +116,6 @@ public sealed class CategoryTools
                 cardName,
                 category,
                 cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 1,
-            changedCards: [cardName],
             cancellationToken);
     }
 
@@ -162,10 +150,6 @@ public sealed class CategoryTools
                 includedInDeck,
                 includedInPrice,
                 cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 0,
-            changedCards: [],
             cancellationToken);
     }
 
@@ -194,10 +178,6 @@ public sealed class CategoryTools
             workspaceId,
             includeWorkspace,
             () => decks.RenameCategoryAsync(workspaceId, oldName, newName, cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 0,
-            changedCards: [],
             cancellationToken);
     }
 
@@ -230,10 +210,6 @@ public sealed class CategoryTools
                 category,
                 replacementCategory,
                 cancellationToken),
-            added: 0,
-            removed: 0,
-            moved: 0,
-            changedCards: [],
             cancellationToken);
     }
 }

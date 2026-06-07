@@ -73,7 +73,7 @@ public sealed class AnalysisTools
     /// <summary>
     /// Reviews weak-slot evidence without selecting final cuts.
     /// </summary>
-    [McpServerTool(Name = "deck_review_weak_spots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [McpServerTool(Name = "deck_review_weak_spots", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description(
         "Return evidence-only weak-slot rows, role/category balance, existing excluded-card candidates, "
             + "source statuses, and notes. The assistant should synthesize final recommendations.")]

@@ -352,6 +352,52 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that weak-spot review warns when intent protects a weak row.
+    /// </summary>
+    [Fact]
+    public async Task ReviewWeakSpots_MarksIntentProtectedCardsWithoutAddingWeakSignals()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace fixture = CreateIngaAndEsikaFixtureWorkspace();
+        fixture.Description =
+            """
+            MTG MCP Deck Intent
+            Protect
+            - Boundless Realms
+            - commander
+            End MTG MCP Deck Intent
+            """;
+        fixture.Categories.Add(new DeckCategory { Name = DeckRoles.Utility, IncludedInDeck = true });
+        fixture.Cards.Single(card => card.Name == "Inga and Esika").Quantity = 2;
+        fixture.Cards.Add(IngaFixtureCard(
+            "Boundless Realms",
+            1,
+            DeckRoles.Utility,
+            "Sorcery",
+            7,
+            "Search your library for up to X basic land cards, where X is the number of lands you control.",
+            ["G"],
+            "https://scryfall.com/card/m13/164/boundless-realms"));
+        DeckWorkspace workspace = await workspaces.SaveAsync(fixture, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckWeakSpotReview review = await service.ReviewWeakSpotsAsync(
+            workspace.Id,
+            "auto",
+            limit: 20,
+            TestContext.Current.CancellationToken);
+
+        DeckWeakSlotEvidenceRow protectedCard = review.WeakSlots.Single(row => row.CardName == "Boundless Realms");
+        DeckWeakSlotEvidenceRow protectedCommander = review.WeakSlots.Single(row => row.CardName == "Inga and Esika");
+        protectedCard.ProtectedCardWarnings.Should().Equal("Card is protected by deck intent.");
+        protectedCommander.ProtectedCardWarnings.Should().Equal("Card is protected by deck intent.");
+        protectedCard.Signals.Should().NotContain(signal =>
+            signal.Contains("protected", StringComparison.OrdinalIgnoreCase));
+        protectedCommander.Signals.Should().Contain(signal =>
+            signal.Contains("Multiple copies", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that the runtime Tagger taxonomy only names slugs present as oracle-card tags in the saved snapshot.
     /// </summary>
     [Fact]

@@ -25,7 +25,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
         foreach (DeckCard card in IncludedCards(workspace)
             .Where(card => !IsCommanderCard(card))
-            .Where(card => !IsProtectedCard(card, intent))
+            .Where(card => !DeckIntentProtection.IsProtectedCard(card, intent))
             .Where(card => ReadUsdPrice(GetSnapshot(card)) >= effectiveMaxPrice + minSavings)
             .OrderByDescending(card => ReadUsdPrice(GetSnapshot(card)) ?? 0)
             .Take(Math.Clamp(limit, 1, 25)))
@@ -97,7 +97,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
         foreach (DeckCard card in IncludedCards(workspace)
             .Where(ShouldConsiderUpgrade)
-            .Where(card => !IsProtectedCard(card, intent))
+            .Where(card => !DeckIntentProtection.IsProtectedCard(card, intent))
             .OrderBy(card => DeckRoleClassifier.Classify(card).Confidence)
             .ThenByDescending(card => GetSnapshot(card).EdhrecRank ?? int.MaxValue)
             .Take(Math.Clamp(limit, 1, 25)))
@@ -829,22 +829,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         return intent?.Budget.MaxCardPrice is { } intentPrice && maxPrice == 5
             ? intentPrice
             : maxPrice;
-    }
-
-    /// <summary>
-    /// Checks whether an existing card is protected by intent.
-    /// </summary>
-    private static bool IsProtectedCard(DeckCard card, DeckIntent? intent)
-    {
-        if (intent is null)
-        {
-            return false;
-        }
-
-        return intent.Protect.Any(value =>
-            value.Equals("commander", StringComparison.OrdinalIgnoreCase) && IsCommanderCard(card)
-            || card.Name.Equals(value, StringComparison.OrdinalIgnoreCase)
-            || card.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

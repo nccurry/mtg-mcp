@@ -21,6 +21,7 @@ public sealed partial class DeckAnalysisService
                 analysisProfile,
                 cancellationToken)
             .ConfigureAwait(false);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         DeckWorkspaceState state = DeckWorkspaceService.BuildWorkspaceState(workspace);
         DeckWeakSpotReview review = new()
         {
@@ -30,7 +31,7 @@ public sealed partial class DeckAnalysisService
 
         AddBalanceRows(review, bestPractices);
         AddCategoryRows(review, workspace, state);
-        AddWeakSlotRows(review, workspace, bestPractices, Math.Clamp(limit, 1, 100));
+        AddWeakSlotRows(review, workspace, bestPractices, intent, Math.Clamp(limit, 1, 100));
         AddCandidateRows(review, workspace, bestPractices, Math.Clamp(limit, 1, 100));
         review.SourceStatuses.Add(new DeckWeakSpotSourceStatus
         {
@@ -137,6 +138,7 @@ public sealed partial class DeckAnalysisService
         DeckWeakSpotReview review,
         DeckWorkspace workspace,
         DeckBestPracticeAnalysis bestPractices,
+        DeckIntent? intent,
         int limit)
     {
         HashSet<string> highTargets = TargetsWithStatus(bestPractices, "high");
@@ -159,7 +161,10 @@ public sealed partial class DeckAnalysisService
                 ManaValue = snapshot.ManaValue,
                 Price = ReadUsdPrice(snapshot),
                 ClassifierConfidence = assignment.Confidence,
-                ScryfallUri = snapshot.ScryfallUri
+                ScryfallUri = snapshot.ScryfallUri,
+                ProtectedCardWarnings = DeckIntentProtection.IsProtectedCard(card, intent)
+                    ? ["Card is protected by deck intent."]
+                    : []
             };
 
             AddWeakSignals(row, workspace, card, assignment, highTargets);
@@ -446,6 +451,12 @@ public sealed partial class DeckAnalysisService
         if (signals != 0)
         {
             return signals;
+        }
+
+        int protectedWarnings = left.ProtectedCardWarnings.Count.CompareTo(right.ProtectedCardWarnings.Count);
+        if (protectedWarnings != 0)
+        {
+            return protectedWarnings;
         }
 
         int manaValue = Nullable.Compare(right.ManaValue, left.ManaValue);

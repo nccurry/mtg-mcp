@@ -517,7 +517,7 @@ public sealed class McpSurfaceTests
         GetNamedBool(roleCounts, "ReadOnly").Should().BeTrue();
         GetNamedBool(roleCounts, "OpenWorld").Should().BeFalse();
         GetNamedBool(weakSpots, "ReadOnly").Should().BeTrue();
-        GetNamedBool(weakSpots, "OpenWorld").Should().BeTrue();
+        GetNamedBool(weakSpots, "OpenWorld").Should().BeFalse();
         GetNamedBool(workspaceDiff, "ReadOnly").Should().BeTrue();
         GetNamedBool(workspaceDiff, "OpenWorld").Should().BeFalse();
         GetNamedBool(reopenWriteback, "ReadOnly").Should().BeFalse();
@@ -624,6 +624,134 @@ public sealed class McpSurfaceTests
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*workspace_start*");
+    }
+
+    /// <summary>
+    /// Verifies that compact direct mutation output reports actual workspace deltas.
+    /// </summary>
+    [Fact]
+    public async Task CompactMutationResult_ReportsActualDirectMutationDeltas()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Compact",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard { Name = "Ramp Growth", Quantity = 2, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+                new DeckCard { Name = "Short Stay", Quantity = 1, PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] },
+                new DeckCard { Name = "Maybe Later", Quantity = 1, PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] },
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog());
+        DeckMutationTools tools = new(
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        CompactMutationResult quantity = (CompactMutationResult)await tools.SetCardQuantityAsync(
+            workspace.Id,
+            "Ramp Growth",
+            5,
+            DeckRoles.Ramp,
+            includeWorkspace: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+        CompactMutationResult remove = (CompactMutationResult)await tools.RemoveCardAsync(
+            workspace.Id,
+            "Short Stay",
+            quantity: 5,
+            category: DeckRoles.Draw,
+            includeWorkspace: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+        CompactMutationResult move = (CompactMutationResult)await tools.MoveCardAsync(
+            workspace.Id,
+            "Maybe Later",
+            DeckDefaults.Maybeboard,
+            fromCategory: DeckRoles.Draw,
+            includeWorkspace: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        quantity.Added.Should().Be(3);
+        quantity.Removed.Should().Be(0);
+        quantity.Moved.Should().Be(0);
+        quantity.ChangedCards.Should().Equal("Ramp Growth");
+        remove.Added.Should().Be(0);
+        remove.Removed.Should().Be(1);
+        remove.Moved.Should().Be(0);
+        remove.ChangedCards.Should().Equal("Short Stay");
+        move.Added.Should().Be(0);
+        move.Removed.Should().Be(0);
+        move.Moved.Should().Be(1);
+        move.ChangedCards.Should().Equal("Maybe Later");
+    }
+
+    /// <summary>
+    /// Verifies that compact plan apply output only reports changes that actually applied.
+    /// </summary>
+    [Fact]
+    public async Task CompactMutationResult_PartialPlanApplyReportsActualAppliedChanges()
+    {
+        InMemoryRepository repository = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Partial Compact",
+            Cards =
+            [
+                new DeckCard { Name = "Sol Ring", Quantity = 1, PrimaryCategory = DeckRoles.Ramp, Categories = [DeckRoles.Ramp] },
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Partial",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.SetCardQuantity,
+                    CardName = "Sol Ring",
+                    Quantity = 3,
+                    Category = DeckRoles.Ramp
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.RenameCategory,
+                    FromCategory = "Missing Category",
+                    ToCategory = "New Category"
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog(), planRepository: plans);
+        DeckPlanService planService = new(
+            repository,
+            new EmptyCardCatalog(),
+            deckService,
+            planRepository: plans);
+        PlanTools tools = new(
+            planService,
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        CompactMutationResult compact = (CompactMutationResult)await tools.ApplyDeckPlanAsync(
+            plan.PlanId,
+            createCheckpoint: false,
+            checkpointName: null,
+            includeWorkspace: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        compact.Success.Should().BeFalse();
+        compact.Status.Should().Be(DeckEditPlanStatus.PartiallyApplied);
+        compact.Added.Should().Be(2);
+        compact.Removed.Should().Be(0);
+        compact.Moved.Should().Be(0);
+        compact.ChangedCards.Should().Equal("Sol Ring");
+        compact.Notes.Should().Contain(note => note.Contains("Missing Category", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1488,6 +1616,55 @@ public sealed class McpSurfaceTests
         public Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<DeckWorkspace>>(workspaces.Values.ToList());
+        }
+    }
+
+    /// <summary>
+    /// Provides in memory plan repository behavior.
+    /// </summary>
+    private sealed class InMemoryPlanRepository : IDeckPlanRepository
+    {
+        /// <summary>
+        /// Stores fake plans by id.
+        /// </summary>
+        private readonly Dictionary<string, DeckEditPlan> plans = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Saves a plan in the fake repository.
+        /// </summary>
+        public Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken)
+        {
+            plans[plan.PlanId] = plan;
+            return Task.FromResult(plan);
+        }
+
+        /// <summary>
+        /// Gets a plan from the fake repository.
+        /// </summary>
+        public Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken)
+        {
+            plans.TryGetValue(planId, out DeckEditPlan? plan);
+            return Task.FromResult(plan);
+        }
+
+        /// <summary>
+        /// Lists fake plans.
+        /// </summary>
+        public Task<IReadOnlyList<DeckEditPlan>> ListAsync(string? workspaceId, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<DeckEditPlan> result = plans.Values
+                .Where(plan => string.IsNullOrWhiteSpace(workspaceId)
+                    || plan.WorkspaceId.Equals(workspaceId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            return Task.FromResult(result);
+        }
+
+        /// <summary>
+        /// Deletes a fake plan.
+        /// </summary>
+        public Task<bool> DeleteAsync(string planId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(plans.Remove(planId));
         }
     }
 

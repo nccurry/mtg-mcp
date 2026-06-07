@@ -175,16 +175,16 @@ public sealed class PlanTools
         }
 
         DeckEditPlan plan = await plans.GetDeckPlanAsync(planId, cancellationToken).ConfigureAwait(false);
-        DeckWorkspaceState before = await decks.GetWorkspaceStateAsync(plan.WorkspaceId, cancellationToken)
-            .ConfigureAwait(false);
+        CompactMutationPresenter.CompactMutationSnapshot before = CompactMutationPresenter.Capture(
+            await decks.GetDeckResourceAsync(plan.WorkspaceId, cancellationToken)
+                .ConfigureAwait(false));
         DeckEditPlanApplyResult result = await plans.ApplyDeckPlanAsync(
                 planId,
                 createCheckpoint,
                 checkpointName,
                 cancellationToken)
             .ConfigureAwait(false);
-        DeckWorkspaceState after = await decks.GetWorkspaceStateAsync(plan.WorkspaceId, cancellationToken)
-            .ConfigureAwait(false);
-        return CompactMutationPresenter.FromPlanApply(before, after, result, plan);
+        CompactMutationPresenter.CompactMutationSnapshot after = CompactMutationPresenter.Capture(result.Workspace);
+        return CompactMutationPresenter.FromPlanApply(before, after, result);
     }
 }
