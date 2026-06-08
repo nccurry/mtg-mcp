@@ -1,13 +1,14 @@
 version: '3'
 
+dotenv:
+  - versions.env
+
 vars:
   SOLUTION: mtg-mcp.slnx
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
   BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
   CONFIGURATION: Release
   DOTNET: '{{if eq OS "windows"}}.dotnet/dotnet.exe{{else}}./.dotnet/dotnet{{end}}'
-  DOTNET_SDK_VERSION: 11.0.100-preview.4.26230.115
-  GO_TASK_VERSION: 3.51.1
   POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}pwsh -NoProfile{{end}}'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
@@ -32,10 +33,47 @@ tasks:
   setup:
     desc: Install local development dependencies and restore the repo
     cmds:
+      - task: deps:sync
       - task: setup:dotnet
       - task: tools:restore
       - task: restore
       - task: setup:verify
+
+  deps:sync:
+    desc: Sync generated dependency version files from versions.env
+    cmds:
+      - cmd: |
+          powershell -NoProfile -ExecutionPolicy Bypass -Command '& {
+            $ErrorActionPreference = "Stop"
+            $globalJsonLines = @(
+              "{",
+              "  `"sdk`": {",
+              "    `"version`": `"{{.DOTNET_SDK_VERSION}}`",",
+              "    `"allowPrerelease`": true,",
+              "    `"rollForward`": `"latestFeature`",",
+              "    `"paths`": [`".dotnet`", `"`$host`$`"],",
+              "    `"errorMessage`": `"Required .NET SDK not found. Run ./bootstrap.sh, ./bootstrap.ps1, or install the .NET 11 preview SDK listed in global.json.`"",
+              "  }",
+              "}"
+            )
+            $globalJson = [string]::Join([Environment]::NewLine, $globalJsonLines) + [Environment]::NewLine
+            $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+            [System.IO.File]::WriteAllText((Join-Path (Get-Location) "global.json"), $globalJson, $utf8NoBom)
+          }'
+        platforms: [windows]
+      - cmd: |
+          cat > global.json <<EOF
+          {
+            "sdk": {
+              "version": "{{.DOTNET_SDK_VERSION}}",
+              "allowPrerelease": true,
+              "rollForward": "latestFeature",
+              "paths": [".dotnet", "\$host\$"],
+              "errorMessage": "Required .NET SDK not found. Run ./bootstrap.sh, ./bootstrap.ps1, or install the .NET 11 preview SDK listed in global.json."
+            }
+          }
+          EOF
+        platforms: [linux, darwin]
 
   setup:linux:
     desc: Install local Linux prerequisites and restore the repo

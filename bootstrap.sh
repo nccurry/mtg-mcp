@@ -9,7 +9,12 @@ if [ -z "$task_version" ] && [ -f "$versions_file" ]; then
   task_version="$(sed -n 's/^GO_TASK_VERSION=//p' "$versions_file" | head -n 1)"
 fi
 
-TASK_VERSION="${task_version:-3.51.1}"
+if [ -z "$task_version" ]; then
+  printf '%s\n' "GO_TASK_VERSION is missing from versions.env." >&2
+  exit 1
+fi
+
+TASK_VERSION="$task_version"
 
 if [ "$#" -eq 0 ]; then
   set -- setup
@@ -53,10 +58,19 @@ download_task() {
   fi
 }
 
+task_version_matches() {
+  task_path=$1
+  actual_version=$("$task_path" --version 2>/dev/null || true)
+  [ "$actual_version" = "$TASK_VERSION" ]
+}
+
 task_command() {
   if command -v task >/dev/null 2>&1; then
-    command -v task
-    return
+    candidate=$(command -v task)
+    if task_version_matches "$candidate"; then
+      printf '%s\n' "$candidate"
+      return
+    fi
   fi
 
   os=$(task_os)
@@ -64,7 +78,7 @@ task_command() {
   task_dir="${script_dir}/.tools/task/v${TASK_VERSION}/${os}-${architecture}"
   task_path="${task_dir}/task"
 
-  if [ -x "$task_path" ]; then
+  if [ -x "$task_path" ] && task_version_matches "$task_path"; then
     printf '%s\n' "$task_path"
     return
   fi

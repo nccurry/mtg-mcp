@@ -7,29 +7,35 @@ on:
 
 permissions:
   contents: write
+  packages: read
   id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/mtg-mcp-ci-builder:main
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Use image .NET for Taskfile
+        run: |
+          mkdir -p .dotnet
+          ln -sf "$(command -v dotnet)" .dotnet/dotnet
 
       - name: Validate release tag
         shell: pwsh
         run: |
           ./scripts/release.ps1 ValidateVersion -Version "${env:GITHUB_REF_NAME}"
           "VERSION=${env:GITHUB_REF_NAME}" >> "${env:GITHUB_ENV}"
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
-
-      - name: Set up Task
-        uses: go-task/setup-task@v2
 
       - name: Verify release artifacts
         run: task release:verify VERSION="${VERSION}"

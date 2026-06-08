@@ -599,13 +599,10 @@ when cross-publishing:
 task publish:runtime RUNTIME=linux-x64
 ```
 
-For a system-wide setup instead of the local bootstrap, install these
-prerequisites yourself and then run `task setup`:
-
-- .NET SDK `11.0.100-preview.4.26230.115` or a compatible .NET 11 preview SDK.
-- Task CLI `3.51.1` or newer.
-- PowerShell 7 `pwsh` on Linux/macOS, or Windows PowerShell on Windows.
-- `curl`, used by the setup script and optional Moxfield HTTP fallback.
+For a system-wide setup instead of the local bootstrap, install the .NET SDK,
+Task CLI, and PowerShell versions listed in `versions.env`, then run
+`task setup`. You also need `curl`, which is used by the setup script and
+optional Moxfield HTTP fallback.
 
 ### Common Workflows
 

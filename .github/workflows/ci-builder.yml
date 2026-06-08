@@ -1,0 +1,68 @@
+name: CI Builder Image
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - .github/docker/**
+      - .github/workflows/ci-builder.yml
+      - scripts/install-linux-native-deps.sh
+      - versions.env
+      - global.json
+      - dotnet-tools.json
+  pull_request:
+    branches: [ main ]
+    paths:
+      - .github/docker/**
+      - .github/workflows/ci-builder.yml
+      - scripts/install-linux-native-deps.sh
+      - versions.env
+      - global.json
+      - dotnet-tools.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/mtg-mcp-ci-builder
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read builder versions
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source versions.env
+          set +a
+          echo "base=${CI_IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build builder image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .github/docker/ci-builder.Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          build-args: |
+            CI_IMAGE_BASE=${{ steps.versions.outputs.base }}

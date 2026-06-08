@@ -1,0 +1,12 @@
+.git
+.github/docker/ci-builder.Dockerfile.dockerignore
+artifacts
+bin
+obj
+**/bin
+**/obj
+.tools
+.dotnet
+.dotnet-home
+.nuget
+.msbuild

@@ -20,13 +20,12 @@ if ([string]::IsNullOrWhiteSpace($repoRoot)) {
 
 function Get-VersionValue {
     param(
-        [Parameter(Mandatory = $true)][string] $Name,
-        [Parameter(Mandatory = $true)][string] $DefaultValue
+        [Parameter(Mandatory = $true)][string] $Name
     )
 
     $versionsPath = Join-Path $repoRoot "versions.env"
     if (-not (Test-Path -LiteralPath $versionsPath)) {
-        return $DefaultValue
+        throw "versions.env was not found at $versionsPath."
     }
 
     foreach ($line in Get-Content -LiteralPath $versionsPath) {
@@ -41,11 +40,11 @@ function Get-VersionValue {
         }
     }
 
-    return $DefaultValue
+    throw "$Name is missing from versions.env."
 }
 
 if ([string]::IsNullOrWhiteSpace($TaskVersion)) {
-    $TaskVersion = Get-VersionValue -Name "GO_TASK_VERSION" -DefaultValue "3.51.1"
+    $TaskVersion = Get-VersionValue -Name "GO_TASK_VERSION"
 }
 
 function Get-TaskArchitecture {
@@ -58,16 +57,30 @@ function Get-TaskArchitecture {
     }
 }
 
+function Test-TaskVersion {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path
+    )
+
+    try {
+        $actualVersion = (& $Path --version 2>$null).Trim()
+        return $actualVersion -eq $TaskVersion
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-TaskCommand {
     $taskCommand = Get-Command task -ErrorAction SilentlyContinue
-    if ($null -ne $taskCommand) {
+    if ($null -ne $taskCommand -and (Test-TaskVersion -Path $taskCommand.Source)) {
         return $taskCommand.Source
     }
 
     $architecture = Get-TaskArchitecture
     $taskDir = Join-Path $repoRoot ".tools\task\v$TaskVersion\windows-$architecture"
     $taskPath = Join-Path $taskDir "task.exe"
-    if (Test-Path -LiteralPath $taskPath) {
+    if ((Test-Path -LiteralPath $taskPath) -and (Test-TaskVersion -Path $taskPath)) {
         return $taskPath
     }
 

@@ -21,26 +21,25 @@ xdg_cache_home="${XDG_CACHE_HOME:-$repo_root/.local/cache}"
 xdg_config_home="${XDG_CONFIG_HOME:-$repo_root/.local/config}"
 xdg_data_home="${XDG_DATA_HOME:-$repo_root/.local/share}"
 versions_file="$repo_root/versions.env"
-default_task_version="3.51.1"
-if [[ -f "$versions_file" ]]; then
-    configured_task_version="$(sed -n 's/^GO_TASK_VERSION=//p' "$versions_file" | head -n 1)"
-    if [[ -n "$configured_task_version" ]]; then
-        default_task_version="$configured_task_version"
-    fi
-fi
-
-task_version="${TASK_VERSION:-$default_task_version}"
-powershell_version="${POWERSHELL_VERSION:-7.6.2}"
-sdk_version="${DOTNET_SDK_VERSION:-}"
-
-if [[ -z "$sdk_version" ]]; then
-    sdk_version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$repo_root/global.json" | head -n 1)"
-fi
-
-if [[ -z "$sdk_version" ]]; then
-    echo "Could not determine the required .NET SDK version from global.json." >&2
+if [[ ! -f "$versions_file" ]]; then
+    echo "versions.env was not found at $versions_file." >&2
     exit 1
 fi
+
+set -a
+source "$versions_file"
+set +a
+
+task_version="${TASK_VERSION:-${GO_TASK_VERSION:-}}"
+powershell_version="${POWERSHELL_VERSION:-}"
+sdk_version="${DOTNET_SDK_VERSION:-}"
+
+if [[ -z "$task_version" || -z "$powershell_version" || -z "$sdk_version" ]]; then
+    echo "GO_TASK_VERSION, POWERSHELL_VERSION, and DOTNET_SDK_VERSION must be set in versions.env." >&2
+    exit 1
+fi
+
+bash "$script_dir/install-linux-native-deps.sh"
 
 mkdir -p \
     "$dotnet_dir" \

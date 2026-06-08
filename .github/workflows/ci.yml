@@ -7,11 +7,20 @@ on:
 permissions:
   contents: read
   actions: read
+  packages: read
   security-events: write
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/mtg-mcp-ci-builder:main
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Check out repository
@@ -19,18 +28,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Use image .NET for Taskfile
+        run: |
+          mkdir -p .dotnet
+          ln -sf "$(command -v dotnet)" .dotnet/dotnet
+
       - name: Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
-
-      - name: Set up Task
-        uses: go-task/setup-task@v2
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
