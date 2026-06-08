@@ -74,13 +74,13 @@ function Invoke-VerifyGates {
 
 function Get-ClassCoverageRate {
     param(
-        [Parameter(Mandatory = $true)] [object[]] $Classes,
+        [object[]] $Classes,
         [Parameter(Mandatory = $true)] [string] $Gate
     )
 
     $matchedClasses = @($Classes | Where-Object { Test-ClassMatchesGate -ClassNode $_ -Gate $Gate })
     if ($matchedClasses.Count -eq 0) {
-        throw "Coverage package not found in report: $Gate"
+        throw "Coverage package not found in report: $Gate. Report contains $($Classes.Count) class nodes."
     }
 
     $coveredLines = 0
