@@ -50,7 +50,7 @@ function Invoke-VerifyGates {
     $classes = @($coverage.SelectNodes("//*[local-name()='class']"))
 
     foreach ($gate in $gates) {
-        $package = @($packages | Where-Object { $_.GetAttribute("name") -eq $gate }) | Select-Object -First 1
+        $package = @($packages | Where-Object { Test-PackageMatchesGate -PackageNode $_ -Gate $gate }) | Select-Object -First 1
         if ($null -ne $package) {
             $rate = [double]::Parse($package.GetAttribute("line-rate"), $culture) * 100.0
         }
@@ -99,6 +99,19 @@ function Get-ClassCoverageRate {
     }
 
     return ($coveredLines / $coverableLines) * 100.0
+}
+
+function Test-PackageMatchesGate {
+    param(
+        [Parameter(Mandatory = $true)] [System.Xml.XmlElement] $PackageNode,
+        [Parameter(Mandatory = $true)] [string] $Gate
+    )
+
+    $packageName = $PackageNode.GetAttribute("name").Replace("\", "/")
+    return $packageName -eq $Gate -or
+        $packageName.EndsWith(".$Gate", [System.StringComparison]::OrdinalIgnoreCase) -or
+        $packageName.IndexOf("/$Gate/", [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+        $packageName.IndexOf($Gate, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 
 function Test-ClassMatchesGate {
