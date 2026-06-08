@@ -47,14 +47,17 @@ function Invoke-VerifyGates {
     $failed = $false
     $culture = [System.Globalization.CultureInfo]::InvariantCulture
     $packages = @($coverage.SelectNodes("/coverage/packages/package"))
+    $classes = @($coverage.SelectNodes("//class"))
 
     foreach ($gate in $gates) {
         $package = @($packages | Where-Object { $_.GetAttribute("name") -eq $gate }) | Select-Object -First 1
-        if ($null -eq $package) {
-            throw "Coverage package not found in report: $gate"
+        if ($null -ne $package) {
+            $rate = [double]::Parse($package.GetAttribute("line-rate"), $culture) * 100.0
+        }
+        else {
+            $rate = Get-ClassCoverageRate -Classes $classes -Gate $gate
         }
 
-        $rate = [double]::Parse($package.GetAttribute("line-rate"), $culture) * 100.0
         $rateText = $rate.ToString("0.00", $culture)
         Write-Host "${gate}: $rateText% line coverage"
 
@@ -67,6 +70,53 @@ function Invoke-VerifyGates {
     if ($failed) {
         throw "Coverage gates failed."
     }
+}
+
+function Get-ClassCoverageRate {
+    param(
+        [Parameter(Mandatory = $true)] [object[]] $Classes,
+        [Parameter(Mandatory = $true)] [string] $Gate
+    )
+
+    $matchedClasses = @($Classes | Where-Object { Test-ClassMatchesGate -ClassNode $_ -Gate $Gate })
+    if ($matchedClasses.Count -eq 0) {
+        throw "Coverage package not found in report: $Gate"
+    }
+
+    $coveredLines = 0
+    $coverableLines = 0
+    foreach ($class in $matchedClasses) {
+        foreach ($line in @($class.SelectNodes("lines/line"))) {
+            $coverableLines++
+            if ([int]::Parse($line.GetAttribute("hits"), [System.Globalization.CultureInfo]::InvariantCulture) -gt 0) {
+                $coveredLines++
+            }
+        }
+    }
+
+    if ($coverableLines -eq 0) {
+        throw "Coverage package has no coverable lines in report: $Gate"
+    }
+
+    return ($coveredLines / $coverableLines) * 100.0
+}
+
+function Test-ClassMatchesGate {
+    param(
+        [Parameter(Mandatory = $true)] [System.Xml.XmlElement] $ClassNode,
+        [Parameter(Mandatory = $true)] [string] $Gate
+    )
+
+    $className = $ClassNode.GetAttribute("name")
+    if ($className -eq $Gate -or $className.StartsWith("$Gate.", [System.StringComparison]::Ordinal)) {
+        return $true
+    }
+
+    $filename = $ClassNode.GetAttribute("filename").Replace("\", "/")
+    $relativePrefix = "src/$Gate/"
+    $pathSegment = "/$relativePrefix"
+    return $filename.StartsWith($relativePrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $filename.IndexOf($pathSegment, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 
 switch ($Action) {
