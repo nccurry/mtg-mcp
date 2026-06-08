@@ -15,6 +15,7 @@ packages=(
     libicu-dev
     libssl-dev
     libstdc++6
+    libxml2
     tar
     tzdata
     unzip
