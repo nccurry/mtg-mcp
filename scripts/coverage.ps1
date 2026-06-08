@@ -46,8 +46,8 @@ function Invoke-VerifyGates {
 
     $failed = $false
     $culture = [System.Globalization.CultureInfo]::InvariantCulture
-    $packages = @($coverage.SelectNodes("/coverage/packages/package"))
-    $classes = @($coverage.SelectNodes("//class"))
+    $packages = @($coverage.SelectNodes("/*[local-name()='coverage']/*[local-name()='packages']/*[local-name()='package']"))
+    $classes = @($coverage.SelectNodes("//*[local-name()='class']"))
 
     foreach ($gate in $gates) {
         $package = @($packages | Where-Object { $_.GetAttribute("name") -eq $gate }) | Select-Object -First 1
@@ -86,7 +86,7 @@ function Get-ClassCoverageRate {
     $coveredLines = 0
     $coverableLines = 0
     foreach ($class in $matchedClasses) {
-        foreach ($line in @($class.SelectNodes("lines/line"))) {
+        foreach ($line in @($class.SelectNodes("*[local-name()='lines']/*[local-name()='line']"))) {
             $coverableLines++
             if ([int]::Parse($line.GetAttribute("hits"), [System.Globalization.CultureInfo]::InvariantCulture) -gt 0) {
                 $coveredLines++
