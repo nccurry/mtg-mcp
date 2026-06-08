@@ -26,7 +26,7 @@ public sealed partial class ArchidektGateway
     private const int CardMutationBatchSize = 50;
 
     /// <summary>
-    /// Persists the cards.
+    /// Persists added, modified, and removed workspace cards to the bound Archidekt deck.
     /// </summary>
     public async Task PersistCardsAsync(
         DeckWorkspace workspace,
@@ -378,11 +378,27 @@ public sealed partial class ArchidektGateway
         foreach (IGrouping<string, DeckCard> group in unresolvedGroups)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            string? cachedId = await TryGetCachedArchidektCardIdAsync(group.First(), cancellationToken)
+                .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(cachedId))
+            {
+                foreach (DeckCard card in group)
+                {
+                    card.ArchidektCardId = cachedId;
+                    card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution] = "cache";
+                }
+
+                continue;
+            }
+
             string resolvedId = await ResolveArchidektCardIdAsync(group.First(), cancellationToken)
+                .ConfigureAwait(false);
+            await StoreCachedArchidektCardIdAsync(group.First(), resolvedId, cancellationToken)
                 .ConfigureAwait(false);
             foreach (DeckCard card in group)
             {
                 card.ArchidektCardId = resolvedId;
+                card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution] = "resolved";
             }
         }
     }
@@ -404,7 +420,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Resolves the archidekt card id.
+    /// Resolves a workspace card to the Archidekt print id accepted by card mutation calls.
     /// </summary>
     private async Task<string> ResolveArchidektCardIdAsync(
         DeckCard card,
@@ -472,5 +488,171 @@ public sealed partial class ArchidektGateway
             && !string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber)
             && card.Snapshot.Set.Equals(set, StringComparison.OrdinalIgnoreCase)
             && card.Snapshot.CollectorNumber.Equals(collector, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reads a cached Archidekt card id for any stable key on the card.
+    /// </summary>
+    private async Task<string?> TryGetCachedArchidektCardIdAsync(
+        DeckCard card,
+        CancellationToken cancellationToken)
+    {
+        await cardIdCacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Dictionary<string, string> cache = await LoadCardIdCacheAsync(cancellationToken)
+                .ConfigureAwait(false);
+            foreach (string key in GetArchidektCardIdCacheKeys(card))
+            {
+                if (cache.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            cardIdCacheLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Stores a resolved Archidekt card id under every stable key available for the card.
+    /// </summary>
+    private async Task StoreCachedArchidektCardIdAsync(
+        DeckCard card,
+        string archidektCardId,
+        CancellationToken cancellationToken)
+    {
+        await cardIdCacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Dictionary<string, string> cache = await LoadCardIdCacheAsync(cancellationToken)
+                .ConfigureAwait(false);
+            bool changed = false;
+            foreach (string key in GetArchidektCardIdCacheKeys(card))
+            {
+                if (!cache.TryGetValue(key, out string? existing)
+                    || !existing.Equals(archidektCardId, StringComparison.OrdinalIgnoreCase))
+                {
+                    cache[key] = archidektCardId;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                await SaveCardIdCacheAsync(cache, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            cardIdCacheLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Loads the persistent card-id cache, treating missing or malformed files as empty.
+    /// </summary>
+    private async Task<Dictionary<string, string>> LoadCardIdCacheAsync(CancellationToken cancellationToken)
+    {
+        if (cardIdCache is not null)
+        {
+            return cardIdCache;
+        }
+
+        string path = GetCardIdCacheFilePath();
+        if (!File.Exists(path))
+        {
+            cardIdCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            return cardIdCache;
+        }
+
+        try
+        {
+            await using FileStream stream = File.OpenRead(path);
+            Dictionary<string, string>? loaded = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(
+                    stream,
+                    SerializerOptions,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            cardIdCache = loaded is null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(loaded, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception exception) when (
+            exception is IOException
+            || exception is UnauthorizedAccessException
+            || exception is JsonException)
+        {
+            cardIdCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return cardIdCache;
+    }
+
+    /// <summary>
+    /// Saves the card-id cache used to avoid repeated Archidekt print searches.
+    /// </summary>
+    private async Task SaveCardIdCacheAsync(
+        Dictionary<string, string> cache,
+        CancellationToken cancellationToken)
+    {
+        string path = GetCardIdCacheFilePath();
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        await using FileStream stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, cache, SerializerOptions, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Chooses the configured cache path or the user's local mtg-mcp cache file.
+    /// </summary>
+    private string GetCardIdCacheFilePath()
+    {
+        if (!string.IsNullOrWhiteSpace(options.CardIdCacheFile))
+        {
+            return options.CardIdCacheFile;
+        }
+
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            localAppData = AppContext.BaseDirectory;
+        }
+
+        return Path.Combine(localAppData, "mtg-mcp", "archidekt-card-ids.json");
+    }
+
+    /// <summary>
+    /// Builds stable lookup keys for a card's Scryfall id, printed set number, and name.
+    /// </summary>
+    private static List<string> GetArchidektCardIdCacheKeys(DeckCard card)
+    {
+        List<string> keys = [];
+        if (!string.IsNullOrWhiteSpace(card.ScryfallId))
+        {
+            keys.Add($"scryfall:{card.ScryfallId}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(card.Snapshot.Set)
+            && !string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber))
+        {
+            keys.Add($"print:{card.Snapshot.Set}:{card.Snapshot.CollectorNumber}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(card.Name))
+        {
+            keys.Add($"name:{card.Name}");
+        }
+
+        return keys;
     }
 }

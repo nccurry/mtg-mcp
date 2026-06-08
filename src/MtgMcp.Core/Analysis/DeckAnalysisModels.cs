@@ -305,6 +305,26 @@ public sealed class DeckCostAnalysis
     public decimal IncludedTotal { get; set; }
 
     /// <summary>
+    /// Optional budget ceiling used to classify the known included total.
+    /// </summary>
+    public decimal? MaxBudget { get; set; }
+
+    /// <summary>
+    /// Indicates whether known included prices fit under the requested budget when one was supplied.
+    /// </summary>
+    public bool? WithinBudget { get; set; }
+
+    /// <summary>
+    /// Difference between max budget and known included total; positive values are remaining budget.
+    /// </summary>
+    public decimal? BudgetDelta { get; set; }
+
+    /// <summary>
+    /// Compact budget status such as unknown, under-budget, at-budget, or over-budget.
+    /// </summary>
+    public string BudgetStatus { get; set; } = "unknown";
+
+    /// <summary>
     /// Gets or sets the maybeboard total.
     /// </summary>
     public decimal MaybeboardTotal { get; set; }
@@ -318,6 +338,11 @@ public sealed class DeckCostAnalysis
     /// Gets or sets the missing price cards.
     /// </summary>
     public List<string> MissingPriceCards { get; set; } = [];
+
+    /// <summary>
+    /// Budget and pricing caveats that should increase, not reduce, confidence risk.
+    /// </summary>
+    public List<string> PriceRiskNotes { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the top cost drivers.
@@ -554,6 +579,16 @@ public sealed class ManaBaseAnalysis
     /// Gets or sets the tapped land count.
     /// </summary>
     public int TappedLandCount { get; set; }
+
+    /// <summary>
+    /// Lands that appear to always enter tapped.
+    /// </summary>
+    public int AlwaysTappedLandCount { get; set; }
+
+    /// <summary>
+    /// Lands that may enter untapped when a condition is met.
+    /// </summary>
+    public int ConditionalTappedLandCount { get; set; }
 
     /// <summary>
     /// Gets or sets the untapped land count.

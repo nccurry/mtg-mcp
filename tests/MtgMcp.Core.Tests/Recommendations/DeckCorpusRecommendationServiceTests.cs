@@ -117,6 +117,54 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that commander candidate discovery applies source-call bounds and reports partial failures.
+    /// </summary>
+    [Fact]
+    public async Task SearchCommanderCandidates_BoundsEdhrecFetchesAndReportsFailures()
+    {
+        FakeCardCatalog catalog = new();
+        CommanderCandidateCorpusProvider provider = new(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Alesha, Who Smiles at Death"] = 2_200,
+                ["Tatyova, Benthic Druid"] = 4_500,
+                ["Roon of the Hidden Realm"] = 2_800,
+            },
+            failingCommanders: ["Glissa Sunslayer"]);
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            catalog,
+            corpusSignalProviders: [provider]);
+
+        CommanderCandidateSearchResult result = await service.SearchCommanderCandidatesAsync(
+            colorIdentity: "brw",
+            exactColorIdentity: true,
+            minEligibleDecks: 1_500,
+            maxEligibleDecks: 3_500,
+            limit: 5,
+            scryfallCandidateCap: 2000,
+            edhrecFetchCap: 3,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.ColorIdentity.Should().Be("WBR");
+        result.ScryfallCandidateCap.Should().Be(200);
+        result.ScryfallCandidatesInspected.Should().Be(4);
+        result.EdhrecFetchCap.Should().Be(3);
+        result.EdhrecFetchesAttempted.Should().Be(3);
+        result.Commanders.Should().ContainSingle().Which.CommanderName.Should().Be("Alesha, Who Smiles at Death");
+        result.Notes.Should().Contain(note => note.Contains("EDHREC failed", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("Glissa Sunslayer", StringComparison.OrdinalIgnoreCase)
+            && note.Contains("unavailable", StringComparison.OrdinalIgnoreCase));
+        result.Notes.Should().Contain(note => note.Contains("fetch cap", StringComparison.OrdinalIgnoreCase));
+        catalog.SearchQueries.Should().Contain("CommanderCandidates:WBR:True");
+        provider.Queries.Select(query => query.Commander).Should().Equal(
+            "Alesha, Who Smiles at Death",
+            "Tatyova, Benthic Druid",
+            "Glissa Sunslayer");
+    }
+
+    /// <summary>
     /// Verifies that the win-condition bundle honors multiple requested aggregate sources separately.
     /// </summary>
     [Fact]
@@ -845,6 +893,95 @@ public sealed partial class DeckIntelligenceTests
             }
 
             return Task.FromResult(report);
+        }
+    }
+
+    /// <summary>
+    /// Provides commander aggregate counts for commander candidate discovery tests.
+    /// </summary>
+    private sealed class CommanderCandidateCorpusProvider : ICorpusSignalProvider
+    {
+        /// <summary>
+        /// Stores eligible deck counts by commander name.
+        /// </summary>
+        private readonly IReadOnlyDictionary<string, int> counts;
+
+        /// <summary>
+        /// Stores commander names that should fail lookup.
+        /// </summary>
+        private readonly HashSet<string> failingCommanders;
+
+        /// <summary>
+        /// Creates a candidate corpus provider.
+        /// </summary>
+        public CommanderCandidateCorpusProvider(
+            IReadOnlyDictionary<string, int> counts,
+            IReadOnlyList<string> failingCommanders)
+        {
+            this.counts = counts;
+            this.failingCommanders = failingCommanders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Gets queries observed by the fake provider.
+        /// </summary>
+        public List<CorpusSignalQuery> Queries { get; } = [];
+
+        /// <summary>
+        /// Gets fake EDHREC source status.
+        /// </summary>
+        public CorpusSourceStatus GetStatus()
+        {
+            return new CorpusSourceStatus
+            {
+                Key = "edhrec",
+                Name = "EDHREC",
+                Kind = "commander-aggregate",
+                Enabled = true,
+                StableApi = false,
+                Status = CorpusSourceStatuses.Available,
+                Uri = "https://edhrec.com/"
+            };
+        }
+
+        /// <summary>
+        /// Gets fake commander aggregate evidence.
+        /// </summary>
+        public Task<CorpusSignalReport> GetSignalsAsync(
+            CorpusSignalQuery query,
+            RecommendationAnalysisBudget budget,
+            CancellationToken cancellationToken)
+        {
+            Queries.Add(query);
+            string commander = query.Commander ?? "";
+            if (failingCommanders.Contains(commander))
+            {
+                throw new InvalidOperationException("EDHREC shape changed.");
+            }
+
+            if (!counts.TryGetValue(commander, out int count))
+            {
+                return Task.FromResult(new CorpusSignalReport { Sources = [GetStatus()] });
+            }
+
+            return Task.FromResult(new CorpusSignalReport
+            {
+                Sources = [GetStatus()],
+                Signals =
+                [
+                    new CardCorpusSignal
+                    {
+                        CardName = "Sol Ring",
+                        Source = "EDHREC",
+                        SignalType = CorpusSignalTypes.Inclusion,
+                        Section = "top-cards",
+                        Score = 1,
+                        DeckCount = Math.Max(1, count / 2),
+                        EligibleDeckCount = count,
+                        Uri = $"https://edhrec.test/commanders/{Uri.EscapeDataString(commander)}",
+                    }
+                ]
+            });
         }
     }
 

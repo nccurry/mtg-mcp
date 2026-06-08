@@ -284,6 +284,17 @@ public static class DeckImportProviders
 }
 
 /// <summary>
+/// Provides well-known metadata keys stored on workspace cards.
+/// </summary>
+public static class DeckCardMetadataKeys
+{
+    /// <summary>
+    /// Stores how an Archidekt card id was resolved.
+    /// </summary>
+    public const string ArchidektCardIdResolution = "archidektCardIdResolution";
+}
+
+/// <summary>
 /// Provides a compact response for opening a workspace through MCP.
 /// </summary>
 public sealed class DeckOpenResult
@@ -481,6 +492,31 @@ public sealed class ArchidektCopyResult
     /// Gets or sets copied category names.
     /// </summary>
     public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Latest copy phase reached before the result was returned.
+    /// </summary>
+    public string CopyPhase { get; set; } = "initialized";
+
+    /// <summary>
+    /// Estimated number of Archidekt HTTP requests needed for this copy attempt.
+    /// </summary>
+    public int EstimatedArchidektRequests { get; set; }
+
+    /// <summary>
+    /// Copied cards whose Archidekt ids were supplied by the local resolution cache.
+    /// </summary>
+    public int CardIdCacheHits { get; set; }
+
+    /// <summary>
+    /// Copied cards whose Archidekt ids were resolved through Archidekt during this copy.
+    /// </summary>
+    public int CardIdsResolved { get; set; }
+
+    /// <summary>
+    /// Copied cards that still lacked Archidekt card ids after resolution.
+    /// </summary>
+    public int MissingArchidektCardIds { get; set; }
 
     /// <summary>
     /// Gets or sets commander names detected in the source workspace.

@@ -348,6 +348,38 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that commander candidate requests translate to Scryfall commander and color filters.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_TranslatesCommanderCandidateRequest()
+    {
+        string query = "(is:commander or (t:legendary t:creature)) legal:commander ci=WBR";
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect($"https://api.scryfall.test/cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "1", "name": "Alesha, Who Smiles at Death", "type_line": "Legendary Creature" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            CardSearchRequest.CommanderCandidates("brw", exactColorIdentity: true),
+            10,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Alesha, Who Smiles at Death");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that get rulings fetches named card then rulings.
     /// </summary>
     [Fact]

@@ -77,6 +77,7 @@ public sealed class McpSurfaceTests
             "commander_get_aggregate_cards",
             "commander_get_tags",
             "commander_get_win_condition_evidence",
+            "commander_search_candidates",
             "combo_get_details",
             "combo_search_by_card",
             "deck_add_card",
@@ -91,6 +92,8 @@ public sealed class McpSurfaceTests
             "deck_analyze_mana",
             "deck_analyze_performance",
             "deck_analyze_structure",
+            "deck_batch_tuning_report",
+            "deck_compare_goldfish",
             "deck_create_category",
             "deck_delete_category",
             "deck_estimate_commander_bracket",
@@ -494,6 +497,9 @@ public sealed class McpSurfaceTests
         CustomAttributeData performance = GetToolAttribute(nameof(SimulationTools.AnalyzeDeckPerformanceAsync));
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
         CustomAttributeData compareGoldfish = GetToolAttribute(nameof(SimulationTools.CompareArchidektGoldfishAsync));
+        CustomAttributeData deckCompareGoldfish = GetToolAttribute(nameof(SimulationTools.CompareGoldfishAsync));
+        CustomAttributeData commanderCandidates = GetToolAttribute(nameof(RecommendationTools.SearchCommanderCandidatesAsync));
+        CustomAttributeData batchTuning = GetToolAttribute(nameof(RecommendationTools.BuildBatchTuningReportAsync));
         CustomAttributeData queryCards = GetToolAttribute(nameof(RecommendationTools.QueryCardsForDeckAsync));
         CustomAttributeData scoreMeta = GetToolAttribute(nameof(RecommendationTools.ScoreCardsForPlaygroupMetaAsync));
         CustomAttributeData createExplicitPlan = GetToolAttribute(nameof(PlanTools.CreateDeckPlanFromExplicitChangesAsync));
@@ -528,6 +534,12 @@ public sealed class McpSurfaceTests
         GetNamedBool(comparePerformance, "OpenWorld").Should().BeTrue();
         GetNamedBool(compareGoldfish, "ReadOnly").Should().BeTrue();
         GetNamedBool(compareGoldfish, "OpenWorld").Should().BeTrue();
+        GetNamedBool(deckCompareGoldfish, "ReadOnly").Should().BeTrue();
+        GetNamedBool(deckCompareGoldfish, "OpenWorld").Should().BeTrue();
+        GetNamedBool(commanderCandidates, "ReadOnly").Should().BeTrue();
+        GetNamedBool(commanderCandidates, "OpenWorld").Should().BeTrue();
+        GetNamedBool(batchTuning, "ReadOnly").Should().BeTrue();
+        GetNamedBool(batchTuning, "OpenWorld").Should().BeTrue();
         GetNamedBool(queryCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(queryCards, "OpenWorld").Should().BeTrue();
         GetNamedBool(scoreMeta, "ReadOnly").Should().BeTrue();

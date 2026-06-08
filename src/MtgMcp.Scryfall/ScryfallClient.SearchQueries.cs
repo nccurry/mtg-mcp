@@ -18,6 +18,7 @@ public sealed partial class ScryfallClient
         {
             CardSearchPreset.RawQuery => BuildRawSearchQuery(request, format),
             CardSearchPreset.CommanderGameChangers => "is:game-changer",
+            CardSearchPreset.CommanderCandidates => BuildCommanderCandidateQuery(request, format),
             CardSearchPreset.Role => BuildRoleSearchQuery(request.Role, format, request.MaxPrice),
             CardSearchPreset.CommanderProtectionEquipment =>
                 BuildFilteredQuery("(o:equipped o:hexproof or o:equipped o:shroud or (o:target o:creature o:hexproof) or (o:permanents o:control o:hexproof))", format, request.MaxPrice),
@@ -55,6 +56,25 @@ public sealed partial class ScryfallClient
             CardSearchPreset.RecentCards => BuildRecentSearchQuery(request, format),
             _ => BuildFilteredQuery("", format, request.MaxPrice)
         };
+    }
+
+    /// <summary>
+    /// Builds a legal commander search query with optional color-identity filtering.
+    /// </summary>
+    private static string BuildCommanderCandidateQuery(CardSearchRequest request, string format)
+    {
+        List<string> parts =
+        [
+            "(is:commander or (t:legendary t:creature))",
+            $"legal:{format}"
+        ];
+        string colors = NormalizeColorIdentity(request.ColorIdentity);
+        if (!string.IsNullOrWhiteSpace(colors))
+        {
+            parts.Add(request.ExactColorIdentity ? $"ci={colors}" : $"ci<={colors}");
+        }
+
+        return string.Join(' ', parts);
     }
 
     /// <summary>
@@ -199,6 +219,28 @@ public sealed partial class ScryfallClient
             "edh" => "commander",
             _ => normalized
         };
+    }
+
+    /// <summary>
+    /// Normalizes color identity text to Scryfall's WUBRG order.
+    /// </summary>
+    private static string NormalizeColorIdentity(string? colorIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(colorIdentity))
+        {
+            return "";
+        }
+
+        List<char> colors = [];
+        foreach (char color in "WUBRG")
+        {
+            if (colorIdentity.Contains(color, StringComparison.OrdinalIgnoreCase))
+            {
+                colors.Add(color);
+            }
+        }
+
+        return new string(colors.ToArray());
     }
 
     /// <summary>

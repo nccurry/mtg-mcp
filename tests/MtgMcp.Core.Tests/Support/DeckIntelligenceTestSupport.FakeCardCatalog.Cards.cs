@@ -310,6 +310,58 @@ public sealed partial class DeckIntelligenceTests
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
                 },
+                "Alesha, Who Smiles at Death" => new CardInfo
+                {
+                    Id = "alesha-who-smiles-at-death",
+                    OracleId = "oracle-alesha",
+                    Name = "Alesha, Who Smiles at Death",
+                    ManaCost = "{2}{R}",
+                    ManaValue = 3,
+                    TypeLine = "Legendary Creature - Human Warrior",
+                    OracleText = "Whenever Alesha attacks, you may return a small creature from your graveyard to the battlefield.",
+                    ColorIdentity = ["W", "B", "R"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
+                },
+                "Tatyova, Benthic Druid" => new CardInfo
+                {
+                    Id = "tatyova-benthic-druid",
+                    OracleId = "oracle-tatyova",
+                    Name = "Tatyova, Benthic Druid",
+                    ManaCost = "{3}{G}{U}",
+                    ManaValue = 5,
+                    TypeLine = "Legendary Creature - Merfolk Druid",
+                    OracleText = "Whenever a land enters the battlefield under your control, you gain 1 life and draw a card.",
+                    ColorIdentity = ["G", "U"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                },
+                "Glissa Sunslayer" => new CardInfo
+                {
+                    Id = "glissa-sunslayer",
+                    OracleId = "oracle-glissa",
+                    Name = "Glissa Sunslayer",
+                    ManaCost = "{1}{B}{G}",
+                    ManaValue = 3,
+                    TypeLine = "Legendary Creature - Phyrexian Zombie Elf",
+                    OracleText = "Whenever Glissa deals combat damage to a player, choose one.",
+                    ColorIdentity = ["B", "G"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
+                },
+                "Roon of the Hidden Realm" => new CardInfo
+                {
+                    Id = "roon-of-the-hidden-realm",
+                    OracleId = "oracle-roon",
+                    Name = "Roon of the Hidden Realm",
+                    ManaCost = "{2}{G}{W}{U}",
+                    ManaValue = 5,
+                    TypeLine = "Legendary Creature - Rhino Soldier",
+                    OracleText = "Exile another target creature. Return that card to the battlefield under its owner's control.",
+                    ColorIdentity = ["G", "W", "U"],
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.50" }
+                },
                 _ => new CardInfo
                 {
                     Id = name.ToLowerInvariant().Replace(' ', '-'),

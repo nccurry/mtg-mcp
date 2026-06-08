@@ -79,6 +79,16 @@ public sealed partial class DeckIntelligenceTests
 
                 results = [new CardSearchResult { Name = "Mana Crypt" }];
             }
+            else if (query.Contains("commander-candidates", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "Alesha, Who Smiles at Death" },
+                    new CardSearchResult { Name = "Tatyova, Benthic Druid" },
+                    new CardSearchResult { Name = "Glissa Sunslayer" },
+                    new CardSearchResult { Name = "Roon of the Hidden Realm" }
+                ];
+            }
             else if (query.Contains("t:land", StringComparison.OrdinalIgnoreCase))
             {
                 results =
@@ -186,6 +196,7 @@ public sealed partial class DeckIntelligenceTests
             {
                 CardSearchPreset.RawQuery => request.RawQuery ?? "",
                 CardSearchPreset.CommanderGameChangers => "is:game-changer",
+                CardSearchPreset.CommanderCandidates => "commander-candidates",
                 CardSearchPreset.Role => RoleFixtureQuery(request.Role),
                 CardSearchPreset.CommanderProtectionEquipment => "hexproof shroud",
                 CardSearchPreset.CommanderProtectionSpell => "indestructible phase out",
@@ -237,6 +248,7 @@ public sealed partial class DeckIntelligenceTests
                 CardSearchPreset.RawQuery => request.RawQuery ?? "",
                 CardSearchPreset.Role => $"Role:{request.Role}",
                 CardSearchPreset.RecentCards => $"RecentCards:{request.Since:yyyy-MM-dd}",
+                CardSearchPreset.CommanderCandidates => $"CommanderCandidates:{request.ColorIdentity}:{request.ExactColorIdentity}",
                 _ => request.Preset.ToString()
             };
         }

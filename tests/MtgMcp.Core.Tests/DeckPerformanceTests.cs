@@ -790,6 +790,19 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies that conditional tapped lands still count as early untapped sources in performance modeling.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_TreatsConditionalTappedLandsAsEarlyUntappedSources()
+    {
+        DeckPerformanceAnalysis conditional = AnalyzeDirect(CreateConditionalBlueLandDeck(), maxTurn: 1, seed: 16);
+        DeckPerformanceAnalysis alwaysTapped = AnalyzeDirect(CreateMonoBlueLandDeck(tapped: true), maxTurn: 1, seed: 16);
+
+        ColorProbability(conditional, "U", 1).Should().BeGreaterThan(0.90);
+        ColorProbability(alwaysTapped, "U", 1).Should().BeLessThan(0.10);
+    }
+
+    /// <summary>
     /// Verifies that probability rows are bounded and confidence intervals are coherent.
     /// </summary>
     [Fact]
@@ -1409,6 +1422,38 @@ public sealed class DeckPerformanceTests
                     tapped ? "Tapped Island enters tapped." : "",
                     ["U"],
                     ["U"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a mono-blue deck whose lands can enter untapped after paying or meeting a condition.
+    /// </summary>
+    private static DeckWorkspace CreateConditionalBlueLandDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Conditional Blue Oracle",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Blue Commander", 1, DeckRoles.Commander, "Creature - Wizard", "{2}{U}", 3, "", ["U"]),
+                Card(
+                    "Watery Grave",
+                    99,
+                    DeckDefaults.Mainboard,
+                    "Land - Island Swamp",
+                    null,
+                    0,
+                    "As Watery Grave enters, you may pay 2 life. If you don't, it enters tapped.",
+                    ["U", "B"],
+                    ["U", "B"]),
             ],
         };
     }

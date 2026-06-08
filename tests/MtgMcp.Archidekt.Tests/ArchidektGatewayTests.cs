@@ -407,7 +407,11 @@ public sealed class ArchidektGatewayTests
             { "results": [ { "id": 151147, "oracleCard": { "name": "Lightning Bolt" } } ] }
             """
         );
-        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """
+            { "cards": [ { "id": 77, "quantity": 1, "categories": ["Mainboard"], "card": { "id": 2, "oracleCard": { "name": "Sol Ring" } } } ] }
+            """);
         handler.Get(
             "api/decks/123/",
             """
@@ -530,6 +534,165 @@ public sealed class ArchidektGatewayTests
         using JsonDocument document = JsonDocument.Parse(body);
         document.RootElement.GetProperty("cards")[0].GetProperty("cardid").GetInt32().Should().Be(2);
         card.ArchidektCardId.Should().Be("2");
+    }
+
+    /// <summary>
+    /// Verifies that card-id resolution is persisted under Scryfall, print, and name keys.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_StoresResolvedCardIdCacheKeys()
+    {
+        string cacheFile = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", $"{Guid.NewGuid():N}.json");
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/cards/v2/?name=Sol%20Ring&pageSize=25",
+            """
+            { "results": [ { "id": 2, "uid": "scryfall-sol-ring", "setCode": "cmm", "collectorNumber": "400", "oracleCard": { "name": "Sol Ring" } } ] }
+            """);
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """
+            { "cards": [ { "id": 77, "quantity": 1, "categories": ["Mainboard"], "card": { "id": 2, "oracleCard": { "name": "Sol Ring" } } } ] }
+            """);
+        ArchidektGateway gateway = CreateAuthorizedGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                CardIdCacheFile = cacheFile,
+            });
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            ScryfallId = "scryfall-sol-ring",
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+            Snapshot = new CardSnapshot { Set = "cmm", CollectorNumber = "400" },
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        string cacheText = File.ReadAllText(cacheFile);
+        cacheText.Should().Contain("scryfall:scryfall-sol-ring");
+        cacheText.Should().Contain("print:cmm:400");
+        cacheText.Should().Contain("name:Sol Ring");
+        card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
+    }
+
+    /// <summary>
+    /// Verifies that duplicate unresolved cards share one Archidekt card search.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_ReusesResolvedCardIdForDuplicateCards()
+    {
+        string cacheFile = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", $"{Guid.NewGuid():N}.json");
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/cards/v2/?name=Sol%20Ring&pageSize=25",
+            """
+            { "results": [ { "id": 2, "uid": "scryfall-sol-ring", "setCode": "cmm", "collectorNumber": "400", "oracleCard": { "name": "Sol Ring" } } ] }
+            """);
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+        ArchidektGateway gateway = CreateAuthorizedGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                CardIdCacheFile = cacheFile,
+            });
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard mainboardCard = new()
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            ScryfallId = "scryfall-sol-ring",
+            ArchidektDeckRelationId = 11,
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+        };
+        DeckCard maybeboardCard = new()
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            ScryfallId = "scryfall-sol-ring",
+            ArchidektDeckRelationId = 12,
+            Categories = [DeckDefaults.Maybeboard],
+            PrimaryCategory = DeckDefaults.Maybeboard,
+        };
+
+        await gateway.PersistCardsAsync(
+            deck,
+            [mainboardCard, maybeboardCard],
+            [],
+            TestContext.Current.CancellationToken);
+
+        handler.Requests.Should().ContainSingle(request => request.Path.StartsWith("api/cards/v2/", StringComparison.Ordinal));
+        string body = handler.Requests.Single(request => request.Method == HttpMethod.Patch).Body;
+        using JsonDocument document = JsonDocument.Parse(body);
+        document.RootElement.GetProperty("cards").EnumerateArray()
+            .Should()
+            .OnlyContain(card => card.GetProperty("cardid").GetInt32() == 2);
+        mainboardCard.ArchidektCardId.Should().Be("2");
+        maybeboardCard.ArchidektCardId.Should().Be("2");
+        mainboardCard.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
+        maybeboardCard.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
+    }
+
+    /// <summary>
+    /// Verifies that cached card ids skip Archidekt card search requests.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_UsesCachedCardIdWithoutSearch()
+    {
+        string cacheFile = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", $"{Guid.NewGuid():N}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+        File.WriteAllText(cacheFile, """{ "scryfall:scryfall-sol-ring": "2" }""");
+        RecordingHandler handler = new();
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """
+            { "cards": [ { "id": 77, "quantity": 1, "categories": ["Mainboard"], "card": { "id": 2, "oracleCard": { "name": "Sol Ring" } } } ] }
+            """);
+        ArchidektGateway gateway = CreateAuthorizedGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                CardIdCacheFile = cacheFile,
+            });
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            ScryfallId = "scryfall-sol-ring",
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        handler.Requests.Should().NotContain(request => request.Path.StartsWith("api/cards/v2/", StringComparison.Ordinal));
+        handler.Requests.Should().ContainSingle(request => request.Method == HttpMethod.Patch);
+        card.ArchidektCardId.Should().Be("2");
+        card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("cache");
     }
 
     /// <summary>
@@ -1020,6 +1183,83 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that read-only imports attempt configured credentials for private Archidekt decks.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AuthenticatesReadOnlyImportWhenCredentialsAreConfigured()
+    {
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "access_token": "login-jwt", "user": { "id": 42 } }""");
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Private Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """);
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Username = "user",
+                Password = "pass",
+                EnableUsernamePasswordLogin = true,
+            });
+
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken);
+
+        deck.Name.Should().Be("Private Deck");
+        handler.Requests.Select(request => request.Path).Should().Equal(
+            "api/rest-auth/login/",
+            "api/decks/123/");
+        handler.Requests[1].Authorization.Should().Be("JWT login-jwt");
+    }
+
+    /// <summary>
+    /// Verifies that public read-only imports still work anonymously when no credentials are configured.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_AllowsAnonymousReadOnlyImportWithoutCredentials()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Public Deck",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """);
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions { BaseAddress = new Uri("https://archidekt.test/") });
+
+        DeckWorkspace deck = await gateway.ImportDeckAsync(
+            "123",
+            writeBack: false,
+            TestContext.Current.CancellationToken);
+
+        deck.Name.Should().Be("Public Deck");
+        handler.Requests.Should().ContainSingle();
+        handler.Requests[0].Authorization.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies that email-shaped usernames use Archidekt's browser login payload shape.
     /// </summary>
     [Fact]
@@ -1423,6 +1663,18 @@ public sealed class ArchidektGatewayTests
     {
         HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://archidekt.test/") };
 
+        return new ArchidektGateway(httpClient, Options.Create(options));
+    }
+
+    /// <summary>
+    /// Creates a gateway with supplied options and an existing auth header.
+    /// </summary>
+    private static ArchidektGateway CreateAuthorizedGateway(
+        RecordingHandler handler,
+        ArchidektOptions options)
+    {
+        HttpClient httpClient = new(handler) { BaseAddress = options.BaseAddress };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("JWT", "test-jwt");
         return new ArchidektGateway(httpClient, Options.Create(options));
     }
 

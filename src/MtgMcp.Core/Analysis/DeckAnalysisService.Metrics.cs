@@ -12,8 +12,20 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         string workspaceId,
         CancellationToken cancellationToken)
     {
+        return await AnalyzeDeckCostAsync(workspaceId, maxBudget: null, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Analyzes deck cost from locally cached card snapshots with an optional budget ceiling.
+    /// </summary>
+    public async Task<DeckCostAnalysis> AnalyzeDeckCostAsync(
+        string workspaceId,
+        decimal? maxBudget,
+        CancellationToken cancellationToken)
+    {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        return AnalyzeDeckCost(workspace);
+        return AnalyzeDeckCost(workspace, maxBudget);
     }
 
     /// <summary>

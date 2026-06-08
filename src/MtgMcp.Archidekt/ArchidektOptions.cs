@@ -39,6 +39,11 @@ public sealed class ArchidektOptions
     /// Gets or sets optional client-side pacing for Archidekt requests.
     /// </summary>
     public ArchidektRateLimitOptions RateLimit { get; set; } = new();
+
+    /// <summary>
+    /// Optional path for the persistent Archidekt card-id resolution cache.
+    /// </summary>
+    public string? CardIdCacheFile { get; set; }
 }
 
 /// <summary>
