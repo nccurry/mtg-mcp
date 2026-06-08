@@ -46,13 +46,15 @@ function Invoke-VerifyGates {
 
     $failed = $false
     $culture = [System.Globalization.CultureInfo]::InvariantCulture
+    $packages = @($coverage.SelectNodes("/coverage/packages/package"))
+
     foreach ($gate in $gates) {
-        $package = @($coverage.coverage.packages.package | Where-Object { $_.name -eq $gate }) | Select-Object -First 1
+        $package = @($packages | Where-Object { $_.GetAttribute("name") -eq $gate }) | Select-Object -First 1
         if ($null -eq $package) {
             throw "Coverage package not found in report: $gate"
         }
 
-        $rate = [double]::Parse([string] $package.'line-rate', $culture) * 100.0
+        $rate = [double]::Parse($package.GetAttribute("line-rate"), $culture) * 100.0
         $rateText = $rate.ToString("0.00", $culture)
         Write-Host "${gate}: $rateText% line coverage"
 
