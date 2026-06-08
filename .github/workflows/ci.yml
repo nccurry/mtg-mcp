@@ -57,6 +57,12 @@ jobs:
       - name: Generate coverage report
         run: task coverage:report
 
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: artifacts/coverage/codecov.cobertura.xml
+
       - name: Enforce coverage gates
         run: task coverage:gates
 
