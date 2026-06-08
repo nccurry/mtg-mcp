@@ -11,6 +11,7 @@ packages=(
     ca-certificates
     curl
     git
+    gnupg
     jq
     libicu-dev
     libssl-dev
