@@ -26,9 +26,10 @@ public sealed partial class DeckRecommendationService
         int? boundedMax = maxEligibleDecks.HasValue
             ? Math.Max(boundedMin, maxEligibleDecks.Value)
             : null;
+        string? normalizedColorIdentity = NormalizeColorIdentityFilter(colorIdentity);
         CommanderCandidateSearchResult result = new()
         {
-            ColorIdentity = NormalizeColorIdentityText(colorIdentity),
+            ColorIdentity = normalizedColorIdentity ?? "",
             ExactColorIdentity = exactColorIdentity,
             MinEligibleDecks = boundedMin,
             MaxEligibleDecks = boundedMax,
@@ -40,10 +41,22 @@ public sealed partial class DeckRecommendationService
                 "EDHREC evidence is unofficial, uses the configured corpus cache unless source refresh is requested, and may return partial results."
             ]
         };
+        if (normalizedColorIdentity is null)
+        {
+            result.Notes.Add("No color identity filter was applied.");
+        }
+        else if (string.IsNullOrEmpty(normalizedColorIdentity))
+        {
+            result.Notes.Add("Colorless commander candidate filter was applied.");
+        }
+        else
+        {
+            result.Notes.Add($"Commander candidate color identity filter: {normalizedColorIdentity}.");
+        }
 
         IReadOnlyList<CardSearchResult> searchedCandidates = await CardCatalog
             .SearchCardsAsync(
-                CardSearchRequest.CommanderCandidates(result.ColorIdentity, exactColorIdentity),
+                CardSearchRequest.CommanderCandidates(normalizedColorIdentity, exactColorIdentity),
                 boundedCandidateCap,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -133,9 +146,18 @@ public sealed partial class DeckRecommendationService
     /// <summary>
     /// Normalizes a color identity string to WUBRG order.
     /// </summary>
-    private static string NormalizeColorIdentityText(string? colorIdentity)
+    private static string? NormalizeColorIdentityFilter(string? colorIdentity)
     {
-        if (string.IsNullOrWhiteSpace(colorIdentity))
+        if (colorIdentity is null)
+        {
+            return null;
+        }
+
+        string trimmed = colorIdentity.Trim();
+        if (trimmed.Length == 0
+            || trimmed.Equals("C", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("colorless", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
         {
             return "";
         }
@@ -143,7 +165,7 @@ public sealed partial class DeckRecommendationService
         List<char> colors = [];
         foreach (char color in "WUBRG")
         {
-            if (colorIdentity.Contains(color, StringComparison.OrdinalIgnoreCase))
+            if (trimmed.Contains(color, StringComparison.OrdinalIgnoreCase))
             {
                 colors.Add(color);
             }

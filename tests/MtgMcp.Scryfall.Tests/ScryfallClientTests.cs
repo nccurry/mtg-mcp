@@ -380,6 +380,70 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that omitted commander candidate color identity does not add a color filter.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_CommanderCandidateWithoutColorIdentityDoesNotFilterColors()
+    {
+        string query = "(is:commander or (t:legendary t:creature)) legal:commander";
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect($"https://api.scryfall.test/cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "1", "name": "Rograkh, Son of Rohgahh", "type_line": "Legendary Creature" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            CardSearchRequest.CommanderCandidates(colorIdentity: null, exactColorIdentity: false),
+            10,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Rograkh, Son of Rohgahh");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that explicit colorless commander candidate requests add a colorless filter.
+    /// </summary>
+    [Fact]
+    public async Task SearchCards_CommanderCandidateColorlessFiltersColorless()
+    {
+        string query = "(is:commander or (t:legendary t:creature)) legal:commander ci=c";
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect($"https://api.scryfall.test/cards/search?q={Uri.EscapeDataString(query)}&unique=cards&order=edhrec")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "has_more": false,
+                  "data": [
+                    { "id": "1", "name": "Kozilek, the Great Distortion", "type_line": "Legendary Creature" }
+                  ]
+                }
+                """
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        IReadOnlyList<CardSearchResult> results = await client.SearchCardsAsync(
+            CardSearchRequest.CommanderCandidates("colorless", exactColorIdentity: true),
+            10,
+            TestContext.Current.CancellationToken);
+
+        results.Should().ContainSingle().Which.Name.Should().Be("Kozilek, the Great Distortion");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that get rulings fetches named card then rulings.
     /// </summary>
     [Fact]

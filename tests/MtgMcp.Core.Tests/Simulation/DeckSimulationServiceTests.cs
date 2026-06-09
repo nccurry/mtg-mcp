@@ -474,6 +474,37 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that missing Archidekt configuration is reported as a reference failure.
+    /// </summary>
+    [Fact]
+    public async Task CompareGoldfish_ReturnsFailureWhenArchidektGatewayIsUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace active = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Active Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace second = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Second Goldfish", archidektDeckId: null, ramp: 16),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        DeckGoldfishComparisonResult comparison = await service.CompareGoldfishAsync(
+            [active.Id, second.Id],
+            ["https://archidekt.com/decks/222/reference_two"],
+            targetTurn: 5,
+            simulations: 100,
+            seed: 44,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        comparison.ComparedDecks.Should().ContainSingle(deck => deck.Label == "workspace-2");
+        GoldfishReferenceImportFailure failure = comparison.Failures.Should().ContainSingle().Subject;
+        failure.Label.Should().Be("reference-1");
+        failure.Source.Should().Be("archidekt");
+        failure.Reason.Should().Contain("Archidekt support is not configured");
+    }
+
+    /// <summary>
     /// Verifies that weak decks report no likely goldfish win route.
     /// </summary>
     [Fact]

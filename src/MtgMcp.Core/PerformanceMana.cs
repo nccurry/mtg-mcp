@@ -187,11 +187,11 @@ internal static class PerformanceMana
     }
 
     /// <summary>
-    /// Checks whether early-turn simulation should treat a land as always tapped.
+    /// Checks whether early-turn simulation should treat a land as unavailable when it enters.
     /// </summary>
     public static bool LooksTapped(CardSnapshot snapshot)
     {
-        return LandEntryClassifier.IsAlwaysTapped(snapshot);
+        return LandEntryClassifier.IsTappedPressure(snapshot);
     }
 
     /// <summary>

@@ -97,7 +97,23 @@ public sealed partial class DeckSimulationService
                     continue;
                 }
 
-                gateway ??= RequireArchidektGateway();
+                if (gateway is null)
+                {
+                    try
+                    {
+                        gateway = RequireArchidektGateway();
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        result.Failures.Add(BuildImportFailure(
+                            label,
+                            input,
+                            "archidekt",
+                            exception.Message));
+                        continue;
+                    }
+                }
+
                 await AddArchidektComparisonAsync(
                         result,
                         baselineGoldfish,

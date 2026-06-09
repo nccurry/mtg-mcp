@@ -108,7 +108,7 @@ public sealed class RecommendationTools
     [McpServerTool(Name = "commander_search_candidates", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Find commander candidates with bounded catalog search and bounded EDHREC eligible deck count checks. Defaults inspect up to 80 catalog candidates and fetch up to 24 EDHREC aggregates; caps are 200 and 50. Partial source failures return notes.")]
     public Task<CommanderCandidateSearchResult> SearchCommanderCandidatesAsync(
-        [Description("Optional color identity such as WUBRG, UB, G, or empty/colorless.")]
+        [Description("Optional color identity such as WUBRG, UB, or G. Omit for any colors; use C, colorless, or an explicit empty string for colorless.")]
         string? colorIdentity = null,
         bool exactColorIdentity = false,
         int minEligibleDecks = 1_500,

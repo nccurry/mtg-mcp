@@ -68,10 +68,17 @@ public sealed partial class ScryfallClient
             "(is:commander or (t:legendary t:creature))",
             $"legal:{format}"
         ];
-        string colors = NormalizeColorIdentity(request.ColorIdentity);
-        if (!string.IsNullOrWhiteSpace(colors))
+        if (request.ColorIdentity is not null)
         {
-            parts.Add(request.ExactColorIdentity ? $"ci={colors}" : $"ci<={colors}");
+            string colors = NormalizeColorIdentity(request.ColorIdentity);
+            if (string.IsNullOrWhiteSpace(colors))
+            {
+                parts.Add(request.ExactColorIdentity ? "ci=c" : "ci<=c");
+            }
+            else
+            {
+                parts.Add(request.ExactColorIdentity ? $"ci={colors}" : $"ci<={colors}");
+            }
         }
 
         return string.Join(' ', parts);
@@ -231,10 +238,18 @@ public sealed partial class ScryfallClient
             return "";
         }
 
+        string trimmed = colorIdentity.Trim();
+        if (trimmed.Equals("C", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("colorless", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
         List<char> colors = [];
         foreach (char color in "WUBRG")
         {
-            if (colorIdentity.Contains(color, StringComparison.OrdinalIgnoreCase))
+            if (trimmed.Contains(color, StringComparison.OrdinalIgnoreCase))
             {
                 colors.Add(color);
             }

@@ -790,15 +790,15 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
-    /// Verifies that conditional tapped lands still count as early untapped sources in performance modeling.
+    /// Verifies that conditional tapped lands are not treated as guaranteed early untapped sources.
     /// </summary>
     [Fact]
-    public void AnalyzeDeckPerformance_TreatsConditionalTappedLandsAsEarlyUntappedSources()
+    public void AnalyzeDeckPerformance_TreatsConditionalTappedLandsAsEarlyTappedPressure()
     {
         DeckPerformanceAnalysis conditional = AnalyzeDirect(CreateConditionalBlueLandDeck(), maxTurn: 1, seed: 16);
         DeckPerformanceAnalysis alwaysTapped = AnalyzeDirect(CreateMonoBlueLandDeck(tapped: true), maxTurn: 1, seed: 16);
 
-        ColorProbability(conditional, "U", 1).Should().BeGreaterThan(0.90);
+        ColorProbability(conditional, "U", 1).Should().BeLessThan(0.10);
         ColorProbability(alwaysTapped, "U", 1).Should().BeLessThan(0.10);
     }
 
