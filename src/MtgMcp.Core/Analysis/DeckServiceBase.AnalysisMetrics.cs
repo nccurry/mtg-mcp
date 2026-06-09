@@ -24,7 +24,7 @@ public abstract partial class DeckServiceBase
 
         return new DeckMetricSnapshot
         {
-            Cost = AnalyzeDeckCost(workspace),
+            Cost = AnalyzeDeckCost(workspace, maxBudget: null),
             Validation = DeckValidator.Validate(workspace),
             Analysis = DeckAnalyzer.Analyze(workspace),
             ManaBase = AnalyzeManaBase(workspace),
@@ -36,9 +36,13 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Analyzes deck cost from local snapshots.
     /// </summary>
-    protected static DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace)
+    protected static DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace, decimal? maxBudget = null)
     {
-        DeckCostAnalysis analysis = new() { WorkspaceId = workspace.Id };
+        DeckCostAnalysis analysis = new()
+        {
+            WorkspaceId = workspace.Id,
+            MaxBudget = maxBudget
+        };
         List<DeckCostDriver> drivers = [];
 
         foreach (DeckCard card in workspace.Cards)
@@ -86,10 +90,14 @@ public abstract partial class DeckServiceBase
             }
         }
 
-        analysis.TopCostDrivers = drivers
-            .OrderByDescending(driver => driver.TotalPrice)
-            .Take(10)
-            .ToList();
+        drivers.Sort((left, right) => right.TotalPrice.CompareTo(left.TotalPrice));
+        if (drivers.Count > 10)
+        {
+            drivers.RemoveRange(10, drivers.Count - 10);
+        }
+
+        analysis.TopCostDrivers = drivers;
+        AddBudgetStatus(analysis, maxBudget);
         return analysis;
     }
 
@@ -129,8 +137,15 @@ public abstract partial class DeckServiceBase
                     analysis.ManaProducingLandCount += quantity;
                 }
 
-                if (LooksTapped(snapshot))
+                LandEntryTiming entryTiming = LandEntryClassifier.Classify(snapshot);
+                if (entryTiming == LandEntryTiming.AlwaysTapped)
                 {
+                    analysis.AlwaysTappedLandCount += quantity;
+                    analysis.TappedLandCount += quantity;
+                }
+                else if (entryTiming == LandEntryTiming.ConditionalTapped)
+                {
+                    analysis.ConditionalTappedLandCount += quantity;
                     analysis.TappedLandCount += quantity;
                 }
                 else
@@ -163,9 +178,13 @@ public abstract partial class DeckServiceBase
             analysis.Risks.Add("Land count is low for most Commander decks.");
         }
 
-        if (analysis.TappedLandCount >= 12)
+        if (analysis.AlwaysTappedLandCount >= 12)
         {
             analysis.Risks.Add("Many lands appear to enter tapped, which can slow early turns.");
+        }
+        else if (analysis.TappedLandCount >= 12)
+        {
+            analysis.Risks.Add("Many lands may enter tapped unless conditions or costs are met.");
         }
 
         if (deckColorIdentity.Count > 1 && analysis.FixingCount < 8)
@@ -174,7 +193,47 @@ public abstract partial class DeckServiceBase
         }
 
         analysis.Notes.Add("Color source counts are inferred from cached Scryfall produced mana and simple land text heuristics.");
+        analysis.Notes.Add("Tapped land count combines always-tapped and conditional-tapped lands for compatibility.");
         return analysis;
+    }
+
+    /// <summary>
+    /// Adds additive budget status fields without changing historical totals.
+    /// </summary>
+    private static void AddBudgetStatus(DeckCostAnalysis analysis, decimal? maxBudget)
+    {
+        if (analysis.MissingPriceCards.Count > 0)
+        {
+            analysis.PriceRiskNotes.Add("Some included or maybeboard cards are missing cached prices, so known totals are a lower bound.");
+        }
+
+        if (!maxBudget.HasValue)
+        {
+            analysis.BudgetStatus = analysis.MissingPriceCards.Count > 0
+                ? "unknown-missing-prices"
+                : "not-requested";
+            return;
+        }
+
+        analysis.BudgetDelta = maxBudget.Value - analysis.IncludedTotal;
+        analysis.WithinBudget = analysis.IncludedTotal <= maxBudget.Value && analysis.MissingPriceCards.Count == 0;
+        if (analysis.IncludedTotal > maxBudget.Value)
+        {
+            analysis.BudgetStatus = "over-budget";
+            analysis.PriceRiskNotes.Add($"Known included total exceeds max budget {maxBudget.Value:0.##}.");
+            return;
+        }
+
+        if (analysis.MissingPriceCards.Count > 0)
+        {
+            analysis.BudgetStatus = "unknown-missing-prices";
+            analysis.PriceRiskNotes.Add($"Known included total is within max budget {maxBudget.Value:0.##}, but missing prices could exceed it.");
+            return;
+        }
+
+        analysis.BudgetStatus = analysis.IncludedTotal == maxBudget.Value
+            ? "at-budget"
+            : "under-budget";
     }
 
     /// <summary>
@@ -408,10 +467,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static bool LooksTapped(CardSnapshot snapshot)
     {
-        string oracleText = snapshot.OracleText ?? "";
-        return oracleText.Contains("enters tapped", StringComparison.OrdinalIgnoreCase)
-            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase)
-            || HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
+        return LandEntryClassifier.IsTappedPressure(snapshot);
     }
 
     /// <summary>

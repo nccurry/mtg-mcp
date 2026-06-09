@@ -6,6 +6,11 @@ namespace MtgMcp.Core;
 public sealed partial class DeckWorkspaceService
 {
     /// <summary>
+    /// Mirrors the Archidekt adapter card mutation batch size for copy request estimates.
+    /// </summary>
+    private const int EstimatedArchidektCardMutationBatchSize = 50;
+
+    /// <summary>
     /// Creates an empty Archidekt deck and stores the writeback workspace locally.
     /// </summary>
     public async Task<DeckWorkspace> CreateArchidektDeckAsync(
@@ -62,11 +67,13 @@ public sealed partial class DeckWorkspaceService
             destinationDeckIdOrUrl,
             allowNonEmptyDestination,
             replaceExistingDestination);
+        result.CopyPhase = "validated";
 
         string destinationName = string.IsNullOrWhiteSpace(name) ? source.Name : name.Trim();
         DeckWorkspace? destination = null;
         if (!string.IsNullOrWhiteSpace(destinationDeckIdOrUrl))
         {
+            result.CopyPhase = "destination-read";
             destination = await RequireArchidektGateway()
                 .ImportDeckAsync(destinationDeckIdOrUrl, writeBack: !dryRun, cancellationToken)
                 .ConfigureAwait(false);
@@ -89,6 +96,7 @@ public sealed partial class DeckWorkspaceService
 
         if (dryRun)
         {
+            result.CopyPhase = "dry-run";
             return result;
         }
 
@@ -103,6 +111,7 @@ public sealed partial class DeckWorkspaceService
 
         if (createNew)
         {
+            result.CopyPhase = "destination-discovery";
             destination = await FindExistingMigrationDestinationAsync(
                     source,
                     destinationName,
@@ -122,6 +131,7 @@ public sealed partial class DeckWorkspaceService
                         "Found an existing Archidekt deck created from this source workspace; "
                             + "returning it instead of creating a duplicate."
                     );
+                    result.CopyPhase = "complete";
                     return result;
                 }
 
@@ -144,6 +154,7 @@ public sealed partial class DeckWorkspaceService
 
         if (createNew)
         {
+            result.CopyPhase = "create-deck";
             destination ??= await CreateArchidektDeckAsync(
                     destinationName,
                     format ?? source.Format,
@@ -154,6 +165,7 @@ public sealed partial class DeckWorkspaceService
         }
         else
         {
+            result.CopyPhase = "open-destination";
             destination = await OpenArchidektDeckAsync(
                     destinationDeckIdOrUrl
                         ?? throw new InvalidOperationException("Destination Archidekt deck id or URL is required."),
@@ -167,11 +179,13 @@ public sealed partial class DeckWorkspaceService
         destination.Description = BuildMigrationDescription(
             description ?? destination.Description,
             source);
+        result.CopyPhase = "metadata";
         await RequireArchidektGateway()
             .PersistMetadataAsync(destination, cancellationToken)
             .ConfigureAwait(false);
         await Repository.SaveAsync(destination, cancellationToken).ConfigureAwait(false);
 
+        result.CopyPhase = "categories";
         await CopyCategoriesToArchidektAsync(source, destination, cancellationToken)
             .ConfigureAwait(false);
 
@@ -183,6 +197,7 @@ public sealed partial class DeckWorkspaceService
 
         if (replaceExistingDestination && destination.Cards.Count > 0)
         {
+            result.CopyPhase = "remove-cards";
             List<DeckCard> removedCards = destination.Cards.ToList();
             await PersistCardsAsync(destination, [], removedCards, cancellationToken)
                 .ConfigureAwait(false);
@@ -190,12 +205,15 @@ public sealed partial class DeckWorkspaceService
         }
 
         destination.Cards.AddRange(copiedCards);
+        result.CopyPhase = "add-cards";
         await PersistCardsAsync(destination, copiedCards, [], cancellationToken)
             .ConfigureAwait(false);
+        UpdateCopyCardIdDiagnostics(result, copiedCards);
 
         result.DestinationWorkspaceId = destination.Id;
         result.DestinationArchidektDeckId = destination.ArchidektDeckId;
         result.DestinationName = destination.Name;
+        result.CopyPhase = "complete";
         return result;
     }
 
@@ -236,6 +254,9 @@ public sealed partial class DeckWorkspaceService
             IncludedCards = source.Cards
                 .Where(card => IsIncludedByPrimaryCategory(categories, card))
                 .Sum(card => Math.Max(0, card.Quantity)),
+            CopyPhase = dryRun ? "dry-run" : "initialized",
+            EstimatedArchidektRequests = EstimateArchidektCopyRequests(source, createNew, destinationDeckIdOrUrl),
+            MissingArchidektCardIds = source.Cards.Count(card => string.IsNullOrWhiteSpace(card.ArchidektCardId)),
             Categories = source.Categories
                 .Select(category => category.Name)
                 .Order(StringComparer.OrdinalIgnoreCase)
@@ -247,6 +268,86 @@ public sealed partial class DeckWorkspaceService
                 .ToList(),
             Warnings = warnings,
         };
+    }
+
+    /// <summary>
+    /// Coarse request budget shown in dry-run diagnostics before Archidekt is contacted.
+    /// </summary>
+    private static int EstimateArchidektCopyRequests(
+        DeckWorkspace source,
+        bool createNew,
+        string? destinationDeckIdOrUrl)
+    {
+        int requests = 0;
+        if (createNew)
+        {
+            requests += 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(destinationDeckIdOrUrl))
+        {
+            requests++;
+        }
+
+        requests += 1;
+        requests += source.Categories.Count;
+        requests += source.Cards.Count == 0
+            ? 0
+            : (int)Math.Ceiling(source.Cards.Count / (double)EstimatedArchidektCardMutationBatchSize);
+        requests += source.Cards
+            .Where(card => string.IsNullOrWhiteSpace(card.ArchidektCardId))
+            .Select(GetCopyResolutionEstimateKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        return requests;
+    }
+
+    /// <summary>
+    /// Builds the unique-print key used for request estimates.
+    /// </summary>
+    private static string GetCopyResolutionEstimateKey(DeckCard card)
+    {
+        string printKey = FirstNonEmpty(
+                card.ScryfallId,
+                string.IsNullOrWhiteSpace(card.Snapshot.Set)
+                    || string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber)
+                    ? null
+                    : $"{card.Snapshot.Set}:{card.Snapshot.CollectorNumber}",
+                card.Name)
+            ?? "";
+        return $"{card.Name}|{printKey}";
+    }
+
+    /// <summary>
+    /// Picks the first stable identity component available for a copied card.
+    /// </summary>
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (string? value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Updates card-id diagnostics after the Archidekt adapter resolves missing ids.
+    /// </summary>
+    private static void UpdateCopyCardIdDiagnostics(
+        ArchidektCopyResult result,
+        IReadOnlyList<DeckCard> cards)
+    {
+        result.CardIdCacheHits = cards.Count(card =>
+            card.Metadata.TryGetValue(DeckCardMetadataKeys.ArchidektCardIdResolution, out string? value)
+            && value.Equals("cache", StringComparison.OrdinalIgnoreCase));
+        result.CardIdsResolved = cards.Count(card =>
+            card.Metadata.TryGetValue(DeckCardMetadataKeys.ArchidektCardIdResolution, out string? value)
+            && value.Equals("resolved", StringComparison.OrdinalIgnoreCase));
+        result.MissingArchidektCardIds = cards.Count(card => string.IsNullOrWhiteSpace(card.ArchidektCardId));
     }
 
     /// <summary>

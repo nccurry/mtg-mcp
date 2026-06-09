@@ -103,6 +103,35 @@ public sealed class RecommendationTools
     }
 
     /// <summary>
+    /// Finds commander candidates within bounded EDHREC popularity ranges.
+    /// </summary>
+    [McpServerTool(Name = "commander_search_candidates", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Find commander candidates with bounded catalog search and bounded EDHREC eligible deck count checks. Defaults inspect up to 80 catalog candidates and fetch up to 24 EDHREC aggregates; caps are 200 and 50. Partial source failures return notes.")]
+    public Task<CommanderCandidateSearchResult> SearchCommanderCandidatesAsync(
+        [Description("Optional color identity such as WUBRG, UB, or G. Omit for any colors; use C, colorless, or an explicit empty string for colorless.")]
+        string? colorIdentity = null,
+        bool exactColorIdentity = false,
+        int minEligibleDecks = 1_500,
+        int? maxEligibleDecks = 3_500,
+        int limit = 10,
+        int scryfallCandidateCap = 80,
+        int edhrecFetchCap = 24,
+        bool refreshSources = false,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.SearchCommanderCandidatesAsync(
+            colorIdentity,
+            exactColorIdentity,
+            minEligibleDecks,
+            maxEligibleDecks,
+            limit,
+            scryfallCandidateCap,
+            edhrecFetchCap,
+            refreshSources,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Finds payoff candidates for a route using Scryfall query templates.
     /// </summary>
     [McpServerTool(Name = "wincon_find_payoffs", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
@@ -175,6 +204,28 @@ public sealed class RecommendationTools
             requiredTags,
             excludedRoles,
             excludedTags,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds a read-only tuning report across several workspaces.
+    /// </summary>
+    [McpServerTool(Name = "deck_batch_tuning_report", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Build a bounded read-only tuning report for 1-8 local workspaces with validation, cost, bracket, mana, consistency, best practices, and goldfish results. Per-workspace failures are returned without aborting the batch.")]
+    public Task<DeckBatchTuningReport> BuildBatchTuningReportAsync(
+        string[] workspaceIds,
+        decimal? maxBudget = null,
+        int targetTurn = 7,
+        int simulations = 1_000,
+        int seed = 1337,
+        CancellationToken cancellationToken = default)
+    {
+        return recommendations.BuildBatchTuningReportAsync(
+            workspaceIds,
+            maxBudget,
+            targetTurn,
+            simulations,
+            seed,
             cancellationToken);
     }
 

@@ -187,14 +187,11 @@ internal static class PerformanceMana
     }
 
     /// <summary>
-    /// Checks whether a land appears to enter tapped.
+    /// Checks whether early-turn simulation should treat a land as unavailable when it enters.
     /// </summary>
     public static bool LooksTapped(CardSnapshot snapshot)
     {
-        string oracleText = snapshot.OracleText ?? "";
-        return oracleText.Contains("enters tapped", StringComparison.OrdinalIgnoreCase)
-            || oracleText.Contains("enters the battlefield tapped", StringComparison.OrdinalIgnoreCase)
-            || HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
+        return LandEntryClassifier.IsTappedPressure(snapshot);
     }
 
     /// <summary>

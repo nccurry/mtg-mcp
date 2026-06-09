@@ -47,6 +47,9 @@ public sealed class McpE2ETests
             "deck_preview_card_package",
             "workspace_diff",
             "workspace_reopen_with_writeback",
+            "deck_compare_goldfish",
+            "deck_batch_tuning_report",
+            "commander_search_candidates",
             "archidekt_compare_goldfish",
             "server_get_info"
         ]);
@@ -336,7 +339,11 @@ public sealed class McpE2ETests
         JsonElement cost = await CallJsonAsync(
             session.Client,
             "deck_analyze_cost",
-            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["maxBudget"] = 20m
+            });
         JsonElement mana = await CallJsonAsync(
             session.Client,
             "deck_analyze_mana",
@@ -371,6 +378,27 @@ public sealed class McpE2ETests
                 ["simulations"] = 50,
                 ["seed"] = 42
             });
+        JsonElement goldfishComparison = await CallJsonAsync(
+            session.Client,
+            "deck_compare_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceIds"] = new string[] { workspaceId },
+                ["archidektDeckIdsOrUrls"] = new List<string> { "https://example.com/decks/not-archidekt" },
+                ["targetTurn"] = 3,
+                ["simulations"] = 50,
+                ["seed"] = 42
+            });
+        JsonElement batchReport = await CallJsonAsync(
+            session.Client,
+            "deck_batch_tuning_report",
+            new Dictionary<string, object?>
+            {
+                ["workspaceIds"] = new string[] { workspaceId, "missing-workspace" },
+                ["targetTurn"] = 3,
+                ["simulations"] = 50,
+                ["seed"] = 42
+            });
 
         GetInt32(analysis, "totalCards").Should().Be(39);
         GetInt32(analysis, "includedCards").Should().Be(39);
@@ -380,6 +408,9 @@ public sealed class McpE2ETests
         GetObject(analysis, "typeCounts").GetProperty("Creature").GetInt32().Should().Be(1);
 
         GetProperty(cost, "includedTotal").GetDecimal().Should().Be(10.80m);
+        GetProperty(cost, "maxBudget").GetDecimal().Should().Be(20m);
+        GetString(cost, "budgetStatus").Should().Be("under-budget");
+        GetProperty(cost, "withinBudget").GetBoolean().Should().BeTrue();
         GetInt32(cost, "pricedIncludedCards").Should().Be(4);
         GetProperty(cost, "topCostDrivers").EnumerateArray()
             .Select(driver => GetString(driver, "cardName"))
@@ -387,6 +418,8 @@ public sealed class McpE2ETests
             .Equal(["Phyrexian Arena", "Tinybones, Trinket Thief", "Swamp", "Arcane Signet"]);
 
         GetInt32(mana, "landCount").Should().Be(36);
+        GetInt32(mana, "alwaysTappedLandCount").Should().Be(0);
+        GetInt32(mana, "conditionalTappedLandCount").Should().Be(0);
         GetInt32(mana, "untappedLandCount").Should().Be(36);
         GetInt32(mana, "fixingCount").Should().Be(1);
         GetInt32(mana, "rampFixingCount").Should().Be(1);
@@ -414,6 +447,10 @@ public sealed class McpE2ETests
         GetInt32(goldfish, "targetTurn").Should().Be(3);
         GetInt32(goldfish, "simulations").Should().Be(100);
         GetProperty(goldfish, "turnSummaries").GetArrayLength().Should().Be(3);
+        GetObject(goldfishComparison, "baselineDeck").GetProperty("workspaceId").GetString().Should().Be(workspaceId);
+        GetArray(goldfishComparison, "failures").Count().Should().Be(1);
+        GetArray(batchReport, "decks").Count().Should().Be(1);
+        GetArray(batchReport, "failures").Count().Should().Be(1);
         archidekt.Requests.Should().BeEmpty();
     }
 

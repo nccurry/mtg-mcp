@@ -950,6 +950,37 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that budget status treats missing prices as risk instead of free cards.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_WithBudgetReportsMissingPriceRisk()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Budget",
+            Cards =
+            [
+                ExpensiveRamp(),
+                new DeckCard { Name = "Unknown Price", PrimaryCategory = DeckRoles.Draw, Categories = [DeckRoles.Draw] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            maxBudget: 300,
+            TestContext.Current.CancellationToken);
+
+        analysis.MaxBudget.Should().Be(300);
+        analysis.BudgetDelta.Should().Be(120);
+        analysis.WithinBudget.Should().BeFalse();
+        analysis.BudgetStatus.Should().Be("unknown-missing-prices");
+        analysis.PriceRiskNotes.Should().Contain(note => note.Contains("missing prices", StringComparison.OrdinalIgnoreCase));
+        analysis.PriceRiskNotes.Should().Contain(note => note.Contains("could exceed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that mana base and consistency analysis return useful signals.
     /// </summary>
     [Fact]
@@ -1013,6 +1044,41 @@ public sealed partial class DeckIntelligenceTests
         consistency.RampCount.Should().Be(2);
         consistency.Risks.Should().Contain(note => note.Contains("Ramp", StringComparison.OrdinalIgnoreCase));
         consistency.KeyOdds.Rows.Should().Contain(row => row.Target == DeckRoles.Ramp);
+    }
+
+    /// <summary>
+    /// Verifies that mana analysis separates always-tapped, conditional-tapped, and untapped modal lands.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeManaBase_SplitsTappedLandPressure()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Tapped Pressure",
+            Cards =
+            [
+                Land("Temple of Deceit", "Temple of Deceit enters the battlefield tapped.", ["U", "B"]),
+                Land("Azorius Guildgate", "Azorius Guildgate enters tapped.", ["W", "U"]),
+                Land("Raffine's Tower", "Raffine's Tower enters the battlefield tapped.", ["W", "U", "B"]),
+                Land("Watery Grave", "As Watery Grave enters, you may pay 2 life. If you don't, it enters tapped.", ["U", "B"]),
+                Land("Drowned Catacomb", "Drowned Catacomb enters the battlefield tapped unless you control an Island or a Swamp.", ["U", "B"]),
+                Land("Shipwreck Marsh", "Shipwreck Marsh enters the battlefield tapped unless you control two or more other lands.", ["U", "B"]),
+                Land("Clearwater Pathway", "{T}: Add {U}. // {T}: Add {B}.", ["U", "B"]),
+                Land("Island", "{T}: Add {U}.", ["U"]),
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        ManaBaseAnalysis analysis = await service.AnalyzeManaBaseAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.LandCount.Should().Be(8);
+        analysis.AlwaysTappedLandCount.Should().Be(3);
+        analysis.ConditionalTappedLandCount.Should().Be(3);
+        analysis.TappedLandCount.Should().Be(6);
+        analysis.UntappedLandCount.Should().Be(2);
     }
 
     /// <summary>

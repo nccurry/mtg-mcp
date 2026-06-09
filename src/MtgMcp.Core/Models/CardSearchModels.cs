@@ -16,6 +16,11 @@ public enum CardSearchPreset
     CommanderGameChangers,
 
     /// <summary>
+    /// Finds legal legendary commander candidates.
+    /// </summary>
+    CommanderCandidates,
+
+    /// <summary>
     /// Finds cards by deck role or tag.
     /// </summary>
     Role,
@@ -142,6 +147,16 @@ public sealed class CardSearchRequest
     public decimal? MaxPrice { get; init; }
 
     /// <summary>
+    /// Color identity filter for commander candidate discovery, in WUBRG order when supplied.
+    /// </summary>
+    public string? ColorIdentity { get; init; }
+
+    /// <summary>
+    /// True when candidate color identity must exactly match the requested colors.
+    /// </summary>
+    public bool ExactColorIdentity { get; init; }
+
+    /// <summary>
     /// Gets or initializes the earliest release date for recent-card searches.
     /// </summary>
     public DateOnly? Since { get; init; }
@@ -197,6 +212,23 @@ public sealed class CardSearchRequest
             Preset = preset,
             Format = format,
             MaxPrice = maxPrice
+        };
+    }
+
+    /// <summary>
+    /// Creates a bounded commander-candidate search request.
+    /// </summary>
+    public static CardSearchRequest CommanderCandidates(
+        string? colorIdentity,
+        bool exactColorIdentity,
+        string? format = "commander")
+    {
+        return new CardSearchRequest
+        {
+            Preset = CardSearchPreset.CommanderCandidates,
+            Format = format,
+            ColorIdentity = colorIdentity,
+            ExactColorIdentity = exactColorIdentity
         };
     }
 

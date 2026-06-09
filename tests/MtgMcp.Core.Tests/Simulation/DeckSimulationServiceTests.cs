@@ -431,6 +431,80 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that generalized goldfish comparison handles local workspaces, Archidekt imports, and partial failures.
+    /// </summary>
+    [Fact]
+    public async Task CompareGoldfish_ComparesLocalAndArchidektDecksWithPartialFailures()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace active = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Active Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace second = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Second Goldfish", archidektDeckId: null, ramp: 16),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new();
+        string archidektUrl = "https://archidekt.com/decks/222/reference_two";
+        string nonArchidektUrl = "https://example.com/decks/reference-three";
+        archidekt.ImportedDecksByInput[archidektUrl] = CreateGoldfishFixtureDeck("Reference Two", "222", tokens: 20);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog(), archidekt);
+
+        DeckGoldfishComparisonResult comparison = await service.CompareGoldfishAsync(
+            [active.Id, second.Id],
+            [archidektUrl, nonArchidektUrl],
+            targetTurn: 5,
+            simulations: 100,
+            seed: 44,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        comparison.WorkspaceId.Should().Be(active.Id);
+        comparison.BaselineDeck.Label.Should().Be("active");
+        comparison.ComparedDecks.Select(deck => deck.Label).Should().Equal("workspace-2", "reference-1");
+        comparison.ComparedDecks.Should().OnlyContain(deck => deck.DeltaFromActive != null);
+        comparison.ComparedDecks.Single(deck => deck.Label == "workspace-2").Source.Should().Be("workspace");
+        comparison.ComparedDecks.Single(deck => deck.Label == "reference-1").Source.Should().Be("archidekt");
+        GoldfishReferenceImportFailure failure = comparison.Failures.Should().ContainSingle().Subject;
+        failure.Label.Should().Be("reference-2");
+        failure.Source.Should().Be("example.com");
+        comparison.Warnings.Should().Contain(warning => warning.Contains("reference-2", StringComparison.OrdinalIgnoreCase));
+        archidekt.ImportRequests.Should().ContainSingle(request =>
+            request.DeckIdOrUrl == archidektUrl
+            && !request.WriteBack);
+    }
+
+    /// <summary>
+    /// Verifies that missing Archidekt configuration is reported as a reference failure.
+    /// </summary>
+    [Fact]
+    public async Task CompareGoldfish_ReturnsFailureWhenArchidektGatewayIsUnavailable()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace active = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Active Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace second = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Second Goldfish", archidektDeckId: null, ramp: 16),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        DeckGoldfishComparisonResult comparison = await service.CompareGoldfishAsync(
+            [active.Id, second.Id],
+            ["https://archidekt.com/decks/222/reference_two"],
+            targetTurn: 5,
+            simulations: 100,
+            seed: 44,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        comparison.ComparedDecks.Should().ContainSingle(deck => deck.Label == "workspace-2");
+        GoldfishReferenceImportFailure failure = comparison.Failures.Should().ContainSingle().Subject;
+        failure.Label.Should().Be("reference-1");
+        failure.Source.Should().Be("archidekt");
+        failure.Reason.Should().Contain("Archidekt support is not configured");
+    }
+
+    /// <summary>
     /// Verifies that weak decks report no likely goldfish win route.
     /// </summary>
     [Fact]
@@ -461,6 +535,180 @@ public sealed partial class DeckIntelligenceTests
         estimate.MedianWinTurn.Should().BeNull();
         estimate.Routes.Should().BeEmpty();
         estimate.Notes.Should().Contain(note => note.Contains("No likely win", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that reanimator-control routes can use graveyard target and held-interaction evidence.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DetectsReanimatorControlRoutePredicates()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateReanimatorControlGoldfishDeck(),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 21,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.WinEstimate.ObservedWins.Should().BeGreaterThan(0);
+        WinRoute route = goldfish.WinEstimate.Routes.Should()
+            .ContainSingle(candidate => candidate.Kind == "reanimator-control")
+            .Subject;
+        route.Evidence.Should().ContainSingle(candidate => candidate.Name == "Reanimator Control");
+        SimulationRouteEvidence evidence = route.Evidence.Single();
+        evidence.Evidence.Should().Contain(line => line.Contains("graveyard count", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("reanimation target", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("interaction held", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that aristocrats routes can use sacrifice, drain, recursion, and token evidence.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DetectsAristocratsRoutePredicates()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateAristocratsGoldfishDeck(),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 4,
+            simulations: 100,
+            seed: 22,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.WinEstimate.ObservedWins.Should().BeGreaterThan(0);
+        WinRoute route = goldfish.WinEstimate.Routes.Should()
+            .ContainSingle(candidate => candidate.Kind == "aristocrats")
+            .Subject;
+        route.Evidence.Should().ContainSingle(candidate => candidate.Name == "Aristocrats Loop");
+        SimulationRouteEvidence evidence = route.Evidence.Single();
+        evidence.Evidence.Should().Contain(line => line.Contains("sacrifice outlet", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("drain payoff", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("recursive creature", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("tokens", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Creates a graveyard-control fixture with an explicit deck-intent route.
+    /// </summary>
+    private static DeckWorkspace CreateReanimatorControlGoldfishDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Reanimator Control Goldfish",
+            Format = "commander",
+            Description = DeckIntentText.UpsertDescription(
+                null,
+                """
+                MTG MCP Deck Intent
+                Version: 2
+                Simulation Profile: control
+
+                Simulation
+                Hold Interaction From Turn: 2
+                Minimum Interaction Held: 1
+
+                Win Routes
+                Reanimator Control: requires graveyard>=2, reanimation-target, interaction-held>=1; earliest turn 3; kind reanimator-control
+                End MTG MCP Deck Intent
+                """),
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                GoldfishCard("Graveyard Commander", 1, DeckRoles.Commander, "Legendary Creature", "{2}{B}", 3, "", ["B"]),
+                GoldfishCard("Swamp", 39, DeckRoles.Lands, "Basic Land - Swamp", null, 0, "{T}: Add {B}.", ["B"], ["B"]),
+                GoldfishCard("Entomb Setup", 20, DeckRoles.Tutors, "Instant", "{B}", 1, "Search your library for a creature card and put that card into your graveyard.", ["B"]),
+                GoldfishCard("Counterspell", 20, DeckRoles.Interaction, "Instant", "{1}{U}", 2, "Counter target spell.", ["U"]),
+                GoldfishCard("Archon of Cruelty", 20, DeckRoles.Wincons, "Creature - Archon", "{6}{B}{B}", 8, "Flying. When this creature enters, each opponent sacrifices a creature or planeswalker.", ["B"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates an aristocrats fixture with an explicit deck-intent route.
+    /// </summary>
+    private static DeckWorkspace CreateAristocratsGoldfishDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Aristocrats Goldfish",
+            Format = "commander",
+            Description = DeckIntentText.UpsertDescription(
+                null,
+                """
+                MTG MCP Deck Intent
+                Version: 2
+                Simulation Profile: value
+
+                Win Routes
+                Aristocrats Loop: requires sac-outlet, drain-payoff, recursive-creature, tokens>=2; earliest turn 3; kind aristocrats
+                End MTG MCP Deck Intent
+                """),
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                GoldfishCard("Aristocrats Commander", 1, DeckRoles.Commander, "Legendary Creature", "{2}{B}", 3, "", ["B"]),
+                GoldfishCard("Swamp", 39, DeckRoles.Lands, "Basic Land - Swamp", null, 0, "{T}: Add {B}.", ["B"], ["B"]),
+                GoldfishCard("Carrion Feeder", 15, DeckRoles.Synergy, "Creature - Zombie", "{B}", 1, "Sacrifice a creature: Put a +1/+1 counter on Carrion Feeder.", ["B"]),
+                GoldfishCard("Blood Artist", 15, DeckRoles.Wincons, "Creature - Vampire", "{1}{B}", 2, "Whenever Blood Artist or another creature dies, target player loses 1 life and you gain 1 life.", ["B"]),
+                GoldfishCard("Reassembling Skeleton", 15, DeckRoles.Synergy, "Creature - Skeleton", "{1}{B}", 2, "Return Reassembling Skeleton from your graveyard to the battlefield tapped.", ["B"]),
+                GoldfishCard("Token Maker", 15, DeckRoles.Synergy, "Creature - Warlock", "{1}{B}", 2, "When this creature enters, create two 1/1 creature tokens.", ["B"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a goldfish fixture card with cached snapshot data.
+    /// </summary>
+    private static DeckCard GoldfishCard(
+        string name,
+        int quantity,
+        string category,
+        string typeLine,
+        string? manaCost,
+        double manaValue,
+        string oracleText,
+        List<string> colorIdentity,
+        List<string>? producedMana = null)
+    {
+        return new DeckCard
+        {
+            Name = name,
+            Quantity = quantity,
+            PrimaryCategory = category,
+            Categories = [category],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = typeLine,
+                ManaCost = manaCost,
+                ManaValue = manaValue,
+                OracleText = oracleText,
+                ColorIdentity = colorIdentity,
+                ProducedMana = producedMana ?? [],
+            },
+        };
     }
 
     /// <summary>

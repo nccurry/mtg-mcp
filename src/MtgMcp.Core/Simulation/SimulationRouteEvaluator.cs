@@ -18,11 +18,16 @@ public static class SimulationRouteEvaluator
 
         return text.Equals("commander", StringComparison.OrdinalIgnoreCase)
             || text.Equals("repeatable-blink", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("reanimation-target", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("sac-outlet", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("drain-payoff", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("recursive-creature", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("card:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("role:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("tag:", StringComparison.OrdinalIgnoreCase)
             || HasNumericPredicate(text, "mana>=")
             || HasNumericPredicate(text, "tokens>=")
+            || HasNumericPredicate(text, "graveyard>=")
             || HasNumericPredicate(text, "interactionheld>=")
             || HasNumericPredicate(text, "dungeonprogress>=")
             || HasNumericPredicate(text, "turn>=")
@@ -105,6 +110,43 @@ public static class SimulationRouteEvaluator
             return matched;
         }
 
+        if (text.Equals("reanimation-target", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.Graveyard.Any(IsReanimationTarget);
+            message = matched
+                ? "graveyard has a plausible reanimation target"
+                : "graveyard lacks a plausible reanimation target";
+            return matched;
+        }
+
+        if (text.Equals("sac-outlet", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.Battlefield.Any(IsSacOutlet);
+            message = matched
+                ? "battlefield has a sacrifice outlet"
+                : "battlefield lacks a sacrifice outlet";
+            return matched;
+        }
+
+        if (text.Equals("drain-payoff", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.Battlefield.Any(IsDrainPayoff);
+            message = matched
+                ? "battlefield has a drain payoff"
+                : "battlefield lacks a drain payoff";
+            return matched;
+        }
+
+        if (text.Equals("recursive-creature", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.Battlefield.Any(IsRecursiveCreature)
+                || state.Graveyard.Any(IsRecursiveCreature);
+            message = matched
+                ? "a recursive creature is available"
+                : "no recursive creature is available";
+            return matched;
+        }
+
         if (TryReadPrefixedValue(text, "card:", out string cardName))
         {
             return MatchCardName(cardName, state.Battlefield, "battlefield", out message);
@@ -142,6 +184,14 @@ public static class SimulationRouteEvaluator
                 ? $"tokens {state.Tokens} >= {tokens}"
                 : $"tokens {state.Tokens} < {tokens}";
             return state.Tokens >= tokens;
+        }
+
+        if (TryReadNumericPredicate(text, "graveyard>=", out int graveyardCount))
+        {
+            message = state.Graveyard.Count >= graveyardCount
+                ? $"graveyard count {state.Graveyard.Count} >= {graveyardCount}"
+                : $"graveyard count {state.Graveyard.Count} < {graveyardCount}";
+            return state.Graveyard.Count >= graveyardCount;
         }
 
         if (TryReadNumericPredicate(text, "interactionheld>=", out int interactionHeld))
@@ -203,6 +253,62 @@ public static class SimulationRouteEvaluator
         return ContainsAny(typeLine, "Creature", "Artifact", "Enchantment", "Planeswalker")
             && (ContainsAny(text, "at the beginning", "whenever", "activate", "{t}", "tap")
                 || ContainsAny(card.Name, "Soulherder", "Teleportation Circle", "Conjurer's Closet"));
+    }
+
+    /// <summary>
+    /// Identifies graveyard cards large enough to matter for reanimation routes.
+    /// </summary>
+    private static bool IsReanimationTarget(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string typeLine = card.Snapshot?.TypeLine ?? "";
+        return typeLine.Contains("Creature", StringComparison.OrdinalIgnoreCase)
+            && ((card.Snapshot?.ManaValue ?? 0) >= 4
+                || role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Identifies permanents that can sacrifice creatures or permanents repeatedly enough for aristocrats routes.
+    /// </summary>
+    private static bool IsSacOutlet(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.SacOutlet, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(text, "sacrifice a creature:", "sacrifice another creature", "sacrifice a permanent:", "sacrifice an artifact:");
+    }
+
+    /// <summary>
+    /// Identifies death-trigger or drain payoff permanents.
+    /// </summary>
+    private static bool IsDrainPayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Aristocrats, StringComparer.OrdinalIgnoreCase)
+            || (ContainsAny(text, "dies", "whenever another creature dies", "whenever a creature dies")
+                && ContainsAny(text, "each opponent loses", "opponent loses", "target player loses"));
+    }
+
+    /// <summary>
+    /// Identifies creatures that can return from the graveyard or be cast from there.
+    /// </summary>
+    private static bool IsRecursiveCreature(DeckCard card)
+    {
+        string typeLine = card.Snapshot?.TypeLine ?? "";
+        string text = card.Snapshot?.OracleText ?? "";
+        return typeLine.Contains("Creature", StringComparison.OrdinalIgnoreCase)
+            && ContainsAny(
+                text,
+                "return this card from your graveyard",
+                "return it from your graveyard",
+                "from your graveyard to the battlefield",
+                "you may cast this card from your graveyard",
+                "escape",
+                "disturb",
+                "unearth");
     }
 
     /// <summary>
@@ -270,11 +376,30 @@ public static class SimulationRouteEvaluator
             return "repeatable-blink";
         }
 
-        string numeric = trimmed
-            .Replace(" ", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("_", "", StringComparison.OrdinalIgnoreCase);
+        if (compact.Equals("reanimationtarget", StringComparison.OrdinalIgnoreCase))
+        {
+            return "reanimation-target";
+        }
+
+        if (compact.Equals("sacoutlet", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sac-outlet";
+        }
+
+        if (compact.Equals("drainpayoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return "drain-payoff";
+        }
+
+        if (compact.Equals("recursivecreature", StringComparison.OrdinalIgnoreCase))
+        {
+            return "recursive-creature";
+        }
+
+        string numeric = NormalizeNumericPredicate(trimmed);
         if (numeric.StartsWith("mana>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("tokens>=", StringComparison.OrdinalIgnoreCase)
+            || numeric.StartsWith("graveyard>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("interactionheld>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("dungeonprogress>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("turn>=", StringComparison.OrdinalIgnoreCase))
@@ -283,6 +408,25 @@ public static class SimulationRouteEvaluator
         }
 
         return trimmed;
+    }
+
+    /// <summary>
+    /// Normalizes numeric predicate names while preserving signed values.
+    /// </summary>
+    private static string NormalizeNumericPredicate(string text)
+    {
+        int operatorIndex = text.IndexOf(">=", StringComparison.Ordinal);
+        if (operatorIndex < 0)
+        {
+            return text;
+        }
+
+        string name = text[..operatorIndex]
+            .Replace(" ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("_", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("-", "", StringComparison.OrdinalIgnoreCase);
+        string value = text[(operatorIndex + 2)..].Trim();
+        return $"{name}>={value}";
     }
 
     /// <summary>

@@ -160,6 +160,27 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a land fixture with cached mana production and entry text.
+    /// </summary>
+    private static DeckCard Land(string name, string oracleText, List<string> producedMana)
+    {
+        return new DeckCard
+        {
+            Name = name,
+            Quantity = 1,
+            PrimaryCategory = DeckRoles.Lands,
+            Categories = [DeckRoles.Lands],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Land",
+                ManaValue = 0,
+                OracleText = oracleText,
+                ProducedMana = producedMana,
+            },
+        };
+    }
+
+    /// <summary>
     /// Creates a small offline fixture derived from the Inga and Esika deck-tuning workflow.
     /// </summary>
     private static DeckWorkspace CreateIngaAndEsikaFixtureWorkspace()

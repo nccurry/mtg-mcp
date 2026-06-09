@@ -183,6 +183,22 @@ public sealed class SimulationProfileTests
     }
 
     /// <summary>
+    /// Verifies that route validation accepts graveyard, reanimation, aristocrats, and held-interaction predicates.
+    /// </summary>
+    [Theory]
+    [InlineData("graveyard>=2")]
+    [InlineData("reanimation-target")]
+    [InlineData("sac-outlet")]
+    [InlineData("drain-payoff")]
+    [InlineData("recursive-creature")]
+    [InlineData("interaction-held>=1")]
+    [InlineData("interactionheld>=1")]
+    public void SimulationRouteEvaluator_SupportsExpandedGoldfishPredicates(string requirement)
+    {
+        SimulationRouteEvaluator.IsSupportedRequirement(requirement).Should().BeTrue();
+    }
+
+    /// <summary>
     /// Verifies that route predicates detect an Abdel-style Altar blink route.
     /// </summary>
     [Fact]

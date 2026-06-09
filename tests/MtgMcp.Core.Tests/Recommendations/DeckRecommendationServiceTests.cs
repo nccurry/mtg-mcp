@@ -1145,4 +1145,36 @@ public sealed partial class DeckIntelligenceTests
             operation.Operation == DeckEditOperations.AddCard && operation.CardName == "Command Tower").Should().Be(1);
         result.Plan.Operations.Should().NotContain(operation => operation.CardName == "Temple of Silence");
     }
+
+    /// <summary>
+    /// Verifies that batch tuning reports return completed rows and per-workspace failures.
+    /// </summary>
+    [Fact]
+    public async Task BuildBatchTuningReport_ReturnsRowsAndPartialFailures()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        DeckBatchTuningReport report = await service.BuildBatchTuningReportAsync(
+            [workspace.Id, "missing-workspace"],
+            maxBudget: 5,
+            targetTurn: 4,
+            simulations: 10,
+            seed: 2026,
+            TestContext.Current.CancellationToken);
+
+        report.Simulations.Should().Be(100);
+        DeckBatchTuningDeckReport deck = report.Decks.Should().ContainSingle().Subject;
+        deck.WorkspaceId.Should().Be(workspace.Id);
+        deck.Cost.IncludedTotal.Should().BeGreaterThan(5);
+        deck.Goldfish.TargetTurn.Should().Be(4);
+        deck.Goldfish.Simulations.Should().Be(100);
+        deck.Risks.Should().Contain(risk => risk.Contains("max budget", StringComparison.OrdinalIgnoreCase));
+        DeckBatchTuningFailure failure = report.Failures.Should().ContainSingle().Subject;
+        failure.WorkspaceId.Should().Be("missing-workspace");
+        failure.Reason.Should().Contain("Workspace");
+    }
 }

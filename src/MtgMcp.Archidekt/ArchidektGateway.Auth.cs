@@ -30,7 +30,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Loads the credentials.
+    /// Loads credentials from options, environment variables, or a configured credentials file.
     /// </summary>
     private ArchidektCredentials LoadCredentials()
     {
@@ -74,7 +74,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Ensures the authenticated.
+    /// Adds an Archidekt bearer token when credentials are available or required.
     /// </summary>
     private async Task EnsureAuthenticatedAsync(bool required, CancellationToken cancellationToken)
     {
@@ -98,19 +98,27 @@ public sealed partial class ArchidektGateway
                 return;
             }
 
-            if (
-                required
-                && options.EnableUsernamePasswordLogin
-                && !string.IsNullOrWhiteSpace(loaded.Username)
-                && !string.IsNullOrWhiteSpace(loaded.Password)
-            )
+            string? username = loaded.Username;
+            string? password = loaded.Password;
+            if (options.EnableUsernamePasswordLogin
+                && !string.IsNullOrWhiteSpace(username)
+                && !string.IsNullOrWhiteSpace(password))
             {
-                string? jwt = await TryLoginAsync(
-                        loaded.Username,
-                        loaded.Password,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                string? jwt = null;
+                try
+                {
+                    jwt = await TryLoginAsync(
+                            username,
+                            password,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                }
+                catch (Exception exception) when (!required && exception is not OperationCanceledException)
+                {
+                    jwt = null;
+                }
+
                 if (!string.IsNullOrWhiteSpace(jwt))
                 {
                     sessionJwt = jwt;

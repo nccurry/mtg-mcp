@@ -403,6 +403,62 @@ public sealed class GoldfishComparisonDelta
 }
 
 /// <summary>
+/// Reports a generalized goldfish comparison across local and read-only imported decks.
+/// </summary>
+public sealed class DeckGoldfishComparisonResult
+{
+    /// <summary>
+    /// Workspace id used as the comparison baseline.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Target turn used for every compared deck.
+    /// </summary>
+    public int TargetTurn { get; set; }
+
+    /// <summary>
+    /// Simulation count used for every compared deck.
+    /// </summary>
+    public int Simulations { get; set; }
+
+    /// <summary>
+    /// Shared random seed used for every compared deck.
+    /// </summary>
+    public int Seed { get; set; }
+
+    /// <summary>
+    /// True when simple mulligans were enabled.
+    /// </summary>
+    public bool Mulligan { get; set; }
+
+    /// <summary>
+    /// Baseline workspace goldfish result.
+    /// </summary>
+    public GoldfishDeckComparison BaselineDeck { get; set; } = new();
+
+    /// <summary>
+    /// Comparison rows for each successfully simulated non-baseline deck.
+    /// </summary>
+    public List<GoldfishDeckComparison> ComparedDecks { get; set; } = [];
+
+    /// <summary>
+    /// Inputs that could not be loaded or simulated without aborting the comparison.
+    /// </summary>
+    public List<GoldfishReferenceImportFailure> Failures { get; set; } = [];
+
+    /// <summary>
+    /// Deterministic comparison notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+
+    /// <summary>
+    /// Non-fatal comparison warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
 /// Reports an active deck goldfish comparison against caller-supplied Archidekt reference decks.
 /// </summary>
 public sealed class ArchidektGoldfishComparisonResult

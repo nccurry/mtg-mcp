@@ -642,9 +642,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         {
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             return GoldfishManaValue(card) <= availableMana
-                && (role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
-                    || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase)
-                    || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase));
+                && IsGoldfishInteraction(role);
         });
     }
 
@@ -710,6 +708,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
 
             int cost = Math.Max(0, (int)Math.Ceiling(GetSnapshot(spell).ManaValue ?? 2));
+            if (ShouldHoldGoldfishInteraction(spell, role, hand, availableMana, turn, profile))
+            {
+                continue;
+            }
+
             bool creatureSpell = IsCreatureSpell(spell);
             int generalMana = Math.Max(0, availableMana - restrictedCreatureMana);
             if (!creatureSpell && cost > generalMana)
@@ -741,6 +744,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 graveyard.Add(spell);
                 run.Line.Add($"T{turn}: used {spell.Name} ({role.PrimaryRole}).");
             }
+
+            ApplyGoldfishGraveyardSetup(spell, deck, graveyard, run, turn);
 
             if (role.Tags.Contains(DeckTags.Tokens) || role.Tags.Contains(DeckTags.SacrificeFodder))
             {
@@ -774,6 +779,100 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 winPressure += 4;
             }
         }
+    }
+
+    /// <summary>
+    /// Keeps the configured minimum amount of interaction available instead of spending it proactively.
+    /// </summary>
+    private static bool ShouldHoldGoldfishInteraction(
+        DeckCard spell,
+        CardRoleAssignment role,
+        IReadOnlyList<DeckCard> hand,
+        int availableMana,
+        int turn,
+        SimulationProfile profile)
+    {
+        if (turn < profile.Sequencing.HoldInteractionFromTurn
+            || profile.Sequencing.MinimumInteractionHeld <= 0
+            || !IsGoldfishInteraction(role))
+        {
+            return false;
+        }
+
+        return GoldfishManaValue(spell) <= availableMana
+            && CountHeldGoldfishInteraction(hand, availableMana) <= profile.Sequencing.MinimumInteractionHeld;
+    }
+
+    /// <summary>
+    /// Checks whether a role assignment represents instant-speed or protective interaction for goldfish holding.
+    /// </summary>
+    private static bool IsGoldfishInteraction(CardRoleAssignment role)
+    {
+        return role.PrimaryRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Models simple self-mill or Entomb-style setup for graveyard route predicates.
+    /// </summary>
+    private static void ApplyGoldfishGraveyardSetup(
+        DeckCard spell,
+        List<DeckCard> deck,
+        List<DeckCard> graveyard,
+        GoldfishRun run,
+        int turn)
+    {
+        if (deck.Count == 0 || !SetsUpGoldfishGraveyard(spell))
+        {
+            return;
+        }
+
+        DeckCard target = ChooseGoldfishGraveyardTarget(deck);
+        deck.Remove(target);
+        graveyard.Add(target);
+        run.Line.Add($"T{turn}: put {target.Name} into the graveyard for graveyard setup.");
+    }
+
+    /// <summary>
+    /// Checks whether a cast spell plausibly fills the graveyard in goldfish.
+    /// </summary>
+    private static bool SetsUpGoldfishGraveyard(DeckCard spell)
+    {
+        string text = GetSnapshot(spell).OracleText ?? "";
+        return ContainsAny(
+            text,
+            "put it into your graveyard",
+            "put that card into your graveyard",
+            "put a card from your library into your graveyard",
+            "mill",
+            "surveil");
+    }
+
+    /// <summary>
+    /// Chooses the most plausible graveyard target from the remaining library.
+    /// </summary>
+    private static DeckCard ChooseGoldfishGraveyardTarget(List<DeckCard> deck)
+    {
+        DeckCard? target = deck
+            .Where(IsGoldfishReanimationTarget)
+            .OrderByDescending(GoldfishManaValue)
+            .ThenBy(card => card.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        return target ?? deck[0];
+    }
+
+    /// <summary>
+    /// Checks whether a card is a meaningful reanimation target.
+    /// </summary>
+    private static bool IsGoldfishReanimationTarget(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string typeLine = GetSnapshot(card).TypeLine ?? "";
+        return typeLine.Contains("Creature", StringComparison.OrdinalIgnoreCase)
+            && (GoldfishManaValue(card) >= 4
+                || role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>
