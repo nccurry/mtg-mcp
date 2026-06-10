@@ -1,0 +1,1378 @@
+{
+  "schemaVersion": 2,
+  "fixtures": [
+    {
+      "fixtureId": "yuriko-edhrec-average",
+      "name": "Yuriko Public Average Template",
+      "label": "public average commander template",
+      "groupId": "yuriko-public-ladder",
+      "profile": "aggro",
+      "sourceKind": "edhrec",
+      "sourceUri": "https://edhrec.com/commanders/yuriko-the-tigers-shadow",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from the public EDHREC commander page for Yuriko, the Tiger's Shadow.",
+      "workspace": {
+        "id": "yuriko-edhrec-average",
+        "name": "Yuriko Public Average Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Yuriko, the Tiger's Shadow",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{1}{U}{B}",
+              "typeLine": "Legendary Creature - Human Ninja",
+              "manaValue": 3,
+              "oracleText": "Commander ninjutsu. Whenever a Ninja you control deals combat damage to a player, reveal the top card of your library and put that card into your hand.",
+              "colorIdentity": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Island Package",
+            "quantity": 13,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Basic Land - Island",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {U}.",
+              "colorIdentity": [],
+              "producedMana": [ "U" ]
+            }
+          },
+          {
+            "name": "Yuriko Swamp Package",
+            "quantity": 13,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Basic Land - Swamp",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {B}.",
+              "colorIdentity": [],
+              "producedMana": [ "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Dimir Dual Package",
+            "quantity": 7,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {U} or {B}.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Average Evasive Enabler Package",
+            "quantity": 14,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Creature - Faerie Rogue",
+              "manaValue": 1,
+              "oracleText": "Flying. This creature enables ninjutsu.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Ninja Package",
+            "quantity": 10,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{2}{U}",
+              "typeLine": "Creature - Ninja",
+              "manaValue": 3,
+              "oracleText": "Ninjutsu. Whenever this creature deals combat damage to a player, draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Yuriko Draw Package",
+            "quantity": 8,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{1}{U}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Dimir Interaction Package",
+            "quantity": 6,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{1}{U}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Counter target spell unless its controller pays {2}.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Yuriko Topdeck Package",
+            "quantity": 6,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{1}{B}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Search your library for a card and put it on top of your library.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Yuriko Big Flip Package",
+            "quantity": 10,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{6}{U}{B}",
+              "typeLine": "Instant",
+              "manaValue": 8,
+              "oracleText": "High mana value spell for Yuriko damage triggers.",
+              "colorIdentity": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Average Yuriko Utility Package",
+            "quantity": 12,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{2}{U}",
+              "typeLine": "Sorcery",
+              "manaValue": 3,
+              "oracleText": "Return a creature to its owner's hand.",
+              "colorIdentity": [ "U" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "yuriko-cedh-template",
+      "name": "Yuriko cEDH Template",
+      "label": "public cEDH commander template",
+      "groupId": "yuriko-public-ladder",
+      "profile": "aggro",
+      "sourceKind": "moxfield",
+      "sourceUri": "https://moxfield.com/decks/tE-BsGMd40iCtpIrXvZskA",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from a public Yuriko cEDH Moxfield list surfaced by search.",
+      "workspace": {
+        "id": "yuriko-cedh-template",
+        "name": "Yuriko cEDH Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Yuriko, the Tiger's Shadow",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{1}{U}{B}",
+              "typeLine": "Legendary Creature - Human Ninja",
+              "manaValue": 3,
+              "oracleText": "Commander ninjutsu. Whenever a Ninja you control deals combat damage to a player, reveal the top card of your library and put that card into your hand.",
+              "colorIdentity": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Fast Dimir Land Package",
+            "quantity": 27,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {U} or {B}.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Zero Mana Artifact Package",
+            "quantity": 5,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{0}",
+              "typeLine": "Artifact",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Free Evasive Enabler Package",
+            "quantity": 12,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{0}",
+              "typeLine": "Artifact Creature - Thopter",
+              "manaValue": 0,
+              "oracleText": "Flying. This creature enables ninjutsu.",
+              "colorIdentity": []
+            }
+          },
+          {
+            "name": "Yuriko Efficient Ninja Package",
+            "quantity": 6,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Creature - Ninja",
+              "manaValue": 1,
+              "oracleText": "Combo enabler. Whenever this creature deals combat damage to a player, draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Yuriko Efficient Tutor Package",
+            "quantity": 10,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Search your library for a card and put it on top of your library.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Cheap Draw Package",
+            "quantity": 8,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Yuriko Free Interaction Package",
+            "quantity": 14,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Counter target spell.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Yuriko Topdeck Control Package",
+            "quantity": 6,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Search your library for a high mana value card and put it on top.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Compact Big Flip Package",
+            "quantity": 4,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{5}{U}{B}",
+              "typeLine": "Instant",
+              "manaValue": 7,
+              "oracleText": "High mana value spell for Yuriko damage triggers.",
+              "colorIdentity": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Yuriko Cheap Protection Package",
+            "quantity": 7,
+            "primaryCategory": "Protection",
+            "categories": [ "Protection" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Target creature gains hexproof until end of turn.",
+              "colorIdentity": [ "U" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "kenrith-edhrec-average",
+      "name": "Kenrith Public Average Template",
+      "label": "public average commander template",
+      "groupId": "kenrith-public-ladder",
+      "profile": "value",
+      "sourceKind": "edhrec",
+      "sourceUri": "https://edhrec.com/commanders/kenrith-the-returned-king",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from the public EDHREC commander page for Kenrith, the Returned King.",
+      "workspace": {
+        "id": "kenrith-edhrec-average",
+        "name": "Kenrith Public Average Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Kenrith, the Returned King",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{4}{W}",
+              "typeLine": "Legendary Creature - Human Noble",
+              "manaValue": 5,
+              "oracleText": "Activated abilities create life gain, counters, draw, reanimation, and haste.",
+              "colorIdentity": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Kenrith Five-Color Land Package",
+            "quantity": 37,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Average Five-Color Ramp Package",
+            "quantity": 9,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{2}",
+              "typeLine": "Artifact",
+              "manaValue": 2,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Draw Package",
+            "quantity": 8,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{2}{U}",
+              "typeLine": "Instant",
+              "manaValue": 3,
+              "oracleText": "Draw two cards.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Interaction Package",
+            "quantity": 8,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{1}{W}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Exile target creature.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Politics Package",
+            "quantity": 12,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{2}{W}",
+              "typeLine": "Enchantment",
+              "manaValue": 3,
+              "oracleText": "Players draw cards or gain life.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Combo Package",
+            "quantity": 3,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{1}{B}",
+              "typeLine": "Creature - Wizard",
+              "manaValue": 2,
+              "oracleText": "Combo enabler for reanimation loops.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Tutor Package",
+            "quantity": 3,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{1}{B}",
+              "typeLine": "Sorcery",
+              "manaValue": 2,
+              "oracleText": "Search your library for a creature card.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Win Package",
+            "quantity": 4,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{3}{W}{U}",
+              "typeLine": "Creature - Avatar",
+              "manaValue": 5,
+              "oracleText": "Large table payoff.",
+              "colorIdentity": [ "W", "U" ]
+            }
+          },
+          {
+            "name": "Average Kenrith Utility Package",
+            "quantity": 15,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{3}{G}",
+              "typeLine": "Creature - Beast",
+              "manaValue": 4,
+              "oracleText": "Flexible value creature.",
+              "colorIdentity": [ "G" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "kenrith-cedh-template",
+      "name": "Kenrith cEDH Template",
+      "label": "public cEDH commander template",
+      "groupId": "kenrith-public-ladder",
+      "profile": "combo",
+      "sourceKind": "moxfield",
+      "sourceUri": "https://moxfield.com/decks/PWUWJEIO70y6CDJpK9IY_A",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from a public Kenrith cEDH Moxfield primer surfaced by search.",
+      "workspace": {
+        "id": "kenrith-cedh-template",
+        "name": "Kenrith cEDH Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Kenrith, the Returned King",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{4}{W}",
+              "typeLine": "Legendary Creature - Human Noble",
+              "manaValue": 5,
+              "oracleText": "Activated abilities create life gain, counters, draw, reanimation, and haste.",
+              "colorIdentity": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Kenrith Fast Five-Color Land Package",
+            "quantity": 28,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Kenrith Zero Mana Artifact Package",
+            "quantity": 8,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{0}",
+              "typeLine": "Artifact",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Kenrith One Mana Ramp Package",
+            "quantity": 5,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{G}",
+              "typeLine": "Creature - Druid",
+              "manaValue": 1,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [ "G" ],
+              "producedMana": [ "W", "U", "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Kenrith Efficient Tutor Package",
+            "quantity": 12,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Search your library for a combo card, reveal it, put it into your hand, then shuffle.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Kenrith Cheap Draw Package",
+            "quantity": 8,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Kenrith Free Interaction Package",
+            "quantity": 14,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Counter target spell.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Kenrith Consult Combo Package",
+            "quantity": 6,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Combo. Copy a win ability whenever your library is empty.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Kenrith Dockside Loop Package",
+            "quantity": 5,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{1}{R}",
+              "typeLine": "Creature - Goblin Pirate",
+              "manaValue": 2,
+              "oracleText": "Combo. Add mana with Treasures whenever this loop repeats.",
+              "colorIdentity": [ "R" ],
+              "producedMana": [ "R" ]
+            }
+          },
+          {
+            "name": "Kenrith Compact Win Package",
+            "quantity": 4,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{U}{B}",
+              "typeLine": "Creature - Merfolk Wizard",
+              "manaValue": 2,
+              "oracleText": "Win the game if your library is empty.",
+              "colorIdentity": [ "U", "B" ]
+            }
+          },
+          {
+            "name": "Kenrith Cheap Protection Package",
+            "quantity": 9,
+            "primaryCategory": "Protection",
+            "categories": [ "Protection" ],
+            "snapshot": {
+              "manaCost": "{W}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Target permanent gains protection until end of turn.",
+              "colorIdentity": [ "W" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "winota-edhrec-average",
+      "name": "Winota Public Average Template",
+      "label": "public average commander template",
+      "groupId": "winota-public-ladder",
+      "profile": "aggro",
+      "sourceKind": "edhrec",
+      "sourceUri": "https://edhrec.com/commanders/winota-joiner-of-forces",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from the public EDHREC commander page for Winota, Joiner of Forces.",
+      "workspace": {
+        "id": "winota-edhrec-average",
+        "name": "Winota Public Average Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Winota, Joiner of Forces",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{2}{R}{W}",
+              "typeLine": "Legendary Creature - Human Warrior",
+              "manaValue": 4,
+              "oracleText": "Whenever a non-Human creature you control attacks, look at the top six cards and put a Human creature onto the battlefield tapped and attacking.",
+              "colorIdentity": [ "R", "W" ]
+            }
+          },
+          {
+            "name": "Winota Plains Package",
+            "quantity": 15,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Basic Land - Plains",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {W}.",
+              "colorIdentity": [],
+              "producedMana": [ "W" ]
+            }
+          },
+          {
+            "name": "Winota Mountain Package",
+            "quantity": 15,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Basic Land - Mountain",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {R}.",
+              "colorIdentity": [],
+              "producedMana": [ "R" ]
+            }
+          },
+          {
+            "name": "Winota Boros Dual Package",
+            "quantity": 6,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {R} or {W}.",
+              "colorIdentity": [],
+              "producedMana": [ "R", "W" ]
+            }
+          },
+          {
+            "name": "Average Boros Ramp Package",
+            "quantity": 8,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{2}",
+              "typeLine": "Artifact",
+              "manaValue": 2,
+              "oracleText": "{T}: Add one mana of any color in your commander's color identity.",
+              "colorIdentity": [],
+              "producedMana": [ "R", "W" ]
+            }
+          },
+          {
+            "name": "Average Non-Human Enabler Package",
+            "quantity": 14,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{1}{R}",
+              "typeLine": "Creature - Goblin",
+              "manaValue": 2,
+              "oracleText": "This non-Human creature attacks to trigger Winota.",
+              "colorIdentity": [ "R" ]
+            }
+          },
+          {
+            "name": "Average Human Hit Package",
+            "quantity": 14,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{3}{W}",
+              "typeLine": "Creature - Human Soldier",
+              "manaValue": 4,
+              "oracleText": "Attacking Humans create combat pressure.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Average Boros Interaction Package",
+            "quantity": 6,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{1}{W}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Exile target attacking creature.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Average Winota Protection Package",
+            "quantity": 4,
+            "primaryCategory": "Protection",
+            "categories": [ "Protection" ],
+            "snapshot": {
+              "manaCost": "{W}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Target permanent gains indestructible until end of turn.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Average Winota Stax Package",
+            "quantity": 3,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{2}{W}",
+              "typeLine": "Creature - Human Advisor",
+              "manaValue": 3,
+              "oracleText": "Opponents cannot cast more than one spell each turn.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Average Winota Draw Package",
+            "quantity": 5,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{2}{R}",
+              "typeLine": "Sorcery",
+              "manaValue": 3,
+              "oracleText": "Draw two cards, then discard a card.",
+              "colorIdentity": [ "R" ]
+            }
+          },
+          {
+            "name": "Average Winota Utility Package",
+            "quantity": 9,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{3}{R}",
+              "typeLine": "Creature - Soldier",
+              "manaValue": 4,
+              "oracleText": "Create a creature token.",
+              "colorIdentity": [ "R" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "winota-cedh-template",
+      "name": "Winota cEDH Template",
+      "label": "public cEDH commander template",
+      "groupId": "winota-public-ladder",
+      "profile": "stax",
+      "sourceKind": "moxfield",
+      "sourceUri": "https://moxfield.com/decks/wUdP6ylCNEmzmswF9zulDg",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from a public Winota cEDH Moxfield list surfaced by search.",
+      "workspace": {
+        "id": "winota-cedh-template",
+        "name": "Winota cEDH Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Winota, Joiner of Forces",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{2}{R}{W}",
+              "typeLine": "Legendary Creature - Human Warrior",
+              "manaValue": 4,
+              "oracleText": "Whenever a non-Human creature you control attacks, look at the top six cards and put a Human creature onto the battlefield tapped and attacking.",
+              "colorIdentity": [ "R", "W" ]
+            }
+          },
+          {
+            "name": "Winota Fast Boros Land Package",
+            "quantity": 28,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {R} or {W}.",
+              "colorIdentity": [],
+              "producedMana": [ "R", "W" ]
+            }
+          },
+          {
+            "name": "Winota Fast Mana Package",
+            "quantity": 8,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{0}",
+              "typeLine": "Artifact",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "R", "W" ]
+            }
+          },
+          {
+            "name": "Winota Cheap Non-Human Package",
+            "quantity": 18,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{R}",
+              "typeLine": "Creature - Goblin",
+              "manaValue": 1,
+              "oracleText": "This non-Human creature attacks to trigger Winota.",
+              "colorIdentity": [ "R" ]
+            }
+          },
+          {
+            "name": "Winota High-Impact Human Package",
+            "quantity": 16,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{2}{W}",
+              "typeLine": "Creature - Human Soldier",
+              "manaValue": 3,
+              "oracleText": "Attacking Humans create combat pressure and lock pieces.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Winota Stax Package",
+            "quantity": 10,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{1}{W}",
+              "typeLine": "Creature - Human Advisor",
+              "manaValue": 2,
+              "oracleText": "Opponents cannot cast more than one spell each turn.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Winota Free Interaction Package",
+            "quantity": 10,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{W}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Prevent a spell or ability from stopping combat.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Winota Tutor Package",
+            "quantity": 4,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{W}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Search your library for an artifact or enchantment.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Winota Cheap Protection Package",
+            "quantity": 3,
+            "primaryCategory": "Protection",
+            "categories": [ "Protection" ],
+            "snapshot": {
+              "manaCost": "{W}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Target permanent gains indestructible until end of turn.",
+              "colorIdentity": [ "W" ]
+            }
+          },
+          {
+            "name": "Winota Compact Draw Package",
+            "quantity": 2,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{R}",
+              "typeLine": "Sorcery",
+              "manaValue": 1,
+              "oracleText": "Discard a card, then draw two cards.",
+              "colorIdentity": [ "R" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "korvold-edhrec-average",
+      "name": "Korvold Public Average Template",
+      "label": "public average commander template",
+      "groupId": "korvold-public-ladder",
+      "profile": "value",
+      "sourceKind": "edhrec",
+      "sourceUri": "https://edhrec.com/commanders/korvold-fae-cursed-king",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from the public EDHREC commander page for Korvold, Fae-Cursed King.",
+      "workspace": {
+        "id": "korvold-edhrec-average",
+        "name": "Korvold Public Average Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Korvold, Fae-Cursed King",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{2}{B}{R}{G}",
+              "typeLine": "Legendary Creature - Dragon Noble",
+              "manaValue": 5,
+              "oracleText": "Whenever Korvold enters the battlefield or attacks, sacrifice another permanent. Whenever you sacrifice a permanent, put a +1/+1 counter on Korvold and draw a card.",
+              "colorIdentity": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Korvold Jund Land Package",
+            "quantity": 36,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {B}, {R}, or {G}.",
+              "colorIdentity": [],
+              "producedMana": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Average Jund Ramp Package",
+            "quantity": 8,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{2}",
+              "typeLine": "Artifact",
+              "manaValue": 2,
+              "oracleText": "{T}: Add one mana of any color in your commander's color identity.",
+              "colorIdentity": [],
+              "producedMana": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Average Korvold Treasure Package",
+            "quantity": 10,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{2}{R}",
+              "typeLine": "Creature - Goblin",
+              "manaValue": 3,
+              "oracleText": "Create Treasure tokens and sacrifice permanents.",
+              "colorIdentity": [ "R" ],
+              "producedMana": [ "R" ]
+            }
+          },
+          {
+            "name": "Average Korvold Draw Package",
+            "quantity": 6,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{2}{B}",
+              "typeLine": "Sorcery",
+              "manaValue": 3,
+              "oracleText": "Draw two cards and lose two life.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Jund Interaction Package",
+            "quantity": 6,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{1}{B}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Destroy target creature.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Korvold Tutor Package",
+            "quantity": 3,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{1}{B}",
+              "typeLine": "Sorcery",
+              "manaValue": 2,
+              "oracleText": "Search your library for a creature card.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Korvold Aristocrats Package",
+            "quantity": 4,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{3}{B}",
+              "typeLine": "Creature - Vampire",
+              "manaValue": 4,
+              "oracleText": "Whenever a permanent is sacrificed, each opponent loses 1 life.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Average Korvold Dragon Package",
+            "quantity": 10,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{4}{R}{G}",
+              "typeLine": "Creature - Dragon",
+              "manaValue": 6,
+              "oracleText": "Flying and large combat pressure.",
+              "colorIdentity": [ "R", "G" ]
+            }
+          },
+          {
+            "name": "Average Korvold Utility Package",
+            "quantity": 16,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{3}{G}",
+              "typeLine": "Creature - Elf Shaman",
+              "manaValue": 4,
+              "oracleText": "Sacrifice a permanent for value.",
+              "colorIdentity": [ "G" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "korvold-cedh-template",
+      "name": "Korvold cEDH Template",
+      "label": "public cEDH commander template",
+      "groupId": "korvold-public-ladder",
+      "profile": "combo",
+      "sourceKind": "moxfield",
+      "sourceUri": "https://moxfield.com/decks/PRzOvTSjm0qDmpZKoFTBpw",
+      "capturedAt": "2026-06-10",
+      "sourceNote": "Offline normalized package snapshot from a public Korvold cEDH Moxfield list surfaced by search.",
+      "workspace": {
+        "id": "korvold-cedh-template",
+        "name": "Korvold cEDH Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Korvold, Fae-Cursed King",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{2}{B}{R}{G}",
+              "typeLine": "Legendary Creature - Dragon Noble",
+              "manaValue": 5,
+              "oracleText": "Whenever Korvold enters the battlefield or attacks, sacrifice another permanent. Whenever you sacrifice a permanent, put a +1/+1 counter on Korvold and draw a card.",
+              "colorIdentity": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Korvold Fast Jund Land Package",
+            "quantity": 30,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {B}, {R}, or {G}.",
+              "colorIdentity": [],
+              "producedMana": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Korvold Fast Mana Package",
+            "quantity": 9,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{0}",
+              "typeLine": "Artifact",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Korvold One Mana Ramp Package",
+            "quantity": 6,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{G}",
+              "typeLine": "Creature - Elf Druid",
+              "manaValue": 1,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [ "G" ],
+              "producedMana": [ "B", "R", "G" ]
+            }
+          },
+          {
+            "name": "Korvold Efficient Tutor Package",
+            "quantity": 12,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Search your library for a combo card, reveal it, put it into your hand, then shuffle.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Korvold Cheap Draw Package",
+            "quantity": 8,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Draw a card and lose 1 life.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Korvold Cheap Interaction Package",
+            "quantity": 10,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{B}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Destroy target creature or counter a triggered ability.",
+              "colorIdentity": [ "B" ]
+            }
+          },
+          {
+            "name": "Korvold Food Chain Package",
+            "quantity": 8,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{2}{G}",
+              "typeLine": "Enchantment",
+              "manaValue": 3,
+              "oracleText": "Combo. Add mana whenever a creature is exiled and cast creatures repeatedly.",
+              "colorIdentity": [ "G" ],
+              "producedMana": [ "G" ]
+            }
+          },
+          {
+            "name": "Korvold Dockside Treasure Package",
+            "quantity": 8,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{1}{R}",
+              "typeLine": "Creature - Goblin Pirate",
+              "manaValue": 2,
+              "oracleText": "Combo. Add mana with Treasures whenever sacrifice triggers loop.",
+              "colorIdentity": [ "R" ],
+              "producedMana": [ "R" ]
+            }
+          },
+          {
+            "name": "Korvold Compact Win Package",
+            "quantity": 4,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{1}{B}",
+              "typeLine": "Creature - Devil",
+              "manaValue": 2,
+              "oracleText": "Whenever a permanent is sacrificed, deal 1 damage to any target.",
+              "colorIdentity": [ "B", "R" ]
+            }
+          },
+          {
+            "name": "Korvold Cheap Protection Package",
+            "quantity": 4,
+            "primaryCategory": "Protection",
+            "categories": [ "Protection" ],
+            "snapshot": {
+              "manaCost": "{G}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Target permanent gains hexproof until end of turn.",
+              "colorIdentity": [ "G" ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expectations": [
+    {
+      "expectationId": "yuriko-cedh-assembles-routes-before-average",
+      "groupId": "yuriko-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "combo" ],
+      "metric": "scorecard:route-assembly",
+      "direction": "higher",
+      "preferredFixtureId": "yuriko-cedh-template",
+      "otherFixtureId": "yuriko-edhrec-average",
+      "minimumDelta": 0.05,
+      "rationale": "The cEDH Yuriko package is denser in cheap tutors, topdeck control, and compact enablers."
+    },
+    {
+      "expectationId": "yuriko-cedh-holds-more-interaction-than-average",
+      "groupId": "yuriko-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "interaction" ],
+      "metric": "scorecard:interaction-readiness",
+      "direction": "higher",
+      "preferredFixtureId": "yuriko-cedh-template",
+      "otherFixtureId": "yuriko-edhrec-average",
+      "minimumDelta": 0.02,
+      "rationale": "The cEDH Yuriko package carries a denser cheap interaction suite."
+    },
+    {
+      "expectationId": "kenrith-cedh-assembles-routes-before-average",
+      "groupId": "kenrith-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "combo" ],
+      "metric": "scorecard:route-assembly",
+      "direction": "higher",
+      "preferredFixtureId": "kenrith-cedh-template",
+      "otherFixtureId": "kenrith-edhrec-average",
+      "minimumDelta": 0.08,
+      "rationale": "The cEDH Kenrith package is built around compact tutor-backed combo routes."
+    },
+    {
+      "expectationId": "kenrith-cedh-develops-earlier-than-average",
+      "groupId": "kenrith-public-ladder",
+      "severity": "advisory",
+      "tags": [ "same-commander", "cedh-contrast", "curve" ],
+      "metric": "scorecard:early-development",
+      "direction": "higher",
+      "preferredFixtureId": "kenrith-cedh-template",
+      "otherFixtureId": "kenrith-edhrec-average",
+      "minimumDelta": 0.02,
+      "rationale": "The cEDH Kenrith package shifts mana and selection to earlier turns, but five-color mana can make this noisy."
+    },
+    {
+      "expectationId": "winota-cedh-develops-earlier-than-average",
+      "groupId": "winota-public-ladder",
+      "severity": "advisory",
+      "tags": [ "same-commander", "cedh-contrast", "curve", "stax" ],
+      "metric": "scorecard:early-development",
+      "direction": "higher",
+      "preferredFixtureId": "winota-cedh-template",
+      "otherFixtureId": "winota-edhrec-average",
+      "minimumDelta": 0.02,
+      "rationale": "The cEDH Winota package has more zero- and one-mana development."
+    },
+    {
+      "expectationId": "winota-cedh-holds-more-interaction-than-average",
+      "groupId": "winota-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "interaction", "stax" ],
+      "metric": "scorecard:interaction-readiness",
+      "direction": "higher",
+      "preferredFixtureId": "winota-cedh-template",
+      "otherFixtureId": "winota-edhrec-average",
+      "minimumDelta": 0.04,
+      "rationale": "The cEDH Winota package runs more cheap interaction and disruptive pressure."
+    },
+    {
+      "expectationId": "korvold-cedh-assembles-routes-before-average",
+      "groupId": "korvold-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "combo" ],
+      "metric": "scorecard:route-assembly",
+      "direction": "higher",
+      "preferredFixtureId": "korvold-cedh-template",
+      "otherFixtureId": "korvold-edhrec-average",
+      "minimumDelta": 0.08,
+      "rationale": "The cEDH Korvold package is tutor- and compact-combo-dense compared with the public average package."
+    },
+    {
+      "expectationId": "korvold-cedh-develops-earlier-than-average",
+      "groupId": "korvold-public-ladder",
+      "severity": "advisory",
+      "tags": [ "same-commander", "cedh-contrast", "curve" ],
+      "metric": "scorecard:early-development",
+      "direction": "higher",
+      "preferredFixtureId": "korvold-cedh-template",
+      "otherFixtureId": "korvold-edhrec-average",
+      "minimumDelta": 0.02,
+      "rationale": "The cEDH Korvold package has more fast mana, but Jund color requirements can make early-development separation noisy."
+    }
+  ]
+}

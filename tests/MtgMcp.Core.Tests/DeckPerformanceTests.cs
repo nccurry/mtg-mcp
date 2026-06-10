@@ -214,6 +214,90 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies that replay metadata and fingerprints are stable for equivalent inputs.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_ReturnsStableReplayMetadata()
+    {
+        DeckWorkspace deck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 29);
+
+        DeckPerformanceAnalysis first = AnalyzeDirect(deck, simulations: 200, maxTurn: 5, seed: 123);
+        DeckPerformanceAnalysis second = AnalyzeDirect(deck, simulations: 200, maxTurn: 5, seed: 123);
+
+        first.SchemaVersion.Should().Be(2);
+        first.ModelVersion.Should().Be("stats-lab-1");
+        first.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
+        first.DeckFingerprint.Should().HaveLength(64);
+        first.CardDataFingerprint.Should().HaveLength(64);
+        first.ProfileFingerprint.Should().HaveLength(64);
+        first.DeckFingerprint.Should().Be(second.DeckFingerprint);
+        first.CardDataFingerprint.Should().Be(second.CardDataFingerprint);
+        first.ProfileFingerprint.Should().Be(second.ProfileFingerprint);
+        first.OpeningHands.SevenCardKeepRate.Should().Be(second.OpeningHands.SevenCardKeepRate);
+        Probability(first, "land-drop-by-turn", 3).Should().Be(Probability(second, "land-drop-by-turn", 3));
+    }
+
+    /// <summary>
+    /// Verifies that fingerprints separate deck construction, card data, and profile inputs.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_FingerprintsChangeForRelevantInputs()
+    {
+        DeckPerformanceAnalysis baseline = AnalyzeDirect(CreatePerformanceDeck(plains: 18, islands: 18, utility: 29), seed: 124);
+        DeckPerformanceAnalysis quantityChanged = AnalyzeDirect(CreatePerformanceDeck(plains: 19, islands: 18, utility: 28), seed: 124);
+        DeckWorkspace cardDataDeck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 29);
+        cardDataDeck.Cards.Single(card => card.Name == "Utility Spell").Snapshot!.OracleText = "Draw a card.";
+        DeckPerformanceAnalysis cardDataChanged = AnalyzeDirect(cardDataDeck, seed: 124);
+        DeckWorkspace profileDeck = CreatePerformanceDeck(plains: 18, islands: 18, utility: 29);
+        profileDeck.Description = DeckIntentText.UpsertDescription(profileDeck.Description, "Simulation Profile: combo");
+        DeckPerformanceAnalysis profileChanged = AnalyzeDirect(profileDeck, profile: "auto", seed: 124);
+
+        quantityChanged.DeckFingerprint.Should().NotBe(baseline.DeckFingerprint);
+        quantityChanged.CardDataFingerprint.Should().Be(baseline.CardDataFingerprint);
+        cardDataChanged.DeckFingerprint.Should().Be(baseline.DeckFingerprint);
+        cardDataChanged.CardDataFingerprint.Should().NotBe(baseline.CardDataFingerprint);
+        profileChanged.ProfileFingerprint.Should().NotBe(baseline.ProfileFingerprint);
+    }
+
+    /// <summary>
+    /// Verifies that the deterministic random source replays the same sequence for the same seed.
+    /// </summary>
+    [Fact]
+    public void DeterministicSimulationRandom_ReplaysSequencesForSameSeed()
+    {
+        DeterministicSimulationRandom first = new(42);
+        DeterministicSimulationRandom second = new(42);
+        DeterministicSimulationRandom different = new(43);
+
+        List<int> firstValues = [];
+        List<int> secondValues = [];
+        List<int> differentValues = [];
+        for (int index = 0; index < 10; index++)
+        {
+            firstValues.Add(first.Next(1_000));
+            secondValues.Add(second.Next(1_000));
+            differentValues.Add(different.Next(1_000));
+        }
+
+        firstValues.Should().Equal(secondValues);
+        firstValues.Should().Equal(793, 45, 469, 118, 70, 428, 570, 360, 455, 210);
+        firstValues.Should().NotEqual(differentValues);
+    }
+
+    /// <summary>
+    /// Verifies that deterministic random ranges reject impossible bounds.
+    /// </summary>
+    [Fact]
+    public void DeterministicSimulationRandom_RejectsNonPositiveUpperBound()
+    {
+        DeterministicSimulationRandom random = new(42);
+
+        Action act = () => random.Next(0);
+
+        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("exclusiveUpperBound");
+    }
+
+    /// <summary>
     /// Verifies that repeated colored pips require repeated colored sources.
     /// </summary>
     [Fact]
@@ -790,6 +874,103 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies that derived scorecard dimensions follow fixture directionality.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_ScorecardDimensionsFollowDeckbuildingExpectations()
+    {
+        DeckPerformanceAnalysis lowLand = AnalyzeDirect(CreateLandSpellDeck(lands: 20, spells: 80), seed: 20);
+        DeckPerformanceAnalysis highLand = AnalyzeDirect(CreateLandSpellDeck(lands: 40, spells: 60), seed: 20);
+        DeckPerformanceAnalysis noInteraction = AnalyzeDirect(CreateInteractionDensityDeck(interaction: 0), maxTurn: 2, seed: 21);
+        DeckPerformanceAnalysis interactionDense = AnalyzeDirect(CreateInteractionDensityDeck(interaction: 20), maxTurn: 2, seed: 21);
+        DeckPerformanceAnalysis lowCurve = AnalyzeDirect(CreateCurvePressureDeck(highManaCards: 0), maxTurn: 4, seed: 22);
+        DeckPerformanceAnalysis highCurve = AnalyzeDirect(CreateCurvePressureDeck(highManaCards: 30), maxTurn: 4, seed: 22);
+
+        ScorecardScore(highLand, "mana-stability").Should().BeGreaterThan(ScorecardScore(lowLand, "mana-stability") + 0.15);
+        ScorecardScore(interactionDense, "interaction-readiness")
+            .Should().BeGreaterThan(ScorecardScore(noInteraction, "interaction-readiness") + 0.20);
+        ScorecardScore(lowCurve, "stranded-resilience")
+            .Should().BeGreaterThan(ScorecardScore(highCurve, "stranded-resilience") + 0.20);
+        highLand.Scorecard.Dimensions.Should().OnlyContain(dimension => dimension.Score >= 0 && dimension.Score <= 1);
+    }
+
+    /// <summary>
+    /// Verifies that trace summaries are bounded and deterministic.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_ReturnsBoundedDeterministicTraceSummary()
+    {
+        DeckPerformanceAnalysis first = AnalyzeDirect(
+            CreatePerformanceDeck(plains: 18, islands: 18, utility: 29),
+            simulations: 300,
+            maxTurn: 5,
+            seed: 23);
+        DeckPerformanceAnalysis second = AnalyzeDirect(
+            CreatePerformanceDeck(plains: 18, islands: 18, utility: 29),
+            simulations: 300,
+            maxTurn: 5,
+            seed: 23);
+
+        first.TraceSummary.AggregateCounters["total-runs"].Should().Be(300);
+        first.TraceSummary.AggregateCounters.Should().ContainKey("no-mulligan-runs");
+        first.TraceSummary.SampledRuns.Should().HaveCount(3);
+        first.TraceSummary.SampledRuns.Select(run => run.Seed).Should().Equal(23, 24, 25);
+        first.TraceSummary.SampledRuns.Select(run => run.LandDropsMade)
+            .Should()
+            .Equal(second.TraceSummary.SampledRuns.Select(run => run.LandDropsMade));
+        first.TraceSummary.Notes.Should().Contain(note => note.Contains("not full play logs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that trace counters distinguish no-mulligan keeps from Commander free-mulligan seven-card keeps.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_TraceSummarySeparatesFreeMulliganSevenCardKeeps()
+    {
+        DeckPerformanceAnalysis analysis = AnalyzeDirect(
+            CreatePerformanceDeck(plains: 10, islands: 10, utility: 45),
+            simulations: 2_000,
+            maxTurn: 1,
+            seed: 607,
+            includeMulligans: true);
+
+        int zeroMulligans = analysis.OpeningHands.MulliganDistribution.GetValueOrDefault(0);
+        int oneMulligan = analysis.OpeningHands.MulliganDistribution.GetValueOrDefault(1);
+
+        oneMulligan.Should().BeGreaterThan(0);
+        analysis.TraceSummary.AggregateCounters["no-mulligan-runs"].Should().Be(zeroMulligans);
+        analysis.TraceSummary.AggregateCounters["kept-seven-runs"].Should().Be(zeroMulligans + oneMulligan);
+        analysis.TraceSummary.AggregateCounters["mulliganed-runs"].Should().Be(analysis.Simulations - zeroMulligans);
+    }
+
+    /// <summary>
+    /// Verifies that developer Markdown summaries present metrics as advisory evidence.
+    /// </summary>
+    [Fact]
+    public void PerformanceMarkdownSummary_IncludesReplayMetadataAndAdvisoryLanguage()
+    {
+        DeckPerformanceAnalysis analysis = AnalyzeDirect(
+            CreatePerformanceDeck(plains: 18, islands: 18, utility: 29),
+            simulations: 300,
+            maxTurn: 5,
+            seed: 24);
+
+        string markdown = DeckPerformanceMarkdownSummary.Build(analysis);
+
+        markdown.Should().Contain("Stats Lab Performance Summary");
+        markdown.Should().Contain("not an objective deck power score");
+        markdown.Should().Contain($"`{analysis.ModelVersion}`");
+        markdown.Should().Contain($"`{analysis.DeckFingerprint}`");
+        markdown.Should().Contain($"`{analysis.CardDataFingerprint}`");
+        markdown.Should().Contain($"`{analysis.ProfileFingerprint}`");
+        markdown.Should().Contain("Scorecard Dimensions");
+        markdown.Should().Contain("Key Scenarios");
+        markdown.Should().Contain("Trace Summary");
+        markdown.Should().Contain("mana-stability");
+        markdown.Should().Contain("commander-by-turn");
+    }
+
+    /// <summary>
     /// Verifies that conditional tapped lands are not treated as guaranteed early untapped sources.
     /// </summary>
     [Fact]
@@ -959,6 +1140,7 @@ public sealed class DeckPerformanceTests
     /// </summary>
     private static DeckPerformanceAnalysis AnalyzeDirect(
         DeckWorkspace deck,
+        string profile = "commander-default",
         int simulations = 500,
         int maxTurn = 5,
         int seed = 1,
@@ -966,7 +1148,7 @@ public sealed class DeckPerformanceTests
     {
         return DeckPerformanceAnalyzer.Analyze(
             deck,
-            "commander-default",
+            profile,
             simulations,
             maxTurn,
             seed,
@@ -1017,6 +1199,14 @@ public sealed class DeckPerformanceTests
     private static double ScenarioRate(DeckPerformanceAnalysis analysis, string name)
     {
         return analysis.Scenarios.Single(row => row.Name == name).SuccessRate;
+    }
+
+    /// <summary>
+    /// Reads a scorecard dimension.
+    /// </summary>
+    private static double ScorecardScore(DeckPerformanceAnalysis analysis, string name)
+    {
+        return analysis.Scorecard.Dimensions.Single(row => row.Name == name).Score;
     }
 
     /// <summary>

@@ -48,7 +48,7 @@ internal static partial class DeckPerformanceAnalyzer
                 cardFacts,
                 deckColors,
                 safeMaxTurn,
-                seed + index,
+                unchecked(seed + index),
                 includeMulligans,
                 resolvedProfile));
         }
@@ -57,6 +57,12 @@ internal static partial class DeckPerformanceAnalyzer
         {
             WorkspaceId = workspace.Id,
             ModelLabel = "strict-sequencing-model",
+            SchemaVersion = StatsLabSchemaVersion,
+            ModelVersion = StatsLabModelVersion,
+            DeckFingerprint = BuildDeckFingerprint(workspace, included),
+            CardDataFingerprint = BuildCardDataFingerprint(included),
+            ProfileFingerprint = BuildProfileFingerprint(resolvedProfile),
+            RngKind = DeterministicSimulationRandom.Kind,
             Profile = resolvedProfile.Id,
             ProfileResolution = profileResolution,
             Simulations = safeSimulations,
@@ -82,6 +88,8 @@ internal static partial class DeckPerformanceAnalyzer
             resolvedProfile,
             intent,
             cardFacts);
+        analysis.Scorecard = BuildPerformanceScorecard(analysis);
+        analysis.TraceSummary = BuildTraceSummary(runs, seed);
         AddPerformanceNotes(analysis, workspace, included, colorIdentityKnown, profileResolution, intent, cardFacts);
         analysis.Warnings.AddRange(profileResolution.Warnings);
         return analysis;

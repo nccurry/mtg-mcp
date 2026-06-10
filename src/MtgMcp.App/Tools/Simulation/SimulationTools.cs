@@ -127,7 +127,7 @@ public sealed class SimulationTools
     /// Runs deterministic whole-deck performance analysis.
     /// </summary>
     [McpServerTool(Name = "deck_analyze_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Run deterministic Stats Lab Monte Carlo analysis for opening hands, mulligans, land drops, colors, castability, command-zone timing, combo assembly, stranded cards, and named scenarios.")]
+    [Description("Run deterministic Stats Lab Monte Carlo analysis for opening hands, mulligans, land drops, colors, castability, command-zone timing, combo assembly, stranded cards, and named scenarios. Returns modelVersion, replay fingerprints, metric scorecard dimensions that are not a power ranking, and bounded traceSummary samples.")]
     public Task<DeckPerformanceAnalysis> AnalyzeDeckPerformanceAsync(
         string workspaceId,
         [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
@@ -152,7 +152,7 @@ public sealed class SimulationTools
     /// Compares performance before and after a persisted deck plan.
     /// </summary>
     [McpServerTool(Name = "deck_plan_compare_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Preview a persisted deck edit plan and compare deterministic Stats Lab performance before and after the changes.")]
+    [Description("Preview a persisted deck edit plan and compare deterministic Stats Lab performance before and after the changes. Use scorecard dimensions, scenario deltas, modelVersion, replay fingerprints, and traceSummary context as metric evidence, not a universal deck power score.")]
     public Task<DeckPerformanceComparison> ComparePlanPerformanceAsync(
         string planId,
         [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]

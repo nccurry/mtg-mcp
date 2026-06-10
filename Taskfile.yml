@@ -7,6 +7,7 @@ vars:
   SOLUTION: mtg-mcp.slnx
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
   BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
+  CALIBRATION_PROJECT: tests/MtgMcp.Calibration/MtgMcp.Calibration.csproj
   CONFIGURATION: Release
   DOTNET: '{{if eq OS "windows"}}.dotnet/dotnet.exe{{else}}./.dotnet/dotnet{{end}}'
   POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}pwsh -NoProfile{{end}}'
@@ -277,6 +278,17 @@ tasks:
         --
         --inProcess
         --filter "*FacetPredicateBenchmarks*"
+        {{.CLI_ARGS}}
+
+  calibrate:stats-lab:
+    desc: Generate the offline Stats Lab calibration report; pass args after --
+    deps: [restore]
+    cmds:
+      - >
+        {{.DOTNET}} run --project {{.CALIBRATION_PROJECT}}
+        --configuration {{.CONFIGURATION}}
+        --
+        --output {{.ARTIFACTS_DIR}}/stats-lab-calibration
         {{.CLI_ARGS}}
 
   coverage:

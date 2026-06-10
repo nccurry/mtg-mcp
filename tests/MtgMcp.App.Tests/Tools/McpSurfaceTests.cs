@@ -382,6 +382,33 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies that performance tool descriptions explain scorecards and replay metadata.
+    /// </summary>
+    [Fact]
+    public void PerformanceToolDescriptions_DescribeScorecardsAsMetricEvidence()
+    {
+        string analysisDescription = GetMethodDescription(
+            typeof(SimulationTools),
+            nameof(SimulationTools.AnalyzeDeckPerformanceAsync));
+        string comparisonDescription = GetMethodDescription(
+            typeof(SimulationTools),
+            nameof(SimulationTools.ComparePlanPerformanceAsync));
+
+        analysisDescription.Should()
+            .Contain("modelVersion")
+            .And.Contain("fingerprints")
+            .And.Contain("scorecard")
+            .And.Contain("not a power ranking")
+            .And.Contain("traceSummary");
+        comparisonDescription.Should()
+            .Contain("modelVersion")
+            .And.Contain("fingerprints")
+            .And.Contain("scorecard")
+            .And.Contain("not a universal deck power score")
+            .And.Contain("traceSummary");
+    }
+
+    /// <summary>
     /// Verifies that workspace resources expose workspaceId rather than legacy deckId.
     /// </summary>
     [Fact]
@@ -1151,6 +1178,17 @@ public sealed class McpSurfaceTests
             ?? throw new InvalidOperationException(
                 $"{type.Name}.{methodName} parameter {parameterName} does not have a description."
             );
+    }
+
+    /// <summary>
+    /// Gets a method description for public tool presentation assertions.
+    /// </summary>
+    private static string GetMethodDescription(Type type, string methodName)
+    {
+        MethodInfo method = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Single(method => method.Name == methodName);
+        return method.GetCustomAttribute<DescriptionAttribute>()?.Description
+            ?? throw new InvalidOperationException($"{type.Name}.{methodName} does not have a description.");
     }
 
     /// <summary>

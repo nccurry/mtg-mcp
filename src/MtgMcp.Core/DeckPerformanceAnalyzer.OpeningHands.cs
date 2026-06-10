@@ -10,7 +10,7 @@ internal static partial class DeckPerformanceAnalyzer
     /// </summary>
     private static PerformanceOpeningHand DrawPerformanceOpeningHand(
         IReadOnlyList<DeckCard> libraryTemplate,
-        Random random,
+        DeterministicSimulationRandom random,
         bool includeMulligans,
         PerformanceMulliganContext context,
         PerformanceCardFactsCache cardFacts)

@@ -8,11 +8,33 @@ Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not
 - Confidence intervals use an approximate 95 percent Wilson interval.
 - Average rows include the arithmetic mean and nearest-rank p25, p50, and p75 values.
 - Turn metrics use the latest simulated state at or before the requested turn.
-- A fixed seed must produce stable output for the same deck and inputs.
+- A fixed seed must produce stable output for the same deck and inputs when
+  `modelVersion`, `deckFingerprint`, `cardDataFingerprint`,
+  `profileFingerprint`, simulation count, and turn horizon match.
+- `schemaVersion` describes the result shape. `modelVersion` describes the
+  deterministic heuristic behavior. A changed `modelVersion` may intentionally
+  change probabilities even when the same seed is used.
+- `rngKind` identifies the deterministic random source used for replay.
 - Larger sample counts should narrow confidence intervals for the same metric.
 - Mana payment treats each source as exclusive for a payment. A source that can produce multiple colors offers choices, but it can only satisfy one mana symbol before it is spent.
 - Mulligan-enabled performance analysis uses a deterministic London mulligan policy that scores functional mana, early plays, early ramp, card flow, interaction, and commander timing. Commander and Brawl workspaces treat the first mulligan as free.
 - Profile-aware tools include `profileResolution`, which reports the selected simulation profile, source, auto-profile candidates, deck intent overrides, and non-fatal warnings.
+
+## Replay Metadata
+
+`deck_analyze_performance` and `deck_plan_compare_performance` should be
+presented with their replay metadata when results are compared or stored:
+
+- `modelVersion`: deterministic heuristic behavior version.
+- `schemaVersion`: result contract shape.
+- `deckFingerprint`: sampled deck construction inputs.
+- `cardDataFingerprint`: cached card fact inputs.
+- `profileFingerprint`: resolved simulation profile inputs.
+- `rngKind`, `seed`, `simulations`, `maxTurn`, and `includeMulligans`.
+
+Treat matching metadata as the condition for deterministic replay. If any of
+these values differ, metric changes may come from input or model changes rather
+than deck quality alone.
 
 ## Opening Hands
 
@@ -75,6 +97,38 @@ fallback wins.
 - `manaStrandedRate`: share of runs where total mana was insufficient.
 - `colorStrandedRate`: share of runs where color requirements were not satisfied.
 
+## Scorecard
+
+`scorecard.dimensions` derives scan-friendly dimensions from the metrics above.
+It is not a universal deck power score and should not be averaged into one.
+Present dimensions as separate metric evidence tied to a deck goal, a benchmark
+expectation, or a before/after plan comparison.
+
+- `mana-stability`: early land drops, untapped mana, and all-color access when
+  color identity is known.
+- `early-development`: early ramp, draw, and retained hand resources.
+- `interaction-readiness`: interaction held up by the profile-relevant early
+  turn.
+- `route-assembly`: combo or tutor-assisted route assembly.
+- `castability`: average nonland hand castability at the simulated horizon.
+- `stranded-resilience`: inverted high-mana stranded-card risk, so higher is
+  better.
+
+## Trace Summary
+
+`traceSummary` is bounded replay context, not a full game log. It includes
+aggregate counters across all runs plus a small deterministic sample of
+run summaries with per-run seed, mulligans, land drops,
+command-zone timing, route assembly timing, stranded-card count, and turns
+where interaction was held up.
+
+Aggregate counters distinguish `no-mulligan-runs` from `kept-seven-runs`;
+Commander and Brawl first free mulligans can still keep a seven-card hand.
+
+Trace samples are useful for explaining why a metric moved. They are not
+representative game transcripts and should not be treated as complete action
+logs.
+
 ## Scenarios
 
 - `commander-by-turn-4`: probability of commander deployment by the profile-adjusted target turn.
@@ -98,3 +152,10 @@ Each scenario includes relevant cards, assumptions, failure drivers, and observe
 - whether before and after confidence intervals overlap.
 
 Recommendation tests should assert directional changes, not exact point estimates, unless the fixture has an oracle outcome.
+
+## Markdown Summaries
+
+Internal developer artifacts may use `DeckPerformanceMarkdownSummary` to render
+one analysis as Markdown. The summary includes replay metadata, scorecard
+dimensions, key scenarios, bounded trace context, warnings, and advisory
+language that explicitly rejects objective power ranking.

@@ -200,6 +200,7 @@ public sealed class McpE2ETests
             });
 
         GetInt32(analysis, "deckSize").Should().Be(100);
+        AssertPerformanceTrustContract(analysis, expectedSimulations: 200);
         FindNamedTurn(GetArray(analysis, "turnProbabilities"), "land-drop-by-turn", 3)
             .GetProperty("sampleSize")
             .GetInt32()
@@ -212,6 +213,8 @@ public sealed class McpE2ETests
         JsonElement rampDelta = FindNamed(GetArray(comparison, "deltas"), "ramp-cast-by-turn-3", metricProperty: "metric");
         rampDelta.GetProperty("after").GetDouble().Should().BeGreaterThan(rampDelta.GetProperty("before").GetDouble());
         rampDelta.GetProperty("beforeLowConfidenceInterval").ValueKind.Should().NotBe(JsonValueKind.Null);
+        AssertPerformanceTrustContract(GetObject(comparison, "before"), expectedSimulations: 200);
+        AssertPerformanceTrustContract(GetObject(comparison, "after"), expectedSimulations: 200);
         JsonElement reference = GetArray(goldfishComparison, "referenceDecks").Should().ContainSingle().Subject;
         GetString(reference, "source").Should().Be("archidekt");
         GetString(GetObject(goldfishComparison, "activeDeck"), "source").Should().Be("workspace");
@@ -1018,6 +1021,7 @@ public sealed class McpE2ETests
             .Should()
             .Contain(note => note != null && note.Contains("Inga and Esika", StringComparison.OrdinalIgnoreCase));
         GetString(performance, "modelLabel").Should().Be("strict-sequencing-model");
+        AssertPerformanceTrustContract(performance, expectedSimulations: 100);
         GetArray(performance, "assumptions")
             .Select(note => note.GetString())
             .Should()
@@ -1650,6 +1654,39 @@ public sealed class McpE2ETests
         return GetProperty(odds, "rows")
             .EnumerateArray()
             .Single(row => string.Equals(GetString(row, "target"), target, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies the MCP JSON shape for Stats Lab trust-contract fields.
+    /// </summary>
+    private static void AssertPerformanceTrustContract(JsonElement analysis, int expectedSimulations)
+    {
+        analysis.TryGetProperty("schemaVersion", out JsonElement schemaVersion).Should().BeTrue();
+        schemaVersion.GetInt32().Should().Be(2);
+        analysis.TryGetProperty("modelVersion", out JsonElement modelVersion).Should().BeTrue();
+        modelVersion.GetString().Should().Be("stats-lab-1");
+        analysis.TryGetProperty("deckFingerprint", out JsonElement deckFingerprint).Should().BeTrue();
+        (deckFingerprint.GetString() ?? "").Should().HaveLength(64);
+        analysis.TryGetProperty("cardDataFingerprint", out JsonElement cardDataFingerprint).Should().BeTrue();
+        (cardDataFingerprint.GetString() ?? "").Should().HaveLength(64);
+        analysis.TryGetProperty("profileFingerprint", out JsonElement profileFingerprint).Should().BeTrue();
+        (profileFingerprint.GetString() ?? "").Should().HaveLength(64);
+        analysis.TryGetProperty("rngKind", out JsonElement rngKind).Should().BeTrue();
+        rngKind.GetString().Should().Be("mtgmcp-splitmix64-v1");
+
+        analysis.TryGetProperty("scorecard", out JsonElement scorecard).Should().BeTrue();
+        scorecard.TryGetProperty("dimensions", out JsonElement dimensions).Should().BeTrue();
+        JsonElement manaStability = FindNamed(dimensions.EnumerateArray(), "mana-stability");
+        manaStability.GetProperty("score").GetDouble().Should().BeInRange(0, 1);
+        manaStability.GetProperty("sourceMetric").GetString().Should().NotBeNullOrWhiteSpace();
+
+        analysis.TryGetProperty("traceSummary", out JsonElement traceSummary).Should().BeTrue();
+        traceSummary.TryGetProperty("sampledRuns", out JsonElement sampledRuns).Should().BeTrue();
+        sampledRuns.GetArrayLength().Should().Be(3);
+        traceSummary.TryGetProperty("representativeRuns", out _).Should().BeFalse();
+        traceSummary.TryGetProperty("aggregateCounters", out JsonElement aggregateCounters).Should().BeTrue();
+        aggregateCounters.GetProperty("total-runs").GetInt32().Should().Be(expectedSimulations);
+        aggregateCounters.GetProperty("no-mulligan-runs").GetInt32().Should().BeGreaterThanOrEqualTo(0);
     }
 
     /// <summary>

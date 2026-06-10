@@ -16,6 +16,36 @@ public sealed class DeckPerformanceAnalysis
     public string ModelLabel { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the version of the JSON-compatible performance result shape.
+    /// </summary>
+    public int SchemaVersion { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deterministic Stats Lab behavior version.
+    /// </summary>
+    public string ModelVersion { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the fingerprint of deck construction inputs sampled by the simulator.
+    /// </summary>
+    public string DeckFingerprint { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the fingerprint of cached card facts used by the simulator.
+    /// </summary>
+    public string CardDataFingerprint { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the fingerprint of the resolved simulation profile.
+    /// </summary>
+    public string ProfileFingerprint { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deterministic random source label used for replay.
+    /// </summary>
+    public string RngKind { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the simulation profile name.
     /// </summary>
     public string Profile { get; set; } = SimulationProfileIds.Neutral;
@@ -91,6 +121,16 @@ public sealed class DeckPerformanceAnalysis
     public List<StrandedCardPerformance> StrandedCards { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets derived metric dimensions for scanning performance strengths and risks.
+    /// </summary>
+    public PerformanceScorecard Scorecard { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets bounded deterministic trace summaries for sampled simulation runs.
+    /// </summary>
+    public PerformanceTraceSummary TraceSummary { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets named deckbuilder scenarios evaluated from the runs.
     /// </summary>
     public List<ScenarioPerformance> Scenarios { get; set; } = [];
@@ -140,6 +180,130 @@ public sealed class DeckPerformanceComparison
     /// Gets or sets preview or analysis warnings.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
+/// Summarizes derived performance dimensions without producing a single power score.
+/// </summary>
+public sealed class PerformanceScorecard
+{
+    /// <summary>
+    /// Gets or sets named scorecard dimensions.
+    /// </summary>
+    public List<PerformanceScorecardDimension> Dimensions { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one derived performance dimension.
+/// </summary>
+public sealed class PerformanceScorecardDimension
+{
+    /// <summary>
+    /// Gets or sets the stable dimension name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the normalized score from 0 to 1.
+    /// </summary>
+    public double Score { get; set; }
+
+    /// <summary>
+    /// Gets or sets the main metric or scenario that produced the score.
+    /// </summary>
+    public string SourceMetric { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets a compact explanation of what the dimension means.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+}
+
+/// <summary>
+/// Provides bounded replay context without returning every simulated action.
+/// </summary>
+public sealed class PerformanceTraceSummary
+{
+    /// <summary>
+    /// Gets or sets aggregate counters across all simulated runs.
+    /// </summary>
+    public Dictionary<string, int> AggregateCounters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets deterministic sampled run summaries.
+    /// </summary>
+    public List<PerformanceTraceRunSummary> SampledRuns { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets trace summary notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Summarizes one sampled run without exposing a full play log.
+/// </summary>
+public sealed class PerformanceTraceRunSummary
+{
+    /// <summary>
+    /// Gets or sets the zero-based run index.
+    /// </summary>
+    public int RunIndex { get; set; }
+
+    /// <summary>
+    /// Gets or sets the per-run seed used for deterministic replay.
+    /// </summary>
+    public int Seed { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of mulligans taken.
+    /// </summary>
+    public int Mulligans { get; set; }
+
+    /// <summary>
+    /// Gets or sets the kept hand size.
+    /// </summary>
+    public int KeptHandSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets lands in the kept opening hand.
+    /// </summary>
+    public int KeptOpeningLands { get; set; }
+
+    /// <summary>
+    /// Gets or sets land drops made before the simulated horizon.
+    /// </summary>
+    public int LandDropsMade { get; set; }
+
+    /// <summary>
+    /// Gets or sets the earliest commander cast turn when observed.
+    /// </summary>
+    public int? CommanderCastTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the earliest Background cast turn when observed.
+    /// </summary>
+    public int? BackgroundCastTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the earliest combo assembly turn when observed.
+    /// </summary>
+    public int? ComboAssemblyTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the earliest tutor-assisted combo turn when observed.
+    /// </summary>
+    public int? TutorAssistedComboTurn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of cards stranded at the final turn.
+    /// </summary>
+    public int StrandedCardCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets turns where interaction remained held up.
+    /// </summary>
+    public List<int> InteractionHeldUpTurns { get; set; } = [];
 }
 
 /// <summary>

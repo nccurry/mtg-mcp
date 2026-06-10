@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 2,
+  "fixtures": [
+    {
+      "fixtureId": "niv-mizzet-edhrec-average",
+      "name": "Niv-Mizzet Public Average Template",
+      "label": "public average commander template",
+      "groupId": "niv-mizzet-public-ladder",
+      "profile": "control",
+      "sourceKind": "edhrec",
+      "sourceUri": "https://edhrec.com/commanders/niv-mizzet-parun",
+      "capturedAt": "2026-06-09",
+      "sourceNote": "Offline normalized package snapshot from the public EDHREC commander page for Niv-Mizzet, Parun.",
+      "workspace": {
+        "id": "niv-mizzet-edhrec-average",
+        "name": "Niv-Mizzet Public Average Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Niv-Mizzet, Parun",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{U}{U}{U}{R}{R}{R}",
+              "typeLine": "Legendary Creature - Dragon Wizard",
+              "manaValue": 6,
+              "oracleText": "This spell can't be countered. Whenever you draw a card, Niv-Mizzet, Parun deals 1 damage to any target.",
+              "colorIdentity": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Island Package",
+            "quantity": 18,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Basic Land - Island",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {U}.",
+              "colorIdentity": [],
+              "producedMana": [ "U" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Mountain Package",
+            "quantity": 17,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Basic Land - Mountain",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {R}.",
+              "colorIdentity": [],
+              "producedMana": [ "R" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Izzet Dual Package",
+            "quantity": 2,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {U} or {R}.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Average Izzet Mana Rock Package",
+            "quantity": 8,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{2}",
+              "typeLine": "Artifact",
+              "manaValue": 2,
+              "oracleText": "{T}: Add one mana of any color in your commander's color identity.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Average Niv-Mizzet Draw Package",
+            "quantity": 12,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{2}{U}",
+              "typeLine": "Instant",
+              "manaValue": 3,
+              "oracleText": "Draw two cards.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Izzet Interaction Package",
+            "quantity": 8,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{1}{U}",
+              "typeLine": "Instant",
+              "manaValue": 2,
+              "oracleText": "Counter target spell unless its controller pays {2}.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Curiosity Package",
+            "quantity": 3,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Enchantment - Aura",
+              "manaValue": 1,
+              "oracleText": "Enchant creature. Whenever enchanted creature deals damage to an opponent, you may draw a card. Combo enabler.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Average Expensive Spell Package",
+            "quantity": 20,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{4}{U}{R}",
+              "typeLine": "Instant",
+              "manaValue": 6,
+              "oracleText": "Draw cards and deal damage to target creature.",
+              "colorIdentity": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Average Spellslinger Finisher Package",
+            "quantity": 11,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{3}{R}",
+              "typeLine": "Creature - Wizard",
+              "manaValue": 4,
+              "oracleText": "Whenever you cast an instant or sorcery spell, this creature deals damage to each opponent.",
+              "colorIdentity": [ "R" ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "niv-mizzet-cedh-template",
+      "name": "Niv-Mizzet cEDH Template",
+      "label": "public cEDH commander template",
+      "groupId": "niv-mizzet-public-ladder",
+      "profile": "combo",
+      "sourceKind": "moxfield",
+      "sourceUri": "https://moxfield.com/decks/HmRJ5ju54USIf9UVsl5kwQ",
+      "capturedAt": "2026-06-09",
+      "sourceNote": "Offline normalized package snapshot from a public Niv-Mizzet cEDH Moxfield list referenced by competitive Commander discussions.",
+      "workspace": {
+        "id": "niv-mizzet-cedh-template",
+        "name": "Niv-Mizzet cEDH Template",
+        "format": "commander",
+        "cards": [
+          {
+            "name": "Niv-Mizzet, Parun",
+            "quantity": 1,
+            "primaryCategory": "Commander",
+            "categories": [ "Commander" ],
+            "snapshot": {
+              "manaCost": "{U}{U}{U}{R}{R}{R}",
+              "typeLine": "Legendary Creature - Dragon Wizard",
+              "manaValue": 6,
+              "oracleText": "This spell can't be countered. Whenever you draw a card, Niv-Mizzet, Parun deals 1 damage to any target.",
+              "colorIdentity": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Fast Izzet Land Package",
+            "quantity": 30,
+            "primaryCategory": "Lands",
+            "categories": [ "Lands" ],
+            "snapshot": {
+              "typeLine": "Land",
+              "manaValue": 0,
+              "oracleText": "{T}: Add {U} or {R}.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Fast Mana Package",
+            "quantity": 12,
+            "primaryCategory": "Ramp",
+            "categories": [ "Ramp" ],
+            "snapshot": {
+              "manaCost": "{0}",
+              "typeLine": "Artifact",
+              "manaValue": 0,
+              "oracleText": "{T}: Add one mana of any color.",
+              "colorIdentity": [],
+              "producedMana": [ "U", "R" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Cheap Draw Package",
+            "quantity": 14,
+            "primaryCategory": "Draw",
+            "categories": [ "Draw" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Free Interaction Package",
+            "quantity": 20,
+            "primaryCategory": "Interaction",
+            "categories": [ "Interaction" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Counter target spell.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Curiosity Combo Package",
+            "quantity": 8,
+            "primaryCategory": "Synergy",
+            "categories": [ "Synergy" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Enchantment - Aura",
+              "manaValue": 1,
+              "oracleText": "Enchant creature. Whenever enchanted creature deals damage to an opponent, you may draw a card. Combo enabler.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Efficient Tutor Package",
+            "quantity": 8,
+            "primaryCategory": "Tutors",
+            "categories": [ "Tutors" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Instant",
+              "manaValue": 1,
+              "oracleText": "Search your library for a combo card, reveal it, put it into your hand, then shuffle.",
+              "colorIdentity": [ "U" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Compact Outlet Package",
+            "quantity": 4,
+            "primaryCategory": "Wincons",
+            "categories": [ "Wincons" ],
+            "snapshot": {
+              "manaCost": "{1}{R}",
+              "typeLine": "Creature - Wizard",
+              "manaValue": 2,
+              "oracleText": "Combo payoff. Whenever you draw a card, this creature deals damage to each opponent.",
+              "colorIdentity": [ "R" ]
+            }
+          },
+          {
+            "name": "Niv-Mizzet Utility Cantrip Package",
+            "quantity": 3,
+            "primaryCategory": "Utility",
+            "categories": [ "Utility" ],
+            "snapshot": {
+              "manaCost": "{U}",
+              "typeLine": "Sorcery",
+              "manaValue": 1,
+              "oracleText": "Scry 2, then draw a card.",
+              "colorIdentity": [ "U" ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expectations": [
+    {
+      "expectationId": "niv-mizzet-cedh-assembles-routes-before-average",
+      "groupId": "niv-mizzet-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "combo" ],
+      "metric": "scorecard:route-assembly",
+      "direction": "higher",
+      "preferredFixtureId": "niv-mizzet-cedh-template",
+      "otherFixtureId": "niv-mizzet-edhrec-average",
+      "minimumDelta": 0.1,
+      "rationale": "The cEDH Niv-Mizzet template has a compact Curiosity-style package and dense tutor support."
+    },
+    {
+      "expectationId": "niv-mizzet-cedh-holds-more-interaction-than-average",
+      "groupId": "niv-mizzet-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "interaction" ],
+      "metric": "scorecard:interaction-readiness",
+      "direction": "higher",
+      "preferredFixtureId": "niv-mizzet-cedh-template",
+      "otherFixtureId": "niv-mizzet-edhrec-average",
+      "minimumDelta": 0.1,
+      "rationale": "The cEDH Niv-Mizzet template is built around a much denser cheap interaction package."
+    },
+    {
+      "expectationId": "niv-mizzet-cedh-develops-earlier-than-average",
+      "groupId": "niv-mizzet-public-ladder",
+      "severity": "required",
+      "tags": [ "same-commander", "cedh-contrast", "curve" ],
+      "metric": "scorecard:early-development",
+      "direction": "higher",
+      "preferredFixtureId": "niv-mizzet-cedh-template",
+      "otherFixtureId": "niv-mizzet-edhrec-average",
+      "minimumDelta": 0.02,
+      "rationale": "The cEDH Niv-Mizzet template shifts ramp and card selection to cheaper early turns."
+    },
+    {
+      "expectationId": "niv-mizzet-cedh-withstands-own-pressure",
+      "kind": "pressure",
+      "groupId": "niv-mizzet-public-ladder",
+      "severity": "required",
+      "tags": [ "cedh-contrast", "pressure", "combo", "interaction" ],
+      "targetFixtureId": "niv-mizzet-cedh-template",
+      "pressureSourceFixtureId": "niv-mizzet-cedh-template",
+      "pressureProfileId": "niv-mizzet-cedh-pressure",
+      "threshold": 1.0,
+      "rationale": "The source cEDH Niv-Mizzet template should satisfy the pressure profile derived from its own metrics."
+    },
+    {
+      "expectationId": "niv-mizzet-average-under-cedh-pressure",
+      "kind": "pressure",
+      "groupId": "niv-mizzet-public-ladder",
+      "severity": "advisory",
+      "tags": [ "same-commander", "cedh-contrast", "pressure" ],
+      "targetFixtureId": "niv-mizzet-edhrec-average",
+      "pressureSourceFixtureId": "niv-mizzet-cedh-template",
+      "pressureProfileId": "niv-mizzet-cedh-pressure",
+      "threshold": 0.8,
+      "rationale": "The public average template is expected to expose pressure gaps against the cEDH-derived metric profile."
+    }
+  ]
+}

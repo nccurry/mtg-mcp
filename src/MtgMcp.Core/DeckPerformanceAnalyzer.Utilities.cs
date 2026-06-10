@@ -50,7 +50,7 @@ internal static partial class DeckPerformanceAnalyzer
     /// <summary>
     /// Shuffles cards in place using Fisher-Yates.
     /// </summary>
-    private static void Shuffle(List<DeckCard> cards, Random random)
+    private static void Shuffle(List<DeckCard> cards, DeterministicSimulationRandom random)
     {
         for (int index = cards.Count - 1; index > 0; index--)
         {

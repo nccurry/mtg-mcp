@@ -14,6 +14,8 @@
     <Project Path="tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj" />
     <Project Path="tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj" />
     <Project Path="tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj" />
+    <Project Path="tests/MtgMcp.Calibration/MtgMcp.Calibration.csproj" />
+    <Project Path="tests/MtgMcp.Calibration.Tests/MtgMcp.Calibration.Tests.csproj" />
     <Project Path="tests/MtgMcp.CommanderSpellbook.Tests/MtgMcp.CommanderSpellbook.Tests.csproj" />
     <Project Path="tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj" />
     <Project Path="tests/MtgMcp.Decklists.Tests/MtgMcp.Decklists.Tests.csproj" />

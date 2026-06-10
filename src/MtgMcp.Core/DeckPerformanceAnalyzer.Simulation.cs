@@ -38,7 +38,7 @@ internal static partial class DeckPerformanceAnalyzer
         bool includeMulligans,
         SimulationProfile profile)
     {
-        Random random = new(seed);
+        DeterministicSimulationRandom random = new(seed);
         PerformanceOpeningHand opening = DrawPerformanceOpeningHand(
             libraryTemplate,
             random,
