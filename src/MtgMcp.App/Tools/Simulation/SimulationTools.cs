@@ -30,13 +30,22 @@ public sealed class SimulationTools
     [Description("Run heuristic no-interaction goldfish simulations with profile-resolved London mulligans, command-zone sequencing, board projection, and win-route estimates.")]
     public Task<GoldfishSimulationResult> SimulateGoldfishAsync(
         string workspaceId,
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int targetTurn = 7,
         int simulations = 1_000,
         int seed = 1337,
         bool mulligan = true,
         CancellationToken cancellationToken = default)
     {
-        return simulation.SimulateGoldfishAsync(workspaceId, targetTurn, simulations, seed, mulligan, cancellationToken);
+        return simulation.SimulateGoldfishAsync(
+            workspaceId,
+            simulationProfile,
+            targetTurn,
+            simulations,
+            seed,
+            mulligan,
+            cancellationToken);
     }
 
     /// <summary>
@@ -44,25 +53,33 @@ public sealed class SimulationTools
     /// </summary>
     [McpServerTool(Name = "deck_compare_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Compare deterministic no-interaction goldfish outputs for 2-8 total local workspace ids and optional read-only Archidekt deck ids or URLs. The first workspace id is the baseline; per-input failures are returned without aborting other decks.")]
-    public Task<DeckGoldfishComparisonResult> CompareGoldfishAsync(
+    public async Task<object> CompareGoldfishAsync(
         [Description("Local workspace ids. The first id is the active comparison baseline.")]
         string[] workspaceIds,
         [Description("Optional Archidekt deck ids or URLs imported read-only for comparison.")]
         string[]? archidektDeckIdsOrUrls = null,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int targetTurn = 7,
         int simulations = 1_000,
         int seed = 1337,
         bool mulligan = true,
         CancellationToken cancellationToken = default)
     {
-        return simulation.CompareGoldfishAsync(
-            workspaceIds,
-            archidektDeckIdsOrUrls,
-            targetTurn,
-            simulations,
-            seed,
-            mulligan,
-            cancellationToken);
+        DeckGoldfishComparisonResult result = await simulation
+            .CompareGoldfishAsync(
+                workspaceIds,
+                archidektDeckIdsOrUrls,
+                simulationProfile,
+                targetTurn,
+                simulations,
+                seed,
+                mulligan,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return GoldfishOutputPresenter.Present(result, detailLevel);
     }
 
     /// <summary>
@@ -70,27 +87,35 @@ public sealed class SimulationTools
     /// </summary>
     [McpServerTool(Name = "archidekt_compare_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Import up to three Archidekt deck ids or URLs read-only and compare deterministic goldfish simulation outputs against the active workspace. Non-Archidekt references are reported without aborting other comparisons.")]
-    public Task<ArchidektGoldfishComparisonResult> CompareArchidektGoldfishAsync(
+    public async Task<object> CompareArchidektGoldfishAsync(
         string workspaceId,
         string deckIdOrUrl1,
         string? deckIdOrUrl2 = null,
         string? deckIdOrUrl3 = null,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int targetTurn = 7,
         int simulations = 1_000,
         int seed = 1337,
         bool mulligan = true,
         CancellationToken cancellationToken = default)
     {
-        return simulation.CompareArchidektGoldfishAsync(
-            workspaceId,
-            deckIdOrUrl1,
-            deckIdOrUrl2,
-            deckIdOrUrl3,
-            targetTurn,
-            simulations,
-            seed,
-            mulligan,
-            cancellationToken);
+        ArchidektGoldfishComparisonResult result = await simulation
+            .CompareArchidektGoldfishAsync(
+                workspaceId,
+                deckIdOrUrl1,
+                deckIdOrUrl2,
+                deckIdOrUrl3,
+                simulationProfile,
+                targetTurn,
+                simulations,
+                seed,
+                mulligan,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return GoldfishOutputPresenter.Present(result, detailLevel);
     }
 
     /// <summary>
@@ -100,12 +125,20 @@ public sealed class SimulationTools
     [Description("Project the likely board state by a turn if the deck is not interacted with.")]
     public Task<ProjectedTurnState> ProjectBoardStateAsync(
         string workspaceId,
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int turn = 5,
         int simulations = 1_000,
         int seed = 1337,
         CancellationToken cancellationToken = default)
     {
-        return simulation.ProjectBoardStateAsync(workspaceId, turn, simulations, seed, cancellationToken);
+        return simulation.ProjectBoardStateAsync(
+            workspaceId,
+            simulationProfile,
+            turn,
+            simulations,
+            seed,
+            cancellationToken);
     }
 
     /// <summary>
@@ -115,12 +148,20 @@ public sealed class SimulationTools
     [Description("Estimate likely goldfish win turns and routes such as combat, finishers, or combo.")]
     public Task<WinTurnEstimate> EstimateWinTurnAsync(
         string workspaceId,
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int maxTurn = 12,
         int simulations = 1_000,
         int seed = 1337,
         CancellationToken cancellationToken = default)
     {
-        return simulation.EstimateWinTurnAsync(workspaceId, maxTurn, simulations, seed, cancellationToken);
+        return simulation.EstimateWinTurnAsync(
+            workspaceId,
+            simulationProfile,
+            maxTurn,
+            simulations,
+            seed,
+            cancellationToken);
     }
 
     /// <summary>

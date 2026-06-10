@@ -17,6 +17,31 @@ public sealed partial class DeckSimulationService
         bool mulligan,
         CancellationToken cancellationToken)
     {
+        return await CompareGoldfishAsync(
+                workspaceIds,
+                archidektDeckIdsOrUrls,
+                SimulationProfileIds.Auto,
+                targetTurn,
+                simulations,
+                seed,
+                mulligan,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Compares local workspaces and optional references with a caller-selected simulation profile.
+    /// </summary>
+    public async Task<DeckGoldfishComparisonResult> CompareGoldfishAsync(
+        IReadOnlyList<string> workspaceIds,
+        IReadOnlyList<string>? archidektDeckIdsOrUrls,
+        string simulationProfile,
+        int targetTurn,
+        int simulations,
+        int seed,
+        bool mulligan,
+        CancellationToken cancellationToken)
+    {
         List<string> workspaceInputs = CollectReferenceInputs(workspaceIds?.ToArray() ?? []);
         List<string> archidektInputs = CollectReferenceInputs(archidektDeckIdsOrUrls?.ToArray() ?? []);
         int totalInputs = workspaceInputs.Count + archidektInputs.Count;
@@ -34,6 +59,7 @@ public sealed partial class DeckSimulationService
             .ConfigureAwait(false);
         GoldfishSimulationResult baselineGoldfish = SimulateGoldfish(
             baselineWorkspace,
+            simulationProfile,
             targetTurn,
             simulations,
             seed,
@@ -71,6 +97,7 @@ public sealed partial class DeckSimulationService
                     baselineGoldfish,
                     label,
                     input,
+                    simulationProfile,
                     targetTurn,
                     simulations,
                     seed,
@@ -120,6 +147,7 @@ public sealed partial class DeckSimulationService
                         gateway,
                         label,
                         input,
+                        simulationProfile,
                         targetTurn,
                         simulations,
                         seed,
@@ -149,6 +177,35 @@ public sealed partial class DeckSimulationService
         bool mulligan,
         CancellationToken cancellationToken)
     {
+        return await CompareArchidektGoldfishAsync(
+                workspaceId,
+                archidektDeckUrl1,
+                archidektDeckUrl2,
+                archidektDeckUrl3,
+                SimulationProfileIds.Auto,
+                targetTurn,
+                simulations,
+                seed,
+                mulligan,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Compares the active workspace against Archidekt references with a caller-selected profile.
+    /// </summary>
+    public async Task<ArchidektGoldfishComparisonResult> CompareArchidektGoldfishAsync(
+        string workspaceId,
+        string? archidektDeckUrl1,
+        string? archidektDeckUrl2,
+        string? archidektDeckUrl3,
+        string simulationProfile,
+        int targetTurn,
+        int simulations,
+        int seed,
+        bool mulligan,
+        CancellationToken cancellationToken)
+    {
         List<string> referenceInputs = CollectReferenceInputs(archidektDeckUrl1, archidektDeckUrl2, archidektDeckUrl3);
         if (referenceInputs.Count == 0)
         {
@@ -158,6 +215,7 @@ public sealed partial class DeckSimulationService
         DeckGoldfishComparisonResult comparison = await CompareGoldfishAsync(
                 [workspaceId],
                 referenceInputs,
+                simulationProfile,
                 targetTurn,
                 simulations,
                 seed,
@@ -188,6 +246,7 @@ public sealed partial class DeckSimulationService
         GoldfishSimulationResult baselineGoldfish,
         string label,
         string input,
+        string simulationProfile,
         int targetTurn,
         int simulations,
         int seed,
@@ -200,6 +259,7 @@ public sealed partial class DeckSimulationService
                 .ConfigureAwait(false);
             GoldfishSimulationResult goldfish = SimulateGoldfish(
                 workspace,
+                simulationProfile,
                 targetTurn,
                 simulations,
                 seed,
@@ -228,6 +288,7 @@ public sealed partial class DeckSimulationService
         IArchidektGateway gateway,
         string label,
         string input,
+        string simulationProfile,
         int targetTurn,
         int simulations,
         int seed,
@@ -241,6 +302,7 @@ public sealed partial class DeckSimulationService
                 .ConfigureAwait(false);
             GoldfishSimulationResult goldfish = SimulateGoldfish(
                 workspace,
+                simulationProfile,
                 targetTurn,
                 simulations,
                 seed,

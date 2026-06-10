@@ -98,12 +98,15 @@ public sealed class WorkspaceTools
         Idempotent = true,
         OpenWorld = false
     )]
-    [Description("List saved local deck workspaces.")]
-    public Task<IReadOnlyList<DeckWorkspace>> ListLocalDecksAsync(
+    [Description("List compact saved local deck workspace summaries without card snapshots; use workspace_open for full cards.")]
+    public async Task<IReadOnlyList<DeckWorkspaceSummary>> ListLocalDecksAsync(
         CancellationToken cancellationToken = default
     )
     {
-        return decks.ListLocalWorkspacesAsync(cancellationToken);
+        IReadOnlyList<DeckWorkspace> workspaces = await decks
+            .ListLocalWorkspacesAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return workspaces.Select(CreateWorkspaceSummary).ToList();
     }
 
     /// <summary>
@@ -446,6 +449,43 @@ public sealed class WorkspaceTools
                         .Sum(card => Math.Max(0, card.Quantity))
                 })
                 .ToList()
+        };
+    }
+
+    /// <summary>
+    /// Creates the compact result returned by workspace list.
+    /// </summary>
+    private static DeckWorkspaceSummary CreateWorkspaceSummary(DeckWorkspace workspace)
+    {
+        Dictionary<string, DeckCategory> categories = workspace.Categories
+            .GroupBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return new DeckWorkspaceSummary
+        {
+            WorkspaceId = workspace.Id,
+            Name = workspace.Name,
+            Format = workspace.Format,
+            Mode = workspace.Mode,
+            UpdatedAt = workspace.UpdatedAt,
+            Persistence = DeckPersistence.For(workspace),
+            TotalCards = workspace.Cards.Sum(card => Math.Max(0, card.Quantity)),
+            IncludedCards = workspace.Cards
+                .Where(card => IsIncludedByPrimaryCategory(categories, card))
+                .Sum(card => Math.Max(0, card.Quantity)),
+            MaybeboardCards = workspace.Cards
+                .Where(card => !IsIncludedByPrimaryCategory(categories, card))
+                .Sum(card => Math.Max(0, card.Quantity)),
+            Commanders = workspace.Cards
+                .Where(card =>
+                    card.PrimaryCategory.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
+                    || card.Categories.Contains(DeckRoles.Commander, StringComparer.OrdinalIgnoreCase))
+                .Select(card => card.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            SourceReferences = workspace.SourceReferences,
+            Warnings = workspace.Warnings
         };
     }
 

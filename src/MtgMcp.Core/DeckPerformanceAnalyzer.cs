@@ -50,7 +50,8 @@ internal static partial class DeckPerformanceAnalyzer
                 safeMaxTurn,
                 unchecked(seed + index),
                 includeMulligans,
-                resolvedProfile));
+                resolvedProfile,
+                collectDecisionEvents: index < SampledTraceRunCount));
         }
 
         DeckPerformanceAnalysis analysis = new()

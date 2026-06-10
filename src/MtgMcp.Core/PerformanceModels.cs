@@ -304,6 +304,52 @@ public sealed class PerformanceTraceRunSummary
     /// Gets or sets turns where interaction remained held up.
     /// </summary>
     public List<int> InteractionHeldUpTurns { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets bounded decision events explaining sampled mulligan and sequencing choices.
+    /// </summary>
+    public List<PerformanceDecisionEvent> DecisionEvents { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one compact simulator decision for sampled performance traces.
+/// </summary>
+public sealed class PerformanceDecisionEvent
+{
+    /// <summary>
+    /// Gets or sets the decision phase, such as mulligan, sequencing, hold-up, or route-check.
+    /// </summary>
+    public string Phase { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the simulated turn when the decision happened, when applicable.
+    /// </summary>
+    public int? Turn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the specific choice being explained.
+    /// </summary>
+    public string Decision { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the chosen outcome, such as keep, bottom, cast, hold, skip, matched, or missing.
+    /// </summary>
+    public string Outcome { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the card, route, or simulator object the choice concerned.
+    /// </summary>
+    public string Subject { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the concise reason the simulator made the choice.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets bounded supporting facts for the decision.
+    /// </summary>
+    public List<string> Evidence { get; set; } = [];
 }
 
 /// <summary>

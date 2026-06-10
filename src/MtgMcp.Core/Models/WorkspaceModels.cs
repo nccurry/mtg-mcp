@@ -268,6 +268,72 @@ public sealed class DeckSourceReference
 }
 
 /// <summary>
+/// Provides compact workspace list data without card payloads or cached card snapshots.
+/// </summary>
+public sealed class DeckWorkspaceSummary
+{
+    /// <summary>
+    /// Gets or sets the workspace id to use with follow-up tools.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deck name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the deck format.
+    /// </summary>
+    public string Format { get; set; } = "commander";
+
+    /// <summary>
+    /// Gets or sets the workspace source mode.
+    /// </summary>
+    public WorkspaceMode Mode { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the workspace was last updated.
+    /// </summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets where future mutations will be persisted.
+    /// </summary>
+    public string Persistence { get; set; } = DeckPersistence.LocalOnly;
+
+    /// <summary>
+    /// Gets or sets total card quantity across all workspace categories.
+    /// </summary>
+    public int TotalCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets card quantity included in the active deck.
+    /// </summary>
+    public int IncludedCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets card quantity in excluded maybeboard-style categories.
+    /// </summary>
+    public int MaybeboardCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets commander card names found in included commander categories.
+    /// </summary>
+    public List<string> Commanders { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets external deck sources that contributed to this local workspace.
+    /// </summary>
+    public List<DeckSourceReference> SourceReferences { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal import or migration warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
 /// Provides well-known deck import provider keys.
 /// </summary>
 public static class DeckImportProviders

@@ -149,7 +149,8 @@ public sealed class SimulationProfileTests
         catalog.TryGet("blink-combo", out SimulationProfile profile).Should().BeTrue();
         profile.Sequencing.TutorPriority.Should().Be(1);
         profile.ThemeTags.Should().Contain(["storm", "blink"]);
-        profile.WinRoutes.Should().BeEmpty();
+        profile.WinRoutes.Should().NotContain(route => route.Name == "Bad Route");
+        profile.WinRoutes.Should().Contain(route => route.Name == "Aristocrats Drain Clock");
 
         ResolvedSimulationProfile resolved = catalog.Resolve(EmptyWorkspace(), "blink-combo", new DeckIntent());
         resolved.Warnings.Should().Contain("configured profile warning");
@@ -191,6 +192,14 @@ public sealed class SimulationProfileTests
     [InlineData("sac-outlet")]
     [InlineData("drain-payoff")]
     [InlineData("recursive-creature")]
+    [InlineData("enchantment-recursion")]
+    [InlineData("repeatable-graveyard-recursion")]
+    [InlineData("enchantress-engine")]
+    [InlineData("engine-payoff")]
+    [InlineData("drain-clock")]
+    [InlineData("treasure-engine")]
+    [InlineData("treasure-payoff")]
+    [InlineData("commander-damage-pressure")]
     [InlineData("interaction-held>=1")]
     [InlineData("interactionheld>=1")]
     public void SimulationRouteEvaluator_SupportsExpandedGoldfishPredicates(string requirement)
@@ -229,6 +238,58 @@ public sealed class SimulationProfileTests
         evidence.Should().ContainSingle();
         evidence[0].Matched.Should().BeTrue();
         evidence[0].Evidence.Should().Contain(line => line.Contains("repeatable blink", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that slow-engine predicates report matched evidence and missing requirements.
+    /// </summary>
+    [Fact]
+    public void SimulationRouteEvaluator_ExplainsEnchantmentRecursionEnginePredicates()
+    {
+        SimulationRouteDefinition route = new()
+        {
+            Name = "Enchantment Engine",
+            Kind = "engine-inevitability",
+            EarliestTurn = 6,
+            Source = "profile-common",
+            Requirements = ["commander", "enchantment-recursion", "engine-payoff", "graveyard>=1"]
+        };
+        List<SimulationRouteEvidence> evidence = SimulationRouteEvaluator.EvaluateRoutes(
+            [route],
+            new SimulationRouteState
+            {
+                Turn = 6,
+                CommanderOnBattlefield = true,
+                Battlefield =
+                [
+                    Card("Ghen, Arcanum Weaver", DeckRoles.Commander, "Legendary Creature", "{R}{W}{B}, {T}, Sacrifice an enchantment: Return target enchantment card from your graveyard to the battlefield."),
+                    Card("Bleeding Pact", DeckRoles.Wincons, "Enchantment", "At the beginning of your end step, each opponent loses 1 life."),
+                ],
+                Graveyard =
+                [
+                    Card("Grave Pact", DeckRoles.Payoffs, "Enchantment", "Whenever a creature you control dies, each opponent sacrifices a creature."),
+                ],
+            });
+
+        SimulationRouteEvidence matched = evidence.Should().ContainSingle().Subject;
+        matched.Matched.Should().BeTrue();
+        matched.Evidence.Should().Contain(line => line.Contains("enchantment recursion", StringComparison.OrdinalIgnoreCase));
+        matched.Evidence.Should().Contain(line => line.Contains("engine payoff", StringComparison.OrdinalIgnoreCase));
+
+        List<SimulationRouteEvidence> missingEvidence = SimulationRouteEvaluator.EvaluateRoutes(
+            [route],
+            new SimulationRouteState
+            {
+                Turn = 6,
+                CommanderOnBattlefield = true,
+                Battlefield =
+                [
+                    Card("Ghen, Arcanum Weaver", DeckRoles.Commander, "Legendary Creature", "{R}{W}{B}, {T}, Sacrifice an enchantment: Return target enchantment card from your graveyard to the battlefield."),
+                ],
+            });
+        missingEvidence.Single().Matched.Should().BeFalse();
+        missingEvidence.Single().MissingRequirements.Should().Contain(line => line.Contains("engine payoff", StringComparison.OrdinalIgnoreCase));
+        missingEvidence.Single().MissingRequirements.Should().Contain(line => line.Contains("graveyard count", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

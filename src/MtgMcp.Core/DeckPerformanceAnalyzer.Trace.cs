@@ -11,6 +11,11 @@ internal static partial class DeckPerformanceAnalyzer
     private const int SampledTraceRunCount = 3;
 
     /// <summary>
+    /// Limits decision events per sampled run so trace payloads remain bounded.
+    /// </summary>
+    private const int PerformanceDecisionEventLimit = 80;
+
+    /// <summary>
     /// Builds aggregate and sampled trace summaries from completed runs.
     /// </summary>
     private static PerformanceTraceSummary BuildTraceSummary(
@@ -87,7 +92,7 @@ internal static partial class DeckPerformanceAnalyzer
             },
             Notes =
             [
-                "Trace summaries are bounded deterministic samples and aggregate counters, not full play logs.",
+                "Trace summaries are bounded deterministic samples, aggregate counters, and compact decision events, not full play logs.",
             ],
         };
 
@@ -112,7 +117,7 @@ internal static partial class DeckPerformanceAnalyzer
             summary.SampledRuns.Add(new PerformanceTraceRunSummary
             {
                 RunIndex = index,
-                Seed = unchecked(seed + index),
+                Seed = run.Seed,
                 Mulligans = run.Mulligans,
                 KeptHandSize = run.KeptHandSize,
                 KeptOpeningLands = run.KeptOpeningLands,
@@ -123,6 +128,7 @@ internal static partial class DeckPerformanceAnalyzer
                 TutorAssistedComboTurn = run.TutorAssistedComboTurn,
                 StrandedCardCount = run.StrandedCards.Count,
                 InteractionHeldUpTurns = interactionHeldUpTurnsForRun,
+                DecisionEvents = run.DecisionEvents.Take(PerformanceDecisionEventLimit).ToList(),
             });
         }
 

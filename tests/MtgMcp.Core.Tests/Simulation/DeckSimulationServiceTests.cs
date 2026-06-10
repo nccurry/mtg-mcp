@@ -601,6 +601,145 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that profile arguments select explicit profiles and unknown profiles fall back through auto with a warning.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_AcceptsExplicitProfileAndFallsBackUnknownProfileToAuto()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Profile Control Goldfish",
+            Description = DeckIntentText.UpsertDescription(
+                null,
+                """
+                Goal: Fast combo loop
+                """),
+            Cards =
+            [
+                GoldfishCard("Forest", 50, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard("Combo A", 25, DeckRoles.Synergy, "Artifact", "{1}", 1, "Combo. Untap target permanent and copy an ability.", []),
+                GoldfishCard("Combo B", 25, DeckRoles.Synergy, "Artifact", "{1}", 1, "Combo. Whenever an ability is copied, untap target permanent.", []),
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult explicitProfile = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            SimulationProfileIds.Control,
+            targetTurn: 4,
+            simulations: 100,
+            seed: 33,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+        GoldfishSimulationResult unknownProfile = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            "not-real",
+            targetTurn: 4,
+            simulations: 100,
+            seed: 33,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        explicitProfile.ProfileResolution.Source.Should().Be("explicit");
+        explicitProfile.ProfileResolution.Profile.Id.Should().Be(SimulationProfileIds.Control);
+        unknownProfile.ProfileResolution.Source.Should().Be("auto");
+        unknownProfile.ProfileResolution.Profile.Id.Should().Be(SimulationProfileIds.Combo);
+        unknownProfile.Warnings.Should().Contain(warning => warning.Contains("not-real", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that goldfish summary metrics stay on the documented 0-100 scales.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_ReturnsBoundedSummaryMetrics()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateGoldfishFixtureDeck("Metric Goldfish", archidektDeckId: null),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 100,
+            seed: 44,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.BoardDevelopmentScore.Should().BeInRange(0, 100);
+        goldfish.ThreatPressure.Should().BeInRange(0, 100);
+        goldfish.EngineOnlineRate.Should().BeInRange(0, 100);
+        goldfish.WinDetectionConfidence.Should().BeInRange(0, 100);
+        goldfish.Notes.Should().Contain(note => note.Contains("0-100", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that fallback route rationales are not labeled deterministic.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_LabelsFallbackRouteRationaleAsHeuristicPressure()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Fallback Pressure",
+            Cards =
+            [
+                GoldfishCard("Forest", 50, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard("Aerial Closer", 50, DeckRoles.Wincons, "Creature - Beast", "{2}{G}", 3, "Flying. Trample.", ["G"]),
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 7,
+            simulations: 100,
+            seed: 52,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        WinRoute route = goldfish.WinEstimate.Routes.Should().NotBeEmpty().And.Subject.First();
+        route.Evidence.Should().OnlyContain(evidence => evidence.Source == "fallback");
+        route.Rationale.Should().Contain("fallback heuristic pressure");
+        route.Rationale.Should().NotContain("deterministic route evidence");
+    }
+
+    /// <summary>
+    /// Verifies that Ghen-style enchantment recursion can be detected through profile route templates.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DetectsEnchantmentRecursionEngineRoute()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateEnchantmentRecursionGoldfishDeck(),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            SimulationProfileIds.Value,
+            targetTurn: 6,
+            simulations: 100,
+            seed: 61,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        WinRoute route = goldfish.WinEstimate.Routes.Should()
+            .ContainSingle(candidate => candidate.Kind == "engine-inevitability")
+            .Subject;
+        SimulationRouteEvidence evidence = route.Evidence.Should()
+            .ContainSingle(candidate => candidate.Name == "Enchantment Recursion Engine")
+            .Subject;
+        evidence.Evidence.Should().Contain(line => line.Contains("enchantment recursion", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("engine payoff", StringComparison.OrdinalIgnoreCase));
+        evidence.MissingRequirements.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Creates a graveyard-control fixture with an explicit deck-intent route.
     /// </summary>
     private static DeckWorkspace CreateReanimatorControlGoldfishDeck()
@@ -675,6 +814,39 @@ public sealed partial class DeckIntelligenceTests
                 GoldfishCard("Blood Artist", 15, DeckRoles.Wincons, "Creature - Vampire", "{1}{B}", 2, "Whenever Blood Artist or another creature dies, target player loses 1 life and you gain 1 life.", ["B"]),
                 GoldfishCard("Reassembling Skeleton", 15, DeckRoles.Synergy, "Creature - Skeleton", "{1}{B}", 2, "Return Reassembling Skeleton from your graveyard to the battlefield tapped.", ["B"]),
                 GoldfishCard("Token Maker", 15, DeckRoles.Synergy, "Creature - Warlock", "{1}{B}", 2, "When this creature enters, create two 1/1 creature tokens.", ["B"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a Ghen-style enchantment recursion fixture without an explicit deck-intent route.
+    /// </summary>
+    private static DeckWorkspace CreateEnchantmentRecursionGoldfishDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Enchantment Recursion Goldfish",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                GoldfishCard(
+                    "Ghen, Arcanum Weaver",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Human Wizard",
+                    "{R}{W}{B}",
+                    3,
+                    "{R}{W}{B}, {T}, Sacrifice an enchantment: Return target enchantment card from your graveyard to the battlefield.",
+                    ["R", "W", "B"]),
+                GoldfishCard("Swamp", 40, DeckRoles.Lands, "Basic Land - Swamp", null, 0, "{T}: Add {B}.", ["B"], ["B"]),
+                GoldfishCard("Graveyard Setup", 20, DeckRoles.Tutors, "Sorcery", "{B}", 1, "Search your library for an enchantment card and put that card into your graveyard.", ["B"]),
+                GoldfishCard("Bleeding Pact", 39, DeckRoles.Wincons, "Enchantment", "{1}{B}", 2, "At the beginning of your end step, each opponent loses 1 life.", ["B"]),
             ],
         };
     }

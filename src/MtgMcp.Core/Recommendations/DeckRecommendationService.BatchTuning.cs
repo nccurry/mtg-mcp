@@ -16,6 +16,29 @@ public sealed partial class DeckRecommendationService
         int seed,
         CancellationToken cancellationToken)
     {
+        return await BuildBatchTuningReportAsync(
+                workspaceIds,
+                maxBudget,
+                SimulationProfileIds.Auto,
+                targetTurn,
+                simulations,
+                seed,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds a read-only tuning report with a caller-selected goldfish simulation profile.
+    /// </summary>
+    public async Task<DeckBatchTuningReport> BuildBatchTuningReportAsync(
+        IReadOnlyList<string> workspaceIds,
+        decimal? maxBudget,
+        string simulationProfile,
+        int targetTurn,
+        int simulations,
+        int seed,
+        CancellationToken cancellationToken)
+    {
         List<string> inputs = workspaceIds
             .Where(workspaceId => !string.IsNullOrWhiteSpace(workspaceId))
             .Select(workspaceId => workspaceId.Trim())
@@ -67,6 +90,7 @@ public sealed partial class DeckRecommendationService
                         .ConfigureAwait(false),
                     Goldfish = await simulation.SimulateGoldfishAsync(
                             workspaceId,
+                            simulationProfile,
                             boundedTargetTurn,
                             boundedSimulations,
                             seed,

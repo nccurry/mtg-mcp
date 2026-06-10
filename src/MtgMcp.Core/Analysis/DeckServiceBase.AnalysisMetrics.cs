@@ -64,6 +64,14 @@ public abstract partial class DeckServiceBase
                 if ((includedInDeck || isMaybeboard) && includedInPrice)
                 {
                     analysis.MissingPriceCards.Add(card.Name);
+                    if (IsBasicLandCard(card))
+                    {
+                        analysis.BasicMissingPriceCards.Add(card.Name);
+                    }
+                    else
+                    {
+                        analysis.NonBasicMissingPriceCards.Add(card.Name);
+                    }
                 }
 
                 continue;
@@ -202,21 +210,21 @@ public abstract partial class DeckServiceBase
     /// </summary>
     private static void AddBudgetStatus(DeckCostAnalysis analysis, decimal? maxBudget)
     {
-        if (analysis.MissingPriceCards.Count > 0)
+        if (analysis.NonBasicMissingPriceCards.Count > 0)
         {
-            analysis.PriceRiskNotes.Add("Some included or maybeboard cards are missing cached prices, so known totals are a lower bound.");
+            analysis.PriceRiskNotes.Add("Some included or maybeboard nonbasic cards are missing cached prices, so known totals are a lower bound.");
         }
 
         if (!maxBudget.HasValue)
         {
-            analysis.BudgetStatus = analysis.MissingPriceCards.Count > 0
+            analysis.BudgetStatus = analysis.NonBasicMissingPriceCards.Count > 0
                 ? "unknown-missing-prices"
                 : "not-requested";
             return;
         }
 
         analysis.BudgetDelta = maxBudget.Value - analysis.IncludedTotal;
-        analysis.WithinBudget = analysis.IncludedTotal <= maxBudget.Value && analysis.MissingPriceCards.Count == 0;
+        analysis.WithinBudget = analysis.IncludedTotal <= maxBudget.Value && analysis.NonBasicMissingPriceCards.Count == 0;
         if (analysis.IncludedTotal > maxBudget.Value)
         {
             analysis.BudgetStatus = "over-budget";
@@ -224,7 +232,7 @@ public abstract partial class DeckServiceBase
             return;
         }
 
-        if (analysis.MissingPriceCards.Count > 0)
+        if (analysis.NonBasicMissingPriceCards.Count > 0)
         {
             analysis.BudgetStatus = "unknown-missing-prices";
             analysis.PriceRiskNotes.Add($"Known included total is within max budget {maxBudget.Value:0.##}, but missing prices could exceed it.");
@@ -234,6 +242,16 @@ public abstract partial class DeckServiceBase
         analysis.BudgetStatus = analysis.IncludedTotal == maxBudget.Value
             ? "at-budget"
             : "under-budget";
+    }
+
+    /// <summary>
+    /// Checks whether a card's cached type line identifies it as a basic land, including Wastes and snow basics.
+    /// </summary>
+    private static bool IsBasicLandCard(DeckCard card)
+    {
+        string typeLine = GetSnapshot(card).TypeLine ?? "";
+        return typeLine.Contains("Basic", StringComparison.OrdinalIgnoreCase)
+            && typeLine.Contains("Land", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -981,6 +981,52 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that missing basic-land prices remain visible without making an under-budget deck unknown.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_MissingOnlyBasicPricesDoesNotBlockBudgetStatus()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Budget Basics",
+            Cards =
+            [
+                ExpensiveRamp(),
+                new DeckCard
+                {
+                    Name = "Snow-Covered Swamp",
+                    Quantity = 10,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Snow Land - Swamp" },
+                },
+                new DeckCard
+                {
+                    Name = "Wastes",
+                    Quantity = 10,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land" },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            maxBudget: 300,
+            TestContext.Current.CancellationToken);
+
+        analysis.MissingPriceCards.Should().Contain(["Snow-Covered Swamp", "Wastes"]);
+        analysis.BasicMissingPriceCards.Should().Contain(["Snow-Covered Swamp", "Wastes"]);
+        analysis.NonBasicMissingPriceCards.Should().BeEmpty();
+        analysis.WithinBudget.Should().BeTrue();
+        analysis.BudgetStatus.Should().Be("under-budget");
+        analysis.PriceRiskNotes.Should().NotContain(note => note.Contains("missing prices", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that mana base and consistency analysis return useful signals.
     /// </summary>
     [Fact]

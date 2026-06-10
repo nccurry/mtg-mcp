@@ -35,6 +35,11 @@ internal sealed class PerformanceOpeningHand
     /// Gets or sets the land count in the first seven-card hand.
     /// </summary>
     public int OpeningSevenLands { get; set; }
+
+    /// <summary>
+    /// Gets or sets bounded decision events collected while choosing the opening hand.
+    /// </summary>
+    public List<PerformanceDecisionEvent> DecisionEvents { get; set; } = [];
 }
 
 /// <summary>
@@ -115,6 +120,11 @@ internal sealed class PerformanceScenarioDefaults
 internal sealed class PerformanceRun
 {
     /// <summary>
+    /// Gets or sets the deterministic seed used for this run.
+    /// </summary>
+    public int Seed { get; set; }
+
+    /// <summary>
     /// Gets or sets how many mulligans were taken.
     /// </summary>
     public int Mulligans { get; set; }
@@ -174,6 +184,11 @@ internal sealed class PerformanceRun
     /// </summary>
     public Dictionary<string, PerformanceStrandedRun> StrandedCards { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets compact decision events for sampled trace runs.
+    /// </summary>
+    public List<PerformanceDecisionEvent> DecisionEvents { get; set; } = [];
 }
 
 /// <summary>

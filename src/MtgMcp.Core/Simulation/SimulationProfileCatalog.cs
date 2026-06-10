@@ -750,7 +750,7 @@ public sealed class SimulationProfileCatalog
     /// </summary>
     private static List<SimulationProfile> BuiltInProfiles()
     {
-        return
+        List<SimulationProfile> profiles =
         [
             new SimulationProfile
             {
@@ -964,6 +964,71 @@ public sealed class SimulationProfileCatalog
                     ComboTurn = 6,
                 }
             }
+        ];
+
+        foreach (SimulationProfile profile in profiles)
+        {
+            profile.WinRoutes.AddRange(CommonCommanderRoutes());
+        }
+
+        return profiles;
+    }
+
+    /// <summary>
+    /// Builds conservative cross-profile route templates for common Commander inevitability engines.
+    /// </summary>
+    private static List<SimulationRouteDefinition> CommonCommanderRoutes()
+    {
+        return
+        [
+            new SimulationRouteDefinition
+            {
+                Name = "Aristocrats Drain Clock",
+                Kind = "aristocrats",
+                EarliestTurn = 5,
+                Source = "profile-common",
+                Requirements = ["sac-outlet", "drain-payoff", "drain-clock", "turn>=5"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Enchantment Recursion Engine",
+                Kind = "engine-inevitability",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["commander", "enchantment-recursion", "engine-payoff", "graveyard>=1", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Enchantress Engine Plus Payoff",
+                Kind = "engine-inevitability",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["enchantress-engine", "engine-payoff", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Repeatable Graveyard Recursion",
+                Kind = "engine-inevitability",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["repeatable-graveyard-recursion", "engine-payoff", "graveyard>=1", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Treasure Alternate Win",
+                Kind = "treasure-alt-win",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["treasure-engine", "treasure-payoff", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Commander Damage Pressure",
+                Kind = "commander-damage",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["commander", "commander-damage-pressure", "turn>=6"],
+            },
         ];
     }
 }

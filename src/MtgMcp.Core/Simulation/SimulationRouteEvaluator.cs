@@ -22,6 +22,14 @@ public static class SimulationRouteEvaluator
             || text.Equals("sac-outlet", StringComparison.OrdinalIgnoreCase)
             || text.Equals("drain-payoff", StringComparison.OrdinalIgnoreCase)
             || text.Equals("recursive-creature", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("enchantment-recursion", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("repeatable-graveyard-recursion", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("enchantress-engine", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("engine-payoff", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("drain-clock", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("treasure-engine", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("treasure-payoff", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("commander-damage-pressure", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("card:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("role:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("tag:", StringComparison.OrdinalIgnoreCase)
@@ -147,6 +155,97 @@ public static class SimulationRouteEvaluator
             return matched;
         }
 
+        if (text.Equals("enchantment-recursion", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsEnchantmentRecursionCard,
+                "battlefield has enchantment recursion",
+                "battlefield lacks enchantment recursion",
+                out message);
+        }
+
+        if (text.Equals("repeatable-graveyard-recursion", StringComparison.OrdinalIgnoreCase))
+        {
+            bool battlefieldMatched = MatchZonePredicate(
+                state.Battlefield,
+                IsRepeatableGraveyardRecursionCard,
+                "battlefield has repeatable graveyard recursion",
+                "battlefield lacks repeatable graveyard recursion",
+                out message);
+            if (battlefieldMatched)
+            {
+                return true;
+            }
+
+            return MatchZonePredicate(
+                state.Graveyard,
+                IsRepeatableGraveyardRecursionCard,
+                "graveyard has repeatable graveyard recursion",
+                "battlefield and graveyard lack repeatable graveyard recursion",
+                out message);
+        }
+
+        if (text.Equals("enchantress-engine", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsEnchantressEngine,
+                "battlefield has an enchantress engine",
+                "battlefield lacks an enchantress engine",
+                out message);
+        }
+
+        if (text.Equals("engine-payoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsEnginePayoff,
+                "battlefield has an engine payoff",
+                "battlefield lacks an engine payoff",
+                out message);
+        }
+
+        if (text.Equals("drain-clock", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.Battlefield.Any(IsDrainPayoff)
+                && (state.Tokens >= 2 || state.Battlefield.Any(IsSacOutlet) || state.Battlefield.Any(IsRecursiveCreature));
+            message = matched
+                ? "battlefield has a drain clock with fodder, recursion, or sacrifice support"
+                : "battlefield lacks a drain clock plus support";
+            return matched;
+        }
+
+        if (text.Equals("treasure-engine", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsTreasureEngine,
+                "battlefield has a treasure engine",
+                "battlefield lacks a treasure engine",
+                out message);
+        }
+
+        if (text.Equals("treasure-payoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsTreasurePayoff,
+                "battlefield has a treasure payoff",
+                "battlefield lacks a treasure payoff",
+                out message);
+        }
+
+        if (text.Equals("commander-damage-pressure", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsCommanderDamagePressureCard,
+                "battlefield has commander-damage pressure support",
+                "battlefield lacks commander-damage pressure support",
+                out message);
+        }
+
         if (TryReadPrefixedValue(text, "card:", out string cardName))
         {
             return MatchCardName(cardName, state.Battlefield, "battlefield", out message);
@@ -238,6 +337,32 @@ public static class SimulationRouteEvaluator
     }
 
     /// <summary>
+    /// Matches a card predicate and includes bounded card names in evidence.
+    /// </summary>
+    private static bool MatchZonePredicate(
+        IReadOnlyList<DeckCard> cards,
+        Func<DeckCard, bool> predicate,
+        string matchedPrefix,
+        string missingMessage,
+        out string message)
+    {
+        List<string> names = cards
+            .Where(predicate)
+            .Select(card => card.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .ToList();
+        if (names.Count > 0)
+        {
+            message = $"{matchedPrefix}: {string.Join(", ", names)}";
+            return true;
+        }
+
+        message = missingMessage;
+        return false;
+    }
+
+    /// <summary>
     /// Identifies blink permanents that plausibly repeat without another card.
     /// </summary>
     private static bool IsRepeatableBlinkCard(DeckCard card)
@@ -309,6 +434,108 @@ public static class SimulationRouteEvaluator
                 "escape",
                 "disturb",
                 "unearth");
+    }
+
+    /// <summary>
+    /// Identifies permanents that can recur enchantments from the graveyard.
+    /// </summary>
+    private static bool IsEnchantmentRecursionCard(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return ContainsAny(text, "enchantment")
+            && (role.PrimaryRole.Equals(DeckRoles.Recursion, StringComparison.OrdinalIgnoreCase)
+                || ContainsAny(text, "from your graveyard", "from a graveyard", "graveyard to the battlefield"))
+            && ContainsAny(text, "return", "cast", "put");
+    }
+
+    /// <summary>
+    /// Identifies cards that repeatedly use graveyard cards rather than one-shot recursion.
+    /// </summary>
+    private static bool IsRepeatableGraveyardRecursionCard(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string typeLine = card.Snapshot?.TypeLine ?? "";
+        string text = card.Snapshot?.OracleText ?? "";
+        bool permanent = ContainsAny(typeLine, "Creature", "Artifact", "Enchantment", "Planeswalker");
+        return (permanent || role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase))
+            && ContainsAny(text, "graveyard")
+            && ContainsAny(text, "return", "cast", "play", "put")
+            && ContainsAny(text, "whenever", "at the beginning", "activate", "{t}", ":");
+    }
+
+    /// <summary>
+    /// Identifies enchantress-style engines that trigger from enchantments.
+    /// </summary>
+    private static bool IsEnchantressEngine(DeckCard card)
+    {
+        string text = card.Snapshot?.OracleText ?? "";
+        return ContainsAny(text, "whenever you cast an enchantment", "whenever an enchantment enters", "constellation")
+            && ContainsAny(text, "draw", "create", "gain", "add");
+    }
+
+    /// <summary>
+    /// Identifies battlefield payoffs that convert engines into inevitability.
+    /// </summary>
+    private static bool IsEnginePayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.PrimaryRole.Equals(DeckRoles.Payoffs, StringComparison.OrdinalIgnoreCase)
+            || role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
+            || (role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
+                && ContainsAny(text, "each opponent loses", "opponent loses", "damage to each opponent", "you win"));
+    }
+
+    /// <summary>
+    /// Identifies repeatable treasure makers.
+    /// </summary>
+    private static bool IsTreasureEngine(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return ContainsAny(text, "treasure")
+            && (role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase)
+                || role.PrimaryRole.Equals(DeckRoles.Synergy, StringComparison.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
+                || ContainsAny(text, "whenever", "at the beginning", "create"));
+    }
+
+    /// <summary>
+    /// Identifies treasure or artifact payoffs that can plausibly become alternate wins.
+    /// </summary>
+    private static bool IsTreasurePayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+                && ContainsAny(text, "treasure", "artifact"))
+            || (ContainsAny(text, "treasure", "artifact")
+                && ContainsAny(text, "you win", "each opponent loses", "opponent loses", "damage to each opponent"));
+    }
+
+    /// <summary>
+    /// Identifies pump, evasion, or Voltron support that makes commander damage plausible.
+    /// </summary>
+    private static bool IsCommanderDamagePressureCard(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Voltron, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Evasion, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(
+                text,
+                "equipped creature gets",
+                "enchanted creature gets",
+                "commander creatures you own have",
+                "double strike",
+                "can't be blocked",
+                "unblockable",
+                "trample",
+                "base power and toughness");
     }
 
     /// <summary>
@@ -394,6 +621,46 @@ public static class SimulationRouteEvaluator
         if (compact.Equals("recursivecreature", StringComparison.OrdinalIgnoreCase))
         {
             return "recursive-creature";
+        }
+
+        if (compact.Equals("enchantmentrecursion", StringComparison.OrdinalIgnoreCase))
+        {
+            return "enchantment-recursion";
+        }
+
+        if (compact.Equals("repeatablegraveyardrecursion", StringComparison.OrdinalIgnoreCase))
+        {
+            return "repeatable-graveyard-recursion";
+        }
+
+        if (compact.Equals("enchantressengine", StringComparison.OrdinalIgnoreCase))
+        {
+            return "enchantress-engine";
+        }
+
+        if (compact.Equals("enginepayoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return "engine-payoff";
+        }
+
+        if (compact.Equals("drainclock", StringComparison.OrdinalIgnoreCase))
+        {
+            return "drain-clock";
+        }
+
+        if (compact.Equals("treasureengine", StringComparison.OrdinalIgnoreCase))
+        {
+            return "treasure-engine";
+        }
+
+        if (compact.Equals("treasurepayoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return "treasure-payoff";
+        }
+
+        if (compact.Equals("commanderdamagepressure", StringComparison.OrdinalIgnoreCase))
+        {
+            return "commander-damage-pressure";
         }
 
         string numeric = NormalizeNumericPredicate(trimmed);

@@ -212,21 +212,29 @@ public sealed class RecommendationTools
     /// </summary>
     [McpServerTool(Name = "deck_batch_tuning_report", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Build a bounded read-only tuning report for 1-8 local workspaces with validation, cost, bracket, mana, consistency, best practices, and goldfish results. Per-workspace failures are returned without aborting the batch.")]
-    public Task<DeckBatchTuningReport> BuildBatchTuningReportAsync(
+    public async Task<object> BuildBatchTuningReportAsync(
         string[] workspaceIds,
         decimal? maxBudget = null,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
+        [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
+        string simulationProfile = "auto",
         int targetTurn = 7,
         int simulations = 1_000,
         int seed = 1337,
         CancellationToken cancellationToken = default)
     {
-        return recommendations.BuildBatchTuningReportAsync(
-            workspaceIds,
-            maxBudget,
-            targetTurn,
-            simulations,
-            seed,
-            cancellationToken);
+        DeckBatchTuningReport report = await recommendations
+            .BuildBatchTuningReportAsync(
+                workspaceIds,
+                maxBudget,
+                simulationProfile,
+                targetTurn,
+                simulations,
+                seed,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return GoldfishOutputPresenter.Present(report, detailLevel);
     }
 
     /// <summary>

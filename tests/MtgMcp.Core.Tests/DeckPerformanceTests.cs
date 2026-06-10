@@ -40,6 +40,12 @@ public sealed class DeckPerformanceTests
         analysis.Commander.CastByTurn.Single(row => row.Turn == 4).Probability.Should().BeGreaterThan(0);
         analysis.Scenarios.Should().Contain(row => row.Name == "commander-by-turn-4");
         analysis.Scenarios.Should().Contain(row => row.Name == "stranded-high-mana-risk-by-max-turn");
+        analysis.TraceSummary.SampledRuns.Should().HaveCount(3);
+        analysis.TraceSummary.SampledRuns.SelectMany(run => run.DecisionEvents)
+            .Should()
+            .Contain(decision => decision.Phase == "mulligan")
+            .And.Contain(decision => decision.Phase == "sequencing")
+            .And.Contain(decision => decision.Phase == "route-check");
         analysis.Assumptions.Should().Contain(note => note.Contains("not simulated", StringComparison.OrdinalIgnoreCase));
     }
 

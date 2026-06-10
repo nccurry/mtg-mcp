@@ -13,11 +13,13 @@ internal static partial class DeckPerformanceAnalyzer
         DeterministicSimulationRandom random,
         bool includeMulligans,
         PerformanceMulliganContext context,
-        PerformanceCardFactsCache cardFacts)
+        PerformanceCardFactsCache cardFacts,
+        bool collectDecisionEvents)
     {
         int mulligans = 0;
         int maximumMulligans = MulliganHeuristics.MaximumMulligans(context.FreeFirstMulligan);
         List<DeckCard> firstSeven = [];
+        List<PerformanceDecisionEvent>? decisionEvents = collectDecisionEvents ? [] : null;
         while (mulligans <= maximumMulligans)
         {
             int targetHandSize = MulliganHeuristics.TargetHandSize(mulligans, context.FreeFirstMulligan);
@@ -36,18 +38,45 @@ internal static partial class DeckPerformanceAnalyzer
                 firstSeven = hand.ToList();
             }
 
+            bool heuristicKeep = IsKeepablePerformanceHand(hand, targetHandSize, mulligans, context, cardFacts);
+            bool forcedFloorKeep = targetHandSize <= 5;
             bool keep = !includeMulligans
-                || IsKeepablePerformanceHand(hand, targetHandSize, mulligans, context, cardFacts)
+                || heuristicKeep
                 || targetHandSize <= 5;
+            AddPerformanceMulliganDecisionEvent(
+                decisionEvents,
+                hand,
+                targetHandSize,
+                mulligans,
+                includeMulligans,
+                context,
+                cardFacts,
+                keep,
+                heuristicKeep,
+                forcedFloorKeep);
             if (keep)
             {
-                BottomPerformanceCards(hand, targetHandSize, context, cardFacts);
+                List<string> bottomedCards = BottomPerformanceCards(hand, targetHandSize, context, cardFacts);
+                if (bottomedCards.Count > 0)
+                {
+                    AddPerformanceDecisionEvent(
+                        decisionEvents,
+                        "bottoming",
+                        null,
+                        "london-mulligan-bottom",
+                        "bottomed",
+                        string.Join(", ", bottomedCards),
+                        "bottomed the cards that preserved the highest kept-hand score.",
+                        $"target hand size: {targetHandSize}");
+                }
+
                 return new PerformanceOpeningHand
                 {
                     Hand = hand,
                     Library = library,
                     Mulligans = mulligans,
                     OpeningSevenLands = CountPerformanceRole(firstSeven, DeckRoles.Lands, cardFacts),
+                    DecisionEvents = decisionEvents ?? [],
                 };
             }
 
@@ -55,6 +84,49 @@ internal static partial class DeckPerformanceAnalyzer
         }
 
         throw new InvalidOperationException("Mulligan heuristic failed to keep a hand by five cards.");
+    }
+
+    /// <summary>
+    /// Adds a compact explanation for one opening-hand keep or mulligan decision.
+    /// </summary>
+    private static void AddPerformanceMulliganDecisionEvent(
+        List<PerformanceDecisionEvent>? decisionEvents,
+        IReadOnlyList<DeckCard> hand,
+        int targetHandSize,
+        int mulligans,
+        bool includeMulligans,
+        PerformanceMulliganContext context,
+        PerformanceCardFactsCache cardFacts,
+        bool keep,
+        bool heuristicKeep,
+        bool forcedFloorKeep)
+    {
+        double score = ScorePerformanceOpeningHand(hand, context, cardFacts);
+        double threshold = MinimumPerformanceKeepScore(targetHandSize, mulligans, context);
+        int lands = CountPerformanceRole(hand, DeckRoles.Lands, cardFacts);
+        int earlyRamp = CountEarlyPerformanceRole(hand, DeckRoles.Ramp, maxManaValue: 2, cardFacts);
+        int earlyDraw = CountEarlyPerformanceRole(hand, DeckRoles.Draw, maxManaValue: 3, cardFacts);
+        string rationale = keep switch
+        {
+            true when !includeMulligans => "mulligans were disabled, so the simulator kept the first hand.",
+            true when forcedFloorKeep => "London mulligan floor reached five cards, so the simulator kept the hand.",
+            true when heuristicKeep => "opening-hand score met the profile keep threshold.",
+            _ => "opening-hand score or land mix missed the profile keep threshold.",
+        };
+        AddPerformanceDecisionEvent(
+            decisionEvents,
+            "mulligan",
+            null,
+            "opening-hand",
+            keep ? "keep" : "reject",
+            $"mulligan {mulligans}",
+            rationale,
+            $"target hand size: {targetHandSize}",
+            $"score: {score:0.0}",
+            $"threshold: {threshold:0.0}",
+            $"lands: {lands}",
+            $"early ramp: {earlyRamp}",
+            $"early draw: {earlyDraw}");
     }
 
     /// <summary>
@@ -348,7 +420,7 @@ internal static partial class DeckPerformanceAnalyzer
     /// <summary>
     /// Bottoms cards after mulligans by preserving the highest-scoring kept hand.
     /// </summary>
-    private static void BottomPerformanceCards(
+    private static List<string> BottomPerformanceCards(
         List<DeckCard> hand,
         int targetHandSize,
         PerformanceMulliganContext context,
@@ -357,7 +429,7 @@ internal static partial class DeckPerformanceAnalyzer
         int removeCount = hand.Count - targetHandSize;
         if (removeCount <= 0)
         {
-            return;
+            return [];
         }
 
         List<int> bestIndexes = [];
@@ -379,10 +451,15 @@ internal static partial class DeckPerformanceAnalyzer
             }
         }
 
+        List<string> bottomedCards = bestIndexes
+            .Select(index => hand[index].Name)
+            .ToList();
         foreach (int index in bestIndexes.OrderByDescending(index => index))
         {
             hand.RemoveAt(index);
         }
+
+        return bottomedCards;
     }
 
     /// <summary>

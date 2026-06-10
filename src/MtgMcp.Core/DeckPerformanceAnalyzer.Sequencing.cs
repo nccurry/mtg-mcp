@@ -74,24 +74,58 @@ internal static partial class DeckPerformanceAnalyzer
         int turn,
         List<PerformancePermanent> battlefield,
         PerformanceCardFactsCache cardFacts,
+        List<PerformanceDecisionEvent>? decisionEvents,
         ref List<PerformanceManaSource> availableSources)
     {
         while (true)
         {
             CommandZoneCardPlan? next = commandZone.NextPending();
-            if (next is null || turn < next.TargetTurn)
+            if (next is null)
             {
+                return;
+            }
+
+            if (turn < next.TargetTurn)
+            {
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "sequencing",
+                    turn,
+                    "command-zone",
+                    "held",
+                    next.Card.Name,
+                    "profile target turn delayed this command-zone card.",
+                    $"target turn: {next.TargetTurn}");
                 return;
             }
 
             if (!TryPay(cardFacts.Get(next.Card), availableSources, out List<PerformanceManaSource> afterSources))
             {
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "sequencing",
+                    turn,
+                    "command-zone",
+                    "skipped",
+                    next.Card.Name,
+                    "available mana could not pay the command-zone card this turn.",
+                    $"available sources: {availableSources.Count}",
+                    $"mana value: {cardFacts.Get(next.Card).ManaValue}");
                 return;
             }
 
             availableSources = afterSources;
             battlefield.Add(new PerformancePermanent { Card = next.Card });
             commandZone.MarkCast(next, turn);
+            AddPerformanceDecisionEvent(
+                decisionEvents,
+                "sequencing",
+                turn,
+                "command-zone",
+                "cast",
+                next.Card.Name,
+                "profile target turn and available mana allowed command-zone deployment.",
+                $"remaining sources: {availableSources.Count}");
         }
     }
 
@@ -111,6 +145,7 @@ internal static partial class DeckPerformanceAnalyzer
         SimulationProfile profile,
         PerformanceSpellWindow window,
         bool commanderCast,
+        List<PerformanceDecisionEvent>? decisionEvents,
         ref List<PerformanceManaSource> availableSources,
         ref bool rampCastByTurn,
         ref bool drawCastByTurn)
@@ -123,14 +158,50 @@ internal static partial class DeckPerformanceAnalyzer
             .ToList())
         {
             PerformanceCardFacts facts = cardFacts.Get(spell);
-            if (!UsePerformanceSpellInWindow(facts, window)
-                || ShouldHoldPerformanceSpell(facts, turn, commanderCast, profile))
+            if (!UsePerformanceSpellInWindow(facts, window))
             {
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "sequencing",
+                    turn,
+                    "cast-window",
+                    "held",
+                    spell.Name,
+                    "delayed-command-zone sequencing reserved this spell for a later window.",
+                    $"window: {window}");
+                continue;
+            }
+
+            if (ShouldHoldPerformanceSpell(facts, turn, commanderCast, profile))
+            {
+                string holdReason = (facts.IsInteraction || facts.IsBoardWipe)
+                    ? "profile preserved instant-speed interaction instead of spending it proactively."
+                    : "profile preserved protection while the commander plan was online.";
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "interaction-hold-up",
+                    turn,
+                    "cast-spell",
+                    "held",
+                    spell.Name,
+                    holdReason,
+                    $"available sources: {availableSources.Count}",
+                    $"mana value: {facts.ManaValue}");
                 continue;
             }
 
             if (!TryPay(facts, availableSources, out List<PerformanceManaSource> afterSpellSources))
             {
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "cast-skip",
+                    turn,
+                    "cast-spell",
+                    "skipped",
+                    spell.Name,
+                    "available mana sources could not satisfy the card cost this turn.",
+                    $"available sources: {availableSources.Count}",
+                    $"mana value: {facts.ManaValue}");
                 continue;
             }
 
@@ -144,6 +215,17 @@ internal static partial class DeckPerformanceAnalyzer
             {
                 graveyard.Add(spell);
             }
+
+            AddPerformanceDecisionEvent(
+                decisionEvents,
+                "sequencing",
+                turn,
+                "cast-spell",
+                "cast",
+                spell.Name,
+                "spell matched the current sequencing window and was payable.",
+                $"role: {facts.Role.PrimaryRole}",
+                $"priority: {PerformanceCastPriority(facts, turn, profile)}");
 
             if (facts.IsRamp)
             {

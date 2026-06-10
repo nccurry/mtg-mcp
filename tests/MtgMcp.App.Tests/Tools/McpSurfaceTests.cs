@@ -352,6 +352,26 @@ public sealed class McpSurfaceTests
             .Contain("auto")
             .And.Contain("neutral")
             .And.Contain("stax");
+        GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.CompareGoldfishAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
+        GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.CompareGoldfishAsync), "simulationProfile")
+            .Should()
+            .Contain("auto")
+            .And.Contain("neutral")
+            .And.Contain("stax");
+        GetParameterDescription(typeof(RecommendationTools), nameof(RecommendationTools.BuildBatchTuningReportAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
+        GetParameterDescription(typeof(RecommendationTools), nameof(RecommendationTools.BuildBatchTuningReportAsync), "simulationProfile")
+            .Should()
+            .Contain("auto")
+            .And.Contain("neutral")
+            .And.Contain("stax");
         GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "simulationProfile")
             .Should()
             .Contain("auto")

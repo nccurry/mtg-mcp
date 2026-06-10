@@ -335,6 +335,10 @@ public sealed class McpE2ETests
         await AddCardAsync(session.Client, workspaceId, "Arcane Signet", 1, "Ramp");
         await AddCardAsync(session.Client, workspaceId, "Phyrexian Arena", 1, "Draw");
 
+        JsonElement workspaceList = await CallJsonAsync(
+            session.Client,
+            "workspace_list",
+            new Dictionary<string, object?>());
         JsonElement analysis = await CallJsonAsync(
             session.Client,
             "deck_analyze_structure",
@@ -392,6 +396,41 @@ public sealed class McpE2ETests
                 ["simulations"] = 50,
                 ["seed"] = 42
             });
+        JsonElement normalGoldfishComparison = await CallJsonAsync(
+            session.Client,
+            "deck_compare_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceIds"] = new string[] { workspaceId },
+                ["archidektDeckIdsOrUrls"] = new List<string> { "https://example.com/decks/not-archidekt" },
+                ["detailLevel"] = "normal",
+                ["targetTurn"] = 3,
+                ["simulations"] = 50,
+                ["seed"] = 42
+            });
+        JsonElement fullGoldfishComparison = await CallJsonAsync(
+            session.Client,
+            "deck_compare_goldfish",
+            new Dictionary<string, object?>
+            {
+                ["workspaceIds"] = new string[] { workspaceId },
+                ["archidektDeckIdsOrUrls"] = new List<string> { "https://example.com/decks/not-archidekt" },
+                ["detailLevel"] = "full",
+                ["targetTurn"] = 3,
+                ["simulations"] = 50,
+                ["seed"] = 42
+            });
+        JsonElement fullBatchReport = await CallJsonAsync(
+            session.Client,
+            "deck_batch_tuning_report",
+            new Dictionary<string, object?>
+            {
+                ["workspaceIds"] = new string[] { workspaceId },
+                ["detailLevel"] = "full",
+                ["targetTurn"] = 3,
+                ["simulations"] = 50,
+                ["seed"] = 42
+            });
         JsonElement batchReport = await CallJsonAsync(
             session.Client,
             "deck_batch_tuning_report",
@@ -402,6 +441,12 @@ public sealed class McpE2ETests
                 ["simulations"] = 50,
                 ["seed"] = 42
             });
+
+        JsonElement workspaceSummary = workspaceList.EnumerateArray().Should().ContainSingle().Subject;
+        workspaceSummary.TryGetProperty("cards", out _).Should().BeFalse();
+        GetString(workspaceSummary, "workspaceId").Should().Be(workspaceId);
+        GetInt32(workspaceSummary, "totalCards").Should().Be(39);
+        GetInt32(workspaceSummary, "includedCards").Should().Be(39);
 
         GetInt32(analysis, "totalCards").Should().Be(39);
         GetInt32(analysis, "includedCards").Should().Be(39);
@@ -450,8 +495,25 @@ public sealed class McpE2ETests
         GetInt32(goldfish, "targetTurn").Should().Be(3);
         GetInt32(goldfish, "simulations").Should().Be(100);
         GetProperty(goldfish, "turnSummaries").GetArrayLength().Should().Be(3);
-        GetObject(goldfishComparison, "baselineDeck").GetProperty("workspaceId").GetString().Should().Be(workspaceId);
+        JsonElement summaryBaseline = GetObject(goldfishComparison, "baselineDeck");
+        GetString(goldfishComparison, "detailLevel").Should().Be("summary");
+        summaryBaseline.GetProperty("workspaceId").GetString().Should().Be(workspaceId);
+        summaryBaseline.TryGetProperty("goldfish", out _).Should().BeFalse();
+        GetObject(summaryBaseline, "metrics").TryGetProperty("boardDevelopmentScore", out _).Should().BeTrue();
+        JsonElement normalBaseline = GetObject(normalGoldfishComparison, "baselineDeck");
+        GetString(normalGoldfishComparison, "detailLevel").Should().Be("normal");
+        JsonElement normalDetails = GetObject(normalBaseline, "details");
+        normalDetails.TryGetProperty("targetTurnBoard", out _).Should().BeTrue();
+        normalDetails.TryGetProperty("representativeLines", out _).Should().BeTrue();
+        JsonElement fullBaseline = GetObject(fullGoldfishComparison, "baselineDeck");
+        JsonElement fullGoldfish = GetObject(fullBaseline, "goldfish");
+        fullGoldfish.TryGetProperty("profileResolution", out _).Should().BeTrue();
+        GetObject(fullGoldfish, "winEstimate").TryGetProperty("routeEvidence", out _).Should().BeTrue();
+        fullGoldfish.TryGetProperty("representativeLines", out _).Should().BeTrue();
+        fullGoldfish.TryGetProperty("turnSummaries", out _).Should().BeTrue();
         GetArray(goldfishComparison, "failures").Count().Should().Be(1);
+        JsonElement fullBatchDeck = GetArray(fullBatchReport, "decks").Single();
+        GetObject(fullBatchDeck, "goldfish").TryGetProperty("profileResolution", out _).Should().BeTrue();
         GetArray(batchReport, "decks").Count().Should().Be(1);
         GetArray(batchReport, "failures").Count().Should().Be(1);
         archidekt.Requests.Should().BeEmpty();

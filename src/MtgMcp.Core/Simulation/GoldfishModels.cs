@@ -239,6 +239,26 @@ public sealed class GoldfishSimulationResult
     public WinTurnEstimate WinEstimate { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets a 0-100 score for mana, permanents, cards, and token board development by the target turn.
+    /// </summary>
+    public int BoardDevelopmentScore { get; set; }
+
+    /// <summary>
+    /// Gets or sets a 0-100 pressure score from combat, drain, commander, finisher, and route pressure.
+    /// </summary>
+    public int ThreatPressure { get; set; }
+
+    /// <summary>
+    /// Gets or sets the 0-100 share of runs where a repeatable engine was online by the target turn.
+    /// </summary>
+    public int EngineOnlineRate { get; set; }
+
+    /// <summary>
+    /// Gets or sets 0-100 confidence that detected wins came from deterministic evidence instead of fallback pressure.
+    /// </summary>
+    public int WinDetectionConfidence { get; set; }
+
+    /// <summary>
     /// Gets or sets representative play lines.
     /// </summary>
     public List<string> RepresentativeLines { get; set; } = [];

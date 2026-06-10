@@ -26,8 +26,31 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         bool mulligan,
         CancellationToken cancellationToken)
     {
+        return await SimulateGoldfishAsync(
+                workspaceId,
+                SimulationProfileIds.Auto,
+                targetTurn,
+                simulations,
+                seed,
+                mulligan,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a heuristic no-interaction goldfish simulation with a caller-selected simulation profile.
+    /// </summary>
+    public async Task<GoldfishSimulationResult> SimulateGoldfishAsync(
+        string workspaceId,
+        string simulationProfile,
+        int targetTurn,
+        int simulations,
+        int seed,
+        bool mulligan,
+        CancellationToken cancellationToken)
+    {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        return SimulateGoldfish(workspace, targetTurn, simulations, seed, mulligan, simulationProfiles);
+        return SimulateGoldfish(workspace, simulationProfile, targetTurn, simulations, seed, mulligan, simulationProfiles);
     }
 
     /// <summary>
@@ -40,8 +63,30 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int seed,
         CancellationToken cancellationToken)
     {
+        return await ProjectBoardStateAsync(
+                workspaceId,
+                SimulationProfileIds.Auto,
+                turn,
+                simulations,
+                seed,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Projects the likely board state by a requested turn with a caller-selected simulation profile.
+    /// </summary>
+    public async Task<ProjectedTurnState> ProjectBoardStateAsync(
+        string workspaceId,
+        string simulationProfile,
+        int turn,
+        int simulations,
+        int seed,
+        CancellationToken cancellationToken)
+    {
         GoldfishSimulationResult result = await SimulateGoldfishAsync(
             workspaceId,
+            simulationProfile,
             turn,
             simulations,
             seed,
@@ -67,8 +112,30 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int seed,
         CancellationToken cancellationToken)
     {
+        return await EstimateWinTurnAsync(
+                workspaceId,
+                SimulationProfileIds.Auto,
+                maxTurn,
+                simulations,
+                seed,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Estimates likely goldfish win turns and routes with a caller-selected simulation profile.
+    /// </summary>
+    public async Task<WinTurnEstimate> EstimateWinTurnAsync(
+        string workspaceId,
+        string simulationProfile,
+        int maxTurn,
+        int simulations,
+        int seed,
+        CancellationToken cancellationToken)
+    {
         GoldfishSimulationResult result = await SimulateGoldfishAsync(
             workspaceId,
+            simulationProfile,
             maxTurn,
             simulations,
             seed,
@@ -82,6 +149,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static GoldfishSimulationResult SimulateGoldfish(
         DeckWorkspace workspace,
+        string? requestedProfile,
         int targetTurn,
         int simulations,
         int seed,
@@ -93,7 +161,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         DeckIntentResult intentResult = DeckIntentText.Extract(workspace.Description, workspace.Id);
         DeckIntent? intent = intentResult.Intent;
         ResolvedSimulationProfile profileResolution = (simulationProfiles ?? SimulationProfileCatalog.CreateDefault())
-            .Resolve(workspace, SimulationProfileIds.Auto, intent);
+            .Resolve(workspace, requestedProfile, intent);
         CommandZonePlan commandZonePlan = CommandZonePlanner.Build(
             IncludedCards(workspace),
             profileResolution.Profile);
@@ -127,6 +195,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         {
             result.TurnSummaries.Add(BuildProjectedTurnState(turn, runs));
         }
+
+        AddGoldfishSummaryMetrics(result, runs, safeTurn);
 
         IEnumerable<GoldfishRun> representativeCandidates = runs;
         if (commandZonePlan.HasBackground && runs.Any(run => run.CommanderWithBackgroundOnlineTurn.HasValue))
@@ -296,6 +366,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             }
 
             int power = EstimateBattlefieldPower(battlefield, tokens);
+            int pressureScore = EstimateThreatPressure(
+                battlefield,
+                tokens,
+                power,
+                winPressure,
+                commandZone.CommanderOnline);
+            bool engineOnline = HasGoldfishEngineOnline(battlefield);
             int comboPieces = battlefield.Count(card => DeckRoleClassifier.Classify(card).Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler));
             if (!run.WinTurn.HasValue)
             {
@@ -381,6 +458,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 CardsInHand = hand.Count,
                 Power = power,
                 Tokens = tokens,
+                ThreatPressure = pressureScore,
+                EngineOnline = engineOnline,
                 CommanderCastByTurn = commandZone.CommanderOnline,
                 BackgroundCastByTurn = commandZone.BackgroundOnline,
                 CommanderWithBackgroundOnlineByTurn = commandZone.CommanderWithBackgroundOnlineTurn.HasValue,
@@ -869,10 +948,19 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
         string typeLine = GetSnapshot(card).TypeLine ?? "";
-        return typeLine.Contains("Creature", StringComparison.OrdinalIgnoreCase)
+        string text = GetSnapshot(card).OracleText ?? "";
+        bool meaningfulCreature = typeLine.Contains("Creature", StringComparison.OrdinalIgnoreCase)
             && (GoldfishManaValue(card) >= 4
                 || role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
                 || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase));
+        bool meaningfulEnchantment = typeLine.Contains("Enchantment", StringComparison.OrdinalIgnoreCase)
+            && (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
+                || role.PrimaryRole.Equals(DeckRoles.Payoffs, StringComparison.OrdinalIgnoreCase)
+                || role.PrimaryRole.Equals(DeckRoles.Synergy, StringComparison.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
+                || ContainsAny(text, "whenever", "at the beginning", "each opponent loses", "you win"));
+        return meaningfulCreature || meaningfulEnchantment;
     }
 
     /// <summary>
@@ -1163,11 +1251,176 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int EstimateBattlefieldPower(IReadOnlyList<DeckCard> battlefield, int tokens)
     {
-        int permanentPower = battlefield
-            .Where(card => ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"))
-            .Sum(card => Math.Max(1, (int)Math.Ceiling(GetSnapshot(card).ManaValue ?? 2)));
+        int permanentPower = 0;
+        foreach (DeckCard card in battlefield)
+        {
+            if (!ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"))
+            {
+                continue;
+            }
+
+            permanentPower += Math.Max(1, (int)Math.Ceiling(GetSnapshot(card).ManaValue ?? 2));
+            if (IsEvasionRouteCard(card))
+            {
+                permanentPower += 1;
+            }
+        }
+
         int finisherBoost = battlefield.Count(card => DeckRoleClassifier.Classify(card).Tags.Contains(DeckTags.Finishers)) * 4;
-        return permanentPower + tokens + finisherBoost;
+        int pumpBoost = battlefield.Where(IsPumpRouteCard).Sum(EstimatePumpPressure);
+        int drainBoost = EstimateDrainPressure(battlefield, tokens);
+        int commanderBoost = battlefield.Any(IsCommanderCard) ? 3 : 0;
+        return permanentPower + tokens + finisherBoost + pumpBoost + drainBoost + commanderBoost;
+    }
+
+    /// <summary>
+    /// Estimates a 0-100 pressure score from board power and route-specific reach.
+    /// </summary>
+    private static int EstimateThreatPressure(
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens,
+        int power,
+        int winPressure,
+        bool commanderOnline)
+    {
+        int evasion = battlefield.Count(IsEvasionRouteCard) * 4;
+        int pump = battlefield.Where(IsPumpRouteCard).Sum(EstimatePumpPressure) * 3;
+        int drain = EstimateDrainPressure(battlefield, tokens) * 4;
+        int commander = commanderOnline ? 8 : 0;
+        return Math.Clamp(power * 2 + winPressure * 5 + evasion + pump + drain + commander, 0, 100);
+    }
+
+    /// <summary>
+    /// Estimates how much a pump, equipment, aura, or anthem permanent increases pressure.
+    /// </summary>
+    private static int EstimatePumpPressure(DeckCard card)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        string typeLine = GetSnapshot(card).TypeLine ?? "";
+        int pressure = 0;
+        if (ContainsAny(typeLine, "Equipment", "Aura"))
+        {
+            pressure += 2;
+        }
+
+        if (ContainsAny(text, "+1/+1"))
+        {
+            pressure += 2;
+        }
+
+        if (ContainsAny(text, "+2/+2"))
+        {
+            pressure += 4;
+        }
+
+        if (ContainsAny(text, "+3/+3"))
+        {
+            pressure += 6;
+        }
+
+        if (ContainsAny(text, "double strike"))
+        {
+            pressure += 4;
+        }
+
+        if (ContainsAny(text, "trample", "flying", "menace", "can't be blocked", "unblockable"))
+        {
+            pressure += 2;
+        }
+
+        return Math.Max(1, pressure);
+    }
+
+    /// <summary>
+    /// Estimates recurring life-loss pressure from aristocrats and drain boards.
+    /// </summary>
+    private static int EstimateDrainPressure(IReadOnlyList<DeckCard> battlefield, int tokens)
+    {
+        int drainPayoffs = battlefield.Count(card =>
+        {
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            return role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.Aristocrats, StringComparer.OrdinalIgnoreCase);
+        });
+        if (drainPayoffs == 0)
+        {
+            return 0;
+        }
+
+        int sacrificeSupport = battlefield.Count(card =>
+        {
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            return role.Tags.Contains(DeckTags.SacOutlet, StringComparer.OrdinalIgnoreCase)
+                || role.Tags.Contains(DeckTags.SacrificeFodder, StringComparer.OrdinalIgnoreCase);
+        });
+        return drainPayoffs * Math.Max(1, Math.Min(4, tokens + sacrificeSupport));
+    }
+
+    /// <summary>
+    /// Checks whether the battlefield has a repeatable engine permanent online.
+    /// </summary>
+    private static bool HasGoldfishEngineOnline(IReadOnlyList<DeckCard> battlefield)
+    {
+        return battlefield.Any(card =>
+        {
+            CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+            string text = GetSnapshot(card).OracleText ?? "";
+            return role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
+                || (ContainsAny(text, "whenever", "at the beginning")
+                    && ContainsAny(text, "draw", "create", "return", "each opponent loses", "opponent loses"));
+        });
+    }
+
+    /// <summary>
+    /// Adds 0-100 summary metrics that distinguish board shape from detected kill confidence.
+    /// </summary>
+    private static void AddGoldfishSummaryMetrics(
+        GoldfishSimulationResult result,
+        IReadOnlyList<GoldfishRun> runs,
+        int targetTurn)
+    {
+        ProjectedTurnState target = result.TurnSummaries.FirstOrDefault(summary => summary.Turn == targetTurn)
+            ?? result.TurnSummaries.LastOrDefault()
+            ?? new ProjectedTurnState();
+        result.BoardDevelopmentScore = Math.Clamp(
+            (target.MedianLands * 8)
+                + (target.MedianManaSources * 4)
+                + (target.MedianNonlandPermanents * 8)
+                + (Math.Min(target.MedianCardsInHand, 7) * 3)
+                + (target.MedianTokens * 3),
+            0,
+            100);
+
+        List<GoldfishTurnSnapshot> targetSnapshots = runs
+            .SelectMany(run => run.Turns.Where(snapshot => snapshot.Turn == targetTurn))
+            .ToList();
+        int medianThreat = Median(targetSnapshots.Select(snapshot => snapshot.ThreatPressure));
+        double routePressure = result.WinEstimate.Routes.Count == 0
+            ? 0
+            : result.WinEstimate.Routes.Max(route => route.Probability) * 100;
+        double turnWinRate = result.WinEstimate.WinByTurnRates.TryGetValue(targetTurn, out double rate)
+            ? rate * 100
+            : 0;
+        result.ThreatPressure = Math.Clamp(
+            (int)Math.Round(Math.Max(medianThreat, Math.Max(routePressure, turnWinRate))),
+            0,
+            100);
+
+        result.EngineOnlineRate = targetSnapshots.Count == 0
+            ? 0
+            : Math.Clamp(
+                (int)Math.Round(targetSnapshots.Count(snapshot => snapshot.EngineOnline) * 100.0 / targetSnapshots.Count),
+                0,
+                100);
+
+        double confidence = result.WinEstimate.RouteEvidence.Count == 0
+            ? 0
+            : result.WinEstimate.RouteEvidence.Max(evidence => evidence.Confidence) * 100;
+        result.WinDetectionConfidence = Math.Clamp((int)Math.Round(confidence), 0, 100);
+        result.Notes.Add(
+            "Summary metrics use 0-100 scales: boardDevelopmentScore measures board shape, "
+                + "threatPressure measures combat/drain/route pressure, engineOnlineRate measures repeatable engines, "
+                + "and winDetectionConfidence is higher for deterministic route evidence than fallback pressure.");
     }
 
     /// <summary>
@@ -1302,9 +1555,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 EarliestTurn = route.Min(run => run.WinTurn),
                 Probability = route.Count() / (double)runs.Count,
                 Cards = RouteCards(workspace, route.Key),
-                Rationale = evidence.Count > 0
-                    ? $"The simulator found {route.Key} through deterministic route evidence."
-                    : $"The simulator found {route.Key} through fallback pressure heuristics.",
+                Rationale = BuildRouteRationale(route.Key, evidence),
                 Evidence = evidence,
             });
         }
@@ -1337,6 +1588,25 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             "Observed win-turn percentiles only include runs that reached a heuristic win; winByTurnRates "
                 + "and observedWinRate are measured against all runs.");
         return estimate;
+    }
+
+    /// <summary>
+    /// Labels deterministic route evidence separately from fallback heuristic pressure.
+    /// </summary>
+    private static string BuildRouteRationale(string route, IReadOnlyList<SimulationRouteEvidence> evidence)
+    {
+        bool deterministicEvidence = evidence.Any(item => !item.Source.Equals("fallback", StringComparison.OrdinalIgnoreCase));
+        if (deterministicEvidence)
+        {
+            return $"The simulator found {route} through deterministic route evidence.";
+        }
+
+        if (evidence.Count > 0)
+        {
+            return $"The simulator found {route} through fallback heuristic pressure.";
+        }
+
+        return $"The simulator found {route} through fallback pressure heuristics.";
     }
 
     /// <summary>
@@ -1496,6 +1766,16 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         /// Gets or sets token count.
         /// </summary>
         public int Tokens { get; set; }
+
+        /// <summary>
+        /// Gets or sets the bounded threat-pressure score for this turn.
+        /// </summary>
+        public int ThreatPressure { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether a repeatable engine appeared online by this turn.
+        /// </summary>
+        public bool EngineOnline { get; set; }
 
         /// <summary>
         /// Gets or sets whether a non-Background commander had been cast by this turn.

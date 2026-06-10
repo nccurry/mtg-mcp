@@ -36,7 +36,8 @@ internal static partial class DeckPerformanceAnalyzer
         int maxTurn,
         int seed,
         bool includeMulligans,
-        SimulationProfile profile)
+        SimulationProfile profile,
+        bool collectDecisionEvents)
     {
         DeterministicSimulationRandom random = new(seed);
         PerformanceOpeningHand opening = DrawPerformanceOpeningHand(
@@ -44,18 +45,22 @@ internal static partial class DeckPerformanceAnalyzer
             random,
             includeMulligans,
             mulliganContext,
-            cardFacts);
+            cardFacts,
+            collectDecisionEvents);
         List<DeckCard> hand = opening.Hand;
         List<DeckCard> library = opening.Library;
         List<PerformancePermanent> battlefield = [];
         List<DeckCard> graveyard = [];
         List<IReadOnlyList<string>> virtualManaSources = [];
+        List<PerformanceDecisionEvent>? decisionEvents = collectDecisionEvents ? opening.DecisionEvents : null;
         PerformanceRun run = new()
         {
+            Seed = seed,
             Mulligans = opening.Mulligans,
             KeptHandSize = opening.Hand.Count,
             KeptOpeningLands = CountPerformanceRole(opening.Hand, DeckRoles.Lands, cardFacts),
             OpeningSevenLands = opening.OpeningSevenLands,
+            DecisionEvents = decisionEvents ?? [],
         };
         bool rampCastByTurn = false;
         bool drawCastByTurn = false;
@@ -79,6 +84,28 @@ internal static partial class DeckPerformanceAnalyzer
                 {
                     unavailablePermanent = permanent;
                 }
+
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "sequencing",
+                    turn,
+                    "land-drop",
+                    "played",
+                    landPlayed.Name,
+                    "selected the land drop that best improved current color access and tempo.",
+                    $"lands in hand before play: {hand.Count(card => cardFacts.Get(card).IsLand) + 1}",
+                    $"enters tapped: {cardFacts.Get(landPlayed).LooksTapped}");
+            }
+            else
+            {
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "sequencing",
+                    turn,
+                    "land-drop",
+                    "skipped",
+                    "land drop",
+                    "no land in hand was available to play.");
             }
 
             List<PerformanceManaSource> availableSources = GetPerformanceManaSources(
@@ -117,6 +144,7 @@ internal static partial class DeckPerformanceAnalyzer
                     turn,
                     battlefield,
                     cardFacts,
+                    decisionEvents,
                     ref availableSources);
             }
 
@@ -135,6 +163,7 @@ internal static partial class DeckPerformanceAnalyzer
                     profile,
                     PerformanceSpellWindow.All,
                     commandZone.CommanderOnline,
+                    decisionEvents,
                     ref availableSources,
                     ref rampCastByTurn,
                     ref drawCastByTurn);
@@ -154,6 +183,7 @@ internal static partial class DeckPerformanceAnalyzer
                     profile,
                     PerformanceSpellWindow.SetupOnly,
                     commandZone.CommanderOnline,
+                    decisionEvents,
                     ref availableSources,
                     ref rampCastByTurn,
                     ref drawCastByTurn);
@@ -162,6 +192,7 @@ internal static partial class DeckPerformanceAnalyzer
                     turn,
                     battlefield,
                     cardFacts,
+                    decisionEvents,
                     ref availableSources);
                 CastPerformanceHandSpells(
                     hand,
@@ -176,6 +207,7 @@ internal static partial class DeckPerformanceAnalyzer
                     profile,
                     PerformanceSpellWindow.NonSetup,
                     commandZone.CommanderOnline,
+                    decisionEvents,
                     ref availableSources,
                     ref rampCastByTurn,
                     ref drawCastByTurn);
@@ -201,6 +233,18 @@ internal static partial class DeckPerformanceAnalyzer
                 availableSources,
                 DeckRoles.Protection,
                 cardFacts);
+            if (state.InteractionHeldUp)
+            {
+                AddPerformanceDecisionEvent(
+                    decisionEvents,
+                    "interaction-hold-up",
+                    turn,
+                    "hold-up",
+                    "held",
+                    "interaction",
+                    "available mana could pay at least one interaction spell remaining in hand.");
+            }
+
             state.CastableHandRate = CalculatePerformanceCastableHandRate(
                 hand,
                 turnStartSources,
@@ -226,6 +270,16 @@ internal static partial class DeckPerformanceAnalyzer
             state.ComboPiecesSeen = comboPiecesSeen;
             state.ComboAssemblyByTurn = comboPiecesSeen >= 2;
             state.TutorAssistedComboByTurn = comboPiecesSeen >= 1 && tutorSeen;
+            AddPerformanceDecisionEvent(
+                decisionEvents,
+                "route-check",
+                turn,
+                "combo-assembly",
+                state.ComboAssemblyByTurn || state.TutorAssistedComboByTurn ? "matched" : "missing",
+                "combo route",
+                "checked whether seen cards satisfied two-piece or tutor-assisted combo pressure.",
+                $"combo pieces seen: {comboPiecesSeen}",
+                $"tutor seen: {tutorSeen}");
             if (state.ComboAssemblyByTurn && !run.ComboAssemblyTurn.HasValue)
             {
                 run.ComboAssemblyTurn = turn;
@@ -245,6 +299,49 @@ internal static partial class DeckPerformanceAnalyzer
         run.CommanderWithBackgroundOnlineTurn = commandZone.CommanderWithBackgroundOnlineTurn;
         AddPerformanceStrandedCards(run, hand, run.Turns.LastOrDefault(), maxTurn, cardFacts);
         return run;
+    }
+
+    /// <summary>
+    /// Adds a bounded decision event to sampled trace runs.
+    /// </summary>
+    private static void AddPerformanceDecisionEvent(
+        List<PerformanceDecisionEvent>? events,
+        string phase,
+        int? turn,
+        string decision,
+        string outcome,
+        string subject,
+        string rationale,
+        params string[] evidence)
+    {
+        if (events is null)
+        {
+            return;
+        }
+
+        if (events.Count >= PerformanceDecisionEventLimit)
+        {
+            return;
+        }
+
+        PerformanceDecisionEvent decisionEvent = new()
+        {
+            Phase = phase,
+            Turn = turn,
+            Decision = decision,
+            Outcome = outcome,
+            Subject = subject,
+            Rationale = rationale,
+        };
+        foreach (string line in evidence)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                decisionEvent.Evidence.Add(line);
+            }
+        }
+
+        events.Add(decisionEvent);
     }
 
 }

@@ -340,6 +340,16 @@ public sealed class DeckCostAnalysis
     public List<string> MissingPriceCards { get; set; } = [];
 
     /// <summary>
+    /// Basic land cards missing cached prices; these do not increase budget uncertainty.
+    /// </summary>
+    public List<string> BasicMissingPriceCards { get; set; } = [];
+
+    /// <summary>
+    /// Nonbasic cards missing cached prices; these keep budget status uncertain.
+    /// </summary>
+    public List<string> NonBasicMissingPriceCards { get; set; } = [];
+
+    /// <summary>
     /// Budget and pricing caveats that should increase, not reduce, confidence risk.
     /// </summary>
     public List<string> PriceRiskNotes { get; set; } = [];
