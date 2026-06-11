@@ -154,12 +154,15 @@ internal static class GoldfishOutputPresenter
             {
                 includedTotal = deck.Cost.IncludedTotal,
                 maxBudget = deck.Cost.MaxBudget,
+                withinKnownBudget = deck.Cost.WithinKnownBudget,
                 withinBudget = deck.Cost.WithinBudget,
                 budgetDelta = deck.Cost.BudgetDelta,
                 budgetStatus = deck.Cost.BudgetStatus,
+                priceRiskStatus = deck.Cost.PriceRiskStatus,
                 missingPriceCards = deck.Cost.MissingPriceCards.Count,
                 basicMissingPriceCards = deck.Cost.BasicMissingPriceCards.Count,
                 nonBasicMissingPriceCards = deck.Cost.NonBasicMissingPriceCards.Count,
+                unresolvedMissingPriceCards = deck.Cost.UnresolvedMissingPriceCards.Count,
                 priceRiskNotes = deck.Cost.PriceRiskNotes,
             },
             bracket = new

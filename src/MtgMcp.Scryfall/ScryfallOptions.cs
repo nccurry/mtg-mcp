@@ -1,3 +1,5 @@
+using MtgMcp.Core;
+
 namespace MtgMcp.Scryfall;
 
 /// <summary>
@@ -29,4 +31,19 @@ public sealed class ScryfallOptions
     /// Gets or sets the release-date reference used for deterministic pricing tests and replayable fetches.
     /// </summary>
     public DateOnly? PricingReferenceDate { get; set; }
+
+    /// <summary>
+    /// Gets or sets how named-card results are replaced with price-relevant printings.
+    /// </summary>
+    public PricingMode PricingMode { get; set; } = PricingMode.ReleasedIfNeeded;
+
+    /// <summary>
+    /// Gets or sets the format legality checked by budget-playable pricing when source data includes it.
+    /// </summary>
+    public string? PricingFormat { get; set; } = "commander";
+
+    /// <summary>
+    /// Gets or sets whether budget-playable pricing may use foil, etched, or market fallback prices.
+    /// </summary>
+    public bool AllowAnyFinishForBudgetPricing { get; set; }
 }

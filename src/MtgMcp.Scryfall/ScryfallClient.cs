@@ -392,30 +392,47 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
     {
         DateOnly referenceDate = CurrentPricingDate();
         CardPriceEvaluation evaluation = CardPriceEvaluator.Evaluate(card, referenceDate);
-        if (evaluation.PriceKnown && evaluation.PrintingStatus.Equals("released", StringComparison.OrdinalIgnoreCase))
+        if (options.PricingMode == PricingMode.ReleasedIfNeeded
+            && evaluation.PriceKnown
+            && evaluation.PrintingStatus.Equals("released", StringComparison.OrdinalIgnoreCase))
         {
             return card;
         }
 
-        if (!ShouldInspectPrintings(card, evaluation))
+        if (!ShouldInspectPrintings(card, evaluation, options.PricingMode))
         {
             return card;
         }
 
         IReadOnlyList<CardInfo> printings = await GetPrintsForCardAsync(card, cancellationToken)
             .ConfigureAwait(false);
+        CardPrintingSelectionOptions selectionOptions = new()
+        {
+            PricingMode = options.PricingMode,
+            Format = options.PricingFormat,
+            AllowAnyFinish = options.AllowAnyFinishForBudgetPricing,
+        };
         CardPriceEvaluator.CardPrintingSelection selection = CardPriceEvaluator.SelectPrinting(
             card,
             printings,
-            referenceDate);
+            referenceDate,
+            selectionOptions);
         return selection.Card;
     }
 
     /// <summary>
     /// Decides when a named-card result has enough pricing context to justify print replacement.
     /// </summary>
-    private static bool ShouldInspectPrintings(CardInfo card, CardPriceEvaluation evaluation)
+    private static bool ShouldInspectPrintings(
+        CardInfo card,
+        CardPriceEvaluation evaluation,
+        PricingMode pricingMode)
     {
+        if (pricingMode != PricingMode.ReleasedIfNeeded)
+        {
+            return true;
+        }
+
         if (evaluation.PrintingStatus.Equals("future", StringComparison.OrdinalIgnoreCase)
             || evaluation.PrintingStatus.Equals("non-paper", StringComparison.OrdinalIgnoreCase))
         {

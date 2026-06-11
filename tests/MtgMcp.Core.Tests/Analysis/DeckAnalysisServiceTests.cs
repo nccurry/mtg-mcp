@@ -1088,8 +1088,12 @@ public sealed partial class DeckIntelligenceTests
         analysis.MissingPriceCards.Should().Contain(["Future Preview", "Unpriced Nonbasic", "Island"]);
         analysis.NonBasicMissingPriceCards.Should().Contain(["Future Preview", "Unpriced Nonbasic"]);
         analysis.BasicMissingPriceCards.Should().Contain("Island");
+        analysis.UnresolvedMissingPriceCards.Should().Contain(["Future Preview", "Unpriced Nonbasic"]);
+        analysis.LowRiskMissingPriceCards.Should().BeEmpty();
+        analysis.WithinKnownBudget.Should().BeTrue();
         analysis.WithinBudget.Should().BeFalse();
-        analysis.BudgetStatus.Should().Be("unknown-missing-prices");
+        analysis.BudgetStatus.Should().Be("under-known-budget-with-price-risk");
+        analysis.PriceRiskStatus.Should().Be("unresolved");
         analysis.PriceRiskNotes.Should().Contain(note =>
             note.Contains("Future Preview", StringComparison.OrdinalIgnoreCase)
             && note.Contains("after reference date 2026-01-01", StringComparison.OrdinalIgnoreCase));
@@ -1127,10 +1131,13 @@ public sealed partial class DeckIntelligenceTests
 
         analysis.MaxBudget.Should().Be(300);
         analysis.BudgetDelta.Should().Be(120);
+        analysis.WithinKnownBudget.Should().BeTrue();
         analysis.WithinBudget.Should().BeFalse();
-        analysis.BudgetStatus.Should().Be("unknown-missing-prices");
+        analysis.BudgetStatus.Should().Be("under-known-budget-with-price-risk");
+        analysis.PriceRiskStatus.Should().Be("unresolved");
+        analysis.UnresolvedMissingPriceCards.Should().Contain("Unknown Price");
         analysis.PriceRiskNotes.Should().Contain(note => note.Contains("missing prices", StringComparison.OrdinalIgnoreCase));
-        analysis.PriceRiskNotes.Should().Contain(note => note.Contains("could exceed", StringComparison.OrdinalIgnoreCase));
+        analysis.PriceRiskNotes.Should().Contain(note => note.Contains("source-backed pricing", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1174,9 +1181,48 @@ public sealed partial class DeckIntelligenceTests
         analysis.MissingPriceCards.Should().Contain(["Snow-Covered Swamp", "Wastes"]);
         analysis.BasicMissingPriceCards.Should().Contain(["Snow-Covered Swamp", "Wastes"]);
         analysis.NonBasicMissingPriceCards.Should().BeEmpty();
+        analysis.UnresolvedMissingPriceCards.Should().BeEmpty();
+        analysis.WithinKnownBudget.Should().BeTrue();
         analysis.WithinBudget.Should().BeTrue();
         analysis.BudgetStatus.Should().Be("under-budget");
+        analysis.PriceRiskStatus.Should().Be("none");
         analysis.PriceRiskNotes.Should().NotContain(note => note.Contains("missing prices", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that common staple names are not treated as low risk without source-backed price data.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_DoesNotHardCodeCommonStaplesAsLowRisk()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Staple Risk",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact" },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            maxBudget: 50,
+            TestContext.Current.CancellationToken);
+
+        analysis.WithinKnownBudget.Should().BeTrue();
+        analysis.WithinBudget.Should().BeFalse();
+        analysis.PriceRiskStatus.Should().Be("unresolved");
+        analysis.LowRiskMissingPriceCards.Should().BeEmpty();
+        analysis.UnresolvedMissingPriceCards.Should().ContainSingle().Which.Should().Be("Sol Ring");
     }
 
     /// <summary>

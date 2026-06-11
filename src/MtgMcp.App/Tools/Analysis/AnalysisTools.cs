@@ -141,7 +141,7 @@ public sealed class AnalysisTools
     /// Analyzes cached deck prices and top cost drivers.
     /// </summary>
     [McpServerTool(Name = "deck_analyze_cost", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Analyze cached deck prices, included total, optional budget status, maybeboard total, missing prices, and top cost drivers.")]
+    [Description("Analyze cached deck prices, included total, withinKnownBudget, conservative withinBudget, price risk status, maybeboard total, missing prices, and top cost drivers.")]
     public Task<DeckCostAnalysis> AnalyzeDeckCostAsync(
         string workspaceId,
         decimal? maxBudget = null,

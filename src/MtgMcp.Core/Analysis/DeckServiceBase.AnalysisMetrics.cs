@@ -76,6 +76,7 @@ public abstract partial class DeckServiceBase
                     else
                     {
                         analysis.NonBasicMissingPriceCards.Add(card.Name);
+                        analysis.UnresolvedMissingPriceCards.Add(card.Name);
                     }
                 }
 
@@ -224,16 +225,18 @@ public abstract partial class DeckServiceBase
             analysis.PriceRiskNotes.Add("Some included or maybeboard nonbasic cards are missing cached prices, so known totals are a lower bound.");
         }
 
+        analysis.PriceRiskStatus = GetPriceRiskStatus(analysis);
         if (!maxBudget.HasValue)
         {
-            analysis.BudgetStatus = analysis.NonBasicMissingPriceCards.Count > 0
+            analysis.BudgetStatus = analysis.UnresolvedMissingPriceCards.Count > 0
                 ? "unknown-missing-prices"
                 : "not-requested";
             return;
         }
 
         analysis.BudgetDelta = maxBudget.Value - analysis.IncludedTotal;
-        analysis.WithinBudget = analysis.IncludedTotal <= maxBudget.Value && analysis.NonBasicMissingPriceCards.Count == 0;
+        analysis.WithinKnownBudget = analysis.IncludedTotal <= maxBudget.Value;
+        analysis.WithinBudget = analysis.WithinKnownBudget.Value && analysis.NonBasicMissingPriceCards.Count == 0;
         if (analysis.IncludedTotal > maxBudget.Value)
         {
             analysis.BudgetStatus = "over-budget";
@@ -243,14 +246,31 @@ public abstract partial class DeckServiceBase
 
         if (analysis.NonBasicMissingPriceCards.Count > 0)
         {
-            analysis.BudgetStatus = "unknown-missing-prices";
-            analysis.PriceRiskNotes.Add($"Known included total is within max budget {maxBudget.Value:0.##}, but missing prices could exceed it.");
+            analysis.BudgetStatus = "under-known-budget-with-price-risk";
+            analysis.PriceRiskNotes.Add(
+                $"Known included total is within max budget {maxBudget.Value:0.##}, "
+                    + "but unresolved nonbasic missing prices still need source-backed pricing.");
             return;
         }
 
         analysis.BudgetStatus = analysis.IncludedTotal == maxBudget.Value
             ? "at-budget"
             : "under-budget";
+    }
+
+    /// <summary>
+    /// Gets aggregate price-risk status without treating card names as price data.
+    /// </summary>
+    private static string GetPriceRiskStatus(DeckCostAnalysis analysis)
+    {
+        if (analysis.UnresolvedMissingPriceCards.Count > 0)
+        {
+            return "unresolved";
+        }
+
+        return analysis.LowRiskMissingPriceCards.Count > 0
+            ? "low"
+            : "none";
     }
 
     /// <summary>

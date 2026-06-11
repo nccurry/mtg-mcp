@@ -1,6 +1,48 @@
 namespace MtgMcp.Core;
 
 /// <summary>
+/// Selects how aggressively mtg-mcp replaces catalog snapshots with budget-relevant printings.
+/// </summary>
+public enum PricingMode
+{
+    /// <summary>
+    /// Keeps a usable released named-card result and only searches prints for missing, future, or non-paper snapshots.
+    /// </summary>
+    ReleasedIfNeeded,
+
+    /// <summary>
+    /// Chooses the cheapest released paper printing from any supported price field.
+    /// </summary>
+    CheapestReleasedPaper,
+
+    /// <summary>
+    /// Chooses a practical budget printing using legal, released, English-preferred, non-foil USD prices by default.
+    /// </summary>
+    BudgetPlayable,
+}
+
+/// <summary>
+/// Controls deterministic printing selection for budget-sensitive card metadata.
+/// </summary>
+public sealed class CardPrintingSelectionOptions
+{
+    /// <summary>
+    /// Gets or sets the pricing mode.
+    /// </summary>
+    public PricingMode PricingMode { get; set; } = PricingMode.ReleasedIfNeeded;
+
+    /// <summary>
+    /// Gets or sets the format whose legality should be honored when legality data is available.
+    /// </summary>
+    public string? Format { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether budget-playable mode may use foil, etched, or market fallback prices.
+    /// </summary>
+    public bool AllowAnyFinish { get; set; }
+}
+
+/// <summary>
 /// Applies mtg-mcp's deterministic policy for budget prices and selected printings.
 /// </summary>
 public static class CardPriceEvaluator
@@ -51,6 +93,22 @@ public static class CardPriceEvaluator
         IReadOnlyList<CardInfo> printings,
         DateOnly referenceDate)
     {
+        return SelectPrinting(
+            canonical,
+            printings,
+            referenceDate,
+            new CardPrintingSelectionOptions());
+    }
+
+    /// <summary>
+    /// Selects the best released paper printing using the supplied pricing policy.
+    /// </summary>
+    public static CardPrintingSelection SelectPrinting(
+        CardInfo canonical,
+        IReadOnlyList<CardInfo> printings,
+        DateOnly referenceDate,
+        CardPrintingSelectionOptions options)
+    {
         List<CardInfo> candidates = [];
         AddCandidate(candidates, canonical);
         foreach (CardInfo printing in printings)
@@ -61,7 +119,7 @@ public static class CardPriceEvaluator
         List<PricedPrintingCandidate> pricedCandidates = [];
         foreach (CardInfo candidate in candidates)
         {
-            PricedPrintingCandidate? priced = BuildPricedCandidate(candidate, referenceDate);
+            PricedPrintingCandidate? priced = BuildPricedCandidate(candidate, referenceDate, options);
             if (priced is not null)
             {
                 pricedCandidates.Add(priced);
@@ -70,11 +128,15 @@ public static class CardPriceEvaluator
 
         if (pricedCandidates.Count == 0)
         {
-            CardPriceEvaluation evaluation = Evaluate(canonical, referenceDate);
+            CardPriceEvaluation evaluation = options.PricingMode == PricingMode.ReleasedIfNeeded
+                ? Evaluate(canonical, referenceDate)
+                : MissingPrice(
+                    "no-matching-priced-printing",
+                    $"No released paper printing matched {options.PricingMode} with a usable positive price.");
             if (!evaluation.PriceKnown)
             {
                 evaluation.SelectedPrintingReason =
-                    "No released paper printing with a usable USD, foil, etched, or TCG price was available. "
+                    "No released paper printing matching the pricing mode had a usable positive price. "
                         + evaluation.SelectedPrintingReason;
             }
 
@@ -89,7 +151,7 @@ public static class CardPriceEvaluator
                 .ToList();
         }
 
-        pricedCandidates.Sort(ComparePricedCandidates);
+        pricedCandidates.Sort((left, right) => ComparePricedCandidates(left, right, options.PricingMode));
         PricedPrintingCandidate selected = pricedCandidates[0];
         CardPriceEvaluation selectedEvaluation = Evaluate(selected.Card, referenceDate);
         selectedEvaluation.SelectedPrintingReason = BuildSelectionReason(selected, hasEnglish, referenceDate);
@@ -157,7 +219,10 @@ public static class CardPriceEvaluator
     /// <summary>
     /// Builds a comparable priced candidate when the printing satisfies release and paper constraints.
     /// </summary>
-    private static PricedPrintingCandidate? BuildPricedCandidate(CardInfo card, DateOnly referenceDate)
+    private static PricedPrintingCandidate? BuildPricedCandidate(
+        CardInfo card,
+        DateOnly referenceDate,
+        CardPrintingSelectionOptions options)
     {
         if (card.ReleasedAt.HasValue && card.ReleasedAt.Value > referenceDate)
         {
@@ -169,31 +234,59 @@ public static class CardPriceEvaluator
             return null;
         }
 
+        if (!IsLegalForFormat(card, options.Format))
+        {
+            return null;
+        }
+
+        PricedPrintingCandidate? bestCandidate = null;
         for (int index = 0; index < PriceFieldOrder.Count; index++)
         {
             PriceField field = PriceFieldOrder[index];
-            decimal? price = TryReadDecimal(card.Prices, field.Name);
-            if (price.HasValue)
+            if (!AllowsPriceField(field, options))
             {
-                return new PricedPrintingCandidate(card, field.Name, field.LowConfidence, index, price.Value);
+                continue;
+            }
+
+            decimal? price = TryReadDecimal(card.Prices, field.Name);
+            if (price is > 0)
+            {
+                PricedPrintingCandidate candidate = new(
+                    card,
+                    field.Name,
+                    field.LowConfidence,
+                    index,
+                    price.Value);
+                if (bestCandidate is null
+                    || ComparePricedCandidates(candidate, bestCandidate, options.PricingMode) < 0)
+                {
+                    bestCandidate = candidate;
+                }
             }
         }
 
-        return null;
+        return bestCandidate;
     }
 
     /// <summary>
     /// Orders candidates by price confidence, lowest known price, and stable printing identity.
     /// </summary>
-    private static int ComparePricedCandidates(PricedPrintingCandidate left, PricedPrintingCandidate right)
+    private static int ComparePricedCandidates(
+        PricedPrintingCandidate left,
+        PricedPrintingCandidate right,
+        PricingMode pricingMode)
     {
-        int comparison = left.PriceTier.CompareTo(right.PriceTier);
+        int comparison = pricingMode == PricingMode.ReleasedIfNeeded
+            ? left.PriceTier.CompareTo(right.PriceTier)
+            : left.Price.CompareTo(right.Price);
         if (comparison != 0)
         {
             return comparison;
         }
 
-        comparison = left.Price.CompareTo(right.Price);
+        comparison = pricingMode == PricingMode.ReleasedIfNeeded
+            ? left.Price.CompareTo(right.Price)
+            : left.PriceTier.CompareTo(right.PriceTier);
         if (comparison != 0)
         {
             return comparison;
@@ -218,6 +311,34 @@ public static class CardPriceEvaluator
         }
 
         return string.Compare(left.Card.Id, right.Card.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether the selected pricing mode can use one provider price field.
+    /// </summary>
+    private static bool AllowsPriceField(PriceField field, CardPrintingSelectionOptions options)
+    {
+        if (options.PricingMode != PricingMode.BudgetPlayable)
+        {
+            return true;
+        }
+
+        return options.AllowAnyFinish || field.Name.Equals("usd", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks provider legality only when the requested format is present in source data.
+    /// </summary>
+    private static bool IsLegalForFormat(CardInfo card, string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format)
+            || !card.Legalities.TryGetValue(format, out string? legality)
+            || string.IsNullOrWhiteSpace(legality))
+        {
+            return true;
+        }
+
+        return legality.Equals("legal", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

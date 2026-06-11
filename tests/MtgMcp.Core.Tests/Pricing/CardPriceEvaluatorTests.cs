@@ -83,6 +83,122 @@ public sealed class CardPriceEvaluatorTests
     }
 
     /// <summary>
+    /// Verifies cheapest released paper mode chooses the cheapest supported field instead of the highest-confidence field.
+    /// </summary>
+    [Fact]
+    public void SelectPrinting_CheapestReleasedPaperCanUseAnySupportedFinish()
+    {
+        CardInfo canonical = Card(
+            "canonical",
+            "Cheap Foil",
+            releasedAt: new DateOnly(2025, 1, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "3.00" });
+        CardInfo cheapFoil = Card(
+            "cheap-foil",
+            "Cheap Foil",
+            releasedAt: new DateOnly(2025, 2, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd_foil"] = "0.50" });
+
+        CardPriceEvaluator.CardPrintingSelection selection = CardPriceEvaluator.SelectPrinting(
+            canonical,
+            [cheapFoil],
+            new DateOnly(2026, 1, 1),
+            new CardPrintingSelectionOptions { PricingMode = PricingMode.CheapestReleasedPaper });
+
+        selection.Card.Id.Should().Be("cheap-foil");
+        selection.PriceEvaluation.PriceSource.Should().Be("usd_foil");
+        selection.PriceEvaluation.Price.Should().Be(0.50m);
+    }
+
+    /// <summary>
+    /// Verifies budget-playable mode uses source-backed legality, paper, release, language, and non-foil USD rules.
+    /// </summary>
+    [Fact]
+    public void SelectPrinting_BudgetPlayableRequiresLegalReleasedPaperUsd()
+    {
+        CardInfo canonical = Card(
+            "future",
+            "Budget Card",
+            releasedAt: new DateOnly(2027, 1, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+        CardInfo arenaOnly = Card(
+            "arena-only",
+            "Budget Card",
+            releasedAt: new DateOnly(2024, 1, 1),
+            language: "en",
+            games: ["arena"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.10" });
+        CardInfo illegal = Card(
+            "illegal",
+            "Budget Card",
+            releasedAt: new DateOnly(2024, 1, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.20" });
+        illegal.Legalities["commander"] = "not_legal";
+        CardInfo foilOnly = Card(
+            "foil-only",
+            "Budget Card",
+            releasedAt: new DateOnly(2024, 1, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd_foil"] = "0.30" });
+        CardInfo legalEnglish = Card(
+            "legal-english",
+            "Budget Card",
+            releasedAt: new DateOnly(2024, 1, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.25" });
+        legalEnglish.Legalities["commander"] = "legal";
+
+        CardPriceEvaluator.CardPrintingSelection selection = CardPriceEvaluator.SelectPrinting(
+            canonical,
+            [arenaOnly, illegal, foilOnly, legalEnglish],
+            new DateOnly(2026, 1, 1),
+            new CardPrintingSelectionOptions
+            {
+                PricingMode = PricingMode.BudgetPlayable,
+                Format = "commander",
+            });
+
+        selection.Card.Id.Should().Be("legal-english");
+        selection.PriceEvaluation.PriceSource.Should().Be("usd");
+        selection.PriceEvaluation.Price.Should().Be(1.25m);
+    }
+
+    /// <summary>
+    /// Verifies budget-playable mode does not treat foil-only prices as safe non-foil budget prices.
+    /// </summary>
+    [Fact]
+    public void SelectPrinting_BudgetPlayableReturnsUnknownWhenOnlyFoilPricesExist()
+    {
+        CardInfo canonical = Card(
+            "foil-only",
+            "Foil Only",
+            releasedAt: new DateOnly(2025, 1, 1),
+            language: "en",
+            games: ["paper"],
+            prices: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd_foil"] = "0.25" });
+
+        CardPriceEvaluator.CardPrintingSelection selection = CardPriceEvaluator.SelectPrinting(
+            canonical,
+            [],
+            new DateOnly(2026, 1, 1),
+            new CardPrintingSelectionOptions { PricingMode = PricingMode.BudgetPlayable });
+
+        selection.PriceEvaluation.PriceKnown.Should().BeFalse();
+        selection.PriceEvaluation.PrintingStatus.Should().Be("no-matching-priced-printing");
+        selection.PriceEvaluation.SelectedPrintingReason.Should().Contain("usable positive price");
+    }
+
+    /// <summary>
     /// Verifies that missing released priced printings remain unknown instead of becoming free.
     /// </summary>
     [Fact]

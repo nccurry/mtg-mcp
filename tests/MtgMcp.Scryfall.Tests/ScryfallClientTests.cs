@@ -282,6 +282,87 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that budget-playable mode inspects prints even when the canonical result is already priced.
+    /// </summary>
+    [Fact]
+    public async Task GetCardsByNames_BudgetPlayableSelectsCheapestLegalNonfoilPrinting()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "data": [
+                    {
+                      "id": "canonical",
+                      "oracle_id": "oracle-budget",
+                      "name": "Budget Policy Card",
+                      "released_at": "2025-01-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "legalities": { "commander": "legal" },
+                      "prices": { "usd": "5.00" }
+                    }
+                  ]
+                }
+                """);
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search?q=oracleid%3Aoracle-budget&unique=prints&order=released")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "data": [
+                    {
+                      "id": "illegal-cheap",
+                      "oracle_id": "oracle-budget",
+                      "name": "Budget Policy Card",
+                      "released_at": "2024-01-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "legalities": { "commander": "not_legal" },
+                      "prices": { "usd": "0.10" }
+                    },
+                    {
+                      "id": "foil-cheap",
+                      "oracle_id": "oracle-budget",
+                      "name": "Budget Policy Card",
+                      "released_at": "2024-01-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "legalities": { "commander": "legal" },
+                      "prices": { "usd_foil": "0.25" }
+                    },
+                    {
+                      "id": "legal-cheap",
+                      "oracle_id": "oracle-budget",
+                      "name": "Budget Policy Card",
+                      "released_at": "2024-02-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "legalities": { "commander": "legal" },
+                      "prices": { "usd": "1.00" }
+                    }
+                  ]
+                }
+                """);
+
+        ScryfallClient client = CreateClient(
+            mockHttp,
+            pricingReferenceDate: new DateOnly(2026, 1, 1),
+            pricingMode: PricingMode.BudgetPlayable);
+        IReadOnlyDictionary<string, CardInfo> cards = await client.GetCardsByNamesAsync(
+            ["Budget Policy Card"],
+            TestContext.Current.CancellationToken);
+
+        cards["Budget Policy Card"].Id.Should().Be("legal-cheap");
+        cards["Budget Policy Card"].Prices["usd"].Should().Be("1.00");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that search cards respects limit.
     /// </summary>
     [Fact]
@@ -844,7 +925,8 @@ public sealed class ScryfallClientTests
         MockHttpMessageHandler mockHttp,
         int maxRateLimitRetries = 3,
         ICorpusCache? cache = null,
-        DateOnly? pricingReferenceDate = null)
+        DateOnly? pricingReferenceDate = null,
+        PricingMode pricingMode = PricingMode.ReleasedIfNeeded)
     {
         HttpClient httpClient = mockHttp.ToHttpClient();
         httpClient.BaseAddress = new Uri("https://api.scryfall.test/");
@@ -857,6 +939,7 @@ public sealed class ScryfallClientTests
                     MinimumDelay = TimeSpan.Zero,
                     MaxRateLimitRetries = maxRateLimitRetries,
                     PricingReferenceDate = pricingReferenceDate,
+                    PricingMode = pricingMode,
                     UserAgent = "mtg-mcp-test/1.0",
                 }
             ),

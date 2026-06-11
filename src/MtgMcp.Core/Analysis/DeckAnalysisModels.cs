@@ -310,9 +310,14 @@ public sealed class DeckCostAnalysis
     public decimal? MaxBudget { get; set; }
 
     /// <summary>
-    /// Indicates whether known included prices fit under the requested budget when one was supplied.
+    /// Indicates whether the deck is safely within budget with no unresolved nonbasic price risk.
     /// </summary>
     public bool? WithinBudget { get; set; }
+
+    /// <summary>
+    /// Indicates whether the known included total fits under the requested budget, ignoring missing prices.
+    /// </summary>
+    public bool? WithinKnownBudget { get; set; }
 
     /// <summary>
     /// Difference between max budget and known included total; positive values are remaining budget.
@@ -348,6 +353,21 @@ public sealed class DeckCostAnalysis
     /// Nonbasic cards missing cached prices; these keep budget status uncertain.
     /// </summary>
     public List<string> NonBasicMissingPriceCards { get; set; } = [];
+
+    /// <summary>
+    /// Source-supported missing nonbasic prices that are unlikely to move the budget meaningfully.
+    /// </summary>
+    public List<string> LowRiskMissingPriceCards { get; set; } = [];
+
+    /// <summary>
+    /// Missing nonbasic prices that still need source-backed pricing before the budget can be considered safe.
+    /// </summary>
+    public List<string> UnresolvedMissingPriceCards { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the aggregate price-risk state: none, low, or unresolved.
+    /// </summary>
+    public string PriceRiskStatus { get; set; } = "none";
 
     /// <summary>
     /// Budget and pricing caveats that should increase, not reduce, confidence risk.
