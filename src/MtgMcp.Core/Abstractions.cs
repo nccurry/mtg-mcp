@@ -229,6 +229,34 @@ public interface IArchidektGateway
     Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Lists decks with optional pagination and folder filters.
+    /// </summary>
+    Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(
+        ArchidektDeckListRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists Archidekt folders visible to configured credentials.
+    /// </summary>
+    Task<IReadOnlyList<ArchidektFolder>> ListFoldersAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates an Archidekt folder.
+    /// </summary>
+    Task<ArchidektFolder> CreateFolderAsync(
+        string name,
+        string? parentFolderId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Moves decks into an Archidekt folder.
+    /// </summary>
+    Task<ArchidektMoveDecksResult> MoveDecksAsync(
+        IReadOnlyList<string> deckIds,
+        string? folderId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Creates a new Archidekt deck and returns the imported writeback workspace.
     /// </summary>
     Task<DeckWorkspace> CreateDeckAsync(
@@ -254,6 +282,13 @@ public interface IArchidektGateway
         IReadOnlyList<DeckCard> removedCards,
         CancellationToken cancellationToken
     );
+
+    /// <summary>
+    /// Resolves Archidekt card ids for copied cards before deck creation when possible.
+    /// </summary>
+    Task ResolveCardIdsAsync(
+        IReadOnlyList<DeckCard> cards,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Persists the category.

@@ -693,8 +693,12 @@ public sealed partial class DeckIntelligenceTests
             seed: 22,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        result.Plan.Kind.Should().Be("transient-card-package");
-        result.Plan.Operations.Should().HaveCount(3);
+        result.PreviewOnly.Should().BeTrue();
+        result.CanApply.Should().BeFalse();
+        result.ApplyPlanId.Should().BeNull();
+        result.NextAction.Should().Contain("deck_plan_create");
+        result.PreviewPlan.Kind.Should().Be("transient-card-package");
+        result.PreviewPlan.Operations.Should().HaveCount(3);
         result.Preview.Before.Analysis.IncludedCards.Should().BeGreaterThan(result.Preview.After.Analysis.IncludedCards);
         result.RoleDeltas.Should().Contain(delta => delta.Role == DeckRoles.Interaction && delta.Delta < 0);
         result.ValidationChanges.Should().NotBeNull();

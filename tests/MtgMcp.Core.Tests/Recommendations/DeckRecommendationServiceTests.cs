@@ -574,7 +574,8 @@ public sealed partial class DeckIntelligenceTests
             cardTrendProvider: new FixedCardTrendProvider(
             [
                 new NewCardSuggestion { CardName = "Blasphemous Act", Score = 1, Price = 3 },
-                new NewCardSuggestion { CardName = "Season of Loss", Score = 0.8, Price = 2, ReleasedAt = new DateOnly(2026, 2, 1), Set = "tst" }
+                new NewCardSuggestion { CardName = "Season of Loss", Score = 0.8, Price = 2, ReleasedAt = new DateOnly(2026, 2, 1), Set = "tst" },
+                new NewCardSuggestion { CardName = "Future Bargain", Score = 0.7, Price = 0.25m, ReleasedAt = new DateOnly(2027, 1, 1), Set = "fut" }
             ]));
 
         NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
@@ -587,6 +588,7 @@ public sealed partial class DeckIntelligenceTests
 
         result.Suggestions.Should().Contain(suggestion => suggestion.CardName == "Season of Loss");
         result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Blasphemous Act");
+        result.Suggestions.Should().NotContain(suggestion => suggestion.CardName == "Future Bargain");
     }
 
     /// <summary>

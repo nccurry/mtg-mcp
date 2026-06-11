@@ -36,7 +36,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Analyzes deck cost from local snapshots.
     /// </summary>
-    protected static DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace, decimal? maxBudget = null)
+    protected DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace, decimal? maxBudget = null)
     {
         DeckCostAnalysis analysis = new()
         {
@@ -53,17 +53,22 @@ public abstract partial class DeckServiceBase
                 continue;
             }
 
-            decimal? price = ReadUsdPrice(GetSnapshot(card));
+            CardPriceEvaluation price = EvaluateUsdPrice(GetSnapshot(card), CurrentDate());
             string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
             bool isMaybeboard = string.Equals(primaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase);
             bool includedInDeck = IsIncluded(workspace, card);
             bool includedInPrice = IsIncludedInPrice(workspace, card);
 
-            if (!price.HasValue)
+            if (!price.PriceKnown || !price.Price.HasValue)
             {
                 if ((includedInDeck || isMaybeboard) && includedInPrice)
                 {
                     analysis.MissingPriceCards.Add(card.Name);
+                    if (!string.IsNullOrWhiteSpace(price.SelectedPrintingReason))
+                    {
+                        analysis.PriceRiskNotes.Add($"{card.Name}: {price.SelectedPrintingReason}");
+                    }
+
                     if (IsBasicLandCard(card))
                     {
                         analysis.BasicMissingPriceCards.Add(card.Name);
@@ -77,7 +82,7 @@ public abstract partial class DeckServiceBase
                 continue;
             }
 
-            decimal total = price.Value * quantity;
+            decimal total = price.Price.Value * quantity;
             if (isMaybeboard && includedInPrice)
             {
                 analysis.MaybeboardTotal += total;
@@ -92,8 +97,12 @@ public abstract partial class DeckServiceBase
                     CardName = card.Name,
                     Category = primaryCategory,
                     Quantity = quantity,
-                    UnitPrice = price.Value,
-                    TotalPrice = total
+                    UnitPrice = price.Price.Value,
+                    TotalPrice = total,
+                    PriceSource = price.PriceSource,
+                    PriceKnown = price.PriceKnown,
+                    PrintingStatus = price.PrintingStatus,
+                    SelectedPrintingReason = price.SelectedPrintingReason
                 });
             }
         }

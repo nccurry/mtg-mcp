@@ -125,14 +125,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static decimal? ReadUsdPrice(CardSnapshot? snapshot)
     {
-        if (snapshot is null)
-        {
-            return null;
-        }
-
-        return TryReadDecimal(snapshot.Prices, "usd")
-            ?? TryReadDecimal(snapshot.Prices, "usd_etched")
-            ?? TryReadDecimal(snapshot.Prices, "usd_foil");
+        return EvaluateUsdPrice(snapshot).Price;
     }
 
     /// <summary>
@@ -140,9 +133,96 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static decimal? ReadUsdPrice(CardInfo card)
     {
-        return TryReadDecimal(card.Prices, "usd")
-            ?? TryReadDecimal(card.Prices, "usd_etched")
-            ?? TryReadDecimal(card.Prices, "usd_foil");
+        return EvaluateUsdPrice(card).Price;
+    }
+
+    /// <summary>
+    /// Evaluates whether a cached snapshot has a usable released-printing price.
+    /// </summary>
+    protected static CardPriceEvaluation EvaluateUsdPrice(CardSnapshot? snapshot)
+    {
+        return snapshot is null
+            ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
+            : EvaluateUsdPrice(snapshot.ReleasedAt, snapshot.Prices, CurrentUtcDate());
+    }
+
+    /// <summary>
+    /// Evaluates whether catalog card details have a usable released-printing price.
+    /// </summary>
+    protected static CardPriceEvaluation EvaluateUsdPrice(CardInfo card)
+    {
+        return EvaluateUsdPrice(card.ReleasedAt, card.Prices, CurrentUtcDate());
+    }
+
+    /// <summary>
+    /// Evaluates whether a cached snapshot has a usable price against a deterministic reference date.
+    /// </summary>
+    protected static CardPriceEvaluation EvaluateUsdPrice(CardSnapshot? snapshot, DateOnly referenceDate)
+    {
+        return snapshot is null
+            ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
+            : EvaluateUsdPrice(snapshot.ReleasedAt, snapshot.Prices, referenceDate);
+    }
+
+    /// <summary>
+    /// Evaluates whether catalog card details have a usable price against a deterministic reference date.
+    /// </summary>
+    protected static CardPriceEvaluation EvaluateUsdPrice(CardInfo card, DateOnly referenceDate)
+    {
+        return EvaluateUsdPrice(card.ReleasedAt, card.Prices, referenceDate);
+    }
+
+    /// <summary>
+    /// Evaluates price status from release date and provider price fields.
+    /// </summary>
+    private static CardPriceEvaluation EvaluateUsdPrice(
+        DateOnly? releasedAt,
+        IReadOnlyDictionary<string, string> prices,
+        DateOnly referenceDate)
+    {
+        if (releasedAt.HasValue && releasedAt.Value > referenceDate)
+        {
+            return MissingPrice(
+                "future",
+                $"Printing releases on {releasedAt.Value:yyyy-MM-dd}, after reference date {referenceDate:yyyy-MM-dd}.");
+        }
+
+        foreach (string key in new[] { "usd", "usd_etched", "usd_foil", "tcgplayer", "tcgplayer_price" })
+        {
+            decimal? price = TryReadDecimal(prices, key);
+            if (price.HasValue)
+            {
+                return new CardPriceEvaluation
+                {
+                    Price = price.Value,
+                    PriceKnown = true,
+                    PriceSource = key,
+                    PrintingStatus = releasedAt.HasValue ? "released" : "unknown-release-date",
+                    SelectedPrintingReason = releasedAt.HasValue
+                        ? $"Selected {key} price for released printing {releasedAt.Value:yyyy-MM-dd}."
+                        : $"Selected {key} price; release date was unavailable."
+                };
+            }
+        }
+
+        return MissingPrice(
+            releasedAt.HasValue ? "unpriced" : "unknown-release-date-unpriced",
+            releasedAt.HasValue
+                ? $"Released printing {releasedAt.Value:yyyy-MM-dd} did not include a usable USD or TCG price."
+                : "Release date and usable USD or TCG price were unavailable.");
+    }
+
+    /// <summary>
+    /// Builds an unknown price evaluation with a deterministic reason.
+    /// </summary>
+    private static CardPriceEvaluation MissingPrice(string printingStatus, string reason)
+    {
+        return new CardPriceEvaluation
+        {
+            PriceKnown = false,
+            PrintingStatus = printingStatus,
+            SelectedPrintingReason = reason
+        };
     }
 
     /// <summary>
@@ -157,6 +237,14 @@ public abstract partial class DeckServiceBase
                 System.Globalization.CultureInfo.InvariantCulture,
                 out decimal result)
                 ? result
-                : null;
+            : null;
+    }
+
+    /// <summary>
+    /// Reads the current UTC date for static legacy price callers.
+    /// </summary>
+    private static DateOnly CurrentUtcDate()
+    {
+        return DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
     }
 }

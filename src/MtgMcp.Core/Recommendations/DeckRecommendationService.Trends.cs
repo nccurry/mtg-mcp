@@ -138,11 +138,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     ?? new NewCardSuggestion { CardName = item.Value.Name };
             DateOnly? releasedAt = providerSuggestion.ReleasedAt ?? item.Value.ReleasedAt;
             string? set = providerSuggestion.Set ?? item.Value.Set;
-            decimal? price = ReadUsdPrice(item.Value) ?? providerSuggestion.Price;
+            CardPriceEvaluation price = EvaluateUsdPrice(item.Value);
             if (!IsLegalInFormat(item.Value, workspace.Format)
                 || !IsInDeckColorIdentity(item.Value, colorKnown, colors)
                 || !MatchesTrendMetadata(releasedAt, set, query)
-                || !IsPriceWithinBudget(price, query.MaxPrice))
+                || !IsPriceWithinBudget(price.Price, query.MaxPrice))
             {
                 continue;
             }
@@ -150,7 +150,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             NewCardSuggestion localFit = BuildNewCardSuggestion(workspace, item.Value, query.Theme);
             localFit.ReleasedAt = releasedAt;
             localFit.Set = set;
-            localFit.Price = price;
+            localFit.Price = price.Price;
             localFit.ScryfallUri = item.Value.ScryfallUri ?? providerSuggestion.ScryfallUri;
             localFit.Score = Math.Max(localFit.Score, providerSuggestion.Score);
             localFit.Rationale = string.IsNullOrWhiteSpace(providerSuggestion.Rationale)

@@ -389,6 +389,26 @@ public sealed class DeckCostDriver
     /// Gets or sets the total price.
     /// </summary>
     public decimal TotalPrice { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider field used for the unit price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the price is safe to use for budget math.
+    /// </summary>
+    public bool PriceKnown { get; set; }
+
+    /// <summary>
+    /// Gets or sets the release and price status for the selected printing.
+    /// </summary>
+    public string PrintingStatus { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets the deterministic reason this printing price was selected.
+    /// </summary>
+    public string SelectedPrintingReason { get; set; } = "";
 }
 
 /// <summary>

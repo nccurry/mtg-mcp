@@ -283,6 +283,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             int availableMana = CountManaSources(battlefield);
             int restrictedCreatureMana = 0;
             bool restrictedCreatureManaInitialized = false;
+            List<DeckCard> castThisTurn = [];
             if (profileResolution.Profile.Sequencing.PreferCommanderOnCurve)
             {
                 CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
@@ -302,6 +303,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     deck,
                     battlefield,
                     graveyard,
+                    castThisTurn,
                     run,
                     turn,
                     profileResolution.Profile,
@@ -328,6 +330,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     deck,
                     battlefield,
                     graveyard,
+                    castThisTurn,
                     run,
                     turn,
                     profileResolution.Profile,
@@ -352,6 +355,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     deck,
                     battlefield,
                     graveyard,
+                    castThisTurn,
                     run,
                     turn,
                     profileResolution.Profile,
@@ -373,6 +377,21 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 winPressure,
                 commandZone.CommanderOnline);
             bool engineOnline = HasGoldfishEngineOnline(battlefield);
+            ActivatedCommanderEnginePressure enginePressure = BuildActivatedCommanderEnginePressure(
+                workspace,
+                battlefield,
+                hand,
+                availableMana,
+                commandZone.CommanderOnline);
+            SorceryFinisherPressure sorceryFinisherPressure = BuildSorceryFinisherPressure(
+                hand,
+                castThisTurn,
+                availableMana,
+                power);
+            pressureScore = Math.Clamp(
+                pressureScore + (enginePressure.Pressure / 3) + (sorceryFinisherPressure.Pressure / 2),
+                0,
+                100);
             int comboPieces = battlefield.Count(card => DeckRoleClassifier.Classify(card).Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler));
             if (!run.WinTurn.HasValue)
             {
@@ -460,6 +479,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 Tokens = tokens,
                 ThreatPressure = pressureScore,
                 EngineOnline = engineOnline,
+                EnginePressure = enginePressure,
+                SorceryFinisherPressure = sorceryFinisherPressure,
                 CommanderCastByTurn = commandZone.CommanderOnline,
                 BackgroundCastByTurn = commandZone.BackgroundOnline,
                 CommanderWithBackgroundOnlineByTurn = commandZone.CommanderWithBackgroundOnlineTurn.HasValue,
@@ -764,6 +785,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         List<DeckCard> deck,
         List<DeckCard> battlefield,
         List<DeckCard> graveyard,
+        List<DeckCard> castThisTurn,
         GoldfishRun run,
         int turn,
         SimulationProfile profile,
@@ -813,6 +835,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
             availableMana -= cost;
             hand.Remove(spell);
+            castThisTurn.Add(spell);
             if (IsPermanent(spell))
             {
                 battlefield.Add(spell);
@@ -1291,6 +1314,272 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Builds deterministic activated commander engine pressure from cached card text.
+    /// </summary>
+    private static ActivatedCommanderEnginePressure BuildActivatedCommanderEnginePressure(
+        DeckWorkspace workspace,
+        IReadOnlyList<DeckCard> battlefield,
+        IReadOnlyList<DeckCard> hand,
+        int availableMana,
+        bool commanderOnline)
+    {
+        DeckCard? commander = battlefield.FirstOrDefault(IsActivatedLibraryCheatCommander);
+        double highCmcHitDensity = HighCmcCreatureHitDensity(workspace);
+        bool topdeckSetup = battlefield.Concat(hand).Any(IsTopdeckSetupCard);
+        bool libraryRevealCheat = commander is not null;
+        int activationCost = commander is null ? int.MaxValue : EstimateActivationCost(GetSnapshot(commander).OracleText ?? "");
+        bool activationManaAvailable = commanderOnline && libraryRevealCheat && availableMana >= activationCost;
+        bool repeatableActivation = commander is not null
+            && !ContainsAny(GetSnapshot(commander).OracleText ?? "", "sacrifice", "exile this", "activate only once");
+        int pressure = 0;
+        if (commanderOnline && libraryRevealCheat)
+        {
+            pressure += 25;
+        }
+
+        if (activationManaAvailable)
+        {
+            pressure += 25;
+        }
+
+        if (topdeckSetup)
+        {
+            pressure += 15;
+        }
+
+        if (repeatableActivation)
+        {
+            pressure += 15;
+        }
+
+        pressure += Math.Clamp((int)Math.Round(highCmcHitDensity * 20), 0, 20);
+
+        ActivatedCommanderEnginePressure result = new()
+        {
+            CommanderOnline = commanderOnline && commander is not null,
+            ActivationManaAvailable = activationManaAvailable,
+            TopdeckSetup = topdeckSetup,
+            LibraryRevealCheat = libraryRevealCheat,
+            HighCmcHitDensity = Math.Round(highCmcHitDensity, 3),
+            RepeatableActivation = repeatableActivation,
+            Pressure = Math.Clamp(pressure, 0, 100)
+        };
+        if (commander is not null)
+        {
+            result.Evidence.Add($"{commander.Name} has activated library/topdeck cheat text in cached snapshot.");
+        }
+
+        if (activationManaAvailable)
+        {
+            result.Evidence.Add($"Available mana {availableMana} met estimated activation cost {activationCost}.");
+        }
+
+        if (topdeckSetup)
+        {
+            result.Evidence.Add("Cached battlefield or hand text contains deterministic topdeck setup language.");
+        }
+
+        if (highCmcHitDensity > 0)
+        {
+            result.Evidence.Add($"High-CMC creature hit density is {highCmcHitDensity:0.###}.");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds deterministic sorcery finisher pressure from cached card text.
+    /// </summary>
+    private static SorceryFinisherPressure BuildSorceryFinisherPressure(
+        IReadOnlyList<DeckCard> hand,
+        IReadOnlyList<DeckCard> castThisTurn,
+        int availableMana,
+        int boardPower)
+    {
+        DeckCard? heldFinisher = hand.FirstOrDefault(IsSorceryFinisherCard);
+        DeckCard? castFinisher = castThisTurn.LastOrDefault(IsSorceryFinisherCard);
+        DeckCard? finisher = heldFinisher ?? castFinisher;
+        bool held = finisher is not null;
+        bool castable = castFinisher is not null || (heldFinisher is not null && GoldfishManaValue(heldFinisher) <= availableMana);
+        int projectedDamage = castable
+            ? EstimateProjectedFinisherDamage(finisher!, boardPower)
+            : boardPower;
+        int pressure = castable && boardPower >= 6
+            ? Math.Clamp(projectedDamage * 3, 0, 100)
+            : 0;
+        SorceryFinisherPressure result = new()
+        {
+            SorceryFinisherHeld = held,
+            CastableFinisher = castable,
+            BoardPowerBeforeFinisher = boardPower,
+            ProjectedDamage = Math.Clamp(projectedDamage, 0, 200),
+            Pressure = pressure
+        };
+        if (heldFinisher is not null)
+        {
+            result.Evidence.Add($"{heldFinisher.Name} matched deterministic sorcery finisher text in hand.");
+        }
+
+        if (castFinisher is not null)
+        {
+            result.Evidence.Add($"{castFinisher.Name} was cast this turn and matched deterministic sorcery finisher text.");
+        }
+
+        if (castable)
+        {
+            result.Evidence.Add($"Available mana {availableMana} can cast the held finisher.");
+        }
+
+        if (pressure > 0)
+        {
+            result.Evidence.Add($"Projected damage pressure {projectedDamage} from board power {boardPower}.");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Identifies commanders with activated library/topdeck cheat text.
+    /// </summary>
+    private static bool IsActivatedLibraryCheatCommander(DeckCard card)
+    {
+        if (!IsCommanderCard(card))
+        {
+            return false;
+        }
+
+        string text = GetSnapshot(card).OracleText ?? "";
+        return text.Contains(':', StringComparison.Ordinal)
+            && ContainsAny(text, "top", "library", "reveal")
+            && ContainsAny(text, "put", "battlefield", "cast");
+    }
+
+    /// <summary>
+    /// Identifies deterministic topdeck setup text in cached snapshots.
+    /// </summary>
+    private static bool IsTopdeckSetupCard(DeckCard card)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        return ContainsAny(text, "scry", "surveil", "look at the top", "rearrange", "put on top", "put that card on top");
+    }
+
+    /// <summary>
+    /// Estimates high-CMC creature density among included non-commander cards.
+    /// </summary>
+    private static double HighCmcCreatureHitDensity(DeckWorkspace workspace)
+    {
+        int creatures = 0;
+        int highCmcCreatures = 0;
+        foreach (DeckCard card in IncludedCards(workspace).Where(card => !IsCommanderCard(card)))
+        {
+            if (!ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"))
+            {
+                continue;
+            }
+
+            creatures += Math.Max(0, card.Quantity);
+            if ((GetSnapshot(card).ManaValue ?? 0) >= 5)
+            {
+                highCmcCreatures += Math.Max(0, card.Quantity);
+            }
+        }
+
+        return creatures == 0 ? 0 : highCmcCreatures / (double)creatures;
+    }
+
+    /// <summary>
+    /// Estimates the first activated ability mana cost from mana symbols before a colon.
+    /// </summary>
+    private static int EstimateActivationCost(string text)
+    {
+        int colon = text.IndexOf(':', StringComparison.Ordinal);
+        if (colon < 0)
+        {
+            return 0;
+        }
+
+        string costText = text[..colon];
+        int cost = 0;
+        for (int index = 0; index < costText.Length; index++)
+        {
+            if (costText[index] != '{')
+            {
+                continue;
+            }
+
+            int close = costText.IndexOf('}', index + 1);
+            if (close < 0)
+            {
+                break;
+            }
+
+            string symbol = costText[(index + 1)..close];
+            if (int.TryParse(symbol, out int generic))
+            {
+                cost += generic;
+            }
+            else if (!symbol.Equals("T", StringComparison.OrdinalIgnoreCase)
+                && !symbol.Equals("Q", StringComparison.OrdinalIgnoreCase))
+            {
+                cost += 1;
+            }
+
+            index = close;
+        }
+
+        return Math.Max(0, cost);
+    }
+
+    /// <summary>
+    /// Identifies sorceries that convert a board into immediate combat or draw pressure.
+    /// </summary>
+    private static bool IsSorceryFinisherCard(DeckCard card)
+    {
+        string typeLine = GetSnapshot(card).TypeLine ?? "";
+        string text = GetSnapshot(card).OracleText ?? "";
+        return typeLine.Contains("Sorcery", StringComparison.OrdinalIgnoreCase)
+            && ContainsAny(text, "creatures you control", "target creatures", "additional combat", "extra combat", "draw cards equal to")
+            && ContainsAny(text, "+x/+x", "+1/+1", "+2/+2", "+3/+3", "trample", "additional combat", "extra combat", "greatest power", "power among creatures");
+    }
+
+    /// <summary>
+    /// Estimates bounded damage pressure after resolving a sorcery finisher.
+    /// </summary>
+    private static int EstimateProjectedFinisherDamage(DeckCard finisher, int boardPower)
+    {
+        string text = GetSnapshot(finisher).OracleText ?? "";
+        int damage = boardPower;
+        if (ContainsAny(text, "+x/+x", "greatest power", "power among creatures"))
+        {
+            damage += boardPower;
+        }
+        else if (ContainsAny(text, "+3/+3"))
+        {
+            damage += 9;
+        }
+        else if (ContainsAny(text, "+2/+2"))
+        {
+            damage += 6;
+        }
+        else if (ContainsAny(text, "+1/+1"))
+        {
+            damage += 3;
+        }
+
+        if (ContainsAny(text, "additional combat", "extra combat"))
+        {
+            damage *= 2;
+        }
+
+        if (ContainsAny(text, "trample"))
+        {
+            damage += Math.Max(2, boardPower / 3);
+        }
+
+        return damage;
+    }
+
+    /// <summary>
     /// Estimates how much a pump, equipment, aura, or anthem permanent increases pressure.
     /// </summary>
     private static int EstimatePumpPressure(DeckCard card)
@@ -1412,6 +1701,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 (int)Math.Round(targetSnapshots.Count(snapshot => snapshot.EngineOnline) * 100.0 / targetSnapshots.Count),
                 0,
                 100);
+        result.EnginePressure = BuildEnginePressureSummary(targetSnapshots);
+        result.SorceryFinisherPressure = BuildSorceryFinisherPressureSummary(targetSnapshots);
 
         double confidence = result.WinEstimate.RouteEvidence.Count == 0
             ? 0
@@ -1421,6 +1712,60 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             "Summary metrics use 0-100 scales: boardDevelopmentScore measures board shape, "
                 + "threatPressure measures combat/drain/route pressure, engineOnlineRate measures repeatable engines, "
                 + "and winDetectionConfidence is higher for deterministic route evidence than fallback pressure.");
+    }
+
+    /// <summary>
+    /// Builds a target-turn activated commander engine summary.
+    /// </summary>
+    private static ActivatedCommanderEnginePressure BuildEnginePressureSummary(IReadOnlyList<GoldfishTurnSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return new ActivatedCommanderEnginePressure();
+        }
+
+        ActivatedCommanderEnginePressure strongest = snapshots
+            .Select(snapshot => snapshot.EnginePressure)
+            .OrderByDescending(pressure => pressure.Pressure)
+            .FirstOrDefault()
+            ?? new ActivatedCommanderEnginePressure();
+        return new ActivatedCommanderEnginePressure
+        {
+            CommanderOnline = snapshots.Any(snapshot => snapshot.EnginePressure.CommanderOnline),
+            ActivationManaAvailable = snapshots.Any(snapshot => snapshot.EnginePressure.ActivationManaAvailable),
+            TopdeckSetup = snapshots.Any(snapshot => snapshot.EnginePressure.TopdeckSetup),
+            LibraryRevealCheat = snapshots.Any(snapshot => snapshot.EnginePressure.LibraryRevealCheat),
+            HighCmcHitDensity = Math.Round(snapshots.Select(snapshot => snapshot.EnginePressure.HighCmcHitDensity).DefaultIfEmpty(0).Average(), 3),
+            RepeatableActivation = snapshots.Any(snapshot => snapshot.EnginePressure.RepeatableActivation),
+            Pressure = Median(snapshots.Select(snapshot => snapshot.EnginePressure.Pressure)),
+            Evidence = strongest.Evidence.Take(6).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Builds a target-turn sorcery finisher pressure summary.
+    /// </summary>
+    private static SorceryFinisherPressure BuildSorceryFinisherPressureSummary(IReadOnlyList<GoldfishTurnSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return new SorceryFinisherPressure();
+        }
+
+        SorceryFinisherPressure strongest = snapshots
+            .Select(snapshot => snapshot.SorceryFinisherPressure)
+            .OrderByDescending(pressure => pressure.Pressure)
+            .FirstOrDefault()
+            ?? new SorceryFinisherPressure();
+        return new SorceryFinisherPressure
+        {
+            SorceryFinisherHeld = snapshots.Any(snapshot => snapshot.SorceryFinisherPressure.SorceryFinisherHeld),
+            CastableFinisher = snapshots.Any(snapshot => snapshot.SorceryFinisherPressure.CastableFinisher),
+            BoardPowerBeforeFinisher = Median(snapshots.Select(snapshot => snapshot.SorceryFinisherPressure.BoardPowerBeforeFinisher)),
+            ProjectedDamage = Median(snapshots.Select(snapshot => snapshot.SorceryFinisherPressure.ProjectedDamage)),
+            Pressure = strongest.Pressure,
+            Evidence = strongest.Evidence.Take(6).ToList()
+        };
     }
 
     /// <summary>
@@ -1776,6 +2121,16 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         /// Gets or sets whether a repeatable engine appeared online by this turn.
         /// </summary>
         public bool EngineOnline { get; set; }
+
+        /// <summary>
+        /// Gets activated commander engine pressure evidence for this turn.
+        /// </summary>
+        public ActivatedCommanderEnginePressure EnginePressure { get; set; } = new();
+
+        /// <summary>
+        /// Gets sorcery finisher pressure evidence for this turn.
+        /// </summary>
+        public SorceryFinisherPressure SorceryFinisherPressure { get; set; } = new();
 
         /// <summary>
         /// Gets or sets whether a non-Background commander had been cast by this turn.

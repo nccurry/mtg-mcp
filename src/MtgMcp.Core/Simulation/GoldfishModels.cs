@@ -259,6 +259,16 @@ public sealed class GoldfishSimulationResult
     public int WinDetectionConfidence { get; set; }
 
     /// <summary>
+    /// Gets or sets deterministic pressure evidence for activated commander engines.
+    /// </summary>
+    public ActivatedCommanderEnginePressure EnginePressure { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets deterministic pressure evidence for castable sorcery finishers.
+    /// </summary>
+    public SorceryFinisherPressure SorceryFinisherPressure { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets representative play lines.
     /// </summary>
     public List<string> RepresentativeLines { get; set; } = [];
@@ -272,6 +282,88 @@ public sealed class GoldfishSimulationResult
     /// Gets or sets non-fatal simulator warnings.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
+/// Summarizes deterministic activated commander engine pressure from goldfish runs.
+/// </summary>
+public sealed class ActivatedCommanderEnginePressure
+{
+    /// <summary>
+    /// Gets or sets whether a commander was online in any representative target-turn run.
+    /// </summary>
+    public bool CommanderOnline { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether activation mana was available after normal sequencing.
+    /// </summary>
+    public bool ActivationManaAvailable { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether cached card text showed topdeck setup support.
+    /// </summary>
+    public bool TopdeckSetup { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether cached card text showed library reveal or cheat support.
+    /// </summary>
+    public bool LibraryRevealCheat { get; set; }
+
+    /// <summary>
+    /// Gets or sets the share of included creature hits with mana value five or greater.
+    /// </summary>
+    public double HighCmcHitDensity { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the commander engine can plausibly activate repeatedly.
+    /// </summary>
+    public bool RepeatableActivation { get; set; }
+
+    /// <summary>
+    /// Gets or sets bounded 0-100 engine pressure.
+    /// </summary>
+    public int Pressure { get; set; }
+
+    /// <summary>
+    /// Gets or sets deterministic evidence notes.
+    /// </summary>
+    public List<string> Evidence { get; set; } = [];
+}
+
+/// <summary>
+/// Summarizes deterministic sorcery-finisher pressure from goldfish runs.
+/// </summary>
+public sealed class SorceryFinisherPressure
+{
+    /// <summary>
+    /// Gets or sets whether a sorcery finisher was held in any target-turn run.
+    /// </summary>
+    public bool SorceryFinisherHeld { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the held finisher was castable.
+    /// </summary>
+    public bool CastableFinisher { get; set; }
+
+    /// <summary>
+    /// Gets or sets median board power before applying finisher pressure.
+    /// </summary>
+    public int BoardPowerBeforeFinisher { get; set; }
+
+    /// <summary>
+    /// Gets or sets bounded projected damage after the finisher pressure estimate.
+    /// </summary>
+    public int ProjectedDamage { get; set; }
+
+    /// <summary>
+    /// Gets or sets bounded 0-100 pressure from the finisher.
+    /// </summary>
+    public int Pressure { get; set; }
+
+    /// <summary>
+    /// Gets or sets deterministic evidence notes.
+    /// </summary>
+    public List<string> Evidence { get; set; } = [];
 }
 
 /// <summary>

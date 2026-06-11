@@ -73,6 +73,77 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that formatted intent quotes delimiter-bearing values so parsing is stable.
+    /// </summary>
+    [Fact]
+    public void DeckIntentText_RoundTripsQuotedDelimiterValues()
+    {
+        DeckIntent intent = new()
+        {
+            Commander = "Kenessos, Priest of Thassa",
+            Archetype = "sea monsters",
+            HeuristicProfile = "archetype-sea-monsters",
+            ArchetypeTags = ["sea monsters", "Kenessos, topdeck"],
+            LocalMeta = ["Bennie Bracks, Zoologist", "graveyard; recursion"],
+            Prefer = ["Kenessos, Priest of Thassa"],
+            Avoid = ["hard stax; prison"],
+            Protect = ["Yuna, Hope of Spira"],
+            Packages =
+            {
+                ["Bennie Bracks, Zoologist package"] = new DeckIntentTarget
+                {
+                    Minimum = 2,
+                    Maximum = 3
+                }
+            },
+            Simulation =
+            {
+                CommandZoneOrder = ["Kenessos, Priest of Thassa", "Yuna, Hope of Spira"]
+            },
+            WinRoutes =
+            [
+                new DeckIntentWinRoute
+                {
+                    Name = "Kenessos reveal route",
+                    Kind = "engine-pressure",
+                    EarliestTurn = 5,
+                    Requirements =
+                    [
+                        "Kenessos, Priest of Thassa online",
+                        "topdeck setup; high mana"
+                    ]
+                }
+            ]
+        };
+
+        string formatted = DeckIntentText.Format(intent);
+        DeckIntentResult parsed = DeckIntentText.Parse(formatted);
+        string formattedAgain = DeckIntentText.Format(parsed.Intent!);
+
+        parsed.Warnings.Should().BeEmpty();
+        parsed.Intent.Should().NotBeNull();
+        parsed.Intent!.Commander.Should().Be("Kenessos, Priest of Thassa");
+        parsed.Intent.ArchetypeTags.Should().Contain(["sea monsters", "Kenessos, topdeck"]);
+        parsed.Intent.LocalMeta.Should().Contain(["Bennie Bracks, Zoologist", "graveyard; recursion"]);
+        parsed.Intent.Simulation.CommandZoneOrder.Should().Contain([
+            "Kenessos, Priest of Thassa",
+            "Yuna, Hope of Spira"
+        ]);
+        parsed.Intent.WinRoutes.Should().ContainSingle()
+            .Which.Requirements.Should().Contain([
+                "Kenessos, Priest of Thassa online",
+                "topdeck setup; high mana"
+            ]);
+        parsed.Intent.Prefer.Should().Contain("Kenessos, Priest of Thassa");
+        parsed.Intent.Avoid.Should().Contain("hard stax; prison");
+        parsed.Intent.Protect.Should().Contain("Yuna, Hope of Spira");
+        parsed.Intent.Packages.Should().ContainKey("Bennie Bracks, Zoologist package");
+        formatted.Should().Contain("\"Kenessos, topdeck\"");
+        formatted.Should().Contain("\"graveyard; recursion\"");
+        formattedAgain.Should().Be(formatted);
+    }
+
+    /// <summary>
     /// Verifies that unknown vocabulary remains readable but produces warnings.
     /// </summary>
     [Fact]

@@ -588,7 +588,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             .Where(card => IsLegalInFormat(card, workspace.Format))
             .Where(card => IsInDeckColorIdentity(card, colorIdentityKnown, deckColorIdentity))
             .Where(card => excludedNames is null || !excludedNames.Contains(card.Name))
-            .Where(card => !ReadUsdPrice(card).HasValue || ReadUsdPrice(card) <= maxPrice)
+            .Where(card => ReadUsdPrice(card) is { } price && price <= maxPrice)
             .Where(card => CandidateMatchesRole(card, role))
             .Where(card => candidateFilter is null || candidateFilter(card))
             .OrderBy(card => card.EdhrecRank ?? int.MaxValue)

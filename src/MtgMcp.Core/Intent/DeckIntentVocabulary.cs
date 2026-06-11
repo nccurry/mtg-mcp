@@ -35,7 +35,11 @@ public static class DeckIntentVocabulary
         "cedh-turbo",
         "cedh-midrange",
         "cedh-stax",
-        "cedh-tempo"
+        "cedh-tempo",
+        "archetype-landfall",
+        "archetype-sea-monsters",
+        "archetype-enchantments",
+        "archetype-go-wide"
     ];
 
     /// <summary>
@@ -90,7 +94,17 @@ public static class DeckIntentVocabulary
             ["7x9"] = "package-7x9",
             ["9x7"] = "package-9x7",
             ["75"] = "seventy-five-percent",
-            ["75-percent"] = "seventy-five-percent"
+            ["75-percent"] = "seventy-five-percent",
+            ["landfall"] = "archetype-landfall",
+            ["sea-monsters"] = "archetype-sea-monsters",
+            ["sea-monster"] = "archetype-sea-monsters",
+            ["kenessos"] = "archetype-sea-monsters",
+            ["enchantments"] = "archetype-enchantments",
+            ["enchantment"] = "archetype-enchantments",
+            ["enchantress"] = "archetype-enchantments",
+            ["yuna"] = "archetype-enchantments",
+            ["go-wide"] = "archetype-go-wide",
+            ["tokens"] = "archetype-go-wide"
         };
 
     /// <summary>

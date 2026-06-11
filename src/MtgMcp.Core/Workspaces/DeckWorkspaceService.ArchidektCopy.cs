@@ -21,6 +21,30 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        return await CreateArchidektDeckAsync(
+                name,
+                format,
+                description,
+                visibility,
+                parentFolderId: null,
+                folderName: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates an empty Archidekt deck in an optional folder and stores the writeback workspace locally.
+    /// </summary>
+    public async Task<DeckWorkspace> CreateArchidektDeckAsync(
+        string name,
+        string format,
+        string? description,
+        string visibility,
+        string? parentFolderId,
+        string? folderName,
+        CancellationToken cancellationToken
+    )
+    {
         DeckWorkspace workspace = await RequireArchidektGateway()
             .CreateDeckAsync(
                 new ArchidektDeckCreateRequest
@@ -29,6 +53,8 @@ public sealed partial class DeckWorkspaceService
                     Format = format,
                     Description = description,
                     Visibility = visibility,
+                    ParentFolderId = parentFolderId,
+                    FolderName = folderName,
                 },
                 cancellationToken)
             .ConfigureAwait(false);
@@ -50,6 +76,42 @@ public sealed partial class DeckWorkspaceService
         string visibility,
         bool allowNonEmptyDestination,
         bool replaceExistingDestination,
+        CancellationToken cancellationToken
+    )
+    {
+        return await CopyWorkspaceToArchidektAsync(
+                workspaceId,
+                dryRun,
+                createNew,
+                destinationDeckIdOrUrl,
+                name,
+                format,
+                description,
+                visibility,
+                allowNonEmptyDestination,
+                replaceExistingDestination,
+                parentFolderId: null,
+                folderName: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Previews or applies a full workspace copy into a new or existing Archidekt deck with optional folder placement.
+    /// </summary>
+    public async Task<ArchidektCopyResult> CopyWorkspaceToArchidektAsync(
+        string workspaceId,
+        bool dryRun,
+        bool createNew,
+        string? destinationDeckIdOrUrl,
+        string? name,
+        string? format,
+        string? description,
+        string visibility,
+        bool allowNonEmptyDestination,
+        bool replaceExistingDestination,
+        string? parentFolderId,
+        string? folderName,
         CancellationToken cancellationToken
     )
     {
@@ -109,6 +171,8 @@ public sealed partial class DeckWorkspaceService
             );
         }
 
+        List<DeckCard> copiedCards = source.Cards.Select(CloneForArchidektCopy).ToList();
+
         if (createNew)
         {
             result.CopyPhase = "destination-discovery";
@@ -135,21 +199,47 @@ public sealed partial class DeckWorkspaceService
                     return result;
                 }
 
-                if (destination.Cards.Count > 0)
+                if (destination.Cards.Count == 0)
                 {
-                    throw new InvalidOperationException(
-                        "Found an existing Archidekt deck created from this source workspace, "
-                            + "but its cards do not match the source. Use destinationDeckIdOrUrl="
-                            + $"{destination.ArchidektDeckId} with replaceExistingDestination=true "
-                            + "to replace it intentionally."
+                    result.Warnings.Add(
+                        "Found an empty Archidekt deck already created from this source workspace; "
+                            + "reusing it instead of creating a duplicate."
                     );
                 }
-
-                result.Warnings.Add(
-                    "Found an empty Archidekt deck already created from this source workspace; "
-                        + "reusing it instead of creating a duplicate."
-                );
+                else
+                {
+                    if (HasSubsetOfCopiedCards(source.Cards, destination.Cards))
+                    {
+                        copiedCards = FilterAlreadyCopiedCards(copiedCards, destination.Cards);
+                        result.CanResume = true;
+                        result.ResumeDeckIdOrUrl = destination.ArchidektDeckId;
+                        result.NextAction =
+                            $"Resume with archidekt_copy_workspace destinationDeckIdOrUrl={destination.ArchidektDeckId}, "
+                            + "createNew=false, allowNonEmptyDestination=true.";
+                        result.Warnings.Add(
+                            "Found a partially copied Archidekt deck created from this source workspace; "
+                                + "resuming by writing only missing card rows.");
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException(
+                            "Found an existing Archidekt deck created from this source workspace, "
+                                + "but its cards do not match the source. Use destinationDeckIdOrUrl="
+                                + $"{destination.ArchidektDeckId} with replaceExistingDestination=true "
+                                + "to replace it intentionally."
+                        );
+                    }
+                }
             }
+        }
+
+        if (createNew && destination is null && copiedCards.Any(card => string.IsNullOrWhiteSpace(card.ArchidektCardId)))
+        {
+            result.CopyPhase = "resolve-card-ids";
+            await RequireArchidektGateway()
+                .ResolveCardIdsAsync(copiedCards, cancellationToken)
+                .ConfigureAwait(false);
+            UpdateCopyCardIdDiagnostics(result, copiedCards);
         }
 
         if (createNew)
@@ -160,6 +250,8 @@ public sealed partial class DeckWorkspaceService
                     format ?? source.Format,
                     BuildMigrationDescription(description ?? source.Description, source),
                     visibility,
+                    parentFolderId,
+                    folderName,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -189,7 +281,6 @@ public sealed partial class DeckWorkspaceService
         await CopyCategoriesToArchidektAsync(source, destination, cancellationToken)
             .ConfigureAwait(false);
 
-        List<DeckCard> copiedCards = source.Cards.Select(CloneForArchidektCopy).ToList();
         if (replaceExistingDestination)
         {
             CopyKnownArchidektCardIds(destination.Cards, copiedCards);
@@ -208,6 +299,7 @@ public sealed partial class DeckWorkspaceService
         result.CopyPhase = "add-cards";
         await PersistCardsAsync(destination, copiedCards, [], cancellationToken)
             .ConfigureAwait(false);
+        result.WrittenRows = copiedCards.Count;
         UpdateCopyCardIdDiagnostics(result, copiedCards);
 
         result.DestinationWorkspaceId = destination.Id;
@@ -347,6 +439,9 @@ public sealed partial class DeckWorkspaceService
         result.CardIdsResolved = cards.Count(card =>
             card.Metadata.TryGetValue(DeckCardMetadataKeys.ArchidektCardIdResolution, out string? value)
             && value.Equals("resolved", StringComparison.OrdinalIgnoreCase));
+        result.CacheHits = result.CardIdCacheHits;
+        result.RemoteLookups = result.CardIdsResolved;
+        result.ResolvedCount = cards.Count(card => !string.IsNullOrWhiteSpace(card.ArchidektCardId));
         result.MissingArchidektCardIds = cards.Count(card => string.IsNullOrWhiteSpace(card.ArchidektCardId));
     }
 
@@ -498,6 +593,57 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Checks whether the destination contains only rows that belong to the source copy.
+    /// </summary>
+    private static bool HasSubsetOfCopiedCards(
+        IReadOnlyList<DeckCard> sourceCards,
+        IReadOnlyList<DeckCard> destinationCards
+    )
+    {
+        List<string> remainingSourceFingerprints = BuildCardFingerprints(sourceCards);
+        foreach (string destinationFingerprint in BuildCardFingerprints(destinationCards))
+        {
+            int matchIndex = remainingSourceFingerprints.FindIndex(fingerprint =>
+                fingerprint.Equals(destinationFingerprint, StringComparison.OrdinalIgnoreCase));
+            if (matchIndex < 0)
+            {
+                return false;
+            }
+
+            remainingSourceFingerprints.RemoveAt(matchIndex);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Removes rows that already exist in the destination so a retry writes only the missing cards.
+    /// </summary>
+    private static List<DeckCard> FilterAlreadyCopiedCards(
+        IReadOnlyList<DeckCard> copiedCards,
+        IReadOnlyList<DeckCard> destinationCards
+    )
+    {
+        List<string> destinationFingerprints = BuildCardFingerprints(destinationCards);
+        List<DeckCard> missingCards = [];
+        foreach (DeckCard copiedCard in copiedCards)
+        {
+            string fingerprint = BuildCardFingerprint(copiedCard);
+            int matchIndex = destinationFingerprints.FindIndex(value =>
+                value.Equals(fingerprint, StringComparison.OrdinalIgnoreCase));
+            if (matchIndex >= 0)
+            {
+                destinationFingerprints.RemoveAt(matchIndex);
+                continue;
+            }
+
+            missingCards.Add(copiedCard);
+        }
+
+        return missingCards;
+    }
+
+    /// <summary>
     /// Builds stable card fingerprints for migration retry comparisons.
     /// </summary>
     private static List<string> BuildCardFingerprints(IReadOnlyList<DeckCard> cards)
@@ -505,25 +651,31 @@ public sealed partial class DeckWorkspaceService
         List<string> fingerprints = [];
         foreach (DeckCard card in cards)
         {
-            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
-            List<string> categories = DeckCategoryOrdering.OrderedDistinct(
-                primaryCategory,
-                card.Categories);
-            categories.Sort(StringComparer.OrdinalIgnoreCase);
-
-            fingerprints.Add(
-                string.Join(
-                    "|",
-                    card.Name,
-                    card.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    primaryCategory,
-                    card.ScryfallId ?? "",
-                    string.Join("\u001F", categories)
-                )
-            );
+            fingerprints.Add(BuildCardFingerprint(card));
         }
 
         return fingerprints;
+    }
+
+    /// <summary>
+    /// Builds a stable card fingerprint for migration retry comparisons.
+    /// </summary>
+    private static string BuildCardFingerprint(DeckCard card)
+    {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        List<string> categories = DeckCategoryOrdering.OrderedDistinct(
+            primaryCategory,
+            card.Categories);
+        categories.Sort(StringComparer.OrdinalIgnoreCase);
+
+        return string.Join(
+            "|",
+            card.Name,
+            card.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            primaryCategory,
+            card.ScryfallId ?? "",
+            string.Join("\u001F", categories)
+        );
     }
 
     /// <summary>

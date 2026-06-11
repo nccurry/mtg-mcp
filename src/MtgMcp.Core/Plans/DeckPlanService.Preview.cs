@@ -77,11 +77,16 @@ public sealed partial class DeckPlanService
             seed,
             includeMulligans: true,
             cancellationToken);
+        previewResult.Preview.PlanId = "";
 
         DeckCardPackagePreviewResult result = new()
         {
             WorkspaceId = workspace.Id,
-            Plan = plan,
+            PreviewPlan = BuildPreviewPlan(plan),
+            PreviewOnly = true,
+            CanApply = false,
+            ApplyPlanId = null,
+            NextAction = "Create a persisted deck edit plan with deck_plan_create before calling deck_plan_apply.",
             Preview = previewResult.Preview,
             RoleDeltas = BuildRoleDeltas(
                 previewResult.Preview.Before.Analysis.RoleCounts,
@@ -98,7 +103,7 @@ public sealed partial class DeckPlanService
             SourceSupport = BuildPackageSourceSupport(plan),
             Performance = new DeckPerformanceComparison
             {
-                PlanId = plan.PlanId,
+                PlanId = "",
                 WorkspaceId = plan.WorkspaceId,
                 Before = beforePerformance,
                 After = afterPerformance,
@@ -113,6 +118,40 @@ public sealed partial class DeckPlanService
         };
 
         return result;
+    }
+
+    /// <summary>
+    /// Copies the preview plan body without exposing the transient generated plan id.
+    /// </summary>
+    private static PreviewDeckEditPlan BuildPreviewPlan(DeckEditPlan plan)
+    {
+        return new PreviewDeckEditPlan
+        {
+            WorkspaceId = plan.WorkspaceId,
+            Name = plan.Name,
+            Kind = plan.Kind,
+            Rationale = plan.Rationale,
+            Confidence = plan.Confidence,
+            Warnings = plan.Warnings.ToList(),
+            Operations = plan.Operations
+                .Select(operation => new DeckEditOperation
+                {
+                    Operation = operation.Operation,
+                    CardName = operation.CardName,
+                    ReplacementCardName = operation.ReplacementCardName,
+                    Quantity = operation.Quantity,
+                    Category = operation.Category,
+                    FromCategory = operation.FromCategory,
+                    ToCategory = operation.ToCategory,
+                    Name = operation.Name,
+                    Format = operation.Format,
+                    Description = operation.Description,
+                    IncludedInDeck = operation.IncludedInDeck,
+                    IncludedInPrice = operation.IncludedInPrice,
+                    Rationale = operation.Rationale
+                })
+                .ToList()
+        };
     }
 
     /// <summary>

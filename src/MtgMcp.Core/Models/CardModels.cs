@@ -262,3 +262,34 @@ public sealed class CardSnapshot
     public Dictionary<string, string> ImageUris { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 }
+
+/// <summary>
+/// Describes whether a card printing has a usable budget price.
+/// </summary>
+public sealed class CardPriceEvaluation
+{
+    /// <summary>
+    /// Gets or sets the selected price when one is known for a released printing.
+    /// </summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the selected price is safe to use for budget math.
+    /// </summary>
+    public bool PriceKnown { get; set; }
+
+    /// <summary>
+    /// Gets or sets the price field used for the selected price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
+    /// Gets or sets release and pricing status for the inspected printing.
+    /// </summary>
+    public string PrintingStatus { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets the deterministic reason this price was or was not selected.
+    /// </summary>
+    public string SelectedPrintingReason { get; set; } = "";
+}

@@ -409,9 +409,29 @@ public sealed class DeckCardPackagePreviewResult
     public string WorkspaceId { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the unsaved plan used for the preview.
+    /// Gets or sets the unsaved, non-applyable plan body used for the preview.
     /// </summary>
-    public DeckEditPlan Plan { get; set; } = new();
+    public PreviewDeckEditPlan PreviewPlan { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets whether this result is only an in-memory preview.
+    /// </summary>
+    public bool PreviewOnly { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether this response includes a persisted plan id that can be applied.
+    /// </summary>
+    public bool CanApply { get; set; }
+
+    /// <summary>
+    /// Gets or sets the applyable plan id when one exists.
+    /// </summary>
+    public string? ApplyPlanId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the recommended next action for callers that want to mutate a deck.
+    /// </summary>
+    public string NextAction { get; set; } = "";
 
     /// <summary>
     /// Gets or sets the same metric preview shape used by persisted plans.
@@ -452,6 +472,47 @@ public sealed class DeckCardPackagePreviewResult
     /// Gets or sets preview warnings and model notes.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
+/// Describes a transient deck edit plan without exposing a persisted apply id.
+/// </summary>
+public sealed class PreviewDeckEditPlan
+{
+    /// <summary>
+    /// Gets or sets the workspace id used for the preview.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the preview plan name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the preview plan kind.
+    /// </summary>
+    public string Kind { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the preview rationale.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the preview confidence.
+    /// </summary>
+    public double Confidence { get; set; }
+
+    /// <summary>
+    /// Gets or sets preview warnings copied from the transient plan body.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the exact operations evaluated in memory.
+    /// </summary>
+    public List<DeckEditOperation> Operations { get; set; } = [];
 }
 
 /// <summary>

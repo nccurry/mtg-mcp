@@ -140,6 +140,16 @@ public sealed class DeckCitation
 public sealed class DeckBestPracticeAnalysis
 {
     /// <summary>
+    /// Gets or sets the deterministic analysis model label.
+    /// </summary>
+    public string ModelLabel { get; set; } = "deterministic-best-practice-thresholds";
+
+    /// <summary>
+    /// Gets or sets the selected profile catalog version.
+    /// </summary>
+    public string ConfigVersion { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the workspace id.
     /// </summary>
     public string WorkspaceId { get; set; } = "";
@@ -153,6 +163,11 @@ public sealed class DeckBestPracticeAnalysis
     /// Gets or sets the profile used for the primary need profile.
     /// </summary>
     public string RecommendedProfile { get; set; } = "commander-baseline";
+
+    /// <summary>
+    /// Gets or sets the explicit input that selected the recommended profile.
+    /// </summary>
+    public string ProfileSource { get; set; } = "baseline-default";
 
     /// <summary>
     /// Gets or sets heuristic profile comparisons.

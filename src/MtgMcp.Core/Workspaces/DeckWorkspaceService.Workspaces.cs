@@ -241,6 +241,47 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Lists Archidekt decks with optional pagination and folder filters.
+    /// </summary>
+    public Task<IReadOnlyList<ArchidektDeckSummary>> ListArchidektDecksAsync(
+        ArchidektDeckListRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        return RequireArchidektGateway().ListDecksAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists Archidekt folders.
+    /// </summary>
+    public Task<IReadOnlyList<ArchidektFolder>> ListArchidektFoldersAsync(CancellationToken cancellationToken)
+    {
+        return RequireArchidektGateway().ListFoldersAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates an Archidekt folder.
+    /// </summary>
+    public Task<ArchidektFolder> CreateArchidektFolderAsync(
+        string name,
+        string? parentFolderId,
+        CancellationToken cancellationToken)
+    {
+        return RequireArchidektGateway().CreateFolderAsync(name, parentFolderId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Moves Archidekt decks into a folder.
+    /// </summary>
+    public Task<ArchidektMoveDecksResult> MoveArchidektDecksAsync(
+        IReadOnlyList<string> deckIds,
+        string? folderId,
+        CancellationToken cancellationToken)
+    {
+        return RequireArchidektGateway().MoveDecksAsync(deckIds, folderId, cancellationToken);
+    }
+
+    /// <summary>
     /// Parses the decklist.
     /// </summary>
     public static ParsedDecklist ParseDecklist(string decklist)

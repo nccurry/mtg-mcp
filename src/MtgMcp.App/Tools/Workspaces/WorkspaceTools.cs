@@ -206,6 +206,8 @@ public sealed class WorkspaceTools
         string format = "commander",
         string? description = null,
         string visibility = "private",
+        string? parentFolderId = null,
+        string? folderName = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -215,6 +217,8 @@ public sealed class WorkspaceTools
                 format,
                 description,
                 visibility,
+                parentFolderId,
+                folderName,
                 cancellationToken)
             .ConfigureAwait(false);
         return CreateOpenResult(workspace);
@@ -246,6 +250,8 @@ public sealed class WorkspaceTools
         string visibility = "private",
         bool allowNonEmptyDestination = false,
         bool replaceExistingDestination = false,
+        string? parentFolderId = null,
+        string? folderName = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -269,6 +275,8 @@ public sealed class WorkspaceTools
             visibility,
             allowNonEmptyDestination,
             replaceExistingDestination,
+            parentFolderId,
+            folderName,
             cancellationToken);
     }
 
@@ -284,10 +292,79 @@ public sealed class WorkspaceTools
     )]
     [Description("List decks visible to the configured Archidekt credentials.")]
     public Task<IReadOnlyList<ArchidektDeckSummary>> ListArchidektDecksAsync(
+        int? page = null,
+        int? pageSize = null,
+        string? folderId = null,
+        string? folderName = null,
         CancellationToken cancellationToken = default
     )
     {
-        return decks.ListArchidektDecksAsync(cancellationToken);
+        return decks.ListArchidektDecksAsync(
+            new ArchidektDeckListRequest
+            {
+                Page = page,
+                PageSize = pageSize,
+                FolderId = folderId,
+                FolderName = folderName
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists Archidekt folders.
+    /// </summary>
+    [McpServerTool(
+        Name = "archidekt_list_folders",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = true
+    )]
+    [Description("List folders visible to the configured Archidekt credentials.")]
+    public Task<IReadOnlyList<ArchidektFolder>> ListArchidektFoldersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return decks.ListArchidektFoldersAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates an Archidekt folder.
+    /// </summary>
+    [McpServerTool(
+        Name = "archidekt_create_folder",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description("Create an Archidekt folder under an optional parent folder id.")]
+    public Task<ArchidektFolder> CreateArchidektFolderAsync(
+        string name,
+        string? parentFolderId = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("archidekt_create_folder");
+        return decks.CreateArchidektFolderAsync(name, parentFolderId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Moves Archidekt decks into a folder.
+    /// </summary>
+    [McpServerTool(
+        Name = "archidekt_move_decks",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description("Move Archidekt decks into a folder. Omit folderId to move decks to the root.")]
+    public Task<ArchidektMoveDecksResult> MoveArchidektDecksAsync(
+        string[] deckIds,
+        string? folderId = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("archidekt_move_decks");
+        return decks.MoveArchidektDecksAsync(deckIds, folderId, cancellationToken);
     }
 
     /// <summary>

@@ -523,6 +523,7 @@ public sealed partial class DeckIntelligenceTests
 
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Status.Should().Be("low");
         analysis.RecommendedProfile.Should().Be("commander-baseline");
+        analysis.ProfileSource.Should().Be("baseline-default");
         analysis.HeuristicComparisons.Should().Contain(comparison => comparison.ProfileId == "command-zone-template");
         analysis.Risks.Should().Contain(risk => risk.Contains("Win", StringComparison.OrdinalIgnoreCase)
             || risk.Contains("win condition", StringComparison.OrdinalIgnoreCase));
@@ -560,9 +561,78 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         analysis.RecommendedProfile.Should().Be("command-zone-template");
+        analysis.ProfileSource.Should().Be("deck-intent:heuristic-profile");
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(10);
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Draw).Minimum.Should().Be(10);
         analysis.NeedProfile.Notes.Should().Contain(note => note.Contains("Command Zone template", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that archetype profiles require explicit intent or tool selection.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_UsesArchetypeProfilesOnlyFromExplicitSignals()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace inferredOnly = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Kenessos Sea Monsters",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Kenessos, Priest of Thassa",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Merfolk Cleric",
+                        OracleText = "{5}{G/U}: Scry 1, then reveal the top card of your library. If it is a Kraken, Leviathan, Octopus, or Serpent creature card, put it onto the battlefield."
+                    }
+                },
+                new DeckCard { Name = "Island", Quantity = 36, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Sea Monster", Quantity = 8, PrimaryCategory = "High-CMC Hits", Categories = ["High-CMC Hits"] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspace explicitIntent = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Explicit Sea Monsters",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Archetype: sea monsters
+                End MTG MCP Deck Intent
+                """,
+            Cards = inferredOnly.Cards.Select(card => new DeckCard
+            {
+                Name = card.Name,
+                Quantity = card.Quantity,
+                PrimaryCategory = card.PrimaryCategory,
+                Categories = card.Categories.ToList(),
+                Snapshot = card.Snapshot
+            }).ToList()
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis baseline = await service.AnalyzeDeckBestPracticesAsync(
+            inferredOnly.Id,
+            TestContext.Current.CancellationToken);
+        DeckBestPracticeAnalysis intentProfile = await service.AnalyzeDeckBestPracticesAsync(
+            explicitIntent.Id,
+            TestContext.Current.CancellationToken);
+        DeckBestPracticeAnalysis toolProfile = await service.AnalyzeDeckBestPracticesAsync(
+            inferredOnly.Id,
+            "landfall",
+            TestContext.Current.CancellationToken);
+
+        baseline.RecommendedProfile.Should().Be("commander-baseline");
+        baseline.ProfileSource.Should().Be("baseline-default");
+        baseline.Strengths.Should().Contain(note => note.Contains("No explicit archetype", StringComparison.OrdinalIgnoreCase));
+        intentProfile.RecommendedProfile.Should().Be("archetype-sea-monsters");
+        intentProfile.ProfileSource.Should().Be("deck-intent:archetype");
+        toolProfile.RecommendedProfile.Should().Be("archetype-landfall");
+        toolProfile.ProfileSource.Should().Be("tool-parameter");
     }
 
     /// <summary>
@@ -597,6 +667,7 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         analysis.RecommendedProfile.Should().Be("cedh-turbo");
+        analysis.ProfileSource.Should().Be("deck-intent:power-level+archetype");
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Lands).Status.Should().Be("high");
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(14);
         analysis.HeuristicComparisons.Should().Contain(comparison => comparison.ProfileId == "cedh-turbo");
@@ -947,6 +1018,88 @@ public sealed partial class DeckIntelligenceTests
         analysis.MaybeboardTotal.Should().Be(6);
         analysis.MissingPriceCards.Should().Contain("Unknown Price");
         analysis.TopCostDrivers.Should().ContainSingle().Which.CardName.Should().Be("Mana Crypt");
+    }
+
+    /// <summary>
+    /// Verifies that release-aware price evaluation treats future and unpriced printings as risk.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_ReportsPriceConfidenceAndFuturePrintingRisk()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Price Confidence",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Released Card",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        ReleasedAt = new DateOnly(2025, 1, 1),
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Future Preview",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Draw,
+                    Categories = [DeckRoles.Draw],
+                    Snapshot = new CardSnapshot
+                    {
+                        ReleasedAt = new DateOnly(2027, 1, 1),
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.01" }
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Unpriced Nonbasic",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Land" }
+                },
+                new DeckCard
+                {
+                    Name = "Island",
+                    Quantity = 10,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Island" }
+                },
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(
+            workspaces,
+            new FakeCardCatalog(),
+            currentDateOverride: new DateOnly(2026, 1, 1));
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            maxBudget: 10,
+            TestContext.Current.CancellationToken);
+
+        analysis.IncludedTotal.Should().Be(2);
+        analysis.MissingPriceCards.Should().Contain(["Future Preview", "Unpriced Nonbasic", "Island"]);
+        analysis.NonBasicMissingPriceCards.Should().Contain(["Future Preview", "Unpriced Nonbasic"]);
+        analysis.BasicMissingPriceCards.Should().Contain("Island");
+        analysis.WithinBudget.Should().BeFalse();
+        analysis.BudgetStatus.Should().Be("unknown-missing-prices");
+        analysis.PriceRiskNotes.Should().Contain(note =>
+            note.Contains("Future Preview", StringComparison.OrdinalIgnoreCase)
+            && note.Contains("after reference date 2026-01-01", StringComparison.OrdinalIgnoreCase));
+
+        DeckCostDriver driver = analysis.TopCostDrivers.Should().ContainSingle().Subject;
+        driver.CardName.Should().Be("Released Card");
+        driver.PriceKnown.Should().BeTrue();
+        driver.PriceSource.Should().Be("usd");
+        driver.PrintingStatus.Should().Be("released");
+        driver.SelectedPrintingReason.Should().Contain("released printing 2025-01-01");
     }
 
     /// <summary>

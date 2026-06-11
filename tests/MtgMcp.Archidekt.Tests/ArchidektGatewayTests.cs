@@ -340,6 +340,67 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that folder operations use Archidekt folder contracts.
+    /// </summary>
+    [Fact]
+    public async Task FolderOperations_MapArchidektFolderContracts()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/folderTree/",
+            """
+            {
+              "results": [
+                {
+                  "id": 10,
+                  "name": "Root",
+                  "children": [
+                    { "id": 11, "name": "Child", "parent": 10 }
+                  ]
+                }
+              ]
+            }
+            """);
+        handler.Post(
+            "api/decks/folders/",
+            """{ "id": 12, "name": "New Folder", "parent": 10 }""");
+        handler.Patch("api/massUpdate/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+
+        IReadOnlyList<ArchidektFolder> folders = await gateway.ListFoldersAsync(
+            TestContext.Current.CancellationToken);
+        ArchidektFolder created = await gateway.CreateFolderAsync(
+            "New Folder",
+            "10",
+            TestContext.Current.CancellationToken);
+        ArchidektMoveDecksResult moved = await gateway.MoveDecksAsync(
+            ["123", "456"],
+            "12",
+            TestContext.Current.CancellationToken);
+
+        folders.Should().HaveCount(2);
+        folders.Should().Contain(folder => folder.Id == "10" && folder.Name == "Root");
+        folders.Should().Contain(folder => folder.Id == "11" && folder.ParentFolderId == "10");
+        created.Id.Should().Be("12");
+        created.ParentFolderId.Should().Be("10");
+        moved.Moved.Should().Be(2);
+
+        RecordedRequest createRequest = handler.Requests.Single(request => request.Method == HttpMethod.Post);
+        using JsonDocument createDocument = JsonDocument.Parse(createRequest.Body);
+        createDocument.RootElement.GetProperty("name").GetString().Should().Be("New Folder");
+        createDocument.RootElement.GetProperty("parent").GetInt32().Should().Be(10);
+
+        RecordedRequest moveRequest = handler.Requests.Single(request => request.Path == "api/massUpdate/");
+        using JsonDocument moveDocument = JsonDocument.Parse(moveRequest.Body);
+        moveDocument.RootElement.GetProperty("deckIds").EnumerateArray()
+            .Select(element => element.GetInt32())
+            .Should()
+            .Equal(123, 456);
+        moveDocument.RootElement.GetProperty("parentFolder").GetInt32().Should().Be(12);
+    }
+
+    /// <summary>
     /// Verifies that create deck posts a private deck payload and maps the created workspace.
     /// </summary>
     [Fact]
@@ -392,6 +453,72 @@ public sealed class ArchidektGatewayTests
         document.RootElement.GetProperty("unlisted").GetBoolean().Should().BeFalse();
         document.RootElement.GetProperty("theorycrafted").GetBoolean().Should().BeFalse();
         document.RootElement.GetProperty("extras").GetProperty("decksToInclude").GetArrayLength().Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies that create deck can resolve a folder name before posting the deck payload.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeck_ResolvesFolderNameBeforePostingDeck()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "api/decks/folderTree/",
+            """{ "results": [ { "id": 42, "name": "Commander" } ] }""");
+        handler.Post(
+            "api/decks/v2/",
+            """
+            {
+              "id": 456,
+              "name": "Migrated",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """);
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        await gateway.CreateDeckAsync(
+            new ArchidektDeckCreateRequest
+            {
+                Name = "Migrated",
+                Format = "commander",
+                Visibility = "private",
+                FolderName = "Commander"
+            },
+            TestContext.Current.CancellationToken);
+
+        RecordedRequest request = handler.Requests.Single(recorded => recorded.Method == HttpMethod.Post);
+        using JsonDocument document = JsonDocument.Parse(request.Body);
+        document.RootElement.GetProperty("parentFolder").GetInt32().Should().Be(42);
+    }
+
+    /// <summary>
+    /// Verifies that create deck rejects folder names that do not identify exactly one folder.
+    /// </summary>
+    [Theory]
+    [InlineData("""{ "results": [] }""", "*was not found*parentFolderId*")]
+    [InlineData("""{ "results": [ { "id": 42, "name": "Commander" }, { "id": 43, "name": "Commander" } ] }""", "*matched 2 folders*parentFolderId*")]
+    public async Task CreateDeck_RejectsUnknownOrAmbiguousFolderName(string folderTreeJson, string expectedMessage)
+    {
+        RecordingHandler handler = new();
+        handler.Get("api/decks/folderTree/", folderTreeJson);
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        Func<Task> act = () => gateway.CreateDeckAsync(
+            new ArchidektDeckCreateRequest
+            {
+                Name = "Migrated",
+                Format = "commander",
+                Visibility = "private",
+                FolderName = "Commander"
+            },
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage(expectedMessage);
+        handler.Requests.Should().NotContain(request => request.Method == HttpMethod.Post);
     }
 
     /// <summary>
@@ -583,6 +710,11 @@ public sealed class ArchidektGatewayTests
         cacheText.Should().Contain("scryfall:scryfall-sol-ring");
         cacheText.Should().Contain("print:cmm:400");
         cacheText.Should().Contain("name:Sol Ring");
+        using JsonDocument cacheDocument = JsonDocument.Parse(cacheText);
+        JsonElement entry = cacheDocument.RootElement.GetProperty("scryfall:scryfall-sol-ring");
+        entry.GetProperty("archidektId").GetString().Should().Be("2");
+        entry.GetProperty("source").GetString().Should().Be("archidekt-card-search");
+        entry.GetProperty("validationStatus").GetString().Should().Be("scryfall-print-match");
         card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("resolved");
     }
 
@@ -693,6 +825,88 @@ public sealed class ArchidektGatewayTests
         handler.Requests.Should().ContainSingle(request => request.Method == HttpMethod.Patch);
         card.ArchidektCardId.Should().Be("2");
         card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("cache");
+
+        using JsonDocument cacheDocument = JsonDocument.Parse(File.ReadAllText(cacheFile));
+        JsonElement entry = cacheDocument.RootElement.GetProperty("scryfall:scryfall-sol-ring");
+        entry.GetProperty("archidektId").GetString().Should().Be("2");
+        entry.GetProperty("validationStatus").GetString().Should().Be("legacy-unvalidated");
+    }
+
+    /// <summary>
+    /// Verifies that a rejected mutation evicts a stale cached card id and retries with a fresh id.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_RefreshesStaleCachedCardIdAfterMutationRejection()
+    {
+        string cacheFile = Path.Combine(Path.GetTempPath(), "mtg-mcp-tests", $"{Guid.NewGuid():N}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+        File.WriteAllText(cacheFile, """{ "scryfall:scryfall-sol-ring": "999" }""");
+        RecordingHandler handler = new();
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "detail": "bad card id" }""",
+            HttpStatusCode.BadRequest);
+        handler.Get(
+            "api/decks/123/",
+            """
+            {
+              "id": 123,
+              "name": "Deck",
+              "deckFormat": 3,
+              "categories": [ { "id": 1, "name": "Mainboard", "includedInDeck": true, "includedInPrice": true } ],
+              "cards": []
+            }
+            """);
+        handler.Get(
+            "api/cards/v2/?name=Sol%20Ring&pageSize=25",
+            """
+            { "results": [ { "id": 2, "uid": "scryfall-sol-ring", "oracleCard": { "name": "Sol Ring" } } ] }
+            """);
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """
+            { "cards": [ { "id": 77, "quantity": 1, "categories": ["Mainboard"], "card": { "id": 2, "oracleCard": { "name": "Sol Ring" } } } ] }
+            """);
+
+        ArchidektGateway gateway = CreateAuthorizedGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                CardIdCacheFile = cacheFile,
+            });
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard card = new()
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            ScryfallId = "scryfall-sol-ring",
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+        };
+
+        await gateway.PersistCardsAsync(deck, [card], [], TestContext.Current.CancellationToken);
+
+        List<RecordedRequest> patches = handler.Requests
+            .Where(request => request.Method == HttpMethod.Patch)
+            .ToList();
+        patches.Should().HaveCount(2);
+        GetFirstMutationCardId(patches[0]).Should().Be(999);
+        GetFirstMutationCardId(patches[1]).Should().Be(2);
+        card.ArchidektCardId.Should().Be("2");
+        card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("refreshed");
+
+        using JsonDocument cacheDocument = JsonDocument.Parse(File.ReadAllText(cacheFile));
+        cacheDocument.RootElement.GetProperty("scryfall:scryfall-sol-ring")
+            .GetProperty("archidektId")
+            .GetString()
+            .Should()
+            .Be("2");
     }
 
     /// <summary>
@@ -957,6 +1171,81 @@ public sealed class ArchidektGatewayTests
         patchRequests.Should().HaveCount(2);
         GetMutationCount(patchRequests[0]).Should().Be(50);
         GetMutationCount(patchRequests[1]).Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that opaque batch failures are bisected down to the rejected card row.
+    /// </summary>
+    [Fact]
+    public async Task PersistCards_BisectsOpaqueBatchFailure()
+    {
+        RecordingHandler handler = new();
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "detail": "bad batch" }""",
+            HttpStatusCode.BadRequest);
+        handler.Get(
+            "api/cards/v2/?name=Good%20Card&pageSize=25",
+            """{ "results": [ { "id": 10, "oracleCard": { "name": "Good Card" } } ] }""");
+        handler.Get(
+            "api/cards/v2/?name=Bad%20Card&pageSize=25",
+            """{ "results": [ { "id": 20, "oracleCard": { "name": "Bad Card" } } ] }""");
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "detail": "bad batch" }""",
+            HttpStatusCode.BadRequest);
+        handler.Patch(
+            "api/decks/123/modifyCards/v2/",
+            """{ "detail": "bad card" }""",
+            HttpStatusCode.BadRequest);
+        handler.Patch("api/decks/123/modifyCards/v2/", "{}");
+
+        ArchidektGateway gateway = CreateGateway(handler);
+        DeckWorkspace deck = new()
+        {
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+        };
+        DeckCard good = new()
+        {
+            Name = "Good Card",
+            Quantity = 1,
+            ArchidektCardId = "old-10",
+            ArchidektDeckRelationId = 101,
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+        };
+        DeckCard bad = new()
+        {
+            Name = "Bad Card",
+            Quantity = 1,
+            ArchidektCardId = "old-20",
+            ArchidektDeckRelationId = 102,
+            Categories = [DeckDefaults.Mainboard],
+            PrimaryCategory = DeckDefaults.Mainboard,
+        };
+
+        Func<Task> act = () => gateway.PersistCardsAsync(
+            deck,
+            [bad, good],
+            [],
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Bad Card*archidektCardId=20*");
+
+        List<RecordedRequest> patchRequests = handler.Requests
+            .Where(request => request.Method == HttpMethod.Patch)
+            .ToList();
+        patchRequests.Should().HaveCount(4);
+        patchRequests.Select(GetMutationCount).Should().Equal(2, 2, 1, 1);
+        GetFirstMutationCardId(patchRequests[1]).Should().Be(20);
+        GetFirstMutationCardId(patchRequests[2]).Should().Be(20);
+        GetFirstMutationCardId(patchRequests[3]).Should().Be(10);
+        good.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("refreshed");
+        bad.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution].Should().Be("refreshed");
     }
 
     /// <summary>
@@ -1637,6 +1926,15 @@ public sealed class ArchidektGatewayTests
     {
         using JsonDocument document = JsonDocument.Parse(request.Body);
         return document.RootElement.GetProperty("cards").GetArrayLength();
+    }
+
+    /// <summary>
+    /// Reads the first card id from a recorded mutation request.
+    /// </summary>
+    private static int GetFirstMutationCardId(RecordedRequest request)
+    {
+        using JsonDocument document = JsonDocument.Parse(request.Body);
+        return document.RootElement.GetProperty("cards")[0].GetProperty("cardid").GetInt32();
     }
 
     /// <summary>

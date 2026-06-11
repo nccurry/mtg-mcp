@@ -17,10 +17,13 @@ public sealed partial class ArchidektGateway
     )
     {
         await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
+        string? parentFolderId = await ResolveCreateDeckFolderIdAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+
         using JsonDocument document = await SendJsonAsync(
                 HttpMethod.Post,
                 "api/decks/v2/",
-                BuildCreateDeckPayload(request),
+                BuildCreateDeckPayload(request, parentFolderId),
                 cancellationToken,
                 authenticate: false
             )
@@ -51,11 +54,54 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
+    /// Resolves the folder id for deck creation without silently falling back to root.
+    /// </summary>
+    private async Task<string?> ResolveCreateDeckFolderIdAsync(
+        ArchidektDeckCreateRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ParentFolderId))
+        {
+            return request.ParentFolderId;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FolderName))
+        {
+            return null;
+        }
+
+        List<ArchidektFolder> matches = [];
+        IReadOnlyList<ArchidektFolder> folders = await ListFoldersAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (ArchidektFolder folder in folders)
+        {
+            if (folder.Name.Equals(request.FolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                matches.Add(folder);
+            }
+        }
+
+        if (matches.Count == 1)
+        {
+            return matches[0].Id;
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Archidekt folder '{request.FolderName}' was not found; pass parentFolderId to create a deck in a known folder.");
+        }
+
+        throw new InvalidOperationException(
+            $"Archidekt folder name '{request.FolderName}' matched {matches.Count} folders; pass parentFolderId to disambiguate.");
+    }
+
+    /// <summary>
     /// Builds Archidekt's new-deck payload while defaulting to private visibility.
     /// </summary>
     private static Dictionary<string, object?> BuildCreateDeckPayload(
-        ArchidektDeckCreateRequest request
-    )
+        ArchidektDeckCreateRequest request,
+        string? parentFolderId)
     {
         string visibility = NormalizeVisibility(request.Visibility);
         return new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -64,7 +110,7 @@ public sealed partial class ArchidektGateway
             ["description"] = request.Description,
             ["deckFormat"] = ToDeckFormatId(request.Format),
             ["edhBracket"] = null,
-            ["parentFolder"] = null,
+            ["parentFolder"] = ParseIntOrString(parentFolderId),
             ["private"] = visibility != "public",
             ["unlisted"] = visibility == "unlisted",
             ["theorycrafted"] = false,

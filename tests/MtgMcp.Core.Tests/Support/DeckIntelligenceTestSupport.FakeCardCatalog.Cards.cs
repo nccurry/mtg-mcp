@@ -310,6 +310,22 @@ public sealed partial class DeckIntelligenceTests
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
                 },
+                "Future Bargain" => new CardInfo
+                {
+                    Id = "future-bargain",
+                    OracleId = "oracle-future-bargain",
+                    Name = "Future Bargain",
+                    ManaCost = "{1}{B}",
+                    ManaValue = 2,
+                    TypeLine = "Sorcery",
+                    OracleText = "Draw two cards and lose 2 life.",
+                    Set = "fut",
+                    ReleasedAt = new DateOnly(2027, 1, 1),
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 1_600,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.25" }
+                },
                 "Alesha, Who Smiles at Death" => new CardInfo
                 {
                     Id = "alesha-who-smiles-at-death",

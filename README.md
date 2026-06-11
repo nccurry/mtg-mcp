@@ -524,8 +524,10 @@ Supported power levels are `precon`, `casual`, `tuned-casual`, `high-power`,
 and `cedh`. Supported heuristic profiles are `auto`, `commander-baseline`,
 `command-zone-template`, `edhrec-foundation`, `mana-rich-39-land`,
 `fifty-mana-sources`, `package-8x8`, `package-7x9`, `package-9x7`,
-`seventy-five-percent`, `cedh-turbo`, `cedh-midrange`, `cedh-stax`, and
-`cedh-tempo`. Supported simulation profiles are `auto`, `neutral`, `aggro`,
+`seventy-five-percent`, `cedh-turbo`, `cedh-midrange`, `cedh-stax`,
+`cedh-tempo`, `archetype-landfall`, `archetype-sea-monsters`,
+`archetype-enchantments`, and `archetype-go-wide`. Supported simulation
+profiles are `auto`, `neutral`, `aggro`,
 `combo`, `control`, `value`, `big-mana`, and `stax`. Package templates are
 `none`, `8x8`, `7x9`, and `9x7`.
 

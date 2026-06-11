@@ -481,6 +481,94 @@ public sealed class ArchidektDeckSummary
     /// Gets or sets the updated at.
     /// </summary>
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Archidekt folder id when available.
+    /// </summary>
+    public string? FolderId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Archidekt folder name when available.
+    /// </summary>
+    public string? FolderName { get; set; }
+
+    /// <summary>
+    /// Gets or sets deck visibility when available.
+    /// </summary>
+    public string? Visibility { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deck card count when available.
+    /// </summary>
+    public int? CardCount { get; set; }
+}
+
+/// <summary>
+/// Describes filters and pagination for Archidekt deck listing.
+/// </summary>
+public sealed class ArchidektDeckListRequest
+{
+    /// <summary>
+    /// Gets or sets the page number requested from Archidekt.
+    /// </summary>
+    public int? Page { get; set; }
+
+    /// <summary>
+    /// Gets or sets the requested page size.
+    /// </summary>
+    public int? PageSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets a folder id filter.
+    /// </summary>
+    public string? FolderId { get; set; }
+
+    /// <summary>
+    /// Gets or sets a folder name filter applied after mapping results.
+    /// </summary>
+    public string? FolderName { get; set; }
+}
+
+/// <summary>
+/// Describes an Archidekt folder.
+/// </summary>
+public sealed class ArchidektFolder
+{
+    /// <summary>
+    /// Gets or sets the folder id.
+    /// </summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the folder name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the parent folder id, when present.
+    /// </summary>
+    public string? ParentFolderId { get; set; }
+}
+
+/// <summary>
+/// Reports a bulk Archidekt deck move.
+/// </summary>
+public sealed class ArchidektMoveDecksResult
+{
+    /// <summary>
+    /// Gets or sets the destination folder id, or null for root.
+    /// </summary>
+    public string? FolderId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deck ids requested for the move.
+    /// </summary>
+    public List<string> DeckIds { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets how many deck ids were submitted.
+    /// </summary>
+    public int Moved { get; set; }
 }
 
 /// <summary>
@@ -507,6 +595,16 @@ public sealed class ArchidektDeckCreateRequest
     /// Gets or sets the requested visibility: private, unlisted, or public.
     /// </summary>
     public string Visibility { get; set; } = "private";
+
+    /// <summary>
+    /// Gets or sets the parent Archidekt folder id for the created deck.
+    /// </summary>
+    public string? ParentFolderId { get; set; }
+
+    /// <summary>
+    /// Gets or sets a parent folder name to resolve before creating the deck.
+    /// </summary>
+    public string? FolderName { get; set; }
 }
 
 /// <summary>
@@ -575,6 +673,26 @@ public sealed class ArchidektCopyResult
     public int CardIdCacheHits { get; set; }
 
     /// <summary>
+    /// Copied cards whose Archidekt ids were resolved from any source.
+    /// </summary>
+    public int ResolvedCount { get; set; }
+
+    /// <summary>
+    /// Copied cards whose Archidekt ids were supplied by the local resolution cache.
+    /// </summary>
+    public int CacheHits { get; set; }
+
+    /// <summary>
+    /// Archidekt card-search lookups performed while resolving card ids.
+    /// </summary>
+    public int RemoteLookups { get; set; }
+
+    /// <summary>
+    /// Card rows written to the destination during this copy attempt.
+    /// </summary>
+    public int WrittenRows { get; set; }
+
+    /// <summary>
     /// Copied cards whose Archidekt ids were resolved through Archidekt during this copy.
     /// </summary>
     public int CardIdsResolved { get; set; }
@@ -583,6 +701,21 @@ public sealed class ArchidektCopyResult
     /// Copied cards that still lacked Archidekt card ids after resolution.
     /// </summary>
     public int MissingArchidektCardIds { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the result can be resumed with the returned destination id.
+    /// </summary>
+    public bool CanResume { get; set; }
+
+    /// <summary>
+    /// Gets or sets a destination deck id or URL that can resume the copy.
+    /// </summary>
+    public string? ResumeDeckIdOrUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the recommended next action for an agent after this copy result.
+    /// </summary>
+    public string? NextAction { get; set; }
 
     /// <summary>
     /// Gets or sets commander names detected in the source workspace.

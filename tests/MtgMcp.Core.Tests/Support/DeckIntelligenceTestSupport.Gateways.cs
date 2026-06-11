@@ -114,6 +114,56 @@ public sealed partial class DeckIntelligenceTests
         }
 
         /// <summary>
+        /// Lists no fake decks for filtered requests.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(
+            ArchidektDeckListRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([]);
+        }
+
+        /// <summary>
+        /// Lists no fake folders.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektFolder>> ListFoldersAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ArchidektFolder>>([]);
+        }
+
+        /// <summary>
+        /// Creates a deterministic fake folder.
+        /// </summary>
+        public Task<ArchidektFolder> CreateFolderAsync(
+            string name,
+            string? parentFolderId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ArchidektFolder
+            {
+                Id = "folder",
+                Name = name,
+                ParentFolderId = parentFolderId,
+            });
+        }
+
+        /// <summary>
+        /// Echoes fake deck move requests.
+        /// </summary>
+        public Task<ArchidektMoveDecksResult> MoveDecksAsync(
+            IReadOnlyList<string> deckIds,
+            string? folderId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ArchidektMoveDecksResult
+            {
+                FolderId = folderId,
+                DeckIds = deckIds.ToList(),
+                Moved = deckIds.Count,
+            });
+        }
+
+        /// <summary>
         /// Creates a fake deck.
         /// </summary>
         public Task<DeckWorkspace> CreateDeckAsync(
@@ -217,6 +267,14 @@ public sealed partial class DeckIntelligenceTests
                 throw PersistCardsException;
             }
 
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Leaves fake Archidekt card ids unchanged before copy tests.
+        /// </summary>
+        public Task ResolveCardIdsAsync(IReadOnlyList<DeckCard> cards, CancellationToken cancellationToken)
+        {
             return Task.CompletedTask;
         }
 

@@ -2590,6 +2590,71 @@ public sealed class DeckWorkspaceServiceTests
         }
 
         /// <summary>
+        /// Lists fake decks after applying folder filters.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(
+            ArchidektDeckListRequest request,
+            CancellationToken cancellationToken)
+        {
+            List<ArchidektDeckSummary> summaries = DeckSummaries.ToList();
+            if (!string.IsNullOrWhiteSpace(request.FolderId))
+            {
+                summaries = summaries
+                    .Where(summary => string.Equals(summary.FolderId, request.FolderId, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.FolderName))
+            {
+                summaries = summaries
+                    .Where(summary => string.Equals(summary.FolderName, request.FolderName, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>(summaries);
+        }
+
+        /// <summary>
+        /// Returns no fake folders by default.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektFolder>> ListFoldersAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ArchidektFolder>>([]);
+        }
+
+        /// <summary>
+        /// Creates a deterministic fake folder.
+        /// </summary>
+        public Task<ArchidektFolder> CreateFolderAsync(
+            string name,
+            string? parentFolderId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ArchidektFolder
+            {
+                Id = "folder",
+                Name = name,
+                ParentFolderId = parentFolderId,
+            });
+        }
+
+        /// <summary>
+        /// Echoes fake deck move requests.
+        /// </summary>
+        public Task<ArchidektMoveDecksResult> MoveDecksAsync(
+            IReadOnlyList<string> deckIds,
+            string? folderId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ArchidektMoveDecksResult
+            {
+                FolderId = folderId,
+                DeckIds = deckIds.ToList(),
+                Moved = deckIds.Count,
+            });
+        }
+
+        /// <summary>
         /// Verifies that create deck.
         /// </summary>
         public Task<DeckWorkspace> CreateDeckAsync(
@@ -2658,6 +2723,20 @@ public sealed class DeckWorkspaceServiceTests
 
             UpsertedCards.AddRange(upsertedCards);
             RemovedCards.AddRange(removedCards);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Resolves missing fake Archidekt card ids without remote access.
+        /// </summary>
+        public Task ResolveCardIdsAsync(IReadOnlyList<DeckCard> cards, CancellationToken cancellationToken)
+        {
+            foreach (DeckCard card in cards.Where(card => string.IsNullOrWhiteSpace(card.ArchidektCardId)))
+            {
+                card.ArchidektCardId = $"fake-{card.Name}";
+                card.Metadata[DeckCardMetadataKeys.ArchidektCardIdResolution] = "resolved";
+            }
+
             return Task.CompletedTask;
         }
 

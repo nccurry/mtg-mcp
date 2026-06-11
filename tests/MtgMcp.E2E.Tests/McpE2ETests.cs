@@ -562,7 +562,8 @@ public sealed class McpE2ETests
             new Dictionary<string, object?>
             {
                 ["workspaceId"] = workspaceId,
-                ["intentText"] = "Archetype: discard-control"
+                ["intentText"] = "Archetype: discard-control",
+                ["includeWorkspace"] = true
             });
         string setDescription = GetString(GetObject(setResult, "workspace"), "description");
 
@@ -575,7 +576,11 @@ public sealed class McpE2ETests
         JsonElement clearResult = await CallJsonAsync(
             session.Client,
             "deck_intent_clear",
-            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["includeWorkspace"] = true
+            });
         string clearedDescription = GetString(GetObject(clearResult, "workspace"), "description");
 
         clearedDescription.Should().Contain("\"bold\":true");

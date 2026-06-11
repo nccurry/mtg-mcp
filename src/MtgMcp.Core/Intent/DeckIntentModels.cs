@@ -314,3 +314,105 @@ public sealed class DeckIntentChangeResult
     /// </summary>
     public string Message { get; set; } = "";
 }
+
+/// <summary>
+/// Reports an intent mutation without returning the full workspace card list.
+/// </summary>
+public sealed class CompactDeckIntentChangeResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether the visible intent text changed.
+    /// </summary>
+    public bool Changed { get; set; }
+
+    /// <summary>
+    /// Gets or sets the parsed intent version after the mutation.
+    /// </summary>
+    public int? IntentVersion { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the workspace description was updated.
+    /// </summary>
+    public bool DescriptionUpdated { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the mutation wrote through to Archidekt metadata.
+    /// </summary>
+    public bool ArchidektWriteBack { get; set; }
+
+    /// <summary>
+    /// Gets or sets parser warnings from the resulting intent block.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets compact intent fields useful for agent loops.
+    /// </summary>
+    public DeckIntentSummary IntentSummary { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the persistence target used by the mutation.
+    /// </summary>
+    public string Persistence { get; set; } = DeckPersistence.LocalOnly;
+
+    /// <summary>
+    /// Gets or sets a short mutation message.
+    /// </summary>
+    public string Message { get; set; } = "";
+}
+
+/// <summary>
+/// Summarizes deck intent without echoing the entire workspace.
+/// </summary>
+public sealed class DeckIntentSummary
+{
+    /// <summary>
+    /// Gets or sets whether an intent block is present.
+    /// </summary>
+    public bool Found { get; set; }
+
+    /// <summary>
+    /// Gets or sets the commander declared in intent, when present.
+    /// </summary>
+    public string? Commander { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deck archetype declared in intent, when present.
+    /// </summary>
+    public string? Archetype { get; set; }
+
+    /// <summary>
+    /// Gets or sets the plain-language deck goal.
+    /// </summary>
+    public string? Goal { get; set; }
+
+    /// <summary>
+    /// Gets or sets the requested power level.
+    /// </summary>
+    public string? PowerLevel { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected heuristic profile id.
+    /// </summary>
+    public string? HeuristicProfile { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected simulation profile id.
+    /// </summary>
+    public string? SimulationProfile { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected package template id.
+    /// </summary>
+    public string? PackageTemplate { get; set; }
+
+    /// <summary>
+    /// Gets or sets explicit archetype tags from intent.
+    /// </summary>
+    public List<string> ArchetypeTags { get; set; } = [];
+}

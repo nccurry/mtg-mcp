@@ -708,6 +708,103 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that activated commander engines create pressure evidence without claiming deterministic wins.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_ReportsKenessosEnginePressureWithoutDetectedWins()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Kenessos Pressure",
+            Cards =
+            [
+                GoldfishCard(
+                    "Kenessos, Priest of Thassa",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Merfolk Cleric",
+                    "{1}{G/U}",
+                    2,
+                    "{5}{G/U}: Scry 1, then reveal the top card of your library. If it is a Kraken, Leviathan, Octopus, or Serpent creature card, put it onto the battlefield.",
+                    ["G", "U"]),
+                GoldfishCard("Forest", 48, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard("Topdeck Setup", 20, DeckRoles.Tutors, "Sorcery", "{G}", 1, "Scry 3, then put a card from your hand on top of your library.", ["G"]),
+                GoldfishCard("Stormtide Leviathan", 31, DeckRoles.Wincons, "Creature - Leviathan", "{5}{U}{U}{U}", 8, "Islandwalk. Creatures without flying or islandwalk can't attack.", ["U"]),
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            SimulationProfileIds.Neutral,
+            targetTurn: 7,
+            simulations: 100,
+            seed: 71,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.EnginePressure.LibraryRevealCheat.Should().BeTrue();
+        goldfish.EnginePressure.HighCmcHitDensity.Should().BeGreaterThan(0.5);
+        goldfish.EnginePressure.Pressure.Should().BeGreaterThan(0);
+        goldfish.EnginePressure.Evidence.Should().Contain(evidence =>
+            evidence.Contains("activated library/topdeck cheat", StringComparison.OrdinalIgnoreCase));
+        goldfish.WinEstimate.ObservedWins.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies that sorcery finisher pressure requires a meaningful board.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_SorceryFinisherPressureRequiresBoard()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace emptyBoard = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Stampede Empty Board",
+            Cards =
+            [
+                GoldfishCard("Forest", 60, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard("Overwhelming Stampede", 40, DeckRoles.Wincons, "Sorcery", "{3}{G}{G}", 5, "Until end of turn, creatures you control get +X/+X and gain trample, where X is the greatest power among creatures you control.", ["G"]),
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspace boardDeck = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Stampede Board",
+            Cards =
+            [
+                GoldfishCard("Forest", 40, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard("Token Maker", 30, DeckRoles.Synergy, "Creature - Elf", "{1}{G}", 2, "When this creature enters, create two 1/1 creature tokens.", ["G"]),
+                GoldfishCard("Overwhelming Stampede", 30, DeckRoles.Wincons, "Sorcery", "{3}{G}{G}", 5, "Until end of turn, creatures you control get +X/+X and gain trample, where X is the greatest power among creatures you control.", ["G"]),
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult empty = await service.SimulateGoldfishAsync(
+            emptyBoard.Id,
+            SimulationProfileIds.Neutral,
+            targetTurn: 6,
+            simulations: 100,
+            seed: 72,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+        GoldfishSimulationResult withBoard = await service.SimulateGoldfishAsync(
+            boardDeck.Id,
+            SimulationProfileIds.Neutral,
+            targetTurn: 6,
+            simulations: 100,
+            seed: 72,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        empty.SorceryFinisherPressure.SorceryFinisherHeld.Should().BeTrue();
+        empty.SorceryFinisherPressure.Pressure.Should().Be(0);
+        withBoard.SorceryFinisherPressure.SorceryFinisherHeld.Should().BeTrue();
+        withBoard.SorceryFinisherPressure.BoardPowerBeforeFinisher.Should().BeGreaterThanOrEqualTo(6);
+        withBoard.SorceryFinisherPressure.Pressure.Should().BeGreaterThan(0);
+    }
+
+    /// <summary>
     /// Verifies that Ghen-style enchantment recursion can be detected through profile route templates.
     /// </summary>
     [Fact]

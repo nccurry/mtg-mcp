@@ -60,7 +60,12 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     /// <summary>
     /// Caches Archidekt card ids by provider-neutral print keys.
     /// </summary>
-    private Dictionary<string, string>? cardIdCache;
+    private Dictionary<string, ArchidektCardIdCacheEntry>? cardIdCache;
+
+    /// <summary>
+    /// Tracks whether legacy cache values should be rewritten in the structured cache format.
+    /// </summary>
+    private bool cardIdCacheNeedsSave;
 
     /// <summary>
     /// Creates a gateway that sends JSON requests to Archidekt.

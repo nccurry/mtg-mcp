@@ -65,7 +65,10 @@ public sealed class McpSurfaceTests
             "archidekt_compare_goldfish",
             "archidekt_copy_workspace",
             "archidekt_create_deck",
+            "archidekt_create_folder",
             "archidekt_list_decks",
+            "archidekt_list_folders",
+            "archidekt_move_decks",
             "card_facets_explain_match",
             "card_facets_get",
             "card_facets_set_annotations",
@@ -683,6 +686,51 @@ public sealed class McpSurfaceTests
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*workspace_start*");
+    }
+
+    /// <summary>
+    /// Verifies that intent mutation tools default to compact output and keep full output opt-in.
+    /// </summary>
+    [Fact]
+    public async Task IntentMutationTools_DefaultCompactAndFullEscapeHatch()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Intent Compact",
+            Description = "Primer text."
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog());
+        IntentTools tools = new(
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        object compact = await tools.SetDeckIntentAsync(
+            workspace.Id,
+            """
+            Commander: Kenessos, Priest of Thassa
+            Archetype: sea monsters
+            Heuristic Profile: sea monsters
+            """,
+            cancellationToken: TestContext.Current.CancellationToken);
+        CompactDeckIntentChangeResult compactResult = compact
+            .Should()
+            .BeOfType<CompactDeckIntentChangeResult>()
+            .Subject;
+
+        compactResult.WorkspaceId.Should().Be(workspace.Id);
+        compactResult.Changed.Should().BeTrue();
+        compactResult.DescriptionUpdated.Should().BeTrue();
+        compactResult.IntentSummary.Commander.Should().Be("Kenessos, Priest of Thassa");
+        compactResult.IntentSummary.HeuristicProfile.Should().Be("archetype-sea-monsters");
+
+        object full = await tools.ClearDeckIntentAsync(
+            workspace.Id,
+            includeWorkspace: true,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        full.Should().BeOfType<DeckIntentChangeResult>()
+            .Which.Workspace.Description.Should().Be("Primer text.");
     }
 
     /// <summary>
@@ -1390,6 +1438,56 @@ public sealed class McpSurfaceTests
         }
 
         /// <summary>
+        /// Returns no deck summaries for filtered fake list requests.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektDeckSummary>> ListDecksAsync(
+            ArchidektDeckListRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ArchidektDeckSummary>>([]);
+        }
+
+        /// <summary>
+        /// Returns no fake folders by default.
+        /// </summary>
+        public Task<IReadOnlyList<ArchidektFolder>> ListFoldersAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ArchidektFolder>>([]);
+        }
+
+        /// <summary>
+        /// Creates a deterministic fake folder for tool shape tests.
+        /// </summary>
+        public Task<ArchidektFolder> CreateFolderAsync(
+            string name,
+            string? parentFolderId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ArchidektFolder
+            {
+                Id = "folder",
+                Name = name,
+                ParentFolderId = parentFolderId,
+            });
+        }
+
+        /// <summary>
+        /// Echoes fake deck move requests.
+        /// </summary>
+        public Task<ArchidektMoveDecksResult> MoveDecksAsync(
+            IReadOnlyList<string> deckIds,
+            string? folderId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ArchidektMoveDecksResult
+            {
+                FolderId = folderId,
+                DeckIds = deckIds.ToList(),
+                Moved = deckIds.Count,
+            });
+        }
+
+        /// <summary>
         /// Creates a fake Archidekt deck.
         /// </summary>
         public Task<DeckWorkspace> CreateDeckAsync(
@@ -1442,6 +1540,14 @@ public sealed class McpSurfaceTests
             IReadOnlyList<DeckCard> removedCards,
             CancellationToken cancellationToken
         )
+        {
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Leaves fake Archidekt card ids unchanged.
+        /// </summary>
+        public Task ResolveCardIdsAsync(IReadOnlyList<DeckCard> cards, CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }

@@ -185,7 +185,7 @@ public static partial class DeckIntentText
                 List<string> parts = [];
                 if (route.Requirements.Count > 0)
                 {
-                    parts.Add($"requires {string.Join(", ", route.Requirements)}");
+                    parts.Add($"requires {string.Join(", ", route.Requirements.Select(requirement => FormatDelimitedToken(requirement, ',', ';')))}");
                 }
 
                 if (route.EarliestTurn.HasValue)
@@ -604,7 +604,7 @@ public static partial class DeckIntentText
     {
         if (values.Count > 0)
         {
-            lines.Add($"{name}: {string.Join(", ", values)}");
+            lines.Add($"{name}: {string.Join(", ", values.Select(value => FormatDelimitedToken(value, ',', ';')))}");
         }
     }
 
@@ -800,10 +800,97 @@ public static partial class DeckIntentText
     /// </summary>
     private static void AddDelimitedItems(List<string> values, string text)
     {
-        foreach (string value in text.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        foreach (string value in SplitDelimitedTokens(text, ',', ';'))
         {
             AddUnique(values, value);
         }
+    }
+
+    /// <summary>
+    /// Splits delimited intent fields while preserving quoted card names and escaped quotes.
+    /// </summary>
+    private static List<string> SplitDelimitedTokens(string text, params char[] delimiters)
+    {
+        return SplitDelimitedTokens(text, preserveQuotes: false, delimiters);
+    }
+
+    /// <summary>
+    /// Splits delimited intent fields while optionally preserving quote markers for nested parsing.
+    /// </summary>
+    private static List<string> SplitDelimitedTokens(
+        string text,
+        bool preserveQuotes,
+        params char[] delimiters)
+    {
+        List<string> tokens = [];
+        List<char> current = [];
+        bool quoted = false;
+        for (int index = 0; index < text.Length; index++)
+        {
+            char character = text[index];
+            if (character == '"')
+            {
+                if (quoted && index + 1 < text.Length && text[index + 1] == '"')
+                {
+                    current.Add('"');
+                    if (preserveQuotes)
+                    {
+                        current.Add('"');
+                    }
+
+                    index++;
+                    continue;
+                }
+
+                if (preserveQuotes)
+                {
+                    current.Add('"');
+                }
+
+                quoted = !quoted;
+                continue;
+            }
+
+            if (!quoted && delimiters.Contains(character))
+            {
+                AddDelimitedToken(tokens, current);
+                current.Clear();
+                continue;
+            }
+
+            current.Add(character);
+        }
+
+        AddDelimitedToken(tokens, current);
+        return tokens;
+    }
+
+    /// <summary>
+    /// Adds one non-empty parsed token.
+    /// </summary>
+    private static void AddDelimitedToken(List<string> tokens, List<char> characters)
+    {
+        string token = new string(characters.ToArray()).Trim();
+        if (token.Length > 0)
+        {
+            tokens.Add(token);
+        }
+    }
+
+    /// <summary>
+    /// Quotes a rendered token when delimiters would otherwise split it.
+    /// </summary>
+    private static string FormatDelimitedToken(string value, params char[] delimiters)
+    {
+        string trimmed = value.Trim();
+        bool needsQuotes = trimmed.Length != value.Length
+            || trimmed.Contains('"')
+            || trimmed.Contains('\n')
+            || trimmed.Contains('\r')
+            || trimmed.Any(character => delimiters.Contains(character));
+        return needsQuotes
+            ? $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\""
+            : trimmed;
     }
 
     /// <summary>
@@ -890,11 +977,11 @@ public static partial class DeckIntentText
             Name = name.Trim(),
             Raw = value.Trim()
         };
-        foreach (string part in value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        foreach (string part in SplitDelimitedTokens(value, true, ';'))
         {
             if (part.StartsWith("requires ", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (string requirement in part["requires ".Length..].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                foreach (string requirement in SplitDelimitedTokens(part["requires ".Length..], ','))
                 {
                     route.Requirements.Add(requirement);
                     if (!SimulationRouteEvaluator.IsSupportedRequirement(requirement))
