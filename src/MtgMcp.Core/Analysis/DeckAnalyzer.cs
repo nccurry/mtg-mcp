@@ -31,8 +31,14 @@ public sealed class DeckAnalyzer
         foreach (DeckCard card in workspace.Cards)
         {
             string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            List<string> allCategories = DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories);
             analysis.TotalCards += card.Quantity;
             Increment(analysis.CategoryCounts, primaryCategory, card.Quantity);
+            foreach (string category in allCategories)
+            {
+                Increment(analysis.AllCategoryCounts, category, card.Quantity);
+            }
+
             bool included = DeckCategoryInclusion.IsIncludedInDeck(categories, primaryCategory);
             if (!included)
             {
@@ -41,6 +47,11 @@ public sealed class DeckAnalyzer
 
             analysis.IncludedCards += card.Quantity;
             Increment(analysis.IncludedCategoryCounts, primaryCategory, card.Quantity);
+            foreach (string category in allCategories)
+            {
+                Increment(analysis.IncludedAllCategoryCounts, category, card.Quantity);
+            }
+
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             Increment(analysis.RoleCounts, role.PrimaryRole, card.Quantity);
             foreach (string tag in role.Tags)

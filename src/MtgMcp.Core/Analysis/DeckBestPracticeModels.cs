@@ -16,6 +16,11 @@ public sealed class DeckNeed
     public int CurrentCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the source used for the current count, such as heuristic roles or all user categories.
+    /// </summary>
+    public string CountSource { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the minimum desired count.
     /// </summary>
     public int Minimum { get; set; }

@@ -111,6 +111,20 @@ public sealed partial class DeckIntelligenceTests
             .PrimaryRole
             .Should()
             .Be(DeckRoles.BoardWipes);
+        DeckRoleClassifier.Classify(Card(
+                "Blasphemous Act",
+                "Sorcery",
+                "This spell costs {1} less to cast for each creature on the battlefield. Blasphemous Act deals 13 damage to each creature."))
+            .PrimaryRole
+            .Should()
+            .Be(DeckRoles.BoardWipes);
+        DeckRoleClassifier.Classify(Card(
+                "Felidar Retreat",
+                "Enchantment",
+                "Landfall - Whenever a land you control enters, choose one - Create a 2/2 Cat Beast creature token. Put a +1/+1 counter on each creature you control. Those creatures gain vigilance until end of turn."))
+            .PrimaryRole
+            .Should()
+            .NotBe(DeckRoles.BoardWipes);
 
         CardRoleAssignment tinybones = DeckRoleClassifier.Classify(Card(
             "Tinybones, Trinket Thief",
@@ -200,6 +214,25 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that user categories do not override source-backed oracle text.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_DoesNotLetUserCategoryOverrideOracleText()
+    {
+        DeckCard felidarRetreat = Card(
+            "Felidar Retreat",
+            "Enchantment",
+            "Landfall - Whenever a land you control enters, choose one - Create a 2/2 Cat Beast creature token. Put a +1/+1 counter on each creature you control.");
+        felidarRetreat.PrimaryCategory = DeckRoles.BoardWipes;
+        felidarRetreat.Categories = [DeckRoles.BoardWipes, "Anthems"];
+
+        CardRoleAssignment assignment = DeckRoleClassifier.Classify(felidarRetreat);
+
+        assignment.PrimaryRole.Should().NotBe(DeckRoles.BoardWipes);
+        assignment.Tags.Should().Contain(DeckTags.Tokens);
+    }
+
+    /// <summary>
     /// Verifies that role-count explanations expose card-by-card evidence for the Inga and Esika fixture.
     /// </summary>
     [Fact]
@@ -273,6 +306,91 @@ public sealed partial class DeckIntelligenceTests
         row.PrimaryCategory.Should().Be(DeckRoles.Ramp);
         row.Categories.Should().ContainSingle().Which.Should().Be(DeckRoles.Ramp);
         row.MatchingEvidence.Should().Contain("workspace category: Ramp");
+    }
+
+    /// <summary>
+    /// Verifies that role-count explanations distinguish primary categories from secondary category evidence.
+    /// </summary>
+    [Fact]
+    public async Task ExplainRoleCounts_ReportsSecondaryCategoryCount()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Secondary category evidence",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Inspired Charge",
+                        Quantity = 1,
+                        PrimaryCategory = DeckDefaults.Mainboard,
+                        Categories = [DeckDefaults.Mainboard, "Anthems"],
+                        Snapshot = new CardSnapshot
+                        {
+                            TypeLine = "Instant",
+                            OracleText = "Creatures you control get +2/+1 until end of turn."
+                        }
+                    }
+                ]
+            },
+            TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckRoleCountExplanation explanation = await service.ExplainRoleCountsAsync(
+            workspace.Id,
+            "Anthems",
+            TestContext.Current.CancellationToken);
+
+        explanation.CategoryCount.Should().Be(0);
+        explanation.AllCategoryCount.Should().Be(1);
+        explanation.OddsTargetCount.Should().Be(1);
+        explanation.Cards.Should().ContainSingle()
+            .Which.CountedByAnyCategory.Should().BeTrue();
+        explanation.Notes.Should().Contain(note =>
+            note.Contains("secondary categories", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that deck analysis preserves primary counts while also exposing all category counts.
+    /// </summary>
+    [Fact]
+    public void DeckAnalyzer_TracksPrimaryAndAllCategoryCounts()
+    {
+        DeckWorkspace workspace = new()
+        {
+            Categories =
+            [
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false }
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Anthem A",
+                    Quantity = 2,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard, "Anthems"]
+                },
+                new DeckCard
+                {
+                    Name = "Anthem B",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard, "Anthems"]
+                }
+            ]
+        };
+
+        DeckAnalysis analysis = DeckAnalyzer.Analyze(workspace);
+
+        analysis.CategoryCounts[DeckDefaults.Mainboard].Should().Be(2);
+        analysis.CategoryCounts[DeckDefaults.Maybeboard].Should().Be(1);
+        analysis.AllCategoryCounts["Anthems"].Should().Be(3);
+        analysis.IncludedCategoryCounts[DeckDefaults.Mainboard].Should().Be(2);
+        analysis.IncludedAllCategoryCounts["Anthems"].Should().Be(2);
     }
 
     /// <summary>
@@ -565,6 +683,39 @@ public sealed partial class DeckIntelligenceTests
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Ramp).Minimum.Should().Be(10);
         analysis.NeedProfile.RoleNeeds.Single(need => need.Target == DeckRoles.Draw).Minimum.Should().Be(10);
         analysis.NeedProfile.Notes.Should().Contain(note => note.Contains("Command Zone template", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that best-practice category targets use secondary user categories with an explicit count source.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckBestPractices_UsesSecondaryCategoriesForCategoryTargets()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Anthem Categories",
+            Cards =
+            [
+                new DeckCard { Name = "Land", Quantity = 35, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
+                new DeckCard { Name = "Anthem A", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] },
+                new DeckCard { Name = "Anthem B", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] },
+                new DeckCard { Name = "Anthem C", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckBestPracticeAnalysis analysis = await service.AnalyzeDeckBestPracticesAsync(
+            workspace.Id,
+            "archetype-go-wide",
+            TestContext.Current.CancellationToken);
+
+        DeckNeed anthemNeed = analysis.NeedProfile.TagNeeds.Single(need => need.Target == "Anthems");
+        anthemNeed.CurrentCount.Should().Be(6);
+        anthemNeed.Status.Should().Be("ok");
+        anthemNeed.CountSource.Should().Be("all user categories");
+        anthemNeed.Rationale.Should().Contain("Count source: all user categories");
+        analysis.Risks.Should().NotContain(risk => risk.Contains("Anthems is low", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

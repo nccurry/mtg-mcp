@@ -917,7 +917,7 @@ public sealed class DeckAnalysis
     public int IncludedCards { get; set; }
 
     /// <summary>
-    /// Gets or sets the category counts.
+    /// Gets or sets primary-category counts across all cards.
     /// </summary>
     public Dictionary<string, int> CategoryCounts { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
@@ -926,6 +926,18 @@ public sealed class DeckAnalysis
     /// Gets or sets primary-category counts for cards included in the active deck.
     /// </summary>
     public Dictionary<string, int> IncludedCategoryCounts { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets counts for every user category on each card, including secondary categories.
+    /// </summary>
+    public Dictionary<string, int> AllCategoryCounts { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets all-category counts for cards included in the active deck.
+    /// </summary>
+    public Dictionary<string, int> IncludedAllCategoryCounts { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>

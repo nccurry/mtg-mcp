@@ -19,8 +19,10 @@ public static partial class DeckRoleClassifier
         string primaryTypeLine = PrimaryTypeLine(typeLine);
         bool hasNonPrimaryLandFace = HasNonPrimaryLandFace(typeLine);
         string oracleText = Text(snapshot.OracleText, card.Metadata, "oracleText");
-        string combined = $"{card.Name} {categoryText} {typeLine} {oracleText}";
         List<string> taggerOracleTags = AnnotationValues(card.Metadata, CardFacetNames.TaggerOracleTags);
+        bool allowBoardWipeCategoryFallback = AllowsBoardWipeCategoryFallback(snapshot, oracleText, taggerOracleTags);
+        string boardWipeCategoryText = allowBoardWipeCategoryFallback ? categoryText : "";
+        string combined = $"{card.Name} {categoryText} {typeLine} {oracleText}";
 
         List<string> tags = ClassifyTags(card, combined);
         AddCanonicalTaggerTags(tags, taggerOracleTags);
@@ -47,6 +49,12 @@ public static partial class DeckRoleClassifier
             return taggerAssignment;
         }
 
+        if (ContainsAny(boardWipeCategoryText, DeckRoles.BoardWipes, "wipe")
+            || ContainsBoardWipeText(oracleText))
+        {
+            return Assignment(DeckRoles.BoardWipes, tags, 0.82);
+        }
+
         if (ContainsAny(categoryText, DeckRoles.Ramp)
             || (snapshot.ProducedMana.Count > 0 && !hasNonPrimaryLandFace)
             || ContainsRampText(oracleText, hasNonPrimaryLandFace))
@@ -65,12 +73,6 @@ public static partial class DeckRoleClassifier
             || ContainsAny(oracleText, "search your library", "searches your library"))
         {
             return Assignment(DeckRoles.Tutors, tags, 0.84);
-        }
-
-        if (ContainsAny(categoryText, DeckRoles.BoardWipes, "wipe")
-            || ContainsAny(oracleText, "destroy all", "exile all", "all creatures", "each creature", "each nonland"))
-        {
-            return Assignment(DeckRoles.BoardWipes, tags, 0.82);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Interaction, "removal")
@@ -360,6 +362,19 @@ public static partial class DeckRoleClassifier
     }
 
     /// <summary>
+    /// Allows board-wipe categories to classify sparse cards without overriding source-backed rules text.
+    /// </summary>
+    private static bool AllowsBoardWipeCategoryFallback(
+        CardSnapshot snapshot,
+        string oracleText,
+        IReadOnlyList<string> taggerOracleTags)
+    {
+        return string.IsNullOrWhiteSpace(oracleText)
+            && snapshot.ProducedMana.Count == 0
+            && taggerOracleTags.Count == 0;
+    }
+
+    /// <summary>
     /// Checks whether oracle text looks like ramp.
     /// </summary>
     private static bool ContainsRampText(string oracleText, bool hasNonPrimaryLandFace)
@@ -382,6 +397,49 @@ public static partial class DeckRoleClassifier
         }
 
         return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
+    }
+
+    /// <summary>
+    /// Checks whether rules text describes a broad destructive or reset effect.
+    /// </summary>
+    private static bool ContainsBoardWipeText(string oracleText)
+    {
+        if (string.IsNullOrWhiteSpace(oracleText))
+        {
+            return false;
+        }
+
+        if (ContainsAny(
+                oracleText,
+                "destroy all",
+                "exile all",
+                "destroy each",
+                "exile each",
+                "return all creatures",
+                "return each creature",
+                "return all nonland",
+                "return each nonland"))
+        {
+            return true;
+        }
+
+        if (ContainsAny(
+                oracleText,
+                "all creatures get -",
+                "each creature gets -",
+                "all nonland creatures get -",
+                "each nonland creature gets -"))
+        {
+            return true;
+        }
+
+        if (BoardDamageRegex().IsMatch(oracleText))
+        {
+            return true;
+        }
+
+        return ContainsAny(oracleText, "all creatures", "each creature", "each nonland")
+            && ContainsAny(oracleText, "destroy", "exile", "damage", "sacrifice", "-x/-x");
     }
 
     /// <summary>
@@ -481,6 +539,14 @@ public static partial class DeckRoleClassifier
         @"each opponent loses\s+x\s+life|each opponent loses life equal",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FinisherLifeLossRegex();
+
+    /// <summary>
+    /// Matches broad creature-damage sweepers such as Blasphemous Act without matching pump text.
+    /// </summary>
+    [GeneratedRegex(
+        @"deals\s+(?:x|\d+|that much)\s+damage\s+to\s+(?:each|all)\s+creatures?",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex BoardDamageRegex();
 
     /// <summary>
     /// Splits locally stored annotation values using the same separators as facet snapshots.

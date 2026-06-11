@@ -125,6 +125,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         }
 
         profile.Notes.Add($"Using {heuristicProfile.Name} targets from {DeckHeuristicProfileCatalog.BuiltInConfigVersion}.");
+        profile.Notes.Add("Need rows use reconciled counts: classifier roles/tags first, then all matching user categories when category evidence is stronger.");
         profile.Notes.AddRange(heuristicProfile.Notes);
         return profile;
     }
@@ -132,21 +133,53 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// <summary>
     /// Counts a need target from classifier roles, classifier tags, or explicit workspace categories.
     /// </summary>
-    private static int CountNeedTarget(DeckAnalysis analysis, string target)
+    private static NeedTargetCount CountNeedTarget(DeckAnalysis analysis, string target)
     {
         int roleCount = Count(analysis.RoleCounts, target);
-        if (roleCount > 0 || DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase))
-        {
-            return roleCount;
-        }
-
         int tagCount = Count(analysis.TagCounts, target);
-        if (tagCount > 0 || DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase))
+        int allCategoryCount = Count(analysis.IncludedAllCategoryCounts, target);
+
+        if (DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase))
         {
-            return tagCount;
+            if (allCategoryCount > roleCount)
+            {
+                return new NeedTargetCount(allCategoryCount, "all user categories");
+            }
+
+            if (roleCount > 0 && allCategoryCount > 0)
+            {
+                return new NeedTargetCount(roleCount, "heuristic roles and user categories agree");
+            }
+
+            return new NeedTargetCount(roleCount, "heuristic functional roles");
         }
 
-        return Count(analysis.IncludedCategoryCounts, target);
+        if (DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase))
+        {
+            if (allCategoryCount > tagCount)
+            {
+                return new NeedTargetCount(allCategoryCount, "all user categories");
+            }
+
+            if (tagCount > 0 && allCategoryCount > 0)
+            {
+                return new NeedTargetCount(tagCount, "classifier tags and user categories agree");
+            }
+
+            return new NeedTargetCount(tagCount, "classifier secondary tags");
+        }
+
+        if (tagCount > 0)
+        {
+            return new NeedTargetCount(tagCount, "classifier secondary tags");
+        }
+
+        if (allCategoryCount > 0)
+        {
+            return new NeedTargetCount(allCategoryCount, "all user categories");
+        }
+
+        return new NeedTargetCount(0, "no matching role, tag, or category evidence");
     }
 
     /// <summary>
@@ -294,12 +327,12 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         double penalty = 0;
         foreach ((string target, (int minimum, int? maximum)) in profile.RoleTargets)
         {
-            penalty += CompareNeed(comparison, target, CountNeedTarget(deck, target), minimum, maximum);
+            penalty += CompareNeed(comparison, target, CountNeedTarget(deck, target).Count, minimum, maximum);
         }
 
         foreach ((string target, (int minimum, int? maximum)) in profile.TagTargets)
         {
-            penalty += CompareNeed(comparison, target, CountNeedTarget(deck, target), minimum, maximum);
+            penalty += CompareNeed(comparison, target, CountNeedTarget(deck, target).Count, minimum, maximum);
         }
 
         if (profile.Id.Equals("fifty-mana-sources", StringComparison.OrdinalIgnoreCase))
@@ -368,19 +401,22 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// <summary>
     /// Builds a single need row.
     /// </summary>
-    private static DeckNeed BuildNeed(string target, int current, int minimum, int? maximum)
+    private static DeckNeed BuildNeed(string target, NeedTargetCount current, int minimum, int? maximum)
     {
-        string status = current < minimum ? "low" : maximum.HasValue && current > maximum.Value ? "high" : "ok";
+        string countSource = current.Source;
+        string countSourceNote = $" Count source: {countSource}.";
+        string status = current.Count < minimum ? "low" : maximum.HasValue && current.Count > maximum.Value ? "high" : "ok";
         string rationale = status switch
         {
-            "low" => $"{target} is low at {current}; target at least {minimum}.",
-            "high" => $"{target} is high at {current}; target no more than {maximum}.",
-            _ => $"{target} is in range at {current}."
+            "low" => $"{target} is low at {current.Count}; target at least {minimum}.{countSourceNote}",
+            "high" => $"{target} is high at {current.Count}; target no more than {maximum}.{countSourceNote}",
+            _ => $"{target} is in range at {current.Count}.{countSourceNote}"
         };
         return new DeckNeed
         {
             Target = target,
-            CurrentCount = current,
+            CurrentCount = current.Count,
+            CountSource = countSource,
             Minimum = minimum,
             Maximum = maximum,
             Status = status,
@@ -430,5 +466,10 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// Carries the selected best-practice profile and its explicit source.
     /// </summary>
     private sealed record BestPracticeProfileResolution(string ProfileId, string Source);
+
+    /// <summary>
+    /// Carries a reconciled best-practice count and the source that made it authoritative.
+    /// </summary>
+    private sealed record NeedTargetCount(int Count, string Source);
 
 }

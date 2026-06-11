@@ -37,6 +37,11 @@ public sealed partial class DeckAnalysisService
                     result.CategoryCount += Math.Max(0, card.Quantity);
                 }
 
+                if (evidence.CountedByAnyCategory)
+                {
+                    result.AllCategoryCount += Math.Max(0, card.Quantity);
+                }
+
                 if (evidence.CountedByHeuristic)
                 {
                     result.HeuristicCount += Math.Max(0, card.Quantity);
@@ -71,10 +76,11 @@ public sealed partial class DeckAnalysisService
         CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
         bool included = DeckCategoryInclusion.IsIncludedInDeck(workspace, card);
         bool categoryMatch = primaryCategory.Equals(target, StringComparison.OrdinalIgnoreCase);
-        bool heuristicMatch = assignment.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase);
-        bool oddsMatch = DeckRoleClassifier.MatchesTarget(card, target);
         CardSnapshot snapshot = card.Snapshot ?? new CardSnapshot();
         List<string> categories = DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories).ToList();
+        bool anyCategoryMatch = categories.Any(category => category.Equals(target, StringComparison.OrdinalIgnoreCase));
+        bool heuristicMatch = assignment.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase);
+        bool oddsMatch = DeckRoleClassifier.MatchesTarget(card, target);
         DeckRoleCountCardEvidence evidence = new()
         {
             CardName = card.Name,
@@ -86,6 +92,7 @@ public sealed partial class DeckAnalysisService
             Tags = assignment.Tags.ToList(),
             ClassifierConfidence = assignment.Confidence,
             CountedByCategory = included && categoryMatch,
+            CountedByAnyCategory = included && anyCategoryMatch,
             CountedByHeuristic = included && heuristicMatch,
             CountedByOddsTarget = included && oddsMatch,
             TypeLine = snapshot.TypeLine,
@@ -131,10 +138,17 @@ public sealed partial class DeckAnalysisService
     /// </summary>
     private static void AddRoleCountNotes(DeckRoleCountExplanation result)
     {
-        if (result.CategoryCount != result.HeuristicCount || result.HeuristicCount != result.OddsTargetCount)
+        if (result.CategoryCount != result.AllCategoryCount
+            || result.AllCategoryCount != result.HeuristicCount
+            || result.HeuristicCount != result.OddsTargetCount)
         {
             result.Notes.Add(
-                $"Counts diverge: category={result.CategoryCount}, heuristic={result.HeuristicCount}, odds-target={result.OddsTargetCount}.");
+                $"Counts diverge: primary-category={result.CategoryCount}, all-categories={result.AllCategoryCount}, heuristic={result.HeuristicCount}, odds-target={result.OddsTargetCount}.");
+        }
+
+        if (result.AllCategoryCount > result.CategoryCount)
+        {
+            result.Notes.Add("All-category counts include secondary categories, while primary-category counts preserve the card's main composition bucket.");
         }
 
         if (result.OddsTargetCount > result.HeuristicCount)
@@ -236,6 +250,19 @@ public sealed partial class DeckAnalysisService
             return;
         }
 
+        if (target.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase)
+            && ContainsAnyPhrase(
+                oracleText,
+                "destroy all",
+                "exile all",
+                "all creatures get -",
+                "each creature gets -",
+                "damage to each creature"))
+        {
+            evidence.Add("oracle text supports Board Wipes through broad destructive or reset text.");
+            return;
+        }
+
         if (target.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase)
             && ContainsAnyPhrase(oracleText, "hexproof", "indestructible", "protection from", "phase out", "can't be countered"))
         {
@@ -316,6 +343,11 @@ public sealed partial class DeckAnalysisService
     {
         int score = 0;
         if (evidence.CountedByCategory)
+        {
+            score++;
+        }
+
+        if (evidence.CountedByAnyCategory)
         {
             score++;
         }

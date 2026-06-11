@@ -42,6 +42,11 @@ public sealed class DeckRoleCountExplanation
     public int CategoryCount { get; set; }
 
     /// <summary>
+    /// Gets or sets active card quantity with any primary or secondary category matching the requested role.
+    /// </summary>
+    public int AllCategoryCount { get; set; }
+
+    /// <summary>
     /// Gets or sets active card quantity whose classifier primary role exactly matches the requested role.
     /// </summary>
     public int HeuristicCount { get; set; }
@@ -111,6 +116,11 @@ public sealed class DeckRoleCountCardEvidence
     /// Gets or sets whether this card was counted by exact primary category.
     /// </summary>
     public bool CountedByCategory { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether this card was counted by any matching primary or secondary category.
+    /// </summary>
+    public bool CountedByAnyCategory { get; set; }
 
     /// <summary>
     /// Gets or sets whether this card was counted by classifier primary role.
