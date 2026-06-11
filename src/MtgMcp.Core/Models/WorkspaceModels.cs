@@ -718,6 +718,36 @@ public sealed class ArchidektCopyResult
     public string CardIdDiagnostics { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the phase that failed, when the copy stopped before completion.
+    /// </summary>
+    public string? FailedPhase { get; set; }
+
+    /// <summary>
+    /// Gets or sets the checkpoint created before mutating an existing destination deck.
+    /// </summary>
+    public string? CheckpointId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the expected final destination card row count after the copy.
+    /// </summary>
+    public int ExpectedCardRows { get; set; }
+
+    /// <summary>
+    /// Gets or sets the detected destination card row count after verification or failure inspection.
+    /// </summary>
+    public int? DetectedCardRows { get; set; }
+
+    /// <summary>
+    /// Gets or sets final verification status, such as not-run, verified, mismatch, blocked, or failed.
+    /// </summary>
+    public string VerificationStatus { get; set; } = "not-run";
+
+    /// <summary>
+    /// Gets recovery steps for partial or blocked copy attempts.
+    /// </summary>
+    public List<string> RecoveryInstructions { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets whether the result can be resumed with the returned destination id.
     /// </summary>
     public bool CanResume { get; set; }

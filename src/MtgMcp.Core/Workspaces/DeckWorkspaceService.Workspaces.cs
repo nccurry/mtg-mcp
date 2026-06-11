@@ -243,12 +243,69 @@ public sealed partial class DeckWorkspaceService
     /// <summary>
     /// Lists Archidekt decks with optional pagination and folder filters.
     /// </summary>
-    public Task<IReadOnlyList<ArchidektDeckSummary>> ListArchidektDecksAsync(
+    public async Task<IReadOnlyList<ArchidektDeckSummary>> ListArchidektDecksAsync(
         ArchidektDeckListRequest request,
         CancellationToken cancellationToken
     )
     {
-        return RequireArchidektGateway().ListDecksAsync(request, cancellationToken);
+        IArchidektGateway archidekt = RequireArchidektGateway();
+        if (string.IsNullOrWhiteSpace(request.FolderName)
+            || !string.IsNullOrWhiteSpace(request.FolderId))
+        {
+            return await archidekt.ListDecksAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        IReadOnlyList<ArchidektFolder> folders = await archidekt.ListFoldersAsync(cancellationToken)
+            .ConfigureAwait(false);
+        List<ArchidektFolder> matches = FindArchidektFolderMatches(folders, request.FolderName);
+        if (matches.Count == 1)
+        {
+            ArchidektDeckListRequest resolvedRequest = new()
+            {
+                Page = request.Page,
+                PageSize = request.PageSize,
+                FolderId = matches[0].Id,
+                FolderName = null,
+            };
+            return await archidekt.ListDecksAsync(resolvedRequest, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (matches.Count > 1)
+        {
+            string candidates = string.Join(
+                ", ",
+                matches.Select(folder => $"{folder.Name} ({folder.Id})"));
+            throw new InvalidOperationException(
+                $"Archidekt folder name '{request.FolderName}' matched multiple folders: {candidates}. "
+                    + "Retry with folderId.");
+        }
+
+        return await archidekt.ListDecksAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Finds Archidekt folders by exact name or path so deck listing can use stable folder ids.
+    /// </summary>
+    private static List<ArchidektFolder> FindArchidektFolderMatches(
+        IReadOnlyList<ArchidektFolder> folders,
+        string folderName)
+    {
+        string requested = folderName.Trim();
+        List<ArchidektFolder> matches = [];
+        foreach (ArchidektFolder folder in folders)
+        {
+            if (folder.Name.Equals(requested, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(folder.Path)
+                    && folder.Path.Equals(requested, StringComparison.OrdinalIgnoreCase)))
+            {
+                matches.Add(folder);
+            }
+        }
+
+        return matches;
     }
 
     /// <summary>

@@ -156,6 +156,12 @@ public sealed partial class DeckWorkspaceService
             }
         }
 
+        result.ExpectedCardRows = EstimateExpectedCardRows(
+            source,
+            destination,
+            source.Cards,
+            createNew,
+            replaceExistingDestination);
         if (dryRun)
         {
             result.CopyPhase = "dry-run";
@@ -234,80 +240,124 @@ public sealed partial class DeckWorkspaceService
             }
         }
 
-        if (createNew && destination is null && copiedCards.Any(card => string.IsNullOrWhiteSpace(card.ArchidektCardId)))
-        {
-            result.CopyPhase = "resolve-card-ids";
-            await RequireArchidektGateway()
-                .ResolveCardIdsAsync(copiedCards, cancellationToken)
-                .ConfigureAwait(false);
-            UpdateCopyCardIdDiagnostics(result, copiedCards);
-        }
-
-        if (createNew)
-        {
-            result.CopyPhase = "create-deck";
-            destination ??= await CreateArchidektDeckAsync(
-                    destinationName,
-                    format ?? source.Format,
-                    BuildMigrationDescription(description ?? source.Description, source),
-                    visibility,
-                    parentFolderId,
-                    folderName,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            result.CopyPhase = "open-destination";
-            destination = await OpenArchidektDeckAsync(
-                    destinationDeckIdOrUrl
-                        ?? throw new InvalidOperationException("Destination Archidekt deck id or URL is required."),
-                    writeBack: true,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        destination.Name = string.IsNullOrWhiteSpace(name) ? destination.Name : name.Trim();
-        destination.Format = string.IsNullOrWhiteSpace(format) ? destination.Format : format.Trim();
-        destination.Description = BuildMigrationDescription(
-            SelectCopyDescription(description, source, destination, createNew),
-            source);
-        result.CopyPhase = "metadata";
-        await RequireArchidektGateway()
-            .PersistMetadataAsync(destination, cancellationToken)
-            .ConfigureAwait(false);
-        await Repository.SaveAsync(destination, cancellationToken).ConfigureAwait(false);
-
-        result.CopyPhase = "categories";
-        await CopyCategoriesToArchidektAsync(source, destination, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (replaceExistingDestination)
+        if (replaceExistingDestination && destination is not null)
         {
             CopyKnownArchidektCardIds(destination.Cards, copiedCards);
         }
 
-        if (replaceExistingDestination && destination.Cards.Count > 0)
+        result.ExpectedCardRows = EstimateExpectedCardRows(
+            source,
+            destination,
+            copiedCards,
+            createNew,
+            replaceExistingDestination);
+        result.CopyPhase = "preflight";
+        await ResolveCopiedCardIdsBeforeMutationAsync(result, copiedCards, cancellationToken)
+            .ConfigureAwait(false);
+        if (result.MissingArchidektCardIds > 0)
         {
-            result.CopyPhase = "remove-cards";
-            List<DeckCard> removedCards = destination.Cards.ToList();
-            await PersistCardsAsync(destination, [], removedCards, cancellationToken)
-                .ConfigureAwait(false);
-            destination.Cards.Clear();
+            BlockCopyBeforeMutation(
+                result,
+                "preflight",
+                "Apply stopped before mutating Archidekt because one or more copied rows could not be resolved to Archidekt card ids.");
+            return result;
         }
 
-        destination.Cards.AddRange(copiedCards);
-        result.CopyPhase = "add-cards";
-        await PersistCardsAsync(destination, copiedCards, [], cancellationToken)
-            .ConfigureAwait(false);
-        result.WrittenRows = copiedCards.Count;
-        UpdateCopyCardIdDiagnostics(result, copiedCards);
+        try
+        {
+            if (createNew)
+            {
+                result.CopyPhase = "create-deck";
+                destination ??= await CreateArchidektDeckAsync(
+                        destinationName,
+                        format ?? source.Format,
+                        BuildMigrationDescription(description ?? source.Description, source),
+                        visibility,
+                        parentFolderId,
+                        folderName,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                result.CopyPhase = "open-destination";
+                destination = await OpenArchidektDeckAsync(
+                        destinationDeckIdOrUrl
+                            ?? throw new InvalidOperationException("Destination Archidekt deck id or URL is required."),
+                        writeBack: true,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        result.DestinationWorkspaceId = destination.Id;
-        result.DestinationArchidektDeckId = destination.ArchidektDeckId;
-        result.DestinationName = destination.Name;
-        result.CopyPhase = "complete";
-        return result;
+                result.CopyPhase = "checkpoint";
+                DeckCheckpoint checkpoint = await RequireArchidektGateway()
+                    .CreateCheckpointAsync(
+                        destination,
+                        $"Before mtg-mcp copy {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss} UTC",
+                        "Created before mtg-mcp copied workspace cards into this Archidekt deck.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                result.CheckpointId = checkpoint.Id;
+                if (string.IsNullOrWhiteSpace(result.CheckpointId))
+                {
+                    throw new InvalidOperationException("Archidekt checkpoint creation did not return a checkpoint id.");
+                }
+            }
+
+            destination.Name = string.IsNullOrWhiteSpace(name) ? destination.Name : name.Trim();
+            destination.Format = string.IsNullOrWhiteSpace(format) ? destination.Format : format.Trim();
+            destination.Description = BuildMigrationDescription(
+                SelectCopyDescription(description, source, destination, createNew),
+                source);
+            result.CopyPhase = "metadata";
+            await RequireArchidektGateway()
+                .PersistMetadataAsync(destination, cancellationToken)
+                .ConfigureAwait(false);
+            await Repository.SaveAsync(destination, cancellationToken).ConfigureAwait(false);
+
+            result.CopyPhase = "categories";
+            await CopyCategoriesToArchidektAsync(source, destination, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (replaceExistingDestination && destination.Cards.Count > 0)
+            {
+                result.CopyPhase = "remove-cards";
+                List<DeckCard> removedCards = destination.Cards.ToList();
+                await PersistCardsAsync(destination, [], removedCards, cancellationToken)
+                    .ConfigureAwait(false);
+                destination.Cards.Clear();
+            }
+
+            destination.Cards.AddRange(copiedCards);
+            result.CopyPhase = "add-cards";
+            await PersistCardsAsync(destination, copiedCards, [], cancellationToken)
+                .ConfigureAwait(false);
+            result.WrittenRows = copiedCards.Count;
+            UpdateCopyCardIdDiagnostics(result, copiedCards);
+
+            result.DestinationWorkspaceId = destination.Id;
+            result.DestinationArchidektDeckId = destination.ArchidektDeckId;
+            result.DestinationName = destination.Name;
+            if (!await VerifyArchidektCopyAsync(destination, destination.Cards, result, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                return result;
+            }
+
+            result.CopyPhase = "complete";
+            return result;
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            await PopulateCopyFailureAsync(
+                    result,
+                    destination,
+                    createNew,
+                    replaceExistingDestination,
+                    exception,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return result;
+        }
     }
 
     /// <summary>
@@ -469,6 +519,225 @@ public sealed partial class DeckWorkspaceService
         result.Warnings.Add(
             "Missing cached Archidekt card ids in dry-run mean mtg-mcp will resolve those ids on apply; "
                 + "they do not by themselves mean the copy will fail.");
+    }
+
+    /// <summary>
+    /// Resolves all copied card ids before the first destination mutation.
+    /// </summary>
+    private async Task ResolveCopiedCardIdsBeforeMutationAsync(
+        ArchidektCopyResult result,
+        IReadOnlyList<DeckCard> copiedCards,
+        CancellationToken cancellationToken)
+    {
+        if (copiedCards.Any(card => string.IsNullOrWhiteSpace(card.ArchidektCardId)))
+        {
+            await RequireArchidektGateway()
+                .ResolveCardIdsAsync(copiedCards, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        UpdateCopyCardIdDiagnostics(result, copiedCards);
+    }
+
+    /// <summary>
+    /// Marks a copy attempt as blocked before any Archidekt deck mutation happened.
+    /// </summary>
+    private static void BlockCopyBeforeMutation(
+        ArchidektCopyResult result,
+        string failedPhase,
+        string reason)
+    {
+        result.CopyPhase = failedPhase;
+        result.FailedPhase = failedPhase;
+        result.VerificationStatus = "blocked";
+        result.CanResume = false;
+        result.NextAction = "Resolve the listed preflight issue, then run archidekt_copy_workspace again.";
+        result.Warnings.Add(reason);
+        result.RecoveryInstructions.Add("No destination card mutation was attempted.");
+        result.RecoveryInstructions.Add(
+            "Refresh card metadata or choose supported paper printings for unresolved rows before retrying.");
+    }
+
+    /// <summary>
+    /// Estimates final destination row count for verification and recovery diagnostics.
+    /// </summary>
+    private static int EstimateExpectedCardRows(
+        DeckWorkspace source,
+        DeckWorkspace? destination,
+        IReadOnlyList<DeckCard> copiedCards,
+        bool createNew,
+        bool replaceExistingDestination)
+    {
+        if (createNew || replaceExistingDestination)
+        {
+            return source.Cards.Count;
+        }
+
+        return (destination?.Cards.Count ?? 0) + copiedCards.Count;
+    }
+
+    /// <summary>
+    /// Re-imports the destination and verifies that remote rows match the intended final rows.
+    /// </summary>
+    private async Task<bool> VerifyArchidektCopyAsync(
+        DeckWorkspace destination,
+        IReadOnlyList<DeckCard> expectedCards,
+        ArchidektCopyResult result,
+        CancellationToken cancellationToken)
+    {
+        result.CopyPhase = "verify";
+        if (string.IsNullOrWhiteSpace(destination.ArchidektDeckId))
+        {
+            result.VerificationStatus = "failed";
+            result.FailedPhase = "verify";
+            result.RecoveryInstructions.Add("Verification could not run because the destination deck id was unavailable.");
+            return false;
+        }
+
+        DeckWorkspace verified = await RequireArchidektGateway()
+            .ImportDeckAsync(destination.ArchidektDeckId, writeBack: true, cancellationToken)
+            .ConfigureAwait(false);
+        result.DetectedCardRows = verified.Cards.Count;
+        result.ExpectedCardRows = expectedCards.Count;
+        if (HasSameCopiedCards(expectedCards, verified.Cards))
+        {
+            result.VerificationStatus = "verified";
+            return true;
+        }
+
+        result.VerificationStatus = "mismatch";
+        result.FailedPhase = "verify";
+        result.CanResume = false;
+        result.NextAction = string.IsNullOrWhiteSpace(result.CheckpointId)
+            ? "Inspect the destination deck before retrying; final verification did not match the expected rows."
+            : $"Restore Archidekt checkpoint {result.CheckpointId}, then retry the copy.";
+        result.Warnings.Add(
+            $"Archidekt verification mismatch: expected {result.ExpectedCardRows} row(s), "
+                + $"detected {result.DetectedCardRows} row(s).");
+        AddRestoreRecoveryInstruction(result);
+        return false;
+    }
+
+    /// <summary>
+    /// Converts non-cancel copy failures into explicit recovery diagnostics.
+    /// </summary>
+    private async Task PopulateCopyFailureAsync(
+        ArchidektCopyResult result,
+        DeckWorkspace? destination,
+        bool createNew,
+        bool replaceExistingDestination,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        string failedPhase = string.IsNullOrWhiteSpace(result.CopyPhase)
+            ? "unknown"
+            : result.CopyPhase;
+        result.FailedPhase = failedPhase;
+        result.VerificationStatus = failedPhase.Equals("checkpoint", StringComparison.OrdinalIgnoreCase)
+            || failedPhase.Equals("preflight", StringComparison.OrdinalIgnoreCase)
+                ? "blocked"
+                : "failed";
+        result.Warnings.Add($"Archidekt copy stopped during {failedPhase}: {exception.Message}");
+
+        if (destination is not null)
+        {
+            result.DestinationWorkspaceId = destination.Id;
+            result.DestinationArchidektDeckId = destination.ArchidektDeckId;
+            result.DestinationName = destination.Name;
+        }
+
+        await TryInspectFailedDestinationAsync(result, destination, cancellationToken)
+            .ConfigureAwait(false);
+        AddCopyFailureRecoveryInstructions(result, createNew, replaceExistingDestination);
+    }
+
+    /// <summary>
+    /// Attempts to read the destination after a partial failure without hiding the original failure.
+    /// </summary>
+    private async Task TryInspectFailedDestinationAsync(
+        ArchidektCopyResult result,
+        DeckWorkspace? destination,
+        CancellationToken cancellationToken)
+    {
+        if (destination is null || string.IsNullOrWhiteSpace(destination.ArchidektDeckId))
+        {
+            return;
+        }
+
+        try
+        {
+            DeckWorkspace inspected = await RequireArchidektGateway()
+                .ImportDeckAsync(destination.ArchidektDeckId, writeBack: true, cancellationToken)
+                .ConfigureAwait(false);
+            result.DetectedCardRows = inspected.Cards.Count;
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            result.Warnings.Add($"Could not inspect destination after failure: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Adds phase-specific recovery guidance after a failed copy attempt.
+    /// </summary>
+    private static void AddCopyFailureRecoveryInstructions(
+        ArchidektCopyResult result,
+        bool createNew,
+        bool replaceExistingDestination)
+    {
+        string failedPhase = result.FailedPhase ?? "unknown";
+        if (failedPhase.Equals("checkpoint", StringComparison.OrdinalIgnoreCase))
+        {
+            result.CanResume = false;
+            result.NextAction = "Fix checkpoint creation before retrying; no card replacement was attempted.";
+            result.RecoveryInstructions.Add("No destination card mutation was attempted because checkpoint creation failed.");
+            return;
+        }
+
+        if (createNew && failedPhase.Equals("add-cards", StringComparison.OrdinalIgnoreCase))
+        {
+            result.CanResume = true;
+            result.ResumeDeckIdOrUrl = result.DestinationArchidektDeckId;
+            result.NextAction =
+                "Retry archidekt_copy_workspace with the same create-new inputs; mtg-mcp will reuse the migration marker and add missing rows.";
+            result.RecoveryInstructions.Add("The destination was created by this migration, so retry can resume from copied row fingerprints.");
+            return;
+        }
+
+        if (replaceExistingDestination
+            && (failedPhase.Equals("remove-cards", StringComparison.OrdinalIgnoreCase)
+                || failedPhase.Equals("add-cards", StringComparison.OrdinalIgnoreCase)
+                || failedPhase.Equals("verify", StringComparison.OrdinalIgnoreCase)))
+        {
+            result.CanResume = false;
+            result.NextAction = string.IsNullOrWhiteSpace(result.CheckpointId)
+                ? "Inspect the destination deck before retrying; card replacement may be partial."
+                : $"Restore Archidekt checkpoint {result.CheckpointId}, then retry replaceExistingDestination=true.";
+            AddRestoreRecoveryInstruction(result);
+            return;
+        }
+
+        result.CanResume = !string.IsNullOrWhiteSpace(result.DestinationArchidektDeckId);
+        result.ResumeDeckIdOrUrl = result.CanResume ? result.DestinationArchidektDeckId : null;
+        result.NextAction = result.CanResume
+            ? "Retry the same archidekt_copy_workspace request after reviewing warnings."
+            : "Retry after resolving the reported failure.";
+        result.RecoveryInstructions.Add("No destructive replace phase was confirmed after the last safe boundary.");
+    }
+
+    /// <summary>
+    /// Adds restore-first guidance when a replace attempt may have changed destination cards.
+    /// </summary>
+    private static void AddRestoreRecoveryInstruction(ArchidektCopyResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.CheckpointId))
+        {
+            result.RecoveryInstructions.Add("No checkpoint id was available; inspect the destination manually before retrying.");
+            return;
+        }
+
+        result.RecoveryInstructions.Add($"Restore Archidekt checkpoint {result.CheckpointId} before retrying replacement.");
+        result.RecoveryInstructions.Add("Do not rerun replace mode against the partial destination until the checkpoint is restored.");
     }
 
     /// <summary>

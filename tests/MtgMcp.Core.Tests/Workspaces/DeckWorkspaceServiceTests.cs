@@ -505,6 +505,7 @@ public sealed class DeckWorkspaceServiceTests
         result.DestinationName.Should().Be("Migrated");
         result.TotalCards.Should().Be(3);
         result.IncludedCards.Should().Be(2);
+        result.ExpectedCardRows.Should().Be(source.Cards.Count);
         result.Categories.Should().Contain(DeckDefaults.Mainboard);
         result.Categories.Should().Contain(DeckDefaults.Maybeboard);
         result.Categories.Should().Contain("Ramp");
@@ -709,32 +710,7 @@ public sealed class DeckWorkspaceServiceTests
             TestContext.Current.CancellationToken);
         FakeArchidektGateway archidekt = new()
         {
-            ImportedDeck = new DeckWorkspace
-            {
-                Id = "remote",
-                Name = "Existing",
-                Mode = WorkspaceMode.Archidekt,
-                WriteBack = true,
-                ArchidektDeckId = "123",
-                Cards =
-                [
-                    new DeckCard
-                    {
-                        Name = "Sol Ring",
-                        PrimaryCategory = DeckDefaults.Mainboard,
-                        Categories = [DeckDefaults.Mainboard],
-                        ScryfallId = "scryfall-sol-ring",
-                        ArchidektCardId = "500",
-                        ArchidektDeckRelationId = 101,
-                    },
-                    new DeckCard
-                    {
-                        Name = "Existing Card",
-                        PrimaryCategory = DeckDefaults.Mainboard,
-                        Categories = [DeckDefaults.Mainboard],
-                    },
-                ],
-            },
+            ImportedDeck = CreateExistingArchidektDestination(),
         };
         DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
 
@@ -814,38 +790,7 @@ public sealed class DeckWorkspaceServiceTests
             TestContext.Current.CancellationToken);
         FakeArchidektGateway archidekt = new()
         {
-            ImportedDeck = new DeckWorkspace
-            {
-                Id = "remote",
-                Name = "Existing",
-                Mode = WorkspaceMode.Archidekt,
-                WriteBack = true,
-                ArchidektDeckId = "123",
-                Categories =
-                [
-                    new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
-                ],
-                Cards =
-                [
-                    new DeckCard
-                    {
-                        Name = "Sol Ring",
-                        PrimaryCategory = DeckDefaults.Mainboard,
-                        Categories = [DeckDefaults.Mainboard],
-                        ScryfallId = "scryfall-sol-ring",
-                        ArchidektCardId = "500",
-                        ArchidektDeckRelationId = 101,
-                    },
-                    new DeckCard
-                    {
-                        Name = "Existing Card",
-                        PrimaryCategory = DeckDefaults.Mainboard,
-                        Categories = [DeckDefaults.Mainboard],
-                        ArchidektCardId = "99",
-                        ArchidektDeckRelationId = 100,
-                    },
-                ],
-            },
+            ImportedDeck = CreateExistingArchidektDestination(),
         };
         DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
 
@@ -863,6 +808,10 @@ public sealed class DeckWorkspaceServiceTests
             TestContext.Current.CancellationToken);
 
         result.DestinationArchidektDeckId.Should().Be("123");
+        result.CheckpointId.Should().Be("7");
+        result.VerificationStatus.Should().Be("verified");
+        result.ExpectedCardRows.Should().Be(source.Cards.Count);
+        result.DetectedCardRows.Should().Be(source.Cards.Count);
         archidekt.RemovedCards.Should().Contain(card => card.Name == "Existing Card");
         archidekt.RemovedCards.Should().Contain(card => card.Name == "Sol Ring");
         archidekt.UpsertedCards.Should().Contain(card =>
@@ -872,6 +821,125 @@ public sealed class DeckWorkspaceServiceTests
         archidekt.UpsertedCards.Should().Contain(card =>
             card.Name == "Brainstorm"
             && card.Categories.Contains("Card Draw"));
+    }
+
+    /// <summary>
+    /// Verifies that replace mode stops before writes when checkpoint creation fails.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_ReplaceCheckpointFailureStopsBeforeMutation()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            FailCheckpointCreation = true,
+            ImportedDeck = CreateExistingArchidektDestination(),
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: true,
+            TestContext.Current.CancellationToken);
+
+        result.FailedPhase.Should().Be("checkpoint");
+        result.VerificationStatus.Should().Be("blocked");
+        result.CanResume.Should().BeFalse();
+        result.RecoveryInstructions.Should().Contain(instruction =>
+            instruction.Contains("No destination card mutation", StringComparison.OrdinalIgnoreCase));
+        archidekt.PersistedMetadataRequests.Should().Be(0);
+        archidekt.RemovedCards.Should().BeEmpty();
+        archidekt.UpsertedCards.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that replace removal failures return restore-first recovery guidance.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_ReplaceRemovalFailureRequiresCheckpointRestore()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            ThrowAfterCardRemoval = true,
+            ImportedDeck = CreateExistingArchidektDestination(),
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: true,
+            TestContext.Current.CancellationToken);
+
+        result.FailedPhase.Should().Be("remove-cards");
+        result.CheckpointId.Should().Be("7");
+        result.CanResume.Should().BeFalse();
+        result.DetectedCardRows.Should().Be(0);
+        result.NextAction.Should().Contain("Restore Archidekt checkpoint 7");
+        result.RecoveryInstructions.Should().Contain(instruction =>
+            instruction.Contains("Restore Archidekt checkpoint 7", StringComparison.OrdinalIgnoreCase));
+        archidekt.UpsertedCards.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that final verification mismatches are explicit and do not claim success.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_ReplaceVerificationMismatchRequiresCheckpointRestore()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(
+            CreateImportedMoxfieldWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            SkipRemoteCardMutation = true,
+            ImportedDeck = CreateExistingArchidektDestination(),
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        ArchidektCopyResult result = await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: true,
+            TestContext.Current.CancellationToken);
+
+        result.CopyPhase.Should().Be("verify");
+        result.FailedPhase.Should().Be("verify");
+        result.VerificationStatus.Should().Be("mismatch");
+        result.ExpectedCardRows.Should().Be(source.Cards.Count);
+        result.DetectedCardRows.Should().Be(2);
+        result.CanResume.Should().BeFalse();
+        result.NextAction.Should().Contain("Restore Archidekt checkpoint 7");
     }
 
     /// <summary>
@@ -1914,6 +1982,34 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that folder-name deck listing resolves through folder ids before filtering decks.
+    /// </summary>
+    [Fact]
+    public async Task ArchidektDeckOperations_ListDecksResolvesFolderNameToFolderId()
+    {
+        InMemoryRepository repository = new();
+        FakeArchidektGateway archidekt = new()
+        {
+            Folders =
+            [
+                new ArchidektFolder { Id = "folder-llm", Name = "LLM" },
+            ],
+            DeckSummaries =
+            [
+                new ArchidektDeckSummary { Id = "1", Name = "Aurelia", FolderId = "folder-llm" },
+                new ArchidektDeckSummary { Id = "2", Name = "Other", FolderId = "folder-other" },
+            ],
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        IReadOnlyList<ArchidektDeckSummary> deckSummaries = await service.ListArchidektDecksAsync(
+            new ArchidektDeckListRequest { FolderName = "LLM" },
+            TestContext.Current.CancellationToken);
+
+        deckSummaries.Should().ContainSingle().Which.Name.Should().Be("Aurelia");
+    }
+
+    /// <summary>
     /// Verifies that Archidekt metadata updates persist through the gateway.
     /// </summary>
     [Fact]
@@ -2203,6 +2299,45 @@ public sealed class DeckWorkspaceServiceTests
                     PrimaryCategory = DeckDefaults.Maybeboard,
                     Categories = [DeckDefaults.Maybeboard, "Card Draw"],
                     Snapshot = new CardSnapshot { TypeLine = "Instant" },
+                },
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a non-empty Archidekt destination used by replace safety tests.
+    /// </summary>
+    private static DeckWorkspace CreateExistingArchidektDestination()
+    {
+        return new DeckWorkspace
+        {
+            Id = "remote",
+            Name = "Existing",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            Categories =
+            [
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    ScryfallId = "scryfall-sol-ring",
+                    ArchidektCardId = "500",
+                    ArchidektDeckRelationId = 101,
+                },
+                new DeckCard
+                {
+                    Name = "Existing Card",
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    ArchidektCardId = "99",
+                    ArchidektDeckRelationId = 100,
                 },
             ],
         };
@@ -2592,6 +2727,11 @@ public sealed class DeckWorkspaceServiceTests
         ];
 
         /// <summary>
+        /// Gets or sets folder summaries returned by folder list requests.
+        /// </summary>
+        public IReadOnlyList<ArchidektFolder> Folders { get; set; } = [];
+
+        /// <summary>
         /// Gets or sets the created deck requests.
         /// </summary>
         public int CreatedDeckRequests { get; private set; }
@@ -2630,6 +2770,21 @@ public sealed class DeckWorkspaceServiceTests
         /// Gets or sets the deleted checkpoint ids.
         /// </summary>
         public List<string> DeletedCheckpointIds { get; } = [];
+
+        /// <summary>
+        /// Gets or sets whether checkpoint creation should fail.
+        /// </summary>
+        public bool FailCheckpointCreation { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether card persistence should record requests without changing the fake remote deck.
+        /// </summary>
+        public bool SkipRemoteCardMutation { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether removals should mutate the fake remote deck and then throw.
+        /// </summary>
+        public bool ThrowAfterCardRemoval { get; set; }
 
         /// <summary>
         /// Verifies that get auth status.
@@ -2679,7 +2834,7 @@ public sealed class DeckWorkspaceServiceTests
         /// </summary>
         public Task<IReadOnlyList<ArchidektFolder>> ListFoldersAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<ArchidektFolder>>([]);
+            return Task.FromResult(Folders);
         }
 
         /// <summary>
@@ -2723,7 +2878,7 @@ public sealed class DeckWorkspaceServiceTests
         )
         {
             CreatedDeckRequests++;
-            return Task.FromResult(new DeckWorkspace
+            ImportedDeck = new DeckWorkspace
             {
                 Id = "created-workspace",
                 Name = request.Name,
@@ -2737,7 +2892,8 @@ public sealed class DeckWorkspaceServiceTests
                     new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
                     new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
                 ],
-            });
+            };
+            return Task.FromResult(ImportedDeck);
         }
 
         /// <summary>
@@ -2783,6 +2939,28 @@ public sealed class DeckWorkspaceServiceTests
 
             UpsertedCards.AddRange(upsertedCards);
             RemovedCards.AddRange(removedCards);
+            if (!SkipRemoteCardMutation)
+            {
+                foreach (DeckCard removed in removedCards)
+                {
+                    int index = ImportedDeck.Cards.FindIndex(card => SameFakeCardRow(card, removed));
+                    if (index >= 0)
+                    {
+                        ImportedDeck.Cards.RemoveAt(index);
+                    }
+                }
+
+                if (ThrowAfterCardRemoval && removedCards.Count > 0)
+                {
+                    throw new TimeoutException("Simulated Archidekt timeout after removal.");
+                }
+
+                foreach (DeckCard upserted in upsertedCards)
+                {
+                    ImportedDeck.Cards.Add(CloneFakeCard(upserted));
+                }
+            }
+
             return Task.CompletedTask;
         }
 
@@ -2853,6 +3031,11 @@ public sealed class DeckWorkspaceServiceTests
             CancellationToken cancellationToken
         )
         {
+            if (FailCheckpointCreation)
+            {
+                throw new InvalidOperationException("Simulated checkpoint failure.");
+            }
+
             return Task.FromResult(
                 new DeckCheckpoint
                 {
@@ -2934,6 +3117,45 @@ public sealed class DeckWorkspaceServiceTests
         {
             DeletedCheckpointIds.Add(checkpointId);
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Checks fake card identity using Archidekt relation id first, then stable card fields.
+        /// </summary>
+        private static bool SameFakeCardRow(DeckCard left, DeckCard right)
+        {
+            if (left.ArchidektDeckRelationId.HasValue && right.ArchidektDeckRelationId.HasValue)
+            {
+                return left.ArchidektDeckRelationId.Value == right.ArchidektDeckRelationId.Value;
+            }
+
+            return left.Name.Equals(right.Name, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.PrimaryCategory, right.PrimaryCategory, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.ScryfallId, right.ScryfallId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Copies fake remote card rows so later local mutations do not rewrite history.
+        /// </summary>
+        private static DeckCard CloneFakeCard(DeckCard source)
+        {
+            return new DeckCard
+            {
+                Id = source.Id,
+                Name = source.Name,
+                Quantity = source.Quantity,
+                PrimaryCategory = source.PrimaryCategory,
+                Categories = source.Categories.ToList(),
+                ScryfallId = source.ScryfallId,
+                ScryfallOracleId = source.ScryfallOracleId,
+                ArchidektCardId = source.ArchidektCardId,
+                ArchidektDeckRelationId = source.ArchidektDeckRelationId,
+                Modifier = source.Modifier,
+                Companion = source.Companion,
+                FlippedDefault = source.FlippedDefault,
+                Snapshot = source.Snapshot,
+                Metadata = new Dictionary<string, string>(source.Metadata, StringComparer.OrdinalIgnoreCase),
+            };
         }
     }
 }
