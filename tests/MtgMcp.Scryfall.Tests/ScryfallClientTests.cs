@@ -208,6 +208,80 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that future or unpriced collection snapshots are replaced with released priced printings.
+    /// </summary>
+    [Fact]
+    public async Task GetCardsByNames_SelectsReleasedPricedPrintingForFutureCanonical()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "data": [
+                    {
+                      "id": "future-preview",
+                      "oracle_id": "oracle-policy",
+                      "name": "Policy Card",
+                      "released_at": "2027-01-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "prices": {}
+                    }
+                  ]
+                }
+                """);
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/search?q=oracleid%3Aoracle-policy&unique=prints&order=released")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "data": [
+                    {
+                      "id": "released-expensive",
+                      "oracle_id": "oracle-policy",
+                      "name": "Policy Card",
+                      "released_at": "2024-01-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "set": "old",
+                      "collector_number": "1",
+                      "prices": { "usd": "3.00" }
+                    },
+                    {
+                      "id": "released-cheap",
+                      "oracle_id": "oracle-policy",
+                      "name": "Policy Card",
+                      "released_at": "2025-01-01",
+                      "lang": "en",
+                      "games": ["paper"],
+                      "set": "new",
+                      "collector_number": "2",
+                      "prices": { "usd": "1.50" }
+                    }
+                  ]
+                }
+                """);
+
+        ScryfallClient client = CreateClient(mockHttp, pricingReferenceDate: new DateOnly(2026, 1, 1));
+        IReadOnlyDictionary<string, CardInfo> cards = await client.GetCardsByNamesAsync(
+            ["Policy Card"],
+            TestContext.Current.CancellationToken);
+
+        cards.Should().ContainKey("Policy Card");
+        CardInfo selected = cards["Policy Card"];
+        selected.Id.Should().Be("released-cheap");
+        selected.ReleasedAt.Should().Be(new DateOnly(2025, 1, 1));
+        selected.Language.Should().Be("en");
+        selected.Games.Should().Contain("paper");
+        selected.Prices["usd"].Should().Be("1.50");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
     /// Verifies that search cards respects limit.
     /// </summary>
     [Fact]
@@ -769,7 +843,8 @@ public sealed class ScryfallClientTests
     private static ScryfallClient CreateClient(
         MockHttpMessageHandler mockHttp,
         int maxRateLimitRetries = 3,
-        ICorpusCache? cache = null)
+        ICorpusCache? cache = null,
+        DateOnly? pricingReferenceDate = null)
     {
         HttpClient httpClient = mockHttp.ToHttpClient();
         httpClient.BaseAddress = new Uri("https://api.scryfall.test/");
@@ -781,6 +856,7 @@ public sealed class ScryfallClientTests
                     BaseAddress = new Uri("https://api.scryfall.test/"),
                     MinimumDelay = TimeSpan.Zero,
                     MaxRateLimitRetries = maxRateLimitRetries,
+                    PricingReferenceDate = pricingReferenceDate,
                     UserAgent = "mtg-mcp-test/1.0",
                 }
             ),

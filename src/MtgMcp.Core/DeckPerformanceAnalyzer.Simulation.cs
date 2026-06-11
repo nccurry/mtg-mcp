@@ -51,7 +51,7 @@ internal static partial class DeckPerformanceAnalyzer
         List<DeckCard> library = opening.Library;
         List<PerformancePermanent> battlefield = [];
         List<DeckCard> graveyard = [];
-        List<IReadOnlyList<string>> virtualManaSources = [];
+        List<PerformanceScheduledManaSource> virtualManaSources = [];
         List<PerformanceDecisionEvent>? decisionEvents = collectDecisionEvents ? opening.DecisionEvents : null;
         PerformanceRun run = new()
         {
@@ -73,7 +73,7 @@ internal static partial class DeckPerformanceAnalyzer
                 PerformanceDrawOne(hand, library);
             }
 
-            DeckCard? landPlayed = ChoosePerformanceLand(hand, battlefield, virtualManaSources, deckColors, cardFacts);
+            DeckCard? landPlayed = ChoosePerformanceLand(hand, battlefield, virtualManaSources, deckColors, turn, cardFacts);
             PerformancePermanent? unavailablePermanent = null;
             if (landPlayed is not null)
             {
@@ -112,12 +112,14 @@ internal static partial class DeckPerformanceAnalyzer
                 battlefield,
                 virtualManaSources,
                 unavailablePermanent,
+                turn,
                 cardFacts);
             List<PerformanceManaSource> turnStartSources = availableSources.ToList();
             int totalManaSources = GetPerformanceManaSources(
                     battlefield,
                     virtualManaSources,
                     unavailablePermanent: null,
+                    turn,
                     cardFacts)
                 .Count;
             PerformanceTurnState state = new()

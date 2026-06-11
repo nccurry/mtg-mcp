@@ -56,6 +56,11 @@ public sealed class CardInfo
     public string? Rarity { get; set; }
 
     /// <summary>
+    /// Gets or sets the printing language code when the provider exposes it.
+    /// </summary>
+    public string? Language { get; set; }
+
+    /// <summary>
     /// Gets or sets the release date.
     /// </summary>
     public DateOnly? ReleasedAt { get; set; }
@@ -89,6 +94,16 @@ public sealed class CardInfo
     /// Gets or sets the produced mana.
     /// </summary>
     public List<string> ProducedMana { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the product channels this printing appears in, such as paper or arena.
+    /// </summary>
+    public List<string> Games { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets available finish names for this printing, such as nonfoil, foil, or etched.
+    /// </summary>
+    public List<string> Finishes { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the legalities.
@@ -221,6 +236,11 @@ public sealed class CardSnapshot
     public string? Rarity { get; set; }
 
     /// <summary>
+    /// Gets or sets the printing language code when the provider exposes it.
+    /// </summary>
+    public string? Language { get; set; }
+
+    /// <summary>
     /// Gets or sets the release date.
     /// </summary>
     public DateOnly? ReleasedAt { get; set; }
@@ -244,6 +264,16 @@ public sealed class CardSnapshot
     /// Gets or sets the produced mana.
     /// </summary>
     public List<string> ProducedMana { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the product channels this printing appears in, such as paper or arena.
+    /// </summary>
+    public List<string> Games { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets available finish names for this printing, such as nonfoil, foil, or etched.
+    /// </summary>
+    public List<string> Finishes { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the legalities.

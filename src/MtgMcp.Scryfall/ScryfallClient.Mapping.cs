@@ -43,6 +43,7 @@ public sealed partial class ScryfallClient
             Set = GetString(element, "set"),
             CollectorNumber = GetString(element, "collector_number"),
             Rarity = GetString(element, "rarity"),
+            Language = GetString(element, "lang"),
             ReleasedAt = GetDateOnly(element, "released_at"),
             ScryfallUri = GetString(element, "scryfall_uri"),
             EdhrecRank = GetInt(element, "edhrec_rank"),
@@ -52,6 +53,8 @@ public sealed partial class ScryfallClient
         AddStringArray(element, "color_identity", card.ColorIdentity);
         AddStringArray(element, "keywords", card.Keywords);
         AddStringArray(element, "produced_mana", card.ProducedMana);
+        AddStringArray(element, "games", card.Games);
+        AddStringArray(element, "finishes", card.Finishes);
         AddStringDictionary(element, "legalities", card.Legalities);
         AddStringDictionary(element, "prices", card.Prices);
         AddStringDictionary(element, "image_uris", card.ImageUris);

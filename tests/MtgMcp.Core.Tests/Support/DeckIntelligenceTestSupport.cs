@@ -160,6 +160,76 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a compact Simic workspace for read-only ramp evaluation tests.
+    /// </summary>
+    private static DeckWorkspace CreateRampEvaluationWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Id = $"ramp-evaluation-{Guid.NewGuid():N}",
+            Name = "Ramp Evaluation Fixture",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                RampEvaluationCard("Kenessos Test Commander", 1, DeckRoles.Commander, "Legendary Creature - Merfolk", "{1}{G}{U}", 3, "", ["G", "U"]),
+                RampEvaluationCard("Forest", 34, DeckDefaults.Mainboard, "Basic Land - Forest", null, 0, "{T}: Add {G}.", [], ["G"]),
+                RampEvaluationCard("Island", 34, DeckDefaults.Mainboard, "Basic Land - Island", null, 0, "{T}: Add {U}.", [], ["U"]),
+                RampEvaluationCard(
+                    "Wayfarer's Bauble",
+                    1,
+                    DeckRoles.Ramp,
+                    "Artifact",
+                    "{1}",
+                    1,
+                    "{2}, {T}, Sacrifice Wayfarer's Bauble: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+                    []),
+                RampEvaluationCard("Nature's Lore", 1, DeckRoles.Ramp, "Sorcery", "{1}{G}", 2, "Search your library for a Forest card, put that card onto the battlefield, then shuffle.", ["G"]),
+                RampEvaluationCard("Three Visits", 1, DeckRoles.Ramp, "Sorcery", "{1}{G}", 2, "Search your library for a Forest card, put that card onto the battlefield. Then shuffle.", ["G"]),
+                RampEvaluationCard("Rampant Growth", 1, DeckRoles.Ramp, "Sorcery", "{1}{G}", 2, "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.", ["G"]),
+                RampEvaluationCard("Arcane Signet", 1, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color in your commander's color identity.", [], ["W", "U", "B", "R", "G"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a card fixture with enough cached Scryfall data for ramp scoring.
+    /// </summary>
+    private static DeckCard RampEvaluationCard(
+        string name,
+        int quantity,
+        string category,
+        string typeLine,
+        string? manaCost,
+        double manaValue,
+        string oracleText,
+        List<string> colorIdentity,
+        List<string>? producedMana = null)
+    {
+        return new DeckCard
+        {
+            Name = name,
+            Quantity = quantity,
+            PrimaryCategory = category,
+            Categories = [category],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = typeLine,
+                ManaCost = manaCost,
+                ManaValue = manaValue,
+                OracleText = oracleText,
+                ColorIdentity = colorIdentity,
+                ProducedMana = producedMana ?? [],
+            },
+        };
+    }
+
+    /// <summary>
     /// Creates a land fixture with cached mana production and entry text.
     /// </summary>
     private static DeckCard Land(string name, string oracleText, List<string> producedMana)

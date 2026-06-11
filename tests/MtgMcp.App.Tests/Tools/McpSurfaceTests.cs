@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.ComponentModel;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,6 +102,7 @@ public sealed class McpSurfaceTests
             "deck_delete_category",
             "deck_estimate_commander_bracket",
             "deck_estimate_win_turn",
+            "deck_evaluate_card",
             "deck_explain_role_counts",
             "deck_facets_count",
             "deck_facets_get",
@@ -432,6 +434,65 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies card evaluation compact output does not include full operational evidence.
+    /// </summary>
+    [Fact]
+    public void CardEvaluationCompactOutput_OmitsFullFactsAndEvidence()
+    {
+        RampContextEvaluation evaluation = new()
+        {
+            WorkspaceId = "workspace",
+            CardName = "Wayfarer's Bauble",
+            Role = DeckRoles.Ramp,
+            RampKind = "activatedLandRamp",
+            Score = 54,
+            TopIssues = ["requires 2 future activation mana"],
+            TopStrengths = ["supports deck color requirements"],
+            Facts = new CardOperationalFacts
+            {
+                CardName = "Wayfarer's Bauble",
+                Role = DeckRoles.Ramp,
+                Evidence =
+                [
+                    new CardFactEvidence
+                    {
+                        Source = "oracle-parser",
+                        Kind = "parserDerived",
+                        Label = "activated-land-ramp",
+                        Detail = "Matched activated ramp text.",
+                    }
+                ],
+            },
+            CandidateEvaluations =
+            [
+                new RampContextEvaluation
+                {
+                    CardName = "Nature's Lore",
+                    Role = DeckRoles.Ramp,
+                    RampKind = "spellLandRampUntapped",
+                    Score = 90,
+                    Facts = new CardOperationalFacts
+                    {
+                        Evidence = [new CardFactEvidence { Source = "oracle-parser", Kind = "parserDerived" }]
+                    },
+                }
+            ],
+        };
+        MethodInfo method = typeof(RecommendationTools)
+            .GetMethod("ToCompactEvaluation", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Missing compact card-evaluation presenter.");
+
+        JsonElement compact = JsonSerializer.SerializeToElement(method.Invoke(null, [evaluation]));
+
+        compact.TryGetProperty("TopCandidates", out JsonElement topCandidates).Should().BeTrue();
+        topCandidates.GetArrayLength().Should().Be(1);
+        compact.TryGetProperty("Facts", out _).Should().BeFalse();
+        compact.TryGetProperty("SubScores", out _).Should().BeFalse();
+        compact.TryGetProperty("CandidateEvaluations", out _).Should().BeFalse();
+        topCandidates[0].TryGetProperty("Facts", out _).Should().BeFalse();
+    }
+
+    /// <summary>
     /// Verifies that workspace resources expose workspaceId rather than legacy deckId.
     /// </summary>
     [Fact]
@@ -731,6 +792,45 @@ public sealed class McpSurfaceTests
 
         full.Should().BeOfType<DeckIntentChangeResult>()
             .Which.Workspace.Description.Should().Be("Primer text.");
+    }
+
+    /// <summary>
+    /// Verifies that Archidekt copy infers existing-deck mode when a destination is supplied.
+    /// </summary>
+    [Fact]
+    public async Task ArchidektCopyWorkspace_InfersExistingDestinationMode()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace source = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Copy Source"
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService deckService = new(
+            repository,
+            new EmptyCardCatalog(),
+            new FakeArchidektGateway
+            {
+                ImportedDeck = new DeckWorkspace
+                {
+                    Name = "Existing",
+                    Mode = WorkspaceMode.Archidekt,
+                    WriteBack = true,
+                    ArchidektDeckId = "123",
+                }
+            });
+        WorkspaceTools tools = new(
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        ArchidektCopyResult result = await tools.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: true,
+            destinationDeckIdOrUrl: "123",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.CreatedNewDeck.Should().BeFalse();
+        result.DestinationArchidektDeckId.Should().Be("123");
+        result.CopyPhase.Should().Be("dry-run");
     }
 
     /// <summary>

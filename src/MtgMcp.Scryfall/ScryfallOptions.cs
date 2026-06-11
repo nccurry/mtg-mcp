@@ -24,4 +24,9 @@ public sealed class ScryfallOptions
     /// Gets or sets how many Scryfall 429 responses are retried before surfacing the failure.
     /// </summary>
     public int MaxRateLimitRetries { get; set; } = 3;
+
+    /// <summary>
+    /// Gets or sets the release-date reference used for deterministic pricing tests and replayable fetches.
+    /// </summary>
+    public DateOnly? PricingReferenceDate { get; set; }
 }

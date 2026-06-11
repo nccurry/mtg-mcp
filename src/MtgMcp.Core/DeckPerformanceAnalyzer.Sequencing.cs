@@ -11,14 +11,16 @@ internal static partial class DeckPerformanceAnalyzer
     private static DeckCard? ChoosePerformanceLand(
         IReadOnlyList<DeckCard> hand,
         IReadOnlyList<PerformancePermanent> battlefield,
-        IReadOnlyList<IReadOnlyList<string>> virtualManaSources,
+        IReadOnlyList<PerformanceScheduledManaSource> virtualManaSources,
         IReadOnlySet<string> deckColors,
+        int turn,
         PerformanceCardFactsCache cardFacts)
     {
         HashSet<string> existingColors = ExtractColoredSymbols(GetPerformanceManaSources(
             battlefield,
             virtualManaSources,
             unavailablePermanent: null,
+            turn,
             cardFacts));
         List<DeckCard> lands = hand
             .Where(card => cardFacts.Get(card).IsLand)
@@ -137,7 +139,7 @@ internal static partial class DeckPerformanceAnalyzer
         List<DeckCard> library,
         List<PerformancePermanent> battlefield,
         List<DeckCard> graveyard,
-        List<IReadOnlyList<string>> virtualManaSources,
+        List<PerformanceScheduledManaSource> virtualManaSources,
         PerformanceTurnState state,
         PerformanceCardFactsCache cardFacts,
         IReadOnlySet<string> deckColors,
@@ -231,9 +233,10 @@ internal static partial class DeckPerformanceAnalyzer
             {
                 rampCastByTurn = true;
                 state.RampCastByTurn = true;
-                if (!facts.IsPermanent)
+                PerformanceScheduledManaSource? scheduledRamp = BuildPerformanceRampSource(facts, deckColors, turn);
+                if (scheduledRamp is not null)
                 {
-                    virtualManaSources.Add(BuildPerformanceRampSource(facts, deckColors));
+                    virtualManaSources.Add(scheduledRamp);
                 }
             }
 
@@ -328,8 +331,9 @@ internal static partial class DeckPerformanceAnalyzer
     /// </summary>
     private static List<PerformanceManaSource> GetPerformanceManaSources(
         IReadOnlyList<PerformancePermanent> battlefield,
-        IReadOnlyList<IReadOnlyList<string>> virtualManaSources,
+        IReadOnlyList<PerformanceScheduledManaSource> virtualManaSources,
         PerformancePermanent? unavailablePermanent,
+        int turn,
         PerformanceCardFactsCache cardFacts)
     {
         List<PerformanceManaSource> sources = [];
@@ -344,7 +348,14 @@ internal static partial class DeckPerformanceAnalyzer
             sources.Add(new PerformanceManaSource(facts.ProducedMana));
         }
 
-        sources.AddRange(virtualManaSources.Select(source => new PerformanceManaSource(source)));
+        foreach (PerformanceScheduledManaSource source in virtualManaSources)
+        {
+            if (source.AvailableTurn <= turn)
+            {
+                sources.Add(new PerformanceManaSource(source.Symbols));
+            }
+        }
+
         return sources;
     }
 
@@ -362,16 +373,87 @@ internal static partial class DeckPerformanceAnalyzer
     /// <summary>
     /// Converts a nonpermanent ramp spell into a future virtual mana source.
     /// </summary>
-    private static IReadOnlyList<string> BuildPerformanceRampSource(
+    private static PerformanceScheduledManaSource? BuildPerformanceRampSource(
         PerformanceCardFacts facts,
+        IReadOnlySet<string> deckColors,
+        int turn)
+    {
+        RampOperationalFacts? ramp = facts.RampFacts;
+        if (ramp is null || ramp.Kind.Equals("unknownShape", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (ramp.Kind.Equals("manaRock", StringComparison.OrdinalIgnoreCase)
+            || ramp.Kind.Equals("manaDork", StringComparison.OrdinalIgnoreCase)
+            || ramp.Kind.Equals("permanentManaSource", StringComparison.OrdinalIgnoreCase)
+            || ramp.Kind.Equals("ritual", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        List<string> symbols = RampSourceSymbols(facts, ramp, deckColors);
+        if (symbols.Count == 0)
+        {
+            return null;
+        }
+
+        return new PerformanceScheduledManaSource
+        {
+            Symbols = symbols,
+            AvailableTurn = RampAvailableTurn(ramp, turn),
+        };
+    }
+
+    /// <summary>
+    /// Reads the mana symbols created by a shaped ramp effect.
+    /// </summary>
+    private static List<string> RampSourceSymbols(
+        PerformanceCardFacts facts,
+        RampOperationalFacts ramp,
         IReadOnlySet<string> deckColors)
     {
+        if (ramp.ProducedMana.Count > 0)
+        {
+            return ramp.ProducedMana.ToList();
+        }
+
         if (facts.ProducedMana.Count > 0)
         {
-            return facts.ProducedMana;
+            return facts.ProducedMana.ToList();
         }
 
         return deckColors.Count > 0 ? deckColors.ToList() : [];
+    }
+
+    /// <summary>
+    /// Computes when a shaped persistent ramp effect becomes available after it was cast this turn.
+    /// </summary>
+    private static int RampAvailableTurn(RampOperationalFacts ramp, int turn)
+    {
+        int delay = 1;
+        if (ramp.Kind.Equals("spellLandRampUntapped", StringComparison.OrdinalIgnoreCase)
+            || ramp.Kind.Equals("treasureBurst", StringComparison.OrdinalIgnoreCase))
+        {
+            delay = 0;
+        }
+
+        if (ramp.Kind.Equals("activatedLandRamp", StringComparison.OrdinalIgnoreCase)
+            || ramp.Kind.Equals("creatureSacrificeLandRamp", StringComparison.OrdinalIgnoreCase))
+        {
+            delay = 0;
+            if (ramp.ActivationMana > 0 || ramp.RequiresTap)
+            {
+                delay++;
+            }
+
+            if (ramp.EntersTapped == true)
+            {
+                delay++;
+            }
+        }
+
+        return Math.Max(1, turn + delay);
     }
 
     /// <summary>

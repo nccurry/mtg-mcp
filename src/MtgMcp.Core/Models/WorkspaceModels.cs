@@ -493,6 +493,11 @@ public sealed class ArchidektDeckSummary
     public string? FolderName { get; set; }
 
     /// <summary>
+    /// Gets or sets the Archidekt folder path when the listing response includes it.
+    /// </summary>
+    public string? FolderPath { get; set; }
+
+    /// <summary>
     /// Gets or sets deck visibility when available.
     /// </summary>
     public string? Visibility { get; set; }
@@ -548,6 +553,11 @@ public sealed class ArchidektFolder
     /// Gets or sets the parent folder id, when present.
     /// </summary>
     public string? ParentFolderId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the folder path when Archidekt exposes one.
+    /// </summary>
+    public string? Path { get; set; }
 }
 
 /// <summary>
@@ -701,6 +711,11 @@ public sealed class ArchidektCopyResult
     /// Copied cards that still lacked Archidekt card ids after resolution.
     /// </summary>
     public int MissingArchidektCardIds { get; set; }
+
+    /// <summary>
+    /// Explains whether missing Archidekt card ids are cache misses or unresolved apply failures.
+    /// </summary>
+    public string CardIdDiagnostics { get; set; } = "";
 
     /// <summary>
     /// Gets or sets whether the result can be resumed with the returned destination id.

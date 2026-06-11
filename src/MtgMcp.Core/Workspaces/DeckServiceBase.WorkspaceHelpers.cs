@@ -20,11 +20,14 @@ public abstract partial class DeckServiceBase
             Set = cardInfo.Set,
             CollectorNumber = cardInfo.CollectorNumber,
             Rarity = cardInfo.Rarity,
+            Language = cardInfo.Language,
             ReleasedAt = cardInfo.ReleasedAt,
             ScryfallUri = cardInfo.ScryfallUri,
             EdhrecRank = cardInfo.EdhrecRank,
             Keywords = cardInfo.Keywords.ToList(),
             ProducedMana = cardInfo.ProducedMana.ToList(),
+            Games = cardInfo.Games.ToList(),
+            Finishes = cardInfo.Finishes.ToList(),
             Legalities = new Dictionary<string, string>(cardInfo.Legalities, StringComparer.OrdinalIgnoreCase),
             Prices = new Dictionary<string, string>(cardInfo.Prices, StringComparer.OrdinalIgnoreCase),
             ImageUris = new Dictionary<string, string>(cardInfo.ImageUris, StringComparer.OrdinalIgnoreCase),
@@ -143,7 +146,7 @@ public abstract partial class DeckServiceBase
     {
         return snapshot is null
             ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
-            : EvaluateUsdPrice(snapshot.ReleasedAt, snapshot.Prices, CurrentUtcDate());
+            : CardPriceEvaluator.Evaluate(snapshot, CurrentUtcDate());
     }
 
     /// <summary>
@@ -151,7 +154,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static CardPriceEvaluation EvaluateUsdPrice(CardInfo card)
     {
-        return EvaluateUsdPrice(card.ReleasedAt, card.Prices, CurrentUtcDate());
+        return CardPriceEvaluator.Evaluate(card, CurrentUtcDate());
     }
 
     /// <summary>
@@ -161,7 +164,7 @@ public abstract partial class DeckServiceBase
     {
         return snapshot is null
             ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
-            : EvaluateUsdPrice(snapshot.ReleasedAt, snapshot.Prices, referenceDate);
+            : CardPriceEvaluator.Evaluate(snapshot, referenceDate);
     }
 
     /// <summary>
@@ -169,47 +172,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static CardPriceEvaluation EvaluateUsdPrice(CardInfo card, DateOnly referenceDate)
     {
-        return EvaluateUsdPrice(card.ReleasedAt, card.Prices, referenceDate);
-    }
-
-    /// <summary>
-    /// Evaluates price status from release date and provider price fields.
-    /// </summary>
-    private static CardPriceEvaluation EvaluateUsdPrice(
-        DateOnly? releasedAt,
-        IReadOnlyDictionary<string, string> prices,
-        DateOnly referenceDate)
-    {
-        if (releasedAt.HasValue && releasedAt.Value > referenceDate)
-        {
-            return MissingPrice(
-                "future",
-                $"Printing releases on {releasedAt.Value:yyyy-MM-dd}, after reference date {referenceDate:yyyy-MM-dd}.");
-        }
-
-        foreach (string key in new[] { "usd", "usd_etched", "usd_foil", "tcgplayer", "tcgplayer_price" })
-        {
-            decimal? price = TryReadDecimal(prices, key);
-            if (price.HasValue)
-            {
-                return new CardPriceEvaluation
-                {
-                    Price = price.Value,
-                    PriceKnown = true,
-                    PriceSource = key,
-                    PrintingStatus = releasedAt.HasValue ? "released" : "unknown-release-date",
-                    SelectedPrintingReason = releasedAt.HasValue
-                        ? $"Selected {key} price for released printing {releasedAt.Value:yyyy-MM-dd}."
-                        : $"Selected {key} price; release date was unavailable."
-                };
-            }
-        }
-
-        return MissingPrice(
-            releasedAt.HasValue ? "unpriced" : "unknown-release-date-unpriced",
-            releasedAt.HasValue
-                ? $"Released printing {releasedAt.Value:yyyy-MM-dd} did not include a usable USD or TCG price."
-                : "Release date and usable USD or TCG price were unavailable.");
+        return CardPriceEvaluator.Evaluate(card, referenceDate);
     }
 
     /// <summary>

@@ -40,12 +40,16 @@ public sealed partial class ArchidektGateway
                     Name = GetString(item, "name") ?? "",
                     Format = NormalizeDeckFormat(GetString(item, "deckFormat") ?? GetString(item, "format")),
                     FolderId = GetString(item, "folderId")
-                        ?? GetString(item, "folder")
                         ?? GetNestedString(item, "parentFolder", "id")
-                        ?? GetNestedString(item, "folder", "id"),
+                        ?? GetNestedString(item, "folder", "id")
+                        ?? GetString(item, "folder"),
                     FolderName = GetString(item, "folderName")
                         ?? GetNestedString(item, "parentFolder", "name")
                         ?? GetNestedString(item, "folder", "name"),
+                    FolderPath = GetString(item, "folderPath")
+                        ?? GetString(item, "path")
+                        ?? GetNestedString(item, "parentFolder", "path")
+                        ?? GetNestedString(item, "folder", "path"),
                     Visibility = ReadVisibility(item),
                     CardCount = GetInt(item, "cardCount")
                         ?? GetInt(item, "cardsCount")

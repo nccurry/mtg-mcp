@@ -12,6 +12,22 @@ internal sealed class PerformancePermanent
 }
 
 /// <summary>
+/// Represents mana from a resolved ramp effect that becomes usable on a later simulation turn.
+/// </summary>
+internal sealed class PerformanceScheduledManaSource
+{
+    /// <summary>
+    /// Gets or sets the mana symbols this scheduled source can produce.
+    /// </summary>
+    public IReadOnlyList<string> Symbols { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the first turn where this source can be counted by Stats Lab.
+    /// </summary>
+    public int AvailableTurn { get; set; }
+}
+
+/// <summary>
 /// Stores the hand and library chosen after mulligans.
 /// </summary>
 internal sealed class PerformanceOpeningHand

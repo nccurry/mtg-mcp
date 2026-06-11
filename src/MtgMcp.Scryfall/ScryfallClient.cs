@@ -187,7 +187,10 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
 
         using (document)
         {
-            return MapCard(document.RootElement);
+            CardInfo card = MapCard(document.RootElement);
+            return Guid.TryParse(nameOrId, out _)
+                ? card
+                : await SelectReleasedPricingSnapshotAsync(card, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -260,7 +263,8 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
             );
             if (match is not null)
             {
-                results[requestedName] = match;
+                results[requestedName] = await SelectReleasedPricingSnapshotAsync(match, cancellationToken)
+                    .ConfigureAwait(false);
             }
         }
 
@@ -337,6 +341,16 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
             return [];
         }
 
+        return await GetPrintsForCardAsync(card, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets printings for a resolved oracle card without performing another named-card lookup.
+    /// </summary>
+    private async Task<IReadOnlyList<CardInfo>> GetPrintsForCardAsync(
+        CardInfo card,
+        CancellationToken cancellationToken)
+    {
         string query = card.OracleId is not null
             ? $"oracleid:{card.OracleId}"
             : $"!\"{card.Name}\"";
@@ -367,6 +381,57 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
 
             return cards;
         }
+    }
+
+    /// <summary>
+    /// Replaces future or unpriced named-card snapshots with deterministic released priced printings.
+    /// </summary>
+    private async Task<CardInfo> SelectReleasedPricingSnapshotAsync(
+        CardInfo card,
+        CancellationToken cancellationToken)
+    {
+        DateOnly referenceDate = CurrentPricingDate();
+        CardPriceEvaluation evaluation = CardPriceEvaluator.Evaluate(card, referenceDate);
+        if (evaluation.PriceKnown && evaluation.PrintingStatus.Equals("released", StringComparison.OrdinalIgnoreCase))
+        {
+            return card;
+        }
+
+        if (!ShouldInspectPrintings(card, evaluation))
+        {
+            return card;
+        }
+
+        IReadOnlyList<CardInfo> printings = await GetPrintsForCardAsync(card, cancellationToken)
+            .ConfigureAwait(false);
+        CardPriceEvaluator.CardPrintingSelection selection = CardPriceEvaluator.SelectPrinting(
+            card,
+            printings,
+            referenceDate);
+        return selection.Card;
+    }
+
+    /// <summary>
+    /// Decides when a named-card result has enough pricing context to justify print replacement.
+    /// </summary>
+    private static bool ShouldInspectPrintings(CardInfo card, CardPriceEvaluation evaluation)
+    {
+        if (evaluation.PrintingStatus.Equals("future", StringComparison.OrdinalIgnoreCase)
+            || evaluation.PrintingStatus.Equals("non-paper", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return card.ReleasedAt.HasValue && !evaluation.PriceKnown;
+    }
+
+    /// <summary>
+    /// Gets the current UTC date for release-aware print selection.
+    /// </summary>
+    private DateOnly CurrentPricingDate()
+    {
+        return options.PricingReferenceDate
+            ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
     }
 
     /// <summary>

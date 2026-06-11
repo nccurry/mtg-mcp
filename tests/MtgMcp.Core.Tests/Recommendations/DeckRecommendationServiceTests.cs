@@ -9,6 +9,75 @@ namespace MtgMcp.Core.Tests;
 public sealed partial class DeckIntelligenceTests
 {
     /// <summary>
+    /// Verifies read-only card evaluation explains weak ramp against explicit alternatives.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateCard_RanksExplicitRampCandidatesWithoutMutatingPlans()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateRampEvaluationWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            archidektGateway: null,
+            plans);
+
+        RampContextEvaluation result = await service.EvaluateCardAsync(
+            workspace.Id,
+            "Wayfarer's Bauble",
+            ["Nature's Lore", "Three Visits", "Rampant Growth", "Arcane Signet"],
+            candidateLimit: 8,
+            TestContext.Current.CancellationToken);
+
+        result.Role.Should().Be(DeckRoles.Ramp);
+        result.RampKind.Should().Be("activatedLandRamp");
+        result.TopIssues.Should().Contain(issue => issue.Contains("future activation mana", StringComparison.OrdinalIgnoreCase));
+        result.TopIssues.Should().Contain(issue => issue.Contains("enters tapped", StringComparison.OrdinalIgnoreCase));
+        result.TopIssues.Should().Contain(issue => issue.Contains("commander", StringComparison.OrdinalIgnoreCase));
+        result.CandidateEvaluations.Should().OnlyContain(candidate => candidate.Score > result.Score);
+        result.CandidateEvaluations.Select(candidate => candidate.CardName)
+            .Should()
+            .Equal("Nature's Lore", "Three Visits", "Arcane Signet", "Rampant Growth");
+        result.CandidateEvaluations.First().TopStrengths.Should().Contain(strength =>
+            strength.Contains("commander", StringComparison.OrdinalIgnoreCase));
+        (await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies explicit ramp candidate rankings are stable for the same inputs.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateCard_ReturnsStableCandidateRankingsForSameInputs()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateRampEvaluationWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        RampContextEvaluation first = await service.EvaluateCardAsync(
+            workspace.Id,
+            "Wayfarer's Bauble",
+            ["Nature's Lore", "Three Visits", "Rampant Growth", "Arcane Signet"],
+            candidateLimit: 8,
+            TestContext.Current.CancellationToken);
+        RampContextEvaluation second = await service.EvaluateCardAsync(
+            workspace.Id,
+            "Wayfarer's Bauble",
+            ["Nature's Lore", "Three Visits", "Rampant Growth", "Arcane Signet"],
+            candidateLimit: 8,
+            TestContext.Current.CancellationToken);
+
+        first.Score.Should().Be(second.Score);
+        first.CandidateEvaluations.Select(candidate => (candidate.CardName, candidate.Score))
+            .Should()
+            .Equal(second.CandidateEvaluations.Select(candidate => (candidate.CardName, candidate.Score)));
+    }
+
+    /// <summary>
     /// Verifies that goal recommendations create a previewable plan.
     /// </summary>
     [Fact]

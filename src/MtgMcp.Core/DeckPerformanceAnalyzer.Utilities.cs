@@ -119,7 +119,7 @@ internal static partial class DeckPerformanceAnalyzer
             analysis.Assumptions.Add("Commander and Brawl performance treats the first mulligan as free.");
         }
 
-        analysis.Assumptions.Add("Nonpermanent ramp becomes one future mana source; draw spells draw one card.");
+        analysis.Assumptions.Add("Shaped ramp effects create scheduled future mana sources; draw spells draw one card.");
         CommanderSpecificSimulationRules commanderRules = CommanderSpecificSimulationRules.Build(included);
         analysis.Assumptions.AddRange(commanderRules.Assumptions);
         if (intent is not null)
@@ -210,6 +210,7 @@ internal static partial class DeckPerformanceAnalyzer
         {
             Snapshot = PerformanceMana.GetSnapshot(card);
             Role = DeckRoleClassifier.Classify(card);
+            OperationalFacts = RampOperationalFactExtractor.Extract(card);
             ManaValue = PerformanceMana.ManaValue(card);
             CostRequirement = PerformanceMana.BuildCostRequirement(card);
             ProducedMana = PerformanceMana.ReadProducedMana(card);
@@ -233,7 +234,7 @@ internal static partial class DeckPerformanceAnalyzer
                 "Planeswalker",
                 "Battle",
                 "Land");
-            IsManaSource = IsLand || IsRamp || ProducedMana.Count > 0;
+            IsManaSource = IsLand || ProducedMana.Count > 0;
             LooksTapped = PerformanceMana.LooksTapped(Snapshot);
             HasComboPieceOrEnabler = HasTag(DeckTags.ComboPiece) || HasTag(DeckTags.ComboEnabler);
         }
@@ -247,6 +248,16 @@ internal static partial class DeckPerformanceAnalyzer
         /// Gets the cached role classifier output.
         /// </summary>
         public CardRoleAssignment Role { get; }
+
+        /// <summary>
+        /// Gets operational facts used to time shaped ramp effects.
+        /// </summary>
+        public CardOperationalFacts OperationalFacts { get; }
+
+        /// <summary>
+        /// Gets ramp timing facts when the card has a recognized ramp shape.
+        /// </summary>
+        public RampOperationalFacts? RampFacts => OperationalFacts.Ramp;
 
         /// <summary>
         /// Gets the nonnegative mana value used for payment checks.

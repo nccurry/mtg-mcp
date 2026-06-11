@@ -369,6 +369,18 @@ public static partial class DeckRoleClassifier
             return true;
         }
 
+        if (ContainsAny(oracleText, "search your library")
+            && ContainsAny(oracleText, "battlefield")
+            && ContainsAny(oracleText, "land card", "basic land", "forest card", "plains card", "island card", "swamp card", "mountain card"))
+        {
+            return true;
+        }
+
+        if (ContainsAny(oracleText, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast"))
+        {
+            return true;
+        }
+
         return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
     }
 

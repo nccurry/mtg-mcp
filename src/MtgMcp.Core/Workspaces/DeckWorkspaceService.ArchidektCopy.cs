@@ -159,6 +159,7 @@ public sealed partial class DeckWorkspaceService
         if (dryRun)
         {
             result.CopyPhase = "dry-run";
+            UpdateDryRunCardIdDiagnostics(result);
             return result;
         }
 
@@ -269,7 +270,7 @@ public sealed partial class DeckWorkspaceService
         destination.Name = string.IsNullOrWhiteSpace(name) ? destination.Name : name.Trim();
         destination.Format = string.IsNullOrWhiteSpace(format) ? destination.Format : format.Trim();
         destination.Description = BuildMigrationDescription(
-            description ?? destination.Description,
+            SelectCopyDescription(description, source, destination, createNew),
             source);
         result.CopyPhase = "metadata";
         await RequireArchidektGateway()
@@ -349,6 +350,9 @@ public sealed partial class DeckWorkspaceService
             CopyPhase = dryRun ? "dry-run" : "initialized",
             EstimatedArchidektRequests = EstimateArchidektCopyRequests(source, createNew, destinationDeckIdOrUrl),
             MissingArchidektCardIds = source.Cards.Count(card => string.IsNullOrWhiteSpace(card.ArchidektCardId)),
+            CardIdDiagnostics = source.Cards.Any(card => string.IsNullOrWhiteSpace(card.ArchidektCardId))
+                ? "Missing cached Archidekt card ids are cache misses. Apply mode will resolve them before card writes."
+                : "All copied rows already have cached Archidekt card ids.",
             Categories = source.Categories
                 .Select(category => category.Name)
                 .Order(StringComparer.OrdinalIgnoreCase)
@@ -443,6 +447,28 @@ public sealed partial class DeckWorkspaceService
         result.RemoteLookups = result.CardIdsResolved;
         result.ResolvedCount = cards.Count(card => !string.IsNullOrWhiteSpace(card.ArchidektCardId));
         result.MissingArchidektCardIds = cards.Count(card => string.IsNullOrWhiteSpace(card.ArchidektCardId));
+        result.CardIdDiagnostics = result.MissingArchidektCardIds == 0
+            ? $"Resolved Archidekt card ids for {result.ResolvedCount} copied row(s)."
+            : $"{result.MissingArchidektCardIds} copied row(s) still lacked Archidekt card ids after resolution.";
+    }
+
+    /// <summary>
+    /// Clarifies that dry-run card-id gaps are cache misses, not a predicted apply failure.
+    /// </summary>
+    private static void UpdateDryRunCardIdDiagnostics(ArchidektCopyResult result)
+    {
+        if (result.MissingArchidektCardIds <= 0)
+        {
+            return;
+        }
+
+        result.CardIdDiagnostics =
+            $"{result.MissingArchidektCardIds} copied row(s) lack cached Archidekt card ids; "
+            + "apply mode will resolve them before card writes.";
+        result.NextAction ??= "Run archidekt_copy_workspace with dryRun=false after reviewing warnings.";
+        result.Warnings.Add(
+            "Missing cached Archidekt card ids in dry-run mean mtg-mcp will resolve those ids on apply; "
+                + "they do not by themselves mean the copy will fail.");
     }
 
     /// <summary>
@@ -514,6 +540,34 @@ public sealed partial class DeckWorkspaceService
                 );
             }
         }
+    }
+
+    /// <summary>
+    /// Chooses destination description text without discarding source deck intent.
+    /// </summary>
+    private static string? SelectCopyDescription(
+        string? explicitDescription,
+        DeckWorkspace source,
+        DeckWorkspace destination,
+        bool createNew)
+    {
+        if (explicitDescription is not null)
+        {
+            return explicitDescription;
+        }
+
+        if (createNew)
+        {
+            return source.Description ?? destination.Description;
+        }
+
+        DeckIntentResult sourceIntent = DeckIntentText.Extract(source.Description, source.Id);
+        if (sourceIntent.Found && !string.IsNullOrWhiteSpace(sourceIntent.IntentText))
+        {
+            return DeckIntentText.UpsertDescription(destination.Description, sourceIntent.IntentText);
+        }
+
+        return destination.Description;
     }
 
     /// <summary>
@@ -868,11 +922,14 @@ public sealed partial class DeckWorkspaceService
             Set = snapshot.Set,
             CollectorNumber = snapshot.CollectorNumber,
             Rarity = snapshot.Rarity,
+            Language = snapshot.Language,
             ReleasedAt = snapshot.ReleasedAt,
             ScryfallUri = snapshot.ScryfallUri,
             EdhrecRank = snapshot.EdhrecRank,
             Keywords = snapshot.Keywords.ToList(),
             ProducedMana = snapshot.ProducedMana.ToList(),
+            Games = snapshot.Games.ToList(),
+            Finishes = snapshot.Finishes.ToList(),
             Legalities = new Dictionary<string, string>(snapshot.Legalities, StringComparer.OrdinalIgnoreCase),
             Prices = new Dictionary<string, string>(snapshot.Prices, StringComparer.OrdinalIgnoreCase),
             ImageUris = new Dictionary<string, string>(snapshot.ImageUris, StringComparer.OrdinalIgnoreCase),

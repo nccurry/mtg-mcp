@@ -208,6 +208,34 @@ public sealed class RecommendationTools
     }
 
     /// <summary>
+    /// Evaluates one card's deterministic operational facts in deck context.
+    /// </summary>
+    [McpServerTool(Name = "deck_evaluate_card", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Read-only deterministic card evaluation. Compact output returns score, role, ramp kind, issues, strengths, and explicit candidate comparisons; detailLevel=full includes operational facts, sub-scores, evidence, and warnings.")]
+    public async Task<object> EvaluateCardAsync(
+        string workspaceId,
+        string cardName,
+        [Description("Optional explicit candidate card names to compare. mtg-mcp does not maintain a hidden replacement list.")]
+        string[]? candidateCards = null,
+        int candidateLimit = 8,
+        [Description("Output detail level: compact or full.")]
+        string detailLevel = "compact",
+        CancellationToken cancellationToken = default)
+    {
+        RampContextEvaluation evaluation = await recommendations
+            .EvaluateCardAsync(
+                workspaceId,
+                cardName,
+                candidateCards,
+                candidateLimit,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return detailLevel.Equals("full", StringComparison.OrdinalIgnoreCase)
+            ? evaluation
+            : ToCompactEvaluation(evaluation);
+    }
+
+    /// <summary>
     /// Builds a read-only tuning report across several workspaces.
     /// </summary>
     [McpServerTool(Name = "deck_batch_tuning_report", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
@@ -304,5 +332,35 @@ public sealed class RecommendationTools
             seed,
             maxPrice,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates compact card-evaluation output that omits evidence lists by default.
+    /// </summary>
+    private static object ToCompactEvaluation(RampContextEvaluation evaluation)
+    {
+        return new
+        {
+            evaluation.WorkspaceId,
+            evaluation.CardName,
+            evaluation.Role,
+            evaluation.Score,
+            evaluation.RampKind,
+            evaluation.TopIssues,
+            evaluation.TopStrengths,
+            TopCandidates = evaluation.CandidateEvaluations
+                .Select(candidate => new
+                {
+                    candidate.CardName,
+                    candidate.Role,
+                    candidate.Score,
+                    candidate.RampKind,
+                    candidate.TopIssues,
+                    candidate.TopStrengths,
+                })
+                .ToList(),
+            evaluation.Warnings,
+            ReadOnly = true
+        };
     }
 }

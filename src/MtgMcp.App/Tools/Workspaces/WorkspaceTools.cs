@@ -242,7 +242,8 @@ public sealed class WorkspaceTools
     public Task<ArchidektCopyResult> CopyWorkspaceToArchidektAsync(
         string workspaceId,
         bool dryRun = true,
-        bool createNew = true,
+        [Description("When omitted, destinationDeckIdOrUrl selects existing-deck mode; otherwise a new deck is created.")]
+        bool? createNew = null,
         string? destinationDeckIdOrUrl = null,
         string? name = null,
         string? format = null,
@@ -264,10 +265,11 @@ public sealed class WorkspaceTools
             operationMode.EnsureCanMutate("archidekt_copy_workspace");
         }
 
+        bool effectiveCreateNew = createNew ?? string.IsNullOrWhiteSpace(destinationDeckIdOrUrl);
         return decks.CopyWorkspaceToArchidektAsync(
             workspaceId,
             dryRun,
-            createNew,
+            effectiveCreateNew,
             destinationDeckIdOrUrl,
             name,
             format,

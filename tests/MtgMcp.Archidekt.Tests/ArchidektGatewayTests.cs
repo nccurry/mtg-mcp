@@ -320,7 +320,15 @@ public sealed class ArchidektGatewayTests
             """
             {
               "decks": [
-                { "id": 123, "name": "Deck", "deckFormat": "3", "updatedAt": "2026-05-01T00:00:00Z" }
+                {
+                  "id": 123,
+                  "name": "Deck",
+                  "deckFormat": "3",
+                  "updatedAt": "2026-05-01T00:00:00Z",
+                  "folder": { "id": 42, "name": "Commander", "path": "Root/Commander" },
+                  "private": true,
+                  "cardCount": 100
+                }
               ]
             }
             """
@@ -334,6 +342,11 @@ public sealed class ArchidektGatewayTests
         decks.Should().ContainSingle();
         decks[0].Id.Should().Be("123");
         decks[0].Format.Should().Be("commander");
+        decks[0].FolderId.Should().Be("42");
+        decks[0].FolderName.Should().Be("Commander");
+        decks[0].FolderPath.Should().Be("Root/Commander");
+        decks[0].Visibility.Should().Be("private");
+        decks[0].CardCount.Should().Be(100);
         decks[0].UpdatedAt.Should().NotBeNull();
         handler.Requests.Single().Authorization.Should().Be("JWT test-jwt");
         handler.Requests.Single().Path.Should().Be("api/decks/");
@@ -355,7 +368,7 @@ public sealed class ArchidektGatewayTests
                   "id": 10,
                   "name": "Root",
                   "children": [
-                    { "id": 11, "name": "Child", "parent": 10 }
+                    { "id": 11, "name": "Child", "parent": 10, "path": "Root/Child" }
                   ]
                 }
               ]
@@ -381,7 +394,7 @@ public sealed class ArchidektGatewayTests
 
         folders.Should().HaveCount(2);
         folders.Should().Contain(folder => folder.Id == "10" && folder.Name == "Root");
-        folders.Should().Contain(folder => folder.Id == "11" && folder.ParentFolderId == "10");
+        folders.Should().Contain(folder => folder.Id == "11" && folder.ParentFolderId == "10" && folder.Path == "Root/Child");
         created.Id.Should().Be("12");
         created.ParentFolderId.Should().Be("10");
         moved.Moved.Should().Be(2);

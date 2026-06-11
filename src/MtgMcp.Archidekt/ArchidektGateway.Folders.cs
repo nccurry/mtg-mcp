@@ -33,7 +33,9 @@ public sealed partial class ArchidektGateway
                 ParentFolderId = GetString(element, "parent")
                     ?? GetString(element, "parentFolder")
                     ?? GetNestedString(element, "parent", "id")
-                    ?? GetNestedString(element, "parentFolder", "id")
+                    ?? GetNestedString(element, "parentFolder", "id"),
+                Path = GetString(element, "path")
+                    ?? GetString(element, "folderPath")
             });
         }
 
@@ -70,7 +72,9 @@ public sealed partial class ArchidektGateway
             Name = GetString(root, "name") ?? name.Trim(),
             ParentFolderId = GetString(root, "parent")
                 ?? GetString(root, "parentFolder")
-                ?? parentFolderId
+                ?? parentFolderId,
+            Path = GetString(root, "path")
+                ?? GetString(root, "folderPath")
         };
     }
 

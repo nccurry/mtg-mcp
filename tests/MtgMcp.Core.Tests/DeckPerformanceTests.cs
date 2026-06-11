@@ -880,6 +880,78 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies delayed activated land ramp does not become immediate turn-two mana.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_BaubleDoesNotImproveTurnTwoMana()
+    {
+        DeckPerformanceAnalysis blanks = AnalyzeDirect(
+            CreateBaubleTimingDeck(baubles: 0),
+            simulations: 2_000,
+            maxTurn: 3,
+            seed: 4040,
+            includeMulligans: false);
+        DeckPerformanceAnalysis baubles = AnalyzeDirect(
+            CreateBaubleTimingDeck(baubles: 20),
+            simulations: 2_000,
+            maxTurn: 3,
+            seed: 4040,
+            includeMulligans: false);
+
+        Probability(baubles, "on-curve-untapped-mana-by-turn", 2)
+            .Should()
+            .BeApproximately(Probability(blanks, "on-curve-untapped-mana-by-turn", 2), 0.02);
+    }
+
+    /// <summary>
+    /// Verifies delayed activated land ramp can improve later mana after cast and activation timing.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_BaubleCanImproveTurnThreeAfterScheduledActivation()
+    {
+        DeckPerformanceAnalysis blanks = AnalyzeDirect(
+            CreateBaubleTimingDeck(baubles: 0),
+            simulations: 2_000,
+            maxTurn: 3,
+            seed: 4041,
+            includeMulligans: false);
+        DeckPerformanceAnalysis baubles = AnalyzeDirect(
+            CreateBaubleTimingDeck(baubles: 24),
+            simulations: 2_000,
+            maxTurn: 3,
+            seed: 4041,
+            includeMulligans: false);
+
+        Probability(baubles, "on-curve-untapped-mana-by-turn", 3)
+            .Should()
+            .BeGreaterThan(Probability(blanks, "on-curve-untapped-mana-by-turn", 3) + 0.03);
+    }
+
+    /// <summary>
+    /// Verifies one-shot rituals do not become persistent future mana sources.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_RitualDoesNotBecomeFutureManaSource()
+    {
+        DeckPerformanceAnalysis blanks = AnalyzeDirect(
+            CreateRitualTimingDeck(rituals: 0),
+            simulations: 2_000,
+            maxTurn: 2,
+            seed: 4042,
+            includeMulligans: false);
+        DeckPerformanceAnalysis rituals = AnalyzeDirect(
+            CreateRitualTimingDeck(rituals: 20),
+            simulations: 2_000,
+            maxTurn: 2,
+            seed: 4042,
+            includeMulligans: false);
+
+        Probability(rituals, "on-curve-untapped-mana-by-turn", 2)
+            .Should()
+            .BeApproximately(Probability(blanks, "on-curve-untapped-mana-by-turn", 2), 0.02);
+    }
+
+    /// <summary>
     /// Verifies that derived scorecard dimensions follow fixture directionality.
     /// </summary>
     [Fact]
@@ -1675,6 +1747,64 @@ public sealed class DeckPerformanceTests
                 Card("Forest", 36, DeckDefaults.Mainboard, "Basic Land - Forest", null, 0, "", ["G"], ["G"]),
                 Card("Ramp Stone", ramp, DeckDefaults.Mainboard, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["G"]),
                 Card("Blank Spell", 63 - ramp, DeckDefaults.Mainboard, "Sorcery", "{3}", 3, "Scry 1.", []),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a deck for delayed activated ramp timing tests.
+    /// </summary>
+    private static DeckWorkspace CreateBaubleTimingDeck(int baubles)
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Bauble Timing",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Ramp Commander", 1, DeckRoles.Commander, "Creature - Druid", "{4}{G}", 5, "", ["G"]),
+                Card("Forest", 36, DeckDefaults.Mainboard, "Basic Land - Forest", null, 0, "", ["G"], ["G"]),
+                Card(
+                    "Wayfarer's Bauble",
+                    baubles,
+                    DeckDefaults.Mainboard,
+                    "Artifact",
+                    "{1}",
+                    1,
+                    "{2}, {T}, Sacrifice Wayfarer's Bauble: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+                    []),
+                Card("Blank Spell", 63 - baubles, DeckDefaults.Mainboard, "Sorcery", "{3}", 3, "Scry 1.", []),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a deck for one-shot ritual timing tests.
+    /// </summary>
+    private static DeckWorkspace CreateRitualTimingDeck(int rituals)
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Ritual Timing",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Ritual Commander", 1, DeckRoles.Commander, "Creature - Cleric", "{4}{B}", 5, "", ["B"]),
+                Card("Swamp", 36, DeckDefaults.Mainboard, "Basic Land - Swamp", null, 0, "", ["B"], ["B"]),
+                Card("Dark Ritual", rituals, DeckDefaults.Mainboard, "Instant", "{B}", 1, "Add {B}{B}{B}.", ["B"]),
+                Card("Blank Spell", 63 - rituals, DeckDefaults.Mainboard, "Sorcery", "{3}", 3, "Scry 1.", []),
             ],
         };
     }

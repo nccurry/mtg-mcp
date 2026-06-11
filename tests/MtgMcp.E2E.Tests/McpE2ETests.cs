@@ -544,6 +544,17 @@ public sealed class McpE2ETests
                 ["format"] = "commander"
             });
         string workspaceId = GetString(workspace, "id");
+        JsonElement compactSetResult = await CallJsonAsync(
+            session.Client,
+            "deck_intent_set",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["intentText"] = "Commander: Kenessos, Priest of Thassa"
+            });
+        compactSetResult.TryGetProperty("workspace", out _).Should().BeFalse();
+        GetString(compactSetResult, "workspaceId").Should().Be(workspaceId);
+
         string richDescription = """
         {"ops":[{"insert":"Primer","attributes":{"bold":true}},{"insert":" before\n"},{"insert":{"image":"https://example.test/card.jpg"}},{"insert":"\nPrimer after\n","attributes":{"italic":true}}]}
         """;

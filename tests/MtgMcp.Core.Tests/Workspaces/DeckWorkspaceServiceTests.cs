@@ -511,8 +511,11 @@ public sealed class DeckWorkspaceServiceTests
         result.CopyPhase.Should().Be("dry-run");
         result.EstimatedArchidektRequests.Should().BeGreaterThan(0);
         result.MissingArchidektCardIds.Should().BeGreaterThan(0);
+        result.CardIdDiagnostics.Should().Contain("apply mode will resolve");
+        result.NextAction.Should().Contain("dryRun=false");
         result.Commanders.Should().ContainSingle().Which.Should().Be("Atraxa, Praetors' Voice");
         result.Warnings.Should().Contain(warning => warning.Contains("no Scryfall id", StringComparison.OrdinalIgnoreCase));
+        result.Warnings.Should().Contain(warning => warning.Contains("do not by themselves mean the copy will fail", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -869,6 +872,58 @@ public sealed class DeckWorkspaceServiceTests
         archidekt.UpsertedCards.Should().Contain(card =>
             card.Name == "Brainstorm"
             && card.Categories.Contains("Card Draw"));
+    }
+
+    /// <summary>
+    /// Verifies that copying into an existing Archidekt deck preserves source deck intent by default.
+    /// </summary>
+    [Fact]
+    public async Task CopyWorkspaceToArchidekt_ExistingDestinationPreservesSourceIntent()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace imported = CreateImportedMoxfieldWorkspace();
+        imported.Description = DeckIntentText.UpsertDescription(
+            "Source primer.",
+            """
+            Commander: Atraxa, Praetors' Voice
+            Archetype: counters
+            """);
+        DeckWorkspace source = await repository.SaveAsync(imported, TestContext.Current.CancellationToken);
+        FakeArchidektGateway archidekt = new()
+        {
+            ImportedDeck = new DeckWorkspace
+            {
+                Id = "remote",
+                Name = "Existing",
+                Description = "Existing destination notes.",
+                Mode = WorkspaceMode.Archidekt,
+                WriteBack = true,
+                ArchidektDeckId = "123",
+                Categories =
+                [
+                    new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                ],
+            },
+        };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        await service.CopyWorkspaceToArchidektAsync(
+            source.Id,
+            dryRun: false,
+            createNew: false,
+            destinationDeckIdOrUrl: "123",
+            name: null,
+            format: null,
+            description: null,
+            visibility: "private",
+            allowNonEmptyDestination: false,
+            replaceExistingDestination: false,
+            TestContext.Current.CancellationToken);
+
+        string persistedDescription = archidekt.PersistedDescriptions.Should().ContainSingle().Subject ?? "";
+        persistedDescription.Should().Contain("Existing destination notes.");
+        persistedDescription.Should().Contain("MTG MCP Deck Intent");
+        persistedDescription.Should().Contain("Commander: Atraxa, Praetors' Voice");
     }
 
     /// <summary>
@@ -2552,6 +2607,11 @@ public sealed class DeckWorkspaceServiceTests
         public int PersistedMetadataRequests { get; private set; }
 
         /// <summary>
+        /// Gets destination descriptions sent through metadata persistence.
+        /// </summary>
+        public List<string?> PersistedDescriptions { get; } = [];
+
+        /// <summary>
         /// Gets or sets the upserted cards.
         /// </summary>
         public List<DeckCard> UpsertedCards { get; } = [];
@@ -2779,6 +2839,7 @@ public sealed class DeckWorkspaceServiceTests
         )
         {
             PersistedMetadataRequests++;
+            PersistedDescriptions.Add(workspace.Description);
             return Task.CompletedTask;
         }
 
