@@ -191,41 +191,53 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
         int postsPerSubreddit = Math.Clamp(budget.MaxDecksPerSource, 2, 10);
         int commentsPerPost = Math.Clamp(budget.MaxEvidencePerRecommendation, 1, 8);
         DateTimeOffset earliestCreatedAt = DateTimeOffset.UtcNow.AddYears(-DiscussionLookbackYears);
-        foreach (string subreddit in subreddits)
+        try
         {
-            Dictionary<string, RedditPost> postsById = new(StringComparer.OrdinalIgnoreCase);
-            foreach (RedditSearchRequest searchRequest in BuildSearchRequests(budget))
+            foreach (string subreddit in subreddits)
             {
-                using JsonDocument searchDocument = await GetJsonAsync(
-                    BuildSearchPath(subreddit, searchText, searchRequest, postsPerSubreddit),
-                    cancellationToken).ConfigureAwait(false);
-                foreach (RedditPost post in ReadPosts(searchDocument.RootElement, status, query, searchText))
+                Dictionary<string, RedditPost> postsById = new(StringComparer.OrdinalIgnoreCase);
+                foreach (RedditSearchRequest searchRequest in BuildSearchRequests(budget))
                 {
-                    if (!string.IsNullOrWhiteSpace(post.Id))
+                    using JsonDocument searchDocument = await GetJsonAsync(
+                        BuildSearchPath(subreddit, searchText, searchRequest, postsPerSubreddit),
+                        cancellationToken).ConfigureAwait(false);
+                    foreach (RedditPost post in ReadPosts(searchDocument.RootElement, status, query, searchText))
                     {
-                        postsById.TryAdd(post.Id, post);
+                        if (!string.IsNullOrWhiteSpace(post.Id))
+                        {
+                            postsById.TryAdd(post.Id, post);
+                        }
                     }
                 }
-            }
 
-            List<RedditPost> selectedPosts = postsById.Values
-                .Where(post => IsRecentEnough(post.Evidence.CreatedAt, earliestCreatedAt))
-                .OrderByDescending(post => post.Evidence.Score ?? 0)
-                .ThenByDescending(post => post.Evidence.CreatedAt ?? DateTimeOffset.MinValue)
-                .Take(postsPerSubreddit)
-                .ToList();
-            foreach (RedditPost post in selectedPosts)
-            {
-                report.Discussions.Add(post.Evidence);
-                report.Discussions.AddRange(await GetCommentsAsync(post.Id, post.Title, searchText, status, query, commentsPerPost, cancellationToken)
-                    .ConfigureAwait(false));
+                List<RedditPost> selectedPosts = postsById.Values
+                    .Where(post => IsRecentEnough(post.Evidence.CreatedAt, earliestCreatedAt))
+                    .OrderByDescending(post => post.Evidence.Score ?? 0)
+                    .ThenByDescending(post => post.Evidence.CreatedAt ?? DateTimeOffset.MinValue)
+                    .Take(postsPerSubreddit)
+                    .ToList();
+                foreach (RedditPost post in selectedPosts)
+                {
+                    report.Discussions.Add(post.Evidence);
+                    report.Discussions.AddRange(await GetCommentsAsync(post.Id, post.Title, searchText, status, query, commentsPerPost, cancellationToken)
+                        .ConfigureAwait(false));
+                }
             }
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            status.Status = CorpusSourceStatuses.AccessBlocked;
+            status.Notes.Add("Reddit returned HTTP 403; public JSON access may be blocked or require OAuth credentials.");
+            report.Notes.Add("Reddit discussion evidence was skipped because Reddit returned HTTP 403. Continuing without Reddit source evidence.");
+            return report;
         }
 
         await AnnotateMentionedCardsAsync(report.Discussions, query, report.Notes, cancellationToken)
             .ConfigureAwait(false);
         AddSignalsFromDiscussions(report, status, budget.MaxCandidates);
-        report.Notes.Add($"Reddit evidence is raw bounded discussion data from posts within the last {DiscussionLookbackYears} years; mtg-mcp does not infer sentiment or card quality from comment text.");
+        report.Notes.Add(
+            $"Reddit evidence is raw bounded discussion data from posts within the last {DiscussionLookbackYears} years; " +
+            "mtg-mcp does not infer sentiment or card quality from comment text.");
         await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
         return report;
     }

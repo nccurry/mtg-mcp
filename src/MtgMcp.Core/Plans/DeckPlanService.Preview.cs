@@ -33,6 +33,7 @@ public sealed partial class DeckPlanService
         IReadOnlyList<ExplicitDeckPlanCardChange>? removeCards,
         IReadOnlyList<ExplicitDeckPlanMoveCardChange>? moveCards,
         bool resolveAddedCards,
+        string? sourceSupportDepth,
         string simulationProfile,
         int simulations,
         int maxTurn,
@@ -56,6 +57,7 @@ public sealed partial class DeckPlanService
             throw new InvalidOperationException("At least one package add, remove, or move is required.");
         }
 
+        string normalizedSourceSupportDepth = NormalizeSourceSupportDepth(sourceSupportDepth);
         PlanPreviewWorkspaceResult previewResult = await PreviewPlanWithWorkspacesAsync(
                 plan,
                 resolveAddedCards,
@@ -100,7 +102,14 @@ public sealed partial class DeckPlanService
             BracketImpact = BuildBracketImpact(
                 previewResult.Preview.Before.Bracket,
                 previewResult.Preview.After.Bracket),
-            SourceSupport = BuildPackageSourceSupport(plan),
+            SourceSupportDepth = normalizedSourceSupportDepth,
+            SourceSupport = await BuildPackageSourceSupportAsync(
+                    plan,
+                    previewResult.BeforeWorkspace,
+                    previewResult.AfterWorkspace,
+                    normalizedSourceSupportDepth,
+                    cancellationToken)
+                .ConfigureAwait(false),
             Performance = new DeckPerformanceComparison
             {
                 PlanId = "",
@@ -280,8 +289,24 @@ public sealed partial class DeckPlanService
     /// <summary>
     /// Builds deterministic package source rows without contacting recommendation providers.
     /// </summary>
-    private static List<DeckPackageSourceSupport> BuildPackageSourceSupport(DeckEditPlan plan)
+    private async Task<List<DeckPackageSourceSupport>> BuildPackageSourceSupportAsync(
+        DeckEditPlan plan,
+        DeckWorkspace before,
+        DeckWorkspace after,
+        string sourceSupportDepth,
+        CancellationToken cancellationToken)
     {
+        if (sourceSupportDepth.Equals(PreviewSourceSupportDepths.None, StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        IReadOnlyDictionary<string, CardInfo> resolvedCards = await ResolvePackageSourceCardsAsync(
+                plan,
+                before,
+                after,
+                cancellationToken)
+            .ConfigureAwait(false);
         List<DeckPackageSourceSupport> rows = [];
         foreach (DeckEditOperation operation in plan.Operations)
         {
@@ -290,20 +315,227 @@ public sealed partial class DeckPlanService
                 continue;
             }
 
-            rows.Add(new DeckPackageSourceSupport
-            {
-                CardName = operation.CardName,
-                Operation = operation.Operation,
-                Status = "not-evaluated",
-                Notes =
-                [
-                    "Transient package preview keeps source-provider research separate; use source_explain_card_signal "
-                        + "or source_search_evidence for source-backed support."
-                ],
-            });
+            DeckCard? workspaceCard = FindPackageCard(operation, before, after);
+            resolvedCards.TryGetValue(operation.CardName, out CardInfo? resolvedCard);
+            rows.Add(BuildPackageSourceSupportRow(
+                operation,
+                workspaceCard,
+                resolvedCard,
+                sourceSupportDepth));
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// Resolves missing package card metadata through the configured card catalog.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, CardInfo>> ResolvePackageSourceCardsAsync(
+        DeckEditPlan plan,
+        DeckWorkspace before,
+        DeckWorkspace after,
+        CancellationToken cancellationToken)
+    {
+        List<string> unresolvedNames = [];
+        foreach (DeckEditOperation operation in plan.Operations)
+        {
+            if (string.IsNullOrWhiteSpace(operation.CardName)
+                || FindPackageCard(operation, before, after) is { Snapshot.ScryfallUri.Length: > 0 })
+            {
+                continue;
+            }
+
+            unresolvedNames.Add(operation.CardName);
+        }
+
+        if (unresolvedNames.Count == 0)
+        {
+            return new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return await CardCatalog
+            .GetCardsByNamesAsync(
+                unresolvedNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds one source-support row from preview snapshots and optional catalog metadata.
+    /// </summary>
+    private static DeckPackageSourceSupport BuildPackageSourceSupportRow(
+        DeckEditOperation operation,
+        DeckCard? workspaceCard,
+        CardInfo? resolvedCard,
+        string sourceSupportDepth)
+    {
+        string cardName = operation.CardName ?? "";
+        CardSnapshot? snapshot = workspaceCard?.Snapshot;
+        string? scryfallUri = FirstNonEmpty(snapshot?.ScryfallUri, resolvedCard?.ScryfallUri);
+        int? edhrecRank = snapshot?.EdhrecRank ?? resolvedCard?.EdhrecRank;
+        (decimal? price, string? priceSource) = ReadSupportPrice(snapshot?.Prices, resolvedCard?.Prices);
+        CardRoleAssignment? assignment = sourceSupportDepth.Equals(PreviewSourceSupportDepths.Balanced, StringComparison.OrdinalIgnoreCase)
+            ? DeckRoleClassifier.Classify(workspaceCard ?? CreateSupportCard(cardName, resolvedCard))
+            : null;
+        DeckPackageSourceSupport row = new()
+        {
+            CardName = cardName,
+            Operation = operation.Operation,
+            Status = string.IsNullOrWhiteSpace(scryfallUri) && !edhrecRank.HasValue
+                ? "unresolved"
+                : "source-backed-metadata",
+            ScryfallUri = scryfallUri,
+            EdhrecRank = edhrecRank,
+            Role = assignment?.PrimaryRole,
+            Tags = assignment?.Tags.ToList() ?? [],
+            Price = price,
+            PriceSource = priceSource,
+        };
+
+        if (!string.IsNullOrWhiteSpace(scryfallUri))
+        {
+            row.Notes.Add("Scryfall card metadata resolved for this package card.");
+        }
+
+        if (edhrecRank.HasValue)
+        {
+            row.Notes.Add($"EDHREC rank {edhrecRank.Value} was available from card metadata.");
+        }
+
+        if (row.Status.Equals("unresolved", StringComparison.OrdinalIgnoreCase))
+        {
+            row.Notes.Add("No source-backed card metadata was available in preview; run source_explain_card_signal for deeper source evidence.");
+        }
+
+        return row;
+    }
+
+    /// <summary>
+    /// Package source support prefers the workspace side where the operation has observable card metadata.
+    /// </summary>
+    private static DeckCard? FindPackageCard(
+        DeckEditOperation operation,
+        DeckWorkspace before,
+        DeckWorkspace after)
+    {
+        if (string.IsNullOrWhiteSpace(operation.CardName))
+        {
+            return null;
+        }
+
+        DeckWorkspace preferred = operation.Operation.Equals(DeckEditOperations.RemoveCard, StringComparison.OrdinalIgnoreCase)
+            ? before
+            : after;
+        DeckCard? card = FindCard(preferred, operation.CardName);
+        return card ?? FindCard(ReferenceEquals(preferred, before) ? after : before, operation.CardName);
+    }
+
+    /// <summary>
+    /// Finds one card in a workspace by card name.
+    /// </summary>
+    private static DeckCard? FindCard(DeckWorkspace workspace, string cardName)
+    {
+        foreach (DeckCard card in workspace.Cards)
+        {
+            if (card.Name.Equals(cardName, StringComparison.OrdinalIgnoreCase))
+            {
+                return card;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Creates a transient card row from catalog metadata for role classification.
+    /// </summary>
+    private static DeckCard CreateSupportCard(string cardName, CardInfo? card)
+    {
+        return new DeckCard
+        {
+            Name = card?.Name ?? cardName,
+            Snapshot = card is null
+                ? new CardSnapshot()
+                : new CardSnapshot
+                {
+                    ManaCost = card.ManaCost,
+                    ManaValue = card.ManaValue,
+                    TypeLine = card.TypeLine,
+                    OracleText = card.OracleText,
+                    ColorIdentity = card.ColorIdentity.ToList(),
+                    ProducedMana = card.ProducedMana.ToList(),
+                    EdhrecRank = card.EdhrecRank,
+                    ScryfallUri = card.ScryfallUri,
+                    Prices = new Dictionary<string, string>(card.Prices, StringComparer.OrdinalIgnoreCase)
+                }
+        };
+    }
+
+    /// <summary>
+    /// Reads the first useful price field for source-support output.
+    /// </summary>
+    private static (decimal? Price, string? Source) ReadSupportPrice(
+        IReadOnlyDictionary<string, string>? snapshotPrices,
+        IReadOnlyDictionary<string, string>? cardPrices)
+    {
+        foreach (IReadOnlyDictionary<string, string>? prices in new[] { snapshotPrices, cardPrices })
+        {
+            if (prices is null)
+            {
+                continue;
+            }
+
+            foreach (string source in new[] { "usd", "usd_foil", "usd_etched" })
+            {
+                if (prices.TryGetValue(source, out string? text)
+                    && decimal.TryParse(
+                        text,
+                        System.Globalization.NumberStyles.Number,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out decimal price)
+                    && price > 0)
+                {
+                    return (price, source);
+                }
+            }
+        }
+
+        return (null, null);
+    }
+
+    /// <summary>
+    /// Returns the first non-empty string from a small set of candidates.
+    /// </summary>
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (string? value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Normalizes source-support depth for transient package previews.
+    /// </summary>
+    private static string NormalizeSourceSupportDepth(string? sourceSupportDepth)
+    {
+        string normalized = string.IsNullOrWhiteSpace(sourceSupportDepth)
+            ? PreviewSourceSupportDepths.Minimal
+            : sourceSupportDepth.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            PreviewSourceSupportDepths.None => PreviewSourceSupportDepths.None,
+            PreviewSourceSupportDepths.Balanced => PreviewSourceSupportDepths.Balanced,
+            PreviewSourceSupportDepths.Minimal => PreviewSourceSupportDepths.Minimal,
+            _ => throw new ArgumentException(
+                "sourceSupportDepth must be none, minimal, or balanced.",
+                nameof(sourceSupportDepth))
+        };
     }
 
     /// <summary>

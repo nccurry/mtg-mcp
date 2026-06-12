@@ -474,6 +474,11 @@ public sealed class DeckCardPackagePreviewResult
     public List<DeckPackageSourceSupport> SourceSupport { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the source-support detail level used for package card rows.
+    /// </summary>
+    public string SourceSupportDepth { get; set; } = PreviewSourceSupportDepths.Minimal;
+
+    /// <summary>
     /// Gets or sets deterministic performance comparison for the transient package.
     /// </summary>
     public DeckPerformanceComparison Performance { get; set; } = new();
@@ -650,9 +655,60 @@ public sealed class DeckPackageSourceSupport
     public string Status { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the Scryfall card page when source-backed metadata resolved.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the EDHREC rank when available from source-backed card metadata.
+    /// </summary>
+    public int? EdhrecRank { get; set; }
+
+    /// <summary>
+    /// Gets or sets the classifier role used in balanced source-support output.
+    /// </summary>
+    public string? Role { get; set; }
+
+    /// <summary>
+    /// Gets or sets classifier tags used in balanced source-support output.
+    /// </summary>
+    public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the USD price when available from source-backed card metadata.
+    /// </summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets the price field used for the source-support price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
     /// Gets or sets source-support notes.
     /// </summary>
     public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Lists package preview source-support depths accepted by MCP tools.
+/// </summary>
+public static class PreviewSourceSupportDepths
+{
+    /// <summary>
+    /// Omits per-card source-support rows.
+    /// </summary>
+    public const string None = "none";
+
+    /// <summary>
+    /// Includes compact source-backed metadata status for package cards.
+    /// </summary>
+    public const string Minimal = "minimal";
+
+    /// <summary>
+    /// Includes source-backed metadata plus role, tags, and price when available.
+    /// </summary>
+    public const string Balanced = "balanced";
 }
 
 /// <summary>

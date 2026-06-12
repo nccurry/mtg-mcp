@@ -543,11 +543,22 @@ public sealed partial class DeckRecommendationService
         DeckCard candidate = CreateCandidateCard(card);
         CardRoleAssignment role = DeckRoleClassifier.Classify(candidate);
         double signalScore = AverageSignalScore(signals);
-        double sourceAgreement = signals.Select(signal => signal.Source).Distinct(StringComparer.OrdinalIgnoreCase).Count() / (double)Math.Max(1, budget.MaxSources);
+        HashSet<string> sources = new(StringComparer.OrdinalIgnoreCase);
+        foreach (CardCorpusSignal signal in signals)
+        {
+            sources.Add(signal.Source);
+        }
+
+        double sourceAgreement = sources.Count / (double)Math.Max(1, budget.MaxSources);
         double roleScore = ScoreRoleFit(role, goal);
         double noveltyScore = IsLesserKnown(card) ? 0.75 : 0.35;
         double priceScore = ReadUsdPrice(card) is null ? 0.45 : 0.65;
-        double score = Math.Clamp((signalScore * 0.45) + (roleScore * 0.25) + (sourceAgreement * 0.15) + (noveltyScore * 0.10) + (priceScore * 0.05), 0, 1);
+        bool lesserKnownRecommendation = recommendationKind.Equals("lesser-known", StringComparison.OrdinalIgnoreCase);
+        bool offPlanComboEvidence = lesserKnownRecommendation && IsOffPlanComboEvidence(signals, goal);
+        double effectiveSignalScore = offPlanComboEvidence ? Math.Min(signalScore, 0.55) : signalScore;
+        double score = lesserKnownRecommendation
+            ? Math.Clamp((roleScore * 0.45) + (effectiveSignalScore * 0.25) + (noveltyScore * 0.20) + (sourceAgreement * 0.05) + (priceScore * 0.05), 0, 1)
+            : Math.Clamp((signalScore * 0.45) + (roleScore * 0.25) + (sourceAgreement * 0.15) + (noveltyScore * 0.10) + (priceScore * 0.05), 0, 1);
         List<CorpusEvidence> evidence = BuildEvidence(signals, budget);
         return new CorpusRecommendation
         {
@@ -634,10 +645,27 @@ public sealed partial class DeckRecommendationService
         return sources
             .Where(source => !string.IsNullOrWhiteSpace(source.Key) || !string.IsNullOrWhiteSpace(source.Name))
             .GroupBy(source => string.IsNullOrWhiteSpace(source.Key) ? source.Name : source.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
+            .Select(group => group
+                .OrderBy(source => SourceStatusPriority(source.Status))
+                .First())
             .OrderBy(source => source.Enabled ? 0 : 1)
             .ThenBy(source => source.Name)
             .ToList();
+    }
+
+    /// <summary>
+    /// Ranks source statuses so blocked or failed query statuses are not hidden by an initial available row.
+    /// </summary>
+    private static int SourceStatusPriority(string status)
+    {
+        return status switch
+        {
+            CorpusSourceStatuses.AccessBlocked => 0,
+            CorpusSourceStatuses.Failed => 1,
+            CorpusSourceStatuses.MissingConfig => 2,
+            CorpusSourceStatuses.Disabled => 3,
+            _ => 4
+        };
     }
 
     /// <summary>
@@ -667,6 +695,26 @@ public sealed partial class DeckRecommendationService
         }
 
         return 0.55;
+    }
+
+    /// <summary>
+    /// Checks whether combo-only evidence is off-plan for a non-combo lesser-known card request.
+    /// </summary>
+    private static bool IsOffPlanComboEvidence(IReadOnlyList<CardCorpusSignal> signals, string? goal)
+    {
+        return signals.Count > 0
+            && signals.All(signal => signal.SignalType.Equals(CorpusSignalTypes.Combo, StringComparison.OrdinalIgnoreCase))
+            && !GoalRequestsCombo(goal);
+    }
+
+    /// <summary>
+    /// Checks whether the user goal explicitly asks for combo recommendations.
+    /// </summary>
+    private static bool GoalRequestsCombo(string? goal)
+    {
+        return !string.IsNullOrWhiteSpace(goal)
+            && (goal.Contains("combo", StringComparison.OrdinalIgnoreCase)
+                || goal.Contains("infinite", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

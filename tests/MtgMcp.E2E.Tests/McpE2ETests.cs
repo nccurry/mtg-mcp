@@ -844,6 +844,7 @@ public sealed class McpE2ETests
                 ["addCards"] = new[] { ExplicitCardChange("Arcane Signet", 1, "Ramp", "Caller-selected ramp add.") },
                 ["moveCards"] = new[] { ExplicitMoveChange("Mana Crypt", "Ramp", "Mainboard", "Caller-selected category move.") },
                 ["resolveAddedCards"] = true,
+                ["sourceSupportDepth"] = "balanced",
                 ["simulationProfile"] = "neutral",
                 ["simulations"] = 100,
                 ["maxTurn"] = 3,
@@ -855,6 +856,7 @@ public sealed class McpE2ETests
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
+                ["detailLevel"] = "normal",
                 ["resolveAddedCards"] = true
             });
         string beforeApplyExport = await CallTextAsync(
@@ -886,10 +888,14 @@ public sealed class McpE2ETests
         GetProperty(GetObject(afterSnapshot, "cost"), "includedTotal").GetDecimal()
             .Should()
             .BeGreaterThan(GetProperty(GetObject(beforeSnapshot, "cost"), "includedTotal").GetDecimal());
+        GetProperty(transientPackage, "previewOnly").GetBoolean().Should().BeTrue();
+        GetProperty(transientPackage, "canApply").GetBoolean().Should().BeFalse();
+        GetProperty(transientPackage, "applyPlanId").ValueKind.Should().Be(JsonValueKind.Null);
+        GetString(transientPackage, "sourceSupportDepth").Should().Be("balanced");
         GetArray(transientPackage, "sourceSupport")
             .Select(row => GetString(row, "status"))
             .Should()
-            .OnlyContain(status => status == "not-evaluated");
+            .Contain("source-backed-metadata");
         GetArray(GetObject(transientPackage, "performance"), "deltas")
             .Should()
             .NotBeEmpty();
@@ -1055,7 +1061,11 @@ public sealed class McpE2ETests
         JsonElement preview = await CallJsonAsync(
             session.Client,
             "deck_plan_preview",
-            new Dictionary<string, object?> { ["planId"] = planId });
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["detailLevel"] = "normal"
+            });
         JsonElement apply = await CallJsonAsync(
             session.Client,
             "deck_plan_apply",
@@ -1435,6 +1445,7 @@ public sealed class McpE2ETests
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
+                ["detailLevel"] = "normal",
                 ["resolveAddedCards"] = true
             });
         string afterPreviewExport = await CallTextAsync(

@@ -528,6 +528,34 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that lesser-known discovery favors explicit plan fit over off-plan combo-only evidence.
+    /// </summary>
+    [Fact]
+    public async Task FindLesserKnownCards_PrioritizesPlanFitOverOffPlanComboSignals()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new PlanFitCorpusSignalProvider()]);
+
+        CorpusRecommendationResult result = await service.FindLesserKnownCardsAsync(
+            workspace.Id,
+            goal: "tokens",
+            limit: 2,
+            maxPrice: 5,
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Recommendations.Should().HaveCount(2);
+        result.Recommendations[0].CardName.Should().Be("Hidden Token Maker");
+        result.Recommendations[1].CardName.Should().Be("Obscure Combo Engine");
+        result.Recommendations[0].Score.Should().BeGreaterThan(result.Recommendations[1].Score);
+    }
+
+    /// <summary>
     /// Verifies that top exemplar lookups return high-signal decks from enabled providers.
     /// </summary>
     [Fact]
@@ -893,6 +921,64 @@ public sealed partial class DeckIntelligenceTests
             }
 
             return Task.FromResult(report);
+        }
+    }
+
+    /// <summary>
+    /// Provides one on-plan lower-known card and one stronger off-plan combo signal.
+    /// </summary>
+    private sealed class PlanFitCorpusSignalProvider : ICorpusSignalProvider
+    {
+        /// <summary>
+        /// Gets fake source status.
+        /// </summary>
+        public CorpusSourceStatus GetStatus()
+        {
+            return new CorpusSourceStatus
+            {
+                Key = "plan-fit",
+                Name = "Plan Fit",
+                Enabled = true,
+                StableApi = true,
+                Status = CorpusSourceStatuses.Available,
+            };
+        }
+
+        /// <summary>
+        /// Gets deterministic plan-fit and combo evidence rows.
+        /// </summary>
+        public Task<CorpusSignalReport> GetSignalsAsync(
+            CorpusSignalQuery query,
+            RecommendationAnalysisBudget budget,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new CorpusSignalReport
+            {
+                Sources = [GetStatus()],
+                Signals =
+                [
+                    new CardCorpusSignal
+                    {
+                        CardName = "Hidden Token Maker",
+                        Source = "Plan Fit",
+                        SignalType = CorpusSignalTypes.Novelty,
+                        Score = 0.70,
+                        Price = 0.75m,
+                        EdhrecRank = 9_000,
+                        Rationale = "Low-known token maker supports the requested token plan."
+                    },
+                    new CardCorpusSignal
+                    {
+                        CardName = "Obscure Combo Engine",
+                        Source = "Plan Fit",
+                        SignalType = CorpusSignalTypes.Combo,
+                        Score = 1.00,
+                        Price = 0.50m,
+                        EdhrecRank = 9_500,
+                        Rationale = "High signal combo piece is unrelated to the requested token plan."
+                    }
+                ],
+            });
         }
     }
 

@@ -64,21 +64,30 @@ public sealed class PlanTools
     /// Previews a persisted plan without mutating local or remote state.
     /// </summary>
     [McpServerTool(Name = "deck_plan_preview", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Preview a persisted deck edit plan without mutating local or Archidekt state. Returns before and after cost, validation, roles, mana, consistency, and bracket metrics.")]
-    public Task<DeckPlanPreviewResult> PreviewDeckPlanAsync(
+    [Description(
+        "Preview a persisted deck edit plan without mutating local or Archidekt state. " +
+        "Defaults to a compact decision summary; detailLevel=full returns before and after cost, validation, roles, mana, consistency, and bracket metrics.")]
+    public async Task<object> PreviewDeckPlanAsync(
         string planId,
         bool resolveAddedCards = true,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default)
     {
-        return plans.PreviewDeckPlanAsync(planId, resolveAddedCards, cancellationToken);
+        DeckPlanPreviewResult preview = await plans
+            .PreviewDeckPlanAsync(planId, resolveAddedCards, cancellationToken)
+            .ConfigureAwait(false);
+        return PlanPreviewPresenter.Present(preview, detailLevel);
     }
 
     /// <summary>
     /// Previews caller-supplied card package operations without persisting a plan.
     /// </summary>
     [McpServerTool(Name = "deck_preview_card_package", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Preview caller-supplied add/remove/move card packages through the same plan preview and performance comparison code without saving a plan.")]
-    public Task<DeckCardPackagePreviewResult> PreviewCardPackageAsync(
+    [Description(
+        "Preview caller-supplied add/remove/move card packages through the same plan preview and performance comparison code without saving a plan. " +
+        "Always returns previewOnly=true, canApply=false, and applyPlanId=null; detailLevel=full includes the full preview model fields.")]
+    public async Task<object> PreviewCardPackageAsync(
         string workspaceId,
         string? name = null,
         string? rationale = null,
@@ -86,6 +95,10 @@ public sealed class PlanTools
         ExplicitDeckPlanCardChange[]? removeCards = null,
         ExplicitDeckPlanMoveCardChange[]? moveCards = null,
         bool resolveAddedCards = true,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
+        [Description("Source-support depth for package cards: none, minimal, or balanced.")]
+        string sourceSupportDepth = PreviewSourceSupportDepths.Minimal,
         [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, or stax.")]
         string simulationProfile = SimulationProfileIds.Auto,
         int simulations = 500,
@@ -93,19 +106,23 @@ public sealed class PlanTools
         int seed = 1337,
         CancellationToken cancellationToken = default)
     {
-        return plans.PreviewCardPackageAsync(
-            workspaceId,
-            name,
-            rationale,
-            addCards,
-            removeCards,
-            moveCards,
-            resolveAddedCards,
-            simulationProfile,
-            simulations,
-            maxTurn,
-            seed,
-            cancellationToken);
+        DeckCardPackagePreviewResult preview = await plans
+            .PreviewCardPackageAsync(
+                workspaceId,
+                name,
+                rationale,
+                addCards,
+                removeCards,
+                moveCards,
+                resolveAddedCards,
+                sourceSupportDepth,
+                simulationProfile,
+                simulations,
+                maxTurn,
+                seed,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return PlanPreviewPresenter.Present(preview, detailLevel);
     }
 
     /// <summary>
@@ -159,7 +176,9 @@ public sealed class PlanTools
     /// Applies a saved deck edit plan.
     /// </summary>
     [McpServerTool(Name = "deck_plan_apply", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
-    [Description("Apply a persisted deck edit plan, returning structured success or failed-operation details. Archidekt writeback workspaces require or create a checkpoint before multi-card edits.")]
+    [Description(
+        "Apply a persisted deck edit plan, returning structured success or failed-operation details. " +
+        "Archidekt writeback workspaces require or create a checkpoint before multi-card edits.")]
     public async Task<object> ApplyDeckPlanAsync(
         string planId,
         bool createCheckpoint = true,

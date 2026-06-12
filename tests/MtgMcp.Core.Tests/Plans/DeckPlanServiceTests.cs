@@ -687,6 +687,7 @@ public sealed partial class DeckIntelligenceTests
                 }
             ],
             resolveAddedCards: false,
+            sourceSupportDepth: PreviewSourceSupportDepths.Balanced,
             simulationProfile: SimulationProfileIds.Neutral,
             simulations: 100,
             maxTurn: 4,
@@ -702,7 +703,13 @@ public sealed partial class DeckIntelligenceTests
         result.Preview.Before.Analysis.IncludedCards.Should().BeGreaterThan(result.Preview.After.Analysis.IncludedCards);
         result.RoleDeltas.Should().Contain(delta => delta.Role == DeckRoles.Interaction && delta.Delta < 0);
         result.ValidationChanges.Should().NotBeNull();
-        result.SourceSupport.Should().OnlyContain(row => row.Status == "not-evaluated");
+        result.SourceSupportDepth.Should().Be(PreviewSourceSupportDepths.Balanced);
+        result.SourceSupport.Should().Contain(row =>
+            row.CardName == "Arcane Signet"
+            && row.Status == "source-backed-metadata"
+            && row.ScryfallUri != null
+            && row.Role == DeckRoles.Ramp
+            && row.Price.HasValue);
         result.Performance.Deltas.Should().NotBeEmpty();
         (await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken)).Should().BeEmpty();
     }

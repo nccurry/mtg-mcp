@@ -386,6 +386,37 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
+    /// Verifies that Reddit HTTP 403 is reported as source status instead of failing the recommendation run.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_ReturnsAccessBlockedStatusForForbiddenResponse()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
+            .Respond(HttpStatusCode.Forbidden, "application/json", """{ "error": "forbidden" }""");
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)));
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
+        budget.MaxDecksPerSource = 1;
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            Query(),
+            budget,
+            TestContext.Current.CancellationToken);
+
+        report.Signals.Should().BeEmpty();
+        report.Discussions.Should().BeEmpty();
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "reddit-discussions"
+            && source.Status == CorpusSourceStatuses.AccessBlocked
+            && source.Notes.Any(note => note.Contains("403", StringComparison.OrdinalIgnoreCase)));
+        report.Notes.Should().Contain(note => note.Contains("Continuing without Reddit", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that Reddit public discussion evidence is enabled by default.
     /// </summary>
     [Fact]

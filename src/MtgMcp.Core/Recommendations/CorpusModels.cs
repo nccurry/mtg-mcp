@@ -71,6 +71,11 @@ public static class CorpusSourceStatuses
     /// Indicates a source query failed.
     /// </summary>
     public const string Failed = "failed";
+
+    /// <summary>
+    /// Indicates the source rejected access without making the recommendation run fail.
+    /// </summary>
+    public const string AccessBlocked = "access-blocked";
 }
 
 /// <summary>

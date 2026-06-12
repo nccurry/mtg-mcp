@@ -3,6 +3,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,19 @@ public sealed class McpSurfaceTests
     /// Maps two-byte IL opcodes for method-body inspection.
     /// </summary>
     private static readonly OpCode[] MultiByteOpCodes = CreateOpCodeLookup(multiByte: true);
+
+    /// <summary>
+    /// Serializes direct tool results with the same naming shape the MCP surface uses.
+    /// </summary>
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Verifies explicit null safety fields survive hosts that omit null object properties.
+    /// </summary>
+    private static readonly JsonSerializerOptions NullIgnoringWebJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     /// <summary>
     /// Lists all tool wrapper types that contribute to the MCP surface.
@@ -377,6 +391,21 @@ public sealed class McpSurfaceTests
             .Contain("auto")
             .And.Contain("neutral")
             .And.Contain("stax");
+        GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewDeckPlanAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
+        GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
+        GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "sourceSupportDepth")
+            .Should()
+            .Contain("none")
+            .And.Contain("minimal")
+            .And.Contain("balanced");
         GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "simulationProfile")
             .Should()
             .Contain("auto")
@@ -959,6 +988,115 @@ public sealed class McpSurfaceTests
         compact.Moved.Should().Be(0);
         compact.ChangedCards.Should().Equal("Sol Ring");
         compact.Notes.Should().Contain(note => note.Contains("Missing Category", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that preview tools default to compact summaries while preserving a full raw escape hatch.
+    /// </summary>
+    [Fact]
+    public async Task PlanPreviewTools_DefaultToCompactSummariesAndFullEscapeHatch()
+    {
+        InMemoryRepository repository = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Preview Compact",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        OracleText = "{T}: Add {C}{C}.",
+                        ScryfallUri = "https://scryfall.test/card/Sol%20Ring"
+                    }
+                },
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Quantity preview",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.SetCardQuantity,
+                    CardName = "Sol Ring",
+                    Quantity = 2,
+                    Category = DeckRoles.Ramp
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog(), planRepository: plans);
+        DeckPlanService planService = new(
+            repository,
+            new EmptyCardCatalog(),
+            deckService,
+            planRepository: plans);
+        PlanTools tools = new(
+            planService,
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Plan })));
+
+        JsonElement compactPlan = JsonSerializer.SerializeToElement(await tools.PreviewDeckPlanAsync(
+            plan.PlanId,
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+        JsonElement compactPackage = JsonSerializer.SerializeToElement(await tools.PreviewCardPackageAsync(
+            workspace.Id,
+            removeCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Sol Ring",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ],
+            simulations: 10,
+            maxTurn: 2,
+            cancellationToken: TestContext.Current.CancellationToken), NullIgnoringWebJsonOptions);
+        JsonElement fullPackage = JsonSerializer.SerializeToElement(await tools.PreviewCardPackageAsync(
+            workspace.Id,
+            removeCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Sol Ring",
+                    Quantity = 1,
+                    Category = DeckRoles.Ramp
+                }
+            ],
+            detailLevel: "full",
+            sourceSupportDepth: PreviewSourceSupportDepths.None,
+            simulations: 10,
+            maxTurn: 2,
+            cancellationToken: TestContext.Current.CancellationToken), NullIgnoringWebJsonOptions);
+
+        compactPlan.GetProperty("detailLevel").GetString().Should().Be("summary");
+        compactPlan.GetProperty("summary").GetProperty("includedCards").GetProperty("delta").GetInt32()
+            .Should()
+            .Be(1);
+        compactPlan.GetProperty("before").ValueKind.Should().Be(JsonValueKind.Null);
+        compactPackage.GetProperty("previewOnly").GetBoolean().Should().BeTrue();
+        compactPackage.GetProperty("canApply").GetBoolean().Should().BeFalse();
+        compactPackage.GetProperty("applyPlanId").ValueKind.Should().Be(JsonValueKind.Null);
+        compactPackage.GetProperty("sourceSupportDepth").GetString().Should().Be(PreviewSourceSupportDepths.Minimal);
+        compactPackage.GetProperty("sourceSupport").EnumerateArray()
+            .Should()
+            .Contain(row => row.GetProperty("status").GetString() == "source-backed-metadata");
+        compactPackage.TryGetProperty("preview", out _).Should().BeFalse();
+        fullPackage.GetProperty("previewOnly").GetBoolean().Should().BeTrue();
+        fullPackage.GetProperty("canApply").GetBoolean().Should().BeFalse();
+        fullPackage.GetProperty("applyPlanId").ValueKind.Should().Be(JsonValueKind.Null);
+        fullPackage.GetProperty("sourceSupportDepth").GetString().Should().Be(PreviewSourceSupportDepths.None);
+        fullPackage.GetProperty("sourceSupport").GetArrayLength().Should().Be(0);
+        fullPackage.TryGetProperty("preview", out _).Should().BeTrue();
     }
 
     /// <summary>

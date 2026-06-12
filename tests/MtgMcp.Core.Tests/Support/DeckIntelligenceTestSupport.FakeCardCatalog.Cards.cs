@@ -378,6 +378,34 @@ public sealed partial class DeckIntelligenceTests
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.50" }
                 },
+                "Hidden Token Maker" => new CardInfo
+                {
+                    Id = "hidden-token-maker",
+                    OracleId = "oracle-hidden-token-maker",
+                    Name = "Hidden Token Maker",
+                    ManaCost = "{2}{B}",
+                    ManaValue = 3,
+                    TypeLine = "Creature - Human Warlock",
+                    OracleText = "When Hidden Token Maker enters, create two 1/1 black creature tokens.",
+                    ColorIdentity = ["B"],
+                    EdhrecRank = 9_000,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.75" }
+                },
+                "Obscure Combo Engine" => new CardInfo
+                {
+                    Id = "obscure-combo-engine",
+                    OracleId = "oracle-obscure-combo-engine",
+                    Name = "Obscure Combo Engine",
+                    ManaCost = "{2}",
+                    ManaValue = 2,
+                    TypeLine = "Artifact",
+                    OracleText = "Combo. Untap target permanent and copy target activated ability.",
+                    ColorIdentity = [],
+                    EdhrecRank = 9_500,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "0.50" }
+                },
                 _ => new CardInfo
                 {
                     Id = name.ToLowerInvariant().Replace(' ', '-'),
