@@ -241,6 +241,61 @@ public sealed class SimulationProfileTests
     }
 
     /// <summary>
+    /// Verifies that commander-damage routes need pump or evasion support, not commander presence alone.
+    /// </summary>
+    [Fact]
+    public void SimulationRouteEvaluator_RequiresSupportForCommanderDamageRoutes()
+    {
+        SimulationRouteDefinition route = new()
+        {
+            Name = "Commander Damage",
+            Kind = "commander-damage",
+            EarliestTurn = 6,
+            Source = "deck-intent",
+            Requirements = ["commander", "commander-damage-pressure"]
+        };
+        DeckCard commander = Card(
+            "Aurelia, the Warleader",
+            DeckRoles.Commander,
+            "Legendary Creature - Angel",
+            "Flying, vigilance, haste. Whenever Aurelia attacks for the first time each turn, untap all creatures you control.");
+        commander.Snapshot.ManaValue = 4;
+
+        List<SimulationRouteEvidence> weakEvidence = SimulationRouteEvaluator.EvaluateRoutes(
+            [route],
+            new SimulationRouteState
+            {
+                Turn = 6,
+                CommanderOnBattlefield = true,
+                Battlefield = [commander]
+            });
+        weakEvidence.Single().Matched.Should().BeFalse();
+        weakEvidence.Single().MissingRequirements.Should().Contain(line =>
+            line.Contains("more than commander presence", StringComparison.OrdinalIgnoreCase));
+
+        List<SimulationRouteEvidence> supportedEvidence = SimulationRouteEvaluator.EvaluateRoutes(
+            [route],
+            new SimulationRouteState
+            {
+                Turn = 6,
+                CommanderOnBattlefield = true,
+                Battlefield =
+                [
+                    commander,
+                    Card(
+                        "Blackblade Reforged",
+                        DeckDefaults.Mainboard,
+                        "Legendary Artifact - Equipment",
+                        "Equipped creature gets +1/+1 for each land you control. Equip legendary creature {3}."),
+                    Card("Whispersilk Cloak", DeckDefaults.Mainboard, "Artifact - Equipment", "Equipped creature can't be blocked and has shroud.")
+                ]
+            });
+        supportedEvidence.Single().Matched.Should().BeTrue();
+        supportedEvidence.Single().Evidence.Should().Contain(line =>
+            line.Contains("projected three-turn damage", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that slow-engine predicates report matched evidence and missing requirements.
     /// </summary>
     [Fact]

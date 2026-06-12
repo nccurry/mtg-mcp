@@ -386,6 +386,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             SorceryFinisherPressure sorceryFinisherPressure = BuildSorceryFinisherPressure(
                 hand,
                 castThisTurn,
+                battlefield,
+                tokens,
                 availableMana,
                 power);
             pressureScore = Math.Clamp(
@@ -712,6 +714,252 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Estimates what the goldfish sequencer must spend to cast a spell right now.
+    /// </summary>
+    private static GoldfishCastCost EstimateGoldfishCastCost(
+        DeckCard card,
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens,
+        int availableMana)
+    {
+        CardSnapshot snapshot = GetSnapshot(card);
+        string text = snapshot.OracleText ?? "";
+        int printedCost = GoldfishManaValue(card);
+        int requiredMana = printedCost;
+        if (HasConvoke(text))
+        {
+            requiredMana = Math.Max(0, requiredMana - ConvokeCreatureCount(battlefield, tokens));
+        }
+
+        int dynamicReduction = EstimateDynamicCostReduction(card, battlefield, tokens);
+        if (dynamicReduction > 0)
+        {
+            requiredMana = Math.Max(MinimumReducedCost(snapshot.ManaCost), requiredMana - dynamicReduction);
+        }
+
+        int activeReduction = EstimateActiveCostReduction(card, battlefield);
+        if (activeReduction > 0)
+        {
+            requiredMana = Math.Max(MinimumReducedCost(snapshot.ManaCost), requiredMana - activeReduction);
+        }
+
+        int xValue = 0;
+        if (HasGoldfishXCost(card) && UsesXAsScalingPayoff(card) && availableMana > requiredMana)
+        {
+            xValue = Math.Min(8, availableMana - requiredMana);
+        }
+
+        return new GoldfishCastCost(
+            RequiredMana: Math.Max(0, requiredMana),
+            XValue: xValue);
+    }
+
+    /// <summary>
+    /// Counts creatures that can safely pay convoke costs in a goldfish board.
+    /// </summary>
+    private static int ConvokeCreatureCount(IReadOnlyList<DeckCard> battlefield, int tokens)
+    {
+        int creatures = tokens;
+        foreach (DeckCard card in battlefield)
+        {
+            if (IsCreatureSpell(card))
+            {
+                creatures++;
+            }
+        }
+
+        return creatures;
+    }
+
+    /// <summary>
+    /// Checks whether Oracle text contains the convoke keyword.
+    /// </summary>
+    private static bool HasConvoke(string oracleText)
+    {
+        return oracleText.Contains("convoke", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Estimates card-text reductions such as Blasphemous Act without full rules parsing.
+    /// </summary>
+    private static int EstimateDynamicCostReduction(
+        DeckCard card,
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        if (!ContainsAny(text, "costs {1} less", "cost {1} less", "costs one less", "cost one less"))
+        {
+            return 0;
+        }
+
+        if (ContainsAny(text, "for each creature"))
+        {
+            return ConvokeCreatureCount(battlefield, tokens);
+        }
+
+        if (ContainsAny(text, "for each token"))
+        {
+            return tokens;
+        }
+
+        if (ContainsAny(text, "for each artifact"))
+        {
+            return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Artifact"));
+        }
+
+        if (ContainsAny(text, "for each enchantment"))
+        {
+            return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Enchantment"));
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Estimates cost reduction from permanents already deployed in the goldfish board.
+    /// </summary>
+    private static int EstimateActiveCostReduction(DeckCard spell, IReadOnlyList<DeckCard> battlefield)
+    {
+        int reduction = 0;
+        foreach (DeckCard permanent in battlefield)
+        {
+            if (CostReducerApplies(permanent, spell))
+            {
+                reduction++;
+            }
+        }
+
+        return Math.Min(3, reduction);
+    }
+
+    /// <summary>
+    /// Checks whether one battlefield permanent reduces the candidate spell's cost.
+    /// </summary>
+    private static bool CostReducerApplies(DeckCard reducer, DeckCard spell)
+    {
+        string text = GetSnapshot(reducer).OracleText ?? "";
+        if (!ContainsAny(text, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast"))
+        {
+            return false;
+        }
+
+        string typeLine = GetSnapshot(spell).TypeLine ?? "";
+        if (ContainsAny(text, "creature spells") && !ContainsAny(typeLine, "Creature"))
+        {
+            return false;
+        }
+
+        if (ContainsAny(text, "instant and sorcery spells")
+            && !ContainsAny(typeLine, "Instant", "Sorcery"))
+        {
+            return false;
+        }
+
+        if (ContainsAny(text, "artifact spells") && !ContainsAny(typeLine, "Artifact"))
+        {
+            return false;
+        }
+
+        if (ContainsAny(text, "enchantment spells") && !ContainsAny(typeLine, "Enchantment"))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Keeps generic cost reduction from erasing colored mana that still has to be paid.
+    /// </summary>
+    private static int MinimumReducedCost(string? manaCost)
+    {
+        if (string.IsNullOrWhiteSpace(manaCost))
+        {
+            return 0;
+        }
+
+        int coloredSymbols = 0;
+        for (int index = 0; index < manaCost.Length; index++)
+        {
+            if (manaCost[index] != '{')
+            {
+                continue;
+            }
+
+            int close = manaCost.IndexOf('}', index + 1);
+            if (close < 0)
+            {
+                break;
+            }
+
+            string symbol = manaCost[(index + 1)..close];
+            if (!int.TryParse(symbol, out _)
+                && !symbol.Equals("X", StringComparison.OrdinalIgnoreCase))
+            {
+                coloredSymbols++;
+            }
+
+            index = close;
+        }
+
+        return coloredSymbols;
+    }
+
+    /// <summary>
+    /// Checks whether the card can spend extra mana through an X cost.
+    /// </summary>
+    private static bool HasGoldfishXCost(DeckCard card)
+    {
+        CardSnapshot snapshot = GetSnapshot(card);
+        return ContainsAny(snapshot.ManaCost ?? "", "{X}", "{x}");
+    }
+
+    /// <summary>
+    /// Checks whether spending extra mana on X changes a board or damage outcome.
+    /// </summary>
+    private static bool UsesXAsScalingPayoff(DeckCard card)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        return ContainsAny(text, "create X", "draw X", "deals X", "get +X/+X", "gets +X/+X", "lose X life");
+    }
+
+    /// <summary>
+    /// Estimates extra tokens produced by a cast X or token-scaling spell.
+    /// </summary>
+    private static int EstimateTokenScaling(DeckCard spell, int xValue)
+    {
+        string text = GetSnapshot(spell).OracleText ?? "";
+        if (xValue > 0 && ContainsAny(text, "create X"))
+        {
+            return Math.Min(8, xValue);
+        }
+
+        if (ContainsAny(text, "for each creature you control", "for each token you control"))
+        {
+            return 2;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Estimates extra win pressure supplied by a resolved X payoff.
+    /// </summary>
+    private static int EstimateXSpellPressure(DeckCard spell, int xValue)
+    {
+        if (xValue <= 0)
+        {
+            return 0;
+        }
+
+        string text = GetSnapshot(spell).OracleText ?? "";
+        return ContainsAny(text, "deals X", "lose X life", "get +X/+X", "gets +X/+X")
+            ? Math.Min(8, Math.Max(2, xValue / 2))
+            : 0;
+    }
+
+    /// <summary>
     /// Checks whether an opening hand plausibly casts the commander by the profile target turn.
     /// </summary>
     private static bool HasGoldfishCommanderPlan(
@@ -798,7 +1046,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         ref int winPressure,
         ref int dungeonProgress)
     {
-        foreach (DeckCard spell in hand.OrderBy(card => CastPriority(card, turn, profile)).ThenBy(card => GetSnapshot(card).ManaValue ?? 0).ToList())
+        int orderingTokens = tokens;
+        int orderingMana = availableMana;
+        foreach (DeckCard spell in hand
+            .OrderBy(card => CastPriority(card, turn, profile))
+            .ThenBy(card => EstimateGoldfishCastCost(card, battlefield, orderingTokens, orderingMana).TotalManaSpent)
+            .ToList())
         {
             CardRoleAssignment role = DeckRoleClassifier.Classify(spell);
             if (role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
@@ -808,7 +1061,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 continue;
             }
 
-            int cost = Math.Max(0, (int)Math.Ceiling(GetSnapshot(spell).ManaValue ?? 2));
+            GoldfishCastCost castCost = EstimateGoldfishCastCost(spell, battlefield, tokens, availableMana);
+            int cost = castCost.TotalManaSpent;
             if (ShouldHoldGoldfishInteraction(spell, role, hand, availableMana, turn, profile))
             {
                 continue;
@@ -851,7 +1105,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
             if (role.Tags.Contains(DeckTags.Tokens) || role.Tags.Contains(DeckTags.SacrificeFodder))
             {
-                tokens += 2;
+                tokens += 2 + EstimateTokenScaling(spell, castCost.XValue);
             }
 
             if (ContainsAny(GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
@@ -878,7 +1132,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
             if (role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase) || role.Tags.Contains(DeckTags.Finishers))
             {
-                winPressure += 4;
+                winPressure += 4 + EstimateXSpellPressure(spell, castCost.XValue);
             }
         }
     }
@@ -1309,8 +1563,42 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int evasion = battlefield.Count(IsEvasionRouteCard) * 4;
         int pump = battlefield.Where(IsPumpRouteCard).Sum(EstimatePumpPressure) * 3;
         int drain = EstimateDrainPressure(battlefield, tokens) * 4;
-        int commander = commanderOnline ? 8 : 0;
+        int commander = EstimateCommanderPressure(battlefield, commanderOnline);
         return Math.Clamp(power * 2 + winPressure * 5 + evasion + pump + drain + commander, 0, 100);
+    }
+
+    /// <summary>
+    /// Separates commander presence pressure from actual commander-damage support.
+    /// </summary>
+    private static int EstimateCommanderPressure(IReadOnlyList<DeckCard> battlefield, bool commanderOnline)
+    {
+        if (!commanderOnline)
+        {
+            return 0;
+        }
+
+        int support = battlefield.Count(card => !IsCommanderCard(card) && IsCommanderDamageSupport(card));
+        return Math.Clamp(3 + (support * 5), 0, 18);
+    }
+
+    /// <summary>
+    /// Identifies pump, evasion, or Voltron text that can turn commander presence into pressure.
+    /// </summary>
+    private static bool IsCommanderDamageSupport(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = GetSnapshot(card).OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Voltron, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Evasion, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(
+                text,
+                "equipped creature gets",
+                "enchanted creature gets",
+                "commander creatures you own have",
+                "double strike",
+                "can't be blocked",
+                "unblockable",
+                "trample");
     }
 
     /// <summary>
@@ -1393,6 +1681,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static SorceryFinisherPressure BuildSorceryFinisherPressure(
         IReadOnlyList<DeckCard> hand,
         IReadOnlyList<DeckCard> castThisTurn,
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens,
         int availableMana,
         int boardPower)
     {
@@ -1400,7 +1690,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         DeckCard? castFinisher = castThisTurn.LastOrDefault(IsSorceryFinisherCard);
         DeckCard? finisher = heldFinisher ?? castFinisher;
         bool held = finisher is not null;
-        bool castable = castFinisher is not null || (heldFinisher is not null && GoldfishManaValue(heldFinisher) <= availableMana);
+        GoldfishCastCost? heldCost = heldFinisher is null
+            ? null
+            : EstimateGoldfishCastCost(heldFinisher, battlefield, tokens, availableMana);
+        bool castable = castFinisher is not null
+            || (heldCost is not null && heldCost.TotalManaSpent <= availableMana);
         int projectedDamage = castable
             ? EstimateProjectedFinisherDamage(finisher!, boardPower)
             : boardPower;
@@ -1427,7 +1721,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
         if (castable)
         {
-            result.Evidence.Add($"Available mana {availableMana} can cast the held finisher.");
+            string costText = heldCost is null
+                ? "the finisher was already cast"
+                : $"effective cost {heldCost.TotalManaSpent}";
+            result.Evidence.Add($"Available mana {availableMana} can support {costText}.");
         }
 
         if (pressure > 0)
@@ -1684,6 +1981,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .SelectMany(run => run.Turns.Where(snapshot => snapshot.Turn == targetTurn))
             .ToList();
         int medianThreat = Median(targetSnapshots.Select(snapshot => snapshot.ThreatPressure));
+        result.PressureOnlyProgress = Math.Clamp(medianThreat, 0, 100);
         double routePressure = result.WinEstimate.Routes.Count == 0
             ? 0
             : result.WinEstimate.Routes.Max(route => route.Probability) * 100;
@@ -1708,10 +2006,16 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             ? 0
             : result.WinEstimate.RouteEvidence.Max(evidence => evidence.Confidence) * 100;
         result.WinDetectionConfidence = Math.Clamp((int)Math.Round(confidence), 0, 100);
+        result.LethalConfidence = Math.Clamp(
+            (int)Math.Round(result.WinEstimate.ObservedWinRate * confidence),
+            0,
+            100);
+        result.WinEstimate.PressureOnlyProgress = result.PressureOnlyProgress;
+        result.WinEstimate.LethalConfidence = result.LethalConfidence;
         result.Notes.Add(
             "Summary metrics use 0-100 scales: boardDevelopmentScore measures board shape, "
                 + "threatPressure measures combat/drain/route pressure, engineOnlineRate measures repeatable engines, "
-                + "and winDetectionConfidence is higher for deterministic route evidence than fallback pressure.");
+                + "pressureOnlyProgress is non-lethal pressure, and lethalConfidence combines win rate with route evidence.");
     }
 
     /// <summary>
@@ -1911,6 +2215,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .Select(group => group.First())
             .Take(10)
             .ToList();
+        estimate.PressureOnlyProgress = EstimateFallbackPressureProgress(estimate.Routes);
+        estimate.LethalConfidence = EstimateLethalConfidence(estimate);
 
         if (estimate.MedianObservedWinTurn is null)
         {
@@ -1932,7 +2238,38 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         estimate.Notes.Add(
             "Observed win-turn percentiles only include runs that reached a heuristic win; winByTurnRates "
                 + "and observedWinRate are measured against all runs.");
+        estimate.Notes.Add("Pressure-only progress is reported separately from lethal confidence.");
         return estimate;
+    }
+
+    /// <summary>
+    /// Estimates how much of the win estimate came from fallback pressure instead of deterministic routes.
+    /// </summary>
+    private static int EstimateFallbackPressureProgress(IReadOnlyList<WinRoute> routes)
+    {
+        double progress = 0;
+        foreach (WinRoute route in routes)
+        {
+            bool fallbackOnly = route.Evidence.Count > 0
+                && route.Evidence.All(evidence => evidence.Source.Equals("fallback", StringComparison.OrdinalIgnoreCase));
+            if (fallbackOnly)
+            {
+                progress = Math.Max(progress, route.Probability * 100);
+            }
+        }
+
+        return Math.Clamp((int)Math.Round(progress), 0, 100);
+    }
+
+    /// <summary>
+    /// Combines observed win rate with the strongest route evidence confidence.
+    /// </summary>
+    private static int EstimateLethalConfidence(WinTurnEstimate estimate)
+    {
+        double confidence = estimate.RouteEvidence.Count == 0
+            ? 0
+            : estimate.RouteEvidence.Max(evidence => evidence.Confidence) * 100;
+        return Math.Clamp((int)Math.Round(estimate.ObservedWinRate * confidence), 0, 100);
     }
 
     /// <summary>
@@ -2146,6 +2483,17 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         /// Gets or sets whether a commander and Background were both online by this turn.
         /// </summary>
         public bool CommanderWithBackgroundOnlineByTurn { get; set; }
+    }
+
+    /// <summary>
+    /// Carries the bounded cast-cost estimate used by one goldfish spell cast.
+    /// </summary>
+    private sealed record GoldfishCastCost(int RequiredMana, int XValue)
+    {
+        /// <summary>
+        /// Total mana the sequencer spends, including chosen X value.
+        /// </summary>
+        public int TotalManaSpent => RequiredMana + XValue;
     }
 
     /// <summary>

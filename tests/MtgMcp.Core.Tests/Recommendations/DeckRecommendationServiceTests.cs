@@ -716,6 +716,12 @@ public sealed partial class DeckIntelligenceTests
         ReplacementSuggestion suggestion = result.Suggestions.Should().ContainSingle().Subject;
         suggestion.WithCardScryfallUri.Should().EndWith(Uri.EscapeDataString("Arcane Signet"));
         suggestion.ReplaceCardScryfallUri.Should().EndWith(Uri.EscapeDataString("Mana Crypt"));
+        suggestion.FeatureVector.RoleFit.Should().BeGreaterThan(0.9);
+        suggestion.FeatureVector.CommanderCurve.Should().BeGreaterThan(0.5);
+        suggestion.FeatureVector.Fixing.Should().BeGreaterThan(0.8);
+        suggestion.FeatureVector.Price.Should().BeGreaterThan(0);
+        suggestion.FeatureVector.EvidenceQuality.Should().BeGreaterThan(0.6);
+        suggestion.Rationale.Should().Contain("feature vector");
         result.Plan.Operations.Should().HaveCount(2);
         result.Plan.Operations[0].Operation.Should().Be(DeckEditOperations.RemoveCard);
         result.Plan.Operations[1].Operation.Should().Be(DeckEditOperations.AddCard);

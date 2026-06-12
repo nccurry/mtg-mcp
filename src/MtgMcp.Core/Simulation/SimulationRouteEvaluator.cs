@@ -238,12 +238,7 @@ public static class SimulationRouteEvaluator
 
         if (text.Equals("commander-damage-pressure", StringComparison.OrdinalIgnoreCase))
         {
-            return MatchZonePredicate(
-                state.Battlefield,
-                IsCommanderDamagePressureCard,
-                "battlefield has commander-damage pressure support",
-                "battlefield lacks commander-damage pressure support",
-                out message);
+            return MatchCommanderDamagePressure(state, out message);
         }
 
         if (TryReadPrefixedValue(text, "card:", out string cardName))
@@ -536,6 +531,78 @@ public static class SimulationRouteEvaluator
                 "unblockable",
                 "trample",
                 "base power and toughness");
+    }
+
+    /// <summary>
+    /// Requires real commander-damage support before a route can count as lethal pressure.
+    /// </summary>
+    private static bool MatchCommanderDamagePressure(
+        SimulationRouteState state,
+        out string message)
+    {
+        DeckCard? commander = state.Battlefield.FirstOrDefault(IsCommanderCard);
+        if (!state.CommanderOnBattlefield || commander is null)
+        {
+            message = "commander-damage route needs the commander on the battlefield";
+            return false;
+        }
+
+        int basePower = EstimateCommanderPower(commander);
+        int supportCount = 0;
+        int evasionCount = 0;
+        foreach (DeckCard card in state.Battlefield)
+        {
+            if (ReferenceEquals(card, commander) || !IsCommanderDamagePressureCard(card))
+            {
+                continue;
+            }
+
+            supportCount++;
+            if (IsCommanderEvasionSupport(card))
+            {
+                evasionCount++;
+            }
+        }
+
+        int projectedHit = basePower + (supportCount * 2) + (evasionCount * 2);
+        int expectedDamage = projectedHit * (evasionCount > 0 ? 3 : 2);
+        bool matched = basePower >= 3
+            && supportCount >= 1
+            && expectedDamage >= 21
+            && (evasionCount > 0 || supportCount >= 2);
+        message = matched
+            ? $"commander damage has base power {basePower}, support {supportCount}, evasion {evasionCount}, projected three-turn damage {expectedDamage}"
+            : "commander damage needs more than commander presence: "
+                + $"base power {basePower}, support {supportCount}, evasion {evasionCount}, projected damage {expectedDamage}";
+        return matched;
+    }
+
+    /// <summary>
+    /// Identifies command-zone creatures from categories or role classification.
+    /// </summary>
+    private static bool IsCommanderCard(DeckCard card)
+    {
+        return DeckCategoryOrdering.PrimaryCategory(card).Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase)
+            || DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Commander, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Estimates commander power from cached data without parsing full printed power.
+    /// </summary>
+    private static int EstimateCommanderPower(DeckCard commander)
+    {
+        return Math.Max(1, (int)Math.Ceiling(commander.Snapshot?.ManaValue ?? 3));
+    }
+
+    /// <summary>
+    /// Checks for support that makes repeated commander hits plausible.
+    /// </summary>
+    private static bool IsCommanderEvasionSupport(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Evasion, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(text, "flying", "menace", "can't be blocked", "unblockable", "trample", "double strike");
     }
 
     /// <summary>

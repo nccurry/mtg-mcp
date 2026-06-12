@@ -74,6 +74,16 @@ public sealed class WinTurnEstimate
     public double ObservedWinRate { get; set; }
 
     /// <summary>
+    /// Reports bounded board or route pressure that did not by itself prove lethal.
+    /// </summary>
+    public int PressureOnlyProgress { get; set; }
+
+    /// <summary>
+    /// Reports bounded confidence that observed wins came from lethal-quality evidence.
+    /// </summary>
+    public int LethalConfidence { get; set; }
+
+    /// <summary>
     /// Gets or sets the median win turn among only the runs that reached a heuristic win.
     /// </summary>
     public int? MedianObservedWinTurn { get; set; }
@@ -247,6 +257,16 @@ public sealed class GoldfishSimulationResult
     /// Gets or sets a 0-100 pressure score from combat, drain, commander, finisher, and route pressure.
     /// </summary>
     public int ThreatPressure { get; set; }
+
+    /// <summary>
+    /// Reports target-turn pressure that is useful progress but not treated as a win by itself.
+    /// </summary>
+    public int PressureOnlyProgress { get; set; }
+
+    /// <summary>
+    /// Reports bounded confidence that the observed win routes represent actual lethal pressure.
+    /// </summary>
+    public int LethalConfidence { get; set; }
 
     /// <summary>
     /// Gets or sets the 0-100 share of runs where a repeatable engine was online by the target turn.

@@ -137,8 +137,13 @@ public sealed partial class DeckIntelligenceTests
         goldfish.WinEstimate.P25ObservedWinTurn.Should().Be(5);
         goldfish.WinEstimate.P75ObservedWinTurn.Should().Be(5);
         goldfish.WinEstimate.MedianWinTurn.Should().Be(5);
+        goldfish.LethalConfidence.Should().BeGreaterThan(0);
+        goldfish.WinEstimate.LethalConfidence.Should().Be(goldfish.LethalConfidence);
+        goldfish.WinEstimate.PressureOnlyProgress.Should().Be(goldfish.PressureOnlyProgress);
         string winEstimateJson = JsonSerializer.Serialize(goldfish.WinEstimate, WebJsonSerializerOptions);
         winEstimateJson.Should().Contain("medianObservedWinTurn");
+        winEstimateJson.Should().Contain("lethalConfidence");
+        winEstimateJson.Should().Contain("pressureOnlyProgress");
         winEstimateJson.Should().NotContain("medianWinTurn");
         goldfish.WinEstimate.WinByTurnRates.Should().Contain([
             new KeyValuePair<int, double>(1, 0),
@@ -157,6 +162,95 @@ public sealed partial class DeckIntelligenceTests
         projected.MedianNonlandPermanents.Should().Be(8);
         projected.LikelyBoard.Should().Be("0 lands, 0 mana sources, 8 nonland permanents, about 0 pressure, 0 cards in hand.");
         winTurn.Routes.Should().ContainSingle(route => route.Kind == "combo" && route.Probability == 1);
+    }
+
+    /// <summary>
+    /// Verifies that bounded effective-cost heuristics cover convoke, Blasphemous Act-style costs, and X token spells.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_UsesBoundedEffectiveCostsForDynamicSpells()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Dynamic Cost Goldfish",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 20,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Forest", ManaValue = 0, OracleText = "{T}: Add {G}." }
+                },
+                new DeckCard
+                {
+                    Name = "Free Soldier",
+                    Quantity = 35,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    Snapshot = new CardSnapshot { TypeLine = "Creature - Soldier", ManaValue = 0 }
+                },
+                new DeckCard
+                {
+                    Name = "Blasphemous Act",
+                    Quantity = 15,
+                    PrimaryCategory = DeckRoles.BoardWipes,
+                    Categories = [DeckRoles.BoardWipes],
+                    Snapshot = new CardSnapshot
+                    {
+                        ManaCost = "{8}{R}",
+                        ManaValue = 9,
+                        TypeLine = "Sorcery",
+                        OracleText = "This spell costs {1} less to cast for each creature on the battlefield. Blasphemous Act deals 13 damage to each creature."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Hour of Reckoning",
+                    Quantity = 10,
+                    PrimaryCategory = DeckRoles.BoardWipes,
+                    Categories = [DeckRoles.BoardWipes],
+                    Snapshot = new CardSnapshot
+                    {
+                        ManaCost = "{4}{W}{W}{W}",
+                        ManaValue = 7,
+                        TypeLine = "Sorcery",
+                        OracleText = "Convoke. Destroy all nontoken creatures."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Secure the Wastes",
+                    Quantity = 20,
+                    PrimaryCategory = DeckRoles.Synergy,
+                    Categories = [DeckRoles.Synergy],
+                    Snapshot = new CardSnapshot
+                    {
+                        ManaCost = "{X}{W}",
+                        ManaValue = 1,
+                        TypeLine = "Instant",
+                        OracleText = "Create X 1/1 white Warrior creature tokens."
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 3,
+            simulations: 100,
+            seed: 77,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.RepresentativeLines.Should().Contain(line =>
+            line.Contains("Blasphemous Act", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Hour of Reckoning", StringComparison.OrdinalIgnoreCase));
+        goldfish.TurnSummaries.Single(summary => summary.Turn == 3).MedianTokens.Should().BeGreaterThan(2);
+        goldfish.PressureOnlyProgress.Should().BeGreaterThan(0);
     }
 
     /// <summary>

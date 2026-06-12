@@ -147,6 +147,50 @@ public sealed class RampOperationalFactExtractorTests
     }
 
     /// <summary>
+    /// Verifies replacement-style ramp comparisons expose timing differences in a five-mana commander deck.
+    /// </summary>
+    [Fact]
+    public void Evaluate_SeparatesBaubleTwoManaRockAndCostReducerForFiveManaCommander()
+    {
+        DeckWorkspace workspace = CreateFiveManaCommanderDeck();
+        RampContextEvaluation bauble = RampContextScorer.Evaluate(
+            workspace,
+            WayfarersBauble(),
+            RampOperationalFactExtractor.Extract(WayfarersBauble()));
+        DeckCard signet = Card(
+            "Arcane Signet",
+            "Artifact",
+            "{2}",
+            2,
+            "{T}: Add one mana of any color in your commander's color identity.",
+            [],
+            ["W", "U", "B", "R", "G"]);
+        RampContextEvaluation signetEvaluation = RampContextScorer.Evaluate(
+            workspace,
+            signet,
+            RampOperationalFactExtractor.Extract(signet));
+        DeckCard reducer = Card(
+            "Banner of Kinship",
+            "Artifact",
+            "{2}",
+            2,
+            "Creature spells you cast cost {1} less to cast.",
+            []);
+        RampContextEvaluation reducerEvaluation = RampContextScorer.Evaluate(
+            workspace,
+            reducer,
+            RampOperationalFactExtractor.Extract(reducer));
+
+        signetEvaluation.RampKind.Should().Be("manaRock");
+        reducerEvaluation.RampKind.Should().Be("costReducer");
+        signetEvaluation.Score.Should().BeGreaterThan(bauble.Score);
+        reducerEvaluation.SubScores["helpsCommanderOnCurve"].Should().Be(20);
+        bauble.TopIssues.Should().Contain(issue => issue.Contains("future activation mana", StringComparison.OrdinalIgnoreCase));
+        signetEvaluation.TopStrengths.Should().Contain(strength => strength.Contains("commander", StringComparison.OrdinalIgnoreCase));
+        reducerEvaluation.TopStrengths.Should().Contain(strength => strength.Contains("commander", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Provides representative ramp cards and expected operational kinds.
     /// </summary>
     public static TheoryData<DeckCard, string> RampCards()
@@ -201,6 +245,30 @@ public sealed class RampOperationalFactExtractorTests
             Cards =
             [
                 Card("Kenessos Test Commander", "Legendary Creature - Merfolk", "{1}{G}{U}", 3, "", ["G", "U"]),
+                Card("Forest", "Basic Land - Forest", null, 0, "{T}: Add {G}.", [], ["G"]),
+                Card("Island", "Basic Land - Island", null, 0, "{T}: Add {U}.", [], ["U"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a five-mana commander deck context for replacement comparison tests.
+    /// </summary>
+    private static DeckWorkspace CreateFiveManaCommanderDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = "five-mana-ramp-context",
+            Name = "Five Mana Ramp Context",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card("Five Mana Commander", "Legendary Creature - Avatar", "{3}{G}{U}", 5, "", ["G", "U"]),
                 Card("Forest", "Basic Land - Forest", null, 0, "{T}: Add {G}.", [], ["G"]),
                 Card("Island", "Basic Land - Island", null, 0, "{T}: Add {U}.", [], ["U"]),
             ],

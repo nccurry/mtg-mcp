@@ -62,6 +62,11 @@ public sealed class ReplacementSuggestion
     public double PriceScore { get; set; }
 
     /// <summary>
+    /// Breaks the replacement score into deterministic contextual features.
+    /// </summary>
+    public ReplacementFeatureVector FeatureVector { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the current price.
     /// </summary>
     public decimal? CurrentPrice { get; set; }
@@ -90,6 +95,57 @@ public sealed class ReplacementSuggestion
     /// Gets or sets the rationale.
     /// </summary>
     public string Rationale { get; set; } = "";
+}
+
+/// <summary>
+/// Breaks replacement scoring into named factors that can be inspected independently.
+/// </summary>
+public sealed class ReplacementFeatureVector
+{
+    /// <summary>
+    /// Measures primary role and tag overlap with the replaced card.
+    /// </summary>
+    public double RoleFit { get; set; }
+
+    /// <summary>
+    /// Measures whether the replacement helps the commander or deck curve.
+    /// </summary>
+    public double CommanderCurve { get; set; }
+
+    /// <summary>
+    /// Measures mana-value and tempo pressure compared with the replaced card.
+    /// </summary>
+    public double Tempo { get; set; }
+
+    /// <summary>
+    /// Measures color production or color-fixing relevance when applicable.
+    /// </summary>
+    public double Fixing { get; set; }
+
+    /// <summary>
+    /// Measures explicit deck-plan, intent, and tag synergy.
+    /// </summary>
+    public double PlanSynergy { get; set; }
+
+    /// <summary>
+    /// Measures whether the card remains useful after early development.
+    /// </summary>
+    public double LateGameFloor { get; set; }
+
+    /// <summary>
+    /// Measures interaction speed, modality, or resilience when relevant.
+    /// </summary>
+    public double InteractionModality { get; set; }
+
+    /// <summary>
+    /// Measures price fit using the active replacement mode.
+    /// </summary>
+    public double Price { get; set; }
+
+    /// <summary>
+    /// Measures the quality of source-backed metadata available for scoring.
+    /// </summary>
+    public double EvidenceQuality { get; set; }
 }
 
 /// <summary>
