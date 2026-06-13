@@ -92,9 +92,64 @@ public sealed class DeckQueryDataCard
     public int? EdhrecRank { get; set; }
 
     /// <summary>
+    /// Gets or sets the selected printing set code.
+    /// </summary>
+    public string? Set { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected printing collector number.
+    /// </summary>
+    public string? CollectorNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected printing release date.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the selected printing is released as of the current date.
+    /// </summary>
+    public bool IsReleased { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card legality for the deck format when source data includes it.
+    /// </summary>
+    public string? Legality { get; set; }
+
+    /// <summary>
     /// Gets or sets the card price.
     /// </summary>
     public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the price is safe to use for budget math.
+    /// </summary>
+    public bool PriceKnown { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider price field used for the selected price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected pricing policy.
+    /// </summary>
+    public string? PricingMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets release and pricing status for the selected printing.
+    /// </summary>
+    public string PrintingStatus { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets why the selected printing or price was chosen.
+    /// </summary>
+    public string SelectedPrintingReason { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets source legalities when available.
+    /// </summary>
+    public Dictionary<string, string> Legalities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets or sets the Scryfall card page when available.
@@ -151,6 +206,11 @@ public sealed class DeckQueryDataResult
     /// Gets or sets non-fatal query quality warnings.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal provider errors that prevented one or more searches from completing.
+    /// </summary>
+    public List<string> Errors { get; set; } = [];
 }
 
 /// <summary>
@@ -199,9 +259,64 @@ public sealed class DeckQueryCandidate
     public double PriceScore { get; set; }
 
     /// <summary>
+    /// Gets or sets the selected printing set code.
+    /// </summary>
+    public string? Set { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected printing collector number.
+    /// </summary>
+    public string? CollectorNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected printing release date.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the selected printing is released as of the current date.
+    /// </summary>
+    public bool IsReleased { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card legality for the deck format when source data includes it.
+    /// </summary>
+    public string? Legality { get; set; }
+
+    /// <summary>
     /// Gets or sets the card price.
     /// </summary>
     public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the price is safe to use for budget math.
+    /// </summary>
+    public bool PriceKnown { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider price field used for the selected price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected pricing policy.
+    /// </summary>
+    public string? PricingMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets release and pricing status for the selected printing.
+    /// </summary>
+    public string PrintingStatus { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets why the selected printing or price was chosen.
+    /// </summary>
+    public string SelectedPrintingReason { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets source legalities when available.
+    /// </summary>
+    public Dictionary<string, string> Legalities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets or sets the Scryfall card page for linking the candidate.
@@ -240,9 +355,64 @@ public sealed class DeckQueryRejectedCandidate
     public List<string> Tags { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the selected printing set code.
+    /// </summary>
+    public string? Set { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected printing collector number.
+    /// </summary>
+    public string? CollectorNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected printing release date.
+    /// </summary>
+    public DateOnly? ReleasedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the selected printing is released as of the current date.
+    /// </summary>
+    public bool IsReleased { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card legality for the deck format when source data includes it.
+    /// </summary>
+    public string? Legality { get; set; }
+
+    /// <summary>
+    /// Gets or sets source legalities when available.
+    /// </summary>
+    public Dictionary<string, string> Legalities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets or sets the card price when available.
     /// </summary>
     public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the price is safe to use for budget math.
+    /// </summary>
+    public bool PriceKnown { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider price field used for the selected price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected pricing policy.
+    /// </summary>
+    public string? PricingMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets release and pricing status for the selected printing.
+    /// </summary>
+    public string PrintingStatus { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets why the selected printing or price was chosen.
+    /// </summary>
+    public string SelectedPrintingReason { get; set; } = "";
 
     /// <summary>
     /// Gets or sets the Scryfall card page for rejected cards when catalog metadata was available.
@@ -299,4 +469,9 @@ public sealed class DeckQueryRecommendationResult
     /// Gets or sets non-fatal query quality warnings.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal provider errors that prevented one or more searches from completing.
+    /// </summary>
+    public List<string> Errors { get; set; } = [];
 }

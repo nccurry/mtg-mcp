@@ -204,6 +204,47 @@ public sealed class CardSearchResult
     public DateOnly? ReleasedAt { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the search result printing is already released.
+    /// </summary>
+    public bool IsReleased { get; set; }
+
+    /// <summary>
+    /// Gets or sets source legalities when search results include them.
+    /// </summary>
+    public Dictionary<string, string> Legalities { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets source price strings when search results include them.
+    /// </summary>
+    public Dictionary<string, string> Prices { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets whether the price is safe to use for budget math.
+    /// </summary>
+    public bool PriceKnown { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider price field used for the selected price.
+    /// </summary>
+    public string? PriceSource { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected price when one is known.
+    /// </summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets release and pricing status for the search result printing.
+    /// </summary>
+    public string PrintingStatus { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets why the search-result price was or was not selected.
+    /// </summary>
+    public string SelectedPrintingReason { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the scryfall uri.
     /// </summary>
     public string? ScryfallUri { get; set; }

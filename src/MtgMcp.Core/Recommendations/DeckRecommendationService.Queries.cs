@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -106,14 +108,24 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
 
             result.ExecutedQueries.Add(executedQuery);
-            IReadOnlyList<CardSearchResult> searchResults = await CardCatalog
-                .SearchCardsAsync(effectiveRequest, searchLimit, cancellationToken)
-                .ConfigureAwait(false);
-            IReadOnlyDictionary<string, CardInfo> cardDetails = await CardCatalog
-                .GetCardsByNamesAsync(
-                    searchResults.Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            IReadOnlyList<CardSearchResult> searchResults;
+            IReadOnlyDictionary<string, CardInfo> cardDetails;
+            try
+            {
+                searchResults = await CardCatalog
+                    .SearchCardsAsync(effectiveRequest, searchLimit, cancellationToken)
+                    .ConfigureAwait(false);
+                cardDetails = await CardCatalog
+                    .GetCardsByNamesAsync(
+                        searchResults.Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (IsDeckQueryCatalogException(exception, cancellationToken))
+            {
+                result.Errors.Add(BuildQueryProviderError(executedQuery, exception));
+                continue;
+            }
 
             foreach (CardSearchResult searchResult in searchResults)
             {
@@ -135,7 +147,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
                 DeckCard candidateCard = CreateCandidateCard(card);
                 CardRoleAssignment role = DeckRoleClassifier.Classify(candidateCard);
-                decimal? price = ReadUsdPrice(card);
+                CardPriceEvaluation priceEvaluation = EvaluateUsdPrice(card);
+                decimal? price = priceEvaluation.PriceKnown ? priceEvaluation.Price : null;
                 DeckQueryRejectedCandidate? rejection = DeckQueryRecommendationEngine.BuildRejection(
                     card,
                     role,
@@ -143,11 +156,12 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     evaluationContext);
                 if (rejection is not null)
                 {
+                    ApplyQueryMetadata(rejection, card, priceEvaluation, format);
                     rejected.Add(rejection);
                     continue;
                 }
 
-                cardsInSourceOrder.Add(new DeckQueryDataCard
+                DeckQueryDataCard dataCard = new()
                 {
                     CardName = card.Name,
                     Role = role.PrimaryRole,
@@ -160,7 +174,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     Price = price,
                     ScryfallUri = card.ScryfallUri,
                     MatchRationale = BuildQueryMatchRationale(card, role, price, evaluationContext)
-                });
+                };
+                ApplyQueryMetadata(dataCard, card, priceEvaluation, format);
+                cardsInSourceOrder.Add(dataCard);
             }
         }
 
@@ -242,14 +258,24 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
 
             result.ExecutedQueries.Add(executedQuery);
-            IReadOnlyList<CardSearchResult> searchResults = await CardCatalog
-                .SearchCardsAsync(effectiveRequest, searchLimit, cancellationToken)
-                .ConfigureAwait(false);
-            IReadOnlyDictionary<string, CardInfo> cards = await CardCatalog
-                .GetCardsByNamesAsync(
-                    searchResults.Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            IReadOnlyList<CardSearchResult> searchResults;
+            IReadOnlyDictionary<string, CardInfo> cards;
+            try
+            {
+                searchResults = await CardCatalog
+                    .SearchCardsAsync(effectiveRequest, searchLimit, cancellationToken)
+                    .ConfigureAwait(false);
+                cards = await CardCatalog
+                    .GetCardsByNamesAsync(
+                        searchResults.Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (IsDeckQueryCatalogException(exception, cancellationToken))
+            {
+                result.Errors.Add(BuildQueryProviderError(executedQuery, exception));
+                continue;
+            }
 
             foreach (CardSearchResult searchResult in searchResults)
             {
@@ -271,7 +297,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
                 DeckCard candidateCard = CreateCandidateCard(card);
                 CardRoleAssignment role = DeckRoleClassifier.Classify(candidateCard);
-                decimal? price = ReadUsdPrice(card);
+                CardPriceEvaluation priceEvaluation = EvaluateUsdPrice(card);
+                decimal? price = priceEvaluation.PriceKnown ? priceEvaluation.Price : null;
                 DeckQueryRejectedCandidate? rejection = DeckQueryRecommendationEngine.BuildRejection(
                     card,
                     role,
@@ -279,18 +306,21 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                     evaluationContext);
                 if (rejection is not null)
                 {
+                    ApplyQueryMetadata(rejection, card, priceEvaluation, format);
                     rejected.Add(rejection);
                     continue;
                 }
 
-                candidates.Add(DeckQueryRecommendationEngine.BuildCandidate(
+                DeckQueryCandidate candidate = DeckQueryRecommendationEngine.BuildCandidate(
                     card,
                     role,
                     price,
                     roleRequirements,
                     tagRequirements,
                     maxPrice,
-                    goal));
+                    goal);
+                ApplyQueryMetadata(candidate, card, priceEvaluation, format);
+                candidates.Add(candidate);
             }
         }
 
@@ -383,6 +413,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         }
 
         plan.Confidence = ranking.Candidates.Count == 0 ? 0 : ranking.Candidates.Average(candidate => candidate.Score);
+        plan.Warnings.AddRange(ranking.Errors);
         plan.Warnings.AddRange(ranking.Warnings);
         plan.Warnings.Add("No cuts were generated; query plans add explicit search results only.");
         if (ranking.Candidates.Count == 0)
@@ -467,5 +498,112 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         }
 
         return string.Join("; ", reasons) + ".";
+    }
+
+    /// <summary>
+    /// Checks whether a catalog exception should become a structured query result error.
+    /// </summary>
+    private static bool IsDeckQueryCatalogException(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception is HttpRequestException
+            || exception is InvalidOperationException
+            || exception is JsonException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested;
+    }
+
+    /// <summary>
+    /// Builds a sanitized provider error for query result output.
+    /// </summary>
+    private static string BuildQueryProviderError(string executedQuery, Exception exception)
+    {
+        return $"Scryfall query '{executedQuery}' failed: {exception.Message}";
+    }
+
+    /// <summary>
+    /// Adds selected-printing and pricing metadata to a data row.
+    /// </summary>
+    private static void ApplyQueryMetadata(
+        DeckQueryDataCard target,
+        CardInfo card,
+        CardPriceEvaluation price,
+        string format)
+    {
+        target.Set = card.Set;
+        target.CollectorNumber = card.CollectorNumber;
+        target.ReleasedAt = card.ReleasedAt;
+        target.IsReleased = IsReleased(card);
+        target.Legality = ReadLegality(card, format);
+        target.Price = price.PriceKnown ? price.Price : null;
+        target.PriceKnown = price.PriceKnown;
+        target.PriceSource = price.PriceSource;
+        target.PricingMode = card.PricingMode;
+        target.PrintingStatus = price.PrintingStatus;
+        target.SelectedPrintingReason = price.SelectedPrintingReason;
+        target.Legalities = new Dictionary<string, string>(card.Legalities, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Adds selected-printing and pricing metadata to a scored candidate row.
+    /// </summary>
+    private static void ApplyQueryMetadata(
+        DeckQueryCandidate target,
+        CardInfo card,
+        CardPriceEvaluation price,
+        string format)
+    {
+        target.Set = card.Set;
+        target.CollectorNumber = card.CollectorNumber;
+        target.ReleasedAt = card.ReleasedAt;
+        target.IsReleased = IsReleased(card);
+        target.Legality = ReadLegality(card, format);
+        target.Price = price.PriceKnown ? price.Price : null;
+        target.PriceKnown = price.PriceKnown;
+        target.PriceSource = price.PriceSource;
+        target.PricingMode = card.PricingMode;
+        target.PrintingStatus = price.PrintingStatus;
+        target.SelectedPrintingReason = price.SelectedPrintingReason;
+        target.Legalities = new Dictionary<string, string>(card.Legalities, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Adds selected-printing and pricing metadata to a rejected candidate row.
+    /// </summary>
+    private static void ApplyQueryMetadata(
+        DeckQueryRejectedCandidate target,
+        CardInfo card,
+        CardPriceEvaluation price,
+        string format)
+    {
+        target.Set = card.Set;
+        target.CollectorNumber = card.CollectorNumber;
+        target.ReleasedAt = card.ReleasedAt;
+        target.IsReleased = IsReleased(card);
+        target.Legality = ReadLegality(card, format);
+        target.Price = price.PriceKnown ? price.Price : null;
+        target.PriceKnown = price.PriceKnown;
+        target.PriceSource = price.PriceSource;
+        target.PricingMode = card.PricingMode;
+        target.PrintingStatus = price.PrintingStatus;
+        target.SelectedPrintingReason = price.SelectedPrintingReason;
+        target.Legalities = new Dictionary<string, string>(card.Legalities, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reads a format legality value when Scryfall provided one.
+    /// </summary>
+    private static string? ReadLegality(CardInfo card, string format)
+    {
+        return card.Legalities.TryGetValue(format, out string? legality)
+            ? legality
+            : null;
+    }
+
+    /// <summary>
+    /// Checks whether the selected printing is already released.
+    /// </summary>
+    private static bool IsReleased(CardInfo card)
+    {
+        return !card.ReleasedAt.HasValue
+            || card.ReleasedAt.Value <= DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
     }
 }

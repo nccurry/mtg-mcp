@@ -13,16 +13,29 @@ public sealed partial class ScryfallClient
     /// </summary>
     private static CardSearchResult MapSearchResult(JsonElement element)
     {
+        CardInfo card = MapCard(element);
+        CardPriceEvaluation price = CardPriceEvaluator.Evaluate(
+            card,
+            DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime));
         return new CardSearchResult
         {
-            Id = GetString(element, "id") ?? "",
-            Name = GetString(element, "name") ?? "",
-            ManaCost = GetString(element, "mana_cost") ?? GetFaceString(element, "mana_cost"),
-            TypeLine = GetString(element, "type_line") ?? GetFaceString(element, "type_line"),
-            Set = GetString(element, "set"),
-            CollectorNumber = GetString(element, "collector_number"),
-            ReleasedAt = GetDateOnly(element, "released_at"),
-            ScryfallUri = GetString(element, "scryfall_uri"),
+            Id = card.Id,
+            Name = card.Name,
+            ManaCost = card.ManaCost,
+            TypeLine = card.TypeLine,
+            Set = card.Set,
+            CollectorNumber = card.CollectorNumber,
+            ReleasedAt = card.ReleasedAt,
+            IsReleased = !card.ReleasedAt.HasValue
+                || card.ReleasedAt.Value <= DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime),
+            Legalities = new Dictionary<string, string>(card.Legalities, StringComparer.OrdinalIgnoreCase),
+            Prices = new Dictionary<string, string>(card.Prices, StringComparer.OrdinalIgnoreCase),
+            Price = price.PriceKnown ? price.Price : null,
+            PriceKnown = price.PriceKnown,
+            PriceSource = price.PriceSource,
+            PrintingStatus = price.PrintingStatus,
+            SelectedPrintingReason = price.SelectedPrintingReason,
+            ScryfallUri = card.ScryfallUri,
         };
     }
 

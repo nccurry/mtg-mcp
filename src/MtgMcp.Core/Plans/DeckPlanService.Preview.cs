@@ -188,11 +188,13 @@ public sealed partial class DeckPlanService
             warnings.Add($"{exception.Message} Preview metrics exclude live Game Changer signals.");
         }
 
-        foreach (DeckEditOperation operation in plan.Operations)
-        {
-            await previewer.ApplyOperationAsync(preview, operation, resolveAddedCards, warnings, cancellationToken)
-                .ConfigureAwait(false);
-        }
+        await previewer.ApplyOperationsAsync(
+                preview,
+                plan.Operations,
+                resolveAddedCards,
+                warnings,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         DeckPlanPreviewResult previewResult = new()
         {

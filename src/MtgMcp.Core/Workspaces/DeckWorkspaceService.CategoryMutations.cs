@@ -81,6 +81,80 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Applies multiple card-category changes after validating the full batch.
+    /// </summary>
+    public async Task<DeckChangeResult> UpdateCardCategoriesBulkAsync(
+        string workspaceId,
+        IReadOnlyList<BulkCardCategoryChange> changes,
+        CancellationToken cancellationToken)
+    {
+        if (changes.Count == 0)
+        {
+            throw new InvalidOperationException("At least one category change is required.");
+        }
+
+        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        List<ValidatedBulkCardCategoryChange> validatedChanges = [];
+        for (int index = 0; index < changes.Count; index++)
+        {
+            BulkCardCategoryChange change = changes[index];
+            if (string.IsNullOrWhiteSpace(change.CardName))
+            {
+                throw new InvalidOperationException($"Bulk category change at index {index} is missing a card name.");
+            }
+
+            if (string.IsNullOrWhiteSpace(change.Category))
+            {
+                throw new InvalidOperationException($"Bulk category change at index {index} is missing a category.");
+            }
+
+            DeckCard card = FindRequiredCard(workspace, change.CardName.Trim(), category: null);
+            validatedChanges.Add(new ValidatedBulkCardCategoryChange(
+                card,
+                NormalizeBulkCategoryAction(change.Action, index),
+                NormalizeCategoryName(change.Category)));
+        }
+
+        foreach (ValidatedBulkCardCategoryChange change in validatedChanges)
+        {
+            if (!change.Action.Equals(BulkCardCategoryActions.Remove, StringComparison.OrdinalIgnoreCase))
+            {
+                EnsureCategory(workspace, change.Category);
+            }
+        }
+
+        List<DeckCard> changedCards = [];
+        foreach (ValidatedBulkCardCategoryChange change in validatedChanges)
+        {
+            if (change.Action.Equals(BulkCardCategoryActions.AddSecondary, StringComparison.OrdinalIgnoreCase))
+            {
+                DeckCategoryOrdering.AddSecondary(change.Card, change.Category);
+            }
+            else if (change.Action.Equals(BulkCardCategoryActions.Remove, StringComparison.OrdinalIgnoreCase))
+            {
+                DeckCategoryOrdering.Remove(change.Card, change.Category);
+                EnsureCategory(workspace, change.Card.PrimaryCategory);
+            }
+            else
+            {
+                DeckCategoryOrdering.SetPrimary(change.Card, change.Category);
+            }
+
+            if (!changedCards.Contains(change.Card))
+            {
+                changedCards.Add(change.Card);
+            }
+        }
+
+        await PersistCardsAsync(workspace, changedCards, [], cancellationToken).ConfigureAwait(false);
+        return Change(
+            workspace,
+            DeckMutationKind.CategoryChanged,
+            $"Updated categories for {changedCards.Count} card(s) across {validatedChanges.Count} bulk request(s).");
+    }
+
+    /// <summary>
     /// Creates the category.
     /// </summary>
     public async Task<DeckChangeResult> CreateCategoryAsync(
@@ -201,4 +275,29 @@ public sealed partial class DeckWorkspaceService
             );
     }
 
+    /// <summary>
+    /// Normalizes a supported bulk card-category action.
+    /// </summary>
+    private static string NormalizeBulkCategoryAction(string? action, int index)
+    {
+        string normalized = string.IsNullOrWhiteSpace(action)
+            ? BulkCardCategoryActions.AddSecondary
+            : action.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            BulkCardCategoryActions.AddSecondary or "add" or "add-category" => BulkCardCategoryActions.AddSecondary,
+            BulkCardCategoryActions.Remove or "remove-category" => BulkCardCategoryActions.Remove,
+            BulkCardCategoryActions.SetPrimary or "primary" or "set" => BulkCardCategoryActions.SetPrimary,
+            _ => throw new InvalidOperationException(
+                $"Bulk category change at index {index} has unsupported action '{action}'. Use add-secondary, remove, or set-primary.")
+        };
+    }
+
+    /// <summary>
+    /// Stores a validated bulk category update.
+    /// </summary>
+    private sealed record ValidatedBulkCardCategoryChange(
+        DeckCard Card,
+        string Action,
+        string Category);
 }

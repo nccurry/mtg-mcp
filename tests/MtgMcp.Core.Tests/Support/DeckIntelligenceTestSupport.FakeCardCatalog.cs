@@ -278,6 +278,16 @@ public sealed partial class DeckIntelligenceTests
             IReadOnlyList<string> names,
             CancellationToken cancellationToken)
         {
+            if (CancelGetCard)
+            {
+                throw new TaskCanceledException("Caller cancelled card lookup.");
+            }
+
+            if (ThrowOnGetCard)
+            {
+                throw new HttpRequestException("Scryfall unavailable.");
+            }
+
             Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
             foreach (string name in names)
             {

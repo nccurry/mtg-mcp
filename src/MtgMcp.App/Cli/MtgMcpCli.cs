@@ -46,6 +46,11 @@ public static class MtgMcpCli
             return PlaygroupAuthCommand.Run(args, output, error);
         }
 
+        if (RedditAuthCommand.IsCommand(args))
+        {
+            return RedditAuthCommand.Run(args, output, error);
+        }
+
         bool smoke = args.Any(arg => arg.Equals("--smoke", StringComparison.OrdinalIgnoreCase));
         using IHost host = (buildHost ?? MtgMcpHost.Build)(args);
 
@@ -114,6 +119,7 @@ public static class MtgMcpCli
         output.WriteLine("Commands:");
         output.WriteLine("  auth archidekt  Write an Archidekt credentials file.");
         output.WriteLine("  auth playgroup  Write a Playgroup.gg credentials file.");
+        output.WriteLine("  auth reddit     Write a Reddit OAuth credentials file.");
         output.WriteLine();
         output.WriteLine("Run 'mtg-mcp auth --help' for credential helper usage.");
     }
@@ -160,6 +166,11 @@ public static class MtgMcpCli
         output.WriteLine(
             "  mtg-mcp auth playgroup [--credentials-file <path>] "
                 + "--api-key <key> [--force]"
+        );
+        output.WriteLine(
+            "  mtg-mcp auth reddit [--credentials-file <path>] "
+                + "[--client-id <id>] [--client-secret <secret>] [--refresh-token <token>] "
+                + "[--access-token <token>|--bearer-token <token>] [--force]"
         );
     }
 }

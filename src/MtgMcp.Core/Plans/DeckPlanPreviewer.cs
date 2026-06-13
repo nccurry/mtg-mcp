@@ -40,7 +40,22 @@ internal sealed class DeckPlanPreviewer
         List<string> warnings,
         CancellationToken cancellationToken)
     {
+        await ApplyOperationsAsync(workspace, [operation], resolveAddedCards, warnings, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies edit operations to a preview workspace while sharing one resolved-card catalog.
+    /// </summary>
+    public async Task ApplyOperationsAsync(
+        DeckWorkspace workspace,
+        IReadOnlyList<DeckEditOperation> operations,
+        bool resolveAddedCards,
+        List<string> warnings,
+        CancellationToken cancellationToken)
+    {
         PreviewCardCatalog previewCatalog = new(cardCatalog, resolveAddedCards);
+        await previewCatalog.PreloadAsync(operations, cancellationToken).ConfigureAwait(false);
         DeckWorkspaceService workspaceService = new(
             new PreviewWorkspaceRepository(workspace),
             previewCatalog);
@@ -52,12 +67,18 @@ internal sealed class DeckPlanPreviewer
             workspace.Mode = WorkspaceMode.Local;
             workspace.WriteBack = false;
 
-            await ApplyOperationAsync(workspaceService, workspace.Id, operation, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (InvalidOperationException exception)
-        {
-            warnings.Add($"Preview skipped operation '{operation.Operation}': {exception.Message}");
+            foreach (DeckEditOperation operation in operations)
+            {
+                try
+                {
+                    await ApplyOperationAsync(workspaceService, workspace.Id, operation, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    warnings.Add($"Preview skipped operation '{operation.Operation}': {exception.Message}");
+                }
+            }
         }
         finally
         {
@@ -65,7 +86,7 @@ internal sealed class DeckPlanPreviewer
             workspace.WriteBack = originalWriteBack;
         }
 
-        foreach (string cardName in previewCatalog.UnresolvedCardNames)
+        foreach (string cardName in previewCatalog.UnresolvedCardNames.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             warnings.Add($"Could not resolve added card '{cardName}' for preview metrics.");
         }
@@ -140,8 +161,8 @@ internal sealed class DeckPlanPreviewer
                 await workspaceService.CreateCategoryAsync(
                     workspaceId,
                     Require(operation.Category, "category"),
-                    operation.IncludedInDeck ?? true,
-                    operation.IncludedInPrice ?? true,
+                    operation.IncludedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(Require(operation.Category, "category")),
+                    operation.IncludedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(Require(operation.Category, "category")),
                     cancellationToken).ConfigureAwait(false);
                 break;
             case DeckEditOperations.RenameCategory:
@@ -244,6 +265,16 @@ internal sealed class DeckPlanPreviewer
         private readonly bool resolveAddedCards;
 
         /// <summary>
+        /// Stores cards resolved before preview operations are applied.
+        /// </summary>
+        private readonly Dictionary<string, CardInfo> preloadedCards = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Stores whether the bulk preload failed and single lookups should be skipped.
+        /// </summary>
+        private bool preloadFailed;
+
+        /// <summary>
         /// Creates a preview catalog wrapper.
         /// </summary>
         public PreviewCardCatalog(ICardCatalog inner, bool resolveAddedCards)
@@ -256,6 +287,61 @@ internal sealed class DeckPlanPreviewer
         /// Gets names whose optional preview metadata could not be resolved.
         /// </summary>
         public List<string> UnresolvedCardNames { get; } = [];
+
+        /// <summary>
+        /// Resolves distinct added card names before mutation playback.
+        /// </summary>
+        public async Task PreloadAsync(
+            IReadOnlyList<DeckEditOperation> operations,
+            CancellationToken cancellationToken)
+        {
+            if (!resolveAddedCards)
+            {
+                return;
+            }
+
+            List<string> names = [];
+            foreach (DeckEditOperation operation in operations)
+            {
+                if (!operation.Operation.Equals(DeckEditOperations.AddCard, StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrWhiteSpace(operation.CardName))
+                {
+                    continue;
+                }
+
+                string cardName = operation.CardName.Trim();
+                if (!names.Contains(cardName, StringComparer.OrdinalIgnoreCase))
+                {
+                    names.Add(cardName);
+                }
+            }
+
+            if (names.Count == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                IReadOnlyDictionary<string, CardInfo> resolved = await inner
+                    .GetCardsByNamesAsync(names, cancellationToken)
+                    .ConfigureAwait(false);
+                foreach (KeyValuePair<string, CardInfo> pair in resolved)
+                {
+                    preloadedCards[pair.Key] = pair.Value;
+                }
+            }
+            catch (Exception exception) when (
+                exception is HttpRequestException
+                || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
+            {
+                preloadFailed = true;
+                foreach (string name in names)
+                {
+                    AddUnresolved(name);
+                }
+            }
+        }
 
         /// <summary>
         /// Searches cards with provider-specific syntax.
@@ -289,13 +375,24 @@ internal sealed class DeckPlanPreviewer
                 return null;
             }
 
+            if (preloadedCards.Count > 0 || preloadFailed)
+            {
+                if (preloadedCards.TryGetValue(nameOrId, out CardInfo? preloaded))
+                {
+                    return preloaded;
+                }
+
+                AddUnresolved(nameOrId);
+                return null;
+            }
+
             try
             {
                 CardInfo? card = await inner.GetCardAsync(nameOrId, cancellationToken)
                     .ConfigureAwait(false);
                 if (card is null)
                 {
-                    UnresolvedCardNames.Add(nameOrId);
+                    AddUnresolved(nameOrId);
                 }
 
                 return card;
@@ -304,7 +401,7 @@ internal sealed class DeckPlanPreviewer
                 exception is HttpRequestException
                 || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
             {
-                UnresolvedCardNames.Add(nameOrId);
+                AddUnresolved(nameOrId);
                 return null;
             }
         }
@@ -349,6 +446,17 @@ internal sealed class DeckPlanPreviewer
             CancellationToken cancellationToken)
         {
             return inner.SuggestCardsAsync(prompt, format, limit, cancellationToken);
+        }
+
+        /// <summary>
+        /// Records an unresolved name once.
+        /// </summary>
+        private void AddUnresolved(string name)
+        {
+            if (!UnresolvedCardNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                UnresolvedCardNames.Add(name);
+            }
         }
     }
 }

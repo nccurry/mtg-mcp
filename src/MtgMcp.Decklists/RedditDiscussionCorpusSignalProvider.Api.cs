@@ -13,7 +13,9 @@ public sealed partial class RedditDiscussionCorpusSignalProvider
     /// </summary>
     private async Task<JsonDocument> GetJsonAsync(string path, CancellationToken cancellationToken)
     {
-        using HttpResponseMessage response = await httpClient.GetAsync(path, cancellationToken).ConfigureAwait(false);
+        using HttpRequestMessage request = await CreateRedditRequestAsync(path, cancellationToken)
+            .ConfigureAwait(false);
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         string payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         if (DecklistCorpusProviderSupport.LooksLikeHtml(payload))

@@ -802,8 +802,8 @@ public sealed partial class DeckPlanService
             DeckEditOperations.CreateCategory => await workspaces.CreateCategoryAsync(
                 workspaceId,
                 Require(operation.Category, "category"),
-                operation.IncludedInDeck ?? true,
-                operation.IncludedInPrice ?? true,
+                operation.IncludedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(Require(operation.Category, "category")),
+                operation.IncludedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(Require(operation.Category, "category")),
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperations.RenameCategory => await workspaces.RenameCategoryAsync(
                 workspaceId,
