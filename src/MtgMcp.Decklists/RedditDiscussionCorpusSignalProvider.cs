@@ -9,17 +9,12 @@ namespace MtgMcp.Decklists;
 /// <summary>
 /// Produces bounded raw discussion evidence from Reddit JSON endpoints.
 /// </summary>
-public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider
+public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignalProvider, IDisposable
 {
     /// <summary>
     /// Stores the default Reddit base address.
     /// </summary>
     private static readonly Uri DefaultBaseAddress = new("https://www.reddit.com/");
-
-    /// <summary>
-    /// Stores the Reddit OAuth API base address used when a bearer token is configured.
-    /// </summary>
-    private static readonly Uri OAuthBaseAddress = new("https://oauth.reddit.com/");
 
     /// <summary>
     /// Limits discussion evidence to recent Commander discourse.
@@ -88,6 +83,11 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
     private readonly RedditSourceHealth sourceHealth;
 
     /// <summary>
+    /// Stores Reddit OAuth configuration.
+    /// </summary>
+    private readonly RedditOptions redditOptions;
+
+    /// <summary>
     /// Creates a Reddit discussion corpus provider with shared source health storage.
     /// </summary>
     public RedditDiscussionCorpusSignalProvider(
@@ -95,26 +95,25 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
         ICardCatalog cardCatalog,
         ICorpusCache cache,
         IOptions<MtgMcpOptions> options,
-        RedditSourceHealth sourceHealth)
+        RedditSourceHealth sourceHealth,
+        IOptions<RedditOptions>? redditOptions = null)
     {
         this.httpClient = httpClient;
         this.cardCatalog = cardCatalog;
         this.cache = cache;
         this.options = options.Value;
         this.sourceHealth = sourceHealth;
+        this.redditOptions = redditOptions?.Value ?? new RedditOptions();
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
+        RedditCredentials loaded = LoadCredentials();
+        bool hasOAuthCredential = HasOAuthCredential(loaded);
         this.httpClient.BaseAddress ??= sourceOptions.BaseAddress
-            ?? (string.IsNullOrWhiteSpace(sourceOptions.ApiKey) ? DefaultBaseAddress : OAuthBaseAddress);
+            ?? (hasOAuthCredential ? this.redditOptions.OAuthBaseAddress : DefaultBaseAddress);
         this.httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        if (!string.IsNullOrWhiteSpace(sourceOptions.ApiKey)
-            && this.httpClient.DefaultRequestHeaders.Authorization is null)
-        {
-            this.httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sourceOptions.ApiKey);
-        }
 
         if (this.httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("mtg-mcp/1.0");
+            this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(EffectiveUserAgent(loaded));
         }
     }
 
@@ -124,35 +123,42 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
     public CorpusSourceStatus GetStatus()
     {
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
-        bool hasBearerToken = !string.IsNullOrWhiteSpace(sourceOptions.ApiKey);
-        bool allowsUnofficialApi = DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: true);
+        RedditCredentials loaded = LoadCredentials();
+        bool hasOAuthCredential = HasOAuthCredential(loaded);
+        bool allowPublicJson = DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: true);
         bool enabled = sourceOptions.Enabled
-            && (hasBearerToken || allowsUnofficialApi);
+            && (hasOAuthCredential || allowPublicJson);
+        string statusLabel = sourceOptions.Enabled
+            ? enabled
+                ? CorpusSourceStatuses.Available
+                : CorpusSourceStatuses.NeedsOAuth
+            : CorpusSourceStatuses.Disabled;
+        bool usesPublicJson = !hasOAuthCredential && allowPublicJson;
         CorpusSourceStatus status = new()
         {
             Key = "reddit-discussions",
             Name = "Reddit discussion search",
             Kind = "discussion-api",
             Enabled = enabled,
-            StableApi = hasBearerToken,
-            ApiType = hasBearerToken || !allowsUnofficialApi ? CorpusSourceApiTypes.Official : CorpusSourceApiTypes.UnofficialApi,
-            UnofficialApi = !hasBearerToken && allowsUnofficialApi,
+            StableApi = hasOAuthCredential,
+            ApiType = hasOAuthCredential || !allowPublicJson ? CorpusSourceApiTypes.Official : CorpusSourceApiTypes.UnofficialApi,
+            UnofficialApi = usesPublicJson,
+            RequiresKey = !hasOAuthCredential && !allowPublicJson,
             PermissionSensitive = true,
             AttributionRequired = true,
-            Status = sourceOptions.Enabled
-                ? enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.NeedsOAuth
-                : CorpusSourceStatuses.Disabled,
+            Status = statusLabel,
             Uri = "https://www.reddit.com/dev/api/",
             Notes =
             [
                 "Queries bounded Reddit post and comment JSON for exact card-reference evidence.",
                 "Searches a fixed EDH/Commander subreddit allowlist for popular commander discussions.",
                 "Reports linked decklist URLs from discussion text without fetching those sites.",
-                "Set MtgMcp:Intelligence:Sources:Reddit:ApiKey to an OAuth bearer token for the official API path.",
-                "Without ApiKey, bounded public JSON is enabled by default and can be disabled with AllowUnofficialApi=false."
+                hasOAuthCredential
+                    ? "Uses Reddit OAuth bearer credentials and the oauth.reddit.com API path."
+                    : "No Reddit OAuth credentials configured; bounded public JSON fallback is enabled only while AllowUnofficialApi permits it."
             ]
         };
-        if (hasBearerToken)
+        if (hasOAuthCredential)
         {
             sourceHealth.Clear();
             return status;
@@ -161,7 +167,7 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
         if (status.Status == CorpusSourceStatuses.NeedsOAuth)
         {
             status.Notes.Add(
-                "Reddit public JSON is disabled; configure MtgMcp:Intelligence:Sources:Reddit:ApiKey or set AllowUnofficialApi=true.");
+                "Reddit public JSON is disabled; configure MtgMcp:Reddit OAuth credentials or set AllowUnofficialApi=true.");
             return status;
         }
 
@@ -254,18 +260,37 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
             status.Status = CorpusSourceStatuses.AccessBlocked;
             status.Enabled = false;
             status.LastCheckedAt = checkedAt;
+            status.Notes.Add(status.StableApi
+                ? "Reddit returned HTTP 403 for the OAuth API path."
+                : "Reddit returned HTTP 403; public JSON access may be blocked or require OAuth credentials.");
+            if (status.StableApi)
+            {
+                report.Notes.Add("Reddit discussion evidence was skipped because Reddit returned HTTP 403 for configured OAuth credentials. Continuing without Reddit source evidence.");
+                return report;
+            }
+
             status.Notes.Add(
-                "Reddit returned HTTP 403; public JSON access may be blocked or require OAuth credentials.");
-            status.Notes.Add(
-                "Configure MtgMcp:Intelligence:Sources:Reddit:ApiKey with an OAuth bearer token, or leave the source disabled for Reddit-backed evidence.");
+                "Configure MtgMcp:Reddit OAuth credentials, or leave the source disabled for Reddit-backed evidence.");
             sourceHealth.Remember(
                 CorpusSourceStatuses.AccessBlocked,
                 checkedAt,
                 [
                     "Last public JSON check returned HTTP 403.",
-                    "Configure MtgMcp:Intelligence:Sources:Reddit:ApiKey with an OAuth bearer token."
+                    "Configure MtgMcp:Reddit OAuth credentials for the official API path."
                 ]);
             report.Notes.Add("Reddit discussion evidence was skipped because Reddit returned HTTP 403. Continuing without Reddit source evidence.");
+            return report;
+        }
+        catch (RedditOAuthException exception)
+        {
+            DateTimeOffset checkedAt = DateTimeOffset.UtcNow;
+            status.Status = exception.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? CorpusSourceStatuses.AccessBlocked
+                : CorpusSourceStatuses.Failed;
+            status.Enabled = false;
+            status.LastCheckedAt = checkedAt;
+            status.Notes.Add(exception.Message);
+            report.Notes.Add("Reddit discussion evidence was skipped because Reddit OAuth token acquisition failed. Continuing without Reddit source evidence.");
             return report;
         }
 
@@ -277,10 +302,14 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
             "mtg-mcp does not infer sentiment or card quality from comment text.");
         DateTimeOffset successCheckedAt = DateTimeOffset.UtcNow;
         status.LastCheckedAt = successCheckedAt;
-        sourceHealth.Remember(
-            CorpusSourceStatuses.Available,
-            successCheckedAt,
-            ["Last public JSON check completed successfully."]);
+        if (!status.StableApi)
+        {
+            sourceHealth.Remember(
+                CorpusSourceStatuses.Available,
+                successCheckedAt,
+                ["Last public JSON check completed successfully."]);
+        }
+
         await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
         return report;
     }
@@ -309,6 +338,14 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
             status.Status = CorpusSourceStatuses.AccessBlocked;
             status.Enabled = false;
         }
+    }
+
+    /// <summary>
+    /// Releases local synchronization resources.
+    /// </summary>
+    public void Dispose()
+    {
+        authLock.Dispose();
     }
 
 }

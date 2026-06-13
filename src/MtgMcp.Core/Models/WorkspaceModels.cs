@@ -1060,6 +1060,176 @@ public sealed class DeckChangeResult
 }
 
 /// <summary>
+/// Describes one card add in a bulk deck mutation.
+/// </summary>
+public sealed class BulkDeckCardAdd
+{
+    /// <summary>
+    /// Gets or sets the exact card name to add.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the quantity to add; values below one are treated as one.
+    /// </summary>
+    public int Quantity { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets the primary workspace category for the added card.
+    /// </summary>
+    public string PrimaryCategory { get; set; } = DeckDefaults.Mainboard;
+
+    /// <summary>
+    /// Gets or sets secondary categories to add after the primary category.
+    /// </summary>
+    public List<string> SecondaryCategories { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one category operation in a bulk card-category mutation.
+/// </summary>
+public sealed class BulkCardCategoryChange
+{
+    /// <summary>
+    /// Gets or sets the workspace card name to update.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the category action: add-secondary, remove, or set-primary.
+    /// </summary>
+    public string Action { get; set; } = BulkCardCategoryActions.AddSecondary;
+
+    /// <summary>
+    /// Gets or sets the category name used by the action.
+    /// </summary>
+    public string Category { get; set; } = "";
+}
+
+/// <summary>
+/// Provides supported bulk card-category action names.
+/// </summary>
+public static class BulkCardCategoryActions
+{
+    /// <summary>
+    /// Adds a category after the card's primary category.
+    /// </summary>
+    public const string AddSecondary = "add-secondary";
+
+    /// <summary>
+    /// Removes a category from the card.
+    /// </summary>
+    public const string Remove = "remove";
+
+    /// <summary>
+    /// Moves a category to the card's primary slot.
+    /// </summary>
+    public const string SetPrimary = "set-primary";
+}
+
+/// <summary>
+/// Reports compact local cards that belong to a workspace category.
+/// </summary>
+public sealed class DeckCategoryCardListResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the normalized category requested by the caller.
+    /// </summary>
+    public string Category { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether secondary categories were included in matching.
+    /// </summary>
+    public bool IncludeSecondary { get; set; }
+
+    /// <summary>
+    /// Gets or sets total matching rows before the response limit was applied.
+    /// </summary>
+    public int Count { get; set; }
+
+    /// <summary>
+    /// Gets or sets total matching card quantity before the response limit was applied.
+    /// </summary>
+    public int TotalQuantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets compact card rows, capped by the requested limit.
+    /// </summary>
+    public List<DeckCategoryCardListRow> Cards { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one compact card row returned for a workspace category.
+/// </summary>
+public sealed class DeckCategoryCardListRow
+{
+    /// <summary>
+    /// Gets or sets the card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the card quantity.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card's primary category.
+    /// </summary>
+    public string PrimaryCategory { get; set; } = DeckDefaults.Mainboard;
+
+    /// <summary>
+    /// Gets or sets all card categories in primary-first order.
+    /// </summary>
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the local role classifier's primary role.
+    /// </summary>
+    public string Role { get; set; } = DeckRoles.Utility;
+
+    /// <summary>
+    /// Gets or sets local classifier tags for the card.
+    /// </summary>
+    public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the cached mana value.
+    /// </summary>
+    public double? ManaValue { get; set; }
+
+    /// <summary>
+    /// Gets or sets the cached type line.
+    /// </summary>
+    public string? TypeLine { get; set; }
+
+    /// <summary>
+    /// Gets or sets the cached USD price when known and safe for budget math.
+    /// </summary>
+    public decimal? Price { get; set; }
+
+    /// <summary>
+    /// Gets or sets the cached Scryfall card URL.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card's primary category counts toward deck size.
+    /// </summary>
+    public bool IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card's primary category counts toward price totals.
+    /// </summary>
+    public bool IncludedInPrice { get; set; }
+}
+
+/// <summary>
 /// Provides deck persistence behavior.
 /// </summary>
 public static class DeckPersistence
@@ -1123,6 +1293,14 @@ public static class DeckDefaults
     }
 
     /// <summary>
+    /// Checks whether a category should be excluded from price totals when mtg-mcp creates it implicitly.
+    /// </summary>
+    public static bool IsDefaultPriceExcludedCategory(string category)
+    {
+        return category.Equals(Sideboard, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Checks whether a category name should represent Archidekt's commander category.
     /// </summary>
     public static bool IsCommanderCategory(string category)
@@ -1147,7 +1325,7 @@ public static class DeckDefaults
             {
                 Name = Sideboard,
                 IncludedInDeck = false,
-                IncludedInPrice = true,
+                IncludedInPrice = false,
             },
             new DeckCategory
             {

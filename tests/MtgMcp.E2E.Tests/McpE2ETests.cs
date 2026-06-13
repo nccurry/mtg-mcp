@@ -17,6 +17,16 @@ public sealed class McpE2ETests
     private static readonly string[] RampRequiredRoles = ["Ramp"];
 
     /// <summary>
+    /// Stores the secondary category used by bulk category E2E flows.
+    /// </summary>
+    private static readonly string[] RemovalSecondaryCategories = ["Removal"];
+
+    /// <summary>
+    /// Stores the ramp secondary category used by bulk category E2E flows.
+    /// </summary>
+    private static readonly string[] RampSecondaryCategories = ["Ramp"];
+
+    /// <summary>
     /// Verifies that the MCP server advertises card and workspace tool groups.
     /// </summary>
     [Fact]
@@ -779,6 +789,117 @@ public sealed class McpE2ETests
             .Select(value => GetString(value, "name"))
             .Should()
             .NotContain("Artifacts");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that bulk card and category tools work through the MCP stdio surface.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task BulkCategoryFlow_ExercisesBulkToolsThroughMcp()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        scryfall.PostJson("cards/collection", BulkCategoryCollectionJson);
+
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: "apply",
+            TestContext.Current.CancellationToken);
+
+        JsonElement workspace = await CallJsonAsync(
+            session.Client,
+            "workspace_start",
+            new Dictionary<string, object?>
+            {
+                ["mode"] = "local",
+                ["name"] = "E2E Bulk Categories",
+                ["format"] = "commander"
+            });
+        string workspaceId = GetString(workspace, "id");
+
+        await CallJsonAsync(
+            session.Client,
+            "deck_add_cards_bulk",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["cards"] = new object[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["cardName"] = "Lightning Bolt",
+                        ["quantity"] = 1,
+                        ["primaryCategory"] = "Sideboard",
+                        ["secondaryCategories"] = RemovalSecondaryCategories
+                    },
+                    new Dictionary<string, object?>
+                    {
+                        ["cardName"] = "Arcane Signet",
+                        ["quantity"] = 1,
+                        ["primaryCategory"] = "Mainboard",
+                        ["secondaryCategories"] = RampSecondaryCategories
+                    }
+                },
+                ["detailLevel"] = "summary"
+            });
+
+        JsonElement firstSideboard = await CallJsonAsync(
+            session.Client,
+            "deck_list_cards_by_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["category"] = "Sideboard",
+                ["includeSecondary"] = true
+            });
+        GetInt32(firstSideboard, "count").Should().Be(1);
+        JsonElement firstSideboardCard = GetArray(firstSideboard, "cards").Should().ContainSingle().Subject;
+        GetString(firstSideboardCard, "cardName").Should().Be("Lightning Bolt");
+        firstSideboardCard.GetProperty("includedInDeck").GetBoolean().Should().BeFalse();
+        firstSideboardCard.GetProperty("includedInPrice").GetBoolean().Should().BeFalse();
+
+        await CallJsonAsync(
+            session.Client,
+            "deck_update_card_categories_bulk",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["changes"] = new object[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["cardName"] = "Arcane Signet",
+                        ["action"] = "add-secondary",
+                        ["category"] = "Sideboard"
+                    },
+                    new Dictionary<string, object?>
+                    {
+                        ["cardName"] = "Lightning Bolt",
+                        ["action"] = "set-primary",
+                        ["category"] = "Mainboard"
+                    }
+                },
+                ["detailLevel"] = "summary"
+            });
+
+        JsonElement secondSideboard = await CallJsonAsync(
+            session.Client,
+            "deck_list_cards_by_category",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["category"] = "Sideboard",
+                ["includeSecondary"] = true
+            });
+        GetInt32(secondSideboard, "count").Should().Be(2);
+        secondSideboard.GetProperty("cards").EnumerateArray()
+            .Select(card => GetString(card, "cardName"))
+            .Should()
+            .BeEquivalentTo(["Arcane Signet", "Lightning Bolt"]);
+
         archidekt.Requests.Should().BeEmpty();
     }
 
@@ -2356,6 +2477,42 @@ public sealed class McpE2ETests
     private const string ArcaneSignetCollectionJson = """
     {
       "data": [
+        {
+          "id": "arcane-signet",
+          "oracle_id": "oracle-arcane-signet",
+          "name": "Arcane Signet",
+          "mana_cost": "{2}",
+          "cmc": 2,
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+          "produced_mana": ["W", "U", "B", "R", "G"],
+          "legalities": { "commander": "legal" },
+          "prices": { "usd": "1.00" },
+          "edhrec_rank": 5
+        }
+      ]
+    }
+    """;
+
+    /// <summary>
+    /// Provides Scryfall collection data for bulk category E2E tests.
+    /// </summary>
+    private const string BulkCategoryCollectionJson = """
+    {
+      "data": [
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "oracle_id": "00000000-0000-0000-0000-000000000002",
+          "name": "Lightning Bolt",
+          "mana_cost": "{R}",
+          "cmc": 1,
+          "type_line": "Instant",
+          "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+          "set": "clu",
+          "collector_number": "141",
+          "scryfall_uri": "https://scryfall.example/card/clu/141",
+          "color_identity": ["R"]
+        },
         {
           "id": "arcane-signet",
           "oracle_id": "oracle-arcane-signet",

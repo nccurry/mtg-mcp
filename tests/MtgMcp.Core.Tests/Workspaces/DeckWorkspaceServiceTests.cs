@@ -201,6 +201,155 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that bulk add resolves cards in one batch and preserves secondary categories.
+    /// </summary>
+    [Fact]
+    public async Task AddCardsBulk_ResolvesOnceAndPreservesSecondaryCategories()
+    {
+        InMemoryRepository repository = new();
+        FakeCardCatalog catalog = new();
+        DeckWorkspaceService service = new(repository, catalog);
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken
+        );
+
+        DeckChangeResult result = await service.AddCardsBulkAsync(
+            deck.Id,
+            [
+                new BulkDeckCardAdd
+                {
+                    CardName = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    SecondaryCategories = ["Artifact", DeckRoles.Ramp]
+                },
+                new BulkDeckCardAdd
+                {
+                    CardName = "Lightning Bolt",
+                    Quantity = 2,
+                    PrimaryCategory = DeckDefaults.Sideboard,
+                    SecondaryCategories = [DeckRoles.Interaction]
+                },
+            ],
+            force: false,
+            TestContext.Current.CancellationToken);
+
+        DeckWorkspace opened = await service.OpenLocalDeckAsync(deck.Id, TestContext.Current.CancellationToken);
+
+        result.Kind.Should().Be(DeckMutationKind.CardAdded);
+        catalog.BatchLookupRequests.Should().Be(1);
+        catalog.SingleLookupRequests.Should().Be(0);
+        DeckCard solRing = opened.Cards.Should().ContainSingle(card =>
+            card.Name == "Sol Ring"
+            && card.Quantity == 1).Subject;
+        solRing.Categories.Should().Equal(DeckRoles.Ramp, "Artifact");
+        DeckCard lightningBolt = opened.Cards.Should().ContainSingle(card =>
+            card.Name == "Lightning Bolt"
+            && card.Quantity == 2).Subject;
+        lightningBolt.Categories.Should().Equal(DeckDefaults.Sideboard, DeckRoles.Interaction);
+        opened.Categories.Single(category => category.Name == DeckDefaults.Sideboard)
+            .IncludedInPrice.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that bulk category changes validate the full batch before persistence.
+    /// </summary>
+    [Fact]
+    public async Task UpdateCardCategoriesBulk_ValidatesBeforePersisting()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardAsync(
+            deck.Id,
+            "Sol Ring",
+            1,
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken
+        );
+
+        Func<Task> update = () => service.UpdateCardCategoriesBulkAsync(
+            deck.Id,
+            [
+                new BulkCardCategoryChange
+                {
+                    CardName = "Sol Ring",
+                    Action = BulkCardCategoryActions.AddSecondary,
+                    Category = "Keep"
+                },
+                new BulkCardCategoryChange
+                {
+                    CardName = "Missing Card",
+                    Action = BulkCardCategoryActions.SetPrimary,
+                    Category = "Should Not Persist"
+                },
+            ],
+            TestContext.Current.CancellationToken);
+
+        await update.Should().ThrowAsync<InvalidOperationException>();
+        DeckWorkspace opened = await service.OpenLocalDeckAsync(deck.Id, TestContext.Current.CancellationToken);
+        opened.Cards.Single().Categories.Should().Equal(DeckDefaults.Mainboard);
+        opened.Categories.Should().NotContain(category => category.Name == "Should Not Persist");
+    }
+
+    /// <summary>
+    /// Verifies that compact category listing reads local cached rows.
+    /// </summary>
+    [Fact]
+    public async Task ListCardsByCategory_ReturnsCompactRowsForPrimaryAndSecondaryMatches()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken
+        );
+        await service.AddCardsBulkAsync(
+            deck.Id,
+            [
+                new BulkDeckCardAdd
+                {
+                    CardName = "Sol Ring",
+                    PrimaryCategory = DeckRoles.Ramp,
+                    SecondaryCategories = ["Artifacts"]
+                },
+                new BulkDeckCardAdd
+                {
+                    CardName = "Lightning Bolt",
+                    PrimaryCategory = DeckDefaults.Sideboard,
+                    SecondaryCategories = [DeckRoles.Interaction]
+                },
+            ],
+            force: false,
+            TestContext.Current.CancellationToken);
+
+        DeckCategoryCardListResult result = await service.ListCardsByCategoryAsync(
+            deck.Id,
+            DeckRoles.Interaction,
+            includeSecondary: true,
+            limit: 25,
+            TestContext.Current.CancellationToken);
+
+        result.Count.Should().Be(1);
+        result.TotalQuantity.Should().Be(1);
+        result.Cards.Should().ContainSingle(card =>
+            card.CardName == "Lightning Bolt"
+            && card.PrimaryCategory == DeckDefaults.Sideboard
+            && !card.IncludedInDeck
+            && !card.IncludedInPrice);
+    }
+
+    /// <summary>
     /// Verifies that list local workspaces excludes cached archidekt decks.
     /// </summary>
     [Fact]

@@ -167,7 +167,7 @@ public abstract partial class DeckServiceBase
         {
             Name = category,
             IncludedInDeck = !DeckDefaults.IsDefaultExcludedCategory(category),
-            IncludedInPrice = true,
+            IncludedInPrice = !DeckDefaults.IsDefaultPriceExcludedCategory(category),
             IsPremier = DeckDefaults.IsCommanderCategory(category),
         };
 

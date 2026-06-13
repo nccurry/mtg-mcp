@@ -63,6 +63,37 @@ public sealed class DeckMutationTools
     }
 
     /// <summary>
+    /// Adds multiple cards.
+    /// </summary>
+    [McpServerTool(
+        Name = "deck_add_cards_bulk",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description("Add multiple cards to a deck workspace in one persisted mutation, with primary and secondary categories per card.")]
+    public Task<object> AddCardsBulkAsync(
+        string workspaceId,
+        BulkDeckCardAdd[] cards,
+        bool force = false,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        operationMode.EnsureCanMutate("deck_add_cards_bulk");
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            detailLevel,
+            () => decks.AddCardsBulkAsync(workspaceId, cards, force, cancellationToken),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Removes the card.
     /// </summary>
     [McpServerTool(

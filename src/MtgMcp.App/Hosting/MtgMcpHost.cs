@@ -115,7 +115,7 @@ public static class MtgMcpHost
         builder.Services.AddMoxfield(builder.Configuration);
         builder.Services.AddPlaygroup(builder.Configuration);
         builder.Services.AddCommanderSpellbook(builder.Configuration);
-        builder.Services.AddDecklistCorpusSources();
+        builder.Services.AddDecklistCorpusSources(builder.Configuration);
 
         builder
             .Services.AddMcpServer(options =>

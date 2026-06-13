@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.Core;
 
@@ -11,9 +12,20 @@ public static class DecklistServiceCollectionExtensions
     /// <summary>
     /// Adds API-backed decklist recommendation sources.
     /// </summary>
-    public static IServiceCollection AddDecklistCorpusSources(this IServiceCollection services)
+    public static IServiceCollection AddDecklistCorpusSources(
+        this IServiceCollection services,
+        IConfiguration? configuration = null)
     {
         services.AddSingleton<RedditSourceHealth>();
+        if (configuration is not null)
+        {
+            services.Configure<RedditOptions>(configuration.GetSection("MtgMcp:Reddit"));
+        }
+        else
+        {
+            services.Configure<RedditOptions>(_ => { });
+        }
+
         services.AddHttpClient<TopDeckCorpusSignalProvider>();
         services.AddHttpClient<SpicerackCorpusSignalProvider>();
         services.AddHttpClient<EdhrecCorpusSignalProvider>();

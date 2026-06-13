@@ -1874,6 +1874,11 @@ public sealed partial class DeckIntelligenceTests
 
         analysis.ColorSources.Should().ContainKey("B");
         analysis.ColorSources.Should().ContainKey("C");
+        analysis.ColorSources.Should().NotContainKey("W");
+        analysis.ColorSources.Should().NotContainKey("U");
+        analysis.ColorSources.Should().NotContainKey("R");
+        analysis.ColorSources.Should().NotContainKey("G");
+        analysis.Notes.Should().Contain(note => note.Contains("Any-color sources", StringComparison.OrdinalIgnoreCase));
         analysis.Risks.Should().NotContain(risk => risk.Contains("Multicolor", StringComparison.OrdinalIgnoreCase));
     }
 

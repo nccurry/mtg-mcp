@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 using MtgMcp.Core;
+using MtgMcp.Decklists;
 
 namespace MtgMcp.App;
 
@@ -51,6 +52,11 @@ public sealed class MtgResources
     private readonly PlaygroupService playgroups;
 
     /// <summary>
+    /// Stores Reddit discussion provider auth status.
+    /// </summary>
+    private readonly RedditDiscussionCorpusSignalProvider reddit;
+
+    /// <summary>
     /// Stores server version and runtime diagnostics.
     /// </summary>
     private readonly ServerInfoService serverInfo;
@@ -65,6 +71,7 @@ public sealed class MtgResources
         IArchidektGateway archidektGateway,
         OperationModeGuard operationMode,
         PlaygroupService playgroups,
+        RedditDiscussionCorpusSignalProvider reddit,
         ServerInfoService serverInfo
     )
     {
@@ -74,6 +81,7 @@ public sealed class MtgResources
         this.archidektGateway = archidektGateway;
         this.operationMode = operationMode;
         this.playgroups = playgroups;
+        this.reddit = reddit;
         this.serverInfo = serverInfo;
     }
 
@@ -366,9 +374,9 @@ public sealed class MtgResources
     /// Returns redacted provider credential availability.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://providers/{provider}/auth-status", Name = "Provider Auth Status")]
-    [Description("Redacted provider credential availability status for archidekt or playgroup.")]
+    [Description("Redacted provider credential availability status for archidekt, playgroup, or reddit.")]
     public async Task<string> GetProviderAuthStatusAsync(
-        [Description("Provider key: archidekt or playgroup.")]
+        [Description("Provider key: archidekt, playgroup, or reddit.")]
         string provider,
         CancellationToken cancellationToken = default
     )
@@ -376,7 +384,7 @@ public sealed class MtgResources
         if (string.IsNullOrWhiteSpace(provider))
         {
             throw new ArgumentException(
-                "Provider must be archidekt or playgroup.",
+                "Provider must be archidekt, playgroup, or reddit.",
                 nameof(provider)
             );
         }
@@ -391,8 +399,12 @@ public sealed class MtgResources
                 await playgroups.GetAuthStatusAsync(cancellationToken).ConfigureAwait(false),
                 JsonOptions
             ),
+            "reddit" => JsonSerializer.Serialize(
+                await reddit.GetAuthStatusAsync(cancellationToken).ConfigureAwait(false),
+                JsonOptions
+            ),
             _ => throw new ArgumentException(
-                "Provider must be archidekt or playgroup.",
+                "Provider must be archidekt, playgroup, or reddit.",
                 nameof(provider)
             ),
         };

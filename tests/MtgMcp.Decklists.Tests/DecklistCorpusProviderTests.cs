@@ -501,8 +501,9 @@ public sealed class DecklistCorpusProviderTests
             source.Key == "reddit-discussions"
             && !source.Enabled
             && !source.UnofficialApi
+            && source.RequiresKey
             && source.Status == CorpusSourceStatuses.NeedsOAuth
-            && source.Notes.Any(note => note.Contains("ApiKey", StringComparison.OrdinalIgnoreCase)));
+            && source.Notes.Any(note => note.Contains("OAuth credentials", StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>
@@ -515,14 +516,153 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
             new FakeCardCatalog(),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "token")),
-            new RedditSourceHealth());
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
+            new RedditSourceHealth(),
+            Options.Create(new RedditOptions
+            {
+                BearerToken = "token",
+                ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1)
+            }));
 
         CorpusSourceStatus status = provider.GetStatus();
 
         status.Enabled.Should().BeTrue();
         status.ApiType.Should().Be(CorpusSourceApiTypes.Official);
         status.UnofficialApi.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that Reddit source API keys are ignored by the OAuth credential path.
+    /// </summary>
+    [Fact]
+    public void RedditProvider_SourceApiKeyDoesNotEnableOAuth()
+    {
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "ignored-api-key", allowUnofficialApi: false)),
+            new RedditSourceHealth());
+
+        CorpusSourceStatus status = provider.GetStatus();
+
+        status.Status.Should().Be(CorpusSourceStatuses.NeedsOAuth);
+        status.RequiresKey.Should().BeTrue();
+        status.UnofficialApi.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that a Reddit refresh token is exchanged before OAuth search requests.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_RefreshTokenExchangesAccessTokenForOAuthSearch()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Post, "https://www.reddit.test/api/v1/access_token")
+            .WithContent("grant_type=refresh_token&refresh_token=refresh-token")
+            .Respond("application/json", """{ "access_token": "access-token", "expires_in": 3600 }""");
+        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
+            .Respond("application/json", EmptyRedditSearchResponseJson);
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://oauth.reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
+            new RedditSourceHealth(),
+            Options.Create(new RedditOptions
+            {
+                ClientId = "client-id",
+                ClientSecret = "client-secret",
+                RefreshToken = "refresh-token",
+                OAuthBaseAddress = new Uri("https://oauth.reddit.test/"),
+                TokenEndpoint = new Uri("https://www.reddit.test/api/v1/access_token"),
+            }));
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
+        budget.MaxDecksPerSource = 1;
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            Query(),
+            budget,
+            TestContext.Current.CancellationToken);
+
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "reddit-discussions"
+            && source.ApiType == CorpusSourceApiTypes.Official);
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that short-lived Reddit tokens are refreshed on later requests.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_RefreshesExpiredAccessToken()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Post, "https://www.reddit.test/api/v1/access_token")
+            .Respond("application/json", """{ "access_token": "first-token", "expires_in": 1 }""");
+        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
+            .Respond("application/json", EmptyRedditSearchResponseJson);
+        mockHttp.Expect(HttpMethod.Post, "https://www.reddit.test/api/v1/access_token")
+            .Respond("application/json", """{ "access_token": "second-token", "expires_in": 3600 }""");
+        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
+            .Respond("application/json", EmptyRedditSearchResponseJson);
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://oauth.reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
+            new RedditSourceHealth(),
+            Options.Create(new RedditOptions
+            {
+                ClientId = "client-id",
+                ClientSecret = "client-secret",
+                RefreshToken = "refresh-token",
+                OAuthBaseAddress = new Uri("https://oauth.reddit.test/"),
+                TokenEndpoint = new Uri("https://www.reddit.test/api/v1/access_token"),
+            }));
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
+        budget.MaxDecksPerSource = 1;
+
+        await provider.GetSignalsAsync(Query(), budget, TestContext.Current.CancellationToken);
+        await provider.GetSignalsAsync(Query(), budget, TestContext.Current.CancellationToken);
+
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that Reddit OAuth search 403 responses are surfaced as access-blocked status.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_OAuthSearchForbiddenReportsAccessBlocked()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
+            .Respond(HttpStatusCode.Forbidden, "application/json", """{ "message": "forbidden" }""");
+        RedditDiscussionCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://oauth.reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
+            new RedditSourceHealth(),
+            Options.Create(new RedditOptions
+            {
+                BearerToken = "access-token",
+                ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+                OAuthBaseAddress = new Uri("https://oauth.reddit.test/")
+            }));
+        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
+        budget.MaxDecksPerSource = 1;
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            Query(),
+            budget,
+            TestContext.Current.CancellationToken);
+
+        report.Sources.Should().ContainSingle(source =>
+            source.Key == "reddit-discussions"
+            && source.Status == CorpusSourceStatuses.AccessBlocked
+            && source.Notes.Any(note => note.Contains("OAuth API path", StringComparison.OrdinalIgnoreCase)));
+        mockHttp.VerifyNoOutstandingExpectation();
     }
 
     /// <summary>
@@ -1009,11 +1149,20 @@ public sealed class DecklistCorpusProviderTests
     """;
 
     /// <summary>
+    /// Provides an empty Reddit search response.
+    /// </summary>
+    private const string EmptyRedditSearchResponseJson = """
+        {
+          "data": { "children": [] }
+        }
+        """;
+
+    /// <summary>
     /// Provides a representative Reddit search response.
     /// </summary>
     private const string RedditSearchResponseJson = """
-    {
-      "data": {
+        {
+          "data": {
         "children": [
           {
             "kind": "t3",

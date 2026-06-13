@@ -20,37 +20,41 @@ public sealed class ScryfallClientTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
-            .When("https://api.scryfall.test/cards/named*")
+            .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
             .Respond(
                 "application/json",
                 """
                 {
-                  "id": "card-1",
-                  "oracle_id": "oracle-1",
-                  "name": "Lightning Bolt",
-                  "mana_cost": "{R}",
-                  "layout": "normal",
-                  "cmc": 1,
-                  "type_line": "Instant",
-                  "oracle_text": "Deal 3 damage.",
-                  "power": "3",
-                  "toughness": "2",
-                  "set": "clu",
-                  "collector_number": "141",
-                  "rarity": "common",
-                  "released_at": "2024-02-01",
-                  "lang": "en",
-                  "scryfall_uri": "https://scryfall.com/card/clu/141",
-                  "edhrec_rank": 42,
-                  "colors": ["R"],
-                  "color_identity": ["R"],
-                  "keywords": ["Flash"],
-                  "produced_mana": ["R"],
-                  "games": ["paper"],
-                  "finishes": ["nonfoil"],
-                  "legalities": { "commander": "legal" },
-                  "prices": { "usd": "0.25" },
-                  "image_uris": { "normal": "https://img.test/bolt.jpg" }
+                  "data": [
+                    {
+                      "id": "card-1",
+                      "oracle_id": "oracle-1",
+                      "name": "Lightning Bolt",
+                      "mana_cost": "{R}",
+                      "layout": "normal",
+                      "cmc": 1,
+                      "type_line": "Instant",
+                      "oracle_text": "Deal 3 damage.",
+                      "power": "3",
+                      "toughness": "2",
+                      "set": "clu",
+                      "collector_number": "141",
+                      "rarity": "common",
+                      "released_at": "2024-02-01",
+                      "lang": "en",
+                      "scryfall_uri": "https://scryfall.com/card/clu/141",
+                      "edhrec_rank": 42,
+                      "colors": ["R"],
+                      "color_identity": ["R"],
+                      "keywords": ["Flash"],
+                      "produced_mana": ["R"],
+                      "games": ["paper"],
+                      "finishes": ["nonfoil"],
+                      "legalities": { "commander": "legal" },
+                      "prices": { "usd": "0.25" },
+                      "image_uris": { "normal": "https://img.test/bolt.jpg" }
+                    }
+                  ]
                 }
                 """
             );
@@ -86,15 +90,19 @@ public sealed class ScryfallClientTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
-            .Expect("https://api.scryfall.test/cards/named*")
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
             .Respond(
                 "application/json",
                 """
                 {
-                  "id": "sol-ring",
-                  "name": "Sol Ring",
-                  "type_line": "Artifact",
-                  "oracle_text": "{T}: Add {C}{C}."
+                  "data": [
+                    {
+                      "id": "sol-ring",
+                      "name": "Sol Ring",
+                      "type_line": "Artifact",
+                      "oracle_text": "{T}: Add {C}{C}."
+                    }
+                  ]
                 }
                 """);
         MemoryCorpusCache cache = new(new MtgMcpCorpusCacheOptions());
@@ -111,6 +119,59 @@ public sealed class ScryfallClientTests
         first.Should().NotBeNull();
         second.Should().NotBeNull();
         second!.Name.Should().Be("Sol Ring");
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that basic land names do not use fuzzy fallback when exact lookup misses.
+    /// </summary>
+    [Fact]
+    public async Task GetCard_BasicLandDoesNotUseFuzzyFallbackWhenExactLookupMisses()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [] }""");
+
+        ScryfallClient client = CreateClient(mockHttp);
+        CardInfo? card = await client.GetCardAsync(
+            "Swamp",
+            TestContext.Current.CancellationToken);
+
+        card.Should().BeNull();
+        mockHttp.VerifyNoOutstandingExpectation();
+    }
+
+    /// <summary>
+    /// Verifies that non-basic single-card lookup falls back to fuzzy when exact collection lookup is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task GetCard_FallsBackToFuzzyWhenExactCollectionLookupFails()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond(HttpStatusCode.NotFound, "application/json", """{ "object": "error" }""");
+        mockHttp
+            .Expect("https://api.scryfall.test/cards/named?fuzzy=Lightning%20Bolt")
+            .Respond(
+                "application/json",
+                """
+                {
+                  "id": "card-1",
+                  "name": "Lightning Bolt",
+                  "type_line": "Instant",
+                  "oracle_text": "Deal 3 damage."
+                }
+                """);
+
+        ScryfallClient client = CreateClient(mockHttp);
+        CardInfo? card = await client.GetCardAsync(
+            "Lightning Bolt",
+            TestContext.Current.CancellationToken);
+
+        card.Should().NotBeNull();
+        card!.TypeLine.Should().Be("Instant");
         mockHttp.VerifyNoOutstandingExpectation();
     }
 
@@ -622,8 +683,8 @@ public sealed class ScryfallClientTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
-            .When("https://api.scryfall.test/cards/named*")
-            .Respond("application/json", """{ "id": "card-1", "name": "Lightning Bolt" }""");
+            .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [ { "id": "card-1", "name": "Lightning Bolt" } ] }""");
         mockHttp
             .When("https://api.scryfall.test/cards/card-1/rulings")
             .Respond(
@@ -656,6 +717,9 @@ public sealed class ScryfallClientTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
+            .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [] }""");
+        mockHttp
             .When("https://api.scryfall.test/cards/named*")
             .Respond(
                 HttpStatusCode.NotFound,
@@ -682,10 +746,10 @@ public sealed class ScryfallClientTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
-            .Expect("https://api.scryfall.test/cards/named?fuzzy=Lightning%20Bolt")
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
             .Respond(
                 "application/json",
-                """{ "id": "card-1", "oracle_id": "oracle-1", "name": "Lightning Bolt" }"""
+                """{ "data": [ { "id": "card-1", "oracle_id": "oracle-1", "name": "Lightning Bolt" } ] }"""
             );
         mockHttp
             .Expect(
@@ -722,6 +786,9 @@ public sealed class ScryfallClientTests
     public async Task GetCard_MapsDoubleFacedCardsFromFaces()
     {
         MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .Expect(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [] }""");
         mockHttp
             .When("https://api.scryfall.test/cards/named*")
             .Respond(
@@ -810,7 +877,7 @@ public sealed class ScryfallClientTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp
-            .When("https://api.scryfall.test/cards/named*")
+            .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
             .Respond(
                 HttpStatusCode.InternalServerError,
                 "application/json",
@@ -835,6 +902,9 @@ public sealed class ScryfallClientTests
     public async Task GetCard_ReturnsNullForScryfallNotFound()
     {
         MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [] }""");
         mockHttp
             .When("https://api.scryfall.test/cards/named*")
             .Respond(

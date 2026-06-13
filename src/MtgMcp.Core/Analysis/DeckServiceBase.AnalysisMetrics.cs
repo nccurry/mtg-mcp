@@ -133,6 +133,7 @@ public abstract partial class DeckServiceBase
     {
         ManaBaseAnalysis analysis = new() { WorkspaceId = workspace.Id };
         HashSet<string> deckColorIdentity = GetDeckColoredIdentity(workspace);
+        bool filteredAnyColorForDisplay = false;
         foreach (DeckCard card in IncludedCards(workspace))
         {
             CardSnapshot snapshot = GetSnapshot(card);
@@ -147,7 +148,13 @@ public abstract partial class DeckServiceBase
             bool isLandSlot = IsLandSlotCategory(card);
             bool isModalDoubleFacedLand = HasNonPrimaryLandFace(snapshot.TypeLine ?? "");
             IReadOnlyList<string> producedMana = ReadProducedMana(card);
+            IReadOnlyList<string> displayProducedMana = FilterProducedManaForDeckColorSummary(
+                producedMana,
+                deckColorIdentity);
             bool fixesMana = producedMana.Count > 1 || role.Tags.Contains(DeckTags.ManaFixing);
+            filteredAnyColorForDisplay |= displayProducedMana.Count != producedMana
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
 
             if (isLandSlot)
             {
@@ -188,7 +195,7 @@ public abstract partial class DeckServiceBase
                 }
             }
 
-            foreach (string color in producedMana)
+            foreach (string color in displayProducedMana)
             {
                 AddCount(analysis.ProducedManaSources, color, quantity);
                 if (isLand)
@@ -229,6 +236,11 @@ public abstract partial class DeckServiceBase
         }
 
         analysis.Notes.Add("Color source counts are inferred from cached Scryfall produced mana and simple land text heuristics.");
+        if (filteredAnyColorForDisplay)
+        {
+            analysis.Notes.Add("Any-color sources are filtered to deck color identity in color-source summaries; fixing counts still use full any-color capability.");
+        }
+
         analysis.Notes.Add("Tapped land count combines always-tapped and conditional-tapped lands for compatibility.");
         if (analysis.TappedLandContributors.Count > 0)
         {
@@ -627,6 +639,47 @@ public abstract partial class DeckServiceBase
         AddBasicLandColor(colors, text, "Forest", "G");
         AddModalDoubleFacedLandColors(colors, card, snapshot);
         return colors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Filters any-color source displays to the deck color identity without changing internal fixing logic.
+    /// </summary>
+    private static IReadOnlyList<string> FilterProducedManaForDeckColorSummary(
+        IReadOnlyList<string> producedMana,
+        IReadOnlySet<string> deckColorIdentity)
+    {
+        List<string> distinct = producedMana
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (deckColorIdentity.Count == 0 || !ContainsAllColoredMana(distinct))
+        {
+            return distinct;
+        }
+
+        List<string> filtered = [];
+        foreach (string symbol in distinct)
+        {
+            if (symbol.Equals("C", StringComparison.OrdinalIgnoreCase)
+                || deckColorIdentity.Contains(symbol))
+            {
+                filtered.Add(symbol);
+            }
+        }
+
+        return filtered;
+    }
+
+    /// <summary>
+    /// Checks whether a produced-mana list represents all five colored mana symbols.
+    /// </summary>
+    private static bool ContainsAllColoredMana(IReadOnlyList<string> producedMana)
+    {
+        return producedMana.Contains("W", StringComparer.OrdinalIgnoreCase)
+            && producedMana.Contains("U", StringComparer.OrdinalIgnoreCase)
+            && producedMana.Contains("B", StringComparer.OrdinalIgnoreCase)
+            && producedMana.Contains("R", StringComparer.OrdinalIgnoreCase)
+            && producedMana.Contains("G", StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

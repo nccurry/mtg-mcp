@@ -77,6 +77,91 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Adds multiple cards to a workspace after validating the full package.
+    /// </summary>
+    public async Task<DeckChangeResult> AddCardsBulkAsync(
+        string workspaceId,
+        IReadOnlyList<BulkDeckCardAdd> cards,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        if (cards.Count == 0)
+        {
+            throw new InvalidOperationException("At least one card add is required.");
+        }
+
+        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        List<ValidatedBulkDeckCardAdd> validatedAdds = [];
+        for (int index = 0; index < cards.Count; index++)
+        {
+            BulkDeckCardAdd request = cards[index];
+            if (string.IsNullOrWhiteSpace(request.CardName))
+            {
+                throw new InvalidOperationException($"Bulk add at index {index} is missing a card name.");
+            }
+
+            string primaryCategory = NormalizeCategoryName(request.PrimaryCategory);
+            validatedAdds.Add(new ValidatedBulkDeckCardAdd(
+                request.CardName.Trim(),
+                Math.Max(1, request.Quantity),
+                primaryCategory,
+                NormalizeSecondaryCategories(request.SecondaryCategories, primaryCategory)));
+        }
+
+        EnsureCommanderBulkAdditionIsSafe(workspace, validatedAdds, force);
+        foreach (ValidatedBulkDeckCardAdd add in validatedAdds)
+        {
+            EnsureCategory(workspace, add.PrimaryCategory);
+            foreach (string secondaryCategory in add.SecondaryCategories)
+            {
+                EnsureCategory(workspace, secondaryCategory);
+            }
+        }
+
+        IReadOnlyDictionary<string, CardInfo> resolvedCards = await ResolveCardsForMutationAsync(
+                validatedAdds.Select(add => add.CardName).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                cancellationToken)
+            .ConfigureAwait(false);
+        List<DeckCard> changedCards = [];
+        int totalQuantity = 0;
+        foreach (ValidatedBulkDeckCardAdd add in validatedAdds)
+        {
+            DeckCard? existing = FindCard(workspace, add.CardName, add.PrimaryCategory);
+            DeckCard changed;
+            if (existing is null)
+            {
+                resolvedCards.TryGetValue(add.CardName, out CardInfo? cardInfo);
+                changed = CreateDeckCard(add.CardName, add.Quantity, add.PrimaryCategory, cardInfo);
+                workspace.Cards.Add(changed);
+            }
+            else
+            {
+                existing.Quantity += add.Quantity;
+                changed = existing;
+            }
+
+            foreach (string secondaryCategory in add.SecondaryCategories)
+            {
+                DeckCategoryOrdering.AddSecondary(changed, secondaryCategory);
+            }
+
+            if (!changedCards.Contains(changed))
+            {
+                changedCards.Add(changed);
+            }
+
+            totalQuantity += add.Quantity;
+        }
+
+        await PersistCardsAsync(workspace, changedCards, [], cancellationToken).ConfigureAwait(false);
+        return Change(
+            workspace,
+            DeckMutationKind.CardAdded,
+            $"Added {totalQuantity} card(s) across {validatedAdds.Count} bulk request(s).");
+    }
+
+    /// <summary>
     /// Removes the card.
     /// </summary>
     public async Task<DeckChangeResult> RemoveCardAsync(
@@ -193,6 +278,18 @@ public sealed partial class DeckWorkspaceService
     {
         CardInfo? cardInfo = await TryGetCardForMutationAsync(cardName, cancellationToken)
             .ConfigureAwait(false);
+        return CreateDeckCard(cardName, quantity, category, cardInfo);
+    }
+
+    /// <summary>
+    /// Creates a workspace card from optional catalog metadata.
+    /// </summary>
+    private static DeckCard CreateDeckCard(
+        string cardName,
+        int quantity,
+        string category,
+        CardInfo? cardInfo)
+    {
         string requestedName = cardName.Trim();
         string displayName = BasicLandIdentity.TryGetCanonicalName(requestedName, out string canonicalName)
             ? canonicalName
@@ -232,6 +329,26 @@ public sealed partial class DeckWorkspaceService
             || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a batch of card names for mutation snapshots while tolerating catalog outages.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, CardInfo>> ResolveCardsForMutationAsync(
+        IReadOnlyList<string> cardNames,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await CardCatalog.GetCardsByNamesAsync(cardNames, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase);
         }
     }
 
@@ -282,4 +399,94 @@ public sealed partial class DeckWorkspaceService
             $"Adding {Math.Max(1, quantity)} card(s) to included category '{category}' would raise this Commander deck from {includedCount} to {projectedCount} included cards. Add to an excluded category such as Maybeboard, set the category to IncludedInDeck=false, or retry with force=true if this overfill is intentional."
         );
     }
+
+    /// <summary>
+    /// Refuses bulk included Commander additions that would unexpectedly exceed the deck size limit.
+    /// </summary>
+    private static void EnsureCommanderBulkAdditionIsSafe(
+        DeckWorkspace workspace,
+        IReadOnlyList<ValidatedBulkDeckCardAdd> adds,
+        bool force)
+    {
+        if (force || !workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Dictionary<string, DeckCategory> categoryMap = DeckCategoryInclusion.BuildCategoryMap(workspace);
+        int includedAdditions = 0;
+        foreach (ValidatedBulkDeckCardAdd add in adds)
+        {
+            if (IsCategoryIncludedAfterEnsure(categoryMap, add.PrimaryCategory))
+            {
+                includedAdditions += add.Quantity;
+            }
+        }
+
+        if (includedAdditions == 0)
+        {
+            return;
+        }
+
+        int includedCount = DeckCategoryInclusion.IncludedCards(workspace)
+            .Sum(card => Math.Max(0, card.Quantity));
+        int projectedCount = includedCount + includedAdditions;
+        if (projectedCount <= CommanderDeckSizeLimit)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Adding {includedAdditions} card(s) to included categories would raise this Commander deck from {includedCount} to {projectedCount} included cards. Add cards to excluded categories such as Maybeboard, set those categories to IncludedInDeck=false, or retry with force=true if this overfill is intentional."
+        );
+    }
+
+    /// <summary>
+    /// Checks the inclusion flag a category will have after implicit creation.
+    /// </summary>
+    private static bool IsCategoryIncludedAfterEnsure(
+        IReadOnlyDictionary<string, DeckCategory> categoryMap,
+        string category)
+    {
+        return categoryMap.TryGetValue(category, out DeckCategory? existing)
+            ? existing.IncludedInDeck
+            : !DeckDefaults.IsDefaultExcludedCategory(category);
+    }
+
+    /// <summary>
+    /// Normalizes a secondary category list while removing the primary category.
+    /// </summary>
+    private static List<string> NormalizeSecondaryCategories(
+        IReadOnlyList<string>? categories,
+        string primaryCategory)
+    {
+        List<string> normalized = [];
+        foreach (string? category in categories ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                continue;
+            }
+
+            string normalizedCategory = NormalizeCategoryName(category);
+            if (normalizedCategory.Equals(primaryCategory, StringComparison.OrdinalIgnoreCase)
+                || normalized.Any(value => value.Equals(normalizedCategory, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            normalized.Add(normalizedCategory);
+        }
+
+        return normalized;
+    }
+
+    /// <summary>
+    /// Stores a validated bulk add request.
+    /// </summary>
+    private sealed record ValidatedBulkDeckCardAdd(
+        string CardName,
+        int Quantity,
+        string PrimaryCategory,
+        List<string> SecondaryCategories);
 }

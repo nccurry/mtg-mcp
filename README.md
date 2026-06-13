@@ -206,6 +206,9 @@ Common credential config:
     },
     "Playgroup": {
       "CredentialsFile": "C:/Users/you/.mtg-mcp/playgroup.json"
+    },
+    "Reddit": {
+      "CredentialsFile": "C:/Users/you/.mtg-mcp/reddit.json"
     }
   }
 }
@@ -231,6 +234,23 @@ The `username` value can be your Archidekt username or account email address.
   "apiKey": "..."
 }
 ```
+
+`reddit.json`:
+
+```json
+{
+  "clientId": "...",
+  "clientSecret": "...",
+  "refreshToken": "...",
+  "userAgent": "mtg-mcp/1.0 by your-reddit-username",
+  "scope": "read"
+}
+```
+
+Reddit uses OAuth bearer tokens through `https://oauth.reddit.com`, not a
+long-lived API key. A refresh token plus app client id is the preferred local
+setup; a temporary `accessToken` or `bearerToken` can be stored for short-lived
+testing.
 
 You can also create an Archidekt credentials file with:
 
@@ -266,6 +286,28 @@ mtg-mcp auth playgroup `
   --api-key "..."
 ```
 
+Create a Reddit OAuth credentials file with:
+
+```bash
+mtg-mcp auth reddit \
+  --credentials-file "$HOME/.mtg-mcp/reddit.json" \
+  --client-id "..." \
+  --client-secret "..." \
+  --refresh-token "..." \
+  --user-agent "mtg-mcp/1.0 by your-reddit-username"
+```
+
+PowerShell equivalent:
+
+```powershell
+mtg-mcp auth reddit `
+  --credentials-file "$env:USERPROFILE\.mtg-mcp\reddit.json" `
+  --client-id "..." `
+  --client-secret "..." `
+  --refresh-token "..." `
+  --user-agent "mtg-mcp/1.0 by your-reddit-username"
+```
+
 Supported environment settings. In rows with slashes, repeat the full prefix for
 each abbreviated suffix.
 
@@ -278,13 +320,17 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` / `MAX_ENTRIES` | Persisted cache limits. |
 | `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` / `SCRYFALL_SEARCH` / `COMMANDERSPELLBOOK` / `DECK_SEARCH` / `DECK_DETAILS` / `CORPUS_SIGNALS` | Per-source cache TTLs such as `24h` or `7d`. |
 | `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` / `SCRYFALL_TAGGER__ENABLED` / `COMMANDERSPELLBOOK__ENABLED` / `TOPDECK__ENABLED` / `SPICERACK__ENABLED` / `EDHREC__ENABLED` / `EDHTOP16__ENABLED` / `REDDIT__ENABLED` | Enable or disable recommendation sources. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` / `SPICERACK__API_KEY` / `REDDIT__API_KEY` | Optional source API keys. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` / `SPICERACK__API_KEY` | Optional source API keys. |
 | `MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API` / `EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHREC__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
 | `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. The username value may be an Archidekt username or account email. |
 | `MTGMCP__ARCHIDEKT__RATE_LIMIT__MAX_REQUESTS` / `WINDOW_SECONDS` | Optional process-local Archidekt pacing. For example, `30` requests per `60` seconds leaves room for browser activity; `0` max requests disables proactive pacing. |
 | `MTGMCP__MOXFIELD__BASE_ADDRESS` / `USER_AGENT` / `CURL_FALLBACK_ENABLED` / `CURL_PATH` | Moxfield import endpoint settings. Imports use an anonymous, unofficial endpoint; when Moxfield blocks .NET HTTP requests, the adapter can retry through `curl` if available. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
+| `MTGMCP__REDDIT__CLIENT_ID` / `CLIENT_SECRET` / `REFRESH_TOKEN` | Reddit OAuth app credentials. `CLIENT_SECRET` is optional for installed-client style flows. |
+| `MTGMCP__REDDIT__ACCESS_TOKEN` / `BEARER_TOKEN` / `EXPIRES_AT_UTC` | Temporary Reddit bearer token override for short-lived local testing. |
+| `MTGMCP__REDDIT__USER_AGENT` / `SCOPE` / `DEVICE_ID` / `CREDENTIALS_FILE` | Reddit request identity and local credential file settings. `SCOPE` defaults to `read`. |
+| `MTGMCP__REDDIT__OAUTH_BASE_ADDRESS` / `TOKEN_ENDPOINT` | Reddit OAuth endpoint overrides for tests or controlled environments. Defaults target Reddit's OAuth API path and token endpoint. |
 | `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `MTGMCP__SIMULATION__ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Commander Spellbook API setting. |
@@ -380,12 +426,13 @@ performance or source decklist evidence. Commander theme filters are used only
 when a source exposes deterministic theme slugs; other sources return an
 `unsupported-theme` note instead of silently falling back to broader rows.
 
-Reddit discussion evidence is also enabled by default through bounded public
-JSON lookups over Commander-focused subreddits. Configure a bearer token to use
-Reddit's OAuth API path, or set `AllowUnofficialApi` to `false` for the Reddit
-source to disable public JSON discussion search. EDHTop16 remains opt-in because
-it uses an unofficial cEDH-focused endpoint rather than broad casual Commander
-data.
+Reddit discussion evidence is also enabled by default for bounded searches over
+Commander-focused subreddits. Configure Reddit OAuth credentials with
+`mtg-mcp auth reddit` or `MTGMCP__REDDIT__...` settings to use bearer requests
+against `https://oauth.reddit.com`. Public JSON fallback remains available only
+when OAuth credentials are absent and `AllowUnofficialApi` permits it; treat that
+fallback as unreliable and less preferred. EDHTop16 remains opt-in because it
+uses an unofficial cEDH-focused endpoint rather than broad casual Commander data.
 
 These tools consume recommendation sources or source-backed catalog evidence:
 
@@ -432,6 +479,9 @@ Workflow-first tools:
   `deck_analyze_mana`, `deck_analyze_consistency`, and
   `deck_analyze_performance`; use `deck_analyze_land_drop_odds` for the
   turn-by-turn land-drop question.
+- Inspect local category contents with `deck_list_cards_by_category`; a newly
+  created or implicit `Sideboard` category is excluded from deck and price
+  accounting unless imported data explicitly says otherwise.
 - Compare no-interaction goldfish outputs with `deck_compare_goldfish`. Its
   default `optimistic-goldfish-model` preserves the existing heuristic output;
   opt into `rules-backed-goldfish-race-v1` for a conservative template life-total
@@ -444,6 +494,9 @@ Workflow-first tools:
   source tools, and Playgroup tools.
 - Preview edits with `deck_plan_create`, `deck_plan_preview`, and
   `deck_plan_compare_performance`; apply only with `deck_plan_apply`.
+- Apply package-style local edits with `deck_add_cards_bulk` and
+  `deck_update_card_categories_bulk` when many candidates or category changes
+  should validate together and persist once.
 - Use provider tools such as `archidekt_copy_workspace`,
   `archidekt_checkpoint_create`, and `playgroup_rank_decks` when the workflow
   needs provider-specific behavior.

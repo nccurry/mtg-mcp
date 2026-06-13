@@ -283,6 +283,16 @@ public sealed partial class DeckIntelligenceTests
             IReadOnlyList<string> names,
             CancellationToken cancellationToken)
         {
+            if (CancelGetCard)
+            {
+                throw new TaskCanceledException("Caller cancelled card lookup.");
+            }
+
+            if (ThrowOnGetCard)
+            {
+                throw new HttpRequestException("Scryfall unavailable.");
+            }
+
             if (ThrowOnGetCardsByNames)
             {
                 throw new HttpRequestException("Bulk Scryfall lookup unavailable.");

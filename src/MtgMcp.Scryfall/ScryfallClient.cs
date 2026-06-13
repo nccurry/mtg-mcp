@@ -162,13 +162,39 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
     }
 
     /// <summary>
-    /// Looks up one Scryfall card by id or fuzzy name.
+    /// Looks up one Scryfall card by id, exact name, or fuzzy name.
     /// </summary>
     public async Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(nameOrId))
         {
             return null;
+        }
+
+        if (!Guid.TryParse(nameOrId, out _))
+        {
+            IReadOnlyDictionary<string, CardInfo> exactCards;
+            try
+            {
+                exactCards = await GetCardsByNamesAsync(
+                        [nameOrId.Trim()],
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (HttpRequestException) when (!IsBasicLandName(nameOrId))
+            {
+                exactCards = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (exactCards.TryGetValue(nameOrId.Trim(), out CardInfo? exactCard))
+            {
+                return exactCard;
+            }
+
+            if (IsBasicLandName(nameOrId))
+            {
+                return null;
+            }
         }
 
         string uri = Guid.TryParse(nameOrId, out _)
@@ -192,6 +218,20 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
                 ? card
                 : await SelectReleasedPricingSnapshotAsync(card, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Checks whether a caller supplied an exact basic land name that should never use fuzzy lookup.
+    /// </summary>
+    private static bool IsBasicLandName(string name)
+    {
+        string normalized = name.Trim();
+        return normalized.Equals("Plains", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Island", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Swamp", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Mountain", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Forest", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Wastes", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

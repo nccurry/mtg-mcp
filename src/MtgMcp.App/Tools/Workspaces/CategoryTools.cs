@@ -61,6 +61,63 @@ public sealed class CategoryTools
     }
 
     /// <summary>
+    /// Lists cards by category.
+    /// </summary>
+    [McpServerTool(
+        Name = "deck_list_cards_by_category",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("List compact cached card rows for a deck workspace category, optionally including secondary category tags.")]
+    public Task<DeckCategoryCardListResult> ListCardsByCategoryAsync(
+        string workspaceId,
+        string category,
+        bool includeSecondary = true,
+        int limit = 200,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return decks.ListCardsByCategoryAsync(
+            workspaceId,
+            category,
+            includeSecondary,
+            limit,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Updates card categories in bulk.
+    /// </summary>
+    [McpServerTool(
+        Name = "deck_update_card_categories_bulk",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = true,
+        OpenWorld = true
+    )]
+    [Description("Update categories for existing cards in one persisted mutation. Actions: add-secondary, remove, or set-primary.")]
+    public Task<object> UpdateCardCategoriesBulkAsync(
+        string workspaceId,
+        BulkCardCategoryChange[] changes,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        operationMode.EnsureCanMutate("deck_update_card_categories_bulk");
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            detailLevel,
+            () => decks.UpdateCardCategoriesBulkAsync(workspaceId, changes, cancellationToken),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Removes the card category.
     /// </summary>
     [McpServerTool(
@@ -142,8 +199,8 @@ public sealed class CategoryTools
     public Task<object> CreateCategoryAsync(
         string workspaceId,
         string category,
-        bool includedInDeck = true,
-        bool includedInPrice = true,
+        bool? includedInDeck = null,
+        bool? includedInPrice = null,
         bool? includeWorkspace = null,
         [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
         string? detailLevel = null,
@@ -159,8 +216,8 @@ public sealed class CategoryTools
             () => decks.CreateCategoryAsync(
                 workspaceId,
                 category,
-                includedInDeck,
-                includedInPrice,
+                includedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(category),
+                includedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(category),
                 cancellationToken),
             cancellationToken);
     }

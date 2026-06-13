@@ -51,16 +51,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         DeckWorkspace preview = previewer.CloneWorkspace(workspace);
         List<string> warnings = [.. plan.Warnings];
 
-        foreach (DeckEditOperation operation in plan.Operations)
-        {
-            await previewer.ApplyOperationAsync(
-                    preview,
-                    operation,
-                    resolveAddedCards: true,
-                    warnings,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
+        await previewer.ApplyOperationsAsync(
+                preview,
+                plan.Operations,
+                resolveAddedCards: true,
+                warnings,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         DeckPerformanceAnalysis before = DeckPerformanceAnalyzer.Analyze(
             workspace,

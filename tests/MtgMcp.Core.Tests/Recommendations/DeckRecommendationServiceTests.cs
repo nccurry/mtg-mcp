@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using FluentAssertions;
 
@@ -246,6 +247,54 @@ public sealed partial class DeckIntelligenceTests
         result.Rejected.Should().Contain(rejected =>
             rejected.CardName == "Torment of Hailfire"
             && rejected.Reasons.Any(reason => reason.Contains("Excluded role", StringComparison.OrdinalIgnoreCase)));
+        result.Cards.Should().Contain(candidate =>
+            candidate.CardName == "Geth's Grimoire"
+            && candidate.PriceKnown
+            && !string.IsNullOrWhiteSpace(candidate.PrintingStatus)
+            && candidate.Legality == "legal");
+    }
+
+    /// <summary>
+    /// Verifies that Scryfall query failures return structured errors instead of invocation failures.
+    /// </summary>
+    [Fact]
+    public async Task QueryCardsForDeck_ReturnsStructuredErrorsWhenCatalogRejectsQuery()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Query Error",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new ThrowingSearchCatalog());
+
+        DeckQueryDataResult result = await service.QueryCardsForDeckAsync(
+            workspace.Id,
+            "bad syntax",
+            "not a valid provider query",
+            count: 4,
+            maxPrice: null,
+            requiredRoles: null,
+            requiredTags: null,
+            excludedRoles: null,
+            excludedTags: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Cards.Should().BeEmpty();
+        result.Errors.Should().ContainSingle(error =>
+            error.Contains("Scryfall query", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("400", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1253,5 +1302,84 @@ public sealed partial class DeckIntelligenceTests
         DeckBatchTuningFailure failure = report.Failures.Should().ContainSingle().Subject;
         failure.WorkspaceId.Should().Be("missing-workspace");
         failure.Reason.Should().Contain("Workspace");
+    }
+
+    /// <summary>
+    /// Simulates a catalog that rejects search syntax.
+    /// </summary>
+    private sealed class ThrowingSearchCatalog : ICardCatalog
+    {
+        /// <summary>
+        /// Throws for raw query search.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("Scryfall returned HTTP 400 for query syntax.", null, HttpStatusCode.BadRequest);
+        }
+
+        /// <summary>
+        /// Throws for structured query search.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("Scryfall returned HTTP 400 for query syntax.", null, HttpStatusCode.BadRequest);
+        }
+
+        /// <summary>
+        /// Returns no single-card metadata.
+        /// </summary>
+        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CardInfo?>(null);
+        }
+
+        /// <summary>
+        /// Returns no card metadata.
+        /// </summary>
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(
+                new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Returns no rulings.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
+        }
+
+        /// <summary>
+        /// Returns no prints.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
+        }
+
+        /// <summary>
+        /// Returns no suggestions.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
+            string prompt,
+            string? format,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
     }
 }

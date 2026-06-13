@@ -209,11 +209,13 @@ public sealed partial class DeckPlanService
             }
         }
 
-        foreach (DeckEditOperation operation in plan.Operations)
-        {
-            await previewer.ApplyOperationAsync(preview, operation, resolveAddedCards, warnings, cancellationToken)
-                .ConfigureAwait(false);
-        }
+        await previewer.ApplyOperationsAsync(
+                preview,
+                plan.Operations,
+                resolveAddedCards,
+                warnings,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         DeckPlanPreviewResult previewResult = new()
         {
