@@ -22,9 +22,17 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth(AnalysisDepths.Balanced);
         budget.MaxCandidates = boundedLimit;
         budget.MaxRecommendations = boundedLimit;
-        CorpusSignalReport report = await CollectCommanderSignalsAsync(
+        CommanderThemeResolution themeResolution = await ResolveCommanderThemeAsync(
             normalizedCommander,
             normalizedTheme,
+            goal: null,
+            source,
+            budget,
+            refresh,
+            cancellationToken).ConfigureAwait(false);
+        CorpusSignalReport report = await CollectCommanderSignalsAsync(
+            normalizedCommander,
+            themeResolution.Theme,
             source,
             budget,
             refresh,
@@ -44,14 +52,15 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CommanderAggregateCardsResult result = new()
         {
             CommanderName = normalizedCommander,
-            Theme = normalizedTheme,
+            Theme = themeResolution.Theme,
             Sources = MergeSourceStatuses(report.Sources),
             Cards = aggregateSignals.Select(signal => BuildAggregateRow(signal, scryfallUris)).ToList()
         };
+        result.Notes.AddRange(themeResolution.Notes);
         result.Notes.AddRange(report.Notes);
-        if (!string.IsNullOrWhiteSpace(normalizedTheme) && result.Cards.Count == 0)
+        if (!string.IsNullOrWhiteSpace(themeResolution.Theme) && result.Cards.Count == 0)
         {
-            result.Notes.Add($"unsupported-theme: no configured source returned deterministic rows for theme '{normalizedTheme}'.");
+            AddUnsupportedThemeNote(result.Notes, normalizedTheme, themeResolution.Theme, themeResolution.SuggestedThemes);
         }
 
         if (string.IsNullOrWhiteSpace(source))
@@ -404,12 +413,334 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Maps noisy goal text onto a bounded set of deterministic commander theme slugs.
+    /// </summary>
+    private async Task<CommanderThemeResolution> ResolveCommanderThemeAsync(
+        string? commanderName,
+        string? requestedTheme,
+        string? goal,
+        string? source,
+        RecommendationAnalysisBudget budget,
+        bool refresh,
+        CancellationToken cancellationToken)
+    {
+        string? normalizedTheme = NormalizeTheme(requestedTheme);
+        if (string.IsNullOrWhiteSpace(commanderName)
+            || !HasCommanderThemeSource(source))
+        {
+            return new CommanderThemeResolution(normalizedTheme, [], KnownCommanderThemeSlugs());
+        }
+
+        string hintText = NormalizeThemeHintText(normalizedTheme, goal);
+        if (string.IsNullOrWhiteSpace(hintText))
+        {
+            return new CommanderThemeResolution(normalizedTheme, [], KnownCommanderThemeSlugs());
+        }
+
+        string? obviousTheme = MatchKnownCommanderTheme(hintText);
+        if (!string.IsNullOrWhiteSpace(obviousTheme)
+            && !obviousTheme.Equals(normalizedTheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return new CommanderThemeResolution(
+                obviousTheme,
+                [$"theme-resolved: commander context matched obvious theme '{obviousTheme}'."],
+                KnownCommanderThemeSlugs());
+        }
+
+        if (!ShouldInspectCommanderThemeTags(normalizedTheme))
+        {
+            return new CommanderThemeResolution(normalizedTheme, [], KnownCommanderThemeSlugs());
+        }
+
+        List<CommanderThemeCandidate> candidates = await GetCommanderThemeCandidatesAsync(
+            commanderName.Trim(),
+            source,
+            budget,
+            refresh,
+            cancellationToken).ConfigureAwait(false);
+        List<string> suggestions = SuggestedCommanderThemes(candidates);
+        string? matchedTheme = MatchCommanderThemeCandidate(hintText, candidates);
+        if (!string.IsNullOrWhiteSpace(matchedTheme)
+            && !matchedTheme.Equals(normalizedTheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return new CommanderThemeResolution(
+                matchedTheme,
+                [$"theme-resolved: commander page tags matched source theme '{matchedTheme}'."],
+                suggestions);
+        }
+
+        return new CommanderThemeResolution(normalizedTheme, [], suggestions);
+    }
+
+    /// <summary>
+    /// Reads candidate theme tags from commander-aggregate sources only.
+    /// </summary>
+    private async Task<List<CommanderThemeCandidate>> GetCommanderThemeCandidatesAsync(
+        string commanderName,
+        string? source,
+        RecommendationAnalysisBudget budget,
+        bool refresh,
+        CancellationToken cancellationToken)
+    {
+        CorpusSignalQuery query = new()
+        {
+            Format = "commander",
+            Commander = commanderName,
+            Refresh = refresh
+        };
+        Dictionary<string, CommanderThemeCandidate> candidates = new(StringComparer.OrdinalIgnoreCase);
+        foreach (ICorpusSignalProvider provider in corpusSignalProviders)
+        {
+            CorpusSourceStatus status = provider.GetStatus();
+            if (!MatchesSourceFilter(status, source)
+                || !status.Enabled
+                || !SupportsCommanderTheme(status))
+            {
+                continue;
+            }
+
+            try
+            {
+                CorpusSignalReport report = await provider.GetSignalsAsync(query, budget, cancellationToken)
+                    .ConfigureAwait(false);
+                foreach (CardCorpusSignal signal in report.Signals)
+                {
+                    string tag = string.IsNullOrWhiteSpace(signal.Section) ? signal.SignalType : signal.Section;
+                    if (string.IsNullOrWhiteSpace(tag))
+                    {
+                        continue;
+                    }
+
+                    string slug = SlugifySimple(tag);
+                    if (string.IsNullOrWhiteSpace(slug)
+                        || candidates.ContainsKey(slug))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(slug, new CommanderThemeCandidate(tag, slug, signal.DeckCount ?? 0));
+                }
+            }
+            catch (Exception exception) when (!IsCancellation(exception))
+            {
+                continue;
+            }
+        }
+
+        List<CommanderThemeCandidate> sortedCandidates = candidates.Values.ToList();
+        sortedCandidates.Sort((left, right) =>
+        {
+            int countComparison = right.DeckCount.CompareTo(left.DeckCount);
+            return countComparison != 0
+                ? countComparison
+                : string.Compare(left.ThemeSlug, right.ThemeSlug, StringComparison.OrdinalIgnoreCase);
+        });
+        return sortedCandidates;
+    }
+
+    /// <summary>
+    /// Checks whether any matching source can answer deterministic commander theme lookups.
+    /// </summary>
+    private bool HasCommanderThemeSource(string? source)
+    {
+        foreach (ICorpusSignalProvider provider in corpusSignalProviders)
+        {
+            CorpusSourceStatus status = provider.GetStatus();
+            if (MatchesSourceFilter(status, source)
+                && status.Enabled
+                && SupportsCommanderTheme(status))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Determines whether source-provided commander tags are worth inspecting for a noisy requested theme.
+    /// </summary>
+    private static bool ShouldInspectCommanderThemeTags(string? normalizedTheme)
+    {
+        return !string.IsNullOrWhiteSpace(normalizedTheme)
+            && normalizedTheme.Contains(' ', StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Adds a compact unsupported-theme note with suggested alternatives when available.
+    /// </summary>
+    private static void AddUnsupportedThemeNote(
+        List<string> notes,
+        string? requestedTheme,
+        string attemptedTheme,
+        IReadOnlyList<string> suggestedThemes)
+    {
+        string themeText = string.IsNullOrWhiteSpace(requestedTheme)
+            || requestedTheme.Equals(attemptedTheme, StringComparison.OrdinalIgnoreCase)
+                ? $"theme '{attemptedTheme}'"
+                : $"requested theme '{requestedTheme}' resolved to '{attemptedTheme}'";
+        if (suggestedThemes.Count == 0)
+        {
+            notes.Add($"unsupported-theme: no configured source returned deterministic rows for {themeText}.");
+            return;
+        }
+
+        notes.Add(
+            $"unsupported-theme: no configured source returned deterministic rows for {themeText}. " +
+            $"Suggested alternatives: {string.Join(", ", suggestedThemes.Take(8))}.");
+    }
+
+    /// <summary>
+    /// Matches common commander theme words used in natural-language goals.
+    /// </summary>
+    private static string? MatchKnownCommanderTheme(string normalizedHintText)
+    {
+        foreach ((string slug, string[] aliases) in KnownCommanderThemeAliases())
+        {
+            foreach (string alias in aliases)
+            {
+                if (ContainsThemePhrase(normalizedHintText, alias))
+                {
+                    return slug;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Matches a source-provided commander page tag against normalized goal text.
+    /// </summary>
+    private static string? MatchCommanderThemeCandidate(
+        string normalizedHintText,
+        IReadOnlyList<CommanderThemeCandidate> candidates)
+    {
+        foreach (CommanderThemeCandidate candidate in candidates)
+        {
+            if (ContainsThemePhrase(normalizedHintText, candidate.ThemeSlug)
+                || ContainsThemePhrase(normalizedHintText, candidate.TagName))
+            {
+                return candidate.ThemeSlug;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds a prioritized suggestion list from source tags and known commander theme slugs.
+    /// </summary>
+    private static List<string> SuggestedCommanderThemes(IReadOnlyList<CommanderThemeCandidate> candidates)
+    {
+        List<string> suggestions = [];
+        foreach (CommanderThemeCandidate candidate in candidates)
+        {
+            AddThemeSuggestion(suggestions, candidate.ThemeSlug);
+        }
+
+        foreach (string knownTheme in KnownCommanderThemeSlugs())
+        {
+            AddThemeSuggestion(suggestions, knownTheme);
+        }
+
+        return suggestions;
+    }
+
+    /// <summary>
+    /// Gets known high-signal commander theme aliases that are safe to retry directly.
+    /// </summary>
+    private static IReadOnlyList<(string Slug, string[] Aliases)> KnownCommanderThemeAliases()
+    {
+        return
+        [
+            ("treasure", ["treasure", "treasures"]),
+            ("artifacts", ["artifact", "artifacts"]),
+            ("tokens", ["token", "tokens"]),
+            ("aristocrats", ["aristocrat", "aristocrats", "sacrifice", "dies", "death triggers"]),
+            ("outlaws", ["outlaw", "outlaws"])
+        ];
+    }
+
+    /// <summary>
+    /// Gets known commander theme slugs for unsupported-theme suggestions.
+    /// </summary>
+    private static List<string> KnownCommanderThemeSlugs()
+    {
+        return KnownCommanderThemeAliases()
+            .Select(theme => theme.Slug)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Adds one theme slug to a suggestion list if it is usable and unique.
+    /// </summary>
+    private static void AddThemeSuggestion(List<string> suggestions, string theme)
+    {
+        if (!string.IsNullOrWhiteSpace(theme)
+            && !suggestions.Contains(theme, StringComparer.OrdinalIgnoreCase))
+        {
+            suggestions.Add(theme);
+        }
+    }
+
+    /// <summary>
+    /// Normalizes free-form theme and goal text for word-boundary matching.
+    /// </summary>
+    private static string NormalizeThemeHintText(string? theme, string? goal)
+    {
+        string text = string.Join(' ', new[] { theme, goal }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "";
+        }
+
+        char[] characters = text.ToLowerInvariant().ToCharArray();
+        for (int i = 0; i < characters.Length; i++)
+        {
+            if (!char.IsLetterOrDigit(characters[i]))
+            {
+                characters[i] = ' ';
+            }
+        }
+
+        return $" {string.Join(' ', new string(characters).Split(' ', StringSplitOptions.RemoveEmptyEntries))} ";
+    }
+
+    /// <summary>
+    /// Checks for a normalized theme phrase with word boundaries.
+    /// </summary>
+    private static bool ContainsThemePhrase(string normalizedHintText, string phrase)
+    {
+        string normalizedPhrase = NormalizeThemeHintText(phrase, null);
+        return !string.IsNullOrWhiteSpace(normalizedPhrase)
+            && normalizedHintText.Contains(normalizedPhrase, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Determines whether a source can answer commander theme lookups without fuzzy inference.
     /// </summary>
     private static bool SupportsCommanderTheme(CorpusSourceStatus status)
     {
         return status.Kind.Equals("commander-aggregate", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Carries the theme slug chosen for a commander lookup plus user-facing notes.
+    /// </summary>
+    private sealed record CommanderThemeResolution(
+        string? Theme,
+        List<string> Notes,
+        List<string> SuggestedThemes);
+
+    /// <summary>
+    /// Represents one source-provided commander theme or tag candidate.
+    /// </summary>
+    private sealed record CommanderThemeCandidate(
+        string TagName,
+        string ThemeSlug,
+        int DeckCount);
 
     /// <summary>
     /// Gets aggregate rows from the requested source set without merging source populations.

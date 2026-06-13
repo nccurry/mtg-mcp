@@ -94,6 +94,59 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that noisy natural-language theme text retries an obvious commander theme slug.
+    /// </summary>
+    [Fact]
+    public async Task GetCommanderAggregateCardsAsync_ResolvesNoisyThemeTextToKnownCommanderTheme()
+    {
+        ThemeAwareCommanderCorpusProvider provider = new();
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            corpusSignalProviders: [provider]);
+
+        CommanderAggregateCardsResult result = await service.GetCommanderAggregateCardsAsync(
+            "Vihaan, Goldwaker",
+            theme: "Vihaan treasure outlaws draw removal lands",
+            source: "edhrec",
+            limit: 5,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.Theme.Should().Be("treasure");
+        result.Cards.Should().Contain(row => row.CardName == "Prosperous Bandit");
+        result.Notes.Should().Contain(note => note.Contains("theme-resolved", StringComparison.OrdinalIgnoreCase));
+        provider.Queries.Should().ContainSingle(query => query.Theme == "treasure");
+        provider.Queries.Should().NotContain(query => query.Theme == "vihaan treasure outlaws draw removal lands");
+    }
+
+    /// <summary>
+    /// Verifies that unsupported commander themes include actionable alternatives.
+    /// </summary>
+    [Fact]
+    public async Task GetCommanderAggregateCardsAsync_SuggestsAlternativesForUnsupportedTheme()
+    {
+        DeckRecommendationService service = CreateRecommendationService(
+            new InMemoryRepository(),
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new ThemeAwareCommanderCorpusProvider()]);
+
+        CommanderAggregateCardsResult result = await service.GetCommanderAggregateCardsAsync(
+            "Vihaan, Goldwaker",
+            theme: "engines",
+            source: "edhrec",
+            limit: 5,
+            refresh: false,
+            TestContext.Current.CancellationToken);
+
+        result.Cards.Should().BeEmpty();
+        result.Notes.Should().Contain(note =>
+            note.Contains("unsupported-theme", StringComparison.OrdinalIgnoreCase)
+            && note.Contains("Suggested alternatives", StringComparison.OrdinalIgnoreCase)
+            && note.Contains("treasure", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that commander tags are derived from source-backed sections.
     /// </summary>
     [Fact]
@@ -470,6 +523,35 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that source evidence searches prefer obvious commander themes from the goal over stale local categories.
+    /// </summary>
+    [Fact]
+    public async Task SearchCorpusEvidence_ResolvesGoalToKnownCommanderTheme()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(VihaanWorkspace(), TestContext.Current.CancellationToken);
+        ThemeAwareCommanderCorpusProvider provider = new();
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [provider]);
+
+        CorpusEvidenceSearchResult result = await service.SearchCorpusEvidenceAsync(
+            workspace.Id,
+            sourceKey: "edhrec",
+            goal: "Vihaan treasure outlaws draw removal lands",
+            limit: 5,
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.CardEvidence.Should().Contain(row => row.CardName == "Prosperous Bandit");
+        result.Notes.Should().Contain(note => note.Contains("theme-resolved", StringComparison.OrdinalIgnoreCase));
+        provider.Queries.Should().ContainSingle(query => query.Theme == "treasure");
+        provider.Queries.Should().NotContain(query => query.Theme == "engines");
+    }
+
+    /// <summary>
     /// Verifies that removed roadmap-only sources no longer appear as disabled providers.
     /// </summary>
     [Fact]
@@ -750,6 +832,41 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a Vihaan workspace whose local archetype is intentionally less specific than the user goal.
+    /// </summary>
+    private static DeckWorkspace VihaanWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Name = "Vihaan",
+            Format = "commander",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Version: 1
+                Commander: Vihaan, Goldwaker
+                Archetype: engines
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Vihaan, Goldwaker",
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature",
+                        OracleText = "Treasures you control are creatures.",
+                        ColorIdentity = ["R", "W", "B"]
+                    }
+                }
+            ]
+        };
+    }
+
+    /// <summary>
     /// Creates a cache key for corpus cache tests.
     /// </summary>
     private static CorpusCacheKey CacheKey(string query, string adapterVersion = "1")
@@ -920,6 +1037,91 @@ public sealed partial class DeckIntelligenceTests
                 ];
             }
 
+            return Task.FromResult(report);
+        }
+    }
+
+    /// <summary>
+    /// Provides commander aggregate rows only for the treasure theme.
+    /// </summary>
+    private sealed class ThemeAwareCommanderCorpusProvider : ICorpusSignalProvider
+    {
+        /// <summary>
+        /// Gets the queries observed by the fake provider.
+        /// </summary>
+        public List<CorpusSignalQuery> Queries { get; } = [];
+
+        /// <summary>
+        /// Gets fake EDHREC status.
+        /// </summary>
+        public CorpusSourceStatus GetStatus()
+        {
+            return new CorpusSourceStatus
+            {
+                Key = "edhrec",
+                Name = "EDHREC",
+                Kind = "commander-aggregate",
+                Enabled = true,
+                StableApi = false,
+                Status = CorpusSourceStatuses.Available,
+                Uri = "https://edhrec.test/"
+            };
+        }
+
+        /// <summary>
+        /// Gets theme-sensitive commander aggregate evidence.
+        /// </summary>
+        public Task<CorpusSignalReport> GetSignalsAsync(
+            CorpusSignalQuery query,
+            RecommendationAnalysisBudget budget,
+            CancellationToken cancellationToken)
+        {
+            Queries.Add(new CorpusSignalQuery
+            {
+                WorkspaceId = query.WorkspaceId,
+                Format = query.Format,
+                Commander = query.Commander,
+                Theme = query.Theme,
+                Goal = query.Goal,
+                ExistingCards = [.. query.ExistingCards],
+                MaxPrice = query.MaxPrice,
+                Refresh = query.Refresh
+            });
+
+            CorpusSignalReport report = new() { Sources = [GetStatus()] };
+            if (string.IsNullOrWhiteSpace(query.Theme))
+            {
+                report.Signals.Add(new CardCorpusSignal
+                {
+                    CardName = "Prosperous Bandit",
+                    Source = "EDHREC",
+                    SignalType = CorpusSignalTypes.Inclusion,
+                    Section = "treasure",
+                    Score = 0.80,
+                    DeckCount = 200
+                });
+                return Task.FromResult(report);
+            }
+
+            if (!query.Theme.Equals("treasure", StringComparison.OrdinalIgnoreCase))
+            {
+                report.Notes.Add($"unsupported-theme: EDHREC did not expose theme slug '{query.Theme}' for this commander.");
+                return Task.FromResult(report);
+            }
+
+            report.Signals.Add(new CardCorpusSignal
+            {
+                CardName = "Prosperous Bandit",
+                Source = "EDHREC",
+                SignalType = CorpusSignalTypes.Inclusion,
+                Section = "treasure",
+                Score = 0.90,
+                InclusionRate = 0.30,
+                DeckCount = 300,
+                EligibleDeckCount = 1_000,
+                Uri = "https://edhrec.test/commanders/vihaan-goldwaker/treasure",
+                Rationale = "Appears in treasure-focused Vihaan aggregate rows."
+            });
             return Task.FromResult(report);
         }
     }

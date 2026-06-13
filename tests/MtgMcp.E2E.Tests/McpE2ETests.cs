@@ -898,9 +898,11 @@ public sealed class McpE2ETests
             .Select(row => GetString(row, "status"))
             .Should()
             .Contain("source-backed-metadata");
+        GetProperty(transientPackage, "performanceSkipped").GetBoolean().Should().BeTrue();
+        GetString(transientPackage, "performanceSkipReason").Should().Contain("partial Commander decks");
         GetArray(GetObject(transientPackage, "performance"), "deltas")
             .Should()
-            .NotBeEmpty();
+            .BeEmpty();
         beforeApplyExport.Should().Contain("1 Mana Crypt");
         beforeApplyExport.Should().NotContain("Arcane Signet");
         GetInt32(apply, "added").Should().Be(1);

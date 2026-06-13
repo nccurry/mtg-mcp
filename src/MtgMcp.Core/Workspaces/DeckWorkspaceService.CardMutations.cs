@@ -193,9 +193,13 @@ public sealed partial class DeckWorkspaceService
     {
         CardInfo? cardInfo = await TryGetCardForMutationAsync(cardName, cancellationToken)
             .ConfigureAwait(false);
+        string requestedName = cardName.Trim();
+        string displayName = BasicLandIdentity.TryGetCanonicalName(requestedName, out string canonicalName)
+            ? canonicalName
+            : cardInfo?.Name ?? requestedName;
         DeckCard card = new()
         {
-            Name = cardInfo?.Name ?? cardName.Trim(),
+            Name = displayName,
             Quantity = Math.Max(1, quantity),
             PrimaryCategory = category,
             Categories = [category],

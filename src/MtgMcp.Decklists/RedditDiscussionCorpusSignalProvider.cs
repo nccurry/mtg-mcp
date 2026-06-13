@@ -83,18 +83,25 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
     private readonly MtgMcpOptions options;
 
     /// <summary>
-    /// Creates a Reddit discussion corpus provider.
+    /// Stores the latest live Reddit source health observation.
+    /// </summary>
+    private readonly RedditSourceHealth sourceHealth;
+
+    /// <summary>
+    /// Creates a Reddit discussion corpus provider with shared source health storage.
     /// </summary>
     public RedditDiscussionCorpusSignalProvider(
         HttpClient httpClient,
         ICardCatalog cardCatalog,
         ICorpusCache cache,
-        IOptions<MtgMcpOptions> options)
+        IOptions<MtgMcpOptions> options,
+        RedditSourceHealth sourceHealth)
     {
         this.httpClient = httpClient;
         this.cardCatalog = cardCatalog;
         this.cache = cache;
         this.options = options.Value;
+        this.sourceHealth = sourceHealth;
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
         this.httpClient.BaseAddress ??= sourceOptions.BaseAddress
             ?? (string.IsNullOrWhiteSpace(sourceOptions.ApiKey) ? DefaultBaseAddress : OAuthBaseAddress);
@@ -118,21 +125,22 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
     {
         MtgMcpCorpusSourceOptions sourceOptions = SourceOptions();
         bool hasBearerToken = !string.IsNullOrWhiteSpace(sourceOptions.ApiKey);
+        bool allowsUnofficialApi = DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: true);
         bool enabled = sourceOptions.Enabled
-            && (hasBearerToken || DecklistCorpusProviderSupport.AllowsUnofficialApi(sourceOptions, defaultAllowed: true));
-        return new CorpusSourceStatus
+            && (hasBearerToken || allowsUnofficialApi);
+        CorpusSourceStatus status = new()
         {
             Key = "reddit-discussions",
             Name = "Reddit discussion search",
             Kind = "discussion-api",
             Enabled = enabled,
             StableApi = hasBearerToken,
-            ApiType = hasBearerToken ? CorpusSourceApiTypes.Official : CorpusSourceApiTypes.UnofficialApi,
-            UnofficialApi = !hasBearerToken,
+            ApiType = hasBearerToken || !allowsUnofficialApi ? CorpusSourceApiTypes.Official : CorpusSourceApiTypes.UnofficialApi,
+            UnofficialApi = !hasBearerToken && allowsUnofficialApi,
             PermissionSensitive = true,
             AttributionRequired = true,
             Status = sourceOptions.Enabled
-                ? enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.Disabled
+                ? enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.NeedsOAuth
                 : CorpusSourceStatuses.Disabled,
             Uri = "https://www.reddit.com/dev/api/",
             Notes =
@@ -140,9 +148,25 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
                 "Queries bounded Reddit post and comment JSON for exact card-reference evidence.",
                 "Searches a fixed EDH/Commander subreddit allowlist for popular commander discussions.",
                 "Reports linked decklist URLs from discussion text without fetching those sites.",
-                "ApiKey may hold an OAuth bearer token; otherwise the bounded public JSON path is enabled by default and can be disabled with AllowUnofficialApi=false."
+                "Set MtgMcp:Intelligence:Sources:Reddit:ApiKey to an OAuth bearer token for the official API path.",
+                "Without ApiKey, bounded public JSON is enabled by default and can be disabled with AllowUnofficialApi=false."
             ]
         };
+        if (hasBearerToken)
+        {
+            sourceHealth.Clear();
+            return status;
+        }
+
+        if (status.Status == CorpusSourceStatuses.NeedsOAuth)
+        {
+            status.Notes.Add(
+                "Reddit public JSON is disabled; configure MtgMcp:Intelligence:Sources:Reddit:ApiKey or set AllowUnofficialApi=true.");
+            return status;
+        }
+
+        ApplyObservedPublicJsonHealth(status);
+        return status;
     }
 
     /// <summary>
@@ -226,8 +250,21 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
         }
         catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
+            DateTimeOffset checkedAt = DateTimeOffset.UtcNow;
             status.Status = CorpusSourceStatuses.AccessBlocked;
-            status.Notes.Add("Reddit returned HTTP 403; public JSON access may be blocked or require OAuth credentials.");
+            status.Enabled = false;
+            status.LastCheckedAt = checkedAt;
+            status.Notes.Add(
+                "Reddit returned HTTP 403; public JSON access may be blocked or require OAuth credentials.");
+            status.Notes.Add(
+                "Configure MtgMcp:Intelligence:Sources:Reddit:ApiKey with an OAuth bearer token, or leave the source disabled for Reddit-backed evidence.");
+            sourceHealth.Remember(
+                CorpusSourceStatuses.AccessBlocked,
+                checkedAt,
+                [
+                    "Last public JSON check returned HTTP 403.",
+                    "Configure MtgMcp:Intelligence:Sources:Reddit:ApiKey with an OAuth bearer token."
+                ]);
             report.Notes.Add("Reddit discussion evidence was skipped because Reddit returned HTTP 403. Continuing without Reddit source evidence.");
             return report;
         }
@@ -238,8 +275,40 @@ public sealed partial class RedditDiscussionCorpusSignalProvider : ICorpusSignal
         report.Notes.Add(
             $"Reddit evidence is raw bounded discussion data from posts within the last {DiscussionLookbackYears} years; " +
             "mtg-mcp does not infer sentiment or card quality from comment text.");
+        DateTimeOffset successCheckedAt = DateTimeOffset.UtcNow;
+        status.LastCheckedAt = successCheckedAt;
+        sourceHealth.Remember(
+            CorpusSourceStatuses.Available,
+            successCheckedAt,
+            ["Last public JSON check completed successfully."]);
         await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
         return report;
+    }
+
+    /// <summary>
+    /// Applies the last live public JSON health observation to source_list status.
+    /// </summary>
+    private void ApplyObservedPublicJsonHealth(CorpusSourceStatus status)
+    {
+        if (!sourceHealth.TryGetLastObservation(
+            out string observedStatus,
+            out DateTimeOffset checkedAt,
+            out IReadOnlyList<string> observedNotes))
+        {
+            return;
+        }
+
+        status.LastCheckedAt = checkedAt;
+        foreach (string note in observedNotes)
+        {
+            status.Notes.Add(note);
+        }
+
+        if (observedStatus.Equals(CorpusSourceStatuses.AccessBlocked, StringComparison.OrdinalIgnoreCase))
+        {
+            status.Status = CorpusSourceStatuses.AccessBlocked;
+            status.Enabled = false;
+        }
     }
 
 }

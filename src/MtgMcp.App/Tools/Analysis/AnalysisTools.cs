@@ -171,7 +171,7 @@ public sealed class AnalysisTools
     /// Analyzes land count, color sources, fixing, and tapped-land pressure.
     /// </summary>
     [McpServerTool(Name = "deck_analyze_mana", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Analyze land count, color sources, produced mana, tapped-land pressure, fixing, and mana-base risks.")]
+    [Description("Analyze land count, color sources, produced mana, tapped-land pressure, named tapped-land contributors, fixing, and mana-base risks.")]
     public Task<ManaBaseAnalysis> AnalyzeManaBaseAsync(
         string workspaceId,
         CancellationToken cancellationToken = default)

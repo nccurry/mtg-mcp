@@ -58,7 +58,7 @@ public sealed class WorkspaceTools
             + "Requires explicit mode 'local', 'archidekt', or 'moxfield'; if unclear, ask the user before calling. "
             + "Archidekt mode also requires an explicit writeBack choice."
     )]
-    public Task<DeckWorkspace> StartDeckWorkspaceAsync(
+    public async Task<object> StartDeckWorkspaceAsync(
         [Description("Workspace source mode: local, archidekt, or moxfield.")]
         string? mode = null,
         string? name = null,
@@ -71,21 +71,28 @@ public sealed class WorkspaceTools
         [Description("Required for Archidekt mode: true to persist edits to Archidekt, false to keep a local cached workspace.")]
         bool? writeBack = null,
         string? decklist = null,
+        [Description("Output detail level: summary, normal, or full. Default summary returns workspace id, counts, commanders, source, and writeback status; full returns the raw workspace.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default
     )
     {
         operationMode.EnsureCanMutate("workspace_start");
-        return decks.StartDeckWorkspaceAsync(
-            mode,
-            name,
-            format,
-            description,
-            archidektDeckIdOrUrl,
-            moxfieldDeckIdOrUrl,
-            writeBack,
-            decklist,
-            cancellationToken
-        );
+        DeckWorkspace workspace = await decks
+            .StartDeckWorkspaceAsync(
+                mode,
+                name,
+                format,
+                description,
+                archidektDeckIdOrUrl,
+                moxfieldDeckIdOrUrl,
+                writeBack,
+                decklist,
+                cancellationToken)
+            .ConfigureAwait(false);
+        string normalizedDetailLevel = NormalizeWorkspaceStartDetailLevel(detailLevel);
+        return normalizedDetailLevel == WorkspaceStartDetailLevels.Full
+            ? workspace
+            : CreateOpenResult(workspace, normalizedDetailLevel);
     }
 
     /// <summary>
@@ -488,12 +495,39 @@ public sealed class WorkspaceTools
     /// </summary>
     private static DeckOpenResult CreateOpenResult(DeckWorkspace workspace)
     {
+        return CreateOpenResult(workspace, WorkspaceStartDetailLevels.Summary);
+    }
+
+    /// <summary>
+    /// Creates the compact result returned by workspace start and remote open operations.
+    /// </summary>
+    private static DeckOpenResult CreateOpenResult(DeckWorkspace workspace, string detailLevel)
+    {
         Dictionary<string, DeckCategory> categories = workspace.Categories
             .GroupBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        bool includeCards = detailLevel.Equals(WorkspaceStartDetailLevels.Normal, StringComparison.OrdinalIgnoreCase);
+        List<DeckOpenCardSummary> cards = [];
+        if (includeCards)
+        {
+            foreach (DeckCard card in workspace.Cards)
+            {
+                cards.Add(new DeckOpenCardSummary
+                {
+                    CardName = card.Name,
+                    Quantity = card.Quantity,
+                    PrimaryCategory = DeckCategoryOrdering.PrimaryCategory(card),
+                    Categories = card.Categories.ToList(),
+                    TypeLine = card.Snapshot?.TypeLine,
+                    ScryfallUri = card.Snapshot?.ScryfallUri
+                });
+            }
+        }
 
         return new DeckOpenResult
         {
+            DetailLevel = detailLevel,
+            Id = workspace.Id,
             WorkspaceId = workspace.Id,
             Name = workspace.Name,
             Format = workspace.Format,
@@ -527,7 +561,8 @@ public sealed class WorkspaceTools
                         .Where(card => HasPrimaryCategory(card, category.Name))
                         .Sum(card => Math.Max(0, card.Quantity))
                 })
-                .ToList()
+                .ToList(),
+            Cards = cards
         };
     }
 
@@ -587,5 +622,44 @@ public sealed class WorkspaceTools
     {
         return DeckCategoryOrdering.PrimaryCategory(card)
             .Equals(category, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Normalizes workspace_start detail levels.
+    /// </summary>
+    private static string NormalizeWorkspaceStartDetailLevel(string? detailLevel)
+    {
+        string normalized = string.IsNullOrWhiteSpace(detailLevel)
+            ? WorkspaceStartDetailLevels.Summary
+            : detailLevel.Trim().ToLowerInvariant();
+        if (normalized is WorkspaceStartDetailLevels.Summary
+            or WorkspaceStartDetailLevels.Normal
+            or WorkspaceStartDetailLevels.Full)
+        {
+            return normalized;
+        }
+
+        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
+    }
+
+    /// <summary>
+    /// Lists accepted workspace_start detail levels.
+    /// </summary>
+    private static class WorkspaceStartDetailLevels
+    {
+        /// <summary>
+        /// Returns compact workspace identity, source, count, commander, and category data.
+        /// </summary>
+        public const string Summary = "summary";
+
+        /// <summary>
+        /// Adds compact card rows without full snapshots.
+        /// </summary>
+        public const string Normal = "normal";
+
+        /// <summary>
+        /// Returns the raw workspace payload.
+        /// </summary>
+        public const string Full = "full";
     }
 }

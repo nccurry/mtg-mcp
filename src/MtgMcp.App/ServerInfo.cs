@@ -18,6 +18,11 @@ public sealed class ServerInfo
     public string AssemblyName { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the resolved path to the server assembly.
+    /// </summary>
+    public string AssemblyPath { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the semantic package version without build metadata.
     /// </summary>
     public string SemVer { get; set; } = "";

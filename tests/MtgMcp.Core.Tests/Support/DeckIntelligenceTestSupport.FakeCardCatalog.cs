@@ -37,6 +37,11 @@ public sealed partial class DeckIntelligenceTests
         public bool CancelGetCard { get; init; }
 
         /// <summary>
+        /// Gets or sets whether bulk card lookup throws.
+        /// </summary>
+        public bool ThrowOnGetCardsByNames { get; init; }
+
+        /// <summary>
         /// Searches fake cards.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(string query, int limit, CancellationToken cancellationToken)
@@ -278,6 +283,11 @@ public sealed partial class DeckIntelligenceTests
             IReadOnlyList<string> names,
             CancellationToken cancellationToken)
         {
+            if (ThrowOnGetCardsByNames)
+            {
+                throw new HttpRequestException("Bulk Scryfall lookup unavailable.");
+            }
+
             Dictionary<string, CardInfo> cards = new(StringComparer.OrdinalIgnoreCase);
             foreach (string name in names)
             {

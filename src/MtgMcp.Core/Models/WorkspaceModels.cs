@@ -366,6 +366,16 @@ public static class DeckCardMetadataKeys
 public sealed class DeckOpenResult
 {
     /// <summary>
+    /// Gets or sets the detail level used to shape the open response.
+    /// </summary>
+    public string DetailLevel { get; set; } = "summary";
+
+    /// <summary>
+    /// Gets or sets the workspace id using the legacy raw-workspace field name.
+    /// </summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the workspace id to use with follow-up tools.
     /// </summary>
     public string WorkspaceId { get; set; } = "";
@@ -434,6 +444,11 @@ public sealed class DeckOpenResult
     /// Gets or sets compact category counts.
     /// </summary>
     public List<DeckOpenCategorySummary> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets compact card rows when normal detail is requested.
+    /// </summary>
+    public List<DeckOpenCardSummary> Cards { get; set; } = [];
 }
 
 /// <summary>
@@ -455,6 +470,42 @@ public sealed class DeckOpenCategorySummary
     /// Gets or sets the card quantity in this category.
     /// </summary>
     public int CardCount { get; set; }
+}
+
+/// <summary>
+/// Describes one compact card row in a normal-detail deck-open response.
+/// </summary>
+public sealed class DeckOpenCardSummary
+{
+    /// <summary>
+    /// Gets or sets the card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets card quantity.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card's primary category.
+    /// </summary>
+    public string PrimaryCategory { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets all category labels on the card.
+    /// </summary>
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets cached type line when known.
+    /// </summary>
+    public string? TypeLine { get; set; }
+
+    /// <summary>
+    /// Gets or sets Scryfall page when known.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
 }
 
 /// <summary>
@@ -960,6 +1011,11 @@ public sealed class DeckAnalysis
     /// Gets or sets the role counts.
     /// </summary>
     public Dictionary<string, int> RoleCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets or sets additive functional role counts where one included card can count for multiple jobs.
+    /// </summary>
+    public Dictionary<string, int> FunctionalRoleCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets or sets the tag counts.

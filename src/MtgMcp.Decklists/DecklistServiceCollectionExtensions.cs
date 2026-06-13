@@ -13,6 +13,7 @@ public static class DecklistServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddDecklistCorpusSources(this IServiceCollection services)
     {
+        services.AddSingleton<RedditSourceHealth>();
         services.AddHttpClient<TopDeckCorpusSignalProvider>();
         services.AddHttpClient<SpicerackCorpusSignalProvider>();
         services.AddHttpClient<EdhrecCorpusSignalProvider>();

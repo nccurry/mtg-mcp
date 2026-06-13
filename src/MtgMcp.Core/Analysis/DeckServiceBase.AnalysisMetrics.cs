@@ -12,10 +12,17 @@ public abstract partial class DeckServiceBase
     protected DeckMetricSnapshot BuildMetricSnapshot(
         DeckWorkspace workspace,
         IReadOnlySet<string> gameChangers,
-        bool gameChangerDataAvailable = true)
+        bool gameChangerDataAvailable = true,
+        string? gameChangerNote = null)
     {
         CommanderBracketEstimate bracket = EstimateCommanderBracket(workspace, gameChangers);
-        if (!gameChangerDataAvailable)
+        if (!string.IsNullOrWhiteSpace(gameChangerNote))
+        {
+            bracket.Notes.RemoveAll(note =>
+                note.Contains("Game Changer data is fetched live", StringComparison.OrdinalIgnoreCase));
+            bracket.Notes.Add(gameChangerNote);
+        }
+        else if (!gameChangerDataAvailable)
         {
             bracket.Notes.RemoveAll(note =>
                 note.Contains("Game Changer data is fetched live", StringComparison.OrdinalIgnoreCase));
@@ -130,6 +137,11 @@ public abstract partial class DeckServiceBase
         {
             CardSnapshot snapshot = GetSnapshot(card);
             int quantity = Math.Max(0, card.Quantity);
+            if (quantity == 0)
+            {
+                continue;
+            }
+
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             bool isLand = role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase);
             bool isLandSlot = IsLandSlotCategory(card);
@@ -160,11 +172,15 @@ public abstract partial class DeckServiceBase
                 {
                     analysis.AlwaysTappedLandCount += quantity;
                     analysis.TappedLandCount += quantity;
+                    analysis.TappedLandContributors.Add(
+                        BuildTappedLandContributor(card, snapshot, quantity, producedMana, entryTiming, isModalDoubleFacedLand));
                 }
                 else if (entryTiming == LandEntryTiming.ConditionalTapped)
                 {
                     analysis.ConditionalTappedLandCount += quantity;
                     analysis.TappedLandCount += quantity;
+                    analysis.TappedLandContributors.Add(
+                        BuildTappedLandContributor(card, snapshot, quantity, producedMana, entryTiming, isModalDoubleFacedLand));
                 }
                 else
                 {
@@ -191,6 +207,8 @@ public abstract partial class DeckServiceBase
             }
         }
 
+        TrimTappedLandContributors(analysis.TappedLandContributors);
+
         if (analysis.LandCount < 34)
         {
             analysis.Risks.Add("Land count is low for most Commander decks.");
@@ -212,7 +230,99 @@ public abstract partial class DeckServiceBase
 
         analysis.Notes.Add("Color source counts are inferred from cached Scryfall produced mana and simple land text heuristics.");
         analysis.Notes.Add("Tapped land count combines always-tapped and conditional-tapped lands for compatibility.");
+        if (analysis.TappedLandContributors.Count > 0)
+        {
+            analysis.Notes.Add("Tapped land contributors identify the lands to prioritize for same-color untapped replacement searches.");
+        }
+
         return analysis;
+    }
+
+    /// <summary>
+    /// Builds one tapped-land contributor row from a classified land.
+    /// </summary>
+    private static TappedLandContributor BuildTappedLandContributor(
+        DeckCard card,
+        CardSnapshot snapshot,
+        int quantity,
+        IReadOnlyList<string> producedMana,
+        LandEntryTiming entryTiming,
+        bool isModalDoubleFacedLand)
+    {
+        return new TappedLandContributor
+        {
+            CardName = card.Name,
+            Quantity = quantity,
+            Timing = TappedLandTiming(entryTiming),
+            ProducedMana = producedMana.ToList(),
+            Reason = TappedLandReason(snapshot, entryTiming, isModalDoubleFacedLand),
+            ScryfallUri = snapshot.ScryfallUri
+        };
+    }
+
+    /// <summary>
+    /// Sorts tapped-land contributors into a bounded, high-signal list.
+    /// </summary>
+    private static void TrimTappedLandContributors(List<TappedLandContributor> contributors)
+    {
+        contributors.Sort(CompareTappedLandContributors);
+        if (contributors.Count > 10)
+        {
+            contributors.RemoveRange(10, contributors.Count - 10);
+        }
+    }
+
+    /// <summary>
+    /// Compares tapped-land contributors by severity, quantity, then name.
+    /// </summary>
+    private static int CompareTappedLandContributors(TappedLandContributor left, TappedLandContributor right)
+    {
+        int timing = TappedLandTimingRank(left.Timing).CompareTo(TappedLandTimingRank(right.Timing));
+        if (timing != 0)
+        {
+            return timing;
+        }
+
+        int quantity = right.Quantity.CompareTo(left.Quantity);
+        return quantity != 0
+            ? quantity
+            : string.Compare(left.CardName, right.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gets the stable timing label for tapped-land output.
+    /// </summary>
+    private static string TappedLandTiming(LandEntryTiming entryTiming)
+    {
+        return entryTiming == LandEntryTiming.AlwaysTapped
+            ? "alwaysTapped"
+            : "conditionalTapped";
+    }
+
+    /// <summary>
+    /// Gets the sort rank for tapped-land timing labels.
+    /// </summary>
+    private static int TappedLandTimingRank(string timing)
+    {
+        return timing.Equals("alwaysTapped", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Explains why a land was assigned to a tapped timing bucket.
+    /// </summary>
+    private static string TappedLandReason(
+        CardSnapshot snapshot,
+        LandEntryTiming entryTiming,
+        bool isModalDoubleFacedLand)
+    {
+        if (entryTiming == LandEntryTiming.ConditionalTapped)
+        {
+            return "Cached oracle text has a tapped-unless condition or optional cost.";
+        }
+
+        return isModalDoubleFacedLand
+            ? "Cached type line has a nonland front face with a land back face."
+            : "Cached oracle text says this land enters tapped.";
     }
 
     /// <summary>
@@ -299,17 +409,22 @@ public abstract partial class DeckServiceBase
         {
             int quantity = Math.Max(0, card.Quantity);
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-            if (role.PrimaryRole.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
+            foreach (string functionalRole in role.FunctionalRoles)
+            {
+                AddCount(analysis.FunctionalRoleCounts, functionalRole, quantity);
+            }
+
+            if (HasFunctionalRole(role, DeckRoles.Ramp))
             {
                 analysis.RampCount += quantity;
             }
 
-            if (role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase))
+            if (HasFunctionalRole(role, DeckRoles.Draw))
             {
                 analysis.DrawCount += quantity;
             }
 
-            if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase))
+            if (HasFunctionalRole(role, DeckRoles.Tutors))
             {
                 analysis.TutorCount += quantity;
             }
@@ -351,6 +466,22 @@ public abstract partial class DeckServiceBase
 
         analysis.Notes.Add("Consistency estimates use role classification and cached card snapshots.");
         return analysis;
+    }
+
+    /// <summary>
+    /// Checks whether a role assignment has an additive functional role.
+    /// </summary>
+    private static bool HasFunctionalRole(CardRoleAssignment role, string target)
+    {
+        foreach (string functionalRole in role.FunctionalRoles)
+        {
+            if (functionalRole.Equals(target, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

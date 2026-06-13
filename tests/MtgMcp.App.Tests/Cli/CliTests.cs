@@ -609,6 +609,25 @@ public sealed class CliTests
     }
 
     /// <summary>
+    /// Verifies that smoke output confirms the validated server build identity.
+    /// </summary>
+    [Fact]
+    public async Task CliRunAsync_SmokePrintsServerIdentity()
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+
+        int exitCode = await MtgMcpCli.RunAsync(["--smoke"], output, error);
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("mtg-mcp host build ok");
+        output.ToString().Should().Contain("serverAssemblyPath:");
+        output.ToString().Should().Contain("gitCommit:");
+        output.ToString().Should().Contain("operationMode:");
+        error.ToString().Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that auth help prints both credential helper shapes without building the host.
     /// </summary>
     [Fact]

@@ -47,6 +47,11 @@ public sealed partial class DeckAnalysisService
                     result.HeuristicCount += Math.Max(0, card.Quantity);
                 }
 
+                if (evidence.CountedByFunctionalRole)
+                {
+                    result.FunctionalCount += Math.Max(0, card.Quantity);
+                }
+
                 if (evidence.CountedByOddsTarget)
                 {
                     result.OddsTargetCount += Math.Max(0, card.Quantity);
@@ -80,6 +85,7 @@ public sealed partial class DeckAnalysisService
         List<string> categories = DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories).ToList();
         bool anyCategoryMatch = categories.Any(category => category.Equals(target, StringComparison.OrdinalIgnoreCase));
         bool heuristicMatch = assignment.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase);
+        bool functionalMatch = assignment.FunctionalRoles.Any(role => role.Equals(target, StringComparison.OrdinalIgnoreCase));
         bool oddsMatch = DeckRoleClassifier.MatchesTarget(card, target);
         DeckRoleCountCardEvidence evidence = new()
         {
@@ -90,10 +96,12 @@ public sealed partial class DeckAnalysisService
             IncludedInDeck = included,
             ClassifierPrimaryRole = assignment.PrimaryRole,
             Tags = assignment.Tags.ToList(),
+            FunctionalRoles = assignment.FunctionalRoles.ToList(),
             ClassifierConfidence = assignment.Confidence,
             CountedByCategory = included && categoryMatch,
             CountedByAnyCategory = included && anyCategoryMatch,
             CountedByHeuristic = included && heuristicMatch,
+            CountedByFunctionalRole = included && functionalMatch,
             CountedByOddsTarget = included && oddsMatch,
             TypeLine = snapshot.TypeLine,
             OracleSnippet = Snippet(snapshot.OracleText),
@@ -109,6 +117,15 @@ public sealed partial class DeckAnalysisService
                 "classifier tag",
                 tag,
                 tag.Equals(target, StringComparison.OrdinalIgnoreCase));
+        }
+
+        foreach (string functionalRole in assignment.FunctionalRoles)
+        {
+            AddRoleEvidence(
+                evidence.MatchingEvidence,
+                "classifier functional role",
+                functionalRole,
+                functionalRole.Equals(target, StringComparison.OrdinalIgnoreCase));
         }
 
         foreach (string category in categories)
@@ -140,10 +157,11 @@ public sealed partial class DeckAnalysisService
     {
         if (result.CategoryCount != result.AllCategoryCount
             || result.AllCategoryCount != result.HeuristicCount
-            || result.HeuristicCount != result.OddsTargetCount)
+            || result.HeuristicCount != result.FunctionalCount
+            || result.FunctionalCount != result.OddsTargetCount)
         {
             result.Notes.Add(
-                $"Counts diverge: primary-category={result.CategoryCount}, all-categories={result.AllCategoryCount}, heuristic={result.HeuristicCount}, odds-target={result.OddsTargetCount}.");
+                $"Counts diverge: primary-category={result.CategoryCount}, all-categories={result.AllCategoryCount}, heuristic={result.HeuristicCount}, functional={result.FunctionalCount}, odds-target={result.OddsTargetCount}.");
         }
 
         if (result.AllCategoryCount > result.CategoryCount)
@@ -153,7 +171,7 @@ public sealed partial class DeckAnalysisService
 
         if (result.OddsTargetCount > result.HeuristicCount)
         {
-            result.Notes.Add("Odds target matching includes secondary tags and category labels, so it can be broader than classifier primary role.");
+            result.Notes.Add("Odds target matching includes functional roles, secondary tags, and category labels, so it can be broader than classifier primary role.");
         }
 
         if (result.Cards.Count == 0)
@@ -353,6 +371,11 @@ public sealed partial class DeckAnalysisService
         }
 
         if (evidence.CountedByHeuristic)
+        {
+            score++;
+        }
+
+        if (evidence.CountedByFunctionalRole)
         {
             score++;
         }

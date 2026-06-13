@@ -17,6 +17,8 @@ public sealed partial class DeckPlanService
         PlanPreviewWorkspaceResult result = await PreviewPlanWithWorkspacesAsync(
                 plan,
                 resolveAddedCards,
+                includeLiveBracket: true,
+                bracketSkipReason: null,
                 cancellationToken)
             .ConfigureAwait(false);
         return result.Preview;
@@ -34,6 +36,7 @@ public sealed partial class DeckPlanService
         IReadOnlyList<ExplicitDeckPlanMoveCardChange>? moveCards,
         bool resolveAddedCards,
         string? sourceSupportDepth,
+        string? analysisMode,
         string simulationProfile,
         int simulations,
         int maxTurn,
@@ -58,27 +61,36 @@ public sealed partial class DeckPlanService
         }
 
         string normalizedSourceSupportDepth = NormalizeSourceSupportDepth(sourceSupportDepth);
+        string normalizedAnalysisMode = NormalizeAnalysisMode(analysisMode);
+        bool largePackage = IsLargePackage(plan);
+        bool partialDeck = IsPartialCommanderDeck(workspace, expectedIncludedCards: 100);
+        bool includeLiveBracket = ShouldIncludeLiveBracket(normalizedAnalysisMode, largePackage);
+        bool performanceSkipped = ShouldSkipPerformance(normalizedAnalysisMode, largePackage, partialDeck);
+        string? performanceSkipReason = performanceSkipped
+            ? BuildPerformanceSkipReason(normalizedAnalysisMode, plan, workspace, largePackage, partialDeck)
+            : null;
+        string? bracketSkipReason = includeLiveBracket
+            ? null
+            : BuildBracketSkipReason(normalizedAnalysisMode, largePackage);
         PlanPreviewWorkspaceResult previewResult = await PreviewPlanWithWorkspacesAsync(
                 plan,
                 resolveAddedCards,
+                includeLiveBracket,
+                bracketSkipReason,
                 cancellationToken)
             .ConfigureAwait(false);
-        DeckPerformanceAnalysis beforePerformance = DeckPerformanceAnalyzer.Analyze(
-            previewResult.BeforeWorkspace,
-            simulationProfile,
-            simulations,
-            maxTurn,
-            seed,
-            includeMulligans: true,
-            cancellationToken);
-        DeckPerformanceAnalysis afterPerformance = DeckPerformanceAnalyzer.Analyze(
-            previewResult.AfterWorkspace,
-            simulationProfile,
-            simulations,
-            maxTurn,
-            seed,
-            includeMulligans: true,
-            cancellationToken);
+        DeckPerformanceComparison performance = performanceSkipped
+            ? BuildSkippedPerformance(plan.WorkspaceId, performanceSkipReason)
+            : BuildPackagePerformance(
+                previewResult.BeforeWorkspace,
+                previewResult.AfterWorkspace,
+                plan.WorkspaceId,
+                simulationProfile,
+                simulations,
+                maxTurn,
+                seed,
+                previewResult.Preview.Warnings,
+                cancellationToken);
         previewResult.Preview.PlanId = "";
 
         DeckCardPackagePreviewResult result = new()
@@ -101,28 +113,23 @@ public sealed partial class DeckPlanService
                 previewResult.Preview.After.Cost),
             BracketImpact = BuildBracketImpact(
                 previewResult.Preview.Before.Bracket,
-                previewResult.Preview.After.Bracket),
+                previewResult.Preview.After.Bracket,
+                bracketSkipReason),
+            AnalysisMode = normalizedAnalysisMode,
+            PartialDeck = partialDeck,
+            ExpectedIncludedCards = partialDeck ? 100 : null,
+            PerformanceSkipped = performanceSkipped,
+            PerformanceSkipReason = performanceSkipReason,
             SourceSupportDepth = normalizedSourceSupportDepth,
             SourceSupport = await BuildPackageSourceSupportAsync(
                     plan,
                     previewResult.BeforeWorkspace,
                     previewResult.AfterWorkspace,
                     normalizedSourceSupportDepth,
+                    previewResult.Preview.Warnings,
                     cancellationToken)
                 .ConfigureAwait(false),
-            Performance = new DeckPerformanceComparison
-            {
-                PlanId = "",
-                WorkspaceId = plan.WorkspaceId,
-                Before = beforePerformance,
-                After = afterPerformance,
-                Deltas = DeckPerformanceComparisonBuilder.BuildDeltas(beforePerformance, afterPerformance),
-                Warnings = previewResult.Preview.Warnings
-                    .Concat(beforePerformance.Warnings.Select(warning => $"Before: {warning}"))
-                    .Concat(afterPerformance.Warnings.Select(warning => $"After: {warning}"))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList(),
-            },
+            Performance = performance,
             Warnings = previewResult.Preview.Warnings
         };
 
@@ -169,23 +176,37 @@ public sealed partial class DeckPlanService
     private async Task<PlanPreviewWorkspaceResult> PreviewPlanWithWorkspacesAsync(
         DeckEditPlan plan,
         bool resolveAddedCards,
+        bool includeLiveBracket,
+        string? bracketSkipReason,
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(plan.WorkspaceId, cancellationToken).ConfigureAwait(false);
         DeckPlanPreviewer previewer = new(CardCatalog);
         DeckWorkspace preview = previewer.CloneWorkspace(workspace);
         List<string> warnings = [];
-        IReadOnlySet<string> gameChangers;
+        IReadOnlySet<string> gameChangers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         bool gameChangerDataAvailable = true;
-        try
+        string? gameChangerNote = null;
+        if (includeLiveBracket)
         {
-            gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException exception)
+            {
+                gameChangers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                gameChangerDataAvailable = false;
+                warnings.Add($"{exception.Message} Preview metrics exclude live Game Changer signals.");
+            }
         }
-        catch (InvalidOperationException exception)
+        else
         {
-            gameChangers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            gameChangerDataAvailable = false;
-            warnings.Add($"{exception.Message} Preview metrics exclude live Game Changer signals.");
+            gameChangerNote = "Live Game Changer lookup was skipped for this preview; bracket estimates exclude live Game Changer signals.";
+            if (!string.IsNullOrWhiteSpace(bracketSkipReason))
+            {
+                warnings.Add(bracketSkipReason);
+            }
         }
 
         foreach (DeckEditOperation operation in plan.Operations)
@@ -199,8 +220,8 @@ public sealed partial class DeckPlanService
             PlanId = plan.PlanId,
             WorkspaceId = plan.WorkspaceId,
             ResolveAddedCards = resolveAddedCards,
-            Before = BuildMetricSnapshot(workspace, gameChangers, gameChangerDataAvailable),
-            After = BuildMetricSnapshot(preview, gameChangers, gameChangerDataAvailable),
+            Before = BuildMetricSnapshot(workspace, gameChangers, gameChangerDataAvailable, gameChangerNote),
+            After = BuildMetricSnapshot(preview, gameChangers, gameChangerDataAvailable, gameChangerNote),
             Warnings = warnings
         };
 
@@ -274,10 +295,13 @@ public sealed partial class DeckPlanService
     /// </summary>
     private static DeckBracketImpact BuildBracketImpact(
         CommanderBracketEstimate before,
-        CommanderBracketEstimate after)
+        CommanderBracketEstimate after,
+        string? skipReason)
     {
         return new DeckBracketImpact
         {
+            Skipped = !string.IsNullOrWhiteSpace(skipReason),
+            SkipReason = skipReason,
             BeforeEstimatedBracket = before.EstimatedBracket,
             AfterEstimatedBracket = after.EstimatedBracket,
             EstimatedBracketDelta = after.EstimatedBracket - before.EstimatedBracket,
@@ -294,6 +318,7 @@ public sealed partial class DeckPlanService
         DeckWorkspace before,
         DeckWorkspace after,
         string sourceSupportDepth,
+        List<string> warnings,
         CancellationToken cancellationToken)
     {
         if (sourceSupportDepth.Equals(PreviewSourceSupportDepths.None, StringComparison.OrdinalIgnoreCase))
@@ -301,12 +326,24 @@ public sealed partial class DeckPlanService
             return [];
         }
 
-        IReadOnlyDictionary<string, CardInfo> resolvedCards = await ResolvePackageSourceCardsAsync(
-                plan,
-                before,
-                after,
-                cancellationToken)
-            .ConfigureAwait(false);
+        IReadOnlyDictionary<string, CardInfo> resolvedCards;
+        try
+        {
+            resolvedCards = await ResolvePackageSourceCardsAsync(
+                    plan,
+                    before,
+                    after,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException
+            || exception is TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            warnings.Add($"Package source-support metadata resolution failed: {exception.Message} Returning partial preview rows.");
+            resolvedCards = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase);
+        }
+
         List<DeckPackageSourceSupport> rows = [];
         foreach (DeckEditOperation operation in plan.Operations)
         {
@@ -325,6 +362,70 @@ public sealed partial class DeckPlanService
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// Builds deterministic performance comparison when the caller requests full analysis.
+    /// </summary>
+    private static DeckPerformanceComparison BuildPackagePerformance(
+        DeckWorkspace beforeWorkspace,
+        DeckWorkspace afterWorkspace,
+        string workspaceId,
+        string simulationProfile,
+        int simulations,
+        int maxTurn,
+        int seed,
+        IReadOnlyList<string> previewWarnings,
+        CancellationToken cancellationToken)
+    {
+        DeckPerformanceAnalysis beforePerformance = DeckPerformanceAnalyzer.Analyze(
+            beforeWorkspace,
+            simulationProfile,
+            simulations,
+            maxTurn,
+            seed,
+            includeMulligans: true,
+            cancellationToken);
+        DeckPerformanceAnalysis afterPerformance = DeckPerformanceAnalyzer.Analyze(
+            afterWorkspace,
+            simulationProfile,
+            simulations,
+            maxTurn,
+            seed,
+            includeMulligans: true,
+            cancellationToken);
+
+        return new DeckPerformanceComparison
+        {
+            PlanId = "",
+            WorkspaceId = workspaceId,
+            Before = beforePerformance,
+            After = afterPerformance,
+            Deltas = DeckPerformanceComparisonBuilder.BuildDeltas(beforePerformance, afterPerformance),
+            Warnings = previewWarnings
+                .Concat(beforePerformance.Warnings.Select(warning => $"Before: {warning}"))
+                .Concat(afterPerformance.Warnings.Select(warning => $"After: {warning}"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+        };
+    }
+
+    /// <summary>
+    /// Builds a performance comparison placeholder with explicit skip context.
+    /// </summary>
+    private static DeckPerformanceComparison BuildSkippedPerformance(string workspaceId, string? skipReason)
+    {
+        DeckPerformanceComparison comparison = new()
+        {
+            PlanId = "",
+            WorkspaceId = workspaceId,
+        };
+        if (!string.IsNullOrWhiteSpace(skipReason))
+        {
+            comparison.Warnings.Add(skipReason);
+        }
+
+        return comparison;
     }
 
     /// <summary>
@@ -536,6 +637,150 @@ public sealed partial class DeckPlanService
                 "sourceSupportDepth must be none, minimal, or balanced.",
                 nameof(sourceSupportDepth))
         };
+    }
+
+    /// <summary>
+    /// Normalizes package preview analysis mode.
+    /// </summary>
+    private static string NormalizeAnalysisMode(string? analysisMode)
+    {
+        string normalized = string.IsNullOrWhiteSpace(analysisMode)
+            ? PreviewAnalysisModes.Summary
+            : analysisMode.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            PreviewAnalysisModes.None => PreviewAnalysisModes.None,
+            PreviewAnalysisModes.Summary => PreviewAnalysisModes.Summary,
+            PreviewAnalysisModes.Full => PreviewAnalysisModes.Full,
+            _ => throw new ArgumentException(
+                "analysisMode must be none, summary, or full.",
+                nameof(analysisMode))
+        };
+    }
+
+    /// <summary>
+    /// Checks whether package size should use bounded summary analysis by default.
+    /// </summary>
+    private static bool IsLargePackage(DeckEditPlan plan)
+    {
+        return plan.Operations.Count >= 25 || CountChangedCopies(plan) >= 50;
+    }
+
+    /// <summary>
+    /// Counts card-copy changes represented by a package plan.
+    /// </summary>
+    private static int CountChangedCopies(DeckEditPlan plan)
+    {
+        int count = 0;
+        foreach (DeckEditOperation operation in plan.Operations)
+        {
+            count += Math.Max(1, operation.Quantity ?? 1);
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Checks whether a Commander workspace is below the expected deck size.
+    /// </summary>
+    private static bool IsPartialCommanderDeck(DeckWorkspace workspace, int expectedIncludedCards)
+    {
+        if (!workspace.Format.Equals("commander", StringComparison.OrdinalIgnoreCase)
+            && !workspace.Format.Equals("edh", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        int included = 0;
+        foreach (DeckCard card in workspace.Cards)
+        {
+            if (DeckCategoryInclusion.IsIncludedInDeck(workspace, card))
+            {
+                included += Math.Max(0, card.Quantity);
+            }
+        }
+
+        return included > 0 && included < expectedIncludedCards;
+    }
+
+    /// <summary>
+    /// Determines whether a package preview should fetch live Game Changer data.
+    /// </summary>
+    private static bool ShouldIncludeLiveBracket(string analysisMode, bool largePackage)
+    {
+        if (analysisMode.Equals(PreviewAnalysisModes.None, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !largePackage || analysisMode.Equals(PreviewAnalysisModes.Full, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Determines whether package performance simulation should run.
+    /// </summary>
+    private static bool ShouldSkipPerformance(string analysisMode, bool largePackage, bool partialDeck)
+    {
+        if (analysisMode.Equals(PreviewAnalysisModes.Full, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return analysisMode.Equals(PreviewAnalysisModes.None, StringComparison.OrdinalIgnoreCase)
+            || largePackage
+            || partialDeck;
+    }
+
+    /// <summary>
+    /// Builds a stable skip reason for performance analysis.
+    /// </summary>
+    private static string BuildPerformanceSkipReason(
+        string analysisMode,
+        DeckEditPlan plan,
+        DeckWorkspace workspace,
+        bool largePackage,
+        bool partialDeck)
+    {
+        if (analysisMode.Equals(PreviewAnalysisModes.None, StringComparison.OrdinalIgnoreCase))
+        {
+            return "analysisMode=none skips goldfish performance simulation.";
+        }
+
+        if (largePackage)
+        {
+            return $"Summary analysis skips performance for large packages ({plan.Operations.Count} operations, {CountChangedCopies(plan)} changed copies). Use analysisMode=full to run it.";
+        }
+
+        if (partialDeck)
+        {
+            int included = 0;
+            foreach (DeckCard card in workspace.Cards)
+            {
+                if (DeckCategoryInclusion.IsIncludedInDeck(workspace, card))
+                {
+                    included += Math.Max(0, card.Quantity);
+                }
+            }
+
+            return $"Summary analysis skips performance for partial Commander decks ({included}/100 included cards). Use analysisMode=full after the deck is complete.";
+        }
+
+        return "Performance analysis skipped.";
+    }
+
+    /// <summary>
+    /// Builds a stable skip reason for live Commander bracket lookups.
+    /// </summary>
+    private static string? BuildBracketSkipReason(string analysisMode, bool largePackage)
+    {
+        if (analysisMode.Equals(PreviewAnalysisModes.None, StringComparison.OrdinalIgnoreCase))
+        {
+            return "analysisMode=none skips live Commander Game Changer lookup; bracket impact excludes live Game Changer signals.";
+        }
+
+        return largePackage
+            ? "Summary analysis skips live Commander Game Changer lookup for large packages; bracket impact excludes live Game Changer signals."
+            : null;
     }
 
     /// <summary>

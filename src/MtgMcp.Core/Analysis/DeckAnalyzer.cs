@@ -54,6 +54,11 @@ public sealed class DeckAnalyzer
 
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             Increment(analysis.RoleCounts, role.PrimaryRole, card.Quantity);
+            foreach (string functionalRole in role.FunctionalRoles)
+            {
+                Increment(analysis.FunctionalRoleCounts, functionalRole, card.Quantity);
+            }
+
             foreach (string tag in role.Tags)
             {
                 Increment(analysis.TagCounts, tag, card.Quantity);

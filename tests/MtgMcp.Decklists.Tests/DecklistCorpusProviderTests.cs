@@ -317,7 +317,8 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(mockHttp, "https://reddit.test/"),
             new FakeCardCatalog("Dark Deal", "Waste Not"),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)));
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)),
+            new RedditSourceHealth());
         RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
         budget.MaxDecksPerSource = 1;
         budget.MaxEvidencePerRecommendation = 2;
@@ -357,7 +358,8 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(mockHttp, "https://reddit.test/"),
             new FakeCardCatalog("Beast Whisperer", "Raise the Palisade", "Craterhoof Behemoth", "V.A.T.S."),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)));
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)),
+            new RedditSourceHealth());
         RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("balanced");
         budget.MaxDecksPerSource = 1;
         budget.MaxEvidencePerRecommendation = 1;
@@ -398,7 +400,8 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(mockHttp, "https://reddit.test/"),
             new FakeCardCatalog(),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)));
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)),
+            new RedditSourceHealth());
         RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
         budget.MaxDecksPerSource = 1;
 
@@ -412,8 +415,49 @@ public sealed class DecklistCorpusProviderTests
         report.Sources.Should().ContainSingle(source =>
             source.Key == "reddit-discussions"
             && source.Status == CorpusSourceStatuses.AccessBlocked
+            && !source.Enabled
+            && source.LastCheckedAt.HasValue
             && source.Notes.Any(note => note.Contains("403", StringComparison.OrdinalIgnoreCase)));
         report.Notes.Should().Contain(note => note.Contains("Continuing without Reddit", StringComparison.OrdinalIgnoreCase));
+
+        CorpusSourceStatus status = provider.GetStatus();
+        status.Status.Should().Be(CorpusSourceStatuses.AccessBlocked);
+        status.Enabled.Should().BeFalse();
+        status.LastCheckedAt.Should().NotBeNull();
+        status.Notes.Should().Contain(note => note.Contains("OAuth", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that Reddit health observations are shared across provider instances for source_list.
+    /// </summary>
+    [Fact]
+    public async Task RedditProvider_SharedHealthReportsBlockedStatusBeforeNextQuery()
+    {
+        RedditSourceHealth sourceHealth = new();
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
+            .Respond(HttpStatusCode.Forbidden, "application/json", """{ "error": "forbidden" }""");
+        IOptions<MtgMcpOptions> options = Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true));
+        RedditDiscussionCorpusSignalProvider queryProvider = new(
+            CreateClient(mockHttp, "https://reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            options,
+            sourceHealth);
+
+        await queryProvider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
+        RedditDiscussionCorpusSignalProvider statusProvider = new(
+            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
+            new FakeCardCatalog(),
+            new NullCorpusCache(),
+            options,
+            sourceHealth);
+
+        CorpusSourceStatus status = statusProvider.GetStatus();
+
+        status.Status.Should().Be(CorpusSourceStatuses.AccessBlocked);
+        status.Enabled.Should().BeFalse();
+        status.LastCheckedAt.Should().NotBeNull();
     }
 
     /// <summary>
@@ -426,7 +470,8 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
             new FakeCardCatalog(),
             new NullCorpusCache(),
-            Options.Create(new MtgMcpOptions()));
+            Options.Create(new MtgMcpOptions()),
+            new RedditSourceHealth());
 
         CorpusSourceStatus status = provider.GetStatus();
 
@@ -446,7 +491,8 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
             new FakeCardCatalog(),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)));
+            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
+            new RedditSourceHealth());
 
         CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
 
@@ -454,8 +500,9 @@ public sealed class DecklistCorpusProviderTests
         report.Sources.Should().ContainSingle(source =>
             source.Key == "reddit-discussions"
             && !source.Enabled
-            && source.UnofficialApi
-            && source.Status == CorpusSourceStatuses.Disabled);
+            && !source.UnofficialApi
+            && source.Status == CorpusSourceStatuses.NeedsOAuth
+            && source.Notes.Any(note => note.Contains("ApiKey", StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>
@@ -468,7 +515,8 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
             new FakeCardCatalog(),
             new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "token")));
+            Options.Create(OptionsWithSource("Reddit", "token")),
+            new RedditSourceHealth());
 
         CorpusSourceStatus status = provider.GetStatus();
 

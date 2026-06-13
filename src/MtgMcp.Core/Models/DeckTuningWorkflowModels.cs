@@ -52,6 +52,11 @@ public sealed class DeckRoleCountExplanation
     public int HeuristicCount { get; set; }
 
     /// <summary>
+    /// Gets or sets active card quantity whose additive functional roles match the requested role.
+    /// </summary>
+    public int FunctionalCount { get; set; }
+
+    /// <summary>
     /// Gets or sets active card quantity that the draw-odds target matcher would treat as a success.
     /// </summary>
     public int OddsTargetCount { get; set; }
@@ -108,6 +113,11 @@ public sealed class DeckRoleCountCardEvidence
     public List<string> Tags { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets additive classifier roles for multi-function cards.
+    /// </summary>
+    public List<string> FunctionalRoles { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets classifier confidence.
     /// </summary>
     public double ClassifierConfidence { get; set; }
@@ -126,6 +136,11 @@ public sealed class DeckRoleCountCardEvidence
     /// Gets or sets whether this card was counted by classifier primary role.
     /// </summary>
     public bool CountedByHeuristic { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether this card was counted by additive functional role.
+    /// </summary>
+    public bool CountedByFunctionalRole { get; set; }
 
     /// <summary>
     /// Gets or sets whether this card was counted by the draw-odds role/tag/category matcher.
@@ -521,6 +536,31 @@ public sealed class DeckCardPackagePreviewResult
     public DeckBracketImpact BracketImpact { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets the preview analysis mode that controlled expensive analysis work.
+    /// </summary>
+    public string AnalysisMode { get; set; } = PreviewAnalysisModes.Summary;
+
+    /// <summary>
+    /// Gets or sets whether the package was previewed against a below-size Commander deck.
+    /// </summary>
+    public bool PartialDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets the expected included card count when a Commander deck is partial.
+    /// </summary>
+    public int? ExpectedIncludedCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether goldfish performance analysis was intentionally skipped.
+    /// </summary>
+    public bool PerformanceSkipped { get; set; }
+
+    /// <summary>
+    /// Gets or sets why goldfish performance analysis was skipped.
+    /// </summary>
+    public string? PerformanceSkipReason { get; set; }
+
+    /// <summary>
     /// Gets or sets deterministic source-support status rows for package cards.
     /// </summary>
     public List<DeckPackageSourceSupport> SourceSupport { get; set; } = [];
@@ -661,6 +701,16 @@ public sealed class DeckPriceDelta
 public sealed class DeckBracketImpact
 {
     /// <summary>
+    /// Gets or sets whether live bracket impact analysis was intentionally skipped.
+    /// </summary>
+    public bool Skipped { get; set; }
+
+    /// <summary>
+    /// Gets or sets why live bracket impact analysis was skipped.
+    /// </summary>
+    public string? SkipReason { get; set; }
+
+    /// <summary>
     /// Gets or sets the before estimated bracket.
     /// </summary>
     public int BeforeEstimatedBracket { get; set; }
@@ -761,6 +811,27 @@ public static class PreviewSourceSupportDepths
     /// Includes source-backed metadata plus role, tags, and price when available.
     /// </summary>
     public const string Balanced = "balanced";
+}
+
+/// <summary>
+/// Lists analysis modes accepted by transient package previews.
+/// </summary>
+public static class PreviewAnalysisModes
+{
+    /// <summary>
+    /// Skips expensive open-world and simulation work, keeping local composition, price, and validation deltas.
+    /// </summary>
+    public const string None = "none";
+
+    /// <summary>
+    /// Uses bounded defaults and skips noisy performance analysis for large packages or partial decks.
+    /// </summary>
+    public const string Summary = "summary";
+
+    /// <summary>
+    /// Runs the full preview analysis path requested by the caller.
+    /// </summary>
+    public const string Full = "full";
 }
 
 /// <summary>

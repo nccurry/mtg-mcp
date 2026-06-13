@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace MtgMcp.App;
@@ -52,7 +53,7 @@ public static class MtgMcpCli
         if (smoke)
         {
             MtgMcpHost.ValidateServices(host.Services);
-            error.WriteLine("mtg-mcp host build ok");
+            WriteSmokeInfo(output, host.Services.GetRequiredService<ServerInfoService>().GetInfo());
             return 0;
         }
 
@@ -129,6 +130,31 @@ public static class MtgMcpCli
             ?? assembly.GetName().Version?.ToString()
             ?? "unknown";
         output.WriteLine($"mtg-mcp {ExtractSemVer(informationalVersion)}");
+    }
+
+    /// <summary>
+    /// Writes build and runtime identity after validating the host can start.
+    /// </summary>
+    private static void WriteSmokeInfo(TextWriter output, ServerInfo info)
+    {
+        output.WriteLine("mtg-mcp host build ok");
+        output.WriteLine($"serverVersion: {info.SemVer}");
+        output.WriteLine($"serverInformationalVersion: {info.InformationalVersion}");
+        output.WriteLine($"serverAssemblyPath: {info.AssemblyPath}");
+        output.WriteLine($"gitCommit: {info.GitCommit ?? "unknown"}");
+        output.WriteLine($"gitBranch: {info.GitBranch ?? "unknown"}");
+        output.WriteLine($"gitDirty: {FormatNullableBoolean(info.GitDirty)}");
+        output.WriteLine($"operationMode: {info.OperationMode}");
+    }
+
+    /// <summary>
+    /// Formats an optional boolean for smoke output.
+    /// </summary>
+    private static string FormatNullableBoolean(bool? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString().ToLowerInvariant()
+            : "unknown";
     }
 
     /// <summary>

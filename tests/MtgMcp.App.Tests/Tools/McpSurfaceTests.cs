@@ -344,6 +344,11 @@ public sealed class McpSurfaceTests
             .Contain("local")
             .And.Contain("archidekt")
             .And.Contain("moxfield");
+        GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.StartDeckWorkspaceAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
         GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.ExportDeckAsync), "format")
             .Should()
             .Contain("text")
@@ -420,6 +425,11 @@ public sealed class McpSurfaceTests
             .Contain("none")
             .And.Contain("minimal")
             .And.Contain("balanced");
+        GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "analysisMode")
+            .Should()
+            .Contain("none")
+            .And.Contain("summary")
+            .And.Contain("full");
         GetParameterDescription(typeof(PlanTools), nameof(PlanTools.PreviewCardPackageAsync), "simulationProfile")
             .Should()
             .Contain("auto")
@@ -622,6 +632,7 @@ public sealed class McpSurfaceTests
 
         info.PackageId.Should().Be("Nccurry.MtgMcp");
         info.AssemblyName.Should().Be("MtgMcp.App");
+        info.AssemblyPath.Should().NotBeNullOrWhiteSpace();
         info.SemVer.Should().NotBeNullOrWhiteSpace();
         info.InformationalVersion.Should().NotBeNullOrWhiteSpace();
         info.OperationMode.Should().Be(OperationModeGuard.Plan);
@@ -790,6 +801,51 @@ public sealed class McpSurfaceTests
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*workspace_start*");
+    }
+
+    /// <summary>
+    /// Verifies that workspace_start defaults to compact output and keeps full raw workspace output opt-in.
+    /// </summary>
+    [Fact]
+    public async Task WorkspaceStart_DefaultsToCompactSummaryAndFullEscapeHatch()
+    {
+        DeckWorkspaceService deckService = new(new InMemoryRepository(), new EmptyCardCatalog());
+        WorkspaceTools tools = new(
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        JsonElement summary = JsonSerializer.SerializeToElement(await tools.StartDeckWorkspaceAsync(
+            mode: "local",
+            name: "Compact Start",
+            decklist: "1 Sol Ring",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+        JsonElement normal = JsonSerializer.SerializeToElement(await tools.StartDeckWorkspaceAsync(
+            mode: "local",
+            name: "Normal Start",
+            decklist: "1 Sol Ring",
+            detailLevel: "normal",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+        JsonElement full = JsonSerializer.SerializeToElement(await tools.StartDeckWorkspaceAsync(
+            mode: "local",
+            name: "Full Start",
+            decklist: "1 Sol Ring",
+            detailLevel: "full",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        summary.GetProperty("detailLevel").GetString().Should().Be("summary");
+        summary.GetProperty("id").GetString().Should().NotBeNullOrWhiteSpace();
+        summary.GetProperty("workspaceId").GetString().Should().Be(summary.GetProperty("id").GetString());
+        summary.GetProperty("totalCards").GetInt32().Should().Be(1);
+        summary.GetProperty("cards").GetArrayLength().Should().Be(0);
+        normal.GetProperty("detailLevel").GetString().Should().Be("normal");
+        normal.GetProperty("cards").EnumerateArray()
+            .Should()
+            .Contain(card => card.GetProperty("cardName").GetString() == "Sol Ring");
+        normal.GetProperty("cards").EnumerateArray().First().TryGetProperty("snapshot", out _).Should().BeFalse();
+        full.GetProperty("name").GetString().Should().Be("Full Start");
+        full.GetProperty("cards").EnumerateArray()
+            .Should()
+            .Contain(card => card.GetProperty("name").GetString() == "Sol Ring");
     }
 
     /// <summary>
@@ -1336,7 +1392,12 @@ public sealed class McpSurfaceTests
         compactPackage.GetProperty("previewOnly").GetBoolean().Should().BeTrue();
         compactPackage.GetProperty("canApply").GetBoolean().Should().BeFalse();
         compactPackage.GetProperty("applyPlanId").ValueKind.Should().Be(JsonValueKind.Null);
+        compactPackage.GetProperty("analysisMode").GetString().Should().Be(PreviewAnalysisModes.Summary);
+        compactPackage.GetProperty("partialDeck").GetBoolean().Should().BeTrue();
+        compactPackage.GetProperty("performanceSkipped").GetBoolean().Should().BeTrue();
+        compactPackage.GetProperty("performanceSkipReason").GetString().Should().Contain("partial Commander decks");
         compactPackage.GetProperty("sourceSupportDepth").GetString().Should().Be(PreviewSourceSupportDepths.Minimal);
+        compactPackage.GetProperty("performance").GetProperty("skipped").GetBoolean().Should().BeTrue();
         compactPackage.GetProperty("sourceSupport").EnumerateArray()
             .Should()
             .Contain(row => row.GetProperty("status").GetString() == "source-backed-metadata");
@@ -1344,6 +1405,8 @@ public sealed class McpSurfaceTests
         fullPackage.GetProperty("previewOnly").GetBoolean().Should().BeTrue();
         fullPackage.GetProperty("canApply").GetBoolean().Should().BeFalse();
         fullPackage.GetProperty("applyPlanId").ValueKind.Should().Be(JsonValueKind.Null);
+        fullPackage.GetProperty("analysisMode").GetString().Should().Be(PreviewAnalysisModes.Summary);
+        fullPackage.GetProperty("performanceSkipped").GetBoolean().Should().BeTrue();
         fullPackage.GetProperty("sourceSupportDepth").GetString().Should().Be(PreviewSourceSupportDepths.None);
         fullPackage.GetProperty("sourceSupport").GetArrayLength().Should().Be(0);
         fullPackage.TryGetProperty("preview", out _).Should().BeTrue();

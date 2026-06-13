@@ -26,6 +26,11 @@ public static partial class DeckRoleClassifier
 
         List<string> tags = ClassifyTags(card, combined);
         AddCanonicalTaggerTags(tags, taggerOracleTags);
+        List<string> functionalRoles = ClassifyFunctionalRoles(
+            categoryText,
+            oracleText,
+            snapshot,
+            hasNonPrimaryLandFace);
 
         if (primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
         {
@@ -46,13 +51,14 @@ public static partial class DeckRoleClassifier
         CardRoleAssignment? taggerAssignment = TryClassifyFromTaggerTags(taggerOracleTags, tags);
         if (taggerAssignment is not null)
         {
+            AddFunctionalRoles(taggerAssignment.FunctionalRoles, functionalRoles);
             return taggerAssignment;
         }
 
         if (ContainsAny(boardWipeCategoryText, DeckRoles.BoardWipes, "wipe")
             || ContainsBoardWipeText(oracleText))
         {
-            return Assignment(DeckRoles.BoardWipes, tags, 0.82);
+            return Assignment(DeckRoles.BoardWipes, tags, 0.82, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Ramp)
@@ -60,19 +66,19 @@ public static partial class DeckRoleClassifier
             || ContainsRampText(oracleText, hasNonPrimaryLandFace))
         {
             AddTag(tags, DeckTags.ManaFixing, snapshot.ProducedMana.Count > 1 || ContainsAny(oracleText, "mana of any color", "any color"));
-            return Assignment(DeckRoles.Ramp, tags, 0.85);
+            return Assignment(DeckRoles.Ramp, tags, 0.85, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Draw)
-            || ContainsAny(oracleText, "draw a card", "draw two", "draw three", "draw cards", "draw that many"))
+            || ContainsDrawText(oracleText))
         {
-            return Assignment(DeckRoles.Draw, tags, 0.82);
+            return Assignment(DeckRoles.Draw, tags, 0.82, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Tutors)
             || ContainsAny(oracleText, "search your library", "searches your library"))
         {
-            return Assignment(DeckRoles.Tutors, tags, 0.84);
+            return Assignment(DeckRoles.Tutors, tags, 0.84, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Interaction, "removal")
@@ -90,40 +96,40 @@ public static partial class DeckRoleClassifier
                 "sacrifices an enchantment",
                 "sacrifices an artifact"))
         {
-            return Assignment(DeckRoles.Interaction, tags, 0.78);
+            return Assignment(DeckRoles.Interaction, tags, 0.78, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Protection)
             || ContainsCommanderProtectionText(oracleText))
         {
-            return Assignment(DeckRoles.Protection, tags, 0.78);
+            return Assignment(DeckRoles.Protection, tags, 0.78, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Recursion)
             || ContainsAny(oracleText, "return target", "from your graveyard", "from a graveyard to the battlefield", "return a creature card"))
         {
-            return Assignment(DeckRoles.Recursion, tags, 0.76);
+            return Assignment(DeckRoles.Recursion, tags, 0.76, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Wincons, "finisher")
             || ContainsFinisherText(oracleText))
         {
-            return Assignment(DeckRoles.Wincons, tags, 0.72);
+            return Assignment(DeckRoles.Wincons, tags, 0.72, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Payoffs, "payoff")
             || ContainsAny(oracleText, "whenever you discard", "whenever you draw", "whenever one or more", "whenever a creature dies"))
         {
-            return Assignment(DeckRoles.Payoffs, tags, 0.68);
+            return Assignment(DeckRoles.Payoffs, tags, 0.68, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Synergy)
             || ContainsAny(combined, "synergy", "engine", "combo"))
         {
-            return Assignment(DeckRoles.Synergy, tags, 0.62);
+            return Assignment(DeckRoles.Synergy, tags, 0.62, functionalRoles);
         }
 
-        return Assignment(DeckRoles.Utility, tags, tags.Count > 0 ? 0.55 : 0.35);
+        return Assignment(DeckRoles.Utility, tags, tags.Count > 0 ? 0.55 : 0.35, functionalRoles);
     }
 
     /// <summary>
@@ -138,6 +144,11 @@ public static partial class DeckRoleClassifier
         }
 
         if (assignment.Tags.Any(tag => tag.Equals(target, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (assignment.FunctionalRoles.Any(role => role.Equals(target, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
@@ -204,14 +215,25 @@ public static partial class DeckRoleClassifier
     /// <summary>
     /// Creates a role assignment.
     /// </summary>
-    private static CardRoleAssignment Assignment(string primaryRole, List<string> tags, double confidence)
+    private static CardRoleAssignment Assignment(
+        string primaryRole,
+        List<string> tags,
+        double confidence,
+        IReadOnlyList<string>? functionalRoles = null)
     {
-        return new CardRoleAssignment
+        CardRoleAssignment assignment = new()
         {
             PrimaryRole = primaryRole,
             Tags = tags,
             Confidence = confidence
         };
+        AddFunctionalRole(assignment.FunctionalRoles, primaryRole);
+        if (functionalRoles is not null)
+        {
+            AddFunctionalRoles(assignment.FunctionalRoles, functionalRoles);
+        }
+
+        return assignment;
     }
 
     /// <summary>
@@ -233,6 +255,33 @@ public static partial class DeckRoleClassifier
         }
 
         tags.Add(tag);
+    }
+
+    /// <summary>
+    /// Adds a functional role when it is not already present.
+    /// </summary>
+    private static void AddFunctionalRole(List<string> roles, string role)
+    {
+        foreach (string value in roles)
+        {
+            if (value.Equals(role, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        roles.Add(role);
+    }
+
+    /// <summary>
+    /// Adds functional roles from a precomputed set.
+    /// </summary>
+    private static void AddFunctionalRoles(List<string> roles, IReadOnlyList<string> additionalRoles)
+    {
+        foreach (string role in additionalRoles)
+        {
+            AddFunctionalRole(roles, role);
+        }
     }
 
     /// <summary>
@@ -352,6 +401,38 @@ public static partial class DeckRoleClassifier
     }
 
     /// <summary>
+    /// Classifies additive functional roles without changing the primary-role priority order.
+    /// </summary>
+    private static List<string> ClassifyFunctionalRoles(
+        string categoryText,
+        string oracleText,
+        CardSnapshot snapshot,
+        bool hasNonPrimaryLandFace)
+    {
+        List<string> roles = [];
+        if (ContainsAny(categoryText, DeckRoles.Ramp)
+            || (snapshot.ProducedMana.Count > 0 && !hasNonPrimaryLandFace)
+            || ContainsRampText(oracleText, hasNonPrimaryLandFace))
+        {
+            AddFunctionalRole(roles, DeckRoles.Ramp);
+        }
+
+        if (ContainsAny(categoryText, DeckRoles.Draw)
+            || ContainsDrawText(oracleText))
+        {
+            AddFunctionalRole(roles, DeckRoles.Draw);
+        }
+
+        if (ContainsAny(categoryText, DeckRoles.Tutors)
+            || ContainsAny(oracleText, "search your library", "searches your library"))
+        {
+            AddFunctionalRole(roles, DeckRoles.Tutors);
+        }
+
+        return roles;
+    }
+
+    /// <summary>
     /// Splits a multi-face type line.
     /// </summary>
     private static string[] TypeLineFaces(string typeLine)
@@ -398,6 +479,38 @@ public static partial class DeckRoleClassifier
         }
 
         return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
+    }
+
+    /// <summary>
+    /// Checks whether rules text creates card advantage or card replacement that should count as draw density.
+    /// </summary>
+    private static bool ContainsDrawText(string oracleText)
+    {
+        if (ContainsAny(oracleText, "draw a card", "draw two", "draw three", "draw cards", "draw that many"))
+        {
+            return true;
+        }
+
+        if (ContainsAny(oracleText, "discard")
+            && ContainsAny(oracleText, "draw a card", "draw two", "draw cards"))
+        {
+            return true;
+        }
+
+        if (ContainsAny(oracleText, "sacrifice an artifact", "sacrifice a creature", "sacrifice another")
+            && ContainsAny(oracleText, "draw a card", "draw two", "draw cards"))
+        {
+            return true;
+        }
+
+        return ContainsAny(oracleText, "exile the top card", "exile the top two", "exile cards from the top")
+            && ContainsAny(oracleText, "you may play", "you may cast")
+            && ContainsAny(
+                oracleText,
+                "this turn",
+                "until end of turn",
+                "until your next turn",
+                "until the end of your next turn");
     }
 
     /// <summary>

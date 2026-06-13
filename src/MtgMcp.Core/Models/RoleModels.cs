@@ -294,6 +294,11 @@ public sealed class CardRoleAssignment
     public List<string> Tags { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets additive functional roles used when one card serves multiple deck jobs.
+    /// </summary>
+    public List<string> FunctionalRoles { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the confidence.
     /// </summary>
     public double Confidence { get; set; }

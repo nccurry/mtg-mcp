@@ -144,6 +144,12 @@ public sealed class DeckPlanSummary
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets or sets additive functional role counts where one card can count for multiple jobs.
+    /// </summary>
+    public Dictionary<string, int> FunctionalRoleCounts { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets or sets the tag counts.
     /// </summary>
     public Dictionary<string, int> TagCounts { get; set; } =
@@ -702,6 +708,11 @@ public sealed class ManaBaseAnalysis
     public int ConditionalTappedLandCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the highest-impact lands behind tapped-land pressure.
+    /// </summary>
+    public List<TappedLandContributor> TappedLandContributors { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the untapped land count.
     /// </summary>
     public int UntappedLandCount { get; set; }
@@ -728,6 +739,42 @@ public sealed class ManaBaseAnalysis
 }
 
 /// <summary>
+/// Describes one land contributing to tapped-land pressure.
+/// </summary>
+public sealed class TappedLandContributor
+{
+    /// <summary>
+    /// Gets or sets the land name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the included quantity.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the tapped timing bucket: alwaysTapped or conditionalTapped.
+    /// </summary>
+    public string Timing { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the produced mana colors inferred from the cached snapshot.
+    /// </summary>
+    public List<string> ProducedMana { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the reason the land was assigned to this timing bucket.
+    /// </summary>
+    public string Reason { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the Scryfall card page when known.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+}
+
+/// <summary>
 /// Provides deck consistency analysis behavior.
 /// </summary>
 public sealed class DeckConsistencyAnalysis
@@ -751,6 +798,12 @@ public sealed class DeckConsistencyAnalysis
     /// Gets or sets the draw count.
     /// </summary>
     public int DrawCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets additive role counts used for consistency density checks.
+    /// </summary>
+    public Dictionary<string, int> FunctionalRoleCounts { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets or sets the tutor count.

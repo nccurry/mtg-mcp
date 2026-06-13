@@ -6,19 +6,6 @@ namespace MtgMcp.Core;
 public sealed class DeckValidator
 {
     /// <summary>
-    /// Lists card names exempt from singleton copy limits.
-    /// </summary>
-    private static readonly HashSet<string> BasicLands = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Plains",
-        "Island",
-        "Swamp",
-        "Mountain",
-        "Forest",
-        "Wastes",
-    };
-
-    /// <summary>
     /// Validates the workspace.
     /// </summary>
     public static DeckValidationResult Validate(DeckWorkspace workspace)
@@ -87,7 +74,7 @@ public sealed class DeckValidator
 
         foreach (DeckCard card in includedCards)
         {
-            if (card.Quantity > 1 && !BasicLands.Contains(card.Name))
+            if (card.Quantity > 1 && !BasicLandIdentity.IsBasicLand(card))
             {
                 result.Errors.Add(
                     $"Commander singleton violation: {card.Name} has quantity {card.Quantity}."

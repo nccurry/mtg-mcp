@@ -49,6 +49,11 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         {
             CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
             AddCount(summary.RoleCounts, assignment.PrimaryRole, card.Quantity);
+            foreach (string functionalRole in assignment.FunctionalRoles)
+            {
+                AddCount(summary.FunctionalRoleCounts, functionalRole, card.Quantity);
+            }
+
             foreach (string tag in assignment.Tags)
             {
                 AddCount(summary.TagCounts, tag, card.Quantity);

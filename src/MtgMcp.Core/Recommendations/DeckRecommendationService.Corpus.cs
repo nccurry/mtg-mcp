@@ -395,6 +395,16 @@ public sealed partial class DeckRecommendationService
             Refresh = refresh
         };
         CorpusSignalReport combined = new();
+        CommanderThemeResolution themeResolution = await ResolveCommanderThemeAsync(
+            query.Commander,
+            query.Theme,
+            goal,
+            sourceKey,
+            budget,
+            refresh,
+            cancellationToken).ConfigureAwait(false);
+        query.Theme = themeResolution.Theme;
+        combined.Notes.AddRange(themeResolution.Notes);
         bool sourceFilterActive = !string.IsNullOrWhiteSpace(sourceKey);
         int queriedSources = 0;
         bool matchedSource = false;
@@ -662,9 +672,10 @@ public sealed partial class DeckRecommendationService
         {
             CorpusSourceStatuses.AccessBlocked => 0,
             CorpusSourceStatuses.Failed => 1,
-            CorpusSourceStatuses.MissingConfig => 2,
-            CorpusSourceStatuses.Disabled => 3,
-            _ => 4
+            CorpusSourceStatuses.NeedsOAuth => 2,
+            CorpusSourceStatuses.MissingConfig => 3,
+            CorpusSourceStatuses.Disabled => 4,
+            _ => 5
         };
     }
 

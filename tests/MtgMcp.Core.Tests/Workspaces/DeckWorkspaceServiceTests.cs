@@ -1820,6 +1820,84 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that Commander validation allows repeated cards whose type line marks them as basic lands.
+    /// </summary>
+    [Fact]
+    public void CommanderValidation_AllowsRepeatedBasicsByTypeLine()
+    {
+        DeckWorkspace deck = new()
+        {
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 5,
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Swamp" },
+                },
+                new DeckCard
+                {
+                    Name = "Mountain",
+                    Quantity = 4,
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Mountain" },
+                },
+                new DeckCard
+                {
+                    Name = "Plains",
+                    Quantity = 3,
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Plains" },
+                },
+                new DeckCard
+                {
+                    Name = "Foggy Bottom Swamp",
+                    Quantity = 2,
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Swamp" },
+                },
+            ],
+        };
+
+        DeckValidationResult result = DeckValidator.Validate(deck);
+
+        result.Errors.Should().BeEmpty();
+        result.Warnings.Should().Contain(warning => warning.Contains("100", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that a requested plain basic land keeps its canonical display name.
+    /// </summary>
+    [Fact]
+    public async Task AddCard_PreservesRequestedBasicNameWhenCatalogReturnsNoveltyName()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(
+            repository,
+            new FakeCardCatalog { ReturnNoveltySwampName = true });
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Basics",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken);
+
+        DeckChangeResult result = await service.AddCardAsync(
+            deck.Id,
+            "Swamp",
+            5,
+            DeckRoles.Lands,
+            TestContext.Current.CancellationToken);
+        DeckWorkspace opened = await service.OpenLocalDeckAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken);
+
+        DeckCard swamp = opened.Cards.Should().ContainSingle().Which;
+        swamp.Name.Should().Be("Swamp");
+        swamp.Quantity.Should().Be(5);
+        swamp.Snapshot.TypeLine.Should().Be("Basic Land - Swamp");
+        result.Message.Should().Contain("Added 5 Swamp");
+        DeckValidator.Validate(opened).Errors.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that commander singleton validation ignores non-included cards.
     /// </summary>
     [Fact]
@@ -2706,6 +2784,11 @@ public sealed class DeckWorkspaceServiceTests
         public bool CancelGetCard { get; init; }
 
         /// <summary>
+        /// Gets or sets whether Swamp lookup returns a novelty print display name.
+        /// </summary>
+        public bool ReturnNoveltySwampName { get; init; }
+
+        /// <summary>
         /// Returns no fake search results.
         /// </summary>
         public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
@@ -2756,7 +2839,9 @@ public sealed class DeckWorkspaceServiceTests
             {
                 Id = $"scryfall-{nameOrId}",
                 OracleId = $"oracle-{nameOrId}",
-                Name = nameOrId,
+                Name = ReturnNoveltySwampName && nameOrId.Equals("Swamp", StringComparison.OrdinalIgnoreCase)
+                    ? "Foggy Bottom Swamp"
+                    : nameOrId,
                 ManaValue = nameOrId.Contains("Island", StringComparison.OrdinalIgnoreCase) ? 0 : 1,
                 TypeLine = GetTypeLine(nameOrId),
                 ColorIdentity = nameOrId.Contains("Lightning", StringComparison.OrdinalIgnoreCase)
@@ -2796,6 +2881,11 @@ public sealed class DeckWorkspaceServiceTests
         /// </summary>
         private static string GetTypeLine(string name)
         {
+            if (name.Equals("Swamp", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Basic Land - Swamp";
+            }
+
             if (name.Contains("Island", StringComparison.OrdinalIgnoreCase))
             {
                 return "Basic Land";

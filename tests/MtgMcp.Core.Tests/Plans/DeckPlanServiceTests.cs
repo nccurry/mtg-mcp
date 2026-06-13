@@ -688,6 +688,7 @@ public sealed partial class DeckIntelligenceTests
             ],
             resolveAddedCards: false,
             sourceSupportDepth: PreviewSourceSupportDepths.Balanced,
+            analysisMode: PreviewAnalysisModes.Full,
             simulationProfile: SimulationProfileIds.Neutral,
             simulations: 100,
             maxTurn: 4,
@@ -703,6 +704,8 @@ public sealed partial class DeckIntelligenceTests
         result.Preview.Before.Analysis.IncludedCards.Should().BeGreaterThan(result.Preview.After.Analysis.IncludedCards);
         result.RoleDeltas.Should().Contain(delta => delta.Role == DeckRoles.Interaction && delta.Delta < 0);
         result.ValidationChanges.Should().NotBeNull();
+        result.AnalysisMode.Should().Be(PreviewAnalysisModes.Full);
+        result.PerformanceSkipped.Should().BeFalse();
         result.SourceSupportDepth.Should().Be(PreviewSourceSupportDepths.Balanced);
         result.SourceSupport.Should().Contain(row =>
             row.CardName == "Arcane Signet"
@@ -712,6 +715,164 @@ public sealed partial class DeckIntelligenceTests
             && row.Price.HasValue);
         result.Performance.Deltas.Should().NotBeEmpty();
         (await plans.ListAsync(workspace.Id, TestContext.Current.CancellationToken)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that large package previews default to composition analysis without performance simulation.
+    /// </summary>
+    [Fact]
+    public async Task PreviewCardPackage_LargePackageSkipsPerformanceByDefault()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Large Package",
+                Format = "commander",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Commander",
+                        Quantity = 1,
+                        PrimaryCategory = DeckRoles.Commander,
+                        Categories = [DeckRoles.Commander],
+                    },
+                ],
+            },
+            TestContext.Current.CancellationToken);
+        List<ExplicitDeckPlanCardChange> addCards = [];
+        for (int index = 0; index < 50; index++)
+        {
+            addCards.Add(new ExplicitDeckPlanCardChange
+            {
+                CardName = $"Package Card {index}",
+                Quantity = 1,
+                Category = DeckDefaults.Mainboard,
+            });
+        }
+
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckCardPackagePreviewResult result = await service.PreviewCardPackageAsync(
+            workspace.Id,
+            name: "Large package",
+            rationale: null,
+            addCards: addCards,
+            removeCards: null,
+            moveCards: null,
+            resolveAddedCards: false,
+            sourceSupportDepth: PreviewSourceSupportDepths.None,
+            analysisMode: PreviewAnalysisModes.Summary,
+            simulationProfile: SimulationProfileIds.Neutral,
+            simulations: 500,
+            maxTurn: 6,
+            seed: 22,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.AnalysisMode.Should().Be(PreviewAnalysisModes.Summary);
+        result.PartialDeck.Should().BeTrue();
+        result.PerformanceSkipped.Should().BeTrue();
+        result.PerformanceSkipReason.Should().Contain("large packages");
+        result.Performance.Deltas.Should().BeEmpty();
+        result.BracketImpact.Skipped.Should().BeTrue();
+        result.BracketImpact.SkipReason.Should().Contain("large packages");
+        result.ValidationChanges.Should().NotBeNull();
+        result.PriceDelta.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Verifies that analysisMode none avoids open-world bracket and performance work.
+    /// </summary>
+    [Fact]
+    public async Task PreviewCardPackage_AnalysisModeNoneSkipsPerformanceAndLiveBracketLookup()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        FakeCardCatalog catalog = new() { ThrowOnGameChangerSearch = true };
+        DeckPlanService service = CreatePlanService(workspaces, catalog, archidektGateway: null, plans);
+
+        DeckCardPackagePreviewResult result = await service.PreviewCardPackageAsync(
+            workspace.Id,
+            name: "Fast preview",
+            rationale: null,
+            addCards: null,
+            removeCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Counterspell",
+                    Category = DeckRoles.Interaction,
+                }
+            ],
+            moveCards: null,
+            resolveAddedCards: false,
+            sourceSupportDepth: PreviewSourceSupportDepths.None,
+            analysisMode: PreviewAnalysisModes.None,
+            simulationProfile: SimulationProfileIds.Neutral,
+            simulations: 500,
+            maxTurn: 6,
+            seed: 22,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.AnalysisMode.Should().Be(PreviewAnalysisModes.None);
+        result.PerformanceSkipped.Should().BeTrue();
+        result.PerformanceSkipReason.Should().Contain("analysisMode=none");
+        result.BracketImpact.Skipped.Should().BeTrue();
+        result.BracketImpact.SkipReason.Should().Contain("analysisMode=none");
+        catalog.SearchQueries.Should().NotContain(query =>
+            query.Contains("is:game-changer", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that package preview returns partial source rows when bulk metadata lookup fails.
+    /// </summary>
+    [Fact]
+    public async Task PreviewCardPackage_SourceSupportFailureReturnsPartialRows()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace { Name = "Partial Source Support" },
+            TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(
+            workspaces,
+            new FakeCardCatalog { ThrowOnGetCardsByNames = true },
+            archidektGateway: null,
+            plans);
+
+        DeckCardPackagePreviewResult result = await service.PreviewCardPackageAsync(
+            workspace.Id,
+            name: "Unresolved package",
+            rationale: null,
+            addCards:
+            [
+                new ExplicitDeckPlanCardChange
+                {
+                    CardName = "Mystery Card",
+                    Category = DeckRoles.Draw,
+                }
+            ],
+            removeCards: null,
+            moveCards: null,
+            resolveAddedCards: false,
+            sourceSupportDepth: PreviewSourceSupportDepths.Balanced,
+            analysisMode: PreviewAnalysisModes.None,
+            simulationProfile: SimulationProfileIds.Neutral,
+            simulations: 500,
+            maxTurn: 6,
+            seed: 22,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.SourceSupport.Should().ContainSingle(row =>
+            row.CardName == "Mystery Card"
+            && row.Status == "unresolved");
+        result.Warnings.Should().Contain(warning =>
+            warning.Contains("Returning partial preview rows", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

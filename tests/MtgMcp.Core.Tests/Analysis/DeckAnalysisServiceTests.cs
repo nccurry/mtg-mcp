@@ -341,6 +341,27 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that treasure draw and impulse draw keep primary roles while adding Draw functionally.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_AddsFunctionalDrawForTreasureAndImpulseDraw()
+    {
+        CardRoleAssignment windfall = DeckRoleClassifier.Classify(Card(
+            "Unexpected Windfall",
+            "Instant",
+            "As an additional cost to cast this spell, discard a card. Draw two cards and create two Treasure tokens."));
+        CardRoleAssignment impulse = DeckRoleClassifier.Classify(Card(
+            "Reckless Impulse",
+            "Sorcery",
+            "Exile the top two cards of your library. Until the end of your next turn, you may play those cards."));
+
+        windfall.PrimaryRole.Should().Be(DeckRoles.Ramp);
+        windfall.FunctionalRoles.Should().Contain([DeckRoles.Ramp, DeckRoles.Draw]);
+        impulse.PrimaryRole.Should().Be(DeckRoles.Draw);
+        impulse.FunctionalRoles.Should().Contain(DeckRoles.Draw);
+    }
+
+    /// <summary>
     /// Verifies that saved Scryfall Tagger oracle annotations drive role classification before text heuristics.
     /// </summary>
     [Fact]
@@ -412,6 +433,50 @@ public sealed partial class DeckIntelligenceTests
             .Contain(evidence => evidence.Contains("oracle text", StringComparison.OrdinalIgnoreCase));
         explanation.Notes.Should().Contain(note =>
             note.Contains("diverge", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that role-count explanations distinguish primary-role and functional counts.
+    /// </summary>
+    [Fact]
+    public async Task ExplainRoleCounts_IncludesFunctionalMultiRoleCounts()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Functional Counts",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Unexpected Windfall",
+                        Quantity = 1,
+                        PrimaryCategory = DeckRoles.Ramp,
+                        Categories = [DeckRoles.Ramp],
+                        Snapshot = new CardSnapshot
+                        {
+                            TypeLine = "Instant",
+                            OracleText = "As an additional cost to cast this spell, discard a card. Draw two cards and create two Treasure tokens."
+                        }
+                    }
+                ]
+            },
+            TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckRoleCountExplanation explanation = await service.ExplainRoleCountsAsync(
+            workspace.Id,
+            DeckRoles.Draw,
+            TestContext.Current.CancellationToken);
+
+        explanation.CategoryCount.Should().Be(0);
+        explanation.HeuristicCount.Should().Be(0);
+        explanation.FunctionalCount.Should().Be(1);
+        explanation.OddsTargetCount.Should().Be(1);
+        DeckRoleCountCardEvidence row = explanation.Cards.Should().ContainSingle().Subject;
+        row.CountedByFunctionalRole.Should().BeTrue();
+        row.FunctionalRoles.Should().Contain(DeckRoles.Draw);
     }
 
     /// <summary>
@@ -1108,6 +1173,36 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that deck summaries expose additive functional role counts alongside primary-role counts.
+    /// </summary>
+    [Fact]
+    public async Task SummarizeDeckWorkspace_ReturnsFunctionalRoleCounts()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Functional Summary",
+            Cards =
+            [
+                Card(
+                    "Unexpected Windfall",
+                    "Instant",
+                    "As an additional cost to cast this spell, discard a card. Draw two cards and create two Treasure tokens.")
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckPlanSummary summary = await service.SummarizeDeckWorkspaceAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        summary.RoleCounts[DeckRoles.Ramp].Should().Be(1);
+        summary.RoleCounts.Should().NotContainKey(DeckRoles.Draw);
+        summary.FunctionalRoleCounts[DeckRoles.Ramp].Should().Be(1);
+        summary.FunctionalRoleCounts[DeckRoles.Draw].Should().Be(1);
+    }
+
+    /// <summary>
     /// Verifies that summarize deck plan uses intent thresholds when present.
     /// </summary>
     [Fact]
@@ -1610,6 +1705,67 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that consistency draw density uses additive functional draw roles.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckConsistency_CountsTreasureDrawAsFunctionalDraw()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Treasure Draw Density",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 80,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot { TypeLine = "Basic Land - Swamp" }
+                },
+                new DeckCard
+                {
+                    Name = "Read the Bones",
+                    Quantity = 6,
+                    PrimaryCategory = DeckRoles.Draw,
+                    Categories = [DeckRoles.Draw],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        OracleText = "Scry 2, then draw two cards. You lose 2 life."
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Unexpected Windfall",
+                    Quantity = 7,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Instant",
+                        OracleText = "As an additional cost to cast this spell, discard a card. Draw two cards and create two Treasure tokens."
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckAnalysis analysis = DeckAnalyzer.Analyze(workspace);
+        DeckConsistencyAnalysis consistency = await service.AnalyzeDeckConsistencyAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        analysis.RoleCounts[DeckRoles.Draw].Should().Be(6);
+        analysis.FunctionalRoleCounts[DeckRoles.Draw].Should().Be(13);
+        consistency.DrawCount.Should().Be(13);
+        consistency.FunctionalRoleCounts[DeckRoles.Draw].Should().Be(13);
+        consistency.Risks.Should().NotContain(risk =>
+            risk.Contains("Card draw density", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that mana analysis separates always-tapped, conditional-tapped, and untapped modal lands.
     /// </summary>
     [Fact]
@@ -1642,6 +1798,21 @@ public sealed partial class DeckIntelligenceTests
         analysis.ConditionalTappedLandCount.Should().Be(3);
         analysis.TappedLandCount.Should().Be(6);
         analysis.UntappedLandCount.Should().Be(2);
+        analysis.TappedLandContributors.Should().HaveCount(6);
+        analysis.TappedLandContributors
+            .Where(contributor => contributor.Timing == "alwaysTapped")
+            .Select(contributor => contributor.CardName)
+            .Should()
+            .Equal(["Azorius Guildgate", "Raffine's Tower", "Temple of Deceit"]);
+        analysis.TappedLandContributors
+            .Where(contributor => contributor.Timing == "conditionalTapped")
+            .Select(contributor => contributor.CardName)
+            .Should()
+            .Equal(["Drowned Catacomb", "Shipwreck Marsh", "Watery Grave"]);
+        TappedLandContributor temple = analysis.TappedLandContributors
+            .Single(contributor => contributor.CardName == "Temple of Deceit");
+        temple.ProducedMana.Should().Equal(["U", "B"]);
+        temple.Reason.Should().Contain("oracle text");
     }
 
     /// <summary>

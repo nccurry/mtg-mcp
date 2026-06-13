@@ -58,6 +58,8 @@ internal static class PlanPreviewPresenter
         response["sourceSupport"] = PresentSourceSupport(result.SourceSupport);
         response["performance"] = new
         {
+            skipped = result.PerformanceSkipped,
+            skipReason = result.PerformanceSkipReason,
             deltas = result.Performance.Deltas.Take(8).ToList(),
             warnings = result.Performance.Warnings.Take(8).ToList(),
         };
@@ -191,6 +193,11 @@ internal static class PlanPreviewPresenter
             ["canApply"] = false,
             ["applyPlanId"] = null,
             ["nextAction"] = result.NextAction,
+            ["analysisMode"] = result.AnalysisMode,
+            ["partialDeck"] = result.PartialDeck,
+            ["expectedIncludedCards"] = result.ExpectedIncludedCards,
+            ["performanceSkipped"] = result.PerformanceSkipped,
+            ["performanceSkipReason"] = result.PerformanceSkipReason,
             ["sourceSupportDepth"] = result.SourceSupportDepth,
         };
     }
@@ -219,6 +226,7 @@ internal static class PlanPreviewPresenter
                 categoryCounts = snapshot.Analysis.CategoryCounts,
                 allCategoryCounts = snapshot.Analysis.AllCategoryCounts,
                 roleCounts = snapshot.Analysis.RoleCounts,
+                functionalRoleCounts = snapshot.Analysis.FunctionalRoleCounts,
                 tagCounts = snapshot.Analysis.TagCounts,
             },
             manaBase = new

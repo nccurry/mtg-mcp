@@ -76,6 +76,11 @@ public static class CorpusSourceStatuses
     /// Indicates the source rejected access without making the recommendation run fail.
     /// </summary>
     public const string AccessBlocked = "access-blocked";
+
+    /// <summary>
+    /// Indicates a source needs OAuth credentials before it can be queried.
+    /// </summary>
+    public const string NeedsOAuth = "needs-oauth";
 }
 
 /// <summary>
@@ -318,6 +323,11 @@ public sealed class CorpusSourceStatus
     /// Gets or sets the source URL.
     /// </summary>
     public string? Uri { get; set; }
+
+    /// <summary>
+    /// Gets or sets when this source status was last observed from a live source call.
+    /// </summary>
+    public DateTimeOffset? LastCheckedAt { get; set; }
 
     /// <summary>
     /// Gets or sets source notes, limitations, and permission guidance.

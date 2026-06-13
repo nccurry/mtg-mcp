@@ -99,6 +99,8 @@ public sealed class PlanTools
         string detailLevel = "summary",
         [Description("Source-support depth for package cards: none, minimal, or balanced.")]
         string sourceSupportDepth = PreviewSourceSupportDepths.Minimal,
+        [Description("Analysis mode: none, summary, or full. none skips simulation and live bracket lookups; summary skips simulation for large packages or partial Commander decks.")]
+        string analysisMode = PreviewAnalysisModes.Summary,
         [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, or stax.")]
         string simulationProfile = SimulationProfileIds.Auto,
         int simulations = 500,
@@ -116,6 +118,7 @@ public sealed class PlanTools
                 moveCards,
                 resolveAddedCards,
                 sourceSupportDepth,
+                analysisMode,
                 simulationProfile,
                 simulations,
                 maxTurn,

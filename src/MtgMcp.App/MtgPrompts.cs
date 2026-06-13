@@ -187,8 +187,10 @@ public sealed class MtgPrompts
             Max price: {maxPrice}
 
             Use deck_refresh_card_metadata, deck_analyze_mana, and explicit deck_query_cards
-            lookups for lands or fixing. Preserve color identity, legality, and budget. Return
-            land-count, color-source, tapped-land, and fixing data before creating any plan.
+            lookups for lands or fixing. Use tappedLandContributors as the prioritized cut list,
+            splitting always-tapped from conditional-tapped lands. Preserve color identity,
+            legality, and budget. Return land-count, color-source, tapped-land, and fixing data
+            before creating any plan.
             """;
     }
 

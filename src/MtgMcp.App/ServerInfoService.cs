@@ -56,6 +56,7 @@ public sealed class ServerInfoService
         return new ServerInfo
         {
             AssemblyName = assemblyName.Name ?? "",
+            AssemblyPath = assembly.Location,
             SemVer = ExtractSemVer(informationalVersion),
             AssemblyVersion = assemblyName.Version?.ToString() ?? "",
             FileVersion = fileVersion,
