@@ -56,7 +56,7 @@ public sealed class ServerInfoService
         return new ServerInfo
         {
             AssemblyName = assemblyName.Name ?? "",
-            AssemblyPath = assembly.Location,
+            AssemblyPath = ResolveAssemblyPath(assemblyName.Name ?? ""),
             SemVer = ExtractSemVer(informationalVersion),
             AssemblyVersion = assemblyName.Version?.ToString() ?? "",
             FileVersion = fileVersion,
@@ -70,6 +70,23 @@ public sealed class ServerInfoService
             BaseDirectory = AppContext.BaseDirectory,
             CurrentDirectory = Environment.CurrentDirectory,
         };
+    }
+
+    /// <summary>
+    /// Returns a useful server binary path for both framework-dependent and single-file hosts.
+    /// </summary>
+    private static string ResolveAssemblyPath(string assemblyName)
+    {
+        if (!string.IsNullOrWhiteSpace(assemblyName))
+        {
+            string assemblyPath = Path.Combine(AppContext.BaseDirectory, $"{assemblyName}.dll");
+            if (File.Exists(assemblyPath))
+            {
+                return assemblyPath;
+            }
+        }
+
+        return Environment.ProcessPath ?? AppContext.BaseDirectory;
     }
 
     /// <summary>
