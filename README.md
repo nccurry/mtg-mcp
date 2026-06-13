@@ -432,6 +432,10 @@ Workflow-first tools:
   `deck_analyze_mana`, `deck_analyze_consistency`, and
   `deck_analyze_performance`; use `deck_analyze_land_drop_odds` for the
   turn-by-turn land-drop question.
+- Compare no-interaction goldfish outputs with `deck_compare_goldfish`. Its
+  default `optimistic-goldfish-model` preserves the existing heuristic output;
+  opt into `rules-backed-goldfish-race-v1` for a conservative template life-total
+  race that reports explicit assumptions and unsupported-text warnings.
 - Inspect combos and win routes with `deck_analyze_combos`,
   `combo_search_by_card`, `combo_get_details`, `card_classify_win_routes`, and
   `wincon_find_payoffs`.
@@ -478,6 +482,11 @@ Simulation results include the resolved simulation profile, why that profile was
 chosen, route evidence, and warnings when a claim comes from fallback
 heuristics. See [`docs/simulation-profiles.md`](docs/simulation-profiles.md)
 for the compact profile, deck-intent, and route syntax reference.
+
+Several mutation and lookup tools default to bounded output so repeated agent
+work does not flood context. Use `detailLevel:"full"` when you need full
+workspace or facet payloads from tools such as `deck_refresh_card_metadata`,
+`deck_plan_apply`, category edits, mutation tools, or `card_facets_get`.
 
 ## Deck Intent
 

@@ -357,6 +357,16 @@ public sealed class McpSurfaceTests
             .Contain("included")
             .And.Contain("maybeboard")
             .And.Contain("missing");
+        GetParameterDescription(typeof(AnalysisTools), nameof(AnalysisTools.RefreshDeckCardSnapshotsAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
+        GetParameterDescription(typeof(FacetTools), nameof(FacetTools.GetCardFacetsAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
         GetParameterDescription(typeof(CorpusTools), nameof(CorpusTools.SearchCorpusEvidenceAsync), "sourceKey")
             .Should()
             .Contain("topdeck")
@@ -381,6 +391,10 @@ public sealed class McpSurfaceTests
             .Contain("auto")
             .And.Contain("neutral")
             .And.Contain("stax");
+        GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.CompareGoldfishAsync), "model")
+            .Should()
+            .Contain("optimistic-goldfish-model")
+            .And.Contain("rules-backed-goldfish-race-v1");
         GetParameterDescription(typeof(RecommendationTools), nameof(RecommendationTools.BuildBatchTuningReportAsync), "detailLevel")
             .Should()
             .Contain("summary")
@@ -863,6 +877,238 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies that metadata refresh defaults to bounded output and keeps full workspace output opt-in.
+    /// </summary>
+    [Fact]
+    public async Task RefreshCardMetadata_DefaultSummaryAndFullEscapeHatch()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = new()
+        {
+            Name = "Refresh Compact"
+        };
+        for (int index = 0; index < 100; index++)
+        {
+            workspace.Cards.Add(new DeckCard
+            {
+                Name = $"Missing Card {index}",
+                Quantity = 1
+            });
+        }
+
+        workspace = await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = new(repository, new EmptyCardCatalog());
+        AnalysisTools tools = new(
+            service,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Plan })));
+
+        JsonElement summary = JsonSerializer.SerializeToElement(await tools.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            scope: "all",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+        object full = await tools.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            scope: "all",
+            detailLevel: "full",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        summary.GetProperty("requestedCardCount").GetInt32().Should().Be(100);
+        summary.GetProperty("missingCardCount").GetInt32().Should().Be(100);
+        summary.GetProperty("failedCardCount").GetInt32().Should().Be(0);
+        summary.TryGetProperty("workspace", out _).Should().BeFalse();
+        summary.TryGetProperty("missingCards", out _).Should().BeFalse();
+        summary.TryGetProperty("failedCards", out _).Should().BeFalse();
+        summary.GetProperty("snapshotQualityBefore").GetProperty("cardCount").GetInt32().Should().Be(100);
+        full.Should().BeOfType<DeckNormalizationResult>()
+            .Which.Workspace.Cards.Should().HaveCount(100);
+    }
+
+    /// <summary>
+    /// Verifies mutation tools default to summary and still honor explicit full output.
+    /// </summary>
+    [Fact]
+    public async Task MutationTools_DefaultSummaryAndFullEscapeHatch()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Mutation Compact",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp]
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog());
+        CategoryTools tools = new(
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        CompactMutationSummaryResult summary = (CompactMutationSummaryResult)await tools.AddCardCategoryAsync(
+            workspace.Id,
+            "Sol Ring",
+            "Anthem",
+            cancellationToken: TestContext.Current.CancellationToken);
+        DeckChangeResult full = (DeckChangeResult)await tools.AddCardCategoryAsync(
+            workspace.Id,
+            "Sol Ring",
+            "Finisher",
+            includeWorkspace: true,
+            cancellationToken: TestContext.Current.CancellationToken);
+        CompactMutationResult normal = (CompactMutationResult)await tools.AddCardCategoryAsync(
+            workspace.Id,
+            "Sol Ring",
+            "Wincon",
+            includeWorkspace: true,
+            detailLevel: "normal",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        summary.Success.Should().BeTrue();
+        summary.WorkspaceId.Should().Be(workspace.Id);
+        summary.ChangedCards.Should().Equal("Sol Ring");
+        summary.ValidationSummary.IsValid.Should().BeTrue();
+        full.Workspace.Cards.Single().Categories.Should().Contain("Finisher");
+        normal.ChangedCards.Should().Equal("Sol Ring");
+        normal.CategoryCountsAfter.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies card facets default to compact key data and miss with a structured result.
+    /// </summary>
+    [Fact]
+    public async Task CardFacetsGet_DefaultSummaryFullEscapeHatchAndStructuredMiss()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(new DeckWorkspace
+        {
+            Name = "Facet Compact",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true }
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Phyrexian Arena",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Draw,
+                    Categories = [DeckRoles.Draw],
+                    ScryfallId = "phyrexian-arena",
+                    ScryfallOracleId = "oracle-phyrexian-arena",
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Enchantment",
+                        OracleText = "At the beginning of your upkeep, you draw a card and you lose 1 life.",
+                        ManaValue = 3,
+                        ScryfallUri = "https://scryfall.com/card/test/1/phyrexian-arena",
+                        Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["commander"] = "legal",
+                            ["modern"] = "legal"
+                        },
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["usd"] = "2.50"
+                        },
+                        ImageUris = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["normal"] = "https://cards.scryfall.io/normal/front/test.jpg"
+                        }
+                    },
+                    Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        [CardFacetNames.UserTags] = "card-advantage"
+                    }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        FacetTools tools = new(
+            new CardFacetService(repository),
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })));
+
+        CardFacetSummaryResult summary = (CardFacetSummaryResult)await tools.GetCardFacetsAsync(
+            workspace.Id,
+            "Phyrexian Arena",
+            cancellationToken: TestContext.Current.CancellationToken);
+        CardFacetNormalResult normal = (CardFacetNormalResult)await tools.GetCardFacetsAsync(
+            workspace.Id,
+            "Phyrexian Arena",
+            detailLevel: "normal",
+            cancellationToken: TestContext.Current.CancellationToken);
+        CardFacetSnapshot full = (CardFacetSnapshot)await tools.GetCardFacetsAsync(
+            workspace.Id,
+            "Phyrexian Arena",
+            detailLevel: "full",
+            cancellationToken: TestContext.Current.CancellationToken);
+        CardFacetNotFoundResult missing = (CardFacetNotFoundResult)await tools.GetCardFacetsAsync(
+            workspace.Id,
+            "Skyhunter Strike Force",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        summary.Status.Should().Be("ok");
+        summary.Role.Should().Be(DeckRoles.Draw);
+        summary.UserTags.Should().Contain("card-advantage");
+        summary.CommanderLegality.Should().Be("legal");
+        summary.PriceUsd.Should().Be("2.50");
+        normal.Facets.Should().ContainKey("scryfall.legalities.commander");
+        normal.Facets.Should().NotContainKey("scryfall.legalities.modern");
+        normal.Facets.Should().NotContainKey("scryfall.image_uris.normal");
+        full.Facets.Should().ContainKey("scryfall.legalities.modern");
+        full.Facets.Should().ContainKey("scryfall.image_uris.normal");
+        missing.Status.Should().Be("not-found-in-workspace");
+        missing.Suggestion.Should().Contain("card_get");
+    }
+
+    /// <summary>
+    /// Verifies the opt-in rules-backed goldfish race model returns bounded MCP output.
+    /// </summary>
+    [Fact]
+    public async Task CompareGoldfish_RulesBackedRaceModelReturnsBoundedSummary()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace fast = await repository.SaveAsync(CreateRaceWorkspace("fast", "Fast", power: 20), TestContext.Current.CancellationToken);
+        DeckWorkspace slow = await repository.SaveAsync(CreateRaceWorkspace("slow", "Slow", power: 1), TestContext.Current.CancellationToken);
+        SimulationTools tools = new(new DeckSimulationService(repository, new EmptyCardCatalog()));
+
+        object summaryResult = await tools.CompareGoldfishAsync(
+            [fast.Id, slow.Id],
+            detailLevel: "summary",
+            targetTurn: 5,
+            simulations: 2,
+            seed: 4,
+            mulligan: false,
+            model: RulesGoldfishRaceConstants.ModelName,
+            cancellationToken: TestContext.Current.CancellationToken);
+        object normalResult = await tools.CompareGoldfishAsync(
+            [fast.Id, slow.Id],
+            detailLevel: "normal",
+            targetTurn: 5,
+            simulations: 2,
+            seed: 4,
+            mulligan: false,
+            model: RulesGoldfishRaceConstants.ModelName,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        JsonElement summary = JsonSerializer.SerializeToElement(summaryResult, WebJsonOptions);
+        JsonElement normal = JsonSerializer.SerializeToElement(normalResult, WebJsonOptions);
+        summary.GetProperty("modelName").GetString().Should().Be(RulesGoldfishRaceConstants.ModelName);
+        summary.GetProperty("modelDescription").GetString().Should().Contain("not a full Magic rules engine");
+        summary.GetProperty("decks")[0].GetProperty("wins").GetInt32().Should().Be(2);
+        summary.GetProperty("decks")[0].TryGetProperty("representativeTrace", out JsonElement summaryTrace)
+            .Should()
+            .BeTrue();
+        summaryTrace.ValueKind.Should().Be(JsonValueKind.Null);
+        normal.GetProperty("decks")[0].GetProperty("representativeTrace").GetArrayLength().Should().BeGreaterThan(0);
+        normal.GetProperty("sampleOutcomes").GetArrayLength().Should().Be(2);
+    }
+
+    /// <summary>
     /// Verifies that compact direct mutation output reports actual workspace deltas.
     /// </summary>
     [Fact]
@@ -896,6 +1142,7 @@ public sealed class McpSurfaceTests
             5,
             DeckRoles.Ramp,
             includeWorkspace: false,
+            detailLevel: "normal",
             cancellationToken: TestContext.Current.CancellationToken);
         CompactMutationResult remove = (CompactMutationResult)await tools.RemoveCardAsync(
             workspace.Id,
@@ -903,6 +1150,7 @@ public sealed class McpSurfaceTests
             quantity: 5,
             category: DeckRoles.Draw,
             includeWorkspace: false,
+            detailLevel: "normal",
             cancellationToken: TestContext.Current.CancellationToken);
         CompactMutationResult move = (CompactMutationResult)await tools.MoveCardAsync(
             workspace.Id,
@@ -910,6 +1158,7 @@ public sealed class McpSurfaceTests
             DeckDefaults.Maybeboard,
             fromCategory: DeckRoles.Draw,
             includeWorkspace: false,
+            detailLevel: "normal",
             cancellationToken: TestContext.Current.CancellationToken);
 
         quantity.Added.Should().Be(3);
@@ -979,6 +1228,7 @@ public sealed class McpSurfaceTests
             createCheckpoint: false,
             checkpointName: null,
             includeWorkspace: false,
+            detailLevel: "normal",
             cancellationToken: TestContext.Current.CancellationToken);
 
         compact.Success.Should().BeFalse();
@@ -1645,6 +1895,47 @@ public sealed class McpSurfaceTests
         }
 
         return opCodes;
+    }
+
+    /// <summary>
+    /// Creates a compact rules-backed race fixture workspace.
+    /// </summary>
+    private static DeckWorkspace CreateRaceWorkspace(string id, string name, int power)
+    {
+        return new DeckWorkspace
+        {
+            Id = id,
+            Name = name,
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 3,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Forest",
+                        ProducedMana = ["G"],
+                    }
+                },
+                new DeckCard
+                {
+                    Name = $"{name} Attacker",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Wincons,
+                    Categories = [DeckRoles.Wincons],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Cat",
+                        ManaValue = 1,
+                        Power = power.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        Toughness = "1",
+                    }
+                },
+            ],
+        };
     }
 
     /// <summary>

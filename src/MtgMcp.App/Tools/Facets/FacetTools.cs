@@ -33,13 +33,27 @@ public sealed class FacetTools
     /// Gets normalized factual facets for one workspace card.
     /// </summary>
     [McpServerTool(Name = "card_facets_get", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Get factual facets for one workspace card, including Scryfall snapshot fields, workspace categories, local user annotations, and locally cached Tagger annotations.")]
-    public Task<CardFacetSnapshot> GetCardFacetsAsync(
+    [Description("Get factual facets for one workspace card. Defaults to key facets only; detailLevel=full returns every facet.")]
+    public async Task<object> GetCardFacetsAsync(
         string workspaceId,
         string cardName,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default)
     {
-        return facets.GetCardFacetsAsync(workspaceId, cardName, cancellationToken);
+        try
+        {
+            CardFacetSnapshot snapshot = await facets.GetCardFacetsAsync(
+                    workspaceId,
+                    cardName,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return CardFacetOutputPresenter.Present(snapshot, detailLevel);
+        }
+        catch (InvalidOperationException exception) when (IsCardNotFoundInWorkspace(exception))
+        {
+            return CardFacetOutputPresenter.NotFound(workspaceId, cardName);
+        }
     }
 
     /// <summary>
@@ -106,5 +120,13 @@ public sealed class FacetTools
             taggerOracleTags,
             taggerArtTags,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Identifies workspace-card misses so the MCP response is structured.
+    /// </summary>
+    private static bool IsCardNotFoundInWorkspace(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("was not found in workspace", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -24,6 +24,12 @@ Resolution order:
 3. auto-inferred profile,
 4. `neutral`.
 
+`deck_compare_goldfish` also has a separate opt-in comparison model named
+`rules-backed-goldfish-race-v1`. That model is a conservative template
+life-total race, not a simulation profile. It reports its own seat order,
+starting life, paired seed policy, tie policy, bounded traces, and
+unsupported-text warnings, and it ignores the `simulationProfile` argument.
+
 ## Deck Intent V2
 
 Deck intent is stored between `MTG MCP Deck Intent` and

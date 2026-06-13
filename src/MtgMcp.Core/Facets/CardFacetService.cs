@@ -227,6 +227,10 @@ public sealed class CardFacetService
         AddDictionaryValues(result, "scryfall.prices", CardFacetSourceNames.Scryfall, snapshot.Prices);
         AddDictionaryValues(result, "scryfall.image_uris", CardFacetSourceNames.Scryfall, snapshot.ImageUris);
 
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        AddValue(result, "classifier.primary_role", CardFacetSourceNames.Classifier, role.PrimaryRole);
+        AddValues(result, "classifier.tags", CardFacetSourceNames.Classifier, role.Tags);
+
         AddMetadataFacets(result, card.Metadata);
         AddAnnotatedValues(result, CardFacetNames.UserTags, CardFacetSourceNames.User, card.Metadata);
         AddAnnotatedValues(result, CardFacetNames.UserCategories, CardFacetSourceNames.User, card.Metadata);

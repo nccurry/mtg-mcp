@@ -164,6 +164,234 @@ public sealed partial class DeckSimulationService
     }
 
     /// <summary>
+    /// Compares local workspaces and optional references with a caller-selected comparison model.
+    /// </summary>
+    public async Task<object> CompareGoldfishAsync(
+        IReadOnlyList<string> workspaceIds,
+        IReadOnlyList<string>? archidektDeckIdsOrUrls,
+        string simulationProfile,
+        int targetTurn,
+        int simulations,
+        int seed,
+        bool mulligan,
+        string model,
+        CancellationToken cancellationToken)
+    {
+        if (IsDefaultGoldfishModel(model))
+        {
+            return await CompareGoldfishAsync(
+                    workspaceIds,
+                    archidektDeckIdsOrUrls,
+                    simulationProfile,
+                    targetTurn,
+                    simulations,
+                    seed,
+                    mulligan,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (model.Equals(RulesGoldfishRaceConstants.ModelName, StringComparison.OrdinalIgnoreCase))
+        {
+            return await CompareRulesBackedGoldfishRaceAsync(
+                    workspaceIds,
+                    archidektDeckIdsOrUrls,
+                    simulationProfile,
+                    targetTurn,
+                    simulations,
+                    seed,
+                    mulligan,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        throw new ArgumentException(
+            $"model must be {GoldfishModelLabel} or {RulesGoldfishRaceConstants.ModelName}.",
+            nameof(model));
+    }
+
+    /// <summary>
+    /// Runs the conservative template race comparison.
+    /// </summary>
+    private async Task<RulesGoldfishRaceResult> CompareRulesBackedGoldfishRaceAsync(
+        IReadOnlyList<string> workspaceIds,
+        IReadOnlyList<string>? archidektDeckIdsOrUrls,
+        string simulationProfile,
+        int targetTurn,
+        int simulations,
+        int seed,
+        bool mulligan,
+        CancellationToken cancellationToken)
+    {
+        List<string> workspaceInputs = CollectReferenceInputs(workspaceIds?.ToArray() ?? []);
+        List<string> archidektInputs = CollectReferenceInputs(archidektDeckIdsOrUrls?.ToArray() ?? []);
+        int totalInputs = workspaceInputs.Count + archidektInputs.Count;
+        if (workspaceInputs.Count == 0)
+        {
+            throw new InvalidOperationException("At least one local workspace id is required as the comparison baseline.");
+        }
+
+        if (totalInputs is < 2 or > 8)
+        {
+            throw new InvalidOperationException("Goldfish comparison requires 2 to 8 total workspace or Archidekt inputs.");
+        }
+
+        DeckWorkspace baselineWorkspace = await LoadWorkspaceAsync(workspaceInputs[0], cancellationToken)
+            .ConfigureAwait(false);
+        List<RulesGoldfishRaceDeck> raceDecks =
+        [
+            RulesGoldfishRaceCompiler.CompileDeck(baselineWorkspace, "active")
+        ];
+        List<GoldfishReferenceImportFailure> failures = [];
+        for (int index = 1; index < workspaceInputs.Count; index++)
+        {
+            string input = workspaceInputs[index];
+            string label = $"workspace-{index + 1}";
+            try
+            {
+                DeckWorkspace workspace = await LoadWorkspaceAsync(input, cancellationToken)
+                    .ConfigureAwait(false);
+                raceDecks.Add(RulesGoldfishRaceCompiler.CompileDeck(workspace, label));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failures.Add(BuildImportFailure(label, input, "workspace", exception.Message));
+            }
+        }
+
+        await AddRulesBackedArchidektRaceDecksAsync(
+                raceDecks,
+                failures,
+                archidektInputs,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        RulesGoldfishRaceResult result = raceDecks.Count >= 2
+            ? RulesGoldfishRaceSimulator.Run(new RulesGoldfishRaceRequest
+            {
+                Decks = raceDecks,
+                Simulations = simulations,
+                Seed = seed,
+                StartingLife = 40,
+                TurnLimit = targetTurn,
+                Mulligan = mulligan,
+                FirstPlayerDraws = true,
+            })
+            : BuildUnrunRulesBackedRaceResult(raceDecks, simulations, seed, targetTurn, mulligan);
+        result.Failures.AddRange(failures);
+        result.Notes.Add($"simulationProfile '{simulationProfile}' is ignored by {RulesGoldfishRaceConstants.ModelName}; card templates come from snapshots and deterministic text patterns.");
+        foreach (GoldfishReferenceImportFailure failure in failures)
+        {
+            result.Warnings.Add($"{failure.Label}: {failure.Reason}");
+        }
+
+        result.Warnings = result.Warnings
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return result;
+    }
+
+    /// <summary>
+    /// Adds read-only Archidekt imports to the conservative race.
+    /// </summary>
+    private async Task AddRulesBackedArchidektRaceDecksAsync(
+        List<RulesGoldfishRaceDeck> raceDecks,
+        List<GoldfishReferenceImportFailure> failures,
+        IReadOnlyList<string> archidektInputs,
+        CancellationToken cancellationToken)
+    {
+        if (archidektInputs.Count == 0)
+        {
+            return;
+        }
+
+        IArchidektGateway? gateway = null;
+        for (int index = 0; index < archidektInputs.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string input = archidektInputs[index];
+            string label = $"reference-{index + 1}";
+            if (!IsArchidektReference(input))
+            {
+                failures.Add(BuildImportFailure(
+                    label,
+                    input,
+                    DetectReferenceSource(input),
+                    "Only Archidekt deck ids and URLs can be imported by this tool today."));
+                continue;
+            }
+
+            if (gateway is null)
+            {
+                try
+                {
+                    gateway = RequireArchidektGateway();
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    failures.Add(BuildImportFailure(label, input, "archidekt", exception.Message));
+                    continue;
+                }
+            }
+
+            try
+            {
+                DeckWorkspace workspace = await gateway
+                    .ImportDeckAsync(input, writeBack: false, cancellationToken)
+                    .ConfigureAwait(false);
+                raceDecks.Add(RulesGoldfishRaceCompiler.CompileDeck(workspace, label));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failures.Add(BuildImportFailure(label, input, "archidekt", exception.Message));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a conservative race result when fewer than two decks can be loaded.
+    /// </summary>
+    private static RulesGoldfishRaceResult BuildUnrunRulesBackedRaceResult(
+        IReadOnlyList<RulesGoldfishRaceDeck> raceDecks,
+        int simulations,
+        int seed,
+        int targetTurn,
+        bool mulligan)
+    {
+        return new RulesGoldfishRaceResult
+        {
+            Seed = seed,
+            Simulations = Math.Clamp(simulations, 1, 10_000),
+            StartingLife = 40,
+            TurnLimit = Math.Clamp(targetTurn, 1, 30),
+            Mulligan = mulligan,
+            FirstPlayerDraws = true,
+            SeatOrder = raceDecks.Select(deck => deck.Label).ToList(),
+            SeedPolicy = "Race was not run because fewer than two decks loaded successfully.",
+            TiePolicy = "Same-turn lethal is recorded as a tie; no-lethal runs are draws.",
+            Notes =
+            [
+                "Conservative template simulator did not run because fewer than two decks loaded successfully.",
+            ],
+            Warnings =
+            [
+                "Rules-backed goldfish race requires at least two successfully loaded decks.",
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Checks whether the caller requested the existing optimistic model.
+    /// </summary>
+    private static bool IsDefaultGoldfishModel(string? model)
+    {
+        return string.IsNullOrWhiteSpace(model)
+            || model.Equals(GoldfishModelLabel, StringComparison.OrdinalIgnoreCase)
+            || model.Equals("optimistic", StringComparison.OrdinalIgnoreCase)
+            || model.Equals("heuristic", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Compares the active workspace against up to three read-only Archidekt reference decks.
     /// </summary>
     public async Task<ArchidektGoldfishComparisonResult> CompareArchidektGoldfishAsync(

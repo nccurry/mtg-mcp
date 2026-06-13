@@ -1181,28 +1181,7 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static CardSnapshot CloneSnapshot(CardSnapshot snapshot)
     {
-        return new CardSnapshot
-        {
-            ManaCost = snapshot.ManaCost,
-            TypeLine = snapshot.TypeLine,
-            ManaValue = snapshot.ManaValue,
-            OracleText = snapshot.OracleText,
-            ColorIdentity = snapshot.ColorIdentity.ToList(),
-            Set = snapshot.Set,
-            CollectorNumber = snapshot.CollectorNumber,
-            Rarity = snapshot.Rarity,
-            Language = snapshot.Language,
-            ReleasedAt = snapshot.ReleasedAt,
-            ScryfallUri = snapshot.ScryfallUri,
-            EdhrecRank = snapshot.EdhrecRank,
-            Keywords = snapshot.Keywords.ToList(),
-            ProducedMana = snapshot.ProducedMana.ToList(),
-            Games = snapshot.Games.ToList(),
-            Finishes = snapshot.Finishes.ToList(),
-            Legalities = new Dictionary<string, string>(snapshot.Legalities, StringComparer.OrdinalIgnoreCase),
-            Prices = new Dictionary<string, string>(snapshot.Prices, StringComparer.OrdinalIgnoreCase),
-            ImageUris = new Dictionary<string, string>(snapshot.ImageUris, StringComparer.OrdinalIgnoreCase),
-        };
+        return CopyCardSnapshot(snapshot);
     }
 
     /// <summary>

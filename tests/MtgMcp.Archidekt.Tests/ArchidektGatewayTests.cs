@@ -42,10 +42,13 @@ public sealed class ArchidektGatewayTests
                   "card": {
                     "id": 99,
                     "uid": "scryfall-card",
+                    "layout": "normal",
                     "setCode": "lea",
                     "collectorNumber": "161",
                     "rarity": "common",
                     "scryfallUri": "https://scryfall.test/card",
+                    "power": "3",
+                    "toughness": "2",
                     "oracleCard": {
                       "uid": "oracle-card",
                       "name": "Lightning Bolt",
@@ -87,6 +90,9 @@ public sealed class ArchidektGatewayTests
         deck.Cards[0].ArchidektCardId.Should().Be("99");
         deck.Cards[0].ArchidektDeckRelationId.Should().Be(44);
         deck.Cards[0].Snapshot.TypeLine.Should().Be("Instant");
+        deck.Cards[0].Snapshot.Layout.Should().Be("normal");
+        deck.Cards[0].Snapshot.Power.Should().Be("3");
+        deck.Cards[0].Snapshot.Toughness.Should().Be("2");
         deck.Cards[0].Snapshot.OracleText.Should().Contain("3 damage");
         deck.Cards[0].Snapshot.ManaValue.Should().Be(1);
         deck.Cards[0].Snapshot.EdhrecRank.Should().Be(42);
@@ -95,6 +101,8 @@ public sealed class ArchidektGatewayTests
         deck.Cards[0].Snapshot.CollectorNumber.Should().Be("161");
         deck.Cards[0].Snapshot.Rarity.Should().Be("common");
         deck.Cards[0].Snapshot.ScryfallUri.Should().Be("https://scryfall.test/card");
+        deck.Cards[0].Snapshot.Provenance.Provider.Should().Be(DeckImportProviders.Archidekt);
+        deck.Cards[0].Snapshot.Provenance.ProviderCardId.Should().Be("99");
     }
 
     /// <summary>
@@ -193,6 +201,11 @@ public sealed class ArchidektGatewayTests
         card.Modifier.Should().Be("Normal");
         card.Snapshot.ManaCost.Should().Be("{3}{B}{B}");
         card.Snapshot.TypeLine.Should().Be("Legendary Creature - God // Legendary Artifact");
+        card.Snapshot.Faces.Should().HaveCount(2);
+        card.Snapshot.Faces[0].ManaCost.Should().Be("{3}{B}{B}");
+        card.Snapshot.Faces[0].TypeLine.Should().Be("Legendary Creature - God");
+        card.Snapshot.Faces[1].ManaCost.Should().Be("{3}{B}");
+        card.Snapshot.Faces[1].TypeLine.Should().Be("Legendary Artifact");
         card.Snapshot.Set.Should().Be("khm");
         card.Snapshot.OracleText.Should().Contain("Whenever an opponent sacrifices");
         card.Snapshot.OracleText.Should().Contain("Target player loses 3 life");

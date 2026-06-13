@@ -383,6 +383,58 @@ public sealed class CompactMutationResult
 }
 
 /// <summary>
+/// Reports the smallest safe response for repetitive workspace mutations.
+/// </summary>
+public sealed class CompactMutationSummaryResult
+{
+    /// <summary>
+    /// Gets or sets whether the mutation completed successfully.
+    /// </summary>
+    public bool Success { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets changed card names.
+    /// </summary>
+    public List<string> ChangedCards { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the mutation message.
+    /// </summary>
+    public string Message { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets bounded validation counts after the mutation.
+    /// </summary>
+    public CompactValidationSummary ValidationSummary { get; set; } = new();
+}
+
+/// <summary>
+/// Summarizes validation without listing every warning or error.
+/// </summary>
+public sealed class CompactValidationSummary
+{
+    /// <summary>
+    /// Gets or sets whether validation passed.
+    /// </summary>
+    public bool IsValid { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of validation errors.
+    /// </summary>
+    public int ErrorCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of validation warnings.
+    /// </summary>
+    public int WarningCount { get; set; }
+}
+
+/// <summary>
 /// Describes one exact move requested while creating a deck edit plan.
 /// </summary>
 public sealed class ExplicitDeckPlanMoveCardChange

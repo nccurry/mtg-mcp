@@ -26,6 +26,11 @@ public sealed class CardInfo
     public string? ManaCost { get; set; }
 
     /// <summary>
+    /// Gets or sets the Scryfall layout value, such as normal, split, adventure, or modal_dfc.
+    /// </summary>
+    public string? Layout { get; set; }
+
+    /// <summary>
     /// Gets or sets the mana value.
     /// </summary>
     public double? ManaValue { get; set; }
@@ -39,6 +44,26 @@ public sealed class CardInfo
     /// Gets or sets the oracle text.
     /// </summary>
     public string? OracleText { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed power when the card has creature stats.
+    /// </summary>
+    public string? Power { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed toughness when the card has creature stats.
+    /// </summary>
+    public string? Toughness { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed loyalty when the card has planeswalker stats.
+    /// </summary>
+    public string? Loyalty { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed defense when the card has battle stats.
+    /// </summary>
+    public string? Defense { get; set; }
 
     /// <summary>
     /// Gets or sets the set.
@@ -69,6 +94,16 @@ public sealed class CardInfo
     /// Gets or sets the scryfall uri.
     /// </summary>
     public string? ScryfallUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets why this printing was selected for cached pricing.
+    /// </summary>
+    public string? SelectedPrintingReason { get; set; }
+
+    /// <summary>
+    /// Gets or sets the pricing mode that selected this printing, when known.
+    /// </summary>
+    public string? PricingMode { get; set; }
 
     /// <summary>
     /// Gets or sets the edhrec rank.
@@ -104,6 +139,11 @@ public sealed class CardInfo
     /// Gets or sets available finish names for this printing, such as nonfoil, foil, or etched.
     /// </summary>
     public List<string> Finishes { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets structured face data for split, adventure, modal, and transforming cards.
+    /// </summary>
+    public List<CardFaceSnapshot> Faces { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the legalities.
@@ -201,6 +241,11 @@ public sealed class CardSnapshot
     public string? ManaCost { get; set; }
 
     /// <summary>
+    /// Gets or sets the card layout value from the source provider.
+    /// </summary>
+    public string? Layout { get; set; }
+
+    /// <summary>
     /// Gets or sets the type line.
     /// </summary>
     public string? TypeLine { get; set; }
@@ -214,6 +259,26 @@ public sealed class CardSnapshot
     /// Gets or sets the oracle text.
     /// </summary>
     public string? OracleText { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed power when known.
+    /// </summary>
+    public string? Power { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed toughness when known.
+    /// </summary>
+    public string? Toughness { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed loyalty when known.
+    /// </summary>
+    public string? Loyalty { get; set; }
+
+    /// <summary>
+    /// Gets or sets printed defense when known.
+    /// </summary>
+    public string? Defense { get; set; }
 
     /// <summary>
     /// Gets or sets the color identity.
@@ -251,6 +316,21 @@ public sealed class CardSnapshot
     public string? ScryfallUri { get; set; }
 
     /// <summary>
+    /// Gets or sets why this printing was selected for cached pricing.
+    /// </summary>
+    public string? SelectedPrintingReason { get; set; }
+
+    /// <summary>
+    /// Gets or sets the pricing mode that selected this printing, when known.
+    /// </summary>
+    public string? PricingMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets freshness and provider provenance for the snapshot.
+    /// </summary>
+    public CardSnapshotProvenance Provenance { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the edhrec rank.
     /// </summary>
     public int? EdhrecRank { get; set; }
@@ -276,6 +356,11 @@ public sealed class CardSnapshot
     public List<string> Finishes { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets structured face data for multi-face cards.
+    /// </summary>
+    public List<CardFaceSnapshot> Faces { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the legalities.
     /// </summary>
     public Dictionary<string, string> Legalities { get; set; } =
@@ -291,6 +376,83 @@ public sealed class CardSnapshot
     /// </summary>
     public Dictionary<string, string> ImageUris { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Captures card-face facts used by analysis and conservative simulation.
+/// </summary>
+public sealed class CardFaceSnapshot
+{
+    /// <summary>
+    /// Gets or sets the face name.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the face mana cost.
+    /// </summary>
+    public string? ManaCost { get; set; }
+
+    /// <summary>
+    /// Gets or sets the face type line.
+    /// </summary>
+    public string? TypeLine { get; set; }
+
+    /// <summary>
+    /// Gets or sets the face oracle text.
+    /// </summary>
+    public string? OracleText { get; set; }
+
+    /// <summary>
+    /// Gets or sets face power when known.
+    /// </summary>
+    public string? Power { get; set; }
+
+    /// <summary>
+    /// Gets or sets face toughness when known.
+    /// </summary>
+    public string? Toughness { get; set; }
+
+    /// <summary>
+    /// Gets or sets face loyalty when known.
+    /// </summary>
+    public string? Loyalty { get; set; }
+
+    /// <summary>
+    /// Gets or sets face defense when known.
+    /// </summary>
+    public string? Defense { get; set; }
+
+    /// <summary>
+    /// Gets or sets face colors.
+    /// </summary>
+    public List<string> Colors { get; set; } = [];
+}
+
+/// <summary>
+/// Records where a cached card snapshot came from and when it was refreshed.
+/// </summary>
+public sealed class CardSnapshotProvenance
+{
+    /// <summary>
+    /// Gets or sets the provider that supplied the snapshot.
+    /// </summary>
+    public string? Provider { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider's card id for this snapshot, when known.
+    /// </summary>
+    public string? ProviderCardId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the schema version used by mtg-mcp snapshot mapping.
+    /// </summary>
+    public int SchemaVersion { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the snapshot was refreshed.
+    /// </summary>
+    public DateTimeOffset? RefreshedAtUtc { get; set; }
 }
 
 /// <summary>

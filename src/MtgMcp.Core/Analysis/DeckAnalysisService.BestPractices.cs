@@ -135,51 +135,78 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// </summary>
     private static NeedTargetCount CountNeedTarget(DeckAnalysis analysis, string target)
     {
-        int roleCount = Count(analysis.RoleCounts, target);
-        int tagCount = Count(analysis.TagCounts, target);
-        int allCategoryCount = Count(analysis.IncludedAllCategoryCounts, target);
+        int roleCount = CountAliased(analysis.RoleCounts, target);
+        int tagCount = CountAliased(analysis.TagCounts, target);
+        int allCategoryCount = CountAliased(analysis.IncludedAllCategoryCounts, target);
+        int classifierCount = Math.Max(roleCount, tagCount);
+        string classifierSource = roleCount >= tagCount ? "classifier role" : "classifier tag";
 
-        if (DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase))
+        return SelectNeedTargetCount(classifierCount, classifierSource, allCategoryCount);
+    }
+
+    /// <summary>
+    /// Chooses the count and source label from classifier and category evidence.
+    /// </summary>
+    private static NeedTargetCount SelectNeedTargetCount(
+        int classifierCount,
+        string classifierSource,
+        int userCategoryCount)
+    {
+        if (classifierCount > 0 && userCategoryCount > 0)
         {
-            if (allCategoryCount > roleCount)
-            {
-                return new NeedTargetCount(allCategoryCount, "all user categories");
-            }
-
-            if (roleCount > 0 && allCategoryCount > 0)
-            {
-                return new NeedTargetCount(roleCount, "heuristic roles and user categories agree");
-            }
-
-            return new NeedTargetCount(roleCount, "heuristic functional roles");
+            return new NeedTargetCount(Math.Max(classifierCount, userCategoryCount), "combined");
         }
 
-        if (DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase))
+        if (userCategoryCount > 0)
         {
-            if (allCategoryCount > tagCount)
-            {
-                return new NeedTargetCount(allCategoryCount, "all user categories");
-            }
-
-            if (tagCount > 0 && allCategoryCount > 0)
-            {
-                return new NeedTargetCount(tagCount, "classifier tags and user categories agree");
-            }
-
-            return new NeedTargetCount(tagCount, "classifier secondary tags");
+            return new NeedTargetCount(userCategoryCount, "user category");
         }
 
-        if (tagCount > 0)
+        if (classifierCount > 0)
         {
-            return new NeedTargetCount(tagCount, "classifier secondary tags");
-        }
-
-        if (allCategoryCount > 0)
-        {
-            return new NeedTargetCount(allCategoryCount, "all user categories");
+            return new NeedTargetCount(classifierCount, classifierSource);
         }
 
         return new NeedTargetCount(0, "no matching role, tag, or category evidence");
+    }
+
+    /// <summary>
+    /// Counts a target after applying singular, plural, and common category aliases.
+    /// </summary>
+    private static int CountAliased(IReadOnlyDictionary<string, int> counts, string target)
+    {
+        int count = 0;
+        foreach (string alias in NeedTargetAliases(target))
+        {
+            if (counts.TryGetValue(alias, out int aliasCount))
+            {
+                count = Math.Max(count, aliasCount);
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Gets labels that should satisfy the same best-practice target.
+    /// </summary>
+    private static List<string> NeedTargetAliases(string target)
+    {
+        string normalized = DeckIntentVocabulary.NormalizeToken(target);
+        return normalized switch
+        {
+            "anthem" or "anthems" => ["Anthem", "Anthems"],
+            "board-wipe" or "board-wipes" => ["Board Wipe", DeckRoles.BoardWipes],
+            "token" or "tokens" => ["Token", DeckTags.Tokens],
+            "wincon" or "wincons" or "finisher" or "finishers" =>
+            [
+                "Wincon",
+                DeckRoles.Wincons,
+                "Finisher",
+                DeckTags.Finishers,
+            ],
+            _ => [target],
+        };
     }
 
     /// <summary>

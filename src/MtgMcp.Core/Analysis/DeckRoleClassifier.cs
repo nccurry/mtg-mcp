@@ -186,6 +186,7 @@ public static partial class DeckRoleClassifier
         AddTag(tags, DeckTags.TokenHate, ContainsAny(text, "destroy all tokens", "creature tokens", "tokens get", "tokens can't", "each creature gets -1/-1"));
         AddTag(tags, DeckTags.ArtifactEnchantmentHate, ContainsArtifactEnchantmentHateText(text));
         AddTag(tags, DeckTags.CombatProtection, ContainsAny(text, "prevent all combat damage", "prevent all damage", "phase out", "indestructible until end of turn"));
+        AddTag(tags, DeckTags.CombatPayoff, ContainsCombatPayoffText(text));
         AddTag(tags, DeckTags.Evasion, ContainsAny(text, "flying", "trample", "menace", "can't be blocked", "unblockable"));
         AddTag(tags, DeckTags.Finishers, ContainsFinisherText(text));
         AddTag(tags, DeckTags.SacrificeFodder, ContainsAny(text, "create") && ContainsAny(text, "token"));
@@ -493,7 +494,34 @@ public static partial class DeckRoleClassifier
             return true;
         }
 
-        return FinisherLifeLossRegex().IsMatch(text);
+        return ContainsCombatPayoffText(text) || FinisherLifeLossRegex().IsMatch(text);
+    }
+
+    /// <summary>
+    /// Checks whether text provides a deterministic team-combat payoff or closer.
+    /// </summary>
+    private static bool ContainsCombatPayoffText(string text)
+    {
+        return ContainsAny(
+            text,
+            "attacking creatures you control have double strike",
+            "other creatures you control have melee",
+            "creatures you control have melee",
+            "battle cry",
+            "creatures you control get +",
+            "creatures you control gain trample",
+            "creatures you control have trample",
+            "creatures you control gain flying",
+            "creatures you control have flying",
+            "creatures you control gain menace",
+            "creatures you control have menace",
+            "creatures you control gain haste",
+            "creatures you control have haste",
+            "creatures you control can't be blocked",
+            "creatures can't block creatures you control",
+            "creatures without flying can't block",
+            "whenever a creature you control attacks, it gets +",
+            "as long as you control your commander, creatures you control get +");
     }
 
     /// <summary>

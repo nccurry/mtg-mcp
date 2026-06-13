@@ -33,15 +33,20 @@ public sealed class AnalysisTools
     /// Refreshes cached Scryfall snapshots for workspace cards.
     /// </summary>
     [McpServerTool(Name = "deck_refresh_card_metadata", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Refresh Scryfall snapshot metadata for workspace cards without changing deck contents or writing card changes to Archidekt. Scope: all, included, maybeboard, or missing.")]
-    public Task<DeckNormalizationResult> RefreshDeckCardSnapshotsAsync(
+    [Description("Refresh Scryfall snapshot metadata for workspace cards without changing deck contents or writing card changes to Archidekt. Defaults to bounded summary output; detailLevel=full returns the workspace.")]
+    public async Task<object> RefreshDeckCardSnapshotsAsync(
         string workspaceId,
-        [Description("Metadata refresh scope: all, included, maybeboard, or missing.")]
+        [Description("Metadata refresh scope: missing, stale, needed, all, included, or maybeboard.")]
         string scope = "missing",
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default)
     {
         operationMode.EnsureCanWritePlanningState("deck_refresh_card_metadata");
-        return analysis.RefreshDeckCardSnapshotsAsync(workspaceId, scope, cancellationToken);
+        DeckNormalizationResult result = await analysis
+            .RefreshDeckCardSnapshotsAsync(workspaceId, scope, cancellationToken)
+            .ConfigureAwait(false);
+        return DeckNormalizationPresenter.Present(result, detailLevel);
     }
 
     /// <summary>

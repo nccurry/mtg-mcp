@@ -29,18 +29,25 @@ public sealed class ScryfallClientTests
                   "oracle_id": "oracle-1",
                   "name": "Lightning Bolt",
                   "mana_cost": "{R}",
+                  "layout": "normal",
                   "cmc": 1,
                   "type_line": "Instant",
                   "oracle_text": "Deal 3 damage.",
+                  "power": "3",
+                  "toughness": "2",
                   "set": "clu",
                   "collector_number": "141",
                   "rarity": "common",
+                  "released_at": "2024-02-01",
+                  "lang": "en",
                   "scryfall_uri": "https://scryfall.com/card/clu/141",
                   "edhrec_rank": 42,
                   "colors": ["R"],
                   "color_identity": ["R"],
                   "keywords": ["Flash"],
                   "produced_mana": ["R"],
+                  "games": ["paper"],
+                  "finishes": ["nonfoil"],
                   "legalities": { "commander": "legal" },
                   "prices": { "usd": "0.25" },
                   "image_uris": { "normal": "https://img.test/bolt.jpg" }
@@ -56,9 +63,16 @@ public sealed class ScryfallClientTests
 
         card.Should().NotBeNull();
         card!.Name.Should().Be("Lightning Bolt");
+        card.Layout.Should().Be("normal");
+        card.Power.Should().Be("3");
+        card.Toughness.Should().Be("2");
+        card.ReleasedAt.Should().Be(new DateOnly(2024, 2, 1));
+        card.Language.Should().Be("en");
         card.EdhrecRank.Should().Be(42);
         card.Keywords.Should().Contain("Flash");
         card.ProducedMana.Should().Contain("R");
+        card.Games.Should().Contain("paper");
+        card.Finishes.Should().Contain("nonfoil");
         card.ColorIdentity.Should().ContainSingle().Which.Should().Be("R");
         card.Legalities["commander"].Should().Be("legal");
         card.ImageUris["normal"].Should().Contain("bolt");
@@ -278,6 +292,8 @@ public sealed class ScryfallClientTests
         selected.Language.Should().Be("en");
         selected.Games.Should().Contain("paper");
         selected.Prices["usd"].Should().Be("1.50");
+        selected.SelectedPrintingReason.Should().Contain("released paper printings");
+        selected.PricingMode.Should().Be(nameof(PricingMode.ReleasedIfNeeded));
         mockHttp.VerifyNoOutstandingExpectation();
     }
 
@@ -714,15 +730,18 @@ public sealed class ScryfallClientTests
                 {
                   "id": "card-1",
                   "name": "Fire // Ice",
+                  "layout": "split",
                   "cmc": 2,
                   "card_faces": [
                     {
+                      "name": "Fire",
                       "mana_cost": "{1}{R}",
                       "type_line": "Instant",
                       "oracle_text": "Fire deals 2 damage.",
                       "image_uris": { "normal": "https://img.test/fire.jpg" }
                     },
                     {
+                      "name": "Ice",
                       "mana_cost": "{1}{U}",
                       "type_line": "Instant",
                       "oracle_text": "Tap target permanent."
@@ -741,10 +760,16 @@ public sealed class ScryfallClientTests
 
         card.Should().NotBeNull();
         card!.ManaCost.Should().Be("{1}{R}");
+        card.Layout.Should().Be("split");
         card.TypeLine.Should().Be("Instant");
         card.OracleText.Should().Contain("Fire deals");
         card.ColorIdentity.Should().BeEquivalentTo(["R", "U"]);
         card.ImageUris["normal"].Should().Contain("fire");
+        card.Faces.Should().HaveCount(2);
+        card.Faces[0].Name.Should().Be("Fire");
+        card.Faces[0].ManaCost.Should().Be("{1}{R}");
+        card.Faces[1].Name.Should().Be("Ice");
+        card.Faces[1].OracleText.Should().Contain("Tap target permanent");
     }
 
     /// <summary>

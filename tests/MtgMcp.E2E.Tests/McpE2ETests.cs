@@ -98,7 +98,8 @@ public sealed class McpE2ETests
                 ["workspaceId"] = workspaceId,
                 ["cardName"] = "Lightning Bolt",
                 ["quantity"] = 2,
-                ["category"] = "Mainboard"
+                ["category"] = "Mainboard",
+                ["detailLevel"] = "normal"
             });
         string export = await CallTextAsync(
             session.Client,
@@ -870,7 +871,8 @@ public sealed class McpE2ETests
             {
                 ["planId"] = planId,
                 ["createCheckpoint"] = false,
-                ["includeWorkspace"] = false
+                ["includeWorkspace"] = false,
+                ["detailLevel"] = "normal"
             });
         string afterApplyExport = await CallTextAsync(
             session.Client,
@@ -1073,7 +1075,8 @@ public sealed class McpE2ETests
             {
                 ["planId"] = planId,
                 ["createCheckpoint"] = false,
-                ["includeWorkspace"] = false
+                ["includeWorkspace"] = false,
+                ["detailLevel"] = "normal"
             });
         JsonElement diff = await CallJsonAsync(
             session.Client,
@@ -1340,7 +1343,8 @@ public sealed class McpE2ETests
                 ["workspaceId"] = workspaceId,
                 ["cardName"] = "Lightning Bolt",
                 ["quantity"] = 1,
-                ["category"] = "Mainboard"
+                ["category"] = "Mainboard",
+                ["detailLevel"] = "normal"
             });
 
         GetString(change, "persistence").Should().Be("archidekt-writeback");
@@ -1465,7 +1469,8 @@ public sealed class McpE2ETests
             new Dictionary<string, object?>
             {
                 ["planId"] = planId,
-                ["createCheckpoint"] = false
+                ["createCheckpoint"] = false,
+                ["detailLevel"] = "full"
             });
         string afterApplyExport = await CallTextAsync(
             session.Client,

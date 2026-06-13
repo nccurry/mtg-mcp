@@ -66,6 +66,48 @@ internal static class GoldfishOutputPresenter
     }
 
     /// <summary>
+    /// Presents a conservative rules-backed goldfish race with bounded evidence.
+    /// </summary>
+    public static object Present(RulesGoldfishRaceResult result, string detailLevel)
+    {
+        string normalized = NormalizeDetailLevel(detailLevel);
+        if (normalized == GoldfishDetailLevels.Full)
+        {
+            return result;
+        }
+
+        return new
+        {
+            detailLevel = normalized,
+            modelName = result.ModelName,
+            engineVersion = result.EngineVersion,
+            modelDescription = "Conservative template simulator; not a full Magic rules engine.",
+            randomKind = result.RandomKind,
+            seed = result.Seed,
+            simulations = result.Simulations,
+            startingLife = result.StartingLife,
+            turnLimit = result.TurnLimit,
+            mulligan = result.Mulligan,
+            firstPlayerDraws = result.FirstPlayerDraws,
+            seatOrder = result.SeatOrder,
+            seedPolicy = result.SeedPolicy,
+            tiePolicy = result.TiePolicy,
+            commanderDamageIgnored = result.CommanderDamageIgnored,
+            decks = result.Decks
+                .Select(deck => PresentRaceDeck(deck, normalized))
+                .ToList(),
+            sampleOutcomes = normalized == GoldfishDetailLevels.Normal
+                ? result.SampleOutcomes
+                : null,
+            failures = result.Failures,
+            notes = normalized == GoldfishDetailLevels.Normal
+                ? result.Notes
+                : result.Notes.Take(2).ToList(),
+            warnings = result.Warnings,
+        };
+    }
+
+    /// <summary>
     /// Presents a batch tuning report with bounded goldfish evidence.
     /// </summary>
     public static object Present(DeckBatchTuningReport result, string detailLevel)
@@ -105,6 +147,35 @@ internal static class GoldfishOutputPresenter
         }
 
         throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
+    }
+
+    /// <summary>
+    /// Presents one conservative race deck row.
+    /// </summary>
+    private static object PresentRaceDeck(RulesGoldfishRaceDeckSummary deck, string detailLevel)
+    {
+        return new
+        {
+            label = deck.Label,
+            seat = deck.Seat,
+            workspaceId = deck.WorkspaceId,
+            name = deck.Name,
+            wins = deck.Wins,
+            ties = deck.Ties,
+            draws = deck.Draws,
+            losses = deck.Losses,
+            winRate = deck.WinRate,
+            tieRate = deck.TieRate,
+            lethalRuns = deck.LethalRuns,
+            medianLethalTurn = deck.MedianLethalTurn,
+            lethalTurnCounts = detailLevel == GoldfishDetailLevels.Normal
+                ? deck.LethalTurnCounts
+                : null,
+            representativeTrace = detailLevel == GoldfishDetailLevels.Normal
+                ? deck.RepresentativeTrace
+                : null,
+            warnings = deck.Warnings,
+        };
     }
 
     /// <summary>

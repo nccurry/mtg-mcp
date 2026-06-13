@@ -37,9 +37,14 @@ public sealed partial class ScryfallClient
             OracleId = GetString(element, "oracle_id"),
             Name = GetString(element, "name") ?? "",
             ManaCost = GetString(element, "mana_cost") ?? GetFaceString(element, "mana_cost"),
+            Layout = GetString(element, "layout"),
             ManaValue = GetDouble(element, "cmc"),
             TypeLine = GetString(element, "type_line") ?? GetFaceString(element, "type_line"),
             OracleText = GetString(element, "oracle_text") ?? GetFaceText(element, "oracle_text"),
+            Power = GetString(element, "power"),
+            Toughness = GetString(element, "toughness"),
+            Loyalty = GetString(element, "loyalty"),
+            Defense = GetString(element, "defense"),
             Set = GetString(element, "set"),
             CollectorNumber = GetString(element, "collector_number"),
             Rarity = GetString(element, "rarity"),
@@ -58,6 +63,7 @@ public sealed partial class ScryfallClient
         AddStringDictionary(element, "legalities", card.Legalities);
         AddStringDictionary(element, "prices", card.Prices);
         AddStringDictionary(element, "image_uris", card.ImageUris);
+        AddFaces(element, card.Faces);
 
         if (
             card.ImageUris.Count == 0
@@ -75,6 +81,37 @@ public sealed partial class ScryfallClient
         }
 
         return card;
+    }
+
+    /// <summary>
+    /// Adds structured card-face data when Scryfall exposes it.
+    /// </summary>
+    private static void AddFaces(JsonElement element, List<CardFaceSnapshot> target)
+    {
+        if (
+            !element.TryGetProperty("card_faces", out JsonElement faces)
+            || faces.ValueKind != JsonValueKind.Array
+        )
+        {
+            return;
+        }
+
+        foreach (JsonElement face in faces.EnumerateArray())
+        {
+            CardFaceSnapshot snapshot = new()
+            {
+                Name = GetString(face, "name"),
+                ManaCost = GetString(face, "mana_cost"),
+                TypeLine = GetString(face, "type_line"),
+                OracleText = GetString(face, "oracle_text"),
+                Power = GetString(face, "power"),
+                Toughness = GetString(face, "toughness"),
+                Loyalty = GetString(face, "loyalty"),
+                Defense = GetString(face, "defense"),
+            };
+            AddStringArray(face, "colors", snapshot.Colors);
+            target.Add(snapshot);
+        }
     }
 
     /// <summary>

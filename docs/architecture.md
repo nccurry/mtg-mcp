@@ -17,7 +17,8 @@ Existing capabilities include:
 - Factual card facets and explicit predicate counts over Scryfall snapshots, workspace categories, and local annotations.
 - Role and tag classification for deck cards.
 - Hypergeometric and Monte Carlo draw odds for roles, tags, and turn-by-turn land drops.
-- Heuristic no-opponent goldfish projection.
+- Heuristic no-opponent goldfish projection and opt-in conservative template
+  goldfish race comparison.
 - Commander best-practice profiles, simulation profiles, and deck intent guidance.
 - Deck-local win routes with deterministic route predicate evidence.
 - Commander Spellbook catalog combo search, raw combo details, and near-miss detection.
@@ -27,7 +28,7 @@ Existing capabilities include:
 - Stats Lab whole-deck performance analysis for opening hands, land drops, colors, castability, commander timing, combo/tutor assembly, stranded-card risk, and named scenarios.
 - Previewed plan performance comparison with before/after deltas and confidence interval context.
 
-These tools answer questions like "how much ramp do I have?" or "what are my odds of seeing draw by turn 3?" They do not currently answer full rules questions like "what is my real win rate against this opponent deck under legal game actions?"
+These tools answer questions like "how much ramp do I have?", "what are my odds of seeing draw by turn 3?", or "which deck is faster under a no-interaction goldfish race?" They do not currently answer full rules questions like "what is my real win rate against this opponent deck under legal game actions?"
 
 ## Design Goals
 
@@ -107,8 +108,8 @@ Core workflow groups are:
   `deck_analyze_structure`, `deck_analyze_mana`,
   `deck_analyze_consistency`, `deck_analyze_land_drop_odds`,
   `deck_analyze_performance`, `deck_simulate_goldfish`,
-  `deck_project_board_state`, `deck_estimate_win_turn`, and
-  `deck_plan_compare_performance`.
+  `deck_compare_goldfish`, `deck_project_board_state`,
+  `deck_estimate_win_turn`, and `deck_plan_compare_performance`.
 - Combo and win-condition evidence: `deck_analyze_combos`,
   `combo_search_by_card`, `combo_get_details`,
   `card_classify_win_routes`, `wincon_find_payoffs`,
@@ -130,6 +131,30 @@ Source-backed results preserve source, source kind, source URI, cache status,
 retrieval time, confidence, determinism, and notes where available.
 
 No external matchup simulation tools are currently exposed.
+
+## Conservative Goldfish Race
+
+`deck_compare_goldfish` keeps the existing `optimistic-goldfish-model` as its
+default model. Callers can opt into `rules-backed-goldfish-race-v1` for an
+internal, conservative template simulator that races each deck against the same
+life-total target. It is a goldfish comparison model, not a full Magic rules
+engine.
+
+The race model reports its model name, engine version, deterministic random
+kind, seed, paired seed policy, seat order, starting life, first-player draw
+policy, tie policy, commander-zone treatment, and whether commander damage is
+ignored. It uses bounded traces and warnings so unsupported or ambiguous card
+text is visible without making the response unbounded.
+
+The v1 template compiler recognizes simple lands, mana rocks, mana creatures,
+vanilla or stat creatures, simple ETB draw, token, and ramp effects, simple
+drain or life-loss effects, and deterministic combat payoffs. Unsupported
+templates are ignored conservatively and reported as warnings.
+
+The model intentionally omits stack handling, priority exchange, blockers,
+targeted interaction, layers, replacement effects, prevention effects, and
+opponent disruption. Results should be described as no-interaction race
+evidence, not matchup win rates.
 
 ## Deferred Full-Game Simulation
 

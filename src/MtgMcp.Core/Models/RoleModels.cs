@@ -213,6 +213,11 @@ public static class DeckTags
     public const string CombatProtection = "Combat Protection";
 
     /// <summary>
+    /// Stores the combat payoff tag.
+    /// </summary>
+    public const string CombatPayoff = "Combat Payoff";
+
+    /// <summary>
     /// Stores the evasion tag.
     /// </summary>
     public const string Evasion = "Evasion";
@@ -264,6 +269,7 @@ public static class DeckTags
         TokenHate,
         ArtifactEnchantmentHate,
         CombatProtection,
+        CombatPayoff,
         Evasion,
         Finishers,
         SacrificeFodder,

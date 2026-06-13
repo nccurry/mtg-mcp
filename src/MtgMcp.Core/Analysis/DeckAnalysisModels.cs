@@ -26,14 +26,75 @@ public sealed class DeckNormalizationResult
     public int UpdatedCards { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of targeted cards that already had the selected metadata.
+    /// </summary>
+    public int UnchangedCards { get; set; }
+
+    /// <summary>
     /// Gets or sets the missing cards.
     /// </summary>
     public List<string> MissingCards { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets cards whose refresh failed after being selected for refresh.
+    /// </summary>
+    public List<string> FailedCards { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets a bounded quality summary before refresh.
+    /// </summary>
+    public CardSnapshotQualitySummary SnapshotQualityBefore { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets a bounded quality summary after refresh.
+    /// </summary>
+    public CardSnapshotQualitySummary SnapshotQualityAfter { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the workspace.
     /// </summary>
     public DeckWorkspace Workspace { get; set; } = new();
+}
+
+/// <summary>
+/// Summarizes cached card snapshot completeness without returning every card.
+/// </summary>
+public sealed class CardSnapshotQualitySummary
+{
+    /// <summary>
+    /// Gets or sets the number of cards inspected.
+    /// </summary>
+    public int CardCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards with any cached snapshot object.
+    /// </summary>
+    public int SnapshotCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards with a type line.
+    /// </summary>
+    public int TypeLineCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards with oracle text.
+    /// </summary>
+    public int OracleTextCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards with at least one cached price field.
+    /// </summary>
+    public int PriceCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards with produced mana metadata.
+    /// </summary>
+    public int ProducedManaCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards with enough metadata for current analysis heuristics.
+    /// </summary>
+    public int AnalysisReadyCount { get; set; }
 }
 
 /// <summary>

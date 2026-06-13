@@ -135,6 +135,9 @@ public sealed partial class ArchidektGateway
                 GetNestedString(cardElement, "oracleCard", "mana_cost"),
                 GetNestedFaceString(cardElement, "manaCost"),
                 GetNestedFaceString(cardElement, "mana_cost")),
+            Layout = FirstNonEmpty(
+                GetString(cardElement, "layout"),
+                GetNestedString(cardElement, "oracleCard", "layout")),
             TypeLine = FirstNonEmpty(
                 GetNestedString(cardElement, "oracleCard", "typeLine"),
                 BuildNestedTypeLine(cardElement),
@@ -151,6 +154,10 @@ public sealed partial class ArchidektGateway
                 GetNestedString(cardElement, "oracleCard", "oracle_text"),
                 GetNestedString(cardElement, "oracleCard", "text"),
                 GetNestedFaceText(cardElement)),
+            Power = FirstNonEmpty(GetString(cardElement, "power"), GetNestedFaceString(cardElement, "power")),
+            Toughness = FirstNonEmpty(GetString(cardElement, "toughness"), GetNestedFaceString(cardElement, "toughness")),
+            Loyalty = FirstNonEmpty(GetString(cardElement, "loyalty"), GetNestedFaceString(cardElement, "loyalty")),
+            Defense = FirstNonEmpty(GetString(cardElement, "defense"), GetNestedFaceString(cardElement, "defense")),
             ColorIdentity = ParseColorIdentity(cardElement),
             Set = FirstNonEmpty(
                 GetNestedString(cardElement, "edition", "editioncode"),
@@ -168,8 +175,55 @@ public sealed partial class ArchidektGateway
                 ?? GetNestedInt(cardElement, "oracleCard", "edhrec_rank"),
             ScryfallUri =
                 GetString(cardElement, "scryfallUri") ?? GetString(cardElement, "scryfall_uri"),
+            Provenance = new CardSnapshotProvenance
+            {
+                Provider = DeckImportProviders.Archidekt,
+                ProviderCardId = GetString(cardElement, "id"),
+                SchemaVersion = 1,
+                RefreshedAtUtc = DateTimeOffset.UtcNow,
+            },
+            Faces = ReadFaces(cardElement),
             Prices = ParsePrices(cardElement),
         };
+    }
+
+    /// <summary>
+    /// Reads Archidekt oracle face data when it is available.
+    /// </summary>
+    private static List<CardFaceSnapshot> ReadFaces(JsonElement cardElement)
+    {
+        if (
+            !cardElement.TryGetProperty("oracleCard", out JsonElement oracleCard)
+            || oracleCard.ValueKind != JsonValueKind.Object
+            || !oracleCard.TryGetProperty("faces", out JsonElement faces)
+            || faces.ValueKind != JsonValueKind.Array
+        )
+        {
+            return [];
+        }
+
+        List<CardFaceSnapshot> result = [];
+        foreach (JsonElement face in faces.EnumerateArray())
+        {
+            CardFaceSnapshot snapshot = new()
+            {
+                Name = GetString(face, "name"),
+                ManaCost = FirstNonEmpty(GetString(face, "manaCost"), GetString(face, "mana_cost")),
+                TypeLine = BuildTypeLine(face),
+                OracleText = FirstNonEmpty(
+                    GetString(face, "oracleText"),
+                    GetString(face, "oracle_text"),
+                    GetString(face, "text")),
+                Power = GetString(face, "power"),
+                Toughness = GetString(face, "toughness"),
+                Loyalty = GetString(face, "loyalty"),
+                Defense = GetString(face, "defense"),
+            };
+            AddColors(snapshot.Colors, face, "colors");
+            result.Add(snapshot);
+        }
+
+        return result;
     }
 
     /// <summary>

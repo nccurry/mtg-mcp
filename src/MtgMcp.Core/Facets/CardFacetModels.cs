@@ -77,6 +77,11 @@ public static class CardFacetSourceNames
     public const string Tagger = "scryfall-tagger";
 
     /// <summary>
+    /// Indicates deterministic mtg-mcp role-classifier values.
+    /// </summary>
+    public const string Classifier = "classifier";
+
+    /// <summary>
     /// Indicates metadata persisted on the workspace card.
     /// </summary>
     public const string Metadata = "metadata";
@@ -147,6 +152,154 @@ public sealed class CardFacetSnapshot
     /// Gets or sets normalized facets by name.
     /// </summary>
     public Dictionary<string, CardFacet> Facets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Reports the default bounded card-facet view for one workspace card.
+/// </summary>
+public sealed class CardFacetSummaryResult
+{
+    /// <summary>
+    /// Gets or sets the lookup status.
+    /// </summary>
+    public string Status { get; set; } = "ok";
+
+    /// <summary>
+    /// Gets or sets the workspace id that supplied the card.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the card quantity in the workspace.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card contributes to active deck counts.
+    /// </summary>
+    public bool IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall card id when known.
+    /// </summary>
+    public string? ScryfallId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall Oracle id when known.
+    /// </summary>
+    public string? ScryfallOracleId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the ordered primary category.
+    /// </summary>
+    public string? PrimaryCategory { get; set; }
+
+    /// <summary>
+    /// Gets or sets workspace categories attached to the card.
+    /// </summary>
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the classifier primary role.
+    /// </summary>
+    public string? Role { get; set; }
+
+    /// <summary>
+    /// Gets or sets classifier secondary tags.
+    /// </summary>
+    public List<string> RoleTags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets local user tags.
+    /// </summary>
+    public List<string> UserTags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets locally cached Scryfall Tagger oracle tags.
+    /// </summary>
+    public List<string> TaggerOracleTags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the mana value facet when known.
+    /// </summary>
+    public string? ManaValue { get; set; }
+
+    /// <summary>
+    /// Gets or sets the type line facet when known.
+    /// </summary>
+    public string? TypeLine { get; set; }
+
+    /// <summary>
+    /// Gets or sets the oracle text facet when known.
+    /// </summary>
+    public string? OracleText { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected USD price facet when known.
+    /// </summary>
+    public string? PriceUsd { get; set; }
+
+    /// <summary>
+    /// Gets or sets Commander legality when known.
+    /// </summary>
+    public string? CommanderLegality { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Scryfall URI when known.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+}
+
+/// <summary>
+/// Reports bounded key facets plus a filtered facet dictionary.
+/// </summary>
+public sealed class CardFacetNormalResult
+{
+    /// <summary>
+    /// Gets or sets the lookup status.
+    /// </summary>
+    public string Status { get; set; } = "ok";
+
+    /// <summary>
+    /// Gets or sets the summary facet view.
+    /// </summary>
+    public CardFacetSummaryResult Summary { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets filtered facets that avoid large image and legality payloads.
+    /// </summary>
+    public Dictionary<string, CardFacet> Facets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Reports a card-facet lookup miss without throwing a generic tool error.
+/// </summary>
+public sealed class CardFacetNotFoundResult
+{
+    /// <summary>
+    /// Gets or sets the lookup status.
+    /// </summary>
+    public string Status { get; set; } = "not-found-in-workspace";
+
+    /// <summary>
+    /// Gets or sets the workspace id that was searched.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the requested card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets suggested next lookup action.
+    /// </summary>
+    public string Suggestion { get; set; } = "Use card_get for global card lookup, or add the card to this workspace before requesting workspace facets.";
 }
 
 /// <summary>

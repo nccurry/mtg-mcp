@@ -44,7 +44,9 @@ public sealed class CategoryTools
         string workspaceId,
         string cardName,
         string category,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -53,6 +55,7 @@ public sealed class CategoryTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.AddCardCategoryAsync(workspaceId, cardName, category, cancellationToken),
             cancellationToken);
     }
@@ -72,7 +75,9 @@ public sealed class CategoryTools
         string workspaceId,
         string cardName,
         string category,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -81,6 +86,7 @@ public sealed class CategoryTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.RemoveCardCategoryAsync(workspaceId, cardName, category, cancellationToken),
             cancellationToken);
     }
@@ -102,7 +108,9 @@ public sealed class CategoryTools
         string workspaceId,
         string cardName,
         string category,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -111,6 +119,7 @@ public sealed class CategoryTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.SetPrimaryCardCategoryAsync(
                 workspaceId,
                 cardName,
@@ -135,7 +144,9 @@ public sealed class CategoryTools
         string category,
         bool includedInDeck = true,
         bool includedInPrice = true,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -144,6 +155,7 @@ public sealed class CategoryTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.CreateCategoryAsync(
                 workspaceId,
                 category,
@@ -168,7 +180,9 @@ public sealed class CategoryTools
         string workspaceId,
         string oldName,
         string newName,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -177,6 +191,7 @@ public sealed class CategoryTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.RenameCategoryAsync(workspaceId, oldName, newName, cancellationToken),
             cancellationToken);
     }
@@ -196,7 +211,9 @@ public sealed class CategoryTools
         string workspaceId,
         string category,
         string replacementCategory = DeckDefaults.Mainboard,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -205,6 +222,7 @@ public sealed class CategoryTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.DeleteCategoryAsync(
                 workspaceId,
                 category,

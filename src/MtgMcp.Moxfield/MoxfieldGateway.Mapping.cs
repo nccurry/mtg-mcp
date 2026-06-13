@@ -168,9 +168,14 @@ public sealed partial class MoxfieldGateway
         return new CardSnapshot
         {
             ManaCost = GetString(cardElement, "mana_cost") ?? GetString(cardElement, "manaCost"),
+            Layout = GetString(cardElement, "layout"),
             TypeLine = GetString(cardElement, "type_line") ?? GetString(cardElement, "typeLine"),
             ManaValue = GetDouble(cardElement, "cmc") ?? GetDouble(cardElement, "manaValue"),
             OracleText = GetString(cardElement, "oracle_text") ?? GetString(cardElement, "oracleText"),
+            Power = GetString(cardElement, "power"),
+            Toughness = GetString(cardElement, "toughness"),
+            Loyalty = GetString(cardElement, "loyalty"),
+            Defense = GetString(cardElement, "defense"),
             ColorIdentity = ReadStringArray(cardElement, "color_identity")
                 .Concat(ReadStringArray(cardElement, "colorIdentity"))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -180,8 +185,50 @@ public sealed partial class MoxfieldGateway
             Rarity = GetString(cardElement, "rarity"),
             EdhrecRank = GetInt(cardElement, "edhrec_rank") ?? GetInt(cardElement, "edhrecRank"),
             ScryfallUri = GetString(cardElement, "scryfall_uri") ?? GetString(cardElement, "scryfallUri"),
+            Provenance = new CardSnapshotProvenance
+            {
+                Provider = DeckImportProviders.Moxfield,
+                ProviderCardId = GetString(cardElement, "id"),
+                SchemaVersion = 1,
+                RefreshedAtUtc = DateTimeOffset.UtcNow,
+            },
+            Faces = ReadFaces(cardElement),
             Prices = ParsePrices(cardElement),
         };
+    }
+
+    /// <summary>
+    /// Reads Scryfall-style card faces from Moxfield card payloads.
+    /// </summary>
+    private static List<CardFaceSnapshot> ReadFaces(JsonElement cardElement)
+    {
+        if (
+            !cardElement.TryGetProperty("card_faces", out JsonElement faces)
+            || faces.ValueKind != JsonValueKind.Array
+        )
+        {
+            return [];
+        }
+
+        List<CardFaceSnapshot> result = [];
+        foreach (JsonElement face in faces.EnumerateArray())
+        {
+            CardFaceSnapshot snapshot = new()
+            {
+                Name = GetString(face, "name"),
+                ManaCost = GetString(face, "mana_cost") ?? GetString(face, "manaCost"),
+                TypeLine = GetString(face, "type_line") ?? GetString(face, "typeLine"),
+                OracleText = GetString(face, "oracle_text") ?? GetString(face, "oracleText"),
+                Power = GetString(face, "power"),
+                Toughness = GetString(face, "toughness"),
+                Loyalty = GetString(face, "loyalty"),
+                Defense = GetString(face, "defense"),
+                Colors = ReadStringArray(face, "colors"),
+            };
+            result.Add(snapshot);
+        }
+
+        return result;
     }
 
     /// <summary>

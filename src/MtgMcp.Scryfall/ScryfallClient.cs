@@ -396,11 +396,15 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
             && evaluation.PriceKnown
             && evaluation.PrintingStatus.Equals("released", StringComparison.OrdinalIgnoreCase))
         {
+            card.SelectedPrintingReason = evaluation.SelectedPrintingReason;
+            card.PricingMode = options.PricingMode.ToString();
             return card;
         }
 
         if (!ShouldInspectPrintings(card, evaluation, options.PricingMode))
         {
+            card.SelectedPrintingReason = evaluation.SelectedPrintingReason;
+            card.PricingMode = options.PricingMode.ToString();
             return card;
         }
 
@@ -417,6 +421,8 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
             printings,
             referenceDate,
             selectionOptions);
+        selection.Card.SelectedPrintingReason = selection.PriceEvaluation.SelectedPrintingReason;
+        selection.Card.PricingMode = options.PricingMode.ToString();
         return selection.Card;
     }
 

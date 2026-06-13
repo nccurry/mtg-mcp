@@ -1947,6 +1947,178 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that Archidekt mutation rebases preserve rich Scryfall snapshots for exact printing matches.
+    /// </summary>
+    [Fact]
+    public async Task ArchidektBoundMutation_PreservesEnrichedSnapshotForExactPrintingMatch()
+    {
+        InMemoryRepository repository = new();
+        FakeArchidektGateway archidekt = new();
+        DeckWorkspace remoteDeck = new()
+        {
+            Id = "remote",
+            Name = "Remote",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    Quantity = 1,
+                    ScryfallId = "command-tower-print",
+                    ScryfallOracleId = "oracle-command-tower",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    ArchidektCardId = "10",
+                    ArchidektDeckRelationId = 99,
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        Provenance = new CardSnapshotProvenance
+                        {
+                            Provider = DeckImportProviders.Archidekt,
+                            ProviderCardId = "10",
+                            SchemaVersion = 1,
+                            RefreshedAtUtc = DateTimeOffset.UtcNow,
+                        },
+                    },
+                },
+            ],
+        };
+        archidekt.ImportedDeck = remoteDeck;
+        DeckWorkspace cached = new()
+        {
+            Id = "workspace",
+            Name = "Cached",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    Quantity = 1,
+                    ScryfallId = "command-tower-print",
+                    ScryfallOracleId = "oracle-command-tower",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = RichCommandTowerSnapshot("command-tower-print", "sld", "1"),
+                },
+            ],
+        };
+        await repository.SaveAsync(cached, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        DeckChangeResult result = await service.AddCardCategoryAsync(
+            "workspace",
+            "Command Tower",
+            "Fixing",
+            TestContext.Current.CancellationToken);
+
+        DeckCard card = result.Workspace.Cards.Single(card => card.Name == "Command Tower");
+        card.Snapshot.Provenance.Provider.Should().Be("scryfall");
+        card.Snapshot.ProducedMana.Should().BeEquivalentTo(["W", "U", "B", "R", "G"]);
+        card.Snapshot.ScryfallUri.Should().Be("https://scryfall.test/card/command-tower-print");
+        card.Snapshot.Set.Should().Be("sld");
+        card.Snapshot.Prices["usd"].Should().Be("1.00");
+    }
+
+    /// <summary>
+    /// Verifies that oracle fallback preservation does not copy printing-specific fields.
+    /// </summary>
+    [Fact]
+    public async Task ArchidektBoundMutation_OracleFallbackPreservesOnlyOracleLevelSnapshotFields()
+    {
+        InMemoryRepository repository = new();
+        FakeArchidektGateway archidekt = new();
+        DeckWorkspace remoteDeck = new()
+        {
+            Id = "remote",
+            Name = "Remote",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    Quantity = 1,
+                    ScryfallId = "new-command-tower-print",
+                    ScryfallOracleId = "oracle-command-tower",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    ArchidektCardId = "10",
+                    ArchidektDeckRelationId = 99,
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        Set = "otc",
+                        CollectorNumber = "2",
+                        Language = "ja",
+                        ReleasedAt = new DateOnly(2023, 5, 5),
+                        ScryfallUri = "https://scryfall.test/card/new-command-tower-print",
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["usd"] = "9.99",
+                        },
+                        Provenance = new CardSnapshotProvenance
+                        {
+                            Provider = DeckImportProviders.Archidekt,
+                            ProviderCardId = "10",
+                            SchemaVersion = 1,
+                            RefreshedAtUtc = DateTimeOffset.UtcNow,
+                        },
+                    },
+                },
+            ],
+        };
+        archidekt.ImportedDeck = remoteDeck;
+        DeckWorkspace cached = new()
+        {
+            Id = "workspace",
+            Name = "Cached",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    Quantity = 1,
+                    ScryfallId = "old-command-tower-print",
+                    ScryfallOracleId = "oracle-command-tower",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = RichCommandTowerSnapshot("old-command-tower-print", "sld", "1"),
+                },
+            ],
+        };
+        await repository.SaveAsync(cached, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), archidekt);
+
+        DeckChangeResult result = await service.AddCardCategoryAsync(
+            "workspace",
+            "Command Tower",
+            "Fixing",
+            TestContext.Current.CancellationToken);
+
+        DeckCard card = result.Workspace.Cards.Single(card => card.Name == "Command Tower");
+        card.Snapshot.ProducedMana.Should().BeEquivalentTo(["W", "U", "B", "R", "G"]);
+        card.Snapshot.OracleText.Should().Contain("Add one mana");
+        card.Snapshot.Set.Should().Be("otc");
+        card.Snapshot.CollectorNumber.Should().Be("2");
+        card.Snapshot.Language.Should().Be("ja");
+        card.Snapshot.ScryfallUri.Should().Be("https://scryfall.test/card/new-command-tower-print");
+        card.Snapshot.Prices["usd"].Should().Be("9.99");
+        card.Snapshot.Provenance.Provider.Should().Be(DeckImportProviders.Archidekt);
+    }
+
+    /// <summary>
     /// Verifies that Archidekt deck listing and opening delegate to the gateway.
     /// </summary>
     [Fact]
@@ -2232,6 +2404,44 @@ public sealed class DeckWorkspaceServiceTests
             // Maybeboard
             1 Missing Card
             """;
+    }
+
+    /// <summary>
+    /// Creates an enriched Scryfall-style Command Tower snapshot for metadata preservation tests.
+    /// </summary>
+    private static CardSnapshot RichCommandTowerSnapshot(
+        string providerCardId,
+        string setCode,
+        string collectorNumber)
+    {
+        return new CardSnapshot
+        {
+            TypeLine = "Land",
+            OracleText = "{T}: Add one mana of any color in your commander's color identity.",
+            ProducedMana = ["W", "U", "B", "R", "G"],
+            Set = setCode,
+            CollectorNumber = collectorNumber,
+            Language = "en",
+            ReleasedAt = new DateOnly(2022, 1, 1),
+            ScryfallUri = $"https://scryfall.test/card/{providerCardId}",
+            SelectedPrintingReason = "test fixture",
+            PricingMode = nameof(PricingMode.CheapestReleasedPaper),
+            Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["commander"] = "legal",
+            },
+            Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["usd"] = "1.00",
+            },
+            Provenance = new CardSnapshotProvenance
+            {
+                Provider = "scryfall",
+                ProviderCardId = providerCardId,
+                SchemaVersion = 1,
+                RefreshedAtUtc = DateTimeOffset.UtcNow,
+            },
+        };
     }
 
     /// <summary>

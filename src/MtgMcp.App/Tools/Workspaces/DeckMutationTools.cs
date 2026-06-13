@@ -46,7 +46,9 @@ public sealed class DeckMutationTools
         int quantity = 1,
         string category = DeckDefaults.Mainboard,
         bool force = false,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -55,6 +57,7 @@ public sealed class DeckMutationTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.AddCardAsync(workspaceId, cardName, quantity, category, force, cancellationToken),
             cancellationToken);
     }
@@ -75,7 +78,9 @@ public sealed class DeckMutationTools
         string cardName,
         int quantity = 1,
         string? category = null,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -84,6 +89,7 @@ public sealed class DeckMutationTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.RemoveCardAsync(workspaceId, cardName, quantity, category, cancellationToken),
             cancellationToken);
     }
@@ -104,7 +110,9 @@ public sealed class DeckMutationTools
         string cardName,
         int quantity,
         string? category = null,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -113,6 +121,7 @@ public sealed class DeckMutationTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.SetCardQuantityAsync(
                 workspaceId,
                 cardName,
@@ -140,7 +149,9 @@ public sealed class DeckMutationTools
         string cardName,
         string toCategory,
         string? fromCategory = null,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -149,6 +160,7 @@ public sealed class DeckMutationTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.MoveCardAsync(
                 workspaceId,
                 cardName,
@@ -174,7 +186,9 @@ public sealed class DeckMutationTools
         string? name = null,
         string? format = null,
         string? description = null,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -183,6 +197,7 @@ public sealed class DeckMutationTools
             decks,
             workspaceId,
             includeWorkspace,
+            detailLevel,
             () => decks.UpdateDeckMetadataAsync(
                 workspaceId,
                 name,

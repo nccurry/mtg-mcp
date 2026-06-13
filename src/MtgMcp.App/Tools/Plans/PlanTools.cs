@@ -183,11 +183,14 @@ public sealed class PlanTools
         string planId,
         bool createCheckpoint = true,
         string? checkpointName = null,
-        bool includeWorkspace = true,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
         CancellationToken cancellationToken = default)
     {
         operationMode.EnsureCanMutate("deck_plan_apply");
-        if (includeWorkspace)
+        string normalizedDetailLevel = CompactMutationPresenter.ResolveDetailLevel(includeWorkspace, detailLevel);
+        if (normalizedDetailLevel == CompactMutationPresenter.DetailLevels.Full)
         {
             return await plans.ApplyDeckPlanAsync(planId, createCheckpoint, checkpointName, cancellationToken)
                 .ConfigureAwait(false);
@@ -204,6 +207,9 @@ public sealed class PlanTools
                 cancellationToken)
             .ConfigureAwait(false);
         CompactMutationPresenter.CompactMutationSnapshot after = CompactMutationPresenter.Capture(result.Workspace);
-        return CompactMutationPresenter.FromPlanApply(before, after, result);
+        CompactMutationResult compact = CompactMutationPresenter.FromPlanApply(before, after, result);
+        return normalizedDetailLevel == CompactMutationPresenter.DetailLevels.Normal
+            ? compact
+            : CompactMutationPresenter.ToSummary(compact);
     }
 }

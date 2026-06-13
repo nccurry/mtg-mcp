@@ -24,6 +24,7 @@ public sealed class CardFacetServiceTests
 
         facets.Facets[CardFacetNames.WorkspaceCategories].Values.Should().Contain(DeckRoles.Draw);
         facets.Facets["scryfall.oracle_text"].Values.Should().Contain(value => value.Contains("draw a card", StringComparison.OrdinalIgnoreCase));
+        facets.Facets["classifier.primary_role"].Values.Should().Contain(DeckRoles.Draw);
         facets.Facets[CardFacetNames.UserTags].Values.Should().Contain("card-advantage");
         facets.Facets[CardFacetNames.TaggerOracleTags].Values.Should().Contain("repeatable-draw");
     }

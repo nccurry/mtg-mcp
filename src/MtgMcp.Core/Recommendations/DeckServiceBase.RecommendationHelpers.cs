@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -5,6 +7,11 @@ namespace MtgMcp.Core;
 /// </summary>
 public abstract partial class DeckServiceBase
 {
+    /// <summary>
+    /// Refreshes Scryfall-backed snapshots after this age even when required fields are present.
+    /// </summary>
+    private static readonly TimeSpan SnapshotStaleAfter = TimeSpan.FromDays(30);
+
     /// <summary>
     /// Refreshes cached card snapshots for cards matching a normalized scope.
     /// </summary>
@@ -22,7 +29,9 @@ public abstract partial class DeckServiceBase
             .ConfigureAwait(false);
 
         List<string> missingCards = [];
+        CardSnapshotQualitySummary qualityBefore = BuildSnapshotQualitySummary(targetCards);
         int updatedCards = 0;
+        int unchangedCards = 0;
         foreach (DeckCard card in targetCards)
         {
             if (!cardsByName.TryGetValue(card.Name, out CardInfo? cardInfo))
@@ -31,10 +40,19 @@ public abstract partial class DeckServiceBase
                 continue;
             }
 
+            CardSnapshotFingerprint before = CardSnapshotFingerprint.From(card);
             card.ScryfallId = cardInfo.Id;
             card.ScryfallOracleId = cardInfo.OracleId;
             ApplyCardSnapshot(card, cardInfo);
-            updatedCards++;
+            CardSnapshotFingerprint after = CardSnapshotFingerprint.From(card);
+            if (before.Equals(after))
+            {
+                unchangedCards++;
+            }
+            else
+            {
+                updatedCards++;
+            }
         }
 
         return new DeckNormalizationResult
@@ -43,7 +61,11 @@ public abstract partial class DeckServiceBase
             Scope = normalizedScope,
             RequestedCards = targetCards.Count,
             UpdatedCards = updatedCards,
+            UnchangedCards = unchangedCards,
             MissingCards = missingCards,
+            FailedCards = [],
+            SnapshotQualityBefore = qualityBefore,
+            SnapshotQualityAfter = BuildSnapshotQualitySummary(targetCards),
             Workspace = workspace
         };
     }
@@ -58,11 +80,86 @@ public abstract partial class DeckServiceBase
             "all" => true,
             "included" => IsIncluded(workspace, card),
             "maybeboard" => string.Equals(DeckCategoryOrdering.PrimaryCategory(card), DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase),
-            "missing" => string.IsNullOrWhiteSpace(GetSnapshot(card).TypeLine)
-                || string.IsNullOrWhiteSpace(GetSnapshot(card).OracleText)
-                || GetSnapshot(card).Prices.Count == 0,
+            "missing" => IsMissingScryfallSnapshot(card),
+            "stale" => !IsMissingScryfallSnapshot(card) && IsStaleSnapshot(card, workspace),
+            "needed" => IsMissingScryfallSnapshot(card) || IsStaleSnapshot(card, workspace),
             _ => true
         };
+    }
+
+    /// <summary>
+    /// Checks whether a card lacks a resolvable Scryfall-backed snapshot identity.
+    /// </summary>
+    protected static bool IsMissingScryfallSnapshot(DeckCard card)
+    {
+        return card.Snapshot is null || string.IsNullOrWhiteSpace(card.ScryfallId);
+    }
+
+    /// <summary>
+    /// Checks whether a snapshot exists but is incomplete or past its freshness window.
+    /// </summary>
+    protected static bool IsStaleSnapshot(DeckCard card, DeckWorkspace workspace)
+    {
+        CardSnapshot snapshot = GetSnapshot(card);
+        if (!IsScryfallSnapshot(snapshot))
+        {
+            return true;
+        }
+
+        if (!snapshot.Provenance.RefreshedAtUtc.HasValue
+            || DateTimeOffset.UtcNow - snapshot.Provenance.RefreshedAtUtc.Value > SnapshotStaleAfter)
+        {
+            return true;
+        }
+
+        return !HasRequiredSnapshotFields(card, workspace, snapshot);
+    }
+
+    /// <summary>
+    /// Checks whether a snapshot was sourced from Scryfall metadata.
+    /// </summary>
+    private static bool IsScryfallSnapshot(CardSnapshot snapshot)
+    {
+        return snapshot.Provenance.Provider?.Equals("scryfall", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    /// <summary>
+    /// Checks whether the snapshot has fields needed by analysis, pricing, legality, and display.
+    /// </summary>
+    private static bool HasRequiredSnapshotFields(DeckCard card, DeckWorkspace workspace, CardSnapshot snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot.TypeLine))
+        {
+            return false;
+        }
+
+        if (NeedsManaMetadata(card, workspace, snapshot)
+            && (string.IsNullOrWhiteSpace(snapshot.OracleText) || snapshot.ProducedMana.Count == 0))
+        {
+            return false;
+        }
+
+        return snapshot.Prices.Count > 0
+            && !string.IsNullOrWhiteSpace(snapshot.SelectedPrintingReason)
+            && !string.IsNullOrWhiteSpace(snapshot.ScryfallUri)
+            && snapshot.Legalities.Count > 0
+            && snapshot.ReleasedAt.HasValue
+            && !string.IsNullOrWhiteSpace(snapshot.Language);
+    }
+
+    /// <summary>
+    /// Checks whether analyses need produced-mana facts for this card.
+    /// </summary>
+    private static bool NeedsManaMetadata(DeckCard card, DeckWorkspace workspace, CardSnapshot snapshot)
+    {
+        string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+        return primaryCategory.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
+            || primaryCategory.Equals("Land", StringComparison.OrdinalIgnoreCase)
+            || primaryCategory.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase)
+            || (snapshot.TypeLine?.Contains("Land", StringComparison.OrdinalIgnoreCase) == true)
+            || (snapshot.OracleText?.Contains("add ", StringComparison.OrdinalIgnoreCase) == true)
+            || IsIncluded(workspace, card)
+                && (snapshot.OracleText?.Contains("add one mana", StringComparison.OrdinalIgnoreCase) == true);
     }
 
     /// <summary>
@@ -222,6 +319,57 @@ public abstract partial class DeckServiceBase
     }
 
     /// <summary>
+    /// Builds a bounded quality summary from current card snapshots.
+    /// </summary>
+    protected static CardSnapshotQualitySummary BuildSnapshotQualitySummary(IReadOnlyList<DeckCard> cards)
+    {
+        CardSnapshotQualitySummary summary = new()
+        {
+            CardCount = cards.Count
+        };
+        foreach (DeckCard card in cards)
+        {
+            CardSnapshot? snapshot = card.Snapshot;
+            if (snapshot is null)
+            {
+                continue;
+            }
+
+            summary.SnapshotCount++;
+            bool hasTypeLine = !string.IsNullOrWhiteSpace(snapshot.TypeLine);
+            bool hasOracleText = !string.IsNullOrWhiteSpace(snapshot.OracleText);
+            bool hasPrices = snapshot.Prices.Count > 0;
+            bool hasProducedMana = snapshot.ProducedMana.Count > 0;
+            if (hasTypeLine)
+            {
+                summary.TypeLineCount++;
+            }
+
+            if (hasOracleText)
+            {
+                summary.OracleTextCount++;
+            }
+
+            if (hasPrices)
+            {
+                summary.PriceCount++;
+            }
+
+            if (hasProducedMana)
+            {
+                summary.ProducedManaCount++;
+            }
+
+            if (hasTypeLine && (hasOracleText || hasPrices || hasProducedMana))
+            {
+                summary.AnalysisReadyCount++;
+            }
+        }
+
+        return summary;
+    }
+
+    /// <summary>
     /// Adds a quantity to a count dictionary.
     /// </summary>
     protected static void AddCount(Dictionary<string, int> counts, string key, int quantity)
@@ -253,5 +401,141 @@ public abstract partial class DeckServiceBase
     protected IDeckPlanRepository RequirePlanRepository()
     {
         return PlanRepository ?? throw new InvalidOperationException("Deck edit plan persistence is not configured.");
+    }
+
+    /// <summary>
+    /// Captures enough card metadata to distinguish real refresh changes.
+    /// </summary>
+    private sealed record CardSnapshotFingerprint(
+        string? ScryfallId,
+        string? ScryfallOracleId,
+        string? ManaCost,
+        double? ManaValue,
+        string? TypeLine,
+        string? OracleText,
+        string? Layout,
+        string? Power,
+        string? Toughness,
+        string? Loyalty,
+        string? Defense,
+        string? Set,
+        string? CollectorNumber,
+        string? Rarity,
+        string? Language,
+        DateOnly? ReleasedAt,
+        string? ScryfallUri,
+        string? SelectedPrintingReason,
+        string? PricingMode,
+        int? EdhrecRank,
+        string Provenance,
+        string ColorIdentity,
+        string Keywords,
+        string ProducedMana,
+        string Games,
+        string Finishes,
+        string Faces,
+        string Legalities,
+        string Prices,
+        string ImageUris)
+    {
+        /// <summary>
+        /// Captures the current snapshot state for comparison.
+        /// </summary>
+        public static CardSnapshotFingerprint From(DeckCard card)
+        {
+            CardSnapshot snapshot = GetSnapshot(card);
+            return new CardSnapshotFingerprint(
+                card.ScryfallId,
+                card.ScryfallOracleId,
+                snapshot.ManaCost,
+                snapshot.ManaValue,
+                snapshot.TypeLine,
+                snapshot.OracleText,
+                snapshot.Layout,
+                snapshot.Power,
+                snapshot.Toughness,
+                snapshot.Loyalty,
+                snapshot.Defense,
+                snapshot.Set,
+                snapshot.CollectorNumber,
+                snapshot.Rarity,
+                snapshot.Language,
+                snapshot.ReleasedAt,
+                snapshot.ScryfallUri,
+                snapshot.SelectedPrintingReason,
+                snapshot.PricingMode,
+                snapshot.EdhrecRank,
+                Joined(snapshot.Provenance),
+                Joined(snapshot.ColorIdentity),
+                Joined(snapshot.Keywords),
+                Joined(snapshot.ProducedMana),
+                Joined(snapshot.Games),
+                Joined(snapshot.Finishes),
+                Joined(snapshot.Faces),
+                Joined(snapshot.Legalities),
+                Joined(snapshot.Prices),
+                Joined(snapshot.ImageUris));
+        }
+
+        /// <summary>
+        /// Joins provenance fields that change only when source identity or schema changes.
+        /// </summary>
+        private static string Joined(CardSnapshotProvenance provenance)
+        {
+            return string.Join(
+                '\u001f',
+                provenance.Provider,
+                provenance.ProviderCardId,
+                provenance.SchemaVersion.ToString(CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>
+        /// Joins face values in stable source order.
+        /// </summary>
+        private static string Joined(IReadOnlyList<CardFaceSnapshot> faces)
+        {
+            List<string> values = [];
+            foreach (CardFaceSnapshot face in faces)
+            {
+                values.Add(string.Join(
+                    '\u001e',
+                    face.Name,
+                    face.ManaCost,
+                    face.TypeLine,
+                    face.OracleText,
+                    face.Power,
+                    face.Toughness,
+                    face.Loyalty,
+                    face.Defense,
+                    Joined(face.Colors)));
+            }
+
+            return string.Join('\u001f', values);
+        }
+
+        /// <summary>
+        /// Joins list values in stable order.
+        /// </summary>
+        private static string Joined(IReadOnlyList<string> values)
+        {
+            List<string> sorted = values.ToList();
+            sorted.Sort(StringComparer.OrdinalIgnoreCase);
+            return string.Join('\u001f', sorted);
+        }
+
+        /// <summary>
+        /// Joins dictionary values in stable order.
+        /// </summary>
+        private static string Joined(IReadOnlyDictionary<string, string> values)
+        {
+            List<string> pairs = [];
+            foreach (KeyValuePair<string, string> value in values)
+            {
+                pairs.Add($"{value.Key}\u001e{value.Value}");
+            }
+
+            pairs.Sort(StringComparer.OrdinalIgnoreCase);
+            return string.Join('\u001f', pairs);
+        }
     }
 }

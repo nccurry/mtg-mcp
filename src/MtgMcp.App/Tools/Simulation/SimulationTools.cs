@@ -52,7 +52,7 @@ public sealed class SimulationTools
     /// Compares local workspaces and optional Archidekt references with the same goldfish settings.
     /// </summary>
     [McpServerTool(Name = "deck_compare_goldfish", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Compare deterministic no-interaction goldfish outputs for 2-8 total local workspace ids and optional read-only Archidekt deck ids or URLs. The first workspace id is the baseline; per-input failures are returned without aborting other decks.")]
+    [Description("Compare deterministic no-interaction goldfish outputs for 2-8 total local workspace ids and optional read-only Archidekt deck ids or URLs. The first workspace id is the baseline; model can opt into rules-backed-goldfish-race-v1, a conservative template simulator rather than a full Magic rules engine.")]
     public async Task<object> CompareGoldfishAsync(
         [Description("Local workspace ids. The first id is the active comparison baseline.")]
         string[] workspaceIds,
@@ -66,9 +66,11 @@ public sealed class SimulationTools
         int simulations = 1_000,
         int seed = 1337,
         bool mulligan = true,
+        [Description("Comparison model: optimistic-goldfish-model keeps the existing heuristic output; rules-backed-goldfish-race-v1 runs the conservative template life-total race.")]
+        string model = "optimistic-goldfish-model",
         CancellationToken cancellationToken = default)
     {
-        DeckGoldfishComparisonResult result = await simulation
+        object result = await simulation
             .CompareGoldfishAsync(
                 workspaceIds,
                 archidektDeckIdsOrUrls,
@@ -77,9 +79,12 @@ public sealed class SimulationTools
                 simulations,
                 seed,
                 mulligan,
+                model,
                 cancellationToken)
             .ConfigureAwait(false);
-        return GoldfishOutputPresenter.Present(result, detailLevel);
+        return result is RulesGoldfishRaceResult race
+            ? GoldfishOutputPresenter.Present(race, detailLevel)
+            : GoldfishOutputPresenter.Present((DeckGoldfishComparisonResult)result, detailLevel);
     }
 
     /// <summary>

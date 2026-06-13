@@ -98,6 +98,102 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that missing scope only selects cards without Scryfall snapshot identity.
+    /// </summary>
+    [Fact]
+    public async Task RefreshDeckCardSnapshots_MissingScopeIgnoresSparseKnownScryfallId()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Sparse",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    ScryfallId = "command-tower",
+                    ScryfallOracleId = "oracle-command-tower",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        Provenance = new CardSnapshotProvenance
+                        {
+                            Provider = DeckImportProviders.Archidekt,
+                            ProviderCardId = "archidekt-1",
+                            SchemaVersion = 1,
+                            RefreshedAtUtc = DateTimeOffset.UtcNow,
+                        },
+                    },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckNormalizationResult result = await service.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            "missing",
+            TestContext.Current.CancellationToken);
+
+        result.RequestedCards.Should().Be(0);
+        result.UpdatedCards.Should().Be(0);
+        result.Workspace.Cards.Single().Snapshot.Provenance.Provider.Should().Be(DeckImportProviders.Archidekt);
+    }
+
+    /// <summary>
+    /// Verifies that needed scope refreshes sparse snapshots even when they have a Scryfall id.
+    /// </summary>
+    [Fact]
+    public async Task RefreshDeckCardSnapshots_NeededScopeRefreshesSparseKnownScryfallId()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Sparse",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Command Tower",
+                    ScryfallId = "command-tower",
+                    ScryfallOracleId = "oracle-command-tower",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        Provenance = new CardSnapshotProvenance
+                        {
+                            Provider = DeckImportProviders.Archidekt,
+                            ProviderCardId = "archidekt-1",
+                            SchemaVersion = 1,
+                            RefreshedAtUtc = DateTimeOffset.UtcNow,
+                        },
+                    },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckNormalizationResult result = await service.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            "needed",
+            TestContext.Current.CancellationToken);
+
+        result.RequestedCards.Should().Be(1);
+        result.UpdatedCards.Should().Be(1);
+        result.SnapshotQualityBefore.ProducedManaCount.Should().Be(0);
+        result.SnapshotQualityAfter.ProducedManaCount.Should().Be(1);
+        DeckCard card = result.Workspace.Cards.Single();
+        card.Snapshot.Provenance.Provider.Should().Be("scryfall");
+        card.Snapshot.ProducedMana.Should().BeEquivalentTo(["W", "U", "B", "R", "G"]);
+        card.Snapshot.SelectedPrintingReason.Should().Be("test fixture");
+        card.Snapshot.Language.Should().Be("en");
+    }
+
+    /// <summary>
     /// Verifies that role classifier classifies common deck roles and tags.
     /// </summary>
     [Fact]
@@ -614,6 +710,20 @@ public sealed partial class DeckIntelligenceTests
             .Tags
             .Should()
             .Contain(DeckTags.Finishers);
+
+        CardRoleAssignment skyhunter = DeckRoleClassifier.Classify(Card(
+            "Skyhunter Strike Force",
+            "Creature - Cat Knight",
+            "Melee. Other creatures you control have melee."));
+        skyhunter.PrimaryRole.Should().Be(DeckRoles.Wincons);
+        skyhunter.Tags.Should().Contain([DeckTags.CombatPayoff, DeckTags.Finishers]);
+
+        CardRoleAssignment bladeHistorian = DeckRoleClassifier.Classify(Card(
+            "Blade Historian",
+            "Creature - Human Cleric",
+            "Attacking creatures you control have double strike."));
+        bladeHistorian.PrimaryRole.Should().Be(DeckRoles.Wincons);
+        bladeHistorian.Tags.Should().Contain([DeckTags.CombatPayoff, DeckTags.Finishers]);
     }
 
     /// <summary>
@@ -698,9 +808,9 @@ public sealed partial class DeckIntelligenceTests
             Cards =
             [
                 new DeckCard { Name = "Land", Quantity = 35, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
-                new DeckCard { Name = "Anthem A", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] },
-                new DeckCard { Name = "Anthem B", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] },
-                new DeckCard { Name = "Anthem C", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] }
+                new DeckCard { Name = "Anthem A", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem"] },
+                new DeckCard { Name = "Anthem B", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem"] },
+                new DeckCard { Name = "Anthem C", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem"] }
             ]
         }, TestContext.Current.CancellationToken);
         DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
@@ -713,8 +823,8 @@ public sealed partial class DeckIntelligenceTests
         DeckNeed anthemNeed = analysis.NeedProfile.TagNeeds.Single(need => need.Target == "Anthems");
         anthemNeed.CurrentCount.Should().Be(6);
         anthemNeed.Status.Should().Be("ok");
-        anthemNeed.CountSource.Should().Be("all user categories");
-        anthemNeed.Rationale.Should().Contain("Count source: all user categories");
+        anthemNeed.CountSource.Should().Be("user category");
+        anthemNeed.Rationale.Should().Contain("Count source: user category");
         analysis.Risks.Should().NotContain(risk => risk.Contains("Anthems is low", StringComparison.OrdinalIgnoreCase));
     }
 

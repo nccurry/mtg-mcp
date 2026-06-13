@@ -48,10 +48,24 @@ public sealed class MoxfieldGatewayTests
                         "scryfall_id": "scryfall-atraxa",
                         "oracle_id": "oracle-atraxa",
                         "mana_cost": "{G}{W}{U}{B}",
+                        "layout": "normal",
                         "type_line": "Legendary Creature - Phyrexian Angel Horror",
                         "oracle_text": "Flying, vigilance, deathtouch, lifelink",
+                        "power": "4",
+                        "toughness": "4",
                         "cmc": 4,
                         "color_identity": ["W", "U", "B", "G"],
+                        "card_faces": [
+                          {
+                            "name": "Atraxa, Praetors' Voice",
+                            "mana_cost": "{G}{W}{U}{B}",
+                            "type_line": "Legendary Creature - Phyrexian Angel Horror",
+                            "oracle_text": "Flying, vigilance, deathtouch, lifelink",
+                            "power": "4",
+                            "toughness": "4",
+                            "colors": ["W", "U", "B", "G"]
+                          }
+                        ],
                         "set": "c16",
                         "cn": "28",
                         "rarity": "mythic",
@@ -135,7 +149,13 @@ public sealed class MoxfieldGatewayTests
         commander.ScryfallId.Should().Be("scryfall-atraxa");
         commander.ScryfallOracleId.Should().Be("oracle-atraxa");
         commander.Snapshot.ManaCost.Should().Be("{G}{W}{U}{B}");
+        commander.Snapshot.Layout.Should().Be("normal");
+        commander.Snapshot.Power.Should().Be("4");
+        commander.Snapshot.Toughness.Should().Be("4");
         commander.Snapshot.ColorIdentity.Should().BeEquivalentTo(["W", "U", "B", "G"]);
+        commander.Snapshot.Provenance.Provider.Should().Be(DeckImportProviders.Moxfield);
+        commander.Snapshot.Provenance.ProviderCardId.Should().Be("mox-card-1");
+        commander.Snapshot.Faces.Should().ContainSingle().Which.Name.Should().Be("Atraxa, Praetors' Voice");
         commander.Snapshot.Prices["usd"].Should().Be("17.50");
 
         DeckCard solRing = workspace.Cards.Single(card => card.Name == "Sol Ring");

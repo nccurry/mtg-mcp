@@ -13,11 +13,13 @@ internal static class CompactMutationPresenter
     public static async Task<object> RunMutationAsync(
         DeckWorkspaceService decks,
         string workspaceId,
-        bool includeWorkspace,
+        bool? includeWorkspace,
+        string? detailLevel,
         Func<Task<DeckChangeResult>> mutation,
         CancellationToken cancellationToken)
     {
-        if (includeWorkspace)
+        string normalizedDetailLevel = ResolveDetailLevel(includeWorkspace, detailLevel);
+        if (normalizedDetailLevel == DetailLevels.Full)
         {
             return await mutation().ConfigureAwait(false);
         }
@@ -27,13 +29,44 @@ internal static class CompactMutationPresenter
                 .ConfigureAwait(false));
         DeckChangeResult result = await mutation().ConfigureAwait(false);
         CompactMutationSnapshot after = Capture(result.Workspace);
-        return FromSnapshots(
+        CompactMutationResult compact = FromSnapshots(
             before,
             after,
             result.WorkspaceId,
             result.Persistence,
             result.Message,
             CompactMutationDelta.Build(before, after));
+        return normalizedDetailLevel == DetailLevels.Normal
+            ? compact
+            : ToSummary(compact);
+    }
+
+    /// <summary>
+    /// Resolves detail-level compatibility between the old includeWorkspace flag and the new detailLevel parameter.
+    /// </summary>
+    public static string ResolveDetailLevel(bool? includeWorkspace, string? detailLevel)
+    {
+        if (!string.IsNullOrWhiteSpace(detailLevel))
+        {
+            return NormalizeDetailLevel(detailLevel);
+        }
+
+        return includeWorkspace == true ? DetailLevels.Full : DetailLevels.Summary;
+    }
+
+    /// <summary>
+    /// Converts a normal compact mutation result to the summary shape.
+    /// </summary>
+    public static CompactMutationSummaryResult ToSummary(CompactMutationResult compact)
+    {
+        return new CompactMutationSummaryResult
+        {
+            Success = compact.Success,
+            WorkspaceId = compact.WorkspaceId,
+            ChangedCards = compact.ChangedCards.ToList(),
+            Message = compact.Message,
+            ValidationSummary = BuildValidationSummary(compact.Validation)
+        };
     }
 
     /// <summary>
@@ -117,6 +150,33 @@ internal static class CompactMutationPresenter
             CategoryCountsAfter = new Dictionary<string, int>(after.CategoryCounts, StringComparer.OrdinalIgnoreCase),
             Validation = after.Validation
         };
+    }
+
+    /// <summary>
+    /// Builds bounded validation counts for summary mutation output.
+    /// </summary>
+    private static CompactValidationSummary BuildValidationSummary(DeckValidationResult validation)
+    {
+        return new CompactValidationSummary
+        {
+            IsValid = validation.IsValid,
+            ErrorCount = validation.Errors.Count,
+            WarningCount = validation.Warnings.Count
+        };
+    }
+
+    /// <summary>
+    /// Normalizes public detail-level values.
+    /// </summary>
+    private static string NormalizeDetailLevel(string detailLevel)
+    {
+        string normalized = detailLevel.Trim().ToLowerInvariant();
+        if (normalized is DetailLevels.Summary or DetailLevels.Normal or DetailLevels.Full)
+        {
+            return normalized;
+        }
+
+        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
     }
 
     /// <summary>
@@ -365,5 +425,26 @@ internal static class CompactMutationPresenter
                 .ToList();
             return delta;
         }
+    }
+
+    /// <summary>
+    /// Public detail-level values for mutation output.
+    /// </summary>
+    public static class DetailLevels
+    {
+        /// <summary>
+        /// Bounded mutation result with changed cards and validation counts.
+        /// </summary>
+        public const string Summary = "summary";
+
+        /// <summary>
+        /// Previous compact mutation diff envelope.
+        /// </summary>
+        public const string Normal = "normal";
+
+        /// <summary>
+        /// Original full mutation result including workspace payload when available.
+        /// </summary>
+        public const string Full = "full";
     }
 }

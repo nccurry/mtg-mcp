@@ -599,6 +599,42 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies the opt-in rules-backed race model reuses deck_compare_goldfish inputs.
+    /// </summary>
+    [Fact]
+    public async Task CompareGoldfish_RulesBackedRaceModelReturnsConservativeRace()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace fast = await workspaces.SaveAsync(
+            CreateRulesBackedRaceFixtureDeck("Fast Race", "fast", power: 20),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace slow = await workspaces.SaveAsync(
+            CreateRulesBackedRaceFixtureDeck("Slow Race", "slow", power: 1),
+            TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        object comparison = await service.CompareGoldfishAsync(
+            [fast.Id, slow.Id],
+            archidektDeckIdsOrUrls: null,
+            simulationProfile: SimulationProfileIds.Auto,
+            targetTurn: 5,
+            simulations: 3,
+            seed: 8,
+            mulligan: false,
+            model: RulesGoldfishRaceConstants.ModelName,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        RulesGoldfishRaceResult result = comparison.Should().BeOfType<RulesGoldfishRaceResult>().Subject;
+        result.ModelName.Should().Be(RulesGoldfishRaceConstants.ModelName);
+        result.RandomKind.Should().Be(DeterministicSimulationRandom.Kind);
+        result.StartingLife.Should().Be(40);
+        result.TiePolicy.Should().Contain("Same-turn lethal");
+        result.Notes.Should().Contain(note => note.Contains("not a full Magic rules engine", StringComparison.OrdinalIgnoreCase));
+        result.Decks.Single(deck => deck.Label == "active").Wins.Should().Be(3);
+        result.Decks.Single(deck => deck.Label == "workspace-2").Losses.Should().Be(3);
+    }
+
+    /// <summary>
     /// Verifies that weak decks report no likely goldfish win route.
     /// </summary>
     [Fact]
@@ -1220,6 +1256,48 @@ public sealed partial class DeckIntelligenceTests
                         TypeLine = "Basic Land - Forest",
                         ManaValue = 0,
                         OracleText = "{T}: Add {G}.",
+                    },
+                },
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a compact fixture with printed stats for rules-backed race tests.
+    /// </summary>
+    private static DeckWorkspace CreateRulesBackedRaceFixtureDeck(string name, string id, int power)
+    {
+        return new DeckWorkspace
+        {
+            Id = id,
+            Name = name,
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 3,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Forest",
+                        ProducedMana = ["G"],
+                    },
+                },
+                new DeckCard
+                {
+                    Name = $"{name} Attacker",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Wincons,
+                    Categories = [DeckRoles.Wincons],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Cat",
+                        ManaValue = 1,
+                        Power = power.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        Toughness = "1",
                     },
                 },
             ],

@@ -424,6 +424,10 @@ public sealed partial class DeckIntelligenceTests
             };
 
             card.ScryfallUri ??= $"https://scryfall.test/card/{Uri.EscapeDataString(card.Name)}";
+            card.Language ??= "en";
+            card.ReleasedAt ??= new DateOnly(2024, 1, 1);
+            card.SelectedPrintingReason ??= "test fixture";
+            card.PricingMode ??= "CheapestReleased";
             return card;
         }
     }
