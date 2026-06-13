@@ -49,11 +49,13 @@ public static partial class RulesGoldfishRaceCompiler
         bool isLand = role.PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
             || Contains(typeLine, "Land");
         bool isCreature = Contains(typeLine, "Creature");
+        bool hasKnownManaValue = snapshot.ManaValue.HasValue;
         RulesGoldfishRaceCard template = new()
         {
             Name = card.Name,
             Quantity = Math.Max(0, card.Quantity),
             ManaValue = SafeManaValue(snapshot.ManaValue),
+            CanBeCast = isLand || hasKnownManaValue,
             IsLand = isLand,
             IsCreature = isCreature,
             StaysOnBattlefield = isCreature || IsPermanentType(typeLine),
@@ -61,6 +63,7 @@ public static partial class RulesGoldfishRaceCompiler
             Toughness = ReadToughness(snapshot),
         };
 
+        WarnMissingManaValue(card, isLand, hasKnownManaValue, warnings);
         template.ManaProduced = ReadManaProduced(card, snapshot, isLand, isCreature, normalizedText, warnings);
         template.ManaSourceIsCreature = isCreature && template.ManaProduced > 0;
         ApplyDrawTemplate(template, normalizedText);
@@ -119,6 +122,21 @@ public static partial class RulesGoldfishRaceCompiler
         }
 
         return Math.Clamp((int)Math.Ceiling(manaValue.Value), 0, 20);
+    }
+
+    /// <summary>
+    /// Warns when a nonland cannot be conservatively costed.
+    /// </summary>
+    private static void WarnMissingManaValue(
+        DeckCard card,
+        bool isLand,
+        bool hasKnownManaValue,
+        List<string> warnings)
+    {
+        if (!isLand && !hasKnownManaValue)
+        {
+            AddWarning(warnings, $"{card.Name}: mana value is missing; race treats this nonland as uncastable.");
+        }
     }
 
     /// <summary>

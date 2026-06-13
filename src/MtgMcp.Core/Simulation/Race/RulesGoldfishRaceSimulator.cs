@@ -399,7 +399,7 @@ public static class RulesGoldfishRaceSimulator
         for (int index = 0; index < cards.Count; index++)
         {
             RulesGoldfishRaceCard card = cards[index];
-            if (card.IsLand || card.ManaValue > availableMana)
+            if (card.IsLand || !card.CanBeCast || card.ManaValue > availableMana)
             {
                 continue;
             }

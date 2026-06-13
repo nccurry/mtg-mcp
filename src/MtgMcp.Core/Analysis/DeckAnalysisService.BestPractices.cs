@@ -43,7 +43,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             RecommendedProfile = selectedProfile.Id,
             ProfileSource = profileResolution.Source,
             HeuristicComparisons = profiles
-                .Select(value => CompareHeuristicProfile(deck, intent, value))
+                .Select(value => CompareHeuristicProfile(workspace, deck, intent, value))
                 .OrderByDescending(value => value.FitScore)
                 .ToList(),
             Citations = BuildBestPracticeCitations()
@@ -111,12 +111,12 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
 
         foreach ((string target, (int minimum, int? maximum)) in roleTargets)
         {
-            profile.RoleNeeds.Add(BuildNeed(target, CountNeedTarget(analysis, target), minimum, maximum));
+            profile.RoleNeeds.Add(BuildNeed(target, CountNeedTarget(workspace, analysis, target), minimum, maximum));
         }
 
         foreach ((string target, (int minimum, int? maximum)) in tagTargets)
         {
-            profile.TagNeeds.Add(BuildNeed(target, CountNeedTarget(analysis, target), minimum, maximum));
+            profile.TagNeeds.Add(BuildNeed(target, CountNeedTarget(workspace, analysis, target), minimum, maximum));
         }
 
         if (intent is not null)
@@ -133,11 +133,11 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// <summary>
     /// Counts a need target from classifier roles, classifier tags, or explicit workspace categories.
     /// </summary>
-    private static NeedTargetCount CountNeedTarget(DeckAnalysis analysis, string target)
+    private static NeedTargetCount CountNeedTarget(DeckWorkspace workspace, DeckAnalysis analysis, string target)
     {
         int roleCount = CountAliased(analysis.RoleCounts, target);
         int tagCount = CountAliased(analysis.TagCounts, target);
-        int allCategoryCount = CountAliased(analysis.IncludedAllCategoryCounts, target);
+        int allCategoryCount = CountAliasedCategories(workspace, target);
         int classifierCount = Math.Max(roleCount, tagCount);
         string classifierSource = roleCount >= tagCount ? "classifier role" : "classifier tag";
 
@@ -181,6 +181,35 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             if (counts.TryGetValue(alias, out int aliasCount))
             {
                 count = Math.Max(count, aliasCount);
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Counts included cards matching any alias without double-counting cards that have several aliases.
+    /// </summary>
+    private static int CountAliasedCategories(DeckWorkspace workspace, string target)
+    {
+        List<string> aliases = NeedTargetAliases(target);
+        Dictionary<string, DeckCategory> categories = DeckCategoryInclusion.BuildCategoryMap(workspace);
+        int count = 0;
+        foreach (DeckCard card in workspace.Cards)
+        {
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            if (!DeckCategoryInclusion.IsIncludedInDeck(categories, primaryCategory))
+            {
+                continue;
+            }
+
+            foreach (string category in DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories))
+            {
+                if (aliases.Contains(category, StringComparer.OrdinalIgnoreCase))
+                {
+                    count += Math.Max(0, card.Quantity);
+                    break;
+                }
             }
         }
 
@@ -341,6 +370,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// Compares a deck to a heuristic profile.
     /// </summary>
     private static DeckHeuristicProfileComparison CompareHeuristicProfile(
+        DeckWorkspace workspace,
         DeckAnalysis deck,
         DeckIntent? intent,
         DeckHeuristicProfile profile)
@@ -354,12 +384,12 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         double penalty = 0;
         foreach ((string target, (int minimum, int? maximum)) in profile.RoleTargets)
         {
-            penalty += CompareNeed(comparison, target, CountNeedTarget(deck, target).Count, minimum, maximum);
+            penalty += CompareNeed(comparison, target, CountNeedTarget(workspace, deck, target).Count, minimum, maximum);
         }
 
         foreach ((string target, (int minimum, int? maximum)) in profile.TagTargets)
         {
-            penalty += CompareNeed(comparison, target, CountNeedTarget(deck, target).Count, minimum, maximum);
+            penalty += CompareNeed(comparison, target, CountNeedTarget(workspace, deck, target).Count, minimum, maximum);
         }
 
         if (profile.Id.Equals("fifty-mana-sources", StringComparison.OrdinalIgnoreCase))

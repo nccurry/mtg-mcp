@@ -134,7 +134,12 @@ public abstract partial class DeckServiceBase
         }
 
         if (NeedsManaMetadata(card, workspace, snapshot)
-            && (string.IsNullOrWhiteSpace(snapshot.OracleText) || snapshot.ProducedMana.Count == 0))
+            && string.IsNullOrWhiteSpace(snapshot.OracleText))
+        {
+            return false;
+        }
+
+        if (NeedsProducedManaMetadata(card, snapshot) && snapshot.ProducedMana.Count == 0)
         {
             return false;
         }
@@ -160,6 +165,44 @@ public abstract partial class DeckServiceBase
             || (snapshot.OracleText?.Contains("add ", StringComparison.OrdinalIgnoreCase) == true)
             || IsIncluded(workspace, card)
                 && (snapshot.OracleText?.Contains("add one mana", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    /// <summary>
+    /// Checks whether Scryfall should have supplied concrete produced-mana symbols.
+    /// </summary>
+    private static bool NeedsProducedManaMetadata(DeckCard card, CardSnapshot snapshot)
+    {
+        return IsBasicLandName(card.Name)
+            || ContainsManaProductionText(snapshot.OracleText);
+    }
+
+    /// <summary>
+    /// Checks for oracle phrases that describe adding mana.
+    /// </summary>
+    private static bool ContainsManaProductionText(string? oracleText)
+    {
+        if (string.IsNullOrWhiteSpace(oracleText))
+        {
+            return false;
+        }
+
+        return oracleText.Contains("add {", StringComparison.OrdinalIgnoreCase)
+            || oracleText.Contains("add one mana", StringComparison.OrdinalIgnoreCase)
+            || oracleText.Contains("add two mana", StringComparison.OrdinalIgnoreCase)
+            || oracleText.Contains("add three mana", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether the card name is one of the six basic land names.
+    /// </summary>
+    private static bool IsBasicLandName(string name)
+    {
+        return name.Equals("Plains", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Island", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Swamp", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Mountain", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Forest", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Wastes", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

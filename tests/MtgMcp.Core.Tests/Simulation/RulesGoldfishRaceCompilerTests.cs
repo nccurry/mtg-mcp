@@ -54,6 +54,45 @@ public sealed class RulesGoldfishRaceCompilerTests
     }
 
     /// <summary>
+    /// Verifies that sparse nonland snapshots are not treated as zero-cost spells.
+    /// </summary>
+    [Fact]
+    public void CompileDeck_MissingNonlandManaValueIsUncastable()
+    {
+        DeckWorkspace workspace = new()
+        {
+            Id = "workspace-missing-cost",
+            Name = "Missing Cost",
+            Cards =
+            [
+                Card("Plains", 3, DeckRoles.Lands, "Basic Land - Plains", "", producedMana: ["W"]),
+                new DeckCard
+                {
+                    Name = "Mystery Beater",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Wincons,
+                    Categories = [DeckRoles.Wincons],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Creature - Avatar",
+                        OracleText = "",
+                        Power = "20",
+                        Toughness = "20",
+                    },
+                },
+            ],
+        };
+
+        RulesGoldfishRaceDeck deck = RulesGoldfishRaceCompiler.CompileDeck(workspace, "missing-cost");
+
+        RulesGoldfishRaceCard beater = deck.Cards.Single(card => card.Name == "Mystery Beater");
+        beater.CanBeCast.Should().BeFalse();
+        deck.Warnings.Should().Contain(warning =>
+            warning.Contains("Mystery Beater", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("mana value is missing", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that compiled templates can feed the race kernel deterministically.
     /// </summary>
     [Fact]
@@ -107,7 +146,7 @@ public sealed class RulesGoldfishRaceCompilerTests
         string category,
         string typeLine,
         string oracleText,
-        double manaValue = 0,
+        double? manaValue = 0,
         string? power = null,
         string? toughness = null,
         IReadOnlyList<string>? producedMana = null)

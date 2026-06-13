@@ -124,6 +124,11 @@ public sealed class RulesGoldfishRaceCard
     public int ManaValue { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the race kernel may cast this template.
+    /// </summary>
+    public bool CanBeCast { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets whether this template is a land.
     /// </summary>
     public bool IsLand { get; set; }

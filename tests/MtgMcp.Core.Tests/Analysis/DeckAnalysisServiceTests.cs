@@ -194,6 +194,63 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that complete Scryfall snapshots for non-mana lands are not refreshed repeatedly.
+    /// </summary>
+    [Fact]
+    public async Task RefreshDeckCardSnapshots_NeededScopeKeepsFreshNonManaLandSnapshot()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Fresh Fetch",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Evolving Wilds",
+                    ScryfallId = "evolving-wilds",
+                    ScryfallOracleId = "oracle-evolving-wilds",
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Land",
+                        OracleText = "{T}, Sacrifice Evolving Wilds: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+                        SelectedPrintingReason = "test fixture",
+                        ScryfallUri = "https://scryfall.test/card/evolving-wilds",
+                        ReleasedAt = new DateOnly(2024, 1, 1),
+                        Language = "en",
+                        Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["commander"] = "legal",
+                        },
+                        Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["usd"] = "0.10",
+                        },
+                        Provenance = new CardSnapshotProvenance
+                        {
+                            Provider = "scryfall",
+                            ProviderCardId = "evolving-wilds",
+                            SchemaVersion = 1,
+                            RefreshedAtUtc = DateTimeOffset.UtcNow,
+                        },
+                    },
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckNormalizationResult result = await service.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            "needed",
+            TestContext.Current.CancellationToken);
+
+        result.RequestedCards.Should().Be(0);
+        result.UpdatedCards.Should().Be(0);
+    }
+
+    /// <summary>
     /// Verifies that role classifier classifies common deck roles and tags.
     /// </summary>
     [Fact]
@@ -809,8 +866,8 @@ public sealed partial class DeckIntelligenceTests
             [
                 new DeckCard { Name = "Land", Quantity = 35, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] },
                 new DeckCard { Name = "Anthem A", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem"] },
-                new DeckCard { Name = "Anthem B", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem"] },
-                new DeckCard { Name = "Anthem C", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem"] }
+                new DeckCard { Name = "Anthem B", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthems"] },
+                new DeckCard { Name = "Anthem C", Quantity = 2, PrimaryCategory = DeckDefaults.Mainboard, Categories = [DeckDefaults.Mainboard, "Anthem", "Anthems"] }
             ]
         }, TestContext.Current.CancellationToken);
         DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());

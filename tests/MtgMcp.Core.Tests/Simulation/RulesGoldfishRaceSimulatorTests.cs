@@ -121,6 +121,44 @@ public sealed class RulesGoldfishRaceSimulatorTests
     }
 
     /// <summary>
+    /// Verifies that templates marked uncastable are skipped even when their mana value is zero.
+    /// </summary>
+    [Fact]
+    public void Run_DoesNotCastUncastableTemplates()
+    {
+        RulesGoldfishRaceDeck unknownCostDeck = RaceDeck("unknown", "Unknown", creaturePower: 0);
+        unknownCostDeck.Cards.Add(new RulesGoldfishRaceCard
+        {
+            Name = "Mystery Beater",
+            Quantity = 1,
+            ManaValue = 0,
+            CanBeCast = false,
+            IsCreature = true,
+            StaysOnBattlefield = true,
+            Power = 20,
+            Toughness = 20,
+        });
+        RulesGoldfishRaceRequest request = new()
+        {
+            Seed = 5,
+            Simulations = 1,
+            StartingLife = 2,
+            TurnLimit = 3,
+            Mulligan = false,
+            Decks =
+            [
+                unknownCostDeck,
+                RaceDeck("slow", "Slow", creaturePower: 1),
+            ],
+        };
+
+        RulesGoldfishRaceResult result = RulesGoldfishRaceSimulator.Run(request);
+
+        result.Decks.Single(deck => deck.Label == "unknown").Wins.Should().Be(0);
+        result.Decks.Single(deck => deck.Label == "slow").Wins.Should().Be(1);
+    }
+
+    /// <summary>
     /// Creates a tiny deterministic race deck.
     /// </summary>
     private static RulesGoldfishRaceDeck RaceDeck(string label, string name, int creaturePower)
