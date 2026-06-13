@@ -878,6 +878,9 @@ public sealed class ScryfallClientTests
         MockHttpMessageHandler mockHttp = new();
         mockHttp
             .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [] }""");
+        mockHttp
+            .When("https://api.scryfall.test/cards/named*")
             .Respond(
                 HttpStatusCode.InternalServerError,
                 "application/json",

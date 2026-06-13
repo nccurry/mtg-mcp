@@ -318,6 +318,15 @@ public sealed class McpE2ETests
     {
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
+        scryfall.PostJson(
+            "cards/collection",
+            $$"""
+            {
+              "data": [
+                {{SwampJson}}
+              ]
+            }
+            """);
         scryfall.GetJson("cards/named?fuzzy=Tinybones%2C%20Trinket%20Thief", TinybonesJson);
         scryfall.GetJson("cards/named?fuzzy=Swamp", SwampJson);
         scryfall.GetJson("cards/named?fuzzy=Arcane%20Signet", ArcaneSignetJson);
