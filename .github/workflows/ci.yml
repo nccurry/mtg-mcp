@@ -67,7 +67,7 @@ jobs:
         run: task coverage:gates
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: artifacts/coverage/codecov.cobertura.xml
