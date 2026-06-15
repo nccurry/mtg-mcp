@@ -86,7 +86,7 @@ public sealed class TopDeckCorpusSignalProvider : ICorpusSignalProvider
             return report;
         }
 
-        string requestFingerprint = $"{query.Format}|{query.Commander}|{query.Theme}|{budget.AnalysisDepth}|{budget.MaxDecksPerSource}";
+        string requestFingerprint = $"{query.Format}|{CommanderFingerprint(query)}|{query.Theme}|{budget.AnalysisDepth}|{budget.MaxDecksPerSource}";
         CorpusCacheKey cacheKey = new()
         {
             Source = status.Key,
@@ -229,8 +229,38 @@ public sealed class TopDeckCorpusSignalProvider : ICorpusSignalProvider
     /// </summary>
     private static bool MatchesQuery(IReadOnlyCollection<string> cards, CorpusSignalQuery query)
     {
-        return string.IsNullOrWhiteSpace(query.Commander)
-            || cards.Contains(query.Commander, StringComparer.OrdinalIgnoreCase);
+        List<string> commanderNames = QueryCommanderNames(query);
+        return commanderNames.Count == 0
+            || commanderNames.Any(name => cards.Contains(name, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Builds a cache fingerprint for the commander query.
+    /// </summary>
+    private static string CommanderFingerprint(CorpusSignalQuery query)
+    {
+        List<string> commanderNames = QueryCommanderNames(query);
+        return commanderNames.Count == 0
+            ? query.Commander ?? ""
+            : string.Join(" // ", commanderNames);
+    }
+
+    /// <summary>
+    /// Gets exact-match commander names, falling back to the display name for singleton decks.
+    /// </summary>
+    private static List<string> QueryCommanderNames(CorpusSignalQuery query)
+    {
+        List<string> commanderNames = query.CommanderNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (commanderNames.Count == 0 && !string.IsNullOrWhiteSpace(query.Commander))
+        {
+            commanderNames.Add(query.Commander.Trim());
+        }
+
+        return commanderNames;
     }
 
     /// <summary>

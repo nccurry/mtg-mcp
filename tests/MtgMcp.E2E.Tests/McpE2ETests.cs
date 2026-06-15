@@ -177,6 +177,17 @@ public sealed class McpE2ETests
                 ["seed"] = 2026,
                 ["includeMulligans"] = false
             });
+        JsonElement compactAnalysis = await CallJsonAsync(
+            session.Client,
+            "deck_analyze_performance",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["detailLevel"] = "summary",
+                ["simulations"] = 50,
+                ["maxTurn"] = 3,
+                ["seed"] = 2026
+            });
         JsonElement planResult = await CallJsonAsync(
             session.Client,
             "deck_plan_create",
@@ -198,6 +209,25 @@ public sealed class McpE2ETests
                 ["maxTurn"] = 3,
                 ["seed"] = 2026
             });
+        JsonElement compactComparison = await CallJsonAsync(
+            session.Client,
+            "deck_plan_compare_performance",
+            new Dictionary<string, object?>
+            {
+                ["planId"] = planId,
+                ["detailLevel"] = "normal",
+                ["simulations"] = 50,
+                ["maxTurn"] = 3,
+                ["seed"] = 2026
+            });
+        CallToolResult invalidDetailLevel = await session.Client.CallToolAsync(
+            "deck_analyze_performance",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["detailLevel"] = "verbose"
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
         JsonElement goldfishComparison = await CallJsonAsync(
             session.Client,
             "archidekt_compare_goldfish",
@@ -212,6 +242,9 @@ public sealed class McpE2ETests
 
         GetInt32(analysis, "deckSize").Should().Be(100);
         AssertPerformanceTrustContract(analysis, expectedSimulations: 200);
+        GetString(compactAnalysis, "detailLevel").Should().Be("summary");
+        compactAnalysis.TryGetProperty("turnProbabilities", out _).Should().BeFalse();
+        GetProperty(compactAnalysis, "topStrandedCards").GetArrayLength().Should().BeLessThanOrEqualTo(5);
         FindNamedTurn(GetArray(analysis, "turnProbabilities"), "land-drop-by-turn", 3)
             .GetProperty("sampleSize")
             .GetInt32()
@@ -226,6 +259,16 @@ public sealed class McpE2ETests
         rampDelta.GetProperty("beforeLowConfidenceInterval").ValueKind.Should().NotBe(JsonValueKind.Null);
         AssertPerformanceTrustContract(GetObject(comparison, "before"), expectedSimulations: 200);
         AssertPerformanceTrustContract(GetObject(comparison, "after"), expectedSimulations: 200);
+        GetString(compactComparison, "detailLevel").Should().Be("normal");
+        GetString(GetObject(compactComparison, "before"), "detailLevel").Should().Be("normal");
+        GetProperty(GetObject(compactComparison, "before"), "traceSummary")
+            .GetProperty("aggregateCounters")
+            .GetProperty("total-runs")
+            .GetInt32()
+            .Should()
+            .Be(100);
+        invalidDetailLevel.IsError.Should().BeTrue();
+        ReadText(invalidDetailLevel).Should().Contain("deck_analyze_performance");
         JsonElement reference = GetArray(goldfishComparison, "referenceDecks").Should().ContainSingle().Subject;
         GetString(reference, "source").Should().Be("archidekt");
         GetString(GetObject(goldfishComparison, "activeDeck"), "source").Should().Be("workspace");
@@ -536,6 +579,65 @@ public sealed class McpE2ETests
         GetObject(fullBatchDeck, "goldfish").TryGetProperty("profileResolution", out _).Should().BeTrue();
         GetArray(batchReport, "decks").Count().Should().Be(1);
         GetArray(batchReport, "failures").Count().Should().Be(1);
+        JsonElement activeCards = await CallJsonAsync(
+            session.Client,
+            "deck_list_cards_by_zone",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["zone"] = "active"
+            });
+        GetArray(activeCards, "cards")
+            .Select(card => GetString(card, "cardName"))
+            .Should()
+            .Contain("Arcane Signet");
+        JsonElement bulkMove = await CallJsonAsync(
+            session.Client,
+            "deck_move_cards_bulk",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["moves"] = new[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["cardName"] = "Arcane Signet",
+                        ["fromCategory"] = "Ramp",
+                        ["toCategory"] = "Maybeboard"
+                    }
+                },
+                ["detailLevel"] = "normal"
+            });
+        JsonElement maybeboardCards = await CallJsonAsync(
+            session.Client,
+            "deck_list_cards_by_zone",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["zone"] = "maybeboard"
+            });
+        JsonElement lastImportDiff = await CallJsonAsync(
+            session.Client,
+            "workspace_diff_last_import",
+            new Dictionary<string, object?> { ["workspaceId"] = workspaceId });
+        JsonElement reEvaluation = await CallJsonAsync(
+            session.Client,
+            "deck_re_evaluate",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = workspaceId,
+                ["limit"] = 3
+            });
+
+        GetInt32(bulkMove, "moved").Should().Be(1);
+        GetArray(maybeboardCards, "cards")
+            .Select(card => GetString(card, "cardName"))
+            .Should()
+            .Contain("Arcane Signet");
+        GetString(lastImportDiff, "status").Should().Be("workspaceHasNoSource");
+        GetString(reEvaluation, "detailLevel").Should().Be("summary");
+        GetString(reEvaluation.GetProperty("sourceRecommendations"), "status").Should().Be("notQueried");
+        GetArray(reEvaluation, "topRisks").Count().Should().BeLessThanOrEqualTo(3);
         archidekt.Requests.Should().BeEmpty();
     }
 

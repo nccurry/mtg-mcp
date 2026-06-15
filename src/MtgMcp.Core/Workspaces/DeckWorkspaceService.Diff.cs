@@ -22,6 +22,67 @@ public sealed partial class DeckWorkspaceService
             .ConfigureAwait(false);
         DeckWorkspace previous = await LoadWorkspaceAsync(previousWorkspaceId, cancellationToken)
             .ConfigureAwait(false);
+        return BuildWorkspaceDiff(current, previous);
+    }
+
+    /// <summary>
+    /// Returns deterministic changes against the previous import into this same source-scoped workspace.
+    /// </summary>
+    public async Task<WorkspaceDiffLastImportResult> DiffLastImportAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace current = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        ImportSource? source = ResolveImportSource(current);
+        WorkspaceDiffLastImportResult result = new()
+        {
+            WorkspaceId = current.Id,
+            Provider = source?.Provider,
+            ExternalId = source?.ExternalId,
+            LocalWorkspaceId = current.Id
+        };
+        if (source is null)
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+            result.Notes.Add("Workspace does not have a provider source reference.");
+            return result;
+        }
+
+        if (!IsImportHistoryProvider(source.Provider))
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.SourceUnsupported;
+            result.Notes.Add($"Import history does not support provider '{source.Provider}'.");
+            return result;
+        }
+
+        DeckImportHistoryEntry? entry = FindLatestImportHistoryEntry(current, source);
+        if (entry is null)
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.NoPriorBaseline;
+            result.Notes.Add("No prior import baseline exists for this provider, external deck id, and local workspace id.");
+            return result;
+        }
+
+        result.ImportedAt = entry.ImportedAt;
+        if (entry.BaselineWorkspace is null)
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.HistoryUnavailable;
+            result.Notes.Add("The matching import history entry does not contain a baseline workspace snapshot.");
+            return result;
+        }
+
+        result.Status = WorkspaceDiffLastImportStatuses.BaselineFound;
+        result.Diff = BuildWorkspaceDiff(current, entry.BaselineWorkspace);
+        result.Notes.Add($"Compared against import history captured at {entry.ImportedAt:O}.");
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a deterministic diff for two workspace instances.
+    /// </summary>
+    private static WorkspaceDiffResult BuildWorkspaceDiff(DeckWorkspace current, DeckWorkspace previous)
+    {
         DeckWorkspaceState currentState = BuildWorkspaceState(current);
         DeckWorkspaceState previousState = BuildWorkspaceState(previous);
         Dictionary<string, DiffCardAggregate> currentCards = BuildDiffCardIndex(current);
@@ -87,6 +148,32 @@ public sealed partial class DeckWorkspaceService
         if (current.Id.Equals(previous.Id, StringComparison.OrdinalIgnoreCase))
         {
             result.Notes.Add("Current and baseline workspace ids are the same; diff rows should be empty unless storage changed during the call.");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Finds the newest import history entry matching the current workspace source scope.
+    /// </summary>
+    private static DeckImportHistoryEntry? FindLatestImportHistoryEntry(
+        DeckWorkspace workspace,
+        ImportSource source)
+    {
+        DeckImportHistoryEntry? result = null;
+        foreach (DeckImportHistoryEntry entry in workspace.ImportHistory)
+        {
+            if (!entry.Provider.Equals(source.Provider, StringComparison.OrdinalIgnoreCase)
+                || !entry.ExternalId.Equals(source.ExternalId, StringComparison.OrdinalIgnoreCase)
+                || !entry.LocalWorkspaceId.Equals(workspace.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (result is null || entry.ImportedAt > result.ImportedAt)
+            {
+                result = entry;
+            }
         }
 
         return result;

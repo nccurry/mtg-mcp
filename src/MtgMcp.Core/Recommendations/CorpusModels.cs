@@ -356,6 +356,11 @@ public sealed class CorpusSignalQuery
     public string? Commander { get; set; }
 
     /// <summary>
+    /// Gets or sets individual command-zone commander names for providers that exact-match deck cards.
+    /// </summary>
+    public List<string> CommanderNames { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the requested theme.
     /// </summary>
     public string? Theme { get; set; }
@@ -656,9 +661,29 @@ public sealed class CardEvidenceTableRow
     public double? InclusionRate { get; set; }
 
     /// <summary>
-    /// Indicates whether this card is already present in the workspace.
+    /// Indicates whether this card is already present in the active deck.
     /// </summary>
     public bool AlreadyInDeck { get; set; }
+
+    /// <summary>
+    /// Indicates whether this card appears anywhere in the workspace.
+    /// </summary>
+    public bool AlreadyInWorkspace { get; set; }
+
+    /// <summary>
+    /// Lists all workspace categories attached to matching card rows.
+    /// </summary>
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Lists non-primary workspace categories attached to matching card rows.
+    /// </summary>
+    public List<string> SecondaryCategories { get; set; } = [];
+
+    /// <summary>
+    /// Lists where this card appears in the workspace.
+    /// </summary>
+    public List<CardWorkspaceLocation> Locations { get; set; } = [];
 
     /// <summary>
     /// Points to a representative source URL.
@@ -674,6 +699,32 @@ public sealed class CardEvidenceTableRow
     /// Summarizes the source rationale without adding LLM interpretation.
     /// </summary>
     public string Rationale { get; set; } = "";
+}
+
+/// <summary>
+/// Describes one workspace location for a card evidence row.
+/// </summary>
+public sealed class CardWorkspaceLocation
+{
+    /// <summary>
+    /// Gets or sets the workspace category name.
+    /// </summary>
+    public string Category { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether this category is the card row's primary category.
+    /// </summary>
+    public bool Primary { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the category contributes to the active deck.
+    /// </summary>
+    public bool IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets card quantity in this category location.
+    /// </summary>
+    public int Quantity { get; set; }
 }
 
 /// <summary>

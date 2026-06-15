@@ -411,6 +411,37 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that partner command-zone context takes precedence over stale single-commander intent.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeCommanderTrends_UsesPartnerCommandZoneContext()
+    {
+        InMemoryRepository workspaces = new();
+        FakeCorpusSignalProvider provider = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(PartnerCorpusWorkspace(), TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [provider]);
+
+        CorpusRecommendationResult result = await service.AnalyzeCommanderTrendsAsync(
+            workspace.Id,
+            limit: 5,
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        string pairName = "Frodo, Adventurous Hobbit // Sam, Loyal Attendant";
+        provider.LastQuery.Should().NotBeNull();
+        provider.LastQuery!.Commander.Should().Be(pairName);
+        provider.LastQuery.CommanderNames.Should().Equal("Frodo, Adventurous Hobbit", "Sam, Loyal Attendant");
+        provider.LastQuery.Theme.Should().BeNull();
+        result.Commander.Should().Be(pairName);
+        result.Theme.Should().BeNull();
+        result.Notes.Should().Contain(note => note.Contains("broad pair aggregate", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that corpus tools do not synthesize built-in staple recommendations without providers.
     /// </summary>
     [Fact]
@@ -520,6 +551,49 @@ public sealed partial class DeckIntelligenceTests
             && row.ScryfallUri!.EndsWith(Uri.EscapeDataString("Illness in the Ranks"), StringComparison.Ordinal)
             && !row.AlreadyInDeck);
         result.Notes.Should().NotContain(note => note.Contains("Failing corpus", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that evidence location labels separate active deck cards from excluded workspace cards.
+    /// </summary>
+    [Fact]
+    public async Task SearchCorpusEvidence_LabelsActiveAndExcludedWorkspaceLocations()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspaceWithEvidenceLocations(), TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [new FakeCorpusSignalProvider()]);
+
+        CorpusEvidenceSearchResult result = await service.SearchCorpusEvidenceAsync(
+            workspace.Id,
+            sourceKey: "fake-corpus",
+            goal: "ramp",
+            limit: 5,
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        CardEvidenceTableRow sideboardCard = result.CardEvidence.Single(row => row.CardName == "Arcane Signet");
+        sideboardCard.AlreadyInWorkspace.Should().BeTrue();
+        sideboardCard.AlreadyInDeck.Should().BeFalse();
+        sideboardCard.Locations.Should().ContainSingle(location =>
+            location.Category == DeckDefaults.Sideboard
+            && location.Primary
+            && !location.IncludedInDeck
+            && location.Quantity == 1);
+
+        CardEvidenceTableRow activeCard = result.CardEvidence.Single(row => row.CardName == "Lightning Greaves");
+        activeCard.AlreadyInWorkspace.Should().BeTrue();
+        activeCard.AlreadyInDeck.Should().BeTrue();
+        activeCard.Categories.Should().Contain([DeckDefaults.Mainboard, DeckDefaults.Sideboard]);
+        activeCard.SecondaryCategories.Should().ContainSingle(DeckDefaults.Sideboard);
+        activeCard.Locations.Should().ContainSingle(location =>
+            location.Category == DeckDefaults.Mainboard
+            && location.Primary
+            && location.IncludedInDeck
+            && location.Quantity == 1);
     }
 
     /// <summary>
@@ -832,6 +906,75 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a partner commander workspace whose saved intent is intentionally stale.
+    /// </summary>
+    private static DeckWorkspace PartnerCorpusWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Name = "Partner Corpus",
+            Format = "commander",
+            Description =
+                """
+                MTG MCP Deck Intent
+                Version: 1
+                Commander: Sam, Loyal Attendant
+                Archetype: lifegain
+                End MTG MCP Deck Intent
+                """,
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Frodo, Adventurous Hobbit",
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Halfling Scout",
+                        OracleText = "Partner with Sam, Loyal Attendant.",
+                        ColorIdentity = ["W", "B"]
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Sam, Loyal Attendant",
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Halfling Peasant",
+                        OracleText = "Partner with Frodo, Adventurous Hobbit.",
+                        ColorIdentity = ["G", "W"]
+                    }
+                }
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Creates a workspace with one evidence card active and one only in an excluded category.
+    /// </summary>
+    private static DeckWorkspace CorpusWorkspaceWithEvidenceLocations()
+    {
+        DeckWorkspace workspace = CorpusWorkspace();
+        workspace.Cards.Add(new DeckCard
+        {
+            Name = "Arcane Signet",
+            PrimaryCategory = DeckDefaults.Sideboard,
+            Categories = [DeckDefaults.Sideboard],
+        });
+        workspace.Cards.Add(new DeckCard
+        {
+            Name = "Lightning Greaves",
+            PrimaryCategory = DeckDefaults.Mainboard,
+            Categories = [DeckDefaults.Mainboard, DeckDefaults.Sideboard],
+        });
+
+        return workspace;
+    }
+
+    /// <summary>
     /// Creates a Vihaan workspace whose local archetype is intentionally less specific than the user goal.
     /// </summary>
     private static DeckWorkspace VihaanWorkspace()
@@ -1084,6 +1227,7 @@ public sealed partial class DeckIntelligenceTests
                 Theme = query.Theme,
                 Goal = query.Goal,
                 ExistingCards = [.. query.ExistingCards],
+                CommanderNames = [.. query.CommanderNames],
                 MaxPrice = query.MaxPrice,
                 Refresh = query.Refresh
             });

@@ -79,7 +79,7 @@ internal static partial class DeckPerformanceAnalyzer
             StrandedCards = BuildStrandedCardPerformance(runs),
         };
 
-        AddTurnPerformanceMetrics(analysis, runs, deckColors, colorIdentityKnown, safeMaxTurn);
+        AddTurnPerformanceMetrics(analysis, runs, deckColors, colorIdentityKnown, safeMaxTurn, commandZonePlan);
         analysis.Scenarios = BuildScenarioPerformance(
             included,
             runs,

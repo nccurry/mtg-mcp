@@ -1023,6 +1023,30 @@ public sealed class SimulationProfileCatalog
             },
             new SimulationRouteDefinition
             {
+                Name = "Food Lifegain Drain Burst",
+                Kind = "food-lifegain-drain",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["food-bank", "lifegain-burst", "lifegain-payoff", "drain-payoff", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Food Artifact Leaves Drain",
+                Kind = "food-artifact-drain",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["artifact-token-bank", "artifact-leaves-drain", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
+                Name = "Food Board Combat Alpha",
+                Kind = "food-combat-alpha",
+                EarliestTurn = 6,
+                Source = "profile-common",
+                Requirements = ["food-bank", "food-combat-alpha", "turn>=6"],
+            },
+            new SimulationRouteDefinition
+            {
                 Name = "Commander Damage Pressure",
                 Kind = "commander-damage",
                 EarliestTurn = 6,

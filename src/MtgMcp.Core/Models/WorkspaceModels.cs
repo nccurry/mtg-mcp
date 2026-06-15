@@ -239,6 +239,11 @@ public sealed class DeckWorkspace
     /// Gets or sets external deck sources that contributed to this local workspace.
     /// </summary>
     public List<DeckSourceReference> SourceReferences { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets bounded snapshots captured before explicit provider re-imports.
+    /// </summary>
+    public List<DeckImportHistoryEntry> ImportHistory { get; set; } = [];
 }
 
 /// <summary>
@@ -265,6 +270,37 @@ public sealed class DeckSourceReference
     /// Gets or sets when the source was imported into mtg-mcp.
     /// </summary>
     public DateTimeOffset ImportedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// Stores the previous local state for a provider import into the same workspace id.
+/// </summary>
+public sealed class DeckImportHistoryEntry
+{
+    /// <summary>
+    /// Gets or sets the source provider key.
+    /// </summary>
+    public string Provider { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the provider deck id.
+    /// </summary>
+    public string ExternalId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the local workspace id whose import produced this history entry.
+    /// </summary>
+    public string LocalWorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets when the import occurred.
+    /// </summary>
+    public DateTimeOffset ImportedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Gets or sets the local workspace snapshot from immediately before the import.
+    /// </summary>
+    public DeckWorkspace? BaselineWorkspace { get; set; }
 }
 
 /// <summary>
@@ -506,6 +542,171 @@ public sealed class DeckOpenCardSummary
     /// Gets or sets Scryfall page when known.
     /// </summary>
     public string? ScryfallUri { get; set; }
+}
+
+/// <summary>
+/// Describes the card zone requested by a compact workspace listing.
+/// </summary>
+public static class DeckCardZones
+{
+    /// <summary>
+    /// Lists cards whose primary category contributes to the active deck.
+    /// </summary>
+    public const string Active = "active";
+
+    /// <summary>
+    /// Lists cards whose primary category is Sideboard.
+    /// </summary>
+    public const string Sideboard = "sideboard";
+
+    /// <summary>
+    /// Lists cards whose primary category is Maybeboard.
+    /// </summary>
+    public const string Maybeboard = "maybeboard";
+
+    /// <summary>
+    /// Lists cards whose primary category is excluded from the active deck.
+    /// </summary>
+    public const string Excluded = "excluded";
+
+    /// <summary>
+    /// Lists every workspace card row.
+    /// </summary>
+    public const string All = "all";
+}
+
+/// <summary>
+/// Returns a compact card listing for a workspace zone.
+/// </summary>
+public sealed class DeckCardsByZoneResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the normalized requested zone.
+    /// </summary>
+    public string Zone { get; set; } = DeckCardZones.Active;
+
+    /// <summary>
+    /// Gets or sets whether duplicate card identities were collapsed.
+    /// </summary>
+    public bool CollapseDuplicates { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets total quantity represented by the returned rows.
+    /// </summary>
+    public int TotalQuantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of rows returned after optional duplicate collapsing.
+    /// </summary>
+    public int RowCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets cards matching the zone filter.
+    /// </summary>
+    public List<DeckCardZoneRow> Cards { get; set; } = [];
+}
+
+/// <summary>
+/// Describes one card in a compact zone listing.
+/// </summary>
+public sealed class DeckCardZoneRow
+{
+    /// <summary>
+    /// Gets or sets the display card name.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets total card quantity for this row.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the primary category when the row is not collapsed across categories.
+    /// </summary>
+    public string? PrimaryCategory { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether any primary location contributes to the active deck.
+    /// </summary>
+    public bool IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets all categories represented by this row.
+    /// </summary>
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets category-level locations represented by this row.
+    /// </summary>
+    public List<DeckCardZoneLocation> Locations { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets cached type line when known.
+    /// </summary>
+    public string? TypeLine { get; set; }
+
+    /// <summary>
+    /// Gets or sets Scryfall page when known.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
+}
+
+/// <summary>
+/// Describes a card quantity in one workspace category.
+/// </summary>
+public sealed class DeckCardZoneLocation
+{
+    /// <summary>
+    /// Gets or sets the category name.
+    /// </summary>
+    public string Category { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether this location is the card row's primary category.
+    /// </summary>
+    public bool Primary { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the category contributes to the active deck.
+    /// </summary>
+    public bool IncludedInDeck { get; set; }
+
+    /// <summary>
+    /// Gets or sets card quantity in this location.
+    /// </summary>
+    public int Quantity { get; set; }
+}
+
+/// <summary>
+/// Carries one card/category transfer requested by deck_move_cards_bulk.
+/// </summary>
+public sealed class BulkDeckCardMove
+{
+    /// <summary>
+    /// Gets or sets the card name to move.
+    /// </summary>
+    public string CardName { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the destination primary category.
+    /// </summary>
+    public string ToCategory { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the optional source primary category.
+    /// </summary>
+    public string? FromCategory { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional partial quantity to move.
+    /// </summary>
+    public int? Quantity { get; set; }
 }
 
 /// <summary>

@@ -11,6 +11,11 @@ internal sealed class CommanderSpecificSimulationRules
     public bool HasIngaAndEsika { get; private init; }
 
     /// <summary>
+    /// Gets whether Sam, Loyal Attendant was detected as a command-zone card.
+    /// </summary>
+    public bool HasSamLoyalAttendant { get; private init; }
+
+    /// <summary>
     /// Gets assumption notes that should be surfaced with simulation output.
     /// </summary>
     public List<string> Assumptions { get; private init; } = [];
@@ -21,6 +26,7 @@ internal sealed class CommanderSpecificSimulationRules
     public static CommanderSpecificSimulationRules Build(IEnumerable<DeckCard> includedCards)
     {
         bool hasIngaAndEsika = false;
+        bool hasSamLoyalAttendant = false;
         foreach (DeckCard card in includedCards)
         {
             if (!IsCommanderCard(card))
@@ -31,7 +37,11 @@ internal sealed class CommanderSpecificSimulationRules
             if (card.Name.Equals("Inga and Esika", StringComparison.OrdinalIgnoreCase))
             {
                 hasIngaAndEsika = true;
-                break;
+            }
+
+            if (card.Name.Equals("Sam, Loyal Attendant", StringComparison.OrdinalIgnoreCase))
+            {
+                hasSamLoyalAttendant = true;
             }
         }
 
@@ -49,9 +59,17 @@ internal sealed class CommanderSpecificSimulationRules
                     + "and replacement effects are approximated rather than fully rules-modeled.");
         }
 
+        if (hasSamLoyalAttendant)
+        {
+            assumptions.Add(
+                "Sam, Loyal Attendant detected: goldfish treats banked Food activations as costing one mana "
+                    + "while Sam is online when estimating lifegain route pressure.");
+        }
+
         return new CommanderSpecificSimulationRules
         {
             HasIngaAndEsika = hasIngaAndEsika,
+            HasSamLoyalAttendant = hasSamLoyalAttendant,
             Assumptions = assumptions
         };
     }

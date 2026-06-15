@@ -37,7 +37,7 @@ internal static class CommandZonePlanner
         {
             Cards = ordered,
             HasCommander = hasCommander,
-            HasBackground = hasBackground,
+            HasBackgroundPair = hasBackgroundPair,
             PrimaryCommander = ordered.FirstOrDefault(card => card.Kind == CommandZoneCardKind.Commander)?.Card,
         };
     }
@@ -243,9 +243,9 @@ internal sealed class CommandZonePlan
     public bool HasCommander { get; set; }
 
     /// <summary>
-    /// Gets or sets whether the plan contains a Background.
+    /// Gets or sets whether the plan contains a commander that chooses a Background and a Background card.
     /// </summary>
-    public bool HasBackground { get; set; }
+    public bool HasBackgroundPair { get; set; }
 
     /// <summary>
     /// Gets or sets the primary non-Background commander used by legacy commander metrics.
@@ -341,7 +341,7 @@ internal sealed class CommandZoneRunState
             BackgroundCastTurn ??= turn;
         }
 
-        if (plan.HasCommander && plan.HasBackground && CommanderOnline && BackgroundOnline)
+        if (plan.HasBackgroundPair && CommanderOnline && BackgroundOnline)
         {
             CommanderWithBackgroundOnlineTurn ??= turn;
         }

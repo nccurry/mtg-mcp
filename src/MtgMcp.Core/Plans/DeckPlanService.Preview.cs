@@ -216,6 +216,7 @@ public sealed partial class DeckPlanService
                 warnings,
                 cancellationToken)
             .ConfigureAwait(false);
+        AddExcludedAdditionWarning(plan, workspace, preview, warnings);
 
         DeckPlanPreviewResult previewResult = new()
         {
@@ -228,6 +229,78 @@ public sealed partial class DeckPlanService
         };
 
         return new PlanPreviewWorkspaceResult(workspace, preview, previewResult);
+    }
+
+    /// <summary>
+    /// Warns when a preview cuts active cards but adds replacements to excluded categories.
+    /// </summary>
+    private static void AddExcludedAdditionWarning(
+        DeckEditPlan plan,
+        DeckWorkspace before,
+        DeckWorkspace after,
+        List<string> warnings)
+    {
+        int beforeIncluded = CountIncludedCards(before);
+        int afterIncluded = CountIncludedCards(after);
+        if (afterIncluded >= beforeIncluded)
+        {
+            return;
+        }
+
+        List<string> excludedCategories = ExcludedAdditionCategories(plan, after);
+        if (excludedCategories.Count == 0)
+        {
+            return;
+        }
+
+        warnings.Add(
+            $"You are adding to an excluded category ({string.Join(", ", excludedCategories)}). "
+                + $"The active deck changes from {beforeIncluded} to {afterIncluded} included card(s), "
+                + "so those additions will not replace cards in the active deck.");
+    }
+
+    /// <summary>
+    /// Finds add or move destinations that do not contribute to active deck size.
+    /// </summary>
+    private static List<string> ExcludedAdditionCategories(DeckEditPlan plan, DeckWorkspace preview)
+    {
+        Dictionary<string, DeckCategory> categoryMap = DeckCategoryInclusion.BuildCategoryMap(preview);
+        List<string> categories = [];
+        foreach (DeckEditOperation operation in plan.Operations)
+        {
+            string? category = operation.Operation switch
+            {
+                DeckEditOperations.AddCard => operation.Category ?? DeckDefaults.Mainboard,
+                DeckEditOperations.MoveCard => operation.ToCategory,
+                _ => null
+            };
+            if (string.IsNullOrWhiteSpace(category)
+                || DeckCategoryInclusion.IsIncludedInDeck(categoryMap, category))
+            {
+                continue;
+            }
+
+            if (!categories.Contains(category, StringComparer.OrdinalIgnoreCase))
+            {
+                categories.Add(category);
+            }
+        }
+
+        return categories;
+    }
+
+    /// <summary>
+    /// Counts card copies whose primary categories contribute to active deck size.
+    /// </summary>
+    private static int CountIncludedCards(DeckWorkspace workspace)
+    {
+        int total = 0;
+        foreach (DeckCard card in DeckCategoryInclusion.IncludedCards(workspace))
+        {
+            total += Math.Max(0, card.Quantity);
+        }
+
+        return total;
     }
 
     /// <summary>

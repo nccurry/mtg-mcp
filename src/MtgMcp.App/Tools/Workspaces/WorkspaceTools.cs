@@ -136,6 +136,27 @@ public sealed class WorkspaceTools
     }
 
     /// <summary>
+    /// Lists workspace cards by active or excluded zone.
+    /// </summary>
+    [McpServerTool(
+        Name = "deck_list_cards_by_zone",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("List compact workspace cards by zone: active, sideboard, maybeboard, excluded, or all. collapseDuplicates=true merges duplicate card rows.")]
+    public Task<DeckCardsByZoneResult> ListCardsByZoneAsync(
+        string workspaceId,
+        [Description("Card zone: active, sideboard, maybeboard, excluded, or all.")]
+        string zone = DeckCardZones.Active,
+        bool collapseDuplicates = true,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.ListCardsByZoneAsync(workspaceId, zone, collapseDuplicates, cancellationToken);
+    }
+
+    /// <summary>
     /// Opens the archidekt deck.
     /// </summary>
     public async Task<DeckOpenResult> OpenArchidektDeckAsync(
@@ -469,6 +490,24 @@ public sealed class WorkspaceTools
     )
     {
         return decks.DiffWorkspacesAsync(workspaceId, previousWorkspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Compares a workspace against its previous provider import baseline.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_diff_last_import",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("Compare a workspace against the previous import into the same provider, external deck id, and local workspace id. Status is baselineFound, noPriorBaseline, sourceUnsupported, workspaceHasNoSource, or historyUnavailable.")]
+    public Task<WorkspaceDiffLastImportResult> DiffLastImportAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.DiffLastImportAsync(workspaceId, cancellationToken);
     }
 
     /// <summary>

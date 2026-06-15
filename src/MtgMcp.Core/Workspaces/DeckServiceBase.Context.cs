@@ -6,11 +6,35 @@ namespace MtgMcp.Core;
 public abstract partial class DeckServiceBase
 {
     /// <summary>
-    /// Finds a commander name.
+    /// Finds the active command-zone commander display name.
     /// </summary>
     protected static string? FindCommanderName(DeckWorkspace workspace)
     {
-        return workspace.Cards.FirstOrDefault(IsCommanderCard)?.Name;
+        return CommandZoneContext.FromWorkspace(workspace).DisplayName;
+    }
+
+    /// <summary>
+    /// Finds the commander query name, preferring active multi-card command zones over stale saved intent.
+    /// </summary>
+    protected static string? FindCommanderName(DeckWorkspace workspace, DeckIntent? intent)
+    {
+        CommandZoneContext commandZone = CommandZoneContext.FromWorkspace(workspace);
+        if (commandZone.HasPartnerPair || commandZone.HasBackgroundPair)
+        {
+            return commandZone.DisplayName;
+        }
+
+        return string.IsNullOrWhiteSpace(intent?.Commander)
+            ? commandZone.DisplayName
+            : intent.Commander;
+    }
+
+    /// <summary>
+    /// Builds active command-zone facts for workspace-aware services.
+    /// </summary>
+    protected static CommandZoneContext FindCommandZoneContext(DeckWorkspace workspace)
+    {
+        return CommandZoneContext.FromWorkspace(workspace);
     }
 
     /// <summary>

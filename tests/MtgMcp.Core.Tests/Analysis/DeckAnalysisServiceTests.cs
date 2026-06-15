@@ -385,6 +385,24 @@ public sealed partial class DeckIntelligenceTests
 
         assignment.PrimaryRole.Should().Be(DeckRoles.Ramp);
         assignment.Tags.Should().Contain(DeckTags.ManaFixing);
+
+        DeckCard foodEngine = new()
+        {
+            Name = "Mystery Pantry",
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Enchantment",
+            },
+            Metadata =
+            {
+                [CardFacetNames.TaggerOracleTags] = "repeatable-food"
+            }
+        };
+
+        CardRoleAssignment foodAssignment = DeckRoleClassifier.Classify(foodEngine);
+
+        foodAssignment.PrimaryRole.Should().Be(DeckRoles.Synergy);
+        foodAssignment.Tags.Should().Contain([DeckTags.Food, DeckTags.Tokens, DeckTags.Lifegain]);
     }
 
     /// <summary>
@@ -803,6 +821,34 @@ public sealed partial class DeckIntelligenceTests
             .Tags
             .Should()
             .Contain(DeckTags.ArtifactEnchantmentHate);
+        DeckRoleClassifier.Classify(Card(
+                "Second Breakfast",
+                "Enchantment",
+                "At the beginning of your end step, create two Food tokens."))
+            .Tags
+            .Should()
+            .Contain([DeckTags.Food, DeckTags.ArtifactTokens, DeckTags.Lifegain]);
+        DeckRoleClassifier.Classify(Card(
+                "Bojuka Bog",
+                "Land",
+                "When Bojuka Bog enters, exile all cards from target player's graveyard."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.GraveyardHate);
+        DeckRoleClassifier.Classify(Card(
+                "Regrowth Rite",
+                "Sorcery",
+                "Return target permanent card from your graveyard to the battlefield."))
+            .Tags
+            .Should()
+            .Contain(DeckTags.Reanimation);
+
+        CardRoleAssignment recursion = DeckRoleClassifier.Classify(Card(
+            "Grave Renewal",
+            "Sorcery",
+            "Return target creature card from your graveyard to the battlefield. You gain 2 life."));
+        recursion.PrimaryRole.Should().Be(DeckRoles.Recursion);
+        recursion.PrimaryRole.Should().NotBe(DeckRoles.BoardWipes);
 
         CardRoleAssignment viciousRumors = DeckRoleClassifier.Classify(Card(
             "Vicious Rumors",

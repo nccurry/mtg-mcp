@@ -158,6 +158,16 @@ public static class DeckTags
     public const string Lifegain = "Lifegain";
 
     /// <summary>
+    /// Stores the Food token tag.
+    /// </summary>
+    public const string Food = "Food";
+
+    /// <summary>
+    /// Stores the artifact token tag.
+    /// </summary>
+    public const string ArtifactTokens = "Artifact Tokens";
+
+    /// <summary>
     /// Stores the drain tag.
     /// </summary>
     public const string Drain = "Drain";
@@ -258,6 +268,8 @@ public static class DeckTags
         ManaFixing,
         CardSelection,
         Lifegain,
+        Food,
+        ArtifactTokens,
         Drain,
         Voltron,
         Blink,

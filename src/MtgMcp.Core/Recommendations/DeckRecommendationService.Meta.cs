@@ -17,7 +17,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         CommanderMetaQuery query = new()
         {
-            Commander = intent?.Commander ?? FindCommanderName(workspace),
+            Commander = FindCommanderName(workspace, intent),
             Theme = intent?.Archetype,
             Format = workspace.Format,
             Limit = Math.Clamp(limit, 1, 100)

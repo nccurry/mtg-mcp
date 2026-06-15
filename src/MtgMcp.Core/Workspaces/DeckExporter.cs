@@ -112,12 +112,12 @@ public sealed class DeckExporter
 
         builder.Append(card.Quantity);
         builder.Append(' ');
-        if (markdownLinks && !string.IsNullOrWhiteSpace(card.Snapshot?.ScryfallUri))
+        if (markdownLinks)
         {
             builder.Append('[');
-            builder.Append(card.Name);
+            builder.Append(EscapeMarkdownLinkText(card.Name));
             builder.Append("](");
-            builder.Append(card.Snapshot.ScryfallUri);
+            builder.Append(ScryfallLink(card));
             builder.Append(')');
         }
         else
@@ -126,5 +126,28 @@ public sealed class DeckExporter
         }
 
         builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Returns a card's known Scryfall page or a deterministic exact-name search URL.
+    /// </summary>
+    private static string ScryfallLink(DeckCard card)
+    {
+        if (!string.IsNullOrWhiteSpace(card.Snapshot?.ScryfallUri))
+        {
+            return card.Snapshot.ScryfallUri;
+        }
+
+        return "https://scryfall.com/search?as=grid&order=name&q="
+            + Uri.EscapeDataString($"!\"{card.Name}\"");
+    }
+
+    /// <summary>
+    /// Escapes characters that would break Markdown link text.
+    /// </summary>
+    private static string EscapeMarkdownLinkText(string value)
+    {
+        return value.Replace("[", "\\[", StringComparison.Ordinal)
+            .Replace("]", "\\]", StringComparison.Ordinal);
     }
 }

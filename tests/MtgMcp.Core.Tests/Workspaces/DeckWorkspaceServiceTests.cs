@@ -1528,6 +1528,274 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that compact zone listings separate active and excluded card rows.
+    /// </summary>
+    [Fact]
+    public async Task ListCardsByZoneAsync_FiltersAndCollapsesDuplicateRows()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = CreateDiffWorkspace("zones");
+        workspace.Cards.Add(new DeckCard
+        {
+            Name = "Sol Ring",
+            Quantity = 2,
+            PrimaryCategory = DeckDefaults.Maybeboard,
+            Categories = [DeckDefaults.Maybeboard],
+            ScryfallOracleId = "oracle-sol-ring",
+            Snapshot = new CardSnapshot { TypeLine = "Artifact" }
+        });
+        workspace.Cards.Single(card => card.Name == "Sol Ring" && card.PrimaryCategory == DeckDefaults.Mainboard)
+            .Categories.Add(DeckDefaults.Sideboard);
+        workspace = await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        DeckCardsByZoneResult active = await service.ListCardsByZoneAsync(
+            workspace.Id,
+            DeckCardZones.Active,
+            collapseDuplicates: true,
+            TestContext.Current.CancellationToken);
+        DeckCardsByZoneResult excluded = await service.ListCardsByZoneAsync(
+            workspace.Id,
+            DeckCardZones.Excluded,
+            collapseDuplicates: true,
+            TestContext.Current.CancellationToken);
+        DeckCardsByZoneResult all = await service.ListCardsByZoneAsync(
+            workspace.Id,
+            DeckCardZones.All,
+            collapseDuplicates: true,
+            TestContext.Current.CancellationToken);
+
+        active.Cards.Single(row => row.CardName == "Sol Ring").Quantity.Should().Be(1);
+        active.Cards.Should().NotContain(row => row.CardName == "Finale of Devastation");
+        excluded.Cards.Single(row => row.CardName == "Sol Ring").Quantity.Should().Be(2);
+        excluded.Cards.Should().Contain(row => row.CardName == "Finale of Devastation");
+        DeckCardZoneRow collapsedSolRing = all.Cards.Single(row => row.CardName == "Sol Ring");
+        collapsedSolRing.Quantity.Should().Be(3);
+        collapsedSolRing.PrimaryCategory.Should().BeNull();
+        collapsedSolRing.Categories.Should().Contain([DeckDefaults.Mainboard, DeckDefaults.Sideboard, DeckDefaults.Maybeboard]);
+        collapsedSolRing.Locations.Should().Contain(location =>
+            location.Category == DeckDefaults.Mainboard
+            && location.Primary
+            && location.IncludedInDeck
+            && location.Quantity == 1);
+        collapsedSolRing.Locations.Should().NotContain(location =>
+            location.Category == DeckDefaults.Sideboard
+            && !location.Primary);
+        collapsedSolRing.Locations.Should().Contain(location =>
+            location.Category == DeckDefaults.Maybeboard
+            && location.Primary
+            && !location.IncludedInDeck
+            && location.Quantity == 2);
+    }
+
+    /// <summary>
+    /// Verifies that bulk moves preserve card metadata and support local partial splits.
+    /// </summary>
+    [Fact]
+    public async Task MoveCardsBulkAsync_MovesWholeRowsAndSplitsLocalPartialRows()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(CreateBulkMoveWorkspace(), TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        DeckChangeResult result = await service.MoveCardsBulkAsync(
+            workspace.Id,
+            [
+                new BulkDeckCardMove
+                {
+                    CardName = "Ramp Stone",
+                    Quantity = 1,
+                    FromCategory = DeckRoles.Ramp,
+                    ToCategory = DeckDefaults.Sideboard
+                },
+                new BulkDeckCardMove
+                {
+                    CardName = "Sol Ring",
+                    FromCategory = DeckRoles.Ramp,
+                    ToCategory = DeckDefaults.Maybeboard
+                }
+            ],
+            TestContext.Current.CancellationToken);
+
+        DeckWorkspace changed = result.Workspace;
+        changed.Cards.Single(card => card.Name == "Ramp Stone" && card.PrimaryCategory == DeckRoles.Ramp)
+            .Quantity.Should().Be(2);
+        DeckCard split = changed.Cards.Single(card =>
+            card.Name == "Ramp Stone"
+            && card.PrimaryCategory == DeckDefaults.Sideboard);
+        split.Quantity.Should().Be(1);
+        split.ScryfallId.Should().Be("ramp-stone-print");
+        split.Snapshot.ScryfallUri.Should().Be("https://scryfall.test/ramp-stone");
+        split.ArchidektDeckRelationId.Should().BeNull();
+        changed.Cards.Single(card => card.Name == "Sol Ring").PrimaryCategory.Should().Be(DeckDefaults.Maybeboard);
+    }
+
+    /// <summary>
+    /// Verifies that partial bulk moves are rejected for Archidekt writeback workspaces.
+    /// </summary>
+    [Fact]
+    public async Task MoveCardsBulkAsync_RejectsPartialArchidektWritebackMoves()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = CreateBulkMoveWorkspace();
+        workspace.Mode = WorkspaceMode.Archidekt;
+        workspace.WriteBack = true;
+        workspace.ArchidektDeckId = "123";
+        workspace = await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        FakeArchidektGateway gateway = new() { ImportedDeck = workspace };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), gateway);
+
+        Func<Task> act = () => service.MoveCardsBulkAsync(
+            workspace.Id,
+            [
+                new BulkDeckCardMove
+                {
+                    CardName = "Ramp Stone",
+                    Quantity = 1,
+                    FromCategory = DeckRoles.Ramp,
+                    ToCategory = DeckDefaults.Sideboard
+                }
+            ],
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Partial bulk moves are not writeback-safe*");
+    }
+
+    /// <summary>
+    /// Verifies that explicit non-positive bulk move quantities are rejected instead of treated as whole-row moves.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task MoveCardsBulkAsync_RejectsNonPositiveQuantities(int quantity)
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(CreateBulkMoveWorkspace(), TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        Func<Task> act = () => service.MoveCardsBulkAsync(
+            workspace.Id,
+            [
+                new BulkDeckCardMove
+                {
+                    CardName = "Ramp Stone",
+                    Quantity = quantity,
+                    FromCategory = DeckRoles.Ramp,
+                    ToCategory = DeckDefaults.Sideboard
+                }
+            ],
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*quantity must be greater than zero*");
+    }
+
+    /// <summary>
+    /// Verifies that markdown-link exports use exact-name Scryfall fallbacks.
+    /// </summary>
+    [Fact]
+    public async Task ExportDeckAsync_MarkdownLinksUsesSnapshotUrisAndExactNameFallbacks()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(CreateDiffWorkspace("export-links"), TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        string markdown = await service.ExportDeckAsync(
+            workspace.Id,
+            format: "markdown-links",
+            includedOnly: false,
+            includeCategories: true,
+            TestContext.Current.CancellationToken);
+
+        markdown.Should().Contain("[Sol Ring](https://scryfall.test/sol-ring)");
+        markdown.Should().Contain("[Brainstorm](https://scryfall.test/brainstorm)");
+
+        workspace.Cards.Single(card => card.Name == "Brainstorm").Snapshot.ScryfallUri = null;
+        await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        markdown = await service.ExportDeckAsync(
+            workspace.Id,
+            format: "markdown-links",
+            includedOnly: false,
+            includeCategories: true,
+            TestContext.Current.CancellationToken);
+
+        markdown.Should().Contain("[Brainstorm](https://scryfall.com/search?as=grid&order=name&q=%21%22Brainstorm%22)");
+    }
+
+    /// <summary>
+    /// Verifies last-import diff status values and baseline diffing.
+    /// </summary>
+    [Fact]
+    public async Task DiffLastImportAsync_ReturnsExplicitStatusesAndBaselineDiff()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace noSource = await repository.SaveAsync(new DeckWorkspace { Id = "no-source" }, TestContext.Current.CancellationToken);
+        DeckWorkspace noBaseline = await repository.SaveAsync(CreateDiffWorkspace("no-baseline"), TestContext.Current.CancellationToken);
+        DeckWorkspace unsupported = await repository.SaveAsync(new DeckWorkspace
+        {
+            Id = "unsupported",
+            SourceReferences =
+            [
+                new DeckSourceReference { Provider = "other", ExternalId = "deck-1" }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspace unavailable = await repository.SaveAsync(CreateDiffWorkspace("unavailable"), TestContext.Current.CancellationToken);
+        unavailable.ImportHistory.Add(new DeckImportHistoryEntry
+        {
+            Provider = DeckImportProviders.Archidekt,
+            ExternalId = "23097041",
+            LocalWorkspaceId = unavailable.Id,
+            BaselineWorkspace = null
+        });
+        await repository.SaveAsync(unavailable, TestContext.Current.CancellationToken);
+        DeckWorkspace baseline = await repository.SaveAsync(CreateDiffWorkspace("imported"), TestContext.Current.CancellationToken);
+        DeckWorkspace remote = CreateDiffWorkspace("remote");
+        remote.ArchidektDeckId = "23097041";
+        remote.Mode = WorkspaceMode.Archidekt;
+        remote.Cards.Add(new DeckCard
+        {
+            Name = "Beast Whisperer",
+            Quantity = 1,
+            PrimaryCategory = DeckRoles.Draw,
+            Categories = [DeckRoles.Draw],
+            ScryfallOracleId = "oracle-beast-whisperer"
+        });
+        FakeArchidektGateway gateway = new() { ImportedDeck = remote };
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog(), gateway);
+
+        DeckWorkspace imported = await service.ReopenWorkspaceWithWritebackAsync(
+            baseline.Id,
+            TestContext.Current.CancellationToken);
+        WorkspaceDiffLastImportResult sourceMissing = await service.DiffLastImportAsync(
+            noSource.Id,
+            TestContext.Current.CancellationToken);
+        WorkspaceDiffLastImportResult baselineMissing = await service.DiffLastImportAsync(
+            noBaseline.Id,
+            TestContext.Current.CancellationToken);
+        WorkspaceDiffLastImportResult unsupportedSource = await service.DiffLastImportAsync(
+            unsupported.Id,
+            TestContext.Current.CancellationToken);
+        WorkspaceDiffLastImportResult unavailableHistory = await service.DiffLastImportAsync(
+            unavailable.Id,
+            TestContext.Current.CancellationToken);
+        WorkspaceDiffLastImportResult diff = await service.DiffLastImportAsync(
+            imported.Id,
+            TestContext.Current.CancellationToken);
+
+        sourceMissing.Status.Should().Be(WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource);
+        baselineMissing.Status.Should().Be(WorkspaceDiffLastImportStatuses.NoPriorBaseline);
+        unsupportedSource.Status.Should().Be(WorkspaceDiffLastImportStatuses.SourceUnsupported);
+        unavailableHistory.Status.Should().Be(WorkspaceDiffLastImportStatuses.HistoryUnavailable);
+        diff.Status.Should().Be(WorkspaceDiffLastImportStatuses.BaselineFound);
+        diff.Diff.Should().NotBeNull();
+        diff.Diff!.AddedCards.Should().ContainSingle(card => card.CardName == "Beast Whisperer");
+        imported.ImportHistory.Should().ContainSingle();
+        imported.ImportHistory[0].LocalWorkspaceId.Should().Be(baseline.Id);
+        imported.ImportHistory[0].BaselineWorkspace!.ImportHistory.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that imported card snapshots feed analysis and validation.
     /// </summary>
     [Fact]
@@ -2844,6 +3112,52 @@ public sealed class DeckWorkspaceServiceTests
                     Categories = [DeckDefaults.Sideboard],
                     ScryfallOracleId = "oracle-finale",
                     Snapshot = new CardSnapshot { TypeLine = "Sorcery", ScryfallUri = "https://scryfall.test/finale" }
+                }
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Creates a workspace with duplicate movable rows.
+    /// </summary>
+    private static DeckWorkspace CreateBulkMoveWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Id = $"bulk-{Guid.NewGuid():N}",
+            Name = "Bulk Move",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Ramp Stone",
+                    Quantity = 3,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    ScryfallId = "ramp-stone-print",
+                    ScryfallOracleId = "ramp-stone-oracle",
+                    ArchidektCardId = "500",
+                    ArchidektDeckRelationId = 9001,
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        ScryfallUri = "https://scryfall.test/ramp-stone"
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    ScryfallId = "sol-ring-print",
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact" }
                 }
             ]
         };

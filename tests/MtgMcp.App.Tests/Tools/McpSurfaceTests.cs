@@ -54,6 +54,7 @@ public sealed class McpSurfaceTests
         typeof(CategoryTools),
         typeof(CheckpointTools),
         typeof(AnalysisTools),
+        typeof(DeckReEvaluationTools),
         typeof(RecommendationTools),
         typeof(CorpusTools),
         typeof(PlanTools),
@@ -128,7 +129,9 @@ public sealed class McpSurfaceTests
             "deck_intent_set",
             "deck_intent_suggest",
             "deck_list_cards_by_category",
+            "deck_list_cards_by_zone",
             "deck_move_card",
+            "deck_move_cards_bulk",
             "deck_plan_apply",
             "deck_plan_clone",
             "deck_plan_compare_performance",
@@ -140,6 +143,7 @@ public sealed class McpSurfaceTests
             "deck_preview_card_package",
             "deck_project_board_state",
             "deck_query_cards",
+            "deck_re_evaluate",
             "deck_refresh_card_metadata",
             "deck_remove_card",
             "deck_remove_card_category",
@@ -167,6 +171,7 @@ public sealed class McpSurfaceTests
             "source_search_reddit_discussions",
             "workspace_export",
             "workspace_diff",
+            "workspace_diff_last_import",
             "workspace_list",
             "workspace_open",
             "workspace_parse_decklist",
@@ -360,6 +365,13 @@ public sealed class McpSurfaceTests
         GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.DiffWorkspacesAsync), "previousWorkspaceId")
             .Should()
             .Contain("Explicit baseline");
+        GetParameterDescription(typeof(WorkspaceTools), nameof(WorkspaceTools.ListCardsByZoneAsync), "zone")
+            .Should()
+            .Contain("active")
+            .And.Contain("sideboard")
+            .And.Contain("maybeboard")
+            .And.Contain("excluded")
+            .And.Contain("all");
         GetParameterDescription(typeof(AnalysisTools), nameof(AnalysisTools.RefreshDeckCardSnapshotsAsync), "scope")
             .Should()
             .Contain("included")
@@ -370,6 +382,12 @@ public sealed class McpSurfaceTests
             .Contain("summary")
             .And.Contain("normal")
             .And.Contain("full");
+        GetParameterDescription(typeof(DeckReEvaluationTools), nameof(DeckReEvaluationTools.ReEvaluateDeckAsync), "analysisProfile")
+            .Should()
+            .Contain("auto");
+        GetParameterDescription(typeof(DeckReEvaluationTools), nameof(DeckReEvaluationTools.ReEvaluateDeckAsync), "limit")
+            .Should()
+            .Contain("clamped");
         GetParameterDescription(typeof(FacetTools), nameof(FacetTools.GetCardFacetsAsync), "detailLevel")
             .Should()
             .Contain("summary")
@@ -389,6 +407,16 @@ public sealed class McpSurfaceTests
             .Contain("auto")
             .And.Contain("neutral")
             .And.Contain("stax");
+        GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.AnalyzeDeckPerformanceAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
+        GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.ComparePlanPerformanceAsync), "detailLevel")
+            .Should()
+            .Contain("summary")
+            .And.Contain("normal")
+            .And.Contain("full");
         GetParameterDescription(typeof(SimulationTools), nameof(SimulationTools.CompareGoldfishAsync), "detailLevel")
             .Should()
             .Contain("summary")
@@ -658,16 +686,20 @@ public sealed class McpSurfaceTests
     {
         CustomAttributeData searchCards = GetToolAttribute(nameof(CardTools.SearchCardsAsync));
         CustomAttributeData addCard = GetToolAttribute(nameof(DeckMutationTools.AddCardAsync));
+        CustomAttributeData bulkMoveCards = GetToolAttribute(nameof(DeckMutationTools.MoveCardsBulkAsync));
         CustomAttributeData removeCard = GetToolAttribute(
             nameof(DeckMutationTools.RemoveCardAsync)
         );
         CustomAttributeData openLocal = GetToolAttribute(nameof(WorkspaceTools.OpenLocalDeckAsync));
+        CustomAttributeData listCardsByZone = GetToolAttribute(nameof(WorkspaceTools.ListCardsByZoneAsync));
         CustomAttributeData previewPlan = GetToolAttribute(nameof(PlanTools.PreviewDeckPlanAsync));
         CustomAttributeData previewPackage = GetToolAttribute(nameof(PlanTools.PreviewCardPackageAsync));
         CustomAttributeData bracket = GetToolAttribute(nameof(AnalysisTools.EstimateCommanderBracketAsync));
         CustomAttributeData roleCounts = GetToolAttribute(nameof(AnalysisTools.ExplainRoleCountsAsync));
         CustomAttributeData weakSpots = GetToolAttribute(nameof(AnalysisTools.ReviewWeakSpotsAsync));
+        CustomAttributeData reEvaluate = GetToolAttribute(nameof(DeckReEvaluationTools.ReEvaluateDeckAsync));
         CustomAttributeData workspaceDiff = GetToolAttribute(nameof(WorkspaceTools.DiffWorkspacesAsync));
+        CustomAttributeData lastImportDiff = GetToolAttribute(nameof(WorkspaceTools.DiffLastImportAsync));
         CustomAttributeData reopenWriteback = GetToolAttribute(nameof(WorkspaceTools.ReopenWorkspaceWithWritebackAsync));
         CustomAttributeData performance = GetToolAttribute(nameof(SimulationTools.AnalyzeDeckPerformanceAsync));
         CustomAttributeData comparePerformance = GetToolAttribute(nameof(SimulationTools.ComparePlanPerformanceAsync));
@@ -685,10 +717,14 @@ public sealed class McpSurfaceTests
         GetNamedBool(searchCards, "OpenWorld").Should().BeTrue();
         GetNamedBool(addCard, "ReadOnly").Should().BeFalse();
         GetNamedBool(addCard, "Destructive").Should().BeFalse();
+        GetNamedBool(bulkMoveCards, "ReadOnly").Should().BeFalse();
+        GetNamedBool(bulkMoveCards, "Destructive").Should().BeTrue();
         GetNamedBool(removeCard, "ReadOnly").Should().BeFalse();
         GetNamedBool(removeCard, "Destructive").Should().BeTrue();
         GetNamedBool(openLocal, "ReadOnly").Should().BeTrue();
         GetNamedBool(openLocal, "OpenWorld").Should().BeFalse();
+        GetNamedBool(listCardsByZone, "ReadOnly").Should().BeTrue();
+        GetNamedBool(listCardsByZone, "OpenWorld").Should().BeFalse();
         GetNamedBool(previewPlan, "ReadOnly").Should().BeTrue();
         GetNamedBool(previewPlan, "OpenWorld").Should().BeTrue();
         GetNamedBool(previewPackage, "ReadOnly").Should().BeTrue();
@@ -699,8 +735,12 @@ public sealed class McpSurfaceTests
         GetNamedBool(roleCounts, "OpenWorld").Should().BeFalse();
         GetNamedBool(weakSpots, "ReadOnly").Should().BeTrue();
         GetNamedBool(weakSpots, "OpenWorld").Should().BeFalse();
+        GetNamedBool(reEvaluate, "ReadOnly").Should().BeTrue();
+        GetNamedBool(reEvaluate, "OpenWorld").Should().BeFalse();
         GetNamedBool(workspaceDiff, "ReadOnly").Should().BeTrue();
         GetNamedBool(workspaceDiff, "OpenWorld").Should().BeFalse();
+        GetNamedBool(lastImportDiff, "ReadOnly").Should().BeTrue();
+        GetNamedBool(lastImportDiff, "OpenWorld").Should().BeFalse();
         GetNamedBool(reopenWriteback, "ReadOnly").Should().BeFalse();
         GetNamedBool(reopenWriteback, "OpenWorld").Should().BeTrue();
         GetNamedBool(performance, "ReadOnly").Should().BeTrue();
@@ -811,6 +851,27 @@ public sealed class McpSurfaceTests
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*workspace_start*");
+    }
+
+    /// <summary>
+    /// Verifies that the bulk move tool is guarded in read-only mode.
+    /// </summary>
+    [Fact]
+    public async Task OperationModeGuard_BlocksBulkMoveWhenReadOnly()
+    {
+        DeckWorkspaceService deckService = new(new InMemoryRepository(), new EmptyCardCatalog());
+        DeckMutationTools tools = new(
+            deckService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "read-only" })));
+
+        Func<Task> act = () => tools.MoveCardsBulkAsync(
+            "workspace",
+            [new BulkDeckCardMove { CardName = "Sol Ring", ToCategory = DeckDefaults.Maybeboard }],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*read-only mode*deck_move_cards_bulk*");
     }
 
     /// <summary>
@@ -987,6 +1048,42 @@ public sealed class McpSurfaceTests
         summary.GetProperty("snapshotQualityBefore").GetProperty("cardCount").GetInt32().Should().Be(100);
         full.Should().BeOfType<DeckNormalizationResult>()
             .Which.Workspace.Cards.Should().HaveCount(100);
+    }
+
+    /// <summary>
+    /// Verifies that deck re-evaluation composes existing analyses into bounded compact output.
+    /// </summary>
+    [Fact]
+    public async Task DeckReEvaluate_ReturnsCompactBoundedHealthSnapshot()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(
+            CreateReEvaluationWorkspace(),
+            TestContext.Current.CancellationToken);
+        EmptyCardCatalog cardCatalog = new();
+        DeckWorkspaceService deckService = new(repository, cardCatalog);
+        DeckAnalysisService analysisService = new(repository, cardCatalog);
+        DeckReEvaluationTools tools = new(deckService, analysisService);
+
+        JsonElement result = JsonSerializer.SerializeToElement(await tools.ReEvaluateDeckAsync(
+            workspace.Id,
+            limit: 2,
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        result.GetProperty("detailLevel").GetString().Should().Be("summary");
+        result.GetProperty("validation").GetProperty("isValid").GetBoolean().Should().BeTrue();
+        result.GetProperty("mana").GetProperty("landCount").GetInt32().Should().BeGreaterThan(0);
+        result.GetProperty("consistency").GetProperty("deckSize").GetInt32().Should().Be(100);
+        result.GetProperty("roleBalance").GetArrayLength().Should().BeLessThanOrEqualTo(2);
+        result.GetProperty("topRisks").GetArrayLength().Should().BeLessThanOrEqualTo(2);
+        result.GetProperty("topSuspectedCuts").GetArrayLength().Should().BeLessThanOrEqualTo(2);
+        result.GetProperty("bestExcludedUpgrades").GetArrayLength().Should().BeLessThanOrEqualTo(2);
+        result.GetProperty("bestExcludedUpgrades")
+            .EnumerateArray()
+            .Should()
+            .Contain(row => row.GetProperty("cardName").GetString() == "Read the Bones"
+                && row.GetProperty("sourceCategory").GetString() == DeckDefaults.Maybeboard);
+        result.GetProperty("sourceRecommendations").GetProperty("status").GetString().Should().Be("notQueried");
     }
 
     /// <summary>
@@ -1172,6 +1269,158 @@ public sealed class McpSurfaceTests
         summaryTrace.ValueKind.Should().Be(JsonValueKind.Null);
         normal.GetProperty("decks")[0].GetProperty("representativeTrace").GetArrayLength().Should().BeGreaterThan(0);
         normal.GetProperty("sampleOutcomes").GetArrayLength().Should().Be(2);
+    }
+
+    /// <summary>
+    /// Verifies that performance analysis defaults to raw output and offers compact detail levels.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzePerformance_DefaultsToFullAndSupportsCompactDetailLevels()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(CreatePerformanceWorkspace(), TestContext.Current.CancellationToken);
+        SimulationTools tools = new(new DeckSimulationService(repository, new EmptyCardCatalog()));
+
+        object fullResult = await tools.AnalyzeDeckPerformanceAsync(
+            workspace.Id,
+            simulations: 100,
+            maxTurn: 4,
+            seed: 9,
+            cancellationToken: TestContext.Current.CancellationToken);
+        object summaryResult = await tools.AnalyzeDeckPerformanceAsync(
+            workspace.Id,
+            detailLevel: "summary",
+            simulations: 100,
+            maxTurn: 4,
+            seed: 9,
+            cancellationToken: TestContext.Current.CancellationToken);
+        object normalResult = await tools.AnalyzeDeckPerformanceAsync(
+            workspace.Id,
+            detailLevel: "normal",
+            simulations: 100,
+            maxTurn: 4,
+            seed: 9,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        fullResult.Should().BeOfType<DeckPerformanceAnalysis>();
+        JsonElement summary = JsonSerializer.SerializeToElement(summaryResult, WebJsonOptions);
+        JsonElement normal = JsonSerializer.SerializeToElement(normalResult, WebJsonOptions);
+        summary.GetProperty("detailLevel").GetString().Should().Be("summary");
+        summary.TryGetProperty("turnProbabilities", out _).Should().BeFalse();
+        summary.GetProperty("keyMetrics").GetProperty("sevenCardKeepRate").GetDouble().Should().BeInRange(0, 1);
+        summary.GetProperty("failedScenarios").GetArrayLength().Should().BeLessThanOrEqualTo(5);
+        summary.GetProperty("topStrandedCards").GetArrayLength().Should().BeLessThanOrEqualTo(5);
+        summary.GetProperty("commanderContext")
+            .GetProperty("commanderNames")
+            .EnumerateArray()
+            .Select(value => value.GetString())
+            .Should()
+            .Contain("Test Commander");
+        summary.GetProperty("traceSummary").ValueKind.Should().Be(JsonValueKind.Null);
+        normal.GetProperty("detailLevel").GetString().Should().Be("normal");
+        normal.GetProperty("traceSummary").GetProperty("aggregateCounters")
+            .GetProperty("total-runs")
+            .GetInt32()
+            .Should()
+            .Be(100);
+    }
+
+    /// <summary>
+    /// Verifies that performance comparison defaults to raw output and offers compact detail levels.
+    /// </summary>
+    [Fact]
+    public async Task ComparePlanPerformance_DefaultsToFullAndSupportsCompactDetailLevels()
+    {
+        InMemoryRepository repository = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await repository.SaveAsync(CreatePerformanceWorkspace(), TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Swap curve slots",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.SetCardQuantity,
+                    CardName = "Ramp Stone",
+                    Quantity = 10,
+                    Category = DeckRoles.Ramp
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.SetCardQuantity,
+                    CardName = "Heavy Spell",
+                    Quantity = 54,
+                    Category = DeckRoles.Utility
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        SimulationTools tools = new(new DeckSimulationService(
+            repository,
+            new EmptyCardCatalog(),
+            planRepository: plans));
+
+        object fullResult = await tools.ComparePlanPerformanceAsync(
+            plan.PlanId,
+            simulations: 100,
+            maxTurn: 4,
+            seed: 9,
+            cancellationToken: TestContext.Current.CancellationToken);
+        object summaryResult = await tools.ComparePlanPerformanceAsync(
+            plan.PlanId,
+            detailLevel: "summary",
+            simulations: 100,
+            maxTurn: 4,
+            seed: 9,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        fullResult.Should().BeOfType<DeckPerformanceComparison>();
+        JsonElement summary = JsonSerializer.SerializeToElement(summaryResult, WebJsonOptions);
+        summary.GetProperty("detailLevel").GetString().Should().Be("summary");
+        summary.GetProperty("before").GetProperty("detailLevel").GetString().Should().Be("summary");
+        summary.GetProperty("after").GetProperty("detailLevel").GetString().Should().Be("summary");
+        summary.GetProperty("deltas").GetArrayLength().Should().BeLessThanOrEqualTo(8);
+        summary.TryGetProperty("traceSummary", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that unsupported performance detail levels are rejected.
+    /// </summary>
+    [Fact]
+    public async Task PerformanceTools_RejectInvalidDetailLevels()
+    {
+        InMemoryRepository repository = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await repository.SaveAsync(CreatePerformanceWorkspace(), TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "No-op",
+            Operations = []
+        }, TestContext.Current.CancellationToken);
+        SimulationTools tools = new(new DeckSimulationService(
+            repository,
+            new EmptyCardCatalog(),
+            planRepository: plans));
+
+        Func<Task> analyze = () => tools.AnalyzeDeckPerformanceAsync(
+            workspace.Id,
+            detailLevel: "verbose",
+            simulations: 10,
+            maxTurn: 2,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Func<Task> compare = () => tools.ComparePlanPerformanceAsync(
+            plan.PlanId,
+            detailLevel: "verbose",
+            simulations: 10,
+            maxTurn: 2,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await analyze.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*detailLevel must be full, normal, or summary*");
+        await compare.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*detailLevel must be full, normal, or summary*");
     }
 
     /// <summary>
@@ -2028,6 +2277,167 @@ public sealed class McpSurfaceTests
                         ManaValue = 1,
                         Power = power.ToString(System.Globalization.CultureInfo.InvariantCulture),
                         Toughness = "1",
+                    }
+                },
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a deterministic Commander workspace for compact performance output tests.
+    /// </summary>
+    private static DeckWorkspace CreatePerformanceWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Name = "Performance Compact",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Lands, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Utility, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Test Commander",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Advisor",
+                        ManaCost = "{2}{G}",
+                        ManaValue = 3,
+                        OracleText = "Whenever you cast your second spell each turn, draw a card.",
+                        ColorIdentity = ["G"]
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Forest",
+                    Quantity = 35,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Forest",
+                        OracleText = "{T}: Add {G}.",
+                        ProducedMana = ["G"],
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Ramp Stone",
+                    Quantity = 8,
+                    PrimaryCategory = DeckRoles.Ramp,
+                    Categories = [DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Artifact",
+                        ManaCost = "{2}",
+                        ManaValue = 2,
+                        OracleText = "{T}: Add {G}.",
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Heavy Spell",
+                    Quantity = 56,
+                    PrimaryCategory = DeckRoles.Utility,
+                    Categories = [DeckRoles.Utility],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        ManaCost = "{5}{G}",
+                        ManaValue = 6,
+                        OracleText = "Draw two cards.",
+                        ColorIdentity = ["G"]
+                    }
+                },
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a Commander workspace with an excluded draw candidate for re-evaluation tests.
+    /// </summary>
+    private static DeckWorkspace CreateReEvaluationWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Name = "Re-evaluate Compact",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Lands, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Ramp, IncludedInDeck = true },
+                new DeckCategory { Name = DeckRoles.Utility, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Test Commander",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Legendary Creature - Advisor",
+                        ManaCost = "{2}{B}",
+                        ManaValue = 3,
+                        OracleText = "Whenever you gain life, each opponent loses 1 life.",
+                        ColorIdentity = ["B"]
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Swamp",
+                    Quantity = 98,
+                    PrimaryCategory = DeckRoles.Lands,
+                    Categories = [DeckRoles.Lands],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Basic Land - Swamp",
+                        OracleText = "{T}: Add {B}.",
+                        ProducedMana = ["B"],
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Expensive Filler",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Utility,
+                    Categories = [DeckRoles.Utility],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        ManaCost = "{5}{B}",
+                        ManaValue = 6,
+                        OracleText = "Target opponent loses 2 life.",
+                        ColorIdentity = ["B"]
+                    }
+                },
+                new DeckCard
+                {
+                    Name = "Read the Bones",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        ManaCost = "{2}{B}",
+                        ManaValue = 3,
+                        OracleText = "Scry 2, then draw two cards. You lose 2 life.",
+                        ColorIdentity = ["B"],
+                        ScryfallUri = "https://scryfall.com/card/test/2/read-the-bones"
                     }
                 },
             ],

@@ -537,6 +537,30 @@ public sealed class DeckPerformanceTests
     }
 
     /// <summary>
+    /// Verifies that partner commanders do not emit Background-specific timing metrics.
+    /// </summary>
+    [Fact]
+    public void AnalyzeDeckPerformance_DoesNotReportBackgroundMetricsForPartnerCommanders()
+    {
+        DeckPerformanceAnalysis analysis = AnalyzeDirect(
+            CreatePartnerPerformanceDeck(),
+            simulations: 300,
+            maxTurn: 5,
+            seed: 74,
+            includeMulligans: false);
+
+        analysis.CommandZone.CommanderNames.Should().Equal(
+            "Frodo, Adventurous Hobbit",
+            "Sam, Loyal Attendant");
+        analysis.CommandZone.BackgroundNames.Should().BeEmpty();
+        analysis.CommandZone.BackgroundCastByTurn.Should().BeEmpty();
+        analysis.CommandZone.CommanderWithBackgroundOnlineByTurn.Should().BeEmpty();
+        analysis.TurnProbabilities.Should().NotContain(row =>
+            row.Name == "background-cast-by-turn"
+            || row.Name == "commander-with-background-online-by-turn");
+    }
+
+    /// <summary>
     /// Verifies that scenarios expose observed failure-driver counts.
     /// </summary>
     [Fact]
@@ -1428,6 +1452,47 @@ public sealed class DeckPerformanceTests
                     ["G"]),
                 Card("Gruul Land Package", 60, DeckDefaults.Mainboard, "Land", null, 0, "{T}: Add {R} or {G}.", [], ["R", "G"]),
                 Card("Ramp Stone", 38, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["R", "G"]),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Creates a partner commander deck with no Background cards.
+    /// </summary>
+    private static DeckWorkspace CreatePartnerPerformanceDeck()
+    {
+        return new DeckWorkspace
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "Frodo Sam Performance",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                Card(
+                    "Frodo, Adventurous Hobbit",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Halfling Scout",
+                    "{W}{B}",
+                    2,
+                    "Partner with Sam, Loyal Attendant.",
+                    ["W", "B"]),
+                Card(
+                    "Sam, Loyal Attendant",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Halfling Peasant",
+                    "{1}{G}{W}",
+                    3,
+                    "Partner with Frodo, Adventurous Hobbit.",
+                    ["G", "W"]),
+                Card("Abzan Land Package", 60, DeckDefaults.Mainboard, "Land", null, 0, "{T}: Add {W}, {B}, or {G}.", [], ["W", "B", "G"]),
+                Card("Food Ramp", 37, DeckRoles.Ramp, "Artifact", "{2}", 2, "{T}: Add one mana of any color.", [], ["W", "B", "G"]),
             ],
         };
     }

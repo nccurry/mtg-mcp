@@ -29,12 +29,21 @@ public static class SimulationRouteEvaluator
             || text.Equals("drain-clock", StringComparison.OrdinalIgnoreCase)
             || text.Equals("treasure-engine", StringComparison.OrdinalIgnoreCase)
             || text.Equals("treasure-payoff", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("food-bank", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("artifact-token-bank", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("lifegain-burst", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("lifegain-payoff", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("artifact-leaves-drain", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("food-combat-alpha", StringComparison.OrdinalIgnoreCase)
             || text.Equals("commander-damage-pressure", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("card:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("role:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("tag:", StringComparison.OrdinalIgnoreCase)
             || HasNumericPredicate(text, "mana>=")
             || HasNumericPredicate(text, "tokens>=")
+            || HasNumericPredicate(text, "artifacttokens>=")
+            || HasNumericPredicate(text, "foodtokens>=")
+            || HasNumericPredicate(text, "lifegainavailable>=")
             || HasNumericPredicate(text, "graveyard>=")
             || HasNumericPredicate(text, "interactionheld>=")
             || HasNumericPredicate(text, "dungeonprogress>=")
@@ -236,6 +245,63 @@ public static class SimulationRouteEvaluator
                 out message);
         }
 
+        if (text.Equals("food-bank", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.FoodTokens >= 2 || state.Battlefield.Any(IsFoodEngine);
+            message = matched
+                ? $"food bank available: food tokens {state.FoodTokens}"
+                : $"food bank unavailable: food tokens {state.FoodTokens}";
+            return matched;
+        }
+
+        if (text.Equals("artifact-token-bank", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.ArtifactTokens >= 2 || state.Battlefield.Any(IsArtifactTokenEngine);
+            message = matched
+                ? $"artifact token bank available: artifact tokens {state.ArtifactTokens}"
+                : $"artifact token bank unavailable: artifact tokens {state.ArtifactTokens}";
+            return matched;
+        }
+
+        if (text.Equals("lifegain-burst", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = state.LifeGainAvailable >= 3;
+            message = matched
+                ? $"lifegain available {state.LifeGainAvailable} >= 3"
+                : $"lifegain available {state.LifeGainAvailable} < 3";
+            return matched;
+        }
+
+        if (text.Equals("lifegain-payoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsLifegainPayoff,
+                "battlefield has a lifegain payoff",
+                "battlefield lacks a lifegain payoff",
+                out message);
+        }
+
+        if (text.Equals("artifact-leaves-drain", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchZonePredicate(
+                state.Battlefield,
+                IsArtifactLeavesDrainPayoff,
+                "battlefield has artifact-leaves drain",
+                "battlefield lacks artifact-leaves drain",
+                out message);
+        }
+
+        if (text.Equals("food-combat-alpha", StringComparison.OrdinalIgnoreCase))
+        {
+            bool matched = (state.FoodTokens + state.ArtifactTokens) >= 4
+                && state.Battlefield.Any(IsFoodCombatPayoff);
+            message = matched
+                ? $"food combat alpha has token bank {state.FoodTokens + state.ArtifactTokens}"
+                : $"food combat alpha lacks token bank or payoff: token bank {state.FoodTokens + state.ArtifactTokens}";
+            return matched;
+        }
+
         if (text.Equals("commander-damage-pressure", StringComparison.OrdinalIgnoreCase))
         {
             return MatchCommanderDamagePressure(state, out message);
@@ -278,6 +344,30 @@ public static class SimulationRouteEvaluator
                 ? $"tokens {state.Tokens} >= {tokens}"
                 : $"tokens {state.Tokens} < {tokens}";
             return state.Tokens >= tokens;
+        }
+
+        if (TryReadNumericPredicate(text, "artifacttokens>=", out int artifactTokens))
+        {
+            message = state.ArtifactTokens >= artifactTokens
+                ? $"artifact tokens {state.ArtifactTokens} >= {artifactTokens}"
+                : $"artifact tokens {state.ArtifactTokens} < {artifactTokens}";
+            return state.ArtifactTokens >= artifactTokens;
+        }
+
+        if (TryReadNumericPredicate(text, "foodtokens>=", out int foodTokens))
+        {
+            message = state.FoodTokens >= foodTokens
+                ? $"food tokens {state.FoodTokens} >= {foodTokens}"
+                : $"food tokens {state.FoodTokens} < {foodTokens}";
+            return state.FoodTokens >= foodTokens;
+        }
+
+        if (TryReadNumericPredicate(text, "lifegainavailable>=", out int lifeGainAvailable))
+        {
+            message = state.LifeGainAvailable >= lifeGainAvailable
+                ? $"lifegain available {state.LifeGainAvailable} >= {lifeGainAvailable}"
+                : $"lifegain available {state.LifeGainAvailable} < {lifeGainAvailable}";
+            return state.LifeGainAvailable >= lifeGainAvailable;
         }
 
         if (TryReadNumericPredicate(text, "graveyard>=", out int graveyardCount))
@@ -408,6 +498,8 @@ public static class SimulationRouteEvaluator
         string text = card.Snapshot?.OracleText ?? "";
         return role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
             || role.Tags.Contains(DeckTags.Aristocrats, StringComparer.OrdinalIgnoreCase)
+            || (ContainsAny(text, "whenever you gain life", "whenever you gained life")
+                && ContainsAny(text, "each opponent loses", "opponent loses", "loses that much life"))
             || (ContainsAny(text, "dies", "whenever another creature dies", "whenever a creature dies")
                 && ContainsAny(text, "each opponent loses", "opponent loses", "target player loses"));
     }
@@ -509,6 +601,77 @@ public static class SimulationRouteEvaluator
                 && ContainsAny(text, "treasure", "artifact"))
             || (ContainsAny(text, "treasure", "artifact")
                 && ContainsAny(text, "you win", "each opponent loses", "opponent loses", "damage to each opponent"));
+    }
+
+    /// <summary>
+    /// Identifies permanents that repeatedly produce or discount Food.
+    /// </summary>
+    private static bool IsFoodEngine(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Food, StringComparer.OrdinalIgnoreCase)
+            && (role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
+                || ContainsAny(text, "whenever", "at the beginning", "create", "foods you control"));
+    }
+
+    /// <summary>
+    /// Identifies repeatable artifact-token engines.
+    /// </summary>
+    private static bool IsArtifactTokenEngine(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.ArtifactTokens, StringComparer.OrdinalIgnoreCase)
+            && (role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
+                || ContainsAny(text, "whenever", "at the beginning", "create"));
+    }
+
+    /// <summary>
+    /// Identifies payoffs that convert lifegain into table pressure.
+    /// </summary>
+    private static bool IsLifegainPayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Lifegain, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(text, "whenever you gain life", "whenever you gained life", "if you gained life");
+    }
+
+    /// <summary>
+    /// Identifies artifact or Food sacrifice payoffs that drain opponents.
+    /// </summary>
+    private static bool IsArtifactLeavesDrainPayoff(DeckCard card)
+    {
+        string text = card.Snapshot?.OracleText ?? "";
+        return ContainsAny(
+                text,
+                "whenever an artifact is put into a graveyard",
+                "whenever one or more artifacts",
+                "whenever you sacrifice an artifact",
+                "whenever you sacrifice a food",
+                "whenever one or more tokens you control leave")
+            && ContainsAny(text, "each opponent loses", "opponent loses", "damage to each opponent", "drain");
+    }
+
+    /// <summary>
+    /// Identifies combat payoffs that scale with a Food or artifact-token board.
+    /// </summary>
+    private static bool IsFoodCombatPayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = card.Snapshot?.OracleText ?? "";
+        return role.Tags.Contains(DeckTags.CombatPayoff, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(
+                text,
+                "creatures you control get +",
+                "creatures you control gain trample",
+                "creatures you control have trample",
+                "creatures you control can't be blocked",
+                "for each artifact you control",
+                "for each food you control");
     }
 
     /// <summary>
@@ -725,6 +888,36 @@ public static class SimulationRouteEvaluator
             return "treasure-payoff";
         }
 
+        if (compact.Equals("foodbank", StringComparison.OrdinalIgnoreCase))
+        {
+            return "food-bank";
+        }
+
+        if (compact.Equals("artifacttokenbank", StringComparison.OrdinalIgnoreCase))
+        {
+            return "artifact-token-bank";
+        }
+
+        if (compact.Equals("lifegainburst", StringComparison.OrdinalIgnoreCase))
+        {
+            return "lifegain-burst";
+        }
+
+        if (compact.Equals("lifegainpayoff", StringComparison.OrdinalIgnoreCase))
+        {
+            return "lifegain-payoff";
+        }
+
+        if (compact.Equals("artifactleavesdrain", StringComparison.OrdinalIgnoreCase))
+        {
+            return "artifact-leaves-drain";
+        }
+
+        if (compact.Equals("foodcombatalpha", StringComparison.OrdinalIgnoreCase))
+        {
+            return "food-combat-alpha";
+        }
+
         if (compact.Equals("commanderdamagepressure", StringComparison.OrdinalIgnoreCase))
         {
             return "commander-damage-pressure";
@@ -733,6 +926,9 @@ public static class SimulationRouteEvaluator
         string numeric = NormalizeNumericPredicate(trimmed);
         if (numeric.StartsWith("mana>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("tokens>=", StringComparison.OrdinalIgnoreCase)
+            || numeric.StartsWith("artifacttokens>=", StringComparison.OrdinalIgnoreCase)
+            || numeric.StartsWith("foodtokens>=", StringComparison.OrdinalIgnoreCase)
+            || numeric.StartsWith("lifegainavailable>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("graveyard>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("interactionheld>=", StringComparison.OrdinalIgnoreCase)
             || numeric.StartsWith("dungeonprogress>=", StringComparison.OrdinalIgnoreCase)
@@ -806,6 +1002,21 @@ public sealed class SimulationRouteState
     /// Gets or sets the current token count estimate.
     /// </summary>
     public int Tokens { get; set; }
+
+    /// <summary>
+    /// Gets or sets the current artifact-token count estimate.
+    /// </summary>
+    public int ArtifactTokens { get; set; }
+
+    /// <summary>
+    /// Gets or sets the current Food-token count estimate.
+    /// </summary>
+    public int FoodTokens { get; set; }
+
+    /// <summary>
+    /// Gets or sets lifegain available from recent effects and spendable banked Food.
+    /// </summary>
+    public int LifeGainAvailable { get; set; }
 
     /// <summary>
     /// Gets or sets the remaining available mana estimate.

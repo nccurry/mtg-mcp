@@ -187,6 +187,24 @@ public sealed partial class DeckWorkspaceService
         CancellationToken cancellationToken
     )
     {
+        return await OpenArchidektDeckAsync(
+                deckIdOrUrl,
+                writeBack,
+                localWorkspaceId: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens the archidekt deck, optionally preserving an existing local workspace id.
+    /// </summary>
+    private async Task<DeckWorkspace> OpenArchidektDeckAsync(
+        string deckIdOrUrl,
+        bool writeBack,
+        string? localWorkspaceId,
+        CancellationToken cancellationToken
+    )
+    {
         IArchidektGateway gateway = RequireArchidektGateway();
         DeckWorkspace workspace = await gateway
             .ImportDeckAsync(deckIdOrUrl, writeBack, cancellationToken)
@@ -194,7 +212,8 @@ public sealed partial class DeckWorkspaceService
         await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
             .ConfigureAwait(false);
 
-        return await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
+        return await SaveImportedWorkspaceAsync(workspace, localWorkspaceId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -207,7 +226,11 @@ public sealed partial class DeckWorkspaceService
         DeckWorkspace existing = await LoadWorkspaceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
         string deckIdOrUrl = ResolveArchidektSourceReference(existing);
-        return await OpenArchidektDeckAsync(deckIdOrUrl, writeBack: true, cancellationToken)
+        return await OpenArchidektDeckAsync(
+                deckIdOrUrl,
+                writeBack: true,
+                localWorkspaceId: existing.Id,
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -227,7 +250,8 @@ public sealed partial class DeckWorkspaceService
 
         workspace.Mode = WorkspaceMode.Local;
         workspace.WriteBack = false;
-        return await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
+        return await SaveImportedWorkspaceAsync(workspace, localWorkspaceId: null, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

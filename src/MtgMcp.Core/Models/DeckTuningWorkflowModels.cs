@@ -911,6 +911,83 @@ public sealed class WorkspaceDiffResult
 }
 
 /// <summary>
+/// Lists statuses returned by the last-import diff workflow.
+/// </summary>
+public static class WorkspaceDiffLastImportStatuses
+{
+    /// <summary>
+    /// A matching import-history baseline was found.
+    /// </summary>
+    public const string BaselineFound = "baselineFound";
+
+    /// <summary>
+    /// The workspace has a supported source but no prior baseline snapshot.
+    /// </summary>
+    public const string NoPriorBaseline = "noPriorBaseline";
+
+    /// <summary>
+    /// The workspace source provider is not supported by import history.
+    /// </summary>
+    public const string SourceUnsupported = "sourceUnsupported";
+
+    /// <summary>
+    /// The workspace does not identify an imported provider deck source.
+    /// </summary>
+    public const string WorkspaceHasNoSource = "workspaceHasNoSource";
+
+    /// <summary>
+    /// History metadata exists but the prior snapshot is unavailable.
+    /// </summary>
+    public const string HistoryUnavailable = "historyUnavailable";
+}
+
+/// <summary>
+/// Reports a workspace diff against the previous import into the same source-scoped workspace.
+/// </summary>
+public sealed class WorkspaceDiffLastImportResult
+{
+    /// <summary>
+    /// Gets or sets the status describing whether a baseline was available.
+    /// </summary>
+    public string Status { get; set; } = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+
+    /// <summary>
+    /// Gets or sets the current workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the source provider key when known.
+    /// </summary>
+    public string? Provider { get; set; }
+
+    /// <summary>
+    /// Gets or sets the source provider deck id when known.
+    /// </summary>
+    public string? ExternalId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the local workspace id used for import-history scoping.
+    /// </summary>
+    public string? LocalWorkspaceId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the import timestamp for the baseline comparison.
+    /// </summary>
+    public DateTimeOffset? ImportedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the diff when a prior baseline was found.
+    /// </summary>
+    public WorkspaceDiffResult? Diff { get; set; }
+
+    /// <summary>
+    /// Gets or sets explanatory notes for missing or unsupported history.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
 /// Identifies one side of a workspace diff comparison.
 /// </summary>
 public sealed class WorkspaceDiffBaseline

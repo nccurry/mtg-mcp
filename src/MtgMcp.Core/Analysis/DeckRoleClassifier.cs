@@ -180,12 +180,14 @@ public static partial class DeckRoleClassifier
         AddTag(tags, DeckTags.SacOutlet, ContainsAny(text, "sacrifice a creature:", "sacrifice another", "sacrifice an artifact:", "sacrifice a permanent:"));
         AddTag(tags, DeckTags.Aristocrats, ContainsAny(text, "whenever a creature dies", "whenever another creature dies", "dies, each opponent"));
         AddTag(tags, DeckTags.Tokens, ContainsAny(text, "create", "token"));
-        AddTag(tags, DeckTags.Reanimation, ContainsAny(text, "from your graveyard to the battlefield", "return target creature card"));
-        AddTag(tags, DeckTags.GraveyardHate, ContainsAny(text, "exile target card from a graveyard", "exile all graveyards", "graveyards"));
+        AddTag(tags, DeckTags.ArtifactTokens, ContainsArtifactTokenText(text));
+        AddTag(tags, DeckTags.Food, ContainsFoodText(text));
+        AddTag(tags, DeckTags.Reanimation, ContainsGraveyardRecursionText(text));
+        AddTag(tags, DeckTags.GraveyardHate, ContainsGraveyardHateText(text));
         AddTag(tags, DeckTags.Stax, ContainsAny(text, "can't cast", "can't attack", "doesn't untap", "skip", "players can't"));
         AddTag(tags, DeckTags.ComboPiece, ContainsAny(text, "combo", "untap") && ContainsAny(text, "add", "whenever", "copy"));
         AddTag(tags, DeckTags.CardSelection, ContainsAny(text, "scry", "surveil", "look at the top", "reveal the top"));
-        AddTag(tags, DeckTags.Lifegain, ContainsAny(text, "gain life", "lifelink"));
+        AddTag(tags, DeckTags.Lifegain, ContainsAny(text, "gain life", "lifelink") || ContainsFoodText(text));
         AddTag(tags, DeckTags.Drain, ContainsAny(text, "opponent loses") && ContainsAny(text, "you gain"));
         AddTag(tags, DeckTags.Voltron, ContainsAny(text, "equipment", "equip", "aura", "enchanted creature"));
         AddTag(tags, DeckTags.Blink, ContainsAny(text, "exile") && ContainsAny(text, "return it", "return that card", "under its owner's control"));
@@ -307,6 +309,16 @@ public static partial class DeckRoleClassifier
             if (DeckTaggerTaxonomy.TryGetRule(taggerTag, out DeckTaggerRule? rule))
             {
                 AddTag(tags, rule.SecondaryTag, condition: true);
+                if (rule.SecondaryTag.Equals(DeckTags.Food, StringComparison.OrdinalIgnoreCase))
+                {
+                    AddTag(tags, DeckTags.Tokens, condition: true);
+                    AddTag(tags, DeckTags.Lifegain, condition: true);
+                }
+
+                if (rule.SecondaryTag.Equals(DeckTags.ArtifactTokens, StringComparison.OrdinalIgnoreCase))
+                {
+                    AddTag(tags, DeckTags.Tokens, condition: true);
+                }
             }
         }
     }
@@ -635,6 +647,73 @@ public static partial class DeckRoleClassifier
             "creatures without flying can't block",
             "whenever a creature you control attacks, it gets +",
             "as long as you control your commander, creatures you control get +");
+    }
+
+    /// <summary>
+    /// Checks whether rules text creates or references Food tokens.
+    /// </summary>
+    private static bool ContainsFoodText(string text)
+    {
+        return ContainsAny(text, "food token", "food tokens", "foods you control", "sacrifice a food", "sacrificed a food");
+    }
+
+    /// <summary>
+    /// Checks whether rules text creates artifact tokens that matter beyond creature count.
+    /// </summary>
+    private static bool ContainsArtifactTokenText(string text)
+    {
+        return ContainsAny(
+            text,
+            "food token",
+            "food tokens",
+            "treasure token",
+            "treasure tokens",
+            "clue token",
+            "clue tokens",
+            "blood token",
+            "blood tokens",
+            "map token",
+            "map tokens",
+            "artifact token",
+            "artifact tokens");
+    }
+
+    /// <summary>
+    /// Checks whether rules text uses cards from graveyards as recursion resources.
+    /// </summary>
+    private static bool ContainsGraveyardRecursionText(string text)
+    {
+        return ContainsAny(
+            text,
+            "from your graveyard to the battlefield",
+            "from a graveyard to the battlefield",
+            "return target creature card",
+            "return target permanent card from your graveyard",
+            "return target card from your graveyard",
+            "return a creature card from your graveyard",
+            "you may cast this card from your graveyard",
+            "you may play lands and cast spells from your graveyard",
+            "escape",
+            "unearth");
+    }
+
+    /// <summary>
+    /// Checks whether rules text answers graveyards rather than using your own graveyard.
+    /// </summary>
+    private static bool ContainsGraveyardHateText(string text)
+    {
+        return ContainsAny(
+            text,
+            "exile target card from a graveyard",
+            "exile target player's graveyard",
+            "exile all cards from target player's graveyard",
+            "exile all graveyards",
+            "exile each graveyard",
+            "cards in graveyards can't",
+            "players can't cast spells from graveyards",
+            "graveyard can't",
+            "graveyards can't",
+            "would be put into a graveyard, exile it instead");
     }
 
     /// <summary>

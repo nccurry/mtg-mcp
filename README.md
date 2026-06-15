@@ -472,16 +472,19 @@ Workflow-first tools:
 
 - Start or open workspaces with `workspace_start`, `workspace_list`, and
   `workspace_open`; parse, export, and validate with `workspace_parse_decklist`,
-  `workspace_export`, and `workspace_validate`.
+  `workspace_export`, `workspace_validate`, and `workspace_diff_last_import`.
 - Search cards with `card_search`, `card_get`, `card_get_prints`, and
   `card_get_rulings`.
 - Inspect decks with `deck_summarize`, `deck_analyze_structure`,
   `deck_analyze_mana`, `deck_analyze_consistency`, and
   `deck_analyze_performance`; use `deck_analyze_land_drop_odds` for the
-  turn-by-turn land-drop question.
-- Inspect local category contents with `deck_list_cards_by_category`; a newly
-  created or implicit `Sideboard` category is excluded from deck and price
-  accounting unless imported data explicitly says otherwise.
+  turn-by-turn land-drop question, or `deck_re_evaluate` for a compact updated
+  deck health snapshot.
+- Inspect local category contents with `deck_list_cards_by_category`, or use
+  `deck_list_cards_by_zone` for active, sideboard, maybeboard, excluded, and
+  all-card views with optional duplicate collapsing; a newly created or
+  implicit `Sideboard` category is excluded from deck and price accounting
+  unless imported data explicitly says otherwise.
 - Compare no-interaction goldfish outputs with `deck_compare_goldfish`. Its
   default `optimistic-goldfish-model` preserves the existing heuristic output;
   opt into `rules-backed-goldfish-race-v1` for a conservative template life-total
@@ -494,9 +497,9 @@ Workflow-first tools:
   source tools, and Playgroup tools.
 - Preview edits with `deck_plan_create`, `deck_plan_preview`, and
   `deck_plan_compare_performance`; apply only with `deck_plan_apply`.
-- Apply package-style local edits with `deck_add_cards_bulk` and
-  `deck_update_card_categories_bulk` when many candidates or category changes
-  should validate together and persist once.
+- Apply package-style local edits with `deck_add_cards_bulk`,
+  `deck_update_card_categories_bulk`, and `deck_move_cards_bulk` when many
+  candidates or category changes should validate together and persist once.
 - Use provider tools such as `archidekt_copy_workspace`,
   `archidekt_checkpoint_create`, and `playgroup_rank_decks` when the workflow
   needs provider-specific behavior.
@@ -540,6 +543,10 @@ Several mutation and lookup tools default to bounded output so repeated agent
 work does not flood context. Use `detailLevel:"full"` when you need full
 workspace or facet payloads from tools such as `deck_refresh_card_metadata`,
 `deck_plan_apply`, category edits, mutation tools, or `card_facets_get`.
+Performance analysis tools preserve backward-compatible raw payloads by
+default; use `detailLevel:"normal"` or `detailLevel:"summary"` on
+`deck_analyze_performance` and `deck_plan_compare_performance` for bounded key
+metrics, failed scenarios, stranded cards, warnings, and command-zone context.
 
 ## Deck Intent
 

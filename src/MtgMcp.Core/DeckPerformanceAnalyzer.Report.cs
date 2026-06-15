@@ -38,7 +38,8 @@ internal static partial class DeckPerformanceAnalyzer
         IReadOnlyList<PerformanceRun> runs,
         IReadOnlySet<string> deckColors,
         bool colorIdentityKnown,
-        int maxTurn)
+        int maxTurn,
+        CommandZonePlan commandZonePlan)
     {
         for (int turn = 1; turn <= maxTurn; turn++)
         {
@@ -83,16 +84,19 @@ internal static partial class DeckPerformanceAnalyzer
                 turn,
                 states.Count(state => state.OnCurveUntappedMana),
                 states.Count));
-            analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
-                "background-cast-by-turn",
-                turn,
-                states.Count(state => state.BackgroundCastByTurn),
-                states.Count));
-            analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
-                "commander-with-background-online-by-turn",
-                turn,
-                states.Count(state => state.CommanderWithBackgroundOnlineByTurn),
-                states.Count));
+            if (commandZonePlan.HasBackgroundPair)
+            {
+                analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
+                    "background-cast-by-turn",
+                    turn,
+                    states.Count(state => state.BackgroundCastByTurn),
+                    states.Count));
+                analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
+                    "commander-with-background-online-by-turn",
+                    turn,
+                    states.Count(state => state.CommanderWithBackgroundOnlineByTurn),
+                    states.Count));
+            }
             if (colorIdentityKnown && deckColors.Count > 0)
             {
                 analysis.TurnProbabilities.Add(PerformanceStatistics.BuildProbability(
@@ -207,14 +211,17 @@ internal static partial class DeckPerformanceAnalyzer
                 .Where(card => card.Kind == CommandZoneCardKind.Commander)
                 .Select(card => card.Card.Name)
                 .ToList(),
-            BackgroundNames = commandZonePlan.Cards
+            AverageCommanderCastTurn = AveragePerformanceTurn(runs.Select(run => run.CommanderCastTurn)),
+        };
+        if (commandZonePlan.HasBackgroundPair)
+        {
+            result.BackgroundNames = commandZonePlan.Cards
                 .Where(card => card.Kind == CommandZoneCardKind.Background)
                 .Select(card => card.Card.Name)
-                .ToList(),
-            AverageCommanderCastTurn = AveragePerformanceTurn(runs.Select(run => run.CommanderCastTurn)),
-            AverageBackgroundCastTurn = AveragePerformanceTurn(runs.Select(run => run.BackgroundCastTurn)),
-            AverageCommanderWithBackgroundOnlineTurn = AveragePerformanceTurn(runs.Select(run => run.CommanderWithBackgroundOnlineTurn)),
-        };
+                .ToList();
+            result.AverageBackgroundCastTurn = AveragePerformanceTurn(runs.Select(run => run.BackgroundCastTurn));
+            result.AverageCommanderWithBackgroundOnlineTurn = AveragePerformanceTurn(runs.Select(run => run.CommanderWithBackgroundOnlineTurn));
+        }
 
         if (commandZonePlan.Cards.Count == 0)
         {
@@ -228,16 +235,19 @@ internal static partial class DeckPerformanceAnalyzer
                 turn,
                 runs.Count(run => run.CommanderCastTurn <= turn),
                 runs.Count));
-            result.BackgroundCastByTurn.Add(PerformanceStatistics.BuildProbability(
-                "background-cast-by-turn",
-                turn,
-                runs.Count(run => run.BackgroundCastTurn <= turn),
-                runs.Count));
-            result.CommanderWithBackgroundOnlineByTurn.Add(PerformanceStatistics.BuildProbability(
-                "commander-with-background-online-by-turn",
-                turn,
-                runs.Count(run => run.CommanderWithBackgroundOnlineTurn <= turn),
-                runs.Count));
+            if (commandZonePlan.HasBackgroundPair)
+            {
+                result.BackgroundCastByTurn.Add(PerformanceStatistics.BuildProbability(
+                    "background-cast-by-turn",
+                    turn,
+                    runs.Count(run => run.BackgroundCastTurn <= turn),
+                    runs.Count));
+                result.CommanderWithBackgroundOnlineByTurn.Add(PerformanceStatistics.BuildProbability(
+                    "commander-with-background-online-by-turn",
+                    turn,
+                    runs.Count(run => run.CommanderWithBackgroundOnlineTurn <= turn),
+                    runs.Count));
+            }
         }
 
         return result;

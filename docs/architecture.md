@@ -103,15 +103,18 @@ Core workflow groups are:
 - Card facts: `card_search`, `card_get`, `card_get_prints`, and
   `card_get_rulings`.
 - Workspace lifecycle: `workspace_start`, `workspace_list`, `workspace_open`,
-  `workspace_parse_decklist`, `workspace_export`, and `workspace_validate`.
+  `workspace_parse_decklist`, `workspace_export`, `workspace_validate`, and
+  `workspace_diff_last_import`.
 - Workspace deck edits: `deck_add_card`, `deck_add_cards_bulk`,
-  `deck_update_card_categories_bulk`, and `deck_list_cards_by_category`.
+  `deck_update_card_categories_bulk`, `deck_move_cards_bulk`,
+  `deck_list_cards_by_category`, and `deck_list_cards_by_zone`.
 - Deck structure and simulation: `deck_summarize`,
   `deck_analyze_structure`, `deck_analyze_mana`,
   `deck_analyze_consistency`, `deck_analyze_land_drop_odds`,
   `deck_analyze_performance`, `deck_simulate_goldfish`,
   `deck_compare_goldfish`, `deck_project_board_state`,
-  `deck_estimate_win_turn`, and `deck_plan_compare_performance`.
+  `deck_estimate_win_turn`, `deck_plan_compare_performance`, and
+  `deck_re_evaluate`.
 - Combo and win-condition evidence: `deck_analyze_combos`,
   `combo_search_by_card`, `combo_get_details`,
   `card_classify_win_routes`, `wincon_find_payoffs`,
@@ -129,6 +132,9 @@ Core workflow groups are:
 
 Performance results include the selected analysis or simulation profile,
 simulation count, seed, assumptions, confidence, warnings, and key metrics.
+`deck_analyze_performance` and `deck_plan_compare_performance` default to the
+full raw model; callers can request `detailLevel=normal` or `summary` for
+bounded presenter output.
 Source-backed results preserve source, source kind, source URI, cache status,
 retrieval time, confidence, determinism, and notes where available.
 

@@ -59,6 +59,29 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
+    /// Verifies that TopDeck exact-matches individual partner names instead of the pair display string.
+    /// </summary>
+    [Fact]
+    public async Task TopDeckProvider_MatchesPartnerCommanderNames()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Post, "https://topdeck.test/v2/tournaments")
+            .Respond("application/json", TopDeckResponseJson);
+        TopDeckCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://topdeck.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("TopDeck", "key")));
+        CorpusSignalQuery query = Query();
+        query.Commander = "Partner One // Tinybones, Trinket Thief";
+        query.CommanderNames = ["Partner One", "Tinybones, Trinket Thief"];
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        report.ExemplarDecks.Should().ContainSingle(deck => deck.Commander == query.Commander);
+        report.Signals.Should().Contain(signal => signal.CardName == "Waste Not" && signal.Source == "TopDeck.gg");
+    }
+
+    /// <summary>
     /// Verifies that Spicerack maps structured decklists.
     /// </summary>
     [Fact]
@@ -75,6 +98,29 @@ public sealed class DecklistCorpusProviderTests
         CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
 
         report.ExemplarDecks.Should().ContainSingle(deck => deck.Name == "Tinybones League");
+        report.Signals.Should().Contain(signal => signal.CardName == "Dark Deal" && signal.Source == "Spicerack public decklists");
+    }
+
+    /// <summary>
+    /// Verifies that Spicerack exact-matches individual partner names instead of the pair display string.
+    /// </summary>
+    [Fact]
+    public async Task SpicerackProvider_MatchesPartnerCommanderNames()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
+            .Respond("application/json", SpicerackResponseJson);
+        SpicerackCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://spicerack.test/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Spicerack", "key")));
+        CorpusSignalQuery query = Query();
+        query.Commander = "Partner One // Tinybones, Trinket Thief";
+        query.CommanderNames = ["Partner One", "Tinybones, Trinket Thief"];
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        report.ExemplarDecks.Should().ContainSingle(deck => deck.Commander == query.Commander);
         report.Signals.Should().Contain(signal => signal.CardName == "Dark Deal" && signal.Source == "Spicerack public decklists");
     }
 
@@ -167,6 +213,33 @@ public sealed class DecklistCorpusProviderTests
             && source.AttributionRequired);
         second.Notes.Should().Contain(note => note.Contains("cache", StringComparison.OrdinalIgnoreCase));
         mockHttp.GetMatchCount(request).Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that EDHREC adapter slugging supports partner commander display names.
+    /// </summary>
+    [Fact]
+    public async Task EdhrecProvider_UsesPartnerCommanderSlug()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp.Expect(
+                HttpMethod.Get,
+                "https://edhrec.test/pages/commanders/frodo-adventurous-hobbit-sam-loyal-attendant.json")
+            .Respond("application/json", EdhrecCommanderResponseJson);
+        EdhrecCorpusSignalProvider provider = new(
+            CreateClient(mockHttp, "https://edhrec.test/pages/"),
+            new NullCorpusCache(),
+            Options.Create(OptionsWithSource("Edhrec", "", allowUnofficialApi: true)));
+        CorpusSignalQuery query = Query();
+        query.Commander = "Frodo, Adventurous Hobbit // Sam, Loyal Attendant";
+        query.Theme = null;
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
+
+        report.Signals.Should().Contain(signal =>
+            signal.CardName == "Waste Not"
+            && signal.Uri == "https://edhrec.com/commanders/frodo-adventurous-hobbit-sam-loyal-attendant");
+        mockHttp.VerifyNoOutstandingExpectation();
     }
 
     /// <summary>

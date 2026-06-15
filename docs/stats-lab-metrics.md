@@ -32,6 +32,11 @@ presented with their replay metadata when results are compared or stored:
 - `profileFingerprint`: resolved simulation profile inputs.
 - `rngKind`, `seed`, `simulations`, `maxTurn`, and `includeMulligans`.
 
+Both tools default to `detailLevel=full` for the raw model payload. Compact
+`normal` and `summary` output still carries replay metadata, settings,
+commander context, key metrics, failed scenarios, stranded-card risk, warnings,
+and assumptions so callers can compare bounded results safely.
+
 Treat matching metadata as the condition for deterministic replay. If any of
 these values differ, metric changes may come from input or model changes rather
 than deck quality alone.

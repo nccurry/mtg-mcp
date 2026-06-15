@@ -267,6 +267,113 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Moves multiple cards in one persisted mutation.
+    /// </summary>
+    public async Task<DeckChangeResult> MoveCardsBulkAsync(
+        string workspaceId,
+        IReadOnlyList<BulkDeckCardMove> moves,
+        CancellationToken cancellationToken)
+    {
+        if (moves.Count == 0)
+        {
+            throw new InvalidOperationException("At least one card move is required.");
+        }
+
+        DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        List<DeckCard> changedCards = [];
+        foreach (BulkDeckCardMove move in moves)
+        {
+            if (string.IsNullOrWhiteSpace(move.CardName))
+            {
+                throw new InvalidOperationException("Every bulk move must include a card name.");
+            }
+
+            string normalizedCategory = NormalizeCategoryName(move.ToCategory);
+            EnsureCategory(workspace, normalizedCategory);
+            DeckCard card = FindRequiredCard(workspace, move.CardName, move.FromCategory);
+            int requestedQuantity = move.Quantity ?? card.Quantity;
+            if (requestedQuantity <= 0)
+            {
+                throw new InvalidOperationException("Bulk move quantity must be greater than zero when supplied.");
+            }
+
+            if (requestedQuantity >= card.Quantity)
+            {
+                DeckCategoryOrdering.SetPrimary(card, normalizedCategory);
+                AddChangedCard(changedCards, card);
+                continue;
+            }
+
+            if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack)
+            {
+                throw new InvalidOperationException(
+                    "Partial bulk moves are not writeback-safe for Archidekt workspaces. "
+                        + "Move the whole card row or refresh/import as a local-only workspace first.");
+            }
+
+            DeckCard? target = FindCard(workspace, card.Name, normalizedCategory);
+            card.Quantity -= requestedQuantity;
+            AddChangedCard(changedCards, card);
+            if (target is not null)
+            {
+                target.Quantity += requestedQuantity;
+                AddChangedCard(changedCards, target);
+                continue;
+            }
+
+            DeckCard split = CloneCardForPartialMove(card, requestedQuantity, normalizedCategory);
+            workspace.Cards.Add(split);
+            AddChangedCard(changedCards, split);
+        }
+
+        await PersistCardsAsync(workspace, changedCards, [], cancellationToken).ConfigureAwait(false);
+        return Change(
+            workspace,
+            DeckMutationKind.CardMoved,
+            $"Moved {moves.Count} card row(s).");
+    }
+
+    /// <summary>
+    /// Clones a card row for a local-only partial category move.
+    /// </summary>
+    private static DeckCard CloneCardForPartialMove(
+        DeckCard source,
+        int quantity,
+        string toCategory)
+    {
+        DeckCard clone = new()
+        {
+            Name = source.Name,
+            Quantity = quantity,
+            PrimaryCategory = source.PrimaryCategory,
+            Categories = source.Categories.ToList(),
+            ScryfallId = source.ScryfallId,
+            ScryfallOracleId = source.ScryfallOracleId,
+            ArchidektCardId = source.ArchidektCardId,
+            Modifier = source.Modifier,
+            Companion = source.Companion,
+            FlippedDefault = source.FlippedDefault,
+            Snapshot = CopyCardSnapshot(source.Snapshot),
+            Metadata = new Dictionary<string, string>(source.Metadata, StringComparer.OrdinalIgnoreCase),
+        };
+        DeckCategoryOrdering.SetPrimary(clone, toCategory);
+        clone.ArchidektDeckRelationId = null;
+        return clone;
+    }
+
+    /// <summary>
+    /// Adds a changed card once by local row id.
+    /// </summary>
+    private static void AddChangedCard(List<DeckCard> changedCards, DeckCard card)
+    {
+        if (!changedCards.Any(existing => existing.Id.Equals(card.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            changedCards.Add(card);
+        }
+    }
+
+    /// <summary>
     /// Creates the deck card.
     /// </summary>
     private async Task<DeckCard> CreateDeckCardAsync(

@@ -232,6 +232,67 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that preview warns when additions go to excluded categories while active cards are removed.
+    /// </summary>
+    [Fact]
+    public async Task PreviewDeckPlan_WarnsWhenAddsGoToExcludedCategory()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Excluded Add Preview",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Active Package",
+                    Quantity = 100,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                },
+            ],
+        }, TestContext.Current.CancellationToken);
+        DeckEditPlan plan = await plans.SaveAsync(new DeckEditPlan
+        {
+            WorkspaceId = workspace.Id,
+            Name = "Add sideboard cards",
+            Operations =
+            [
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.RemoveCard,
+                    CardName = "Active Package",
+                    Quantity = 3,
+                    Category = DeckDefaults.Mainboard
+                },
+                new DeckEditOperation
+                {
+                    Operation = DeckEditOperations.AddCard,
+                    CardName = "Sideboard Upgrade",
+                    Quantity = 3,
+                    Category = DeckDefaults.Sideboard
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+
+        DeckPlanPreviewResult preview = await service.PreviewDeckPlanAsync(
+            plan.PlanId,
+            resolveAddedCards: false,
+            TestContext.Current.CancellationToken);
+
+        preview.Before.Analysis.IncludedCards.Should().Be(100);
+        preview.After.Analysis.IncludedCards.Should().Be(97);
+        preview.Warnings.Should().Contain(warning =>
+            warning.Contains("excluded category", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains(DeckDefaults.Sideboard, StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("100", StringComparison.OrdinalIgnoreCase)
+            && warning.Contains("97", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that preview deck plan applies card-category operations on the clone.
     /// </summary>
     [Fact]

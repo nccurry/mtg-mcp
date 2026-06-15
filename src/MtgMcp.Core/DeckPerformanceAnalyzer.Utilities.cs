@@ -128,7 +128,7 @@ internal static partial class DeckPerformanceAnalyzer
         }
 
         CommandZonePlan commandZonePlan = CommandZonePlanner.Build(included, profileResolution.Profile);
-        if (commandZonePlan.HasBackground)
+        if (commandZonePlan.HasBackgroundPair)
         {
             analysis.Assumptions.Add("Command-zone Backgrounds are sequenced separately from non-Background commanders.");
         }

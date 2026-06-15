@@ -199,7 +199,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         AddGoldfishSummaryMetrics(result, runs, safeTurn);
 
         IEnumerable<GoldfishRun> representativeCandidates = runs;
-        if (commandZonePlan.HasBackground && runs.Any(run => run.CommanderWithBackgroundOnlineTurn.HasValue))
+        if (commandZonePlan.HasBackgroundPair && runs.Any(run => run.CommanderWithBackgroundOnlineTurn.HasValue))
         {
             representativeCandidates = runs.Where(run => run.CommanderWithBackgroundOnlineTurn.HasValue);
         }
@@ -261,6 +261,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         List<DeckCard> graveyard = [];
         GoldfishRun run = new() { Mulliganed = opening.Mulligans > 0 };
         int tokens = 0;
+        int artifactTokens = 0;
+        int foodTokens = 0;
+        int lifeGainEvents = 0;
         int winPressure = 0;
         int dungeonProgress = 0;
 
@@ -286,7 +289,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             List<DeckCard> castThisTurn = [];
             if (profileResolution.Profile.Sequencing.PreferCommanderOnCurve)
             {
-                CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
+                CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, tokens, artifactTokens, ref availableMana);
                 RefreshIngaGrantedCreatureMana(
                     battlefield,
                     commandZone.CommanderOnline,
@@ -313,6 +316,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     ref restrictedCreatureMana,
                     ref availableMana,
                     ref tokens,
+                    ref artifactTokens,
+                    ref foodTokens,
+                    ref lifeGainEvents,
                     ref winPressure,
                     ref dungeonProgress);
             }
@@ -340,9 +346,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     ref restrictedCreatureMana,
                     ref availableMana,
                     ref tokens,
+                    ref artifactTokens,
+                    ref foodTokens,
+                    ref lifeGainEvents,
                     ref winPressure,
                     ref dungeonProgress);
-                CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, ref availableMana);
+                CastGoldfishCommandZoneCards(commandZone, turn, battlefield, run, tokens, artifactTokens, ref availableMana);
                 RefreshIngaGrantedCreatureMana(
                     battlefield,
                     commandZone.CommanderOnline,
@@ -365,14 +374,25 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                     ref restrictedCreatureMana,
                     ref availableMana,
                     ref tokens,
+                    ref artifactTokens,
+                    ref foodTokens,
+                    ref lifeGainEvents,
                     ref winPressure,
                     ref dungeonProgress);
             }
 
             int power = EstimateBattlefieldPower(battlefield, tokens);
+            int lifeGainAvailable = EstimateLifeGainAvailable(
+                foodTokens,
+                lifeGainEvents,
+                availableMana,
+                commanderRules.HasSamLoyalAttendant && battlefield.Any(IsSamLoyalAttendant));
             int pressureScore = EstimateThreatPressure(
                 battlefield,
                 tokens,
+                artifactTokens,
+                foodTokens,
+                lifeGainAvailable,
                 power,
                 winPressure,
                 commandZone.CommanderOnline);
@@ -388,7 +408,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 castThisTurn,
                 battlefield,
                 tokens,
+                artifactTokens,
+                foodTokens,
                 availableMana,
+                commandZone.CommanderOnline,
                 power);
             pressureScore = Math.Clamp(
                 pressureScore + (enginePressure.Pressure / 3) + (sorceryFinisherPressure.Pressure / 2),
@@ -407,6 +430,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                         Graveyard = graveyard,
                         CommanderOnBattlefield = commandZone.CommanderOnline,
                         Tokens = tokens,
+                        ArtifactTokens = artifactTokens,
+                        FoodTokens = foodTokens,
+                        LifeGainAvailable = lifeGainAvailable,
                         AvailableMana = availableMana,
                         InteractionHeld = CountHeldGoldfishInteraction(hand, availableMana),
                         DungeonProgress = dungeonProgress,
@@ -720,7 +746,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         DeckCard card,
         IReadOnlyList<DeckCard> battlefield,
         int tokens,
-        int availableMana)
+        int artifactTokens,
+        int foodTokens,
+        int availableMana,
+        bool commanderOnline)
     {
         CardSnapshot snapshot = GetSnapshot(card);
         string text = snapshot.OracleText ?? "";
@@ -731,7 +760,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             requiredMana = Math.Max(0, requiredMana - ConvokeCreatureCount(battlefield, tokens));
         }
 
-        int dynamicReduction = EstimateDynamicCostReduction(card, battlefield, tokens);
+        int affinityReduction = EstimateAffinityReduction(card, battlefield, tokens, artifactTokens);
+        if (affinityReduction > 0)
+        {
+            requiredMana = Math.Max(MinimumReducedCost(snapshot.ManaCost), requiredMana - affinityReduction);
+        }
+
+        int dynamicReduction = EstimateDynamicCostReduction(card, battlefield, tokens, artifactTokens, foodTokens);
         if (dynamicReduction > 0)
         {
             requiredMana = Math.Max(MinimumReducedCost(snapshot.ManaCost), requiredMana - dynamicReduction);
@@ -741,6 +776,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         if (activeReduction > 0)
         {
             requiredMana = Math.Max(MinimumReducedCost(snapshot.ManaCost), requiredMana - activeReduction);
+        }
+
+        int commanderReduction = EstimateCommanderConditionReduction(card, commanderOnline);
+        if (commanderReduction > 0)
+        {
+            requiredMana = Math.Max(MinimumReducedCost(snapshot.ManaCost), requiredMana - commanderReduction);
         }
 
         int xValue = 0;
@@ -785,7 +826,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static int EstimateDynamicCostReduction(
         DeckCard card,
         IReadOnlyList<DeckCard> battlefield,
-        int tokens)
+        int tokens,
+        int artifactTokens,
+        int foodTokens)
     {
         string text = GetSnapshot(card).OracleText ?? "";
         if (!ContainsAny(text, "costs {1} less", "cost {1} less", "costs one less", "cost one less"))
@@ -805,7 +848,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
         if (ContainsAny(text, "for each artifact"))
         {
-            return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Artifact"));
+            return CountArtifactPermanents(battlefield) + artifactTokens;
+        }
+
+        if (ContainsAny(text, "for each food"))
+        {
+            return foodTokens;
         }
 
         if (ContainsAny(text, "for each enchantment"))
@@ -814,6 +862,69 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Estimates affinity reductions from the current battlefield and token bank.
+    /// </summary>
+    private static int EstimateAffinityReduction(
+        DeckCard card,
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens,
+        int artifactTokens)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        if (!ContainsAny(text, "affinity for"))
+        {
+            return 0;
+        }
+
+        if (ContainsAny(text, "affinity for artifacts"))
+        {
+            return CountArtifactPermanents(battlefield) + artifactTokens;
+        }
+
+        if (ContainsAny(text, "affinity for creatures"))
+        {
+            return ConvokeCreatureCount(battlefield, tokens);
+        }
+
+        if (ContainsAny(text, "affinity for tokens"))
+        {
+            return tokens;
+        }
+
+        if (ContainsAny(text, "affinity for enchantments"))
+        {
+            return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Enchantment"));
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Counts artifact permanents already represented as cards on the battlefield.
+    /// </summary>
+    private static int CountArtifactPermanents(IReadOnlyList<DeckCard> battlefield)
+    {
+        return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Artifact"));
+    }
+
+    /// <summary>
+    /// Estimates simple reductions gated on controlling a commander.
+    /// </summary>
+    private static int EstimateCommanderConditionReduction(DeckCard card, bool commanderOnline)
+    {
+        if (!commanderOnline)
+        {
+            return 0;
+        }
+
+        string text = GetSnapshot(card).OracleText ?? "";
+        return ContainsAny(text, "if you control your commander", "if you control a commander", "as long as you control your commander")
+            && ContainsAny(text, "costs {1} less", "cost {1} less", "costs one less", "cost one less")
+            ? 1
+            : 0;
     }
 
     /// <summary>
@@ -845,6 +956,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         }
 
         string typeLine = GetSnapshot(spell).TypeLine ?? "";
+        if (ContainsAny(text, "commander spells") && !IsCommanderCard(spell))
+        {
+            return false;
+        }
+
         if (ContainsAny(text, "creature spells") && !ContainsAny(typeLine, "Creature"))
         {
             return false;
@@ -925,6 +1041,123 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Estimates token production while preserving artifact and Food subcounts.
+    /// </summary>
+    private static GoldfishTokenProduction EstimateTokenProduction(
+        DeckCard spell,
+        CardRoleAssignment role,
+        int xValue)
+    {
+        string text = GetSnapshot(spell).OracleText ?? "";
+        int food = EstimateNamedTokenCount(text, "Food");
+        int artifact = food;
+        artifact += EstimateNamedTokenCount(text, "Treasure");
+        artifact += EstimateNamedTokenCount(text, "Clue");
+        artifact += EstimateNamedTokenCount(text, "Blood");
+        artifact += EstimateNamedTokenCount(text, "Map");
+        artifact += EstimateArtifactTokenCount(text);
+
+        int total = Math.Max(food, artifact);
+        if (role.Tags.Contains(DeckTags.Tokens, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.SacrificeFodder, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.ArtifactTokens, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Food, StringComparer.OrdinalIgnoreCase))
+        {
+            total = Math.Max(total, 2 + EstimateTokenScaling(spell, xValue));
+        }
+
+        if (xValue > 0 && ContainsAny(text, "create X"))
+        {
+            total = Math.Max(total, Math.Min(8, xValue));
+            if (ContainsAny(text, "artifact token", "artifact tokens", "Food", "Treasure", "Clue", "Blood", "Map"))
+            {
+                artifact = Math.Max(artifact, Math.Min(8, xValue));
+            }
+        }
+
+        return new GoldfishTokenProduction(
+            Total: Math.Clamp(total, 0, 12),
+            ArtifactTokens: Math.Clamp(artifact, 0, 12),
+            FoodTokens: Math.Clamp(food, 0, 12));
+    }
+
+    /// <summary>
+    /// Estimates explicit named-token counts from common English number words.
+    /// </summary>
+    private static int EstimateNamedTokenCount(string text, string tokenName)
+    {
+        if (!ContainsAny(text, tokenName))
+        {
+            return 0;
+        }
+
+        string singular = $"{tokenName} token";
+        string plural = $"{tokenName} tokens";
+        if (ContainsAny(text, $"three {singular}", $"three {plural}"))
+        {
+            return 3;
+        }
+
+        if (ContainsAny(text, $"two {singular}", $"two {plural}"))
+        {
+            return 2;
+        }
+
+        if (ContainsAny(text, $"a {singular}", $"one {singular}", singular, plural))
+        {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Estimates artifact-token counts when text names artifact tokens generically.
+    /// </summary>
+    private static int EstimateArtifactTokenCount(string text)
+    {
+        if (ContainsAny(text, "three artifact tokens"))
+        {
+            return 3;
+        }
+
+        if (ContainsAny(text, "two artifact tokens"))
+        {
+            return 2;
+        }
+
+        return ContainsAny(text, "an artifact token", "a artifact token", "artifact tokens") ? 1 : 0;
+    }
+
+    /// <summary>
+    /// Estimates lifegain that was explicitly created by the resolved spell.
+    /// </summary>
+    private static int EstimateImmediateLifeGain(DeckCard spell, GoldfishTokenProduction tokenProduction)
+    {
+        string text = GetSnapshot(spell).OracleText ?? "";
+        int life = 0;
+        if (ContainsAny(text, "gain 3 life", "gain three life"))
+        {
+            life += 3;
+        }
+        else if (ContainsAny(text, "gain 2 life", "gain two life"))
+        {
+            life += 2;
+        }
+        else if (ContainsAny(text, "gain 1 life", "gain one life", "gain life"))
+        {
+            life += 1;
+        }
+
+        if (tokenProduction.FoodTokens > 0 && ContainsAny(text, "you gain life", "gain 3 life"))
+        {
+            life += tokenProduction.FoodTokens;
+        }
+
+        return Math.Clamp(life, 0, 12);
+    }
+
+    /// <summary>
     /// Estimates extra tokens produced by a cast X or token-scaling spell.
     /// </summary>
     private static int EstimateTokenScaling(DeckCard spell, int xValue)
@@ -1002,6 +1235,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int turn,
         List<DeckCard> battlefield,
         GoldfishRun run,
+        int tokens,
+        int artifactTokens,
         ref int availableMana)
     {
         while (true)
@@ -1012,7 +1247,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 return;
             }
 
-            int cost = GoldfishManaValue(next.Card);
+            int cost = EstimateGoldfishCastCost(
+                next.Card,
+                battlefield,
+                tokens,
+                artifactTokens,
+                foodTokens: 0,
+                availableMana,
+                commanderOnline: commandZone.CommanderOnline).TotalManaSpent;
             if (cost > availableMana)
             {
                 return;
@@ -1043,14 +1285,26 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         ref int restrictedCreatureMana,
         ref int availableMana,
         ref int tokens,
+        ref int artifactTokens,
+        ref int foodTokens,
+        ref int lifeGainEvents,
         ref int winPressure,
         ref int dungeonProgress)
     {
         int orderingTokens = tokens;
+        int orderingArtifactTokens = artifactTokens;
+        int orderingFoodTokens = foodTokens;
         int orderingMana = availableMana;
         foreach (DeckCard spell in hand
             .OrderBy(card => CastPriority(card, turn, profile))
-            .ThenBy(card => EstimateGoldfishCastCost(card, battlefield, orderingTokens, orderingMana).TotalManaSpent)
+            .ThenBy(card => EstimateGoldfishCastCost(
+                card,
+                battlefield,
+                orderingTokens,
+                orderingArtifactTokens,
+                orderingFoodTokens,
+                orderingMana,
+                commanderOnline).TotalManaSpent)
             .ToList())
         {
             CardRoleAssignment role = DeckRoleClassifier.Classify(spell);
@@ -1061,7 +1315,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 continue;
             }
 
-            GoldfishCastCost castCost = EstimateGoldfishCastCost(spell, battlefield, tokens, availableMana);
+            GoldfishCastCost castCost = EstimateGoldfishCastCost(
+                spell,
+                battlefield,
+                tokens,
+                artifactTokens,
+                foodTokens,
+                availableMana,
+                commanderOnline);
             int cost = castCost.TotalManaSpent;
             if (ShouldHoldGoldfishInteraction(spell, role, hand, availableMana, turn, profile))
             {
@@ -1103,10 +1364,15 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
             ApplyGoldfishGraveyardSetup(spell, deck, graveyard, run, turn);
 
-            if (role.Tags.Contains(DeckTags.Tokens) || role.Tags.Contains(DeckTags.SacrificeFodder))
+            GoldfishTokenProduction tokenProduction = EstimateTokenProduction(spell, role, castCost.XValue);
+            if (tokenProduction.Total > 0)
             {
-                tokens += 2 + EstimateTokenScaling(spell, castCost.XValue);
+                tokens += tokenProduction.Total;
+                artifactTokens += tokenProduction.ArtifactTokens;
+                foodTokens += tokenProduction.FoodTokens;
             }
+
+            lifeGainEvents += EstimateImmediateLifeGain(spell, tokenProduction);
 
             if (ContainsAny(GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
             {
@@ -1463,6 +1729,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Checks whether the card is Sam, Loyal Attendant.
+    /// </summary>
+    private static bool IsSamLoyalAttendant(DeckCard card)
+    {
+        return card.Name.Equals("Sam, Loyal Attendant", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Counts battlefield mana sources.
     /// </summary>
     private static int CountManaSources(IReadOnlyList<DeckCard> battlefield)
@@ -1556,6 +1830,9 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static int EstimateThreatPressure(
         IReadOnlyList<DeckCard> battlefield,
         int tokens,
+        int artifactTokens,
+        int foodTokens,
+        int lifeGainAvailable,
         int power,
         int winPressure,
         bool commanderOnline)
@@ -1563,8 +1840,56 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int evasion = battlefield.Count(IsEvasionRouteCard) * 4;
         int pump = battlefield.Where(IsPumpRouteCard).Sum(EstimatePumpPressure) * 3;
         int drain = EstimateDrainPressure(battlefield, tokens) * 4;
+        int foodDrain = EstimateFoodLifegainPressure(battlefield, artifactTokens, foodTokens, lifeGainAvailable);
         int commander = EstimateCommanderPressure(battlefield, commanderOnline);
-        return Math.Clamp(power * 2 + winPressure * 5 + evasion + pump + drain + commander, 0, 100);
+        return Math.Clamp(power * 2 + winPressure * 5 + evasion + pump + drain + foodDrain + commander, 0, 100);
+    }
+
+    /// <summary>
+    /// Estimates lifegain that can still be converted from banked Food this turn.
+    /// </summary>
+    private static int EstimateLifeGainAvailable(
+        int foodTokens,
+        int lifeGainEvents,
+        int availableMana,
+        bool samLoyalAttendantOnline)
+    {
+        int activationCost = samLoyalAttendantOnline ? 1 : 2;
+        int spendableFood = activationCost <= 0 ? foodTokens : Math.Min(foodTokens, Math.Max(0, availableMana) / activationCost);
+        return Math.Clamp(lifeGainEvents + (spendableFood * 3), 0, 30);
+    }
+
+    /// <summary>
+    /// Estimates drain pressure from banked Food, lifegain, and artifact-token death payoffs.
+    /// </summary>
+    private static int EstimateFoodLifegainPressure(
+        IReadOnlyList<DeckCard> battlefield,
+        int artifactTokens,
+        int foodTokens,
+        int lifeGainAvailable)
+    {
+        if (foodTokens == 0 && artifactTokens == 0 && lifeGainAvailable == 0)
+        {
+            return 0;
+        }
+
+        int pressure = 0;
+        if (lifeGainAvailable >= 3 && battlefield.Any(IsLifegainDrainPayoff))
+        {
+            pressure += Math.Min(18, lifeGainAvailable * 2);
+        }
+
+        if ((foodTokens > 0 || artifactTokens > 0) && battlefield.Any(IsArtifactLeavesDrainPayoff))
+        {
+            pressure += Math.Min(18, Math.Max(foodTokens, artifactTokens) * 4);
+        }
+
+        if (foodTokens >= 3 && battlefield.Any(IsFoodCombatPayoff))
+        {
+            pressure += Math.Min(12, foodTokens * 2);
+        }
+
+        return pressure;
     }
 
     /// <summary>
@@ -1683,7 +2008,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         IReadOnlyList<DeckCard> castThisTurn,
         IReadOnlyList<DeckCard> battlefield,
         int tokens,
+        int artifactTokens,
+        int foodTokens,
         int availableMana,
+        bool commanderOnline,
         int boardPower)
     {
         DeckCard? heldFinisher = hand.FirstOrDefault(IsSorceryFinisherCard);
@@ -1692,7 +2020,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         bool held = finisher is not null;
         GoldfishCastCost? heldCost = heldFinisher is null
             ? null
-            : EstimateGoldfishCastCost(heldFinisher, battlefield, tokens, availableMana);
+            : EstimateGoldfishCastCost(
+                heldFinisher,
+                battlefield,
+                tokens,
+                artifactTokens,
+                foodTokens,
+                availableMana,
+                commanderOnline);
         bool castable = castFinisher is not null
             || (heldCost is not null && heldCost.TotalManaSpent <= availableMana);
         int projectedDamage = castable
@@ -1943,6 +2278,53 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     }
 
     /// <summary>
+    /// Identifies payoffs that turn lifegain into opponent life loss or win pressure.
+    /// </summary>
+    private static bool IsLifegainDrainPayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = GetSnapshot(card).OracleText ?? "";
+        return role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
+            || (ContainsAny(text, "whenever you gain life", "whenever you gained life")
+                && ContainsAny(text, "each opponent loses", "opponent loses", "loses that much life", "you win the game"));
+    }
+
+    /// <summary>
+    /// Identifies payoffs for sacrificing or losing artifact tokens such as Food.
+    /// </summary>
+    private static bool IsArtifactLeavesDrainPayoff(DeckCard card)
+    {
+        string text = GetSnapshot(card).OracleText ?? "";
+        return ContainsAny(
+                text,
+                "whenever an artifact is put into a graveyard",
+                "whenever one or more artifacts",
+                "whenever you sacrifice an artifact",
+                "whenever you sacrifice a food",
+                "whenever one or more tokens you control leave")
+            && ContainsAny(text, "each opponent loses", "opponent loses", "damage to each opponent", "drain");
+    }
+
+    /// <summary>
+    /// Identifies combat payoffs that can convert a banked Food/token board into an alpha strike.
+    /// </summary>
+    private static bool IsFoodCombatPayoff(DeckCard card)
+    {
+        CardRoleAssignment role = DeckRoleClassifier.Classify(card);
+        string text = GetSnapshot(card).OracleText ?? "";
+        return role.Tags.Contains(DeckTags.CombatPayoff, StringComparer.OrdinalIgnoreCase)
+            || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase)
+            || ContainsAny(
+                text,
+                "creatures you control get +",
+                "creatures you control gain trample",
+                "creatures you control have trample",
+                "creatures you control can't be blocked",
+                "for each artifact you control",
+                "for each food you control");
+    }
+
+    /// <summary>
     /// Checks whether the battlefield has a repeatable engine permanent online.
     /// </summary>
     private static bool HasGoldfishEngineOnline(IReadOnlyList<DeckCard> battlefield)
@@ -2119,14 +2501,17 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 .Where(card => card.Kind == CommandZoneCardKind.Commander)
                 .Select(card => card.Card.Name)
                 .ToList(),
-            BackgroundNames = plan.Cards
+            AverageCommanderCastTurn = AverageTurn(runs.Select(run => run.CommanderCastTurn)),
+        };
+        if (plan.HasBackgroundPair)
+        {
+            result.BackgroundNames = plan.Cards
                 .Where(card => card.Kind == CommandZoneCardKind.Background)
                 .Select(card => card.Card.Name)
-                .ToList(),
-            AverageCommanderCastTurn = AverageTurn(runs.Select(run => run.CommanderCastTurn)),
-            AverageBackgroundCastTurn = AverageTurn(runs.Select(run => run.BackgroundCastTurn)),
-            AverageCommanderWithBackgroundOnlineTurn = AverageTurn(runs.Select(run => run.CommanderWithBackgroundOnlineTurn)),
-        };
+                .ToList();
+            result.AverageBackgroundCastTurn = AverageTurn(runs.Select(run => run.BackgroundCastTurn));
+            result.AverageCommanderWithBackgroundOnlineTurn = AverageTurn(runs.Select(run => run.CommanderWithBackgroundOnlineTurn));
+        }
 
         if (plan.Cards.Count == 0)
         {
@@ -2140,16 +2525,19 @@ public sealed partial class DeckSimulationService : DeckServiceBase
                 turn,
                 runs.Count(run => run.CommanderCastTurn <= turn),
                 runs.Count));
-            result.BackgroundCastByTurn.Add(PerformanceStatistics.BuildProbability(
-                "background-cast-by-turn",
-                turn,
-                runs.Count(run => run.BackgroundCastTurn <= turn),
-                runs.Count));
-            result.CommanderWithBackgroundOnlineByTurn.Add(PerformanceStatistics.BuildProbability(
-                "commander-with-background-online-by-turn",
-                turn,
-                runs.Count(run => run.CommanderWithBackgroundOnlineTurn <= turn),
-                runs.Count));
+            if (plan.HasBackgroundPair)
+            {
+                result.BackgroundCastByTurn.Add(PerformanceStatistics.BuildProbability(
+                    "background-cast-by-turn",
+                    turn,
+                    runs.Count(run => run.BackgroundCastTurn <= turn),
+                    runs.Count));
+                result.CommanderWithBackgroundOnlineByTurn.Add(PerformanceStatistics.BuildProbability(
+                    "commander-with-background-online-by-turn",
+                    turn,
+                    runs.Count(run => run.CommanderWithBackgroundOnlineTurn <= turn),
+                    runs.Count));
+            }
         }
 
         return result;
@@ -2495,6 +2883,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         /// </summary>
         public int TotalManaSpent => RequiredMana + XValue;
     }
+
+    /// <summary>
+    /// Carries token subcounts from one resolved spell.
+    /// </summary>
+    private sealed record GoldfishTokenProduction(int Total, int ArtifactTokens, int FoodTokens);
 
     /// <summary>
     /// Lists hand-spell sequencing windows around delayed command-zone deployment.

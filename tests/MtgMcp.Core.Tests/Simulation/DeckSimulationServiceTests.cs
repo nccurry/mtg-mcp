@@ -254,6 +254,123 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that affinity and commander-gated discounts affect goldfish cast timing.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_UsesAffinityAndCommanderDiscounts()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Affinity Discount Goldfish",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                GoldfishCard("Test Commander", 1, DeckRoles.Commander, "Legendary Creature", "{1}", 1, "", []),
+                GoldfishCard("Forest", 30, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard("Free Bauble", 24, DeckRoles.Synergy, "Artifact", "{0}", 0, "An artifact.", []),
+                GoldfishCard("Thoughtcast", 35, DeckRoles.Draw, "Sorcery", "{4}{U}", 5, "Affinity for artifacts. Draw two cards.", ["U"]),
+                GoldfishCard(
+                    "Commander's Call",
+                    10,
+                    DeckRoles.Synergy,
+                    "Sorcery",
+                    "{3}{G}",
+                    4,
+                    "This spell costs {1} less to cast if you control your commander. Create two Food tokens.",
+                    ["G"]),
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 3,
+            simulations: 100,
+            seed: 78,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        goldfish.RepresentativeLines.Should().Contain(line => line.Contains("Thoughtcast", StringComparison.OrdinalIgnoreCase));
+        goldfish.RepresentativeLines.Should().Contain(line => line.Contains("Commander's Call", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that banked Food plus lifegain/drain payoff evidence produces the Food drain route.
+    /// </summary>
+    [Fact]
+    public async Task GoldfishSimulation_DetectsFoodLifegainDrainRoute()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Food Drain Goldfish",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+            ],
+            Cards =
+            [
+                GoldfishCard(
+                    "Sam, Loyal Attendant",
+                    1,
+                    DeckRoles.Commander,
+                    "Legendary Creature - Halfling Peasant",
+                    "{1}{G}",
+                    2,
+                    "Activated abilities of Foods you control cost {1} less to activate.",
+                    ["G"]),
+                GoldfishCard("Forest", 37, DeckRoles.Lands, "Basic Land - Forest", null, 0, "{T}: Add {G}.", ["G"], ["G"]),
+                GoldfishCard(
+                    "Second Breakfast",
+                    30,
+                    DeckRoles.Synergy,
+                    "Enchantment",
+                    "{1}",
+                    1,
+                    "At the beginning of your end step, create two Food tokens.",
+                    []),
+                GoldfishCard(
+                    "Sanguine Steward",
+                    32,
+                    DeckRoles.Payoffs,
+                    "Creature",
+                    "{1}",
+                    1,
+                    "Whenever you gain life, each opponent loses 1 life.",
+                    []),
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+
+        GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 6,
+            simulations: 100,
+            seed: 79,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
+
+        WinRoute route = goldfish.WinEstimate.Routes.Should()
+            .ContainSingle(candidate => candidate.Kind == "food-lifegain-drain")
+            .Subject;
+        SimulationRouteEvidence evidence = route.Evidence.Should()
+            .ContainSingle(candidate => candidate.Name == "Food Lifegain Drain Burst")
+            .Subject;
+        evidence.Evidence.Should().Contain(line => line.Contains("food bank", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("lifegain available", StringComparison.OrdinalIgnoreCase));
+        evidence.Evidence.Should().Contain(line => line.Contains("drain payoff", StringComparison.OrdinalIgnoreCase));
+        goldfish.Notes.Should().Contain(note => note.Contains("Sam, Loyal Attendant", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that partial Commander goldfish runs warn and leave sideboard cards out of the sampled deck.
     /// </summary>
     [Fact]

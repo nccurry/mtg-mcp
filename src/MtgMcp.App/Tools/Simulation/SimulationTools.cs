@@ -174,8 +174,10 @@ public sealed class SimulationTools
     /// </summary>
     [McpServerTool(Name = "deck_analyze_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Run deterministic Stats Lab Monte Carlo analysis for opening hands, mulligans, land drops, colors, castability, command-zone timing, combo assembly, stranded cards, and named scenarios. Returns modelVersion, replay fingerprints, metric scorecard dimensions that are not a power ranking, and bounded traceSummary samples.")]
-    public Task<DeckPerformanceAnalysis> AnalyzeDeckPerformanceAsync(
+    public async Task<object> AnalyzeDeckPerformanceAsync(
         string workspaceId,
+        [Description("Output detail level: full, normal, or summary. Default full preserves the raw performance model.")]
+        string detailLevel = "full",
         [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
         string simulationProfile = "auto",
         int simulations = 50_000,
@@ -184,14 +186,18 @@ public sealed class SimulationTools
         bool includeMulligans = true,
         CancellationToken cancellationToken = default)
     {
-        return simulation.AnalyzeDeckPerformanceAsync(
-            workspaceId,
-            simulationProfile,
-            simulations,
-            maxTurn,
-            seed,
-            includeMulligans,
-            cancellationToken);
+        string normalizedDetailLevel = PerformanceOutputPresenter.NormalizeDetailLevel(detailLevel);
+        DeckPerformanceAnalysis result = await simulation
+            .AnalyzeDeckPerformanceAsync(
+                workspaceId,
+                simulationProfile,
+                simulations,
+                maxTurn,
+                seed,
+                includeMulligans,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return PerformanceOutputPresenter.Present(result, normalizedDetailLevel);
     }
 
     /// <summary>
@@ -199,8 +205,10 @@ public sealed class SimulationTools
     /// </summary>
     [McpServerTool(Name = "deck_plan_compare_performance", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Preview a persisted deck edit plan and compare deterministic Stats Lab performance before and after the changes. Use scorecard dimensions, scenario deltas, modelVersion, replay fingerprints, and traceSummary context as metric evidence, not a universal deck power score.")]
-    public Task<DeckPerformanceComparison> ComparePlanPerformanceAsync(
+    public async Task<object> ComparePlanPerformanceAsync(
         string planId,
+        [Description("Output detail level: full, normal, or summary. Default full preserves the raw performance comparison.")]
+        string detailLevel = "full",
         [Description("Simulation profile: auto, neutral, aggro, combo, control, value, big-mana, stax, or configured profile id.")]
         string simulationProfile = "auto",
         int simulations = 50_000,
@@ -208,12 +216,16 @@ public sealed class SimulationTools
         int seed = 1337,
         CancellationToken cancellationToken = default)
     {
-        return simulation.ComparePlanPerformanceAsync(
-            planId,
-            simulationProfile,
-            simulations,
-            maxTurn,
-            seed,
-            cancellationToken);
+        string normalizedDetailLevel = PerformanceOutputPresenter.NormalizeDetailLevel(detailLevel);
+        DeckPerformanceComparison result = await simulation
+            .ComparePlanPerformanceAsync(
+                planId,
+                simulationProfile,
+                simulations,
+                maxTurn,
+                seed,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return PerformanceOutputPresenter.Present(result, normalizedDetailLevel);
     }
 }

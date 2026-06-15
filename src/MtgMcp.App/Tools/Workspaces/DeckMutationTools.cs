@@ -202,6 +202,35 @@ public sealed class DeckMutationTools
     }
 
     /// <summary>
+    /// Moves multiple cards between workspace categories.
+    /// </summary>
+    [McpServerTool(
+        Name = "deck_move_cards_bulk",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = true,
+        OpenWorld = true
+    )]
+    [Description("Move multiple card rows between main deck, sideboard, and maybeboard. Partial quantities are allowed only when Archidekt writeback is not enabled.")]
+    public Task<object> MoveCardsBulkAsync(
+        string workspaceId,
+        BulkDeckCardMove[] moves,
+        bool? includeWorkspace = null,
+        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        string? detailLevel = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("deck_move_cards_bulk");
+        return CompactMutationPresenter.RunMutationAsync(
+            decks,
+            workspaceId,
+            includeWorkspace,
+            detailLevel,
+            () => decks.MoveCardsBulkAsync(workspaceId, moves, cancellationToken),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Updates the deck metadata.
     /// </summary>
     [McpServerTool(
