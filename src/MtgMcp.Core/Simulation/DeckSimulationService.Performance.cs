@@ -19,6 +19,28 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
+        return AnalyzeDeckPerformanceSnapshot(
+            workspace,
+            profile,
+            simulations,
+            maxTurn,
+            seed,
+            includeMulligans,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs deterministic Monte Carlo performance analysis for an in-memory workspace snapshot.
+    /// </summary>
+    public DeckPerformanceAnalysis AnalyzeDeckPerformanceSnapshot(
+        DeckWorkspace workspace,
+        string profile,
+        int simulations,
+        int maxTurn,
+        int seed,
+        bool includeMulligans,
+        CancellationToken cancellationToken)
+    {
         return DeckPerformanceAnalyzer.Analyze(
             workspace,
             profile,

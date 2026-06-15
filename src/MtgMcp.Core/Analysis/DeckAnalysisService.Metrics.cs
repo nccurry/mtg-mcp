@@ -29,6 +29,14 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     }
 
     /// <summary>
+    /// Analyzes cost for an in-memory workspace snapshot.
+    /// </summary>
+    public DeckCostAnalysis AnalyzeDeckCostSnapshot(DeckWorkspace workspace, decimal? maxBudget = null)
+    {
+        return AnalyzeDeckCost(workspace, maxBudget);
+    }
+
+    /// <summary>
     /// Estimates the Commander bracket for a workspace.
     /// </summary>
     public async Task<CommanderBracketEstimate> EstimateCommanderBracketAsync(
@@ -52,6 +60,14 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     }
 
     /// <summary>
+    /// Analyzes mana for an in-memory workspace snapshot.
+    /// </summary>
+    public ManaBaseAnalysis AnalyzeManaBaseSnapshot(DeckWorkspace workspace)
+    {
+        return AnalyzeManaBase(workspace);
+    }
+
+    /// <summary>
     /// Analyzes deck consistency.
     /// </summary>
     public async Task<DeckConsistencyAnalysis> AnalyzeDeckConsistencyAsync(
@@ -59,6 +75,14 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        return AnalyzeDeckConsistency(workspace);
+    }
+
+    /// <summary>
+    /// Analyzes consistency for an in-memory workspace snapshot.
+    /// </summary>
+    public DeckConsistencyAnalysis AnalyzeDeckConsistencySnapshot(DeckWorkspace workspace)
+    {
         return AnalyzeDeckConsistency(workspace);
     }
 

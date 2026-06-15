@@ -244,6 +244,11 @@ public sealed class DeckWorkspace
     /// Gets or sets bounded snapshots captured before explicit provider re-imports.
     /// </summary>
     public List<DeckImportHistoryEntry> ImportHistory { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets local snapshots that can restore non-writeback workspaces.
+    /// </summary>
+    public List<WorkspaceCheckpoint> LocalCheckpoints { get; set; } = [];
 }
 
 /// <summary>
@@ -301,6 +306,99 @@ public sealed class DeckImportHistoryEntry
     /// Gets or sets the local workspace snapshot from immediately before the import.
     /// </summary>
     public DeckWorkspace? BaselineWorkspace { get; set; }
+}
+
+/// <summary>
+/// Stores a local workspace snapshot for manual restore workflows.
+/// </summary>
+public sealed class WorkspaceCheckpoint
+{
+    /// <summary>
+    /// Gets or sets the checkpoint id used by restore and delete tools.
+    /// </summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Gets or sets the workspace id that owns the checkpoint.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the checkpoint display name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets optional human context for why the checkpoint was captured.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the checkpoint was captured.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Gets or sets the non-recursive workspace snapshot.
+    /// </summary>
+    public DeckWorkspace Snapshot { get; set; } = new();
+}
+
+/// <summary>
+/// Summarizes a local checkpoint without returning the saved workspace snapshot.
+/// </summary>
+public sealed class WorkspaceCheckpointSummary
+{
+    /// <summary>
+    /// Gets or sets the checkpoint id used by restore and delete tools.
+    /// </summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the workspace id that owns the checkpoint.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the checkpoint display name.
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets optional human context for why the checkpoint was captured.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the checkpoint was captured.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>
+/// Reports the result of restoring a local workspace checkpoint.
+/// </summary>
+public sealed class WorkspaceCheckpointRestoreResult
+{
+    /// <summary>
+    /// Gets or sets the workspace id restored from the checkpoint.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the restored checkpoint id.
+    /// </summary>
+    public string CheckpointId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets a concise restore status.
+    /// </summary>
+    public string Status { get; set; } = "restored";
+
+    /// <summary>
+    /// Gets or sets the restored workspace after persistence.
+    /// </summary>
+    public DeckWorkspace Workspace { get; set; } = new();
 }
 
 /// <summary>
@@ -1151,6 +1249,178 @@ public sealed class DeckValidationResult
     /// Gets or sets the warnings.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
+/// Reports cached-metadata legality and deck-construction findings for a workspace.
+/// </summary>
+public sealed class DeckLegalityAudit
+{
+    /// <summary>
+    /// Gets whether the audit found no legality errors.
+    /// </summary>
+    public bool IsLegal => Errors.Count == 0
+        && CardLegalityIssues.All(static issue => !issue.Severity.Equals("error", StringComparison.OrdinalIgnoreCase))
+        && ColorIdentityIssues.All(static issue => !issue.Severity.Equals("error", StringComparison.OrdinalIgnoreCase))
+        && CopyLimitIssues.All(static issue => !issue.Severity.Equals("error", StringComparison.OrdinalIgnoreCase))
+        && SideboardIssues.All(static issue => !issue.Severity.Equals("error", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Gets or sets the audited workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the normalized format used for legality checks.
+    /// </summary>
+    public string Format { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether excluded cards were included in card-level legality checks.
+    /// </summary>
+    public bool IncludeExcluded { get; set; }
+
+    /// <summary>
+    /// Gets or sets the active included card count.
+    /// </summary>
+    public int IncludedCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of card rows audited for card-level legality.
+    /// </summary>
+    public int AuditedCardRows { get; set; }
+
+    /// <summary>
+    /// Gets or sets command-zone facts used by Commander legality checks.
+    /// </summary>
+    public DeckLegalityCommandZoneSummary CommandZone { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets construction or command-zone errors.
+    /// </summary>
+    public List<string> Errors { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets non-fatal construction or metadata warnings.
+    /// </summary>
+    public List<string> Warnings { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets cards whose cached format legality is not legal.
+    /// </summary>
+    public List<DeckLegalityIssue> CardLegalityIssues { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets cards outside the Commander color identity.
+    /// </summary>
+    public List<DeckLegalityIssue> ColorIdentityIssues { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets singleton or constructed copy-limit findings.
+    /// </summary>
+    public List<DeckLegalityIssue> CopyLimitIssues { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets sideboard-size and sideboard-category findings.
+    /// </summary>
+    public List<DeckLegalityIssue> SideboardIssues { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets missing cached metadata needed for confident legality checks.
+    /// </summary>
+    public List<DeckLegalityIssue> MetadataGaps { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets audit assumptions and data-source caveats.
+    /// </summary>
+    public List<string> Assumptions { get; set; } = [];
+}
+
+/// <summary>
+/// Summarizes the active command zone for legality audits.
+/// </summary>
+public sealed class DeckLegalityCommandZoneSummary
+{
+    /// <summary>
+    /// Gets or sets command-zone display name for single or paired commanders.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>
+    /// Gets or sets non-Background commander names.
+    /// </summary>
+    public List<string> CommanderNames { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets Background names.
+    /// </summary>
+    public List<string> BackgroundNames { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets whether the command zone appears to be a partner pair.
+    /// </summary>
+    public bool HasPartnerPair { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the command zone appears to be a Background pair.
+    /// </summary>
+    public bool HasBackgroundPair { get; set; }
+
+    /// <summary>
+    /// Gets or sets unioned command-zone color identity.
+    /// </summary>
+    public List<string> ColorIdentity { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the number of active command-zone rows.
+    /// </summary>
+    public int CardRows { get; set; }
+}
+
+/// <summary>
+/// Describes one structured legality finding.
+/// </summary>
+public sealed class DeckLegalityIssue
+{
+    /// <summary>
+    /// Gets or sets error or warning severity.
+    /// </summary>
+    public string Severity { get; set; } = "warning";
+
+    /// <summary>
+    /// Gets or sets the card name when the finding applies to one card.
+    /// </summary>
+    public string? CardName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the primary category for the finding.
+    /// </summary>
+    public string? Category { get; set; }
+
+    /// <summary>
+    /// Gets or sets the card quantity associated with the finding.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the relevant format legality value when known.
+    /// </summary>
+    public string? Legality { get; set; }
+
+    /// <summary>
+    /// Gets or sets card color identity values associated with the finding.
+    /// </summary>
+    public List<string> ColorIdentity { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the human-readable finding.
+    /// </summary>
+    public string Message { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets a card source URI when cached.
+    /// </summary>
+    public string? ScryfallUri { get; set; }
 }
 
 /// <summary>

@@ -55,8 +55,10 @@ public sealed class McpE2ETests
             "deck_plan_compare_performance",
             "deck_plan_clone",
             "deck_preview_card_package",
+            "deck_compare_workspaces_analysis",
             "workspace_diff",
             "workspace_reopen_with_writeback",
+            "workspace_validate_legality",
             "deck_compare_goldfish",
             "deck_batch_tuning_report",
             "commander_search_candidates",
@@ -1187,6 +1189,9 @@ public sealed class McpE2ETests
             session.Client,
             $"mtg://workspace/{baselineWorkspaceId}/assistant-context");
         JsonElement context = JsonElement.Parse(contextText);
+        string simulationGuidanceText = await ReadResourceTextAsync(
+            session.Client,
+            "mtg://usage/simulation-tool-selection");
         string textExport = await CallTextAsync(
             session.Client,
             "workspace_export",
@@ -1320,10 +1325,22 @@ public sealed class McpE2ETests
                 ["workspaceId"] = currentWorkspaceId,
                 ["previousWorkspaceId"] = baselineWorkspaceId
             });
+        JsonElement analysisDiff = await CallJsonAsync(
+            session.Client,
+            "deck_compare_workspaces_analysis",
+            new Dictionary<string, object?>
+            {
+                ["workspaceId"] = currentWorkspaceId,
+                ["baselineMode"] = "explicit",
+                ["baselineWorkspaceId"] = baselineWorkspaceId,
+                ["limit"] = 4
+            });
 
         GetString(state, "workspaceId").Should().Be(baselineWorkspaceId);
         GetArray(state, "commanders").Select(value => value.GetString()).Should().Contain("Inga and Esika");
         GetString(GetObject(context, "state"), "workspaceId").Should().Be(baselineWorkspaceId);
+        simulationGuidanceText.Should().Contain("deck_analyze_performance");
+        simulationGuidanceText.Should().Contain("archidekt_compare_goldfish");
         GetString(remoteWorkspace, "mode").Should().Be("Archidekt");
         GetProperty(remoteWorkspace, "writeBack").GetBoolean().Should().BeFalse();
         GetString(remoteWorkspace, "archidektDeckId").Should().Be("23097041");
@@ -1358,6 +1375,9 @@ public sealed class McpE2ETests
         GetInt32(apply, "moved").Should().Be(1);
         GetString(apply, "workspaceResourceUri").Should().StartWith("mtg://workspace/");
         GetInt32(diff, "includedCountDelta").Should().Be(-1);
+        GetString(analysisDiff, "status").Should().Be("compared");
+        GetInt32(GetObject(analysisDiff, "deltas"), "includedCountDelta").Should().Be(-1);
+        GetString(GetObject(analysisDiff, "performance"), "status").Should().Be("notRequested");
         GetArray(diff, "primaryMoves")
             .Select(row => GetString(row, "cardName"))
             .Should()

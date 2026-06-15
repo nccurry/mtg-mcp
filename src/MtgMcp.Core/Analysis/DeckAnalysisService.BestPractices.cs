@@ -24,6 +24,16 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        return AnalyzeDeckBestPracticesSnapshot(workspace, profile);
+    }
+
+    /// <summary>
+    /// Analyzes an in-memory workspace snapshot against common Commander construction heuristics.
+    /// </summary>
+    public DeckBestPracticeAnalysis AnalyzeDeckBestPracticesSnapshot(
+        DeckWorkspace workspace,
+        string profile)
+    {
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         List<DeckHeuristicProfile> profiles = DeckHeuristicProfileCatalog.BuiltIns();
         BestPracticeProfileResolution profileResolution = ResolveBestPracticeProfile(profile, intent);

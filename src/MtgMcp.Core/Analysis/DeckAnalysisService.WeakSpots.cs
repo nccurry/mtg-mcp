@@ -16,11 +16,18 @@ public sealed partial class DeckAnalysisService
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
-        DeckBestPracticeAnalysis bestPractices = await AnalyzeDeckBestPracticesAsync(
-                workspaceId,
-                analysisProfile,
-                cancellationToken)
-            .ConfigureAwait(false);
+        return ReviewWeakSpotsSnapshot(workspace, analysisProfile, limit);
+    }
+
+    /// <summary>
+    /// Returns deterministic weak-slot evidence for an in-memory workspace snapshot.
+    /// </summary>
+    public DeckWeakSpotReview ReviewWeakSpotsSnapshot(
+        DeckWorkspace workspace,
+        string analysisProfile,
+        int limit)
+    {
+        DeckBestPracticeAnalysis bestPractices = AnalyzeDeckBestPracticesSnapshot(workspace, analysisProfile);
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         DeckWorkspaceState state = DeckWorkspaceService.BuildWorkspaceState(workspace);
         DeckWeakSpotReview review = new()

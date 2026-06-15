@@ -39,9 +39,10 @@ public sealed class MtgPrompts
             Goal: {goal}
 
             Read deck_intent_get first. If no intent exists, use deck_intent_suggest and ask the user
-            whether to save it. Run deck_refresh_card_metadata if needed, deck_summarize, deck_analyze_draw_odds,
-            identify weak roles or curve issues, gather candidate data with deck_query_cards,
-            and only create or apply deck plans after the user approves the exact change direction.
+            whether to save it. Run deck_refresh_card_metadata if needed, then use deck_re_evaluate
+            and workspace_validate_legality for the compact health and legality pass. Gather candidate
+            data with deck_query_cards, and only create or apply deck plans after the user approves
+            the exact change direction.
             """;
     }
 
@@ -58,12 +59,14 @@ public sealed class MtgPrompts
             Goal: {goal}
 
             Read mtg://workspace/{workspaceId}/state and mtg://workspace/{workspaceId}/assistant-context.
-            If previousWorkspaceId is provided, call workspace_diff with that explicit baseline and cite
-            the returned baseline id, source, and timestamp. Use deck_review_weak_spots for evidence-only
-            weak-slot rows, deck_explain_role_counts for any disputed role totals, and source tools when
-            popularity or discussion evidence matters. For candidate packages, use deck_preview_card_package
-            before creating a persistent plan. Keep deterministic evidence separate from final synthesis,
-            and do not apply mutations without explicit user approval.
+            If this workspace came from a provider and the user wants the latest provider state, call
+            workspace_refresh_from_source first. If previousWorkspaceId is provided, call
+            deck_compare_workspaces_analysis with baselineMode=explicit; otherwise use
+            baselineMode=last-import when import history exists. Also use deck_review_weak_spots for
+            evidence-only weak-slot rows, deck_explain_role_counts for disputed role totals, and source
+            tools when popularity or discussion evidence matters. For candidate packages, use
+            deck_preview_card_package before creating a persistent plan. Keep deterministic evidence
+            separate from final synthesis, and do not apply mutations without explicit user approval.
             """;
     }
 
@@ -296,8 +299,10 @@ public sealed class MtgPrompts
             Target turn: {targetTurn}
             Simulations: {simulations}
 
-            Use deck_simulate_goldfish, deck_project_board_state, and deck_estimate_win_turn. Explain that the
-            output assumes no opponent interaction and uses heuristics rather than a full rules engine.
+            Read mtg://usage/simulation-tool-selection first. Use deck_simulate_goldfish,
+            deck_project_board_state, and deck_estimate_win_turn for one-deck no-interaction questions.
+            Use deck_analyze_performance when the user needs Stats Lab scenario metrics instead.
+            Explain that these outputs use heuristics rather than a full rules engine.
             """;
     }
 

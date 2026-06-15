@@ -136,6 +136,50 @@ public sealed class WorkspaceTools
     }
 
     /// <summary>
+    /// Refreshes a provider-sourced workspace in place.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_refresh_from_source",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = true
+    )]
+    [Description("Refresh an existing provider-sourced workspace in place from Archidekt or Moxfield, preserving the workspace id and recording a last-import diff baseline.")]
+    public async Task<object> RefreshWorkspaceFromSourceAsync(
+        string workspaceId,
+        [Description("Optional Archidekt writeback override. Moxfield refresh always remains local-only.")]
+        bool? writeBack = null,
+        [Description("Output detail level: summary, normal, or full. Default summary omits the raw workspace payload.")]
+        string detailLevel = "summary",
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("workspace_refresh_from_source");
+        WorkspaceRefreshFromSourceResult result = await decks
+            .RefreshWorkspaceFromSourceAsync(workspaceId, writeBack, cancellationToken)
+            .ConfigureAwait(false);
+        string normalizedDetailLevel = NormalizeWorkspaceStartDetailLevel(detailLevel);
+        if (normalizedDetailLevel == WorkspaceStartDetailLevels.Full)
+        {
+            return result;
+        }
+
+        return new
+        {
+            result.Status,
+            result.WorkspaceId,
+            result.Provider,
+            result.ExternalId,
+            result.LocalWorkspaceId,
+            Workspace = result.Workspace is null
+                ? null
+                : CreateOpenResult(result.Workspace, normalizedDetailLevel),
+            DiffLastImport = result.DiffLastImport,
+            result.Notes
+        };
+    }
+
+    /// <summary>
     /// Lists workspace cards by active or excluded zone.
     /// </summary>
     [McpServerTool(
@@ -472,6 +516,33 @@ public sealed class WorkspaceTools
     }
 
     /// <summary>
+    /// Runs a cached-metadata legality audit.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_validate_legality",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("Validate cached card legality, Commander color identity, command-zone shape, copy limits, sideboard size, and metadata gaps without live lookups.")]
+    public async Task<object> ValidateLegalityAsync(
+        string workspaceId,
+        [Description("Output detail level: summary, normal, or full.")]
+        string detailLevel = "summary",
+        bool includeExcluded = false,
+        CancellationToken cancellationToken = default)
+    {
+        DeckLegalityAudit audit = await decks
+            .ValidateLegalityAsync(workspaceId, includeExcluded, cancellationToken)
+            .ConfigureAwait(false);
+        string normalizedDetailLevel = NormalizeWorkspaceStartDetailLevel(detailLevel);
+        return normalizedDetailLevel == WorkspaceStartDetailLevels.Full
+            ? audit
+            : SummarizeLegalityAudit(audit, normalizedDetailLevel);
+    }
+
+    /// <summary>
     /// Compares two explicitly selected saved workspaces.
     /// </summary>
     [McpServerTool(
@@ -527,6 +598,42 @@ public sealed class WorkspaceTools
     )
     {
         return decks.AnalyzeDeckAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates bounded legality audit output for summary and normal detail levels.
+    /// </summary>
+    private static object SummarizeLegalityAudit(DeckLegalityAudit audit, string detailLevel)
+    {
+        int limit = detailLevel.Equals(WorkspaceStartDetailLevels.Normal, StringComparison.OrdinalIgnoreCase)
+            ? 25
+            : 8;
+        return new
+        {
+            DetailLevel = detailLevel,
+            audit.WorkspaceId,
+            audit.Format,
+            audit.IncludeExcluded,
+            audit.IsLegal,
+            audit.IncludedCount,
+            audit.AuditedCardRows,
+            audit.CommandZone,
+            ErrorCount = audit.Errors.Count,
+            WarningCount = audit.Warnings.Count,
+            CardLegalityIssueCount = audit.CardLegalityIssues.Count,
+            ColorIdentityIssueCount = audit.ColorIdentityIssues.Count,
+            CopyLimitIssueCount = audit.CopyLimitIssues.Count,
+            SideboardIssueCount = audit.SideboardIssues.Count,
+            MetadataGapCount = audit.MetadataGaps.Count,
+            Errors = audit.Errors.Take(limit).ToList(),
+            Warnings = audit.Warnings.Take(limit).ToList(),
+            CardLegalityIssues = audit.CardLegalityIssues.Take(limit).ToList(),
+            ColorIdentityIssues = audit.ColorIdentityIssues.Take(limit).ToList(),
+            CopyLimitIssues = audit.CopyLimitIssues.Take(limit).ToList(),
+            SideboardIssues = audit.SideboardIssues.Take(limit).ToList(),
+            MetadataGaps = audit.MetadataGaps.Take(limit).ToList(),
+            Assumptions = audit.Assumptions.Take(limit).ToList()
+        };
     }
 
     /// <summary>

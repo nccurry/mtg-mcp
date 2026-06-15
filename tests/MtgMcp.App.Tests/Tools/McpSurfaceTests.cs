@@ -114,6 +114,7 @@ public sealed class McpSurfaceTests
             "deck_analyze_structure",
             "deck_batch_tuning_report",
             "deck_compare_goldfish",
+            "deck_compare_workspaces_analysis",
             "deck_create_category",
             "deck_delete_category",
             "deck_estimate_commander_bracket",
@@ -169,15 +170,22 @@ public sealed class McpSurfaceTests
             "source_list",
             "source_search_evidence",
             "source_search_reddit_discussions",
+            "workspace_checkpoint_create",
+            "workspace_checkpoint_delete",
+            "workspace_checkpoint_get",
+            "workspace_checkpoint_list",
+            "workspace_checkpoint_restore",
             "workspace_export",
             "workspace_diff",
             "workspace_diff_last_import",
             "workspace_list",
             "workspace_open",
             "workspace_parse_decklist",
+            "workspace_refresh_from_source",
             "workspace_reopen_with_writeback",
             "workspace_start",
             "workspace_validate",
+            "workspace_validate_legality",
             "wincon_find_payoffs",
         ];
 
@@ -252,6 +260,7 @@ public sealed class McpSurfaceTests
             "mtg://scryfall/syntax-cheatsheet",
             "mtg://formats/{format}/deck-rules",
             "mtg://usage/workspace-selection",
+            "mtg://usage/simulation-tool-selection",
             "mtg://usage/operation-modes",
             "mtg://usage/deck-intent",
             "mtg://config/effective",
@@ -1084,6 +1093,182 @@ public sealed class McpSurfaceTests
             .Contain(row => row.GetProperty("cardName").GetString() == "Read the Bones"
                 && row.GetProperty("sourceCategory").GetString() == DeckDefaults.Maybeboard);
         result.GetProperty("sourceRecommendations").GetProperty("status").GetString().Should().Be("notQueried");
+    }
+
+    /// <summary>
+    /// Verifies that source evidence stays default-off and becomes an explicit bounded query.
+    /// </summary>
+    [Fact]
+    public async Task DeckReEvaluate_SourceEvidenceIsOptInAndBounded()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = await repository.SaveAsync(
+            CreateReEvaluationWorkspace(),
+            TestContext.Current.CancellationToken);
+        EmptyCardCatalog cardCatalog = new();
+        DeckWorkspaceService deckService = new(repository, cardCatalog);
+        DeckAnalysisService analysisService = new(repository, cardCatalog);
+        DeckSimulationService simulationService = new(repository, cardCatalog);
+        DeckRecommendationService recommendationService = new(
+            repository,
+            cardCatalog,
+            analysisService,
+            simulationService);
+        DeckReEvaluationTools tools = new(deckService, analysisService, recommendationService);
+
+        JsonElement result = JsonSerializer.SerializeToElement(await tools.ReEvaluateDeckAsync(
+            workspace.Id,
+            limit: 20,
+            includeSourceEvidence: true,
+            sourceAnalysisDepth: "minimal",
+            sourceLimit: 30,
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        JsonElement sourceRecommendations = result.GetProperty("sourceRecommendations");
+        sourceRecommendations.GetProperty("status").GetString().Should().Be("queried");
+        sourceRecommendations.GetProperty("analysisDepth").GetString().Should().Be(AnalysisDepths.Minimal);
+        sourceRecommendations.GetProperty("limit").GetInt32().Should().Be(10);
+        sourceRecommendations.GetProperty("recommendations").GetArrayLength().Should().Be(0);
+        sourceRecommendations.GetProperty("notes")
+            .EnumerateArray()
+            .Should()
+            .Contain(note => note.GetString()!.Contains("No API-backed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that explicit workspace analysis comparison returns bounded deltas and diff rows.
+    /// </summary>
+    [Fact]
+    public async Task DeckCompareWorkspacesAnalysis_ExplicitBaselineReturnsCompactDeltas()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace baseline = await repository.SaveAsync(
+            CreateReEvaluationWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace current = await repository.SaveAsync(
+            CreateReEvaluationCurrentWorkspace(),
+            TestContext.Current.CancellationToken);
+        EmptyCardCatalog cardCatalog = new();
+        DeckWorkspaceService deckService = new(repository, cardCatalog);
+        DeckAnalysisService analysisService = new(repository, cardCatalog);
+        DeckReEvaluationTools tools = new(deckService, analysisService);
+
+        JsonElement result = JsonSerializer.SerializeToElement(await tools.CompareWorkspacesAnalysisAsync(
+            current.Id,
+            baselineMode: "explicit",
+            baselineWorkspaceId: baseline.Id,
+            detailLevel: "summary",
+            limit: 1,
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        result.GetProperty("status").GetString().Should().Be("compared");
+        result.GetProperty("detailLevel").GetString().Should().Be("summary");
+        result.GetProperty("baseline").GetProperty("validation").GetProperty("isValid").GetBoolean().Should().BeTrue();
+        result.GetProperty("current").GetProperty("cost").GetProperty("includedTotal").GetDecimal().Should().Be(0);
+        result.GetProperty("deltas").GetProperty("includedCountDelta").GetInt32().Should().Be(0);
+        result.GetProperty("workspaceDiff").GetProperty("counts").GetProperty("addedCards").GetInt32().Should().Be(1);
+        result.GetProperty("workspaceDiff").GetProperty("addedCards").GetArrayLength().Should().Be(1);
+        result.GetProperty("performance").GetProperty("status").GetString().Should().Be("notRequested");
+    }
+
+    /// <summary>
+    /// Verifies that last-import analysis comparison uses import history baselines.
+    /// </summary>
+    [Fact]
+    public async Task DeckCompareWorkspacesAnalysis_LastImportUsesImportHistory()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace baseline = CreateReEvaluationWorkspace();
+        DeckWorkspace current = CreateReEvaluationCurrentWorkspace();
+        current.SourceReferences.Add(new DeckSourceReference
+        {
+            Provider = DeckImportProviders.Moxfield,
+            ExternalId = "abc123"
+        });
+        current.ImportHistory.Add(new DeckImportHistoryEntry
+        {
+            Provider = DeckImportProviders.Moxfield,
+            ExternalId = "abc123",
+            LocalWorkspaceId = current.Id,
+            ImportedAt = DateTimeOffset.UtcNow,
+            BaselineWorkspace = baseline
+        });
+        current = await repository.SaveAsync(current, TestContext.Current.CancellationToken);
+        EmptyCardCatalog cardCatalog = new();
+        DeckWorkspaceService deckService = new(repository, cardCatalog);
+        DeckAnalysisService analysisService = new(repository, cardCatalog);
+        DeckReEvaluationTools tools = new(deckService, analysisService);
+
+        JsonElement result = JsonSerializer.SerializeToElement(await tools.CompareWorkspacesAnalysisAsync(
+            current.Id,
+            baselineMode: " LAST-IMPORT ",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        result.GetProperty("status").GetString().Should().Be("compared");
+        result.GetProperty("baselineMode").GetString().Should().Be("last-import");
+        result.GetProperty("workspaceDiff").GetProperty("counts").GetProperty("addedCards").GetInt32().Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that last-import analysis comparison exposes the no-baseline status.
+    /// </summary>
+    [Fact]
+    public async Task DeckCompareWorkspacesAnalysis_LastImportReturnsNoBaselineStatus()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = CreateReEvaluationWorkspace();
+        workspace.SourceReferences.Add(new DeckSourceReference
+        {
+            Provider = DeckImportProviders.Moxfield,
+            ExternalId = "abc123"
+        });
+        workspace = await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        EmptyCardCatalog cardCatalog = new();
+        DeckWorkspaceService deckService = new(repository, cardCatalog);
+        DeckAnalysisService analysisService = new(repository, cardCatalog);
+        DeckReEvaluationTools tools = new(deckService, analysisService);
+
+        JsonElement result = JsonSerializer.SerializeToElement(await tools.CompareWorkspacesAnalysisAsync(
+            workspace.Id,
+            baselineMode: "last-import",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        result.GetProperty("status").GetString().Should().Be(WorkspaceDiffLastImportStatuses.NoPriorBaseline);
+        result.TryGetProperty("current", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that performance comparison is opt-in and uses bounded summary output.
+    /// </summary>
+    [Fact]
+    public async Task DeckCompareWorkspacesAnalysis_PerformanceOptInReturnsBoundedSummary()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace baseline = await repository.SaveAsync(
+            CreateReEvaluationWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckWorkspace current = await repository.SaveAsync(
+            CreateReEvaluationCurrentWorkspace(),
+            TestContext.Current.CancellationToken);
+        EmptyCardCatalog cardCatalog = new();
+        DeckWorkspaceService deckService = new(repository, cardCatalog);
+        DeckAnalysisService analysisService = new(repository, cardCatalog);
+        DeckSimulationService simulationService = new(repository, cardCatalog);
+        DeckReEvaluationTools tools = new(deckService, analysisService, simulation: simulationService);
+
+        JsonElement result = JsonSerializer.SerializeToElement(await tools.CompareWorkspacesAnalysisAsync(
+            current.Id,
+            baselineMode: "explicit",
+            baselineWorkspaceId: baseline.Id,
+            includePerformance: true,
+            detailLevel: "summary",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+
+        JsonElement performance = result.GetProperty("performance");
+        performance.GetProperty("status").GetString().Should().Be("compared");
+        performance.GetProperty("settings").GetProperty("simulations").GetInt32().Should().Be(1000);
+        performance.GetProperty("before").GetProperty("detailLevel").GetString().Should().Be("summary");
+        performance.GetProperty("after").GetProperty("topStrandedCards").GetArrayLength().Should().BeLessThanOrEqualTo(5);
     }
 
     /// <summary>
@@ -2442,6 +2627,36 @@ public sealed class McpSurfaceTests
                 },
             ],
         };
+    }
+
+    /// <summary>
+    /// Creates a deterministic follow-up workspace with one card swap for analysis comparison tests.
+    /// </summary>
+    private static DeckWorkspace CreateReEvaluationCurrentWorkspace()
+    {
+        DeckWorkspace workspace = CreateReEvaluationWorkspace();
+        workspace.Name = "Re-evaluate Compact Updated";
+        DeckCard swamp = workspace.Cards.Single(card => card.Name == "Swamp");
+        swamp.Quantity = 97;
+        workspace.Cards.Add(new DeckCard
+        {
+            Name = "Sol Ring",
+            Quantity = 1,
+            PrimaryCategory = DeckRoles.Ramp,
+            Categories = [DeckRoles.Ramp],
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = "Artifact",
+                ManaCost = "{1}",
+                ManaValue = 1,
+                OracleText = "{T}: Add {C}{C}.",
+                ProducedMana = ["C"],
+                ColorIdentity = [],
+                ScryfallUri = "https://scryfall.com/card/test/3/sol-ring"
+            }
+        });
+
+        return workspace;
     }
 
     /// <summary>

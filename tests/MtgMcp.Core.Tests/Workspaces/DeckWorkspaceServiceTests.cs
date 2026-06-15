@@ -107,6 +107,158 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that local checkpoints restore workspace cards without recursive snapshot payloads.
+    /// </summary>
+    [Fact]
+    public async Task WorkspaceCheckpoints_CreateRestoreAndDeleteLocalSnapshots()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken);
+        await service.AddCardAsync(
+            deck.Id,
+            "Lightning Bolt",
+            1,
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken);
+        WorkspaceCheckpointSummary summary = await service.CreateWorkspaceCheckpointAsync(
+            deck.Id,
+            "Before testing",
+            "safe point",
+            TestContext.Current.CancellationToken);
+
+        await service.AddCardAsync(
+            deck.Id,
+            "Sol Ring",
+            1,
+            DeckDefaults.Mainboard,
+            TestContext.Current.CancellationToken);
+        WorkspaceCheckpoint checkpoint = await service.GetWorkspaceCheckpointAsync(
+            deck.Id,
+            summary.Id,
+            TestContext.Current.CancellationToken);
+        WorkspaceCheckpointRestoreResult restore = await service.RestoreWorkspaceCheckpointAsync(
+            deck.Id,
+            summary.Id,
+            TestContext.Current.CancellationToken);
+        DeckWorkspace restored = await service.OpenLocalDeckAsync(deck.Id, TestContext.Current.CancellationToken);
+
+        summary.Name.Should().Be("Before testing");
+        checkpoint.Snapshot.Cards.Should().ContainSingle(card => card.Name == "Lightning Bolt");
+        checkpoint.Snapshot.LocalCheckpoints.Should().BeEmpty();
+        checkpoint.Snapshot.ImportHistory.Should().BeEmpty();
+        restore.Status.Should().Be("restored");
+        restored.Cards.Should().ContainSingle(card => card.Name == "Lightning Bolt");
+        restored.Cards.Should().NotContain(card => card.Name == "Sol Ring");
+        restored.LocalCheckpoints.Should().ContainSingle(saved => saved.Id == summary.Id);
+
+        await service.DeleteWorkspaceCheckpointAsync(
+            deck.Id,
+            summary.Id,
+            TestContext.Current.CancellationToken);
+        IReadOnlyList<WorkspaceCheckpointSummary> afterDelete = await service.ListWorkspaceCheckpointsAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken);
+        afterDelete.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that local checkpoint retention keeps only the newest ten snapshots.
+    /// </summary>
+    [Fact]
+    public async Task WorkspaceCheckpoints_TrimToNewestTen()
+    {
+        DeckWorkspaceService service = new(new InMemoryRepository(), new FakeCardCatalog());
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Brew",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken);
+
+        for (int index = 0; index < 11; index++)
+        {
+            await service.CreateWorkspaceCheckpointAsync(
+                deck.Id,
+                $"Checkpoint {index}",
+                null,
+                TestContext.Current.CancellationToken);
+        }
+
+        IReadOnlyList<WorkspaceCheckpointSummary> checkpoints = await service.ListWorkspaceCheckpointsAsync(
+            deck.Id,
+            TestContext.Current.CancellationToken);
+
+        checkpoints.Should().HaveCount(10);
+        checkpoints.Should().NotContain(checkpoint => checkpoint.Name == "Checkpoint 0");
+    }
+
+    /// <summary>
+    /// Verifies that local checkpoints are allowed for read-only imported provider workspaces.
+    /// </summary>
+    [Fact]
+    public async Task WorkspaceCheckpoints_AllowReadOnlyImportedProviderWorkspaces()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = new()
+        {
+            Id = "remote-local",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = false,
+            ArchidektDeckId = "123"
+        };
+        await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        WorkspaceCheckpointSummary checkpoint = await service.CreateWorkspaceCheckpointAsync(
+            workspace.Id,
+            "Read-only import",
+            null,
+            TestContext.Current.CancellationToken);
+
+        checkpoint.WorkspaceId.Should().Be(workspace.Id);
+    }
+
+    /// <summary>
+    /// Verifies that local checkpoints reject Archidekt writeback workspaces.
+    /// </summary>
+    [Fact]
+    public async Task WorkspaceCheckpoints_RejectArchidektWritebackRestore()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = new()
+        {
+            Id = "writeback",
+            Mode = WorkspaceMode.Archidekt,
+            WriteBack = true,
+            ArchidektDeckId = "123",
+            LocalCheckpoints =
+            [
+                new WorkspaceCheckpoint
+                {
+                    Id = "checkpoint",
+                    WorkspaceId = "writeback",
+                    Name = "Remote",
+                    Snapshot = new DeckWorkspace { Id = "writeback" }
+                }
+            ]
+        };
+        await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        Func<Task> act = () => service.RestoreWorkspaceCheckpointAsync(
+            workspace.Id,
+            "checkpoint",
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Archidekt writeback*archidekt_checkpoint_*");
+    }
+
+    /// <summary>
     /// Verifies that category mutations preserve ordered Archidekt categories.
     /// </summary>
     [Fact]
@@ -1796,6 +1948,152 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that Archidekt refresh preserves workspace identity and captures a baseline diff.
+    /// </summary>
+    [Fact]
+    public async Task RefreshWorkspaceFromSourceAsync_RefreshesArchidektInPlace()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace current = CreateDiffWorkspace("refresh-archidekt");
+        current.Mode = WorkspaceMode.Archidekt;
+        current.WriteBack = true;
+        current.ArchidektDeckId = "23097041";
+        current.LocalCheckpoints.Add(new WorkspaceCheckpoint
+        {
+            Id = "checkpoint",
+            WorkspaceId = current.Id,
+            Name = "Before refresh",
+            Snapshot = new DeckWorkspace { Id = current.Id }
+        });
+        await repository.SaveAsync(current, TestContext.Current.CancellationToken);
+        DeckWorkspace remote = CreateDiffWorkspace("remote-archidekt");
+        remote.Mode = WorkspaceMode.Archidekt;
+        remote.ArchidektDeckId = "23097041";
+        remote.Cards.Add(new DeckCard
+        {
+            Name = "Beast Whisperer",
+            Quantity = 1,
+            PrimaryCategory = DeckRoles.Draw,
+            Categories = [DeckRoles.Draw],
+            ScryfallOracleId = "oracle-beast-whisperer"
+        });
+        DeckWorkspaceService service = new(
+            repository,
+            new FakeCardCatalog(),
+            new FakeArchidektGateway { ImportedDeck = remote });
+
+        WorkspaceRefreshFromSourceResult result = await service.RefreshWorkspaceFromSourceAsync(
+            current.Id,
+            writeBack: null,
+            TestContext.Current.CancellationToken);
+
+        result.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.Refreshed);
+        result.WorkspaceId.Should().Be(current.Id);
+        result.Workspace.Should().NotBeNull();
+        result.Workspace!.Id.Should().Be(current.Id);
+        result.Workspace.WriteBack.Should().BeTrue();
+        result.Workspace.LocalCheckpoints.Should().ContainSingle(checkpoint => checkpoint.Id == "checkpoint");
+        result.DiffLastImport!.Status.Should().Be(WorkspaceDiffLastImportStatuses.BaselineFound);
+        result.DiffLastImport.Diff!.AddedCards.Should().ContainSingle(card => card.CardName == "Beast Whisperer");
+        result.Workspace.ImportHistory.Should().ContainSingle();
+        result.Workspace.ImportHistory[0].BaselineWorkspace!.LocalCheckpoints.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that Moxfield refresh preserves workspace identity while staying local-only.
+    /// </summary>
+    [Fact]
+    public async Task RefreshWorkspaceFromSourceAsync_RefreshesMoxfieldInPlaceAsLocalOnly()
+    {
+        InMemoryRepository repository = new();
+        FakeMoxfieldGateway moxfield = new()
+        {
+            ImportedDeck = CreateImportedMoxfieldWorkspace(),
+        };
+        DeckWorkspaceService service = new(
+            repository,
+            new FakeCardCatalog(),
+            archidektGateway: null,
+            moxfieldGateway: moxfield);
+        DeckWorkspace current = await service.StartDeckWorkspaceAsync(
+            "moxfield",
+            name: null,
+            format: "commander",
+            description: null,
+            archidektDeckIdOrUrl: null,
+            moxfieldDeckIdOrUrl: "mox-1",
+            writeBack: null,
+            decklist: null,
+            TestContext.Current.CancellationToken);
+        DeckWorkspace remote = CreateImportedMoxfieldWorkspace();
+        remote.Cards.Add(new DeckCard
+        {
+            Name = "Cultivate",
+            Quantity = 1,
+            PrimaryCategory = DeckDefaults.Mainboard,
+            Categories = [DeckDefaults.Mainboard],
+            Snapshot = new CardSnapshot { TypeLine = "Sorcery" }
+        });
+        moxfield.ImportedDeck = remote;
+
+        WorkspaceRefreshFromSourceResult result = await service.RefreshWorkspaceFromSourceAsync(
+            current.Id,
+            writeBack: true,
+            TestContext.Current.CancellationToken);
+
+        result.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.Refreshed);
+        result.Workspace!.Id.Should().Be(current.Id);
+        result.Workspace.Mode.Should().Be(WorkspaceMode.Local);
+        result.Workspace.WriteBack.Should().BeFalse();
+        result.Workspace.Cards.Should().Contain(card => card.Name == "Cultivate");
+        result.DiffLastImport!.Status.Should().Be(WorkspaceDiffLastImportStatuses.BaselineFound);
+        moxfield.ImportRequests.Should().Equal("mox-1", "mox-1");
+    }
+
+    /// <summary>
+    /// Verifies that refresh reports explicit statuses for missing, unsupported, and unavailable sources.
+    /// </summary>
+    [Fact]
+    public async Task RefreshWorkspaceFromSourceAsync_ReturnsExplicitFailureStatuses()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace noSource = await repository.SaveAsync(new DeckWorkspace { Id = "no-source" }, TestContext.Current.CancellationToken);
+        DeckWorkspace unsupported = await repository.SaveAsync(new DeckWorkspace
+        {
+            Id = "unsupported",
+            SourceReferences =
+            [
+                new DeckSourceReference { Provider = "other", ExternalId = "deck-1" }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspace unavailable = CreateDiffWorkspace("unavailable-refresh");
+        unavailable.Mode = WorkspaceMode.Archidekt;
+        unavailable.ArchidektDeckId = "23097041";
+        unavailable = await repository.SaveAsync(unavailable, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(
+            repository,
+            new FakeCardCatalog(),
+            new FakeArchidektGateway { ThrowOnImport = true });
+
+        WorkspaceRefreshFromSourceResult sourceMissing = await service.RefreshWorkspaceFromSourceAsync(
+            noSource.Id,
+            null,
+            TestContext.Current.CancellationToken);
+        WorkspaceRefreshFromSourceResult unsupportedSource = await service.RefreshWorkspaceFromSourceAsync(
+            unsupported.Id,
+            null,
+            TestContext.Current.CancellationToken);
+        WorkspaceRefreshFromSourceResult unavailableSource = await service.RefreshWorkspaceFromSourceAsync(
+            unavailable.Id,
+            null,
+            TestContext.Current.CancellationToken);
+
+        sourceMissing.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.WorkspaceHasNoSource);
+        unsupportedSource.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.SourceUnsupported);
+        unavailableSource.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.SourceUnavailable);
+    }
+
+    /// <summary>
     /// Verifies that imported card snapshots feed analysis and validation.
     /// </summary>
     [Fact]
@@ -1832,6 +2130,65 @@ public sealed class DeckWorkspaceServiceTests
         validation
             .Errors.Should()
             .Contain(error => error.Contains("60", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that legality audits report Commander legality, color, copy, sideboard, and metadata issues.
+    /// </summary>
+    [Fact]
+    public async Task ValidateLegalityAsync_ReportsStructuredCommanderFindings()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = CreateLegalityAuditWorkspace();
+        await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        DeckLegalityAudit audit = await service.ValidateLegalityAsync(
+            workspace.Id,
+            includeExcluded: false,
+            TestContext.Current.CancellationToken);
+
+        audit.IsLegal.Should().BeFalse();
+        audit.CommandZone.DisplayName.Should().Be("Partner One // Partner Two");
+        audit.CommandZone.HasPartnerPair.Should().BeTrue();
+        audit.CommandZone.ColorIdentity.Should().Equal("W", "B");
+        audit.Warnings.Should().Contain(warning => warning.Contains("exactly 100", StringComparison.OrdinalIgnoreCase));
+        audit.CardLegalityIssues.Should().ContainSingle(issue => issue.CardName == "Banned Spell");
+        audit.ColorIdentityIssues.Should().ContainSingle(issue => issue.CardName == "Blue Spell");
+        audit.CopyLimitIssues.Should().ContainSingle(issue => issue.CardName == "Duplicate Spell");
+        audit.SideboardIssues.Should().Contain(issue => issue.Severity == "error" && issue.Quantity == 16);
+        audit.MetadataGaps.Should().Contain(issue =>
+            issue.CardName == "Mystery Card"
+            && issue.Message.Contains("type line", StringComparison.OrdinalIgnoreCase));
+        audit.MetadataGaps.Should().Contain(issue =>
+            issue.CardName == "Mystery Card"
+            && issue.Message.Contains("legality", StringComparison.OrdinalIgnoreCase));
+        audit.CardLegalityIssues.Should().NotContain(issue => issue.CardName == "Illegal Sideboard Card");
+    }
+
+    /// <summary>
+    /// Verifies that excluded cards are audited only when requested.
+    /// </summary>
+    [Fact]
+    public async Task ValidateLegalityAsync_IncludeExcludedControlsCardLevelAudit()
+    {
+        InMemoryRepository repository = new();
+        DeckWorkspace workspace = CreateLegalityAuditWorkspace();
+        await repository.SaveAsync(workspace, TestContext.Current.CancellationToken);
+        DeckWorkspaceService service = new(repository, new FakeCardCatalog());
+
+        DeckLegalityAudit includedOnly = await service.ValidateLegalityAsync(
+            workspace.Id,
+            includeExcluded: false,
+            TestContext.Current.CancellationToken);
+        DeckLegalityAudit withExcluded = await service.ValidateLegalityAsync(
+            workspace.Id,
+            includeExcluded: true,
+            TestContext.Current.CancellationToken);
+
+        includedOnly.CardLegalityIssues.Should().NotContain(issue => issue.CardName == "Illegal Sideboard Card");
+        withExcluded.CardLegalityIssues.Should().Contain(issue => issue.CardName == "Illegal Sideboard Card");
+        withExcluded.AuditedCardRows.Should().BeGreaterThan(includedOnly.AuditedCardRows);
     }
 
     /// <summary>
@@ -3118,6 +3475,76 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Creates a compact Commander deck with intentional legality audit findings.
+    /// </summary>
+    private static DeckWorkspace CreateLegalityAuditWorkspace()
+    {
+        return new DeckWorkspace
+        {
+            Id = "legality-audit",
+            Name = "Legality Audit",
+            Format = "commander",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Commander, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Mainboard, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false },
+            ],
+            Cards =
+            [
+                LegalityCard("Partner One", 1, DeckRoles.Commander, "Legendary Creature", ["W"], "legal", "oracle-partner-one"),
+                LegalityCard("Partner Two", 1, DeckRoles.Commander, "Legendary Creature", ["B"], "legal", "oracle-partner-two"),
+                LegalityCard("Blue Spell", 1, DeckDefaults.Mainboard, "Instant", ["U"], "legal", "oracle-blue"),
+                LegalityCard("Banned Spell", 1, DeckDefaults.Mainboard, "Sorcery", ["B"], "banned", "oracle-banned"),
+                LegalityCard("Duplicate Spell", 1, DeckDefaults.Mainboard, "Instant", ["B"], "legal", "oracle-duplicate"),
+                LegalityCard("Duplicate Spell", 1, DeckDefaults.Mainboard, "Instant", ["B"], "legal", "oracle-duplicate"),
+                new DeckCard
+                {
+                    Name = "Mystery Card",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Mainboard,
+                    Categories = [DeckDefaults.Mainboard],
+                    ScryfallOracleId = "oracle-mystery",
+                    Snapshot = new CardSnapshot()
+                },
+                LegalityCard("Illegal Sideboard Card", 16, DeckDefaults.Sideboard, "Instant", ["B"], "not_legal", "oracle-sideboard"),
+            ]
+        };
+    }
+
+    /// <summary>
+    /// Creates one card row with cached Commander legality metadata.
+    /// </summary>
+    private static DeckCard LegalityCard(
+        string name,
+        int quantity,
+        string category,
+        string typeLine,
+        List<string> colorIdentity,
+        string commanderLegality,
+        string oracleId)
+    {
+        return new DeckCard
+        {
+            Name = name,
+            Quantity = quantity,
+            PrimaryCategory = category,
+            Categories = [category],
+            ScryfallOracleId = oracleId,
+            Snapshot = new CardSnapshot
+            {
+                TypeLine = typeLine,
+                ColorIdentity = colorIdentity,
+                ScryfallUri = $"https://scryfall.test/{Uri.EscapeDataString(name)}",
+                Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["commander"] = commanderLegality
+                }
+            }
+        };
+    }
+
+    /// <summary>
     /// Creates a workspace with duplicate movable rows.
     /// </summary>
     private static DeckWorkspace CreateBulkMoveWorkspace()
@@ -3409,6 +3836,11 @@ public sealed class DeckWorkspaceServiceTests
         public DeckWorkspace ImportedDeck { get; set; } = CreateImportedMoxfieldWorkspace();
 
         /// <summary>
+        /// Gets or sets whether imports should fail.
+        /// </summary>
+        public bool ThrowOnImport { get; set; }
+
+        /// <summary>
         /// Gets import requests in caller order.
         /// </summary>
         public List<string> ImportRequests { get; } = [];
@@ -3422,6 +3854,11 @@ public sealed class DeckWorkspaceServiceTests
         )
         {
             ImportRequests.Add(deckIdOrUrl);
+            if (ThrowOnImport)
+            {
+                throw new InvalidOperationException("Moxfield source unavailable.");
+            }
+
             return Task.FromResult(ImportedDeck);
         }
     }
@@ -3480,6 +3917,11 @@ public sealed class DeckWorkspaceServiceTests
         /// Gets or sets the imported deck.
         /// </summary>
         public DeckWorkspace ImportedDeck { get; set; } = new();
+
+        /// <summary>
+        /// Gets or sets whether imports should fail.
+        /// </summary>
+        public bool ThrowOnImport { get; set; }
 
         /// <summary>
         /// Gets or sets deck summaries returned by list requests.
@@ -3669,6 +4111,11 @@ public sealed class DeckWorkspaceServiceTests
         )
         {
             ImportedDeckRequests++;
+            if (ThrowOnImport)
+            {
+                throw new InvalidOperationException("Archidekt source unavailable.");
+            }
+
             DeckWorkspace copy = new()
             {
                 Id = ImportedDeck.Id,

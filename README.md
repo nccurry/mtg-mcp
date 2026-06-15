@@ -472,14 +472,18 @@ Workflow-first tools:
 
 - Start or open workspaces with `workspace_start`, `workspace_list`, and
   `workspace_open`; parse, export, and validate with `workspace_parse_decklist`,
-  `workspace_export`, `workspace_validate`, and `workspace_diff_last_import`.
+  `workspace_export`, `workspace_validate`, `workspace_validate_legality`,
+  `workspace_checkpoint_create`, `workspace_refresh_from_source`, and
+  `workspace_diff_last_import`.
 - Search cards with `card_search`, `card_get`, `card_get_prints`, and
   `card_get_rulings`.
 - Inspect decks with `deck_summarize`, `deck_analyze_structure`,
   `deck_analyze_mana`, `deck_analyze_consistency`, and
   `deck_analyze_performance`; use `deck_analyze_land_drop_odds` for the
   turn-by-turn land-drop question, or `deck_re_evaluate` for a compact updated
-  deck health snapshot.
+  deck health snapshot. Use `deck_compare_workspaces_analysis` when you need
+  validation, legality, mana, consistency, cost, role, risk, and optional
+  performance deltas against an explicit or last-import baseline.
 - Inspect local category contents with `deck_list_cards_by_category`, or use
   `deck_list_cards_by_zone` for active, sideboard, maybeboard, excluded, and
   all-card views with optional duplicate collapsing; a newly created or
@@ -515,7 +519,8 @@ Useful resources:
   `mtg://workspace/{workspaceId}/intent`.
 - Usage guides: `mtg://scryfall/syntax-cheatsheet`,
   `mtg://formats/{format}/deck-rules`, `mtg://usage/workspace-selection`,
-  `mtg://usage/operation-modes`, `mtg://usage/deck-intent`.
+  `mtg://usage/simulation-tool-selection`, `mtg://usage/operation-modes`,
+  `mtg://usage/deck-intent`.
 - Status: `mtg://config/effective`, `mtg://sources/status`,
   `mtg://server/info`, `mtg://providers/{provider}/auth-status`.
 
@@ -547,6 +552,9 @@ Performance analysis tools preserve backward-compatible raw payloads by
 default; use `detailLevel:"normal"` or `detailLevel:"summary"` on
 `deck_analyze_performance` and `deck_plan_compare_performance` for bounded key
 metrics, failed scenarios, stranded cards, warnings, and command-zone context.
+Use `mtg://usage/simulation-tool-selection` when choosing between Stats Lab
+performance, goldfish sequence, board projection, win-turn estimate, workspace
+goldfish comparison, and Archidekt-backed comparison tools.
 
 ## Deck Intent
 

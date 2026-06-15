@@ -30,6 +30,104 @@ public sealed class CheckpointTools
     }
 
     /// <summary>
+    /// Captures a local workspace checkpoint for non-writeback restore.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_checkpoint_create",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = false,
+        OpenWorld = false
+    )]
+    [Description("Create a local checkpoint for a non-writeback workspace. Archidekt writeback workspaces should use archidekt_checkpoint_create.")]
+    public Task<WorkspaceCheckpointSummary> CreateWorkspaceCheckpointAsync(
+        string workspaceId,
+        string name,
+        string? description = null,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("workspace_checkpoint_create");
+        return decks.CreateWorkspaceCheckpointAsync(workspaceId, name, description, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists local workspace checkpoints without returning snapshot payloads.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_checkpoint_list",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("List local checkpoints for a workspace without returning saved workspace snapshots.")]
+    public Task<IReadOnlyList<WorkspaceCheckpointSummary>> ListWorkspaceCheckpointsAsync(
+        string workspaceId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.ListWorkspaceCheckpointsAsync(workspaceId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets one local workspace checkpoint and its saved snapshot.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_checkpoint_get",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("Get one local workspace checkpoint, including its saved workspace snapshot.")]
+    public Task<WorkspaceCheckpoint> GetWorkspaceCheckpointAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default)
+    {
+        return decks.GetWorkspaceCheckpointAsync(workspaceId, checkpointId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Restores a local workspace checkpoint.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_checkpoint_restore",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false,
+        OpenWorld = false
+    )]
+    [Description("Restore a non-writeback workspace from a local checkpoint. Archidekt writeback workspaces are refused.")]
+    public Task<WorkspaceCheckpointRestoreResult> RestoreWorkspaceCheckpointAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("workspace_checkpoint_restore");
+        return decks.RestoreWorkspaceCheckpointAsync(workspaceId, checkpointId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes a local workspace checkpoint.
+    /// </summary>
+    [McpServerTool(
+        Name = "workspace_checkpoint_delete",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = true,
+        OpenWorld = false
+    )]
+    [Description("Delete a local workspace checkpoint.")]
+    public Task DeleteWorkspaceCheckpointAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default)
+    {
+        operationMode.EnsureCanMutate("workspace_checkpoint_delete");
+        return decks.DeleteWorkspaceCheckpointAsync(workspaceId, checkpointId, cancellationToken);
+    }
+
+    /// <summary>
     /// Creates an Archidekt checkpoint for a bound workspace.
     /// </summary>
     [McpServerTool(

@@ -248,6 +248,43 @@ public sealed class MtgResources
     }
 
     /// <summary>
+    /// Returns guidance for choosing between simulation and performance tools.
+    /// </summary>
+    [McpServerResource(
+        UriTemplate = "mtg://usage/simulation-tool-selection",
+        Name = "Simulation Tool Selection Guidance"
+    )]
+    [Description("When to use performance analysis, goldfish simulation, board projection, win-turn estimates, and goldfish comparison tools.")]
+    public string GetSimulationToolSelectionGuidance()
+    {
+        return """
+            Use deck_analyze_performance when you need the broad deterministic Stats Lab view:
+            opening hands, mulligans, commander timing, scenario failures, stranded cards,
+            and replay metadata. Request detailLevel=summary or normal for MCP-friendly output.
+
+            Use deck_plan_compare_performance when a saved plan already contains the proposed edits
+            and the question is whether the plan improves the same bounded performance metrics.
+
+            Use deck_simulate_goldfish when the user asks how one deck plays out with no opponent
+            interaction. It is a heuristic play sequence, not full Magic rules simulation.
+
+            Use deck_project_board_state when the user wants expected board shape by a target turn:
+            lands, mana, creatures, tokens, pressure, and resource development.
+
+            Use deck_estimate_win_turn when the user asks how quickly known win routes or heuristic
+            pressure can close a game. Cite assumptions and unsupported route text.
+
+            Use deck_compare_goldfish when comparing two saved workspaces or local deck snapshots
+            under the same no-interaction assumptions. Use archidekt_compare_goldfish only when the
+            comparison inputs are Archidekt deck ids or URLs and provider import is part of the task.
+
+            For updated deck reviews, prefer deck_re_evaluate first. Add
+            deck_compare_workspaces_analysis when a baseline exists, and opt into performance only
+            when the user needs simulated deltas rather than structural analysis.
+            """;
+    }
+
+    /// <summary>
     /// Returns the current operation mode and mutation policy.
     /// </summary>
     [McpServerResource(

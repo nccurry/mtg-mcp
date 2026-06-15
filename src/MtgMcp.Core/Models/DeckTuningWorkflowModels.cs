@@ -988,6 +988,124 @@ public sealed class WorkspaceDiffLastImportResult
 }
 
 /// <summary>
+/// Lists statuses returned by in-place provider refresh.
+/// </summary>
+public static class WorkspaceRefreshFromSourceStatuses
+{
+    /// <summary>
+    /// The workspace was refreshed from its provider source.
+    /// </summary>
+    public const string Refreshed = "refreshed";
+
+    /// <summary>
+    /// The workspace does not identify an imported provider deck source.
+    /// </summary>
+    public const string WorkspaceHasNoSource = "workspaceHasNoSource";
+
+    /// <summary>
+    /// The workspace source provider is not refreshable.
+    /// </summary>
+    public const string SourceUnsupported = "sourceUnsupported";
+
+    /// <summary>
+    /// The source provider could not return the deck for this refresh.
+    /// </summary>
+    public const string SourceUnavailable = "sourceUnavailable";
+}
+
+/// <summary>
+/// Reports the result of refreshing an existing workspace from its provider source.
+/// </summary>
+public sealed class WorkspaceRefreshFromSourceResult
+{
+    /// <summary>
+    /// Gets or sets the refresh status.
+    /// </summary>
+    public string Status { get; set; } = WorkspaceRefreshFromSourceStatuses.WorkspaceHasNoSource;
+
+    /// <summary>
+    /// Gets or sets the refreshed workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the source provider key when known.
+    /// </summary>
+    public string? Provider { get; set; }
+
+    /// <summary>
+    /// Gets or sets the source provider deck id when known.
+    /// </summary>
+    public string? ExternalId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the local workspace id used for refresh and import-history scoping.
+    /// </summary>
+    public string? LocalWorkspaceId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the refreshed workspace when refresh succeeds.
+    /// </summary>
+    public DeckWorkspace? Workspace { get; set; }
+
+    /// <summary>
+    /// Gets or sets the diff against the captured pre-refresh baseline.
+    /// </summary>
+    public WorkspaceDiffLastImportResult? DiffLastImport { get; set; }
+
+    /// <summary>
+    /// Gets or sets explanatory refresh notes.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
+/// Returns the saved baseline workspace for last-import analysis comparisons.
+/// </summary>
+public sealed class WorkspaceImportBaselineResolution
+{
+    /// <summary>
+    /// Gets or sets the baseline resolution status.
+    /// </summary>
+    public string Status { get; set; } = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+
+    /// <summary>
+    /// Gets or sets the current workspace id.
+    /// </summary>
+    public string WorkspaceId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the source provider key when known.
+    /// </summary>
+    public string? Provider { get; set; }
+
+    /// <summary>
+    /// Gets or sets the source provider deck id when known.
+    /// </summary>
+    public string? ExternalId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the local workspace id used for import-history scoping.
+    /// </summary>
+    public string? LocalWorkspaceId { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the baseline was captured.
+    /// </summary>
+    public DateTimeOffset? ImportedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the baseline workspace when one is available.
+    /// </summary>
+    public DeckWorkspace? BaselineWorkspace { get; set; }
+
+    /// <summary>
+    /// Gets or sets explanatory notes for unavailable baselines.
+    /// </summary>
+    public List<string> Notes { get; set; } = [];
+}
+
+/// <summary>
 /// Identifies one side of a workspace diff comparison.
 /// </summary>
 public sealed class WorkspaceDiffBaseline

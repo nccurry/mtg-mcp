@@ -104,7 +104,8 @@ Core workflow groups are:
   `card_get_rulings`.
 - Workspace lifecycle: `workspace_start`, `workspace_list`, `workspace_open`,
   `workspace_parse_decklist`, `workspace_export`, `workspace_validate`, and
-  `workspace_diff_last_import`.
+  `workspace_validate_legality`, `workspace_checkpoint_*`,
+  `workspace_refresh_from_source`, and `workspace_diff_last_import`.
 - Workspace deck edits: `deck_add_card`, `deck_add_cards_bulk`,
   `deck_update_card_categories_bulk`, `deck_move_cards_bulk`,
   `deck_list_cards_by_category`, and `deck_list_cards_by_zone`.
@@ -114,7 +115,8 @@ Core workflow groups are:
   `deck_analyze_performance`, `deck_simulate_goldfish`,
   `deck_compare_goldfish`, `deck_project_board_state`,
   `deck_estimate_win_turn`, `deck_plan_compare_performance`, and
-  `deck_re_evaluate`.
+  `deck_re_evaluate`. Use `deck_compare_workspaces_analysis` for compact
+  baseline-vs-current analysis deltas and opt-in performance comparison.
 - Combo and win-condition evidence: `deck_analyze_combos`,
   `combo_search_by_card`, `combo_get_details`,
   `card_classify_win_routes`, `wincon_find_payoffs`,
@@ -135,6 +137,10 @@ simulation count, seed, assumptions, confidence, warnings, and key metrics.
 `deck_analyze_performance` and `deck_plan_compare_performance` default to the
 full raw model; callers can request `detailLevel=normal` or `summary` for
 bounded presenter output.
+`mtg://usage/simulation-tool-selection` documents when to choose Stats Lab
+performance analysis, goldfish sequence simulation, board projection,
+win-turn estimates, workspace goldfish comparison, or Archidekt-backed
+goldfish comparison.
 Source-backed results preserve source, source kind, source URI, cache status,
 retrieval time, confidence, determinism, and notes where available.
 

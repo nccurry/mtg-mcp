@@ -32,6 +32,7 @@ public sealed partial class DeckWorkspaceService
         if (previous is not null)
         {
             imported.ImportHistory = previous.ImportHistory.ToList();
+            imported.LocalCheckpoints = previous.LocalCheckpoints.ToList();
         }
 
         if (previous is not null
@@ -150,6 +151,7 @@ public sealed partial class DeckWorkspaceService
         string json = JsonSerializer.Serialize(workspace);
         DeckWorkspace clone = JsonSerializer.Deserialize<DeckWorkspace>(json) ?? new DeckWorkspace();
         clone.ImportHistory = [];
+        clone.LocalCheckpoints = [];
         return clone;
     }
 

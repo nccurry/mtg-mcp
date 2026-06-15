@@ -26,6 +26,14 @@ public sealed partial class DeckWorkspaceService
     }
 
     /// <summary>
+    /// Returns deterministic changes between two in-memory workspace snapshots.
+    /// </summary>
+    public WorkspaceDiffResult DiffWorkspaceSnapshots(DeckWorkspace current, DeckWorkspace previous)
+    {
+        return BuildWorkspaceDiff(current, previous);
+    }
+
+    /// <summary>
     /// Returns deterministic changes against the previous import into this same source-scoped workspace.
     /// </summary>
     public async Task<WorkspaceDiffLastImportResult> DiffLastImportAsync(
@@ -75,6 +83,58 @@ public sealed partial class DeckWorkspaceService
         result.Status = WorkspaceDiffLastImportStatuses.BaselineFound;
         result.Diff = BuildWorkspaceDiff(current, entry.BaselineWorkspace);
         result.Notes.Add($"Compared against import history captured at {entry.ImportedAt:O}.");
+        return result;
+    }
+
+    /// <summary>
+    /// Returns the prior import baseline workspace for analysis comparison workflows.
+    /// </summary>
+    public async Task<WorkspaceImportBaselineResolution> GetLastImportBaselineAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace current = await LoadWorkspaceAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        ImportSource? source = ResolveImportSource(current);
+        WorkspaceImportBaselineResolution result = new()
+        {
+            WorkspaceId = current.Id,
+            Provider = source?.Provider,
+            ExternalId = source?.ExternalId,
+            LocalWorkspaceId = current.Id
+        };
+        if (source is null)
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+            result.Notes.Add("Workspace does not have a provider source reference.");
+            return result;
+        }
+
+        if (!IsImportHistoryProvider(source.Provider))
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.SourceUnsupported;
+            result.Notes.Add($"Import history does not support provider '{source.Provider}'.");
+            return result;
+        }
+
+        DeckImportHistoryEntry? entry = FindLatestImportHistoryEntry(current, source);
+        if (entry is null)
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.NoPriorBaseline;
+            result.Notes.Add("No prior import baseline exists for this provider, external deck id, and local workspace id.");
+            return result;
+        }
+
+        result.ImportedAt = entry.ImportedAt;
+        if (entry.BaselineWorkspace is null)
+        {
+            result.Status = WorkspaceDiffLastImportStatuses.HistoryUnavailable;
+            result.Notes.Add("The matching import history entry does not contain a baseline workspace snapshot.");
+            return result;
+        }
+
+        result.Status = WorkspaceDiffLastImportStatuses.BaselineFound;
+        result.BaselineWorkspace = entry.BaselineWorkspace;
         return result;
     }
 

@@ -36,6 +36,9 @@ Both tools default to `detailLevel=full` for the raw model payload. Compact
 `normal` and `summary` output still carries replay metadata, settings,
 commander context, key metrics, failed scenarios, stranded-card risk, warnings,
 and assumptions so callers can compare bounded results safely.
+Use `mtg://usage/simulation-tool-selection` when deciding whether the task
+needs Stats Lab performance, a no-interaction goldfish sequence, board
+projection, win-turn estimate, or deck-to-deck goldfish comparison instead.
 
 Treat matching metadata as the condition for deterministic replay. If any of
 these values differ, metric changes may come from input or model changes rather
