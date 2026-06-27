@@ -6,7 +6,7 @@
 | Risk | Medium (parameter/behavior changes) |
 | Depends on | Phase 1 (normalize the final surface once) |
 | Unblocks | Phase 3 (typed returns enable output schemas) |
-| Target version | 0.8.0 (deprecation release) -> 0.9.0 (removal release) |
+| Target version | 0.10.0 (deprecation release) -> 0.11.0 (removal release) |
 
 Goal: one consistent way to call tools and read results across the (post-consolidation)
 surface - one output-control idiom, consistent identifiers, and one result/error framing.
@@ -115,7 +115,7 @@ mechanical duplication, not deliberate per-tool design.
 
 Split across two releases so implementers know exactly what each version ships:
 
-Deprecation release (0.8.0):
+Deprecation release (0.10.0):
 - Exactly one `detailLevel` normalizer/enum used everywhere; no `*DetailLevels` duplicates.
 - The new unified `detailLevel` is in place on every tool; `includeWorkspace` and the
   `compact/full` variant still work but are marked deprecated in their descriptions and the
@@ -125,7 +125,7 @@ Deprecation release (0.8.0):
 - Extra knobs (`analysisMode`, `sourceSupportDepth`) documented in one place.
 - A deprecation test asserts the legacy `includeWorkspace`/`compact` inputs still resolve.
 
-Removal release (0.9.0):
+Removal release (0.11.0):
 - `includeWorkspace` and `compact/full` removed; the deprecation test is replaced with a
   test asserting they are rejected.
 - `README.md`/usage resources reference only the unified idiom.

@@ -6,7 +6,7 @@
 | Risk | Medium-High (large internal refactor) |
 | Depends on | Phase 4 (typed contracts) recommended first |
 | Unblocks | sustainable change velocity; easier Phase 7 |
-| Target version | 0.12.0 |
+| Target version | 0.14.0 |
 
 Goal: tame the largest services and the shared base so Core stays changeable and testable,
 without altering external behavior.

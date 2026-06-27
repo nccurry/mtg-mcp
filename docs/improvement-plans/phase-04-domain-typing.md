@@ -6,7 +6,7 @@
 | Risk | Medium (serialization compatibility) |
 | Depends on | none hard; coordinate with Phase 2/3 result shapes |
 | Unblocks | Phase 5 (clearer contracts to refactor against) |
-| Target version | 0.11.0 |
+| Target version | 0.13.0 |
 
 Goal: close the gap between the repo's stated type-safety philosophy and the code. The
 project deliberately targets `net11.0` + `LangVersion=preview` to use C# union types, but

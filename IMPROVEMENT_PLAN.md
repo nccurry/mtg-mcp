@@ -1,6 +1,7 @@
 # mtg-mcp Improvement Plan
 
-Status: proposal / roadmap. Current version: `0.5.0` (pre-1.0).
+Status: proposal / roadmap. Latest public tag: `0.7.0`; next roadmap release:
+`0.8.0` (pre-1.0).
 
 This document is a phase-by-phase plan to improve `mtg-mcp` across every dimension
 where it should or could be better. It is intentionally high level on *solutions*:

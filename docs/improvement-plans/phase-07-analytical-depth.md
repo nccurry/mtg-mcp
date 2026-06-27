@@ -6,7 +6,7 @@
 | Risk | Medium (analytical-output changes) |
 | Depends on | Phase 4 (typing) helpful; Phase 0 (labels) prerequisite for the honesty story |
 | Unblocks | trustworthy recommendations; Phase 8 features build on real evaluation |
-| Target version | 0.13.0 |
+| Target version | 0.15.0 |
 
 Goal: deepen the honest-but-shallow heuristics and finish the determinism story - without
 becoming a Magic rules engine (a stated non-goal).

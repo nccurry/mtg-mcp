@@ -6,7 +6,7 @@
 | Risk | Medium |
 | Depends on | none (parallel with Phase 4/5) |
 | Unblocks | Phase 8 (new provider work on a solid base) |
-| Target version | 0.9.0 (redaction + JWT, early) and 0.11.0 (broad resiliency); parallel track |
+| Target version | 0.11.0 (redaction + JWT, early) and 0.13.0 (broad resiliency); parallel track |
 
 Goal: make the six adapters consistent, resilient, and safe - shared retry/backoff, one
 error model, precise secret redaction, and real token refresh - without leaking adapter

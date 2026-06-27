@@ -50,15 +50,15 @@ independent track that rides alongside the surface train.
 
 | Version | Phase(s) | Headline change |
 |---|---|---|
-| 0.6.0 | 0 | Surface metrics (report-only), deprecation policy + ADRs, doc reconciliation, honesty fixes (`RngKind`, evaluate-card status) |
-| 0.7.0 | 1 (deprecation) | Consolidated + toolset surface advertised; mode-aware advertising; old tool names deprecated |
-| 0.8.0 | 1 (removal) + 2 (deprecation) | Remove deprecated tool names; unified `detailLevel` in place; `includeWorkspace`/`compact` deprecated |
-| 0.9.0 | 2 (removal) + 6a | Remove `includeWorkspace`/`compact`; (parallel) secret-redaction hardening + Archidekt JWT refresh |
-| 0.10.0 | 3 | Structured output + structured errors + pagination + resource discovery; minimal in-proc client smoke |
-| 0.11.0 | 4 + 6b | Domain unions/enums (model separation as the last PR); (parallel) shared adapter resiliency + error model |
-| 0.12.0 | 5 | Core service decomposition (ordered sub-PRs) |
-| 0.13.0 | 7 | Analytical depth: evaluator roles (draw/interaction), density bracket, determinism unification |
-| 0.14.0 | 8 | Batch lookup/image/pricing (Track 1); collection subsystem (Track 2) |
+| 0.8.0 | 0 | Surface metrics (report-only), deprecation policy + ADRs, doc reconciliation, honesty fixes (`RngKind`, evaluate-card status) |
+| 0.9.0 | 1 (deprecation) | Consolidated + toolset surface advertised; mode-aware advertising; old tool names deprecated |
+| 0.10.0 | 1 (removal) + 2 (deprecation) | Remove deprecated tool names; unified `detailLevel` in place; `includeWorkspace`/`compact` deprecated |
+| 0.11.0 | 2 (removal) + 6a | Remove `includeWorkspace`/`compact`; (parallel) secret-redaction hardening + Archidekt JWT refresh |
+| 0.12.0 | 3 | Structured output + structured errors + pagination + resource discovery; minimal in-proc client smoke |
+| 0.13.0 | 4 + 6b | Domain unions/enums (model separation as the last PR); (parallel) shared adapter resiliency + error model |
+| 0.14.0 | 5 | Core service decomposition (ordered sub-PRs) |
+| 0.15.0 | 7 | Analytical depth: evaluator roles (draw/interaction), density bracket, determinism unification |
+| 0.16.0 | 8 | Batch lookup/image/pricing (Track 1); collection subsystem (Track 2) |
 | 1.0.0 | 9 | Observability, client matrix, perf ratchet, deprecation completion, release |
 
 Guiding principles and the problem inventory live in the master

@@ -6,7 +6,7 @@
 | Risk | Low |
 | Depends on | none |
 | Unblocks | all phases (metrics + deprecation policy) |
-| Target version | 0.6.0 |
+| Target version | 0.8.0 |
 
 Goal: make the surface measurable, put change-management policy in place, and fix the
 cheap honesty/documentation gaps before any larger refactor. There is no breaking

@@ -6,7 +6,7 @@
 | Risk | Low-Medium |
 | Depends on | Phase 1 (toolsets), Phase 2/3 (stable contracts); Phase 5 (soft - `JsonFileStore<T>`) |
 | Unblocks | broader deckbuilding workflows |
-| Target version | 0.14.0 |
+| Target version | 0.16.0 |
 
 Goal: add the high-value capabilities that are currently absent, on top of the
 consolidated, conformant surface. Investigation shows several are mostly "expose existing

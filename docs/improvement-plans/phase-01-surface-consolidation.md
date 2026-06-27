@@ -6,7 +6,7 @@
 | Risk | High (breaking surface change) |
 | Depends on | Phase 0 (metrics + deprecation policy) |
 | Unblocks | Phase 2 (normalize once on final surface), Phase 8 (toolset gating) |
-| Target version | 0.7.0 (deprecations) -> 0.8.0 (removals) |
+| Target version | 0.9.0 (deprecations) -> 0.10.0 (removals) |
 
 Goal: bring the advertised tool count from ~114 down to a number real MCP clients and
 models handle well, without losing capability, and let deployments advertise only the
@@ -139,9 +139,9 @@ this phase, not just a checklist.
   in `read-only` mode advertises none of its mutating tools).
 
 ### 4.6 Migration + deprecation
-- Under the Phase 0 deprecation policy: ship 0.7.0 advertising the new/merged tools while
+- Under the Phase 0 deprecation policy: ship 0.9.0 advertising the new/merged tools while
   the old names remain (descriptions prefixed "Deprecated: use X"), then remove old names
-  in 0.8.0. Update `McpSurfaceTests.cs` and its `removedToolNames` guard each step.
+  in 0.10.0. Update `McpSurfaceTests.cs` and its `removedToolNames` guard each step.
 - Update `README.md`, prompts (`MtgPrompts.cs`), and usage resources
   (`mtg://usage/*`) to reference the new surface.
 

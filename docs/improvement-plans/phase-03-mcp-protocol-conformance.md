@@ -6,7 +6,7 @@
 | Risk | Medium |
 | Depends on | Phase 2 (typed returns) |
 | Unblocks | Phase 8 (new tools ship conformant from day one) |
-| Target version | 0.10.0 |
+| Target version | 0.12.0 |
 
 Goal: make the server a first-class citizen for capable MCP clients - structured output
 with output schemas, structured errors, paginable lists, and resource-based discovery.
