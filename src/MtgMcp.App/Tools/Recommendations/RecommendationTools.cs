@@ -211,7 +211,7 @@ public sealed class RecommendationTools
     /// Evaluates one card's deterministic operational facts in deck context.
     /// </summary>
     [McpServerTool(Name = "deck_evaluate_card", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Read-only deterministic card evaluation. Compact output returns score, role, ramp kind, issues, strengths, and explicit candidate comparisons; detailLevel=full includes operational facts, sub-scores, evidence, and warnings.")]
+    [Description("Read-only ramp-fit evaluation for one card in deck context. Non-ramp cards return applicable=false with a not-applicable status; detailLevel=full includes operational facts, sub-scores, evidence, and warnings.")]
     public async Task<object> EvaluateCardAsync(
         string workspaceId,
         string cardName,
@@ -341,6 +341,9 @@ public sealed class RecommendationTools
     {
         return new
         {
+            evaluation.Evaluator,
+            evaluation.Applicable,
+            evaluation.EvaluationStatus,
             evaluation.WorkspaceId,
             evaluation.CardName,
             evaluation.Role,

@@ -16,6 +16,11 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private const string BoardProjectionModelLabel = "heuristic-board-projection";
 
     /// <summary>
+    /// Labels the random generator used by the heuristic goldfish family.
+    /// </summary>
+    private const string GoldfishRngKind = "system-random";
+
+    /// <summary>
     /// Runs a heuristic no-interaction goldfish simulation.
     /// </summary>
     public async Task<GoldfishSimulationResult> SimulateGoldfishAsync(
@@ -97,6 +102,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             {
                 Turn = Math.Max(1, turn),
                 ModelLabel = BoardProjectionModelLabel,
+                RngKind = GoldfishRngKind,
                 LikelyBoard = "No projection could be produced.",
                 Notes = ["Projection is derived from the optimistic goldfish model and does not model opponent interaction."],
             };
@@ -184,6 +190,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         {
             WorkspaceId = workspace.Id,
             ModelLabel = GoldfishModelLabel,
+            RngKind = GoldfishRngKind,
             Simulations = safeSimulations,
             TargetTurn = safeTurn,
             Mulligans = runs.Count(run => run.Mulliganed),
@@ -213,6 +220,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .First();
         result.RepresentativeLines = representative.Line.Take(16).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
+        result.Notes.Add("RNG kind system-random: results are seed-replayable within this runtime, but not covered by the Stats Lab deterministic RNG contract.");
         result.Notes.Add(
             "Model label optimistic-goldfish-model: this tool projects board development and fallback win pressure, "
                 + "so commander timing can differ from deck_analyze_performance's strict-sequencing-model scenarios.");
@@ -2470,6 +2478,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         {
             Turn = turn,
             ModelLabel = BoardProjectionModelLabel,
+            RngKind = GoldfishRngKind,
             MedianLands = lands,
             MedianManaSources = manaSources,
             MedianNonlandPermanents = permanents,
@@ -2565,6 +2574,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         {
             WorkspaceId = workspace.Id,
             ModelLabel = GoldfishModelLabel,
+            RngKind = GoldfishRngKind,
             Simulations = runs.Count,
             ObservedWins = wins.Count,
             ObservedWinRate = runs.Count == 0 ? 0 : wins.Count / (double)runs.Count,
@@ -2572,6 +2582,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             P25ObservedWinTurn = Percentile(wins, 0.25),
             P75ObservedWinTurn = Percentile(wins, 0.75)
         };
+        estimate.Notes.Add("RNG kind system-random: seed replayability is runtime-scoped and weaker than the Stats Lab deterministic RNG contract.");
+
         for (int turn = 1; turn <= maxTurn; turn++)
         {
             estimate.WinByTurnRates[turn] = runs.Count == 0 ? 0 : runs.Count(run => run.WinTurn <= turn) / (double)runs.Count;

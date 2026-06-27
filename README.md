@@ -514,11 +514,69 @@ Public tool prefixes are `archidekt_`, `card_`, `commander_`, `combo_`,
 `deck_`, `playgroup_`, `server_`, `source_`, `wincon_`, and `workspace_`.
 Compatibility aliases from older 0.x releases are intentionally not exposed.
 
+Complete registered tool names:
+
+- Archidekt: `archidekt_checkpoint_create`, `archidekt_checkpoint_delete`,
+  `archidekt_checkpoint_get`, `archidekt_checkpoint_list`,
+  `archidekt_checkpoint_rename`, `archidekt_compare_goldfish`,
+  `archidekt_copy_workspace`, `archidekt_create_deck`,
+  `archidekt_create_folder`, `archidekt_list_decks`,
+  `archidekt_list_folders`, `archidekt_move_decks`.
+- Cards and facets: `card_classify_win_routes`, `card_facets_explain_match`,
+  `card_facets_get`, `card_facets_set_annotations`, `card_get`,
+  `card_get_prints`, `card_get_rulings`, `card_search`,
+  `deck_facets_count`, `deck_facets_get`.
+- Commander, combos, and sources: `commander_get_aggregate_cards`,
+  `commander_get_tags`, `commander_get_win_condition_evidence`,
+  `commander_search_candidates`, `combo_get_details`,
+  `combo_search_by_card`, `source_explain_card_signal`, `source_list`,
+  `source_search_evidence`, `source_search_reddit_discussions`,
+  `wincon_find_payoffs`.
+- Deck analysis and simulation: `deck_analyze_best_practices`,
+  `deck_analyze_combos`, `deck_analyze_commander_trends`,
+  `deck_analyze_consistency`, `deck_analyze_cost`, `deck_analyze_draw_odds`,
+  `deck_analyze_land_drop_odds`, `deck_analyze_mana`,
+  `deck_analyze_performance`, `deck_analyze_structure`,
+  `deck_batch_tuning_report`, `deck_compare_goldfish`,
+  `deck_compare_workspaces_analysis`, `deck_estimate_commander_bracket`,
+  `deck_estimate_win_turn`, `deck_evaluate_card`,
+  `deck_explain_role_counts`, `deck_find_exemplar_decks`,
+  `deck_find_lesser_known_cards`, `deck_project_board_state`,
+  `deck_re_evaluate`, `deck_review_weak_spots`,
+  `deck_score_cards_for_playgroup_meta`, `deck_simulate_goldfish`,
+  `deck_summarize`.
+- Deck intent, plans, packages, and research: `deck_intent_clear`,
+  `deck_intent_get`, `deck_intent_set`, `deck_intent_suggest`,
+  `deck_plan_apply`, `deck_plan_clone`, `deck_plan_compare_performance`,
+  `deck_plan_create`, `deck_plan_delete`, `deck_plan_get`,
+  `deck_plan_list`, `deck_plan_preview`, `deck_preview_card_package`,
+  `deck_query_cards`, `deck_review_new_card_swaps`.
+- Deck mutation and categories: `deck_add_card`, `deck_add_card_category`,
+  `deck_add_cards_bulk`, `deck_create_category`, `deck_delete_category`,
+  `deck_list_cards_by_category`, `deck_list_cards_by_zone`,
+  `deck_move_card`, `deck_move_cards_bulk`, `deck_refresh_card_metadata`,
+  `deck_remove_card`, `deck_remove_card_category`, `deck_rename_category`,
+  `deck_set_card_quantity`, `deck_set_primary_card_category`,
+  `deck_update_card_categories_bulk`, `deck_update_metadata`.
+- Playgroup and server: `playgroup_get`, `playgroup_get_auth_status`,
+  `playgroup_get_deck`, `playgroup_list_observed_decks`,
+  `playgroup_list_observed_users`, `playgroup_list_user_decks`,
+  `playgroup_rank_decks`, `server_get_info`.
+- Workspaces and checkpoints: `workspace_checkpoint_create`,
+  `workspace_checkpoint_delete`, `workspace_checkpoint_get`,
+  `workspace_checkpoint_list`, `workspace_checkpoint_restore`,
+  `workspace_diff`, `workspace_diff_last_import`, `workspace_export`,
+  `workspace_list`, `workspace_open`, `workspace_parse_decklist`,
+  `workspace_refresh_from_source`, `workspace_reopen_with_writeback`,
+  `workspace_start`, `workspace_validate`, `workspace_validate_legality`.
+
 Useful resources:
 
 - Workspace data: `mtg://workspace/{workspaceId}`,
   `mtg://workspace/{workspaceId}/summary`,
-  `mtg://workspace/{workspaceId}/intent`.
+  `mtg://workspace/{workspaceId}/state`,
+  `mtg://workspace/{workspaceId}/intent`,
+  `mtg://workspace/{workspaceId}/assistant-context`.
 - Usage guides: `mtg://scryfall/syntax-cheatsheet`,
   `mtg://formats/{format}/deck-rules`, `mtg://usage/workspace-selection`,
   `mtg://usage/simulation-tool-selection`, `mtg://usage/operation-modes`,
@@ -531,6 +589,15 @@ evidence, cost reduction, power increases or reductions, Commander bracket
 reduction, mana-base work, land-drop risk, consistency, local meta tuning,
 new-card swaps, missing combo pieces, goldfishing, goal-focused packages, and
 rules/rulings checks.
+
+Complete registered prompt names: `brew_commander_deck`, `tune_existing_deck`,
+`iterative_deck_review`, `research_commander_common_cards`,
+`research_commander_win_conditions`, `reduce_deck_cost`,
+`upgrade_deck_power`, `reduce_deck_power`, `lower_commander_bracket`,
+`optimize_mana_base`, `improve_deck_consistency`, `tune_for_local_meta`,
+`review_new_card_swaps`, `check_land_drop_risk`,
+`find_missing_combo_pieces`, `goldfish_deck`, `improve_deck_for_goal`,
+`rules_and_rulings_check`.
 
 For Playgroup-aware tuning, `deck_score_cards_for_playgroup_meta` scores
 explicit candidate names with `candidateSource=explicit-cards`, or cards in

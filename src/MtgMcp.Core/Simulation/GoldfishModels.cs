@@ -59,6 +59,11 @@ public sealed class WinTurnEstimate
     public string ModelLabel { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the random source label used by the heuristic goldfish model.
+    /// </summary>
+    public string RngKind { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the number of simulations.
     /// </summary>
     public int Simulations { get; set; }
@@ -153,6 +158,11 @@ public sealed class ProjectedTurnState
     public string ModelLabel { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the random source label used by the heuristic goldfish model.
+    /// </summary>
+    public string RngKind { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the median lands on the battlefield.
     /// </summary>
     public int MedianLands { get; set; }
@@ -212,6 +222,11 @@ public sealed class GoldfishSimulationResult
     /// Gets or sets the simulation model label shown to MCP clients.
     /// </summary>
     public string ModelLabel { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the random source label used by the heuristic goldfish model.
+    /// </summary>
+    public string RngKind { get; set; } = "";
 
     /// <summary>
     /// Gets or sets the number of simulations.

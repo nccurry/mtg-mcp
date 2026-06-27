@@ -578,6 +578,9 @@ public sealed class McpSurfaceTests
 
         JsonElement compact = JsonSerializer.SerializeToElement(method.Invoke(null, [evaluation]));
 
+        compact.GetProperty("Evaluator").GetString().Should().Be("ramp");
+        compact.GetProperty("Applicable").GetBoolean().Should().BeTrue();
+        compact.GetProperty("EvaluationStatus").GetString().Should().Be("evaluated");
         compact.TryGetProperty("TopCandidates", out JsonElement topCandidates).Should().BeTrue();
         topCandidates.GetArrayLength().Should().Be(1);
         compact.TryGetProperty("Facts", out _).Should().BeFalse();

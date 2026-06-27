@@ -25,8 +25,10 @@ public static class RampContextScorer
 
         if (facts.Ramp is null)
         {
+            evaluation.Applicable = false;
+            evaluation.EvaluationStatus = "not-applicable";
             evaluation.Score = 0;
-            evaluation.TopIssues.Add("No ramp operational facts were detected for this card.");
+            evaluation.TopIssues.Add("The ramp evaluator is not applicable because no ramp operational facts were detected for this card.");
             return evaluation;
         }
 

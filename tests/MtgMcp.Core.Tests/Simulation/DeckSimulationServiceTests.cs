@@ -119,8 +119,11 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         goldfish.Simulations.Should().Be(100);
+        goldfish.RngKind.Should().Be("system-random");
+        goldfish.WinEstimate.RngKind.Should().Be("system-random");
         goldfish.Mulligans.Should().Be(100);
         goldfish.TurnSummaries.Should().HaveCount(5);
+        goldfish.TurnSummaries.Should().OnlyContain(summary => summary.RngKind == "system-random");
         goldfish.TurnSummaries.Select(summary => summary.MedianNonlandPermanents)
             .Should()
             .Equal(6, 7, 8, 9, 10);
@@ -141,6 +144,7 @@ public sealed partial class DeckIntelligenceTests
         goldfish.WinEstimate.LethalConfidence.Should().Be(goldfish.LethalConfidence);
         goldfish.WinEstimate.PressureOnlyProgress.Should().Be(goldfish.PressureOnlyProgress);
         string winEstimateJson = JsonSerializer.Serialize(goldfish.WinEstimate, WebJsonSerializerOptions);
+        winEstimateJson.Should().Contain("rngKind");
         winEstimateJson.Should().Contain("medianObservedWinTurn");
         winEstimateJson.Should().Contain("lethalConfidence");
         winEstimateJson.Should().Contain("pressureOnlyProgress");
@@ -159,8 +163,10 @@ public sealed partial class DeckIntelligenceTests
         route.Cards.Should().BeEquivalentTo(["Combo A", "Combo B"]);
 
         projected.Turn.Should().Be(3);
+        projected.RngKind.Should().Be("system-random");
         projected.MedianNonlandPermanents.Should().Be(8);
         projected.LikelyBoard.Should().Be("0 lands, 0 mana sources, 8 nonland permanents, about 0 pressure, 0 cards in hand.");
+        winTurn.RngKind.Should().Be("system-random");
         winTurn.Routes.Should().ContainSingle(route => route.Kind == "combo" && route.Probability == 1);
     }
 

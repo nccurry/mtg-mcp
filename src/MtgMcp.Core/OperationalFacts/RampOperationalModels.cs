@@ -124,6 +124,21 @@ public sealed class CardFactEvidence
 public sealed class RampContextEvaluation
 {
     /// <summary>
+    /// Gets or sets the evaluator that produced this context result.
+    /// </summary>
+    public string Evaluator { get; set; } = "ramp";
+
+    /// <summary>
+    /// Gets or sets whether the evaluator can score the card's operational facts.
+    /// </summary>
+    public bool Applicable { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the stable applicability status for tool clients.
+    /// </summary>
+    public string EvaluationStatus { get; set; } = "evaluated";
+
+    /// <summary>
     /// Gets or sets the workspace id used for context.
     /// </summary>
     public string WorkspaceId { get; set; } = "";

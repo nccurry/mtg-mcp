@@ -380,10 +380,23 @@ tasks:
     cmds:
       - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror'
 
+  surface:report:
+    desc: Print report-only MCP surface inventory metrics
+    deps: [build]
+    cmds:
+      - >
+        {{.DOTNET}} test tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --no-build
+        --filter "FullyQualifiedName~McpSurfaceInventoryTests.SurfaceMetrics_ReportCurrentInventory"
+        --logger "console;verbosity=detailed"
+      - '{{.POWERSHELL}} -Command "Get-Content artifacts/surface-report.txt"'
+
   ci:
     desc: Run the CI validation suite
     cmds:
       - task: lint
+      - task: surface:report
       - task: coverage:report
       - task: coverage:gates
       - task: smoke:mcp

@@ -286,6 +286,8 @@ internal static class GoldfishOutputPresenter
         return new
         {
             targetTurn = goldfish.TargetTurn,
+            modelLabel = goldfish.ModelLabel,
+            rngKind = goldfish.RngKind,
             simulations = goldfish.Simulations,
             mulliganRate = goldfish.Simulations > 0
                 ? goldfish.Mulligans / (double)goldfish.Simulations

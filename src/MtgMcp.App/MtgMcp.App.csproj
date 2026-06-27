@@ -25,6 +25,8 @@
         <PackAsTool>true</PackAsTool>
         <ToolCommandName>mtg-mcp</ToolCommandName>
         <PackageId>Nccurry.MtgMcp</PackageId>
+        <Version>0.5.0</Version>
+        <PackageVersion>0.5.0</PackageVersion>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Authors>Nick Curry</Authors>
         <Company>Nick Curry</Company>

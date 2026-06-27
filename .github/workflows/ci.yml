@@ -56,6 +56,9 @@ jobs:
       - name: Build with analyzers
         run: task lint
 
+      - name: Report MCP surface inventory
+        run: task surface:report
+
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@v4
 

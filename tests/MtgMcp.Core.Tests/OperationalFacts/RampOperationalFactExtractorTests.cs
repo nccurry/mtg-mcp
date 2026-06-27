@@ -147,6 +147,33 @@ public sealed class RampOperationalFactExtractorTests
     }
 
     /// <summary>
+    /// Verifies non-ramp cards return an explicit not-applicable status instead of only a zero score.
+    /// </summary>
+    [Fact]
+    public void Evaluate_NonRampCardReportsNotApplicableStatus()
+    {
+        DeckWorkspace workspace = CreateRampContextDeck();
+        DeckCard card = Card(
+            "Divination",
+            "Sorcery",
+            "{2}{U}",
+            3,
+            "Draw two cards.",
+            ["U"]);
+
+        RampContextEvaluation evaluation = RampContextScorer.Evaluate(
+            workspace,
+            card,
+            RampOperationalFactExtractor.Extract(card));
+
+        evaluation.Evaluator.Should().Be("ramp");
+        evaluation.Applicable.Should().BeFalse();
+        evaluation.EvaluationStatus.Should().Be("not-applicable");
+        evaluation.Score.Should().Be(0);
+        evaluation.TopIssues.Should().Contain(issue => issue.Contains("not applicable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies replacement-style ramp comparisons expose timing differences in a five-mana commander deck.
     /// </summary>
     [Fact]
