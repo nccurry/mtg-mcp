@@ -815,6 +815,64 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies that all public detail-level spellings route through one parser.
+    /// </summary>
+    [Fact]
+    public void DetailLevelParser_NormalizesSharedVocabulary()
+    {
+        DetailLevelParser.Parse(null).Should().Be(DetailLevel.Summary);
+        DetailLevelParser.Normalize(" NORMAL ").Should().Be(DetailLevelParser.Normal);
+        DetailLevelParser.Normalize(null, DetailLevel.Full).Should().Be(DetailLevelParser.Full);
+        DetailLevelParser.Normalize("compact", allowCompactAlias: true).Should().Be(DetailLevelParser.Summary);
+
+        Action act = () => DetailLevelParser.Parse("verbose");
+
+        act.Should()
+            .Throw<ArgumentException>()
+            .WithMessage("*summary, normal, or full*");
+    }
+
+    /// <summary>
+    /// Verifies that presenters do not reintroduce local detail-level normalizers.
+    /// </summary>
+    [Fact]
+    public void DetailLevelPresenters_UseSharedParser()
+    {
+        string[] presenterTypeNames =
+        [
+            "CompactMutationPresenter",
+            "PlanPreviewPresenter",
+            "GoldfishOutputPresenter",
+            "PerformanceOutputPresenter",
+            "DeckNormalizationPresenter",
+            "CardFacetOutputPresenter",
+        ];
+        List<string> localHelpers = [];
+        Assembly assembly = typeof(MtgMcpHost).Assembly;
+        foreach (string typeName in presenterTypeNames)
+        {
+            Type type = assembly.GetType($"MtgMcp.App.{typeName}")
+                ?? throw new InvalidOperationException($"{typeName} was not found.");
+            if (type.GetMethod(
+                    "NormalizeDetailLevel",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) is not null)
+            {
+                localHelpers.Add($"{typeName}.NormalizeDetailLevel");
+            }
+
+            foreach (Type nestedType in type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (nestedType.Name.Contains("DetailLevels", StringComparison.Ordinal))
+                {
+                    localHelpers.Add($"{typeName}.{nestedType.Name}");
+                }
+            }
+        }
+
+        localHelpers.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that the method-level tool registry covers every attributed tool.
     /// </summary>
     [Fact]
@@ -1702,9 +1760,9 @@ public sealed class McpSurfaceTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         await analyze.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*detailLevel must be full, normal, or summary*");
+            .WithMessage("*detailLevel must be summary, normal, or full*");
         await compare.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*detailLevel must be full, normal, or summary*");
+            .WithMessage("*detailLevel must be summary, normal, or full*");
     }
 
     /// <summary>

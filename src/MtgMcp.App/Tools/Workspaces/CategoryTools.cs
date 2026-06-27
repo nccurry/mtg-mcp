@@ -45,7 +45,7 @@ public sealed class CategoryTools
         string cardName,
         string category,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -102,7 +102,7 @@ public sealed class CategoryTools
         string workspaceId,
         BulkCardCategoryChange[] changes,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -133,7 +133,7 @@ public sealed class CategoryTools
         string cardName,
         string category,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -166,7 +166,7 @@ public sealed class CategoryTools
         string cardName,
         string category,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -202,7 +202,7 @@ public sealed class CategoryTools
         bool? includedInDeck = null,
         bool? includedInPrice = null,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -238,7 +238,7 @@ public sealed class CategoryTools
         string oldName,
         string newName,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -269,7 +269,7 @@ public sealed class CategoryTools
         string category,
         string replacementCategory = DeckDefaults.Mainboard,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )

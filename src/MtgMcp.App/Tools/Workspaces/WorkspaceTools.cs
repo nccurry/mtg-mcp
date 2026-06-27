@@ -90,7 +90,7 @@ public sealed class WorkspaceTools
                 cancellationToken)
             .ConfigureAwait(false);
         string normalizedDetailLevel = NormalizeWorkspaceStartDetailLevel(detailLevel);
-        return normalizedDetailLevel == WorkspaceStartDetailLevels.Full
+        return normalizedDetailLevel == DetailLevelParser.Full
             ? workspace
             : CreateOpenResult(workspace, normalizedDetailLevel);
     }
@@ -159,7 +159,7 @@ public sealed class WorkspaceTools
             .RefreshWorkspaceFromSourceAsync(workspaceId, writeBack, cancellationToken)
             .ConfigureAwait(false);
         string normalizedDetailLevel = NormalizeWorkspaceStartDetailLevel(detailLevel);
-        if (normalizedDetailLevel == WorkspaceStartDetailLevels.Full)
+        if (normalizedDetailLevel == DetailLevelParser.Full)
         {
             return result;
         }
@@ -537,7 +537,7 @@ public sealed class WorkspaceTools
             .ValidateLegalityAsync(workspaceId, includeExcluded, cancellationToken)
             .ConfigureAwait(false);
         string normalizedDetailLevel = NormalizeWorkspaceStartDetailLevel(detailLevel);
-        return normalizedDetailLevel == WorkspaceStartDetailLevels.Full
+        return normalizedDetailLevel == DetailLevelParser.Full
             ? audit
             : SummarizeLegalityAudit(audit, normalizedDetailLevel);
     }
@@ -605,7 +605,7 @@ public sealed class WorkspaceTools
     /// </summary>
     private static object SummarizeLegalityAudit(DeckLegalityAudit audit, string detailLevel)
     {
-        int limit = detailLevel.Equals(WorkspaceStartDetailLevels.Normal, StringComparison.OrdinalIgnoreCase)
+        int limit = detailLevel.Equals(DetailLevelParser.Normal, StringComparison.OrdinalIgnoreCase)
             ? 25
             : 8;
         return new
@@ -641,7 +641,7 @@ public sealed class WorkspaceTools
     /// </summary>
     private static DeckOpenResult CreateOpenResult(DeckWorkspace workspace)
     {
-        return CreateOpenResult(workspace, WorkspaceStartDetailLevels.Summary);
+        return CreateOpenResult(workspace, DetailLevelParser.Summary);
     }
 
     /// <summary>
@@ -652,7 +652,7 @@ public sealed class WorkspaceTools
         Dictionary<string, DeckCategory> categories = workspace.Categories
             .GroupBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        bool includeCards = detailLevel.Equals(WorkspaceStartDetailLevels.Normal, StringComparison.OrdinalIgnoreCase);
+        bool includeCards = detailLevel.Equals(DetailLevelParser.Normal, StringComparison.OrdinalIgnoreCase);
         List<DeckOpenCardSummary> cards = [];
         if (includeCards)
         {
@@ -775,37 +775,6 @@ public sealed class WorkspaceTools
     /// </summary>
     private static string NormalizeWorkspaceStartDetailLevel(string? detailLevel)
     {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? WorkspaceStartDetailLevels.Summary
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is WorkspaceStartDetailLevels.Summary
-            or WorkspaceStartDetailLevels.Normal
-            or WorkspaceStartDetailLevels.Full)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
-    }
-
-    /// <summary>
-    /// Lists accepted workspace_start detail levels.
-    /// </summary>
-    private static class WorkspaceStartDetailLevels
-    {
-        /// <summary>
-        /// Returns compact workspace identity, source, count, commander, and category data.
-        /// </summary>
-        public const string Summary = "summary";
-
-        /// <summary>
-        /// Adds compact card rows without full snapshots.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Returns the raw workspace payload.
-        /// </summary>
-        public const string Full = "full";
+        return DetailLevelParser.Normalize(detailLevel);
     }
 }

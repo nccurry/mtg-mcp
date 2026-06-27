@@ -186,7 +186,7 @@ public sealed class SimulationTools
         bool includeMulligans = true,
         CancellationToken cancellationToken = default)
     {
-        string normalizedDetailLevel = PerformanceOutputPresenter.NormalizeDetailLevel(detailLevel);
+        string normalizedDetailLevel = DetailLevelParser.Normalize(detailLevel, DetailLevel.Full);
         DeckPerformanceAnalysis result = await simulation
             .AnalyzeDeckPerformanceAsync(
                 workspaceId,
@@ -216,7 +216,7 @@ public sealed class SimulationTools
         int seed = 1337,
         CancellationToken cancellationToken = default)
     {
-        string normalizedDetailLevel = PerformanceOutputPresenter.NormalizeDetailLevel(detailLevel);
+        string normalizedDetailLevel = DetailLevelParser.Normalize(detailLevel, DetailLevel.Full);
         DeckPerformanceComparison result = await simulation
             .ComparePlanPerformanceAsync(
                 planId,

@@ -12,15 +12,16 @@ internal static class PlanPreviewPresenter
     /// </summary>
     public static object Present(DeckPlanPreviewResult result, string? detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == PreviewDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
+        string normalizedName = normalized.ToWireName();
 
         return new
         {
-            detailLevel = normalized,
+            detailLevel = normalizedName,
             planId = result.PlanId,
             workspaceId = result.WorkspaceId,
             canApply = !string.IsNullOrWhiteSpace(result.PlanId),
@@ -28,8 +29,8 @@ internal static class PlanPreviewPresenter
             previewOnly = false,
             resolveAddedCards = result.ResolveAddedCards,
             summary = BuildSummary(result),
-            before = normalized == PreviewDetailLevels.Normal ? PresentSnapshot(result.Before) : null,
-            after = normalized == PreviewDetailLevels.Normal ? PresentSnapshot(result.After) : null,
+            before = normalized == DetailLevel.Normal ? PresentSnapshot(result.Before) : null,
+            after = normalized == DetailLevel.Normal ? PresentSnapshot(result.After) : null,
             warnings = result.Warnings.Take(8).ToList(),
         };
     }
@@ -39,13 +40,14 @@ internal static class PlanPreviewPresenter
     /// </summary>
     public static object Present(DeckCardPackagePreviewResult result, string? detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == PreviewDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        string normalizedName = normalized.ToWireName();
+        if (normalized == DetailLevel.Full)
         {
-            return PresentFullPackage(result, normalized);
+            return PresentFullPackage(result, normalizedName);
         }
 
-        Dictionary<string, object?> response = PresentPackageHeader(result, normalized);
+        Dictionary<string, object?> response = PresentPackageHeader(result, normalizedName);
         response["previewPlan"] = PresentPreviewPlan(result.PreviewPlan, normalized);
         response["summary"] = BuildSummary(result.Preview);
         response["roleDeltas"] = result.RoleDeltas;
@@ -63,8 +65,8 @@ internal static class PlanPreviewPresenter
             deltas = result.Performance.Deltas.Take(8).ToList(),
             warnings = result.Performance.Warnings.Take(8).ToList(),
         };
-        response["before"] = normalized == PreviewDetailLevels.Normal ? PresentSnapshot(result.Preview.Before) : null;
-        response["after"] = normalized == PreviewDetailLevels.Normal ? PresentSnapshot(result.Preview.After) : null;
+        response["before"] = normalized == DetailLevel.Normal ? PresentSnapshot(result.Preview.Before) : null;
+        response["after"] = normalized == DetailLevel.Normal ? PresentSnapshot(result.Preview.After) : null;
         response["warnings"] = result.Warnings.Take(8).ToList();
         return response;
     }
@@ -119,10 +121,10 @@ internal static class PlanPreviewPresenter
     /// <summary>
     /// Presents a bounded plan body for transient packages.
     /// </summary>
-    private static object PresentPreviewPlan(PreviewDeckEditPlan plan, string detailLevel)
+    private static object PresentPreviewPlan(PreviewDeckEditPlan plan, DetailLevel detailLevel)
     {
         List<object> operations = [];
-        if (detailLevel == PreviewDetailLevels.Normal)
+        if (detailLevel == DetailLevel.Normal)
         {
             foreach (DeckEditOperation operation in plan.Operations)
             {
@@ -345,44 +347,8 @@ internal static class PlanPreviewPresenter
     }
 
     /// <summary>
-    /// Normalizes the preview output detail level.
-    /// </summary>
-    private static string NormalizeDetailLevel(string? detailLevel)
-    {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? PreviewDetailLevels.Summary
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is PreviewDetailLevels.Summary or PreviewDetailLevels.Normal or PreviewDetailLevels.Full)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
-    }
-
-    /// <summary>
     /// Carries one count delta while sorting.
     /// </summary>
     private sealed record CountDelta(string Name, int Before, int After, int Delta);
 
-    /// <summary>
-    /// Lists accepted plan-preview detail levels.
-    /// </summary>
-    private static class PreviewDetailLevels
-    {
-        /// <summary>
-        /// Includes key plan settings, deltas, source support, and warnings.
-        /// </summary>
-        public const string Summary = "summary";
-
-        /// <summary>
-        /// Includes summary output plus bounded before/after metric snapshots.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Returns the raw Core preview model.
-        /// </summary>
-        public const string Full = "full";
-    }
 }

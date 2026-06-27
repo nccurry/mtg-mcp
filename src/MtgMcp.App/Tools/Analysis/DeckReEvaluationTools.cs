@@ -194,7 +194,7 @@ public sealed class DeckReEvaluationTools
             Baseline = PresentAnalysisBundle(before, normalizedDetailLevel, boundedLimit),
             Current = PresentAnalysisBundle(after, normalizedDetailLevel, boundedLimit),
             Deltas = BuildAnalysisDeltas(before, after, workspaceDiff),
-            WorkspaceDiff = normalizedDetailLevel == "full"
+            WorkspaceDiff = normalizedDetailLevel == DetailLevelParser.Full
                 ? workspaceDiff
                 : SummarizeWorkspaceDiff(workspaceDiff, boundedLimit),
             Performance = performance,
@@ -207,15 +207,7 @@ public sealed class DeckReEvaluationTools
     /// </summary>
     private static string NormalizeAnalysisDetailLevel(string? detailLevel)
     {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? "summary"
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is "summary" or "normal" or "full")
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
+        return DetailLevelParser.Normalize(detailLevel);
     }
 
     /// <summary>
@@ -291,7 +283,7 @@ public sealed class DeckReEvaluationTools
     /// </summary>
     private static object PresentAnalysisBundle(WorkspaceAnalysisBundle bundle, string detailLevel, int limit)
     {
-        if (detailLevel == "full")
+        if (detailLevel == DetailLevelParser.Full)
         {
             return new
             {
@@ -468,8 +460,8 @@ public sealed class DeckReEvaluationTools
                 Seed = seed,
                 IncludeMulligans = true
             },
-            Before = PerformanceOutputPresenter.Present(before, detailLevel == "full" ? "normal" : detailLevel),
-            After = PerformanceOutputPresenter.Present(after, detailLevel == "full" ? "normal" : detailLevel)
+            Before = PerformanceOutputPresenter.Present(before, detailLevel == DetailLevelParser.Full ? DetailLevelParser.Normal : detailLevel),
+            After = PerformanceOutputPresenter.Present(after, detailLevel == DetailLevelParser.Full ? DetailLevelParser.Normal : detailLevel)
         };
     }
 

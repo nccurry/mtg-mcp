@@ -47,7 +47,7 @@ public sealed class DeckMutationTools
         string category = DeckDefaults.Mainboard,
         bool force = false,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -78,7 +78,7 @@ public sealed class DeckMutationTools
         BulkDeckCardAdd[] cards,
         bool force = false,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -110,7 +110,7 @@ public sealed class DeckMutationTools
         int quantity = 1,
         string? category = null,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -142,7 +142,7 @@ public sealed class DeckMutationTools
         int quantity,
         string? category = null,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -181,7 +181,7 @@ public sealed class DeckMutationTools
         string toCategory,
         string? fromCategory = null,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )
@@ -216,7 +216,7 @@ public sealed class DeckMutationTools
         string workspaceId,
         BulkDeckCardMove[] moves,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default)
     {
@@ -247,7 +247,7 @@ public sealed class DeckMutationTools
         string? format = null,
         string? description = null,
         bool? includeWorkspace = null,
-        [Description("Output detail level: summary, normal, or full. Explicit detailLevel overrides includeWorkspace.")]
+        [Description("Output detail level: summary, normal, or full. Deprecated: includeWorkspace is accepted for compatibility; use detailLevel=full.")]
         string? detailLevel = null,
         CancellationToken cancellationToken = default
     )

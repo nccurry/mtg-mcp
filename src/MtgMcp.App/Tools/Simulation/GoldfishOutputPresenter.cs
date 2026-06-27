@@ -12,15 +12,16 @@ internal static class GoldfishOutputPresenter
     /// </summary>
     public static object Present(DeckGoldfishComparisonResult result, string detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == GoldfishDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
+        string normalizedName = normalized.ToWireName();
 
         return new
         {
-            detailLevel = normalized,
+            detailLevel = normalizedName,
             workspaceId = result.WorkspaceId,
             targetTurn = result.TargetTurn,
             simulations = result.Simulations,
@@ -41,15 +42,16 @@ internal static class GoldfishOutputPresenter
     /// </summary>
     public static object Present(ArchidektGoldfishComparisonResult result, string detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == GoldfishDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
+        string normalizedName = normalized.ToWireName();
 
         return new
         {
-            detailLevel = normalized,
+            detailLevel = normalizedName,
             workspaceId = result.WorkspaceId,
             targetTurn = result.TargetTurn,
             simulations = result.Simulations,
@@ -70,15 +72,16 @@ internal static class GoldfishOutputPresenter
     /// </summary>
     public static object Present(RulesGoldfishRaceResult result, string detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == GoldfishDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
+        string normalizedName = normalized.ToWireName();
 
         return new
         {
-            detailLevel = normalized,
+            detailLevel = normalizedName,
             modelName = result.ModelName,
             engineVersion = result.EngineVersion,
             modelDescription = "Conservative template simulator; not a full Magic rules engine.",
@@ -96,11 +99,11 @@ internal static class GoldfishOutputPresenter
             decks = result.Decks
                 .Select(deck => PresentRaceDeck(deck, normalized))
                 .ToList(),
-            sampleOutcomes = normalized == GoldfishDetailLevels.Normal
+            sampleOutcomes = normalized == DetailLevel.Normal
                 ? result.SampleOutcomes
                 : null,
             failures = result.Failures,
-            notes = normalized == GoldfishDetailLevels.Normal
+            notes = normalized == DetailLevel.Normal
                 ? result.Notes
                 : result.Notes.Take(2).ToList(),
             warnings = result.Warnings,
@@ -112,15 +115,16 @@ internal static class GoldfishOutputPresenter
     /// </summary>
     public static object Present(DeckBatchTuningReport result, string detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == GoldfishDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
+        string normalizedName = normalized.ToWireName();
 
         return new
         {
-            detailLevel = normalized,
+            detailLevel = normalizedName,
             targetTurn = result.TargetTurn,
             simulations = result.Simulations,
             seed = result.Seed,
@@ -134,25 +138,9 @@ internal static class GoldfishOutputPresenter
     }
 
     /// <summary>
-    /// Normalizes a caller-supplied detail level or rejects unsupported values.
-    /// </summary>
-    private static string NormalizeDetailLevel(string? detailLevel)
-    {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? GoldfishDetailLevels.Summary
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is GoldfishDetailLevels.Summary or GoldfishDetailLevels.Normal or GoldfishDetailLevels.Full)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
-    }
-
-    /// <summary>
     /// Presents one conservative race deck row.
     /// </summary>
-    private static object PresentRaceDeck(RulesGoldfishRaceDeckSummary deck, string detailLevel)
+    private static object PresentRaceDeck(RulesGoldfishRaceDeckSummary deck, DetailLevel detailLevel)
     {
         return new
         {
@@ -168,10 +156,10 @@ internal static class GoldfishOutputPresenter
             tieRate = deck.TieRate,
             lethalRuns = deck.LethalRuns,
             medianLethalTurn = deck.MedianLethalTurn,
-            lethalTurnCounts = detailLevel == GoldfishDetailLevels.Normal
+            lethalTurnCounts = detailLevel == DetailLevel.Normal
                 ? deck.LethalTurnCounts
                 : null,
-            representativeTrace = detailLevel == GoldfishDetailLevels.Normal
+            representativeTrace = detailLevel == DetailLevel.Normal
                 ? deck.RepresentativeTrace
                 : null,
             warnings = deck.Warnings,
@@ -183,7 +171,7 @@ internal static class GoldfishOutputPresenter
     /// </summary>
     private static object PresentDeck(
         GoldfishDeckComparison deck,
-        string detailLevel,
+        DetailLevel detailLevel,
         int targetTurn)
     {
         return new
@@ -197,7 +185,7 @@ internal static class GoldfishOutputPresenter
             includedCards = deck.IncludedCards,
             metrics = PresentMetrics(deck.Goldfish, targetTurn),
             deltaFromActive = deck.DeltaFromActive,
-            details = detailLevel == GoldfishDetailLevels.Normal
+            details = detailLevel == DetailLevel.Normal
                 ? PresentDetails(deck.Goldfish, targetTurn)
                 : null,
         };
@@ -208,7 +196,7 @@ internal static class GoldfishOutputPresenter
     /// </summary>
     private static object PresentBatchDeck(
         DeckBatchTuningDeckReport deck,
-        string detailLevel,
+        DetailLevel detailLevel,
         int targetTurn)
     {
         return new
@@ -268,7 +256,7 @@ internal static class GoldfishOutputPresenter
                 recommendations = deck.BestPractices.Recommendations.Take(3).ToList(),
             },
             goldfish = PresentMetrics(deck.Goldfish, targetTurn),
-            goldfishDetails = detailLevel == GoldfishDetailLevels.Normal
+            goldfishDetails = detailLevel == DetailLevel.Normal
                 ? PresentDetails(deck.Goldfish, targetTurn)
                 : null,
             risks = deck.Risks.Take(8).ToList(),
@@ -362,24 +350,4 @@ internal static class GoldfishOutputPresenter
             ?? goldfish.TurnSummaries.LastOrDefault();
     }
 
-    /// <summary>
-    /// Lists accepted goldfish MCP detail levels.
-    /// </summary>
-    private static class GoldfishDetailLevels
-    {
-        /// <summary>
-        /// Includes only key settings, metrics, failures, warnings, and notes.
-        /// </summary>
-        public const string Summary = "summary";
-
-        /// <summary>
-        /// Includes summary output plus bounded evidence.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Returns the raw Core model.
-        /// </summary>
-        public const string Full = "full";
-    }
 }

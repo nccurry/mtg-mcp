@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Unified MCP `detailLevel` parsing across presenters while keeping legacy
+  `compact` and `includeWorkspace` inputs during the deprecation window.
 - Added method-level MCP toolset and operation-mode filtering so deployments
   advertise only selected tools that can run in the configured mode.
 - Added report-only MCP surface metrics, README surface parity coverage, a

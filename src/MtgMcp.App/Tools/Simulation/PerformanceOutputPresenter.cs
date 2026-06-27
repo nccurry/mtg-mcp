@@ -52,8 +52,8 @@ internal static class PerformanceOutputPresenter
     /// </summary>
     public static object Present(DeckPerformanceAnalysis result, string? detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == PerformanceDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel, DetailLevel.Full);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
@@ -66,15 +66,16 @@ internal static class PerformanceOutputPresenter
     /// </summary>
     public static object Present(DeckPerformanceComparison result, string? detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == PerformanceDetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel, DetailLevel.Full);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
+        string normalizedName = normalized.ToWireName();
 
         return new
         {
-            detailLevel = normalized,
+            detailLevel = normalizedName,
             planId = result.PlanId,
             workspaceId = result.WorkspaceId,
             before = PresentAnalysis(result.Before, normalized),
@@ -85,29 +86,14 @@ internal static class PerformanceOutputPresenter
     }
 
     /// <summary>
-    /// Normalizes a caller-supplied detail level or rejects unsupported values.
-    /// </summary>
-    internal static string NormalizeDetailLevel(string? detailLevel)
-    {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? PerformanceDetailLevels.Full
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is PerformanceDetailLevels.Full or PerformanceDetailLevels.Normal or PerformanceDetailLevels.Summary)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be full, normal, or summary.", nameof(detailLevel));
-    }
-
-    /// <summary>
     /// Presents bounded analysis output.
     /// </summary>
-    private static object PresentAnalysis(DeckPerformanceAnalysis result, string detailLevel)
+    private static object PresentAnalysis(DeckPerformanceAnalysis result, DetailLevel detailLevel)
     {
+        string detailLevelName = detailLevel.ToWireName();
         return new
         {
-            detailLevel,
+            detailLevel = detailLevelName,
             workspaceId = result.WorkspaceId,
             modelLabel = result.ModelLabel,
             schemaVersion = result.SchemaVersion,
@@ -142,7 +128,7 @@ internal static class PerformanceOutputPresenter
             topStrandedCards = PresentStrandedCards(result.StrandedCards, detailLevel),
             warnings = Limit(result.Warnings, detailLevel, SummaryWarningLimit, NormalWarningLimit),
             assumptions = Limit(result.Assumptions, detailLevel, 6, 12),
-            traceSummary = detailLevel == PerformanceDetailLevels.Normal
+            traceSummary = detailLevel == DetailLevel.Normal
                 ? PresentTraceSummary(result.TraceSummary)
                 : null,
         };
@@ -190,7 +176,7 @@ internal static class PerformanceOutputPresenter
     /// <summary>
     /// Presents bounded scorecard dimensions, lowest score first.
     /// </summary>
-    private static List<object> PresentScorecard(PerformanceScorecard scorecard, string detailLevel)
+    private static List<object> PresentScorecard(PerformanceScorecard scorecard, DetailLevel detailLevel)
     {
         List<PerformanceScorecardDimension> dimensions = scorecard.Dimensions.ToList();
         dimensions.Sort(static (left, right) =>
@@ -201,7 +187,7 @@ internal static class PerformanceOutputPresenter
                 : string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
         });
 
-        int limit = detailLevel == PerformanceDetailLevels.Normal ? NormalScorecardLimit : SummaryScorecardLimit;
+        int limit = detailLevel == DetailLevel.Normal ? NormalScorecardLimit : SummaryScorecardLimit;
         List<object> result = [];
         foreach (PerformanceScorecardDimension dimension in dimensions.Take(limit))
         {
@@ -220,7 +206,7 @@ internal static class PerformanceOutputPresenter
     /// <summary>
     /// Presents failed scenarios and risk scenarios with bounded failure evidence.
     /// </summary>
-    private static List<object> PresentFailedScenarios(IReadOnlyList<ScenarioPerformance> scenarios, string detailLevel)
+    private static List<object> PresentFailedScenarios(IReadOnlyList<ScenarioPerformance> scenarios, DetailLevel detailLevel)
     {
         List<ScenarioPerformance> failed = [];
         foreach (ScenarioPerformance scenario in scenarios)
@@ -239,7 +225,7 @@ internal static class PerformanceOutputPresenter
                 : string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
         });
 
-        int limit = detailLevel == PerformanceDetailLevels.Normal ? NormalScenarioLimit : SummaryScenarioLimit;
+        int limit = detailLevel == DetailLevel.Normal ? NormalScenarioLimit : SummaryScenarioLimit;
         List<object> result = [];
         foreach (ScenarioPerformance scenario in failed.Take(limit))
         {
@@ -309,7 +295,7 @@ internal static class PerformanceOutputPresenter
     /// <summary>
     /// Presents the most frequently stranded cards.
     /// </summary>
-    private static List<object> PresentStrandedCards(IReadOnlyList<StrandedCardPerformance> strandedCards, string detailLevel)
+    private static List<object> PresentStrandedCards(IReadOnlyList<StrandedCardPerformance> strandedCards, DetailLevel detailLevel)
     {
         List<StrandedCardPerformance> cards = strandedCards.ToList();
         cards.Sort(static (left, right) =>
@@ -320,7 +306,7 @@ internal static class PerformanceOutputPresenter
                 : string.Compare(left.CardName, right.CardName, StringComparison.OrdinalIgnoreCase);
         });
 
-        int limit = detailLevel == PerformanceDetailLevels.Normal ? NormalStrandedCardLimit : SummaryStrandedCardLimit;
+        int limit = detailLevel == DetailLevel.Normal ? NormalStrandedCardLimit : SummaryStrandedCardLimit;
         List<object> result = [];
         foreach (StrandedCardPerformance card in cards.Take(limit))
         {
@@ -341,7 +327,7 @@ internal static class PerformanceOutputPresenter
     /// <summary>
     /// Presents bounded deltas for before/after comparisons.
     /// </summary>
-    private static List<object> PresentDeltas(IReadOnlyList<PerformanceDelta> deltas, string detailLevel)
+    private static List<object> PresentDeltas(IReadOnlyList<PerformanceDelta> deltas, DetailLevel detailLevel)
     {
         List<PerformanceDelta> sorted = deltas.ToList();
         sorted.Sort(static (left, right) =>
@@ -352,7 +338,7 @@ internal static class PerformanceOutputPresenter
                 : string.Compare(left.Metric, right.Metric, StringComparison.OrdinalIgnoreCase);
         });
 
-        int limit = detailLevel == PerformanceDetailLevels.Normal ? 16 : 8;
+        int limit = detailLevel == DetailLevel.Normal ? 16 : 8;
         List<object> result = [];
         foreach (PerformanceDelta delta in sorted.Take(limit))
         {
@@ -443,32 +429,11 @@ internal static class PerformanceOutputPresenter
     /// </summary>
     private static List<string> Limit(
         IReadOnlyList<string> values,
-        string detailLevel,
+        DetailLevel detailLevel,
         int summaryLimit,
         int normalLimit)
     {
-        int limit = detailLevel == PerformanceDetailLevels.Normal ? normalLimit : summaryLimit;
+        int limit = detailLevel == DetailLevel.Normal ? normalLimit : summaryLimit;
         return values.Take(limit).ToList();
-    }
-
-    /// <summary>
-    /// Lists accepted performance MCP detail levels.
-    /// </summary>
-    private static class PerformanceDetailLevels
-    {
-        /// <summary>
-        /// Returns the raw Core model.
-        /// </summary>
-        public const string Full = "full";
-
-        /// <summary>
-        /// Includes compact output plus bounded trace and scorecard context.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Includes key metrics, failures, top stranded cards, and warnings.
-        /// </summary>
-        public const string Summary = "summary";
     }
 }

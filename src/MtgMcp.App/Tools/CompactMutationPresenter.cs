@@ -18,8 +18,8 @@ internal static class CompactMutationPresenter
         Func<Task<DeckChangeResult>> mutation,
         CancellationToken cancellationToken)
     {
-        string normalizedDetailLevel = ResolveDetailLevel(includeWorkspace, detailLevel);
-        if (normalizedDetailLevel == DetailLevels.Full)
+        DetailLevel normalizedDetailLevel = ResolveDetailLevel(includeWorkspace, detailLevel);
+        if (normalizedDetailLevel == DetailLevel.Full)
         {
             return await mutation().ConfigureAwait(false);
         }
@@ -36,7 +36,7 @@ internal static class CompactMutationPresenter
             result.Persistence,
             result.Message,
             CompactMutationDelta.Build(before, after));
-        return normalizedDetailLevel == DetailLevels.Normal
+        return normalizedDetailLevel == DetailLevel.Normal
             ? compact
             : ToSummary(compact);
     }
@@ -44,14 +44,14 @@ internal static class CompactMutationPresenter
     /// <summary>
     /// Resolves detail-level compatibility between the old includeWorkspace flag and the new detailLevel parameter.
     /// </summary>
-    public static string ResolveDetailLevel(bool? includeWorkspace, string? detailLevel)
+    public static DetailLevel ResolveDetailLevel(bool? includeWorkspace, string? detailLevel)
     {
         if (!string.IsNullOrWhiteSpace(detailLevel))
         {
-            return NormalizeDetailLevel(detailLevel);
+            return DetailLevelParser.Parse(detailLevel);
         }
 
-        return includeWorkspace == true ? DetailLevels.Full : DetailLevels.Summary;
+        return includeWorkspace == true ? DetailLevel.Full : DetailLevel.Summary;
     }
 
     /// <summary>
@@ -163,20 +163,6 @@ internal static class CompactMutationPresenter
             ErrorCount = validation.Errors.Count,
             WarningCount = validation.Warnings.Count
         };
-    }
-
-    /// <summary>
-    /// Normalizes public detail-level values.
-    /// </summary>
-    private static string NormalizeDetailLevel(string detailLevel)
-    {
-        string normalized = detailLevel.Trim().ToLowerInvariant();
-        if (normalized is DetailLevels.Summary or DetailLevels.Normal or DetailLevels.Full)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
     }
 
     /// <summary>
@@ -427,24 +413,4 @@ internal static class CompactMutationPresenter
         }
     }
 
-    /// <summary>
-    /// Public detail-level values for mutation output.
-    /// </summary>
-    public static class DetailLevels
-    {
-        /// <summary>
-        /// Bounded mutation result with changed cards and validation counts.
-        /// </summary>
-        public const string Summary = "summary";
-
-        /// <summary>
-        /// Previous compact mutation diff envelope.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Original full mutation result including workspace payload when available.
-        /// </summary>
-        public const string Full = "full";
-    }
 }

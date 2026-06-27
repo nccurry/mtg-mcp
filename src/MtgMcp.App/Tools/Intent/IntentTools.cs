@@ -61,9 +61,10 @@ public sealed class IntentTools
     public async Task<object> SetDeckIntentAsync(
         string workspaceId,
         string intentText,
+        [Description("Deprecated: use detailLevel=full.")]
         bool includeWorkspace = false,
-        [Description("Output detail level: compact or full.")]
-        string detailLevel = "compact",
+        [Description("Output detail level: summary, normal, or full. Deprecated: compact is accepted as summary.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default)
     {
         operationMode.EnsureCanMutate("deck_intent_set");
@@ -83,9 +84,10 @@ public sealed class IntentTools
     [Description("Remove the MTG MCP Deck Intent section from the workspace description while preserving other description text.")]
     public async Task<object> ClearDeckIntentAsync(
         string workspaceId,
+        [Description("Deprecated: use detailLevel=full.")]
         bool includeWorkspace = false,
-        [Description("Output detail level: compact or full.")]
-        string detailLevel = "compact",
+        [Description("Output detail level: summary, normal, or full. Deprecated: compact is accepted as summary.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default)
     {
         operationMode.EnsureCanMutate("deck_intent_clear");
@@ -104,7 +106,7 @@ public sealed class IntentTools
     private static bool ShouldReturnFull(bool includeWorkspace, string? detailLevel)
     {
         return includeWorkspace
-            || detailLevel?.Equals("full", StringComparison.OrdinalIgnoreCase) == true;
+            || DetailLevelParser.Parse(detailLevel, allowCompactAlias: true) == DetailLevel.Full;
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ using MtgMcp.Core;
 namespace MtgMcp.App;
 
 /// <summary>
-/// Shapes metadata refresh results so agents can request compact or full workspace output.
+/// Shapes metadata refresh results so agents can request bounded or full workspace output.
 /// </summary>
 internal static class DeckNormalizationPresenter
 {
@@ -17,8 +17,8 @@ internal static class DeckNormalizationPresenter
     /// </summary>
     public static object Present(DeckNormalizationResult result, string? detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == DetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return result;
         }
@@ -35,7 +35,7 @@ internal static class DeckNormalizationPresenter
             result.SnapshotQualityBefore,
             result.SnapshotQualityAfter
         };
-        if (normalized == DetailLevels.Summary)
+        if (normalized == DetailLevel.Summary)
         {
             return summary;
         }
@@ -56,40 +56,4 @@ internal static class DeckNormalizationPresenter
         };
     }
 
-    /// <summary>
-    /// Normalizes public detail-level values.
-    /// </summary>
-    private static string NormalizeDetailLevel(string? detailLevel)
-    {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? DetailLevels.Summary
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is DetailLevels.Summary or DetailLevels.Normal or DetailLevels.Full)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
-    }
-
-    /// <summary>
-    /// Public detail-level values for metadata refresh output.
-    /// </summary>
-    private static class DetailLevels
-    {
-        /// <summary>
-        /// Bounded counts without card-name arrays or workspace payload.
-        /// </summary>
-        public const string Summary = "summary";
-
-        /// <summary>
-        /// Bounded counts plus small missing and failed card samples.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Original full normalization result including the workspace.
-        /// </summary>
-        public const string Full = "full";
-    }
 }

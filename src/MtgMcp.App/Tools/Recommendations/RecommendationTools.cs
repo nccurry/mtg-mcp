@@ -218,8 +218,8 @@ public sealed class RecommendationTools
         [Description("Optional explicit candidate card names to compare. mtg-mcp does not maintain a hidden replacement list.")]
         string[]? candidateCards = null,
         int candidateLimit = 8,
-        [Description("Output detail level: compact or full.")]
-        string detailLevel = "compact",
+        [Description("Output detail level: summary, normal, or full. Deprecated: compact is accepted as summary.")]
+        string detailLevel = "summary",
         CancellationToken cancellationToken = default)
     {
         RampContextEvaluation evaluation = await recommendations
@@ -230,7 +230,7 @@ public sealed class RecommendationTools
                 candidateLimit,
                 cancellationToken)
             .ConfigureAwait(false);
-        return detailLevel.Equals("full", StringComparison.OrdinalIgnoreCase)
+        return DetailLevelParser.Parse(detailLevel, allowCompactAlias: true) == DetailLevel.Full
             ? evaluation
             : ToCompactEvaluation(evaluation);
     }

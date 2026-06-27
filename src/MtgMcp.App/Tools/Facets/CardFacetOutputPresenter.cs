@@ -12,14 +12,14 @@ internal static class CardFacetOutputPresenter
     /// </summary>
     public static object Present(CardFacetSnapshot snapshot, string? detailLevel)
     {
-        string normalized = NormalizeDetailLevel(detailLevel);
-        if (normalized == DetailLevels.Full)
+        DetailLevel normalized = DetailLevelParser.Parse(detailLevel);
+        if (normalized == DetailLevel.Full)
         {
             return snapshot;
         }
 
         CardFacetSummaryResult summary = BuildSummary(snapshot);
-        if (normalized == DetailLevels.Summary)
+        if (normalized == DetailLevel.Summary)
         {
             return summary;
         }
@@ -122,40 +122,4 @@ internal static class CardFacetOutputPresenter
             : [];
     }
 
-    /// <summary>
-    /// Normalizes public detail-level values.
-    /// </summary>
-    private static string NormalizeDetailLevel(string? detailLevel)
-    {
-        string normalized = string.IsNullOrWhiteSpace(detailLevel)
-            ? DetailLevels.Summary
-            : detailLevel.Trim().ToLowerInvariant();
-        if (normalized is DetailLevels.Summary or DetailLevels.Normal or DetailLevels.Full)
-        {
-            return normalized;
-        }
-
-        throw new ArgumentException("detailLevel must be summary, normal, or full.", nameof(detailLevel));
-    }
-
-    /// <summary>
-    /// Public detail-level values for card-facet output.
-    /// </summary>
-    private static class DetailLevels
-    {
-        /// <summary>
-        /// Key card facets only.
-        /// </summary>
-        public const string Summary = "summary";
-
-        /// <summary>
-        /// Summary plus filtered concrete facets.
-        /// </summary>
-        public const string Normal = "normal";
-
-        /// <summary>
-        /// Full card facet snapshot.
-        /// </summary>
-        public const string Full = "full";
-    }
 }

@@ -615,8 +615,10 @@ heuristics. See [`docs/simulation-profiles.md`](docs/simulation-profiles.md)
 for the compact profile, deck-intent, and route syntax reference.
 
 Several mutation and lookup tools default to bounded output so repeated agent
-work does not flood context. Use `detailLevel:"full"` when you need full
-workspace or facet payloads from tools such as `deck_refresh_card_metadata`,
+work does not flood context. See [`docs/output-control.md`](docs/output-control.md)
+for the shared `summary` / `normal` / `full` vocabulary. Use
+`detailLevel:"full"` when you need full workspace or facet payloads from tools
+such as `deck_refresh_card_metadata`,
 `deck_plan_apply`, category edits, mutation tools, or `card_facets_get`.
 Performance analysis tools preserve backward-compatible raw payloads by
 default; use `detailLevel:"normal"` or `detailLevel:"summary"` on
