@@ -18,6 +18,11 @@ public sealed class MtgMcpOptions
     public string OperationMode { get; set; } = "apply";
 
     /// <summary>
+    /// Gets or sets comma-separated MCP toolsets to advertise; blank keeps the compatibility profile.
+    /// </summary>
+    public string Toolsets { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets intelligence and recommendation tuning options.
     /// </summary>
     public MtgMcpIntelligenceOptions Intelligence { get; set; } = new();

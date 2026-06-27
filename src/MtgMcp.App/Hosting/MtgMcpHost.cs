@@ -116,6 +116,9 @@ public static class MtgMcpHost
         builder.Services.AddPlaygroup(builder.Configuration);
         builder.Services.AddCommanderSpellbook(builder.Configuration);
         builder.Services.AddDecklistCorpusSources(builder.Configuration);
+        MtgMcpOptions startupOptions = builder
+            .Configuration.GetSection("MtgMcp")
+            .Get<MtgMcpOptions>() ?? new MtgMcpOptions();
 
         // Fall back to the well-known files the auth helpers write to, so
         // `mtg-mcp auth archidekt|playgroup` takes effect with no extra MCP config.
@@ -140,7 +143,7 @@ public static class MtgMcpHost
                 options.ServerInstructions = RecommendationPresentationInstructions;
             })
             .WithStdioServerTransport()
-            .WithToolsFromAssembly()
+            .WithTools(ToolRegistry.CreateTools(startupOptions))
             .WithResourcesFromAssembly()
             .WithPromptsFromAssembly();
 

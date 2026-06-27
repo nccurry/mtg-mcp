@@ -1746,11 +1746,11 @@ public sealed class McpE2ETests
     }
 
     /// <summary>
-    /// Verifies that read-only mode rejects Archidekt workspace mutation before any HTTP call.
+    /// Verifies that read-only mode does not advertise Archidekt workspace mutation.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
-    public async Task ReadOnlyMode_BlocksArchidektWorkspaceBeforeHttp()
+    public async Task ReadOnlyMode_HidesArchidektWorkspaceMutationTools()
     {
         await using FakeHttpServer scryfall = new();
         await using FakeHttpServer archidekt = new();
@@ -1760,18 +1760,12 @@ public sealed class McpE2ETests
             operationMode: "read-only",
             TestContext.Current.CancellationToken);
 
-        CallToolResult result = await session.Client.CallToolAsync(
-            "workspace_start",
-            new Dictionary<string, object?>
-            {
-                ["mode"] = "archidekt",
-                ["archidektDeckIdOrUrl"] = "123",
-                ["writeBack"] = true
-            },
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken);
+        string[] names = tools.Select(tool => tool.Name).ToArray();
 
-        result.IsError.Should().BeTrue();
-        ReadText(result).Should().Contain("workspace_start");
+        names.Should().Contain("workspace_list");
+        names.Should().NotContain("workspace_start");
         archidekt.Requests.Should().BeEmpty();
     }
 

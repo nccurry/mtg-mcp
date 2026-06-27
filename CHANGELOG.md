@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added method-level MCP toolset and operation-mode filtering so deployments
+  advertise only selected tools that can run in the configured mode.
 - Added report-only MCP surface metrics, README surface parity coverage, a
   pre-1.0 versioning/deprecation policy, and initial ADR process docs.
 - Documented the full registered MCP tool/resource/prompt surface in the README.

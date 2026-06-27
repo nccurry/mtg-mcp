@@ -120,16 +120,18 @@ Solutions (high level):
   the `workspace_*`/`archidekt_*` checkpoint pairs behind a provider parameter).
 - Introduce configurable "toolsets" (e.g. `cards`, `workspace`, `analysis`,
   `simulation`, `sources`, `archidekt`, `playgroup`) so a deployment advertises only
-  what it needs. Default profile stays useful out of the box.
+  what it needs. The 0.9.0 compatibility profile keeps blank `Toolsets` as "all
+  selected by mode"; the reduced default profile lands only with the planned
+  deprecation/removal step.
 - Make tool advertising operation-mode-aware: do not list mutating tools when the
   server runs `read-only`; trim planning/writeback tools accordingly.
 - Reduce tool/resource duplication: prefer one canonical home per capability and
   document the rationale where both must exist for client-compatibility reasons.
 
-Done when: default advertised tool count is at/under the agreed ceiling; toolsets are
-configurable and documented; `read-only`/`plan` modes advertise only runnable tools;
-the surface snapshot test reflects the new shape; capability coverage is unchanged
-(every workflow in the README still achievable).
+Done when: toolsets are configurable and documented; `read-only`/`plan` modes advertise
+only runnable tools; the documented core/default profile is at/under the agreed ceiling
+after the deprecation/removal step; the surface snapshot test reflects the new shape;
+capability coverage is unchanged (every workflow in the README still achievable).
 
 Effort: L. Risk: breaking change to the surface - sequence within the deprecation
 policy from Phase 0 and land before 1.0.
@@ -390,7 +392,8 @@ Capability/correctness track: 7 and 8 once contracts are stable.
 
 ## Overall success criteria
 
-- Advertised tool count at/under the agreed ceiling, mode-aware, and toolset-gated.
+- Advertised tool count at/under the agreed ceiling in the documented default/core
+  profile, mode-aware, and toolset-gated.
 - One output-control idiom and one result/error framing across the surface.
 - High-traffic tools expose structured output and structured errors.
 - Documentation matches the registered surface exactly (enforced by test).

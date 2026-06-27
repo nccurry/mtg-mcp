@@ -815,6 +815,102 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies that the method-level tool registry covers every attributed tool.
+    /// </summary>
+    [Fact]
+    public void ToolRegistry_CoversEveryRegisteredTool()
+    {
+        string[] attributedToolNames = ToolTypes
+            .SelectMany(type => GetNamedAttributeValues(type, "McpServerToolAttribute", "Name"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        string[] registryToolNames = ToolRegistry.Entries
+            .Select(entry => entry.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        registryToolNames.Should().BeEquivalentTo(attributedToolNames);
+    }
+
+    /// <summary>
+    /// Verifies that operation mode affects advertised tools before invocation.
+    /// </summary>
+    [Fact]
+    public void ToolRegistry_FiltersToolsByOperationMode()
+    {
+        IReadOnlyList<ToolRegistryEntry> readOnly = ToolRegistry.SelectEntries(
+            new MtgMcpOptions { OperationMode = OperationModeGuard.ReadOnly });
+        IReadOnlyList<ToolRegistryEntry> plan = ToolRegistry.SelectEntries(
+            new MtgMcpOptions { OperationMode = OperationModeGuard.Plan });
+        IReadOnlyList<ToolRegistryEntry> apply = ToolRegistry.SelectEntries(
+            new MtgMcpOptions { OperationMode = OperationModeGuard.Apply });
+
+        readOnly.Should().OnlyContain(entry => entry.Capability == ToolCapability.Read);
+        plan.Should().OnlyContain(entry =>
+            entry.Capability == ToolCapability.Read || entry.Capability == ToolCapability.Plan);
+        apply.Should().HaveSameCount(ToolRegistry.Entries);
+        readOnly.Count.Should().BeLessThan(plan.Count);
+        plan.Count.Should().BeLessThan(apply.Count);
+    }
+
+    /// <summary>
+    /// Verifies that toolset selection intersects with operation mode.
+    /// </summary>
+    [Fact]
+    public void ToolRegistry_FiltersToolsByToolsetAndOperationMode()
+    {
+        string[] names = ToolRegistry
+            .SelectEntries(new MtgMcpOptions
+            {
+                OperationMode = OperationModeGuard.Apply,
+                Toolsets = "cards, server"
+            })
+            .Select(entry => entry.Name)
+            .ToArray();
+        string[] readOnlyEditingNames = ToolRegistry
+            .SelectEntries(new MtgMcpOptions
+            {
+                OperationMode = OperationModeGuard.ReadOnly,
+                Toolsets = "editing"
+            })
+            .Select(entry => entry.Name)
+            .ToArray();
+
+        names.Should().Contain(["card_search", "server_get_info"]);
+        names.Should().NotContain("workspace_start");
+        readOnlyEditingNames.Should().Contain("deck_list_cards_by_category");
+        readOnlyEditingNames.Should().NotContain("deck_add_card");
+    }
+
+    /// <summary>
+    /// Verifies that non-read registry entries are not advertised as read-only MCP tools.
+    /// </summary>
+    [Fact]
+    public void ToolRegistry_CapabilitiesMatchMcpReadOnlyAnnotations()
+    {
+        ToolRegistry.Entries
+            .Where(entry => entry.Capability != ToolCapability.Read)
+            .Should()
+            .OnlyContain(entry => !entry.ReadOnly);
+    }
+
+    /// <summary>
+    /// Verifies that registry capability tags stay aligned with call-time operation guards.
+    /// </summary>
+    [Fact]
+    public void ToolRegistry_CapabilitiesMatchOperationModeGuardCalls()
+    {
+        ToolRegistry.Entries
+            .Where(entry => entry.Capability != ToolCapability.Read)
+            .Should()
+            .OnlyContain(entry => CallsOperationModeGuard(entry.Method));
+        ToolRegistry.Entries
+            .Where(entry => CallsOperationModeGuard(entry.Method))
+            .Should()
+            .OnlyContain(entry => entry.Capability != ToolCapability.Read);
+    }
+
+    /// <summary>
     /// Verifies that every mutating tool wrapper calls the operation mode guard before doing work.
     /// </summary>
     [Fact]

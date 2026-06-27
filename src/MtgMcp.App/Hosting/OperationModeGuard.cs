@@ -100,7 +100,7 @@ public sealed class OperationModeGuard
     /// <summary>
     /// Maps accepted client aliases onto one of the supported safety modes.
     /// </summary>
-    private static string Normalize(string? mode)
+    public static string Normalize(string? mode)
     {
         string value = mode?.Trim().ToLowerInvariant() ?? "";
         return value switch

@@ -316,6 +316,7 @@ each abbreviated suffix.
 | Setting | Use |
 | --- | --- |
 | `MTGMCP__OPERATION_MODE` | `read-only`, `plan`, or `apply`. Set explicitly; the app default is `apply`. |
+| `MTGMCP__TOOLSETS` | Optional comma-separated advertised toolsets. Blank keeps the compatibility profile and advertises all tools allowed by the operation mode; see [`docs/toolsets.md`](docs/toolsets.md). |
 | `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, and source-fact cache. |
 | `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Recommendation source depth: `minimal`, `balanced`, or `best`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MODE` | Source-fact cache: `persisted`, `memory`, or `off`. |

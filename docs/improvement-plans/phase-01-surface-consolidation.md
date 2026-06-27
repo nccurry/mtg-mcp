@@ -29,8 +29,8 @@ tools they need.
 ## 2. Goals / non-goals
 
 Goals:
-- A documented target ceiling (proposal: <= ~60 advertised tools in the default profile,
-  trending lower) tracked by the Phase 0 metrics check.
+- A documented target ceiling (proposal: <= ~60 advertised tools in the documented core
+  profile, trending lower) tracked by the Phase 0 metrics check.
 - Configurable toolsets so a deployment advertises only chosen capability groups.
 - Operation-mode-aware advertising: do not list tools that cannot run in the current mode.
 - Net capability preserved: every workflow in `README.md` remains achievable.
@@ -113,11 +113,13 @@ this phase, not just a checklist.
 - Define toolset groups (proposal): `cards`, `workspace`, `editing`, `analysis`,
   `simulation`, `plans`, `sources`, `archidekt`, `playgroup`, `intent`, `facets`,
   `combos`, `collection` (Phase 8), `server`.
-- Add config `MtgMcp.Toolsets` (env `MTGMCP__TOOLSETS=...`) selecting enabled groups;
-  default profile enables a useful core. Implement registration by filtering the
-  method-level registry and registering the selected methods (via `WithTools(...)` over the
-  resolved methods, or a `WithListToolsHandler` that filters by the registry) instead of
-  `WithToolsFromAssembly()`.
+- Add config `MtgMcp.Toolsets` (env `MTGMCP__TOOLSETS=...`) selecting enabled groups.
+  In the 0.9.0 compatibility/deprecation release, blank means "all tools allowed by the
+  current operation mode" so existing MCP client configs do not silently lose tools. The
+  reduced default/core profile becomes the default only with the planned 0.10.0 removal
+  release. Implement registration by filtering the method-level registry and registering
+  the selected methods (via `WithTools(...)` over the resolved methods, or a
+  `WithListToolsHandler` that filters by the registry) instead of `WithToolsFromAssembly()`.
 
 ### 4.5 Mode-aware advertising
 - Drive mode-aware advertising off the same method-level registry capability tag: in
@@ -159,14 +161,18 @@ this phase, not just a checklist.
 
 ## 6. Testing
 
-- Surface snapshot updated; metrics check confirms count under the agreed ceiling.
+- Surface snapshot updated; metrics check confirms the documented core/default profile is
+  under the agreed ceiling once that profile becomes the default.
 - New tests: enabling a toolset advertises exactly its tools; `read-only`/`plan`/`apply`
   advertise the expected counts; deprecated aliases still resolve during the window.
 - E2E (`tests/MtgMcp.E2E.Tests`) updated to drive merged tools.
 
 ## 7. Definition of done
 
-- Default advertised tool count is at/under the ceiling and mode-aware.
+- 0.9.0 compatibility/deprecation release: advertised tools are mode-aware, configurable by
+  toolset, and still preserve the blank-toolset compatibility profile.
+- 0.10.0 removal/default-profile release: default advertised tool count is at/under the
+  agreed ceiling and mode-aware.
 - Toolsets are configurable and documented; default profile covers the README workflows.
 - Duplicated status tools resolved to one canonical home.
 - Deprecation window honored; removals land in the planned minor.
