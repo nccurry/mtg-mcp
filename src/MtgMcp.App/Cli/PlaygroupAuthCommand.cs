@@ -74,7 +74,12 @@ public static class PlaygroupAuthCommand
             return 1;
         }
 
-        WriteSuccess(output, credentialsFile, options.StoredFieldNames);
+        bool isDefaultLocation = string.Equals(
+            credentialsFile,
+            Path.GetFullPath(GetDefaultCredentialsFile()),
+            StringComparison.OrdinalIgnoreCase
+        );
+        WriteSuccess(output, credentialsFile, options.StoredFieldNames, isDefaultLocation);
         return 0;
     }
 
@@ -286,13 +291,26 @@ public static class PlaygroupAuthCommand
     private static void WriteSuccess(
         TextWriter output,
         string credentialsFile,
-        IReadOnlyList<string> storedFieldNames
+        IReadOnlyList<string> storedFieldNames,
+        bool isDefaultLocation
     )
     {
         output.WriteLine($"Playgroup credentials file written: {credentialsFile}");
         output.WriteLine($"Stored credential fields: {string.Join(", ", storedFieldNames)}");
         output.WriteLine();
-        output.WriteLine("Add this environment variable to your MCP server configuration:");
+        if (isDefaultLocation)
+        {
+            output.WriteLine(
+                "mtg-mcp reads this default location automatically; no MCP client "
+                    + "configuration is needed. Restart the server to pick up the credentials."
+            );
+            return;
+        }
+
+        output.WriteLine(
+            "This is a custom location. Point the server at it with this MCP server "
+                + "configuration entry:"
+        );
         output.WriteLine("\"env\": {");
         output.WriteLine(
             "  \"MTGMCP__PLAYGROUP__CREDENTIALS_FILE\": "

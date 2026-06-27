@@ -252,11 +252,16 @@ long-lived API key. A refresh token plus app client id is the preferred local
 setup; a temporary `accessToken` or `bearerToken` can be stored for short-lived
 testing.
 
-You can also create an Archidekt credentials file with:
+mtg-mcp reads `~/.mtg-mcp/archidekt.json` and `~/.mtg-mcp/playgroup.json`
+automatically when they exist, so the `mtg-mcp auth` helpers are enough to
+configure credentials with no extra MCP configuration. Set the matching
+`MTGMCP__..._CREDENTIALS_FILE` only when you store the file in a non-default
+location.
+
+Create an Archidekt credentials file with:
 
 ```bash
 mtg-mcp auth archidekt \
-  --credentials-file "$HOME/.mtg-mcp/archidekt.json" \
   --username "you-or-you@example.com" \
   --password "..."
 ```
@@ -265,16 +270,14 @@ PowerShell equivalent:
 
 ```powershell
 mtg-mcp auth archidekt `
-  --credentials-file "$env:USERPROFILE\.mtg-mcp\archidekt.json" `
   --username "you-or-you@example.com" `
   --password "..."
 ```
 
-You can create a Playgroup credentials file the same way:
+Create a Playgroup credentials file the same way:
 
 ```bash
 mtg-mcp auth playgroup \
-  --credentials-file "$HOME/.mtg-mcp/playgroup.json" \
   --api-key "..."
 ```
 
@@ -282,7 +285,6 @@ PowerShell equivalent:
 
 ```powershell
 mtg-mcp auth playgroup `
-  --credentials-file "$env:USERPROFILE\.mtg-mcp\playgroup.json" `
   --api-key "..."
 ```
 

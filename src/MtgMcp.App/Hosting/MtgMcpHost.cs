@@ -117,6 +117,23 @@ public static class MtgMcpHost
         builder.Services.AddCommanderSpellbook(builder.Configuration);
         builder.Services.AddDecklistCorpusSources(builder.Configuration);
 
+        // Fall back to the well-known files the auth helpers write to, so
+        // `mtg-mcp auth archidekt|playgroup` takes effect with no extra MCP config.
+        builder.Services.PostConfigure<ArchidektOptions>(options =>
+            ApplyDefaultCredentialsFile(
+                options.CredentialsFile,
+                ArchidektAuthCommand.GetDefaultCredentialsFile(),
+                value => options.CredentialsFile = value
+            )
+        );
+        builder.Services.PostConfigure<PlaygroupOptions>(options =>
+            ApplyDefaultCredentialsFile(
+                options.CredentialsFile,
+                PlaygroupAuthCommand.GetDefaultCredentialsFile(),
+                value => options.CredentialsFile = value
+            )
+        );
+
         builder
             .Services.AddMcpServer(options =>
             {
@@ -128,5 +145,26 @@ public static class MtgMcpHost
             .WithPromptsFromAssembly();
 
         return builder;
+    }
+
+    /// <summary>
+    /// Applies the per-user default credentials file when none was configured and
+    /// the default file exists, so auth helpers take effect without extra config.
+    /// </summary>
+    private static void ApplyDefaultCredentialsFile(
+        string? configured,
+        string defaultFile,
+        Action<string> setCredentialsFile
+    )
+    {
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return;
+        }
+
+        if (File.Exists(defaultFile))
+        {
+            setCredentialsFile(defaultFile);
+        }
     }
 }
