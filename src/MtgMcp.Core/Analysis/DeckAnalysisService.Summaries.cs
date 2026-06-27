@@ -41,12 +41,33 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             Persistence = DeckPersistence.For(workspace),
             IncludedCards = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
             MaybeboardCards = workspace.Cards
-                .Where(card => string.Equals(card.PrimaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+                .Where(card => DeckCategoryOrdering.PrimaryCategory(card)
+                    .Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
                 .Sum(card => Math.Max(0, card.Quantity))
         };
+        Dictionary<string, DeckCategory> categories = DeckCategoryInclusion.BuildCategoryMap(workspace);
 
         foreach (DeckCard card in workspace.Cards)
         {
+            string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
+            if (primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (string category in DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories))
+                {
+                    if (!category.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddCount(summary.MaybeboardCategoryCounts, category, card.Quantity);
+                    }
+                }
+
+                continue;
+            }
+
+            if (!DeckCategoryInclusion.IsIncludedInDeck(categories, primaryCategory))
+            {
+                continue;
+            }
+
             CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
             AddCount(summary.RoleCounts, assignment.PrimaryRole, card.Quantity);
             foreach (string functionalRole in assignment.FunctionalRoles)

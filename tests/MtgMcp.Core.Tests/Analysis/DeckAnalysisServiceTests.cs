@@ -362,6 +362,33 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that Treasure side effects do not override counterspell interaction roles.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_DistinguishesCasterAndOpponentTreasures()
+    {
+        CardRoleAssignment offer = DeckRoleClassifier.Classify(Card(
+            "An Offer You Can't Refuse",
+            "Instant",
+            "Counter target noncreature spell. Its controller creates two Treasure tokens."));
+        CardRoleAssignment swindle = DeckRoleClassifier.Classify(Card(
+            "Spell Swindle",
+            "Instant",
+            "Counter target spell. Create X Treasure tokens, where X is that spell's mana value."));
+        CardRoleAssignment bigScore = DeckRoleClassifier.Classify(Card(
+            "Big Score",
+            "Instant",
+            "As an additional cost to cast this spell, discard a card. Draw two cards and create two Treasure tokens."));
+
+        offer.PrimaryRole.Should().Be(DeckRoles.Interaction);
+        offer.FunctionalRoles.Should().NotContain(DeckRoles.Ramp);
+        swindle.PrimaryRole.Should().Be(DeckRoles.Interaction);
+        swindle.FunctionalRoles.Should().Contain(DeckRoles.Ramp);
+        bigScore.PrimaryRole.Should().Be(DeckRoles.Ramp);
+        bigScore.FunctionalRoles.Should().Contain([DeckRoles.Ramp, DeckRoles.Draw]);
+    }
+
+    /// <summary>
     /// Verifies that saved Scryfall Tagger oracle annotations drive role classification before text heuristics.
     /// </summary>
     [Fact]
@@ -1246,6 +1273,79 @@ public sealed partial class DeckIntelligenceTests
         summary.RoleCounts.Should().NotContainKey(DeckRoles.Draw);
         summary.FunctionalRoleCounts[DeckRoles.Ramp].Should().Be(1);
         summary.FunctionalRoleCounts[DeckRoles.Draw].Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that maybeboard categories are summarized without inflating active deck role counts.
+    /// </summary>
+    [Fact]
+    public async Task SummarizeDeckWorkspace_ReturnsMaybeboardCategoryCountsSeparately()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Maybeboard Summary",
+            Categories =
+            [
+                new DeckCategory { Name = DeckRoles.Draw, IncludedInDeck = true },
+                new DeckCategory { Name = DeckDefaults.Maybeboard, IncludedInDeck = false },
+                new DeckCategory { Name = DeckDefaults.Sideboard, IncludedInDeck = false }
+            ],
+            Cards =
+            [
+                Card("Main Draw", "Sorcery", "Scry 1, then draw two cards."),
+                new DeckCard
+                {
+                    Name = "Maybe Draw",
+                    Quantity = 2,
+                    PrimaryCategory = "",
+                    Categories = [DeckDefaults.Maybeboard, DeckRoles.Draw],
+                    Snapshot = new CardSnapshot { TypeLine = "Sorcery", OracleText = "Draw two cards." }
+                },
+                new DeckCard
+                {
+                    Name = "Maybe Removal",
+                    Quantity = 3,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard, "Removal"],
+                    Snapshot = new CardSnapshot { TypeLine = "Instant", OracleText = "Destroy target creature." }
+                },
+                new DeckCard
+                {
+                    Name = "Maybe Ramp",
+                    Quantity = 4,
+                    PrimaryCategory = DeckDefaults.Maybeboard,
+                    Categories = [DeckDefaults.Maybeboard, DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "{T}: Add one mana of any color." }
+                },
+                new DeckCard
+                {
+                    Name = "Sideboard Ramp",
+                    Quantity = 5,
+                    PrimaryCategory = DeckDefaults.Sideboard,
+                    Categories = [DeckDefaults.Sideboard, DeckRoles.Ramp],
+                    Snapshot = new CardSnapshot { TypeLine = "Artifact", OracleText = "{T}: Add one mana of any color." }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckPlanSummary summary = await service.SummarizeDeckWorkspaceAsync(
+            workspace.Id,
+            TestContext.Current.CancellationToken);
+
+        summary.RoleCounts[DeckRoles.Draw].Should().Be(1);
+        summary.RoleCounts.Should().NotContainKey(DeckRoles.Ramp);
+        summary.RoleCounts.Should().NotContainKey(DeckRoles.Maybeboard);
+        summary.FunctionalRoleCounts[DeckRoles.Draw].Should().Be(1);
+        summary.FunctionalRoleCounts.Should().NotContainKey(DeckRoles.Ramp);
+        summary.TagCounts[DeckTags.CardSelection].Should().Be(1);
+        summary.TagCounts.Should().NotContainKey(DeckTags.ManaFixing);
+        summary.MaybeboardCards.Should().Be(9);
+        summary.MaybeboardCategoryCounts[DeckRoles.Draw].Should().Be(2);
+        summary.MaybeboardCategoryCounts["Removal"].Should().Be(3);
+        summary.MaybeboardCategoryCounts[DeckRoles.Ramp].Should().Be(4);
+        summary.MaybeboardCategoryCounts.Should().NotContainKey(DeckDefaults.Maybeboard);
     }
 
     /// <summary>

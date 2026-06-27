@@ -133,6 +133,12 @@ public sealed class DeckPlanSummary
     public int MaybeboardCards { get; set; }
 
     /// <summary>
+    /// Gets or sets non-primary maybeboard category counts for review piles.
+    /// </summary>
+    public Dictionary<string, int> MaybeboardCategoryCounts { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets or sets the commanders.
     /// </summary>
     public List<string> Commanders { get; set; } = [];

@@ -95,9 +95,13 @@ public sealed partial class DeckWorkspaceService
 
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        workspace = CloneWorkspaceForMutation(workspace);
+
         List<ValidatedBulkCardCategoryChange> validatedChanges = [];
         for (int index = 0; index < changes.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             BulkCardCategoryChange change = changes[index];
             if (string.IsNullOrWhiteSpace(change.CardName))
             {
@@ -118,6 +122,7 @@ public sealed partial class DeckWorkspaceService
 
         foreach (ValidatedBulkCardCategoryChange change in validatedChanges)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!change.Action.Equals(BulkCardCategoryActions.Remove, StringComparison.OrdinalIgnoreCase))
             {
                 EnsureCategory(workspace, change.Category);
@@ -127,6 +132,7 @@ public sealed partial class DeckWorkspaceService
         List<DeckCard> changedCards = [];
         foreach (ValidatedBulkCardCategoryChange change in validatedChanges)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (change.Action.Equals(BulkCardCategoryActions.AddSecondary, StringComparison.OrdinalIgnoreCase))
             {
                 DeckCategoryOrdering.AddSecondary(change.Card, change.Category);
@@ -147,6 +153,7 @@ public sealed partial class DeckWorkspaceService
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await PersistCardsAsync(workspace, changedCards, [], cancellationToken).ConfigureAwait(false);
         return Change(
             workspace,

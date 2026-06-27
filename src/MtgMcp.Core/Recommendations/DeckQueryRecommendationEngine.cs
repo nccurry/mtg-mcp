@@ -10,6 +10,7 @@ internal static class DeckQueryRecommendationEngine
     /// </summary>
     public static DeckQueryRejectedCandidate? BuildRejection(
         CardInfo card,
+        DeckCard candidateCard,
         CardRoleAssignment role,
         decimal? price,
         DeckQueryEvaluationContext context)
@@ -43,7 +44,7 @@ internal static class DeckQueryRecommendationEngine
         }
 
         if (context.RequiredRoles.Count > 0
-            && !context.RequiredRoles.Any(target => role.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase)))
+            && !context.RequiredRoles.Any(target => DeckRoleClassifier.MatchesTarget(candidateCard, target)))
         {
             reasons.Add($"Does not match required role(s): {string.Join(", ", context.RequiredRoles)}.");
         }
@@ -55,7 +56,7 @@ internal static class DeckQueryRecommendationEngine
         }
 
         string? excludedRole = context.ExcludedRoles.FirstOrDefault(target =>
-            role.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase));
+            DeckRoleClassifier.MatchesTarget(candidateCard, target));
         if (excludedRole is not null)
         {
             reasons.Add($"Excluded role matched: {excludedRole}.");
@@ -93,6 +94,7 @@ internal static class DeckQueryRecommendationEngine
     /// </summary>
     public static DeckQueryCandidate BuildCandidate(
         CardInfo card,
+        DeckCard candidateCard,
         CardRoleAssignment role,
         decimal? price,
         IReadOnlyList<string> requiredRoles,
@@ -100,11 +102,11 @@ internal static class DeckQueryRecommendationEngine
         decimal? maxPrice,
         string goal)
     {
-        double roleScore = ScoreRoleMatch(role, requiredRoles);
+        double roleScore = ScoreRoleMatch(candidateCard, role, requiredRoles);
         double tagScore = ScoreTagMatch(role, requiredTags);
         double rankScore = ScoreEdhrecRank(card.EdhrecRank);
         double priceScore = ScoreQueryPrice(price, maxPrice);
-        List<string> reasons = BuildCandidateReasons(role, requiredRoles, requiredTags, price, maxPrice);
+        List<string> reasons = BuildCandidateReasons(candidateCard, role, requiredRoles, requiredTags, price, maxPrice);
         double score = Math.Clamp(
             (roleScore * 0.35) + (tagScore * 0.30) + (rankScore * 0.20) + (priceScore * 0.15),
             0,
@@ -202,16 +204,19 @@ internal static class DeckQueryRecommendationEngine
     }
 
     /// <summary>
-    /// Scores a primary-role match.
+    /// Scores a broad role match.
     /// </summary>
-    private static double ScoreRoleMatch(CardRoleAssignment role, IReadOnlyList<string> requiredRoles)
+    private static double ScoreRoleMatch(
+        DeckCard candidateCard,
+        CardRoleAssignment role,
+        IReadOnlyList<string> requiredRoles)
     {
         if (requiredRoles.Count == 0)
         {
             return Math.Clamp(role.Confidence, 0.35, 0.85);
         }
 
-        return requiredRoles.Any(target => role.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase)) ? 1 : 0;
+        return requiredRoles.Any(target => DeckRoleClassifier.MatchesTarget(candidateCard, target)) ? 1 : 0;
     }
 
     /// <summary>
@@ -266,6 +271,7 @@ internal static class DeckQueryRecommendationEngine
     /// Builds concise positive fit reasons for an accepted candidate.
     /// </summary>
     private static List<string> BuildCandidateReasons(
+        DeckCard candidateCard,
         CardRoleAssignment role,
         IReadOnlyList<string> requiredRoles,
         IReadOnlyList<string> requiredTags,
@@ -273,9 +279,10 @@ internal static class DeckQueryRecommendationEngine
         decimal? maxPrice)
     {
         List<string> reasons = [];
-        if (requiredRoles.Any(target => role.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase)))
+        string? matchedRole = requiredRoles.FirstOrDefault(target => DeckRoleClassifier.MatchesTarget(candidateCard, target));
+        if (matchedRole is not null)
         {
-            reasons.Add($"Matched required role {role.PrimaryRole}.");
+            reasons.Add($"Matched required role {matchedRole}.");
         }
         else if (requiredRoles.Count == 0)
         {

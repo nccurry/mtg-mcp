@@ -407,6 +407,48 @@ public sealed class DeckWorkspaceServiceTests
     }
 
     /// <summary>
+    /// Verifies that bulk add cancellation after card resolution does not persist rows.
+    /// </summary>
+    [Fact]
+    public async Task AddCardsBulk_PropagatesCancellationAfterResolutionWithoutPersisting()
+    {
+        InMemoryRepository repository = new();
+        using CancellationTokenSource cancellation = new();
+        FakeCardCatalog catalog = new() { CancelAfterBatchLookup = cancellation };
+        DeckWorkspaceService service = new(repository, catalog);
+        DeckWorkspace deck = await service.CreateLocalDeckAsync(
+            "Cancelled Bulk",
+            "commander",
+            null,
+            TestContext.Current.CancellationToken);
+        int saveRequests = repository.SaveRequests;
+
+        Func<Task> add = () => service.AddCardsBulkAsync(
+            deck.Id,
+            [
+                new BulkDeckCardAdd
+                {
+                    CardName = "Sol Ring",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Ramp
+                },
+                new BulkDeckCardAdd
+                {
+                    CardName = "Lightning Bolt",
+                    Quantity = 1,
+                    PrimaryCategory = DeckDefaults.Maybeboard
+                },
+            ],
+            force: false,
+            cancellation.Token);
+
+        await add.Should().ThrowAsync<OperationCanceledException>();
+        repository.SaveRequests.Should().Be(saveRequests);
+        DeckWorkspace opened = await service.OpenLocalDeckAsync(deck.Id, TestContext.Current.CancellationToken);
+        opened.Cards.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that bulk category changes validate the full batch before persistence.
     /// </summary>
     [Fact]
@@ -3674,6 +3716,11 @@ public sealed class DeckWorkspaceServiceTests
         public bool CancelGetCard { get; init; }
 
         /// <summary>
+        /// Gets or sets a token source cancelled after a batched card lookup succeeds.
+        /// </summary>
+        public CancellationTokenSource? CancelAfterBatchLookup { get; init; }
+
+        /// <summary>
         /// Gets or sets whether Swamp lookup returns a novelty print display name.
         /// </summary>
         public bool ReturnNoveltySwampName { get; init; }
@@ -3763,6 +3810,7 @@ public sealed class DeckWorkspaceServiceTests
                 }
             }
 
+            CancelAfterBatchLookup?.Cancel();
             return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(cards);
         }
 
@@ -3876,6 +3924,11 @@ public sealed class DeckWorkspaceServiceTests
         );
 
         /// <summary>
+        /// Gets the number of save requests made to the repository.
+        /// </summary>
+        public int SaveRequests { get; private set; }
+
+        /// <summary>
         /// Saves a workspace in memory.
         /// </summary>
         public Task<DeckWorkspace> SaveAsync(
@@ -3883,6 +3936,7 @@ public sealed class DeckWorkspaceServiceTests
             CancellationToken cancellationToken
         )
         {
+            SaveRequests++;
             workspaces[workspace.Id] = workspace;
             return Task.FromResult(workspace);
         }

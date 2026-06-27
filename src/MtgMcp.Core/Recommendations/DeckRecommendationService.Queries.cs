@@ -151,6 +151,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 decimal? price = priceEvaluation.PriceKnown ? priceEvaluation.Price : null;
                 DeckQueryRejectedCandidate? rejection = DeckQueryRecommendationEngine.BuildRejection(
                     card,
+                    candidateCard,
                     role,
                     price,
                     evaluationContext);
@@ -301,6 +302,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 decimal? price = priceEvaluation.PriceKnown ? priceEvaluation.Price : null;
                 DeckQueryRejectedCandidate? rejection = DeckQueryRecommendationEngine.BuildRejection(
                     card,
+                    candidateCard,
                     role,
                     price,
                     evaluationContext);
@@ -313,6 +315,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
                 DeckQueryCandidate candidate = DeckQueryRecommendationEngine.BuildCandidate(
                     card,
+                    candidateCard,
                     role,
                     price,
                     roleRequirements,

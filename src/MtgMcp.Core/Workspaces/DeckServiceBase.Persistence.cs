@@ -51,12 +51,15 @@ public abstract partial class DeckMutationServiceBase
     )
     {
         NormalizeWorkspaceCategories(workspace);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (workspace.Mode == WorkspaceMode.Archidekt && workspace.WriteBack)
         {
             await RequireArchidektGateway()
                 .PersistCardsAsync(workspace, upsertedCards, removedCards, cancellationToken)
                 .ConfigureAwait(false);
+            await Repository.SaveAsync(workspace, CancellationToken.None).ConfigureAwait(false);
+            return;
         }
 
         await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);

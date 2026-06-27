@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -92,9 +94,13 @@ public sealed partial class DeckWorkspaceService
 
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        workspace = CloneWorkspaceForMutation(workspace);
+
         List<ValidatedBulkDeckCardAdd> validatedAdds = [];
         for (int index = 0; index < cards.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             BulkDeckCardAdd request = cards[index];
             if (string.IsNullOrWhiteSpace(request.CardName))
             {
@@ -123,10 +129,13 @@ public sealed partial class DeckWorkspaceService
                 validatedAdds.Select(add => add.CardName).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+
         List<DeckCard> changedCards = [];
         int totalQuantity = 0;
         foreach (ValidatedBulkDeckCardAdd add in validatedAdds)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             DeckCard? existing = FindCard(workspace, add.CardName, add.PrimaryCategory);
             DeckCard changed;
             if (existing is null)
@@ -154,6 +163,7 @@ public sealed partial class DeckWorkspaceService
             totalQuantity += add.Quantity;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await PersistCardsAsync(workspace, changedCards, [], cancellationToken).ConfigureAwait(false);
         return Change(
             workspace,
@@ -281,9 +291,13 @@ public sealed partial class DeckWorkspaceService
 
         DeckWorkspace workspace = await LoadForMutationAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        workspace = CloneWorkspaceForMutation(workspace);
+
         List<DeckCard> changedCards = [];
         foreach (BulkDeckCardMove move in moves)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(move.CardName))
             {
                 throw new InvalidOperationException("Every bulk move must include a card name.");
@@ -327,11 +341,22 @@ public sealed partial class DeckWorkspaceService
             AddChangedCard(changedCards, split);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await PersistCardsAsync(workspace, changedCards, [], cancellationToken).ConfigureAwait(false);
         return Change(
             workspace,
             DeckMutationKind.CardMoved,
             $"Moved {moves.Count} card row(s).");
+    }
+
+    /// <summary>
+    /// Clones a workspace before bulk edits so cancelled calls cannot leak reference mutations.
+    /// </summary>
+    private static DeckWorkspace CloneWorkspaceForMutation(DeckWorkspace workspace)
+    {
+        string json = JsonSerializer.Serialize(workspace);
+        return JsonSerializer.Deserialize<DeckWorkspace>(json)
+            ?? throw new InvalidOperationException("Unable to clone deck workspace for mutation.");
     }
 
     /// <summary>

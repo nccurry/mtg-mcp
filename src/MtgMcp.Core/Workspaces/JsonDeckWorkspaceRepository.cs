@@ -67,6 +67,7 @@ public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(tempPath, path, overwrite: true);
         }
         finally

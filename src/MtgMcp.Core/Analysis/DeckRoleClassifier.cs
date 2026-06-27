@@ -8,6 +8,11 @@ namespace MtgMcp.Core;
 public static partial class DeckRoleClassifier
 {
     /// <summary>
+    /// Stores the common role alias for interaction cards that remove opposing resources.
+    /// </summary>
+    private const string RemovalRoleAlias = "Removal";
+
+    /// <summary>
     /// Classifies the card.
     /// </summary>
     public static CardRoleAssignment Classify(DeckCard card)
@@ -61,6 +66,12 @@ public static partial class DeckRoleClassifier
             return Assignment(DeckRoles.BoardWipes, tags, 0.82, functionalRoles);
         }
 
+        if (ContainsAny(categoryText, DeckRoles.Interaction, RemovalRoleAlias)
+            || ContainsInteractionText(oracleText))
+        {
+            return Assignment(DeckRoles.Interaction, tags, 0.78, functionalRoles);
+        }
+
         if (ContainsAny(categoryText, DeckRoles.Ramp)
             || (snapshot.ProducedMana.Count > 0 && !hasNonPrimaryLandFace)
             || ContainsRampText(oracleText, hasNonPrimaryLandFace))
@@ -79,24 +90,6 @@ public static partial class DeckRoleClassifier
             || ContainsAny(oracleText, "search your library", "searches your library"))
         {
             return Assignment(DeckRoles.Tutors, tags, 0.84, functionalRoles);
-        }
-
-        if (ContainsAny(categoryText, DeckRoles.Interaction, "removal")
-            || ContainsAny(
-                oracleText,
-                "destroy target",
-                "exile target",
-                "counter target",
-                "target creature gets",
-                "fight target",
-                "deals damage to target",
-                "each opponent sacrifices",
-                "target opponent sacrifices",
-                "sacrifices a creature",
-                "sacrifices an enchantment",
-                "sacrifices an artifact"))
-        {
-            return Assignment(DeckRoles.Interaction, tags, 0.78, functionalRoles);
         }
 
         if (ContainsAny(categoryText, DeckRoles.Protection)
@@ -138,7 +131,7 @@ public static partial class DeckRoleClassifier
     public static bool MatchesTarget(DeckCard card, string target)
     {
         CardRoleAssignment assignment = Classify(card);
-        if (assignment.PrimaryRole.Equals(target, StringComparison.OrdinalIgnoreCase))
+        if (MatchesRoleTarget(assignment.PrimaryRole, target))
         {
             return true;
         }
@@ -148,17 +141,17 @@ public static partial class DeckRoleClassifier
             return true;
         }
 
-        if (assignment.FunctionalRoles.Any(role => role.Equals(target, StringComparison.OrdinalIgnoreCase)))
+        if (assignment.FunctionalRoles.Any(role => MatchesRoleTarget(role, target)))
         {
             return true;
         }
 
-        if (Categories(card).Any(category => category.Equals(target, StringComparison.OrdinalIgnoreCase)))
+        if (Categories(card).Any(category => MatchesRoleTarget(category, target)))
         {
             return true;
         }
 
-        return DeckCategoryOrdering.PrimaryCategory(card).Equals(target, StringComparison.OrdinalIgnoreCase);
+        return MatchesRoleTarget(DeckCategoryOrdering.PrimaryCategory(card), target);
     }
 
     /// <summary>
@@ -473,7 +466,12 @@ public static partial class DeckRoleClassifier
     /// </summary>
     private static bool ContainsRampText(string oracleText, bool hasNonPrimaryLandFace)
     {
-        if (ContainsAny(oracleText, "treasure token", "search your library for a basic land", "search your library for a land"))
+        if (ContainsAny(oracleText, "treasure token") && !CreatesTreasureForAnotherPlayer(oracleText))
+        {
+            return true;
+        }
+
+        if (ContainsAny(oracleText, "search your library for a basic land", "search your library for a land"))
         {
             return true;
         }
@@ -491,6 +489,59 @@ public static partial class DeckRoleClassifier
         }
 
         return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
+    }
+
+    /// <summary>
+    /// Checks whether a target role matches a classified role or one of its accepted aliases.
+    /// </summary>
+    private static bool MatchesRoleTarget(string role, string target)
+    {
+        string normalizedRole = NormalizeRoleTarget(role);
+        string normalizedTarget = NormalizeRoleTarget(target);
+        if (normalizedRole.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return normalizedTarget switch
+        {
+            DeckRoles.Interaction => normalizedRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase),
+            RemovalRoleAlias => normalizedRole.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+                || normalizedRole.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Normalizes common role aliases used by users and recommendation filters.
+    /// </summary>
+    private static string NormalizeRoleTarget(string role)
+    {
+        string normalized = string.IsNullOrWhiteSpace(role) ? "" : role.Trim();
+        return normalized.ToLowerInvariant() switch
+        {
+            "board wipe" or "board-wipe" or "boardwipes" => DeckRoles.BoardWipes,
+            "removal" => RemovalRoleAlias,
+            _ => normalized
+        };
+    }
+
+    /// <summary>
+    /// Checks whether rules text creates Treasures for another player rather than the caster.
+    /// </summary>
+    private static bool CreatesTreasureForAnotherPlayer(string oracleText)
+    {
+        return ContainsAny(
+            oracleText,
+            "its controller creates",
+            "that spell's controller creates",
+            "that permanent's controller creates",
+            "that creature's controller creates",
+            "enchanted permanent's controller creates",
+            "enchanted creature's controller creates",
+            "target opponent creates",
+            "an opponent creates",
+            "opponent creates");
     }
 
     /// <summary>
@@ -566,6 +617,26 @@ public static partial class DeckRoleClassifier
 
         return ContainsAny(oracleText, "all creatures", "each creature", "each nonland")
             && ContainsAny(oracleText, "destroy", "exile", "damage", "sacrifice", "-x/-x");
+    }
+
+    /// <summary>
+    /// Checks whether rules text answers another spell or permanent.
+    /// </summary>
+    private static bool ContainsInteractionText(string oracleText)
+    {
+        return ContainsAny(
+            oracleText,
+            "destroy target",
+            "exile target",
+            "counter target",
+            "target creature gets",
+            "fight target",
+            "deals damage to target",
+            "each opponent sacrifices",
+            "target opponent sacrifices",
+            "sacrifices a creature",
+            "sacrifices an enchantment",
+            "sacrifices an artifact");
     }
 
     /// <summary>

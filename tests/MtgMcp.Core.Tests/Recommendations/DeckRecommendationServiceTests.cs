@@ -255,6 +255,86 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that query role filters use broad interaction and removal matching.
+    /// </summary>
+    [Fact]
+    public async Task QueryCardsForDeck_MatchesRequiredRoleAliases()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace redWorkspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Red Interaction",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Torbran, Thane of Red Fell",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["R"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckWorkspace blackWorkspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Black Removal",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Tinybones, Trinket Thief",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["B"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        DeckQueryDataResult interaction = await service.QueryCardsForDeckAsync(
+            redWorkspace.Id,
+            "Find interaction",
+            "each creature",
+            count: 2,
+            maxPrice: 10,
+            requiredRoles: [DeckRoles.Interaction],
+            requiredTags: null,
+            excludedRoles: null,
+            excludedTags: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        DeckQueryDataResult boardWipeRemoval = await service.QueryCardsForDeckAsync(
+            redWorkspace.Id,
+            "Find removal",
+            "each creature",
+            count: 2,
+            maxPrice: 10,
+            requiredRoles: ["Removal"],
+            requiredTags: null,
+            excludedRoles: null,
+            excludedTags: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        DeckQueryDataResult targetedRemoval = await service.QueryCardsForDeckAsync(
+            blackWorkspace.Id,
+            "Find removal",
+            "destroy target",
+            count: 2,
+            maxPrice: 10,
+            requiredRoles: ["Removal"],
+            requiredTags: null,
+            excludedRoles: null,
+            excludedTags: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        interaction.Cards.Should().Contain(card => card.CardName == "Blasphemous Act");
+        boardWipeRemoval.Cards.Should().Contain(card => card.CardName == "Blasphemous Act");
+        targetedRemoval.Cards.Should().Contain(card => card.CardName == "Hero's Downfall");
+    }
+
+    /// <summary>
     /// Verifies that Scryfall query failures return structured errors instead of invocation failures.
     /// </summary>
     [Fact]
