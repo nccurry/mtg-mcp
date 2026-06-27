@@ -16,31 +16,15 @@ public static class DecklistServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration? configuration = null)
     {
-        services.AddSingleton<RedditSourceHealth>();
-        if (configuration is not null)
-        {
-            services.Configure<RedditOptions>(configuration.GetSection("MtgMcp:Reddit"));
-        }
-        else
-        {
-            services.Configure<RedditOptions>(_ => { });
-        }
-
         services.AddHttpClient<TopDeckCorpusSignalProvider>();
-        services.AddHttpClient<SpicerackCorpusSignalProvider>();
         services.AddHttpClient<EdhrecCorpusSignalProvider>();
         services.AddHttpClient<EdhTop16CorpusSignalProvider>();
-        services.AddHttpClient<RedditDiscussionCorpusSignalProvider>();
         services.AddTransient<ICorpusSignalProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<TopDeckCorpusSignalProvider>());
-        services.AddTransient<ICorpusSignalProvider>(serviceProvider =>
-            serviceProvider.GetRequiredService<SpicerackCorpusSignalProvider>());
         services.AddTransient<ICorpusSignalProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<EdhrecCorpusSignalProvider>());
         services.AddTransient<ICorpusSignalProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<EdhTop16CorpusSignalProvider>());
-        services.AddTransient<ICorpusSignalProvider>(serviceProvider =>
-            serviceProvider.GetRequiredService<RedditDiscussionCorpusSignalProvider>());
         return services;
     }
 }

@@ -22,7 +22,7 @@ Existing capabilities include:
 - Commander best-practice profiles, simulation profiles, and deck intent guidance.
 - Deck-local win routes with deterministic route predicate evidence.
 - Commander Spellbook catalog combo search, raw combo details, and near-miss detection.
-- Evidence-first source signals from Scryfall card facts, Commander Spellbook combo catalog rows, TopDeck/Spicerack decklist samples, EDHREC-style aggregate JSON, and OAuth-backed bounded Reddit discussion search with labeled public JSON fallback.
+- Evidence-first source signals from Scryfall card facts, Commander Spellbook combo catalog rows, TopDeck decklist samples, EDHREC-style aggregate JSON, and EDHTop16 cEDH aggregates.
 - Playgroup.gg deck ranking and local-meta candidate scoring.
 - Previewable deck edit plans before any local or Archidekt mutation.
 - Stats Lab whole-deck performance analysis for opening hands, land drops, colors, castability, commander timing, combo/tutor assembly, stranded-card risk, and named scenarios.
@@ -125,9 +125,7 @@ Core workflow groups are:
 - Source-backed recommendation evidence: `deck_review_new_card_swaps`,
   `deck_query_cards`, `deck_find_lesser_known_cards`,
   `deck_find_exemplar_decks`, `deck_analyze_commander_trends`,
-  `source_list`, `source_search_evidence`,
-  `source_search_reddit_discussions`, and
-  `source_explain_card_signal`.
+  `source_list`, `source_search_evidence`, and `source_explain_card_signal`.
 - Provider-local evidence and actions: `archidekt_*` provider tools and
   `playgroup_*` tools, including `deck_score_cards_for_playgroup_meta` for
   Playgroup.gg-scoped pressure.

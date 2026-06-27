@@ -48,7 +48,7 @@ Non-goals:
   (`DeckPlanService.Apply.cs:94-113`), then flattened to `DeckEditPlanApplyResult`
   (`DeckPlanModels.cs:204`).
 - **In-repo precedent (the pattern is proven, just not in Core):** the App/Cli auth commands
-  already use unions - `RedditAuthParseResult`, `ArchidektAuthParseResult`,
+  already use unions - `ArchidektAuthParseResult`,
   `PlaygroupAuthParseResult`. Cite these as the reference style; this phase brings the
   established pattern into Core rather than introducing it from scratch.
 - **Lower-risk than it looks for serialization:** there is no source-generated
@@ -103,7 +103,7 @@ hard to review. Sequence as separate PRs:
 - Convert closed-set strings to enums with `[JsonStringEnumConverter]` (or explicit
   converters) that serialize to the existing exact strings (e.g.
   `draft|applied|failed|partially-applied|apply-state-unknown`,
-  `available|missing-config|disabled|failed|needs-oauth|access-blocked`,
+  `available|missing-config|disabled|failed|access-blocked`,
   `persisted|memory|off`, severity `warning|error|info`).
 - Keep one converter policy in the shared `JsonSerializerOptions` so wire/disk values are
   unchanged. Add a test asserting each enum serializes to its legacy string.

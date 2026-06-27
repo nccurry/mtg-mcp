@@ -82,49 +82,6 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that Spicerack maps structured decklists.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_MapsSignals()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
-            .Respond("application/json", SpicerackResponseJson);
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Spicerack", "key")));
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        report.ExemplarDecks.Should().ContainSingle(deck => deck.Name == "Tinybones League");
-        report.Signals.Should().Contain(signal => signal.CardName == "Dark Deal" && signal.Source == "Spicerack public decklists");
-    }
-
-    /// <summary>
-    /// Verifies that Spicerack exact-matches individual partner names instead of the pair display string.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_MatchesPartnerCommanderNames()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
-            .Respond("application/json", SpicerackResponseJson);
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Spicerack", "key")));
-        CorpusSignalQuery query = Query();
-        query.Commander = "Partner One // Tinybones, Trinket Thief";
-        query.CommanderNames = ["Partner One", "Tinybones, Trinket Thief"];
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(query, Budget(), TestContext.Current.CancellationToken);
-
-        report.ExemplarDecks.Should().ContainSingle(deck => deck.Commander == query.Commander);
-        report.Signals.Should().Contain(signal => signal.CardName == "Dark Deal" && signal.Source == "Spicerack public decklists");
-    }
-
-    /// <summary>
     /// Verifies that EDHTop16 maps cEDH staple and tournament-entry data.
     /// </summary>
     [Fact]
@@ -171,7 +128,7 @@ public sealed class DecklistCorpusProviderTests
             source.Key == "edhtop16"
             && !source.Enabled
             && source.UnofficialApi
-            && source.Status == CorpusSourceStatuses.Disabled);
+            && source.Status == CorpusSourceStatusKind.Disabled);
     }
 
     /// <summary>
@@ -207,7 +164,7 @@ public sealed class DecklistCorpusProviderTests
             && signal.SignalType == CorpusSignalTypes.Trend);
         first.Sources.Should().ContainSingle(source =>
             source.Key == "edhrec"
-            && source.Status == CorpusSourceStatuses.Available
+            && source.Status == CorpusSourceStatusKind.Available
             && source.UnofficialApi
             && source.PermissionSensitive
             && source.AttributionRequired);
@@ -279,7 +236,7 @@ public sealed class DecklistCorpusProviderTests
         CorpusSourceStatus status = provider.GetStatus();
 
         status.Enabled.Should().BeTrue();
-        status.Status.Should().Be(CorpusSourceStatuses.Available);
+        status.Status.Should().Be(CorpusSourceStatusKind.Available);
         status.UnofficialApi.Should().BeTrue();
         status.PermissionSensitive.Should().BeTrue();
     }
@@ -302,7 +259,7 @@ public sealed class DecklistCorpusProviderTests
             source.Key == "edhrec"
             && !source.Enabled
             && source.UnofficialApi
-            && source.Status == CorpusSourceStatuses.Disabled);
+            && source.Status == CorpusSourceStatusKind.Disabled);
     }
 
     /// <summary>
@@ -376,369 +333,6 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that Reddit maps bounded raw discussions and explicit card references.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_MapsDiscussionsAndExplicitCardSignals()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.Expect(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
-            .Respond("application/json", RedditSearchResponseJson);
-        mockHttp.Expect(HttpMethod.Get, "https://reddit.test/comments/abc123.json*")
-            .Respond("application/json", RedditCommentsResponseJson);
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://reddit.test/"),
-            new FakeCardCatalog("Dark Deal", "Waste Not"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)),
-            new RedditSourceHealth());
-        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
-        budget.MaxDecksPerSource = 1;
-        budget.MaxEvidencePerRecommendation = 2;
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), budget, TestContext.Current.CancellationToken);
-
-        report.Discussions.Should().HaveCount(2);
-        report.Discussions.Should().Contain(discussion =>
-            discussion.Source == "Reddit discussion search"
-            && discussion.Body.Contains("[[Waste Not]]", StringComparison.Ordinal)
-            && discussion.MentionedCards.Contains("Waste Not"));
-        report.Discussions.Should().Contain(discussion =>
-            discussion.LinkedDeckUris.Contains("https://archidekt.com/decks/12345/tinybones"));
-        report.Signals.Should().Contain(signal =>
-            signal.CardName == "Dark Deal"
-            && signal.SignalType == CorpusSignalTypes.Discussion);
-    }
-
-    /// <summary>
-    /// Verifies that Reddit samples popular Commander subreddits and validates plain card names.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_SearchesCommanderSubredditsAndValidatesPlainCardNames()
-    {
-        long recent = DateTimeOffset.UtcNow.AddMonths(-2).ToUnixTimeSeconds();
-        long stale = DateTimeOffset.UtcNow.AddYears(-8).ToUnixTimeSeconds();
-        MockHttpMessageHandler mockHttp = new();
-        MockedRequest commanderSearch = mockHttp.When(HttpMethod.Get, "https://reddit.test/r/Commander/search.json*")
-            .Respond("application/json", RedditSearchResponseWithPlainTextJson(recent, stale));
-        mockHttp.When(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
-            .Respond("application/json", RedditSearchResponseWithPlainTextJson(recent, stale));
-        mockHttp.When(HttpMethod.Get, "https://reddit.test/r/Magicdeckbuilding/search.json*")
-            .Respond("application/json", RedditSearchResponseWithPlainTextJson(recent, stale));
-        mockHttp.When(HttpMethod.Get, "https://reddit.test/comments/plain123.json*")
-            .Respond("application/json", RedditPlainTextCommentsResponseJson);
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://reddit.test/"),
-            new FakeCardCatalog("Beast Whisperer", "Raise the Palisade", "Craterhoof Behemoth", "V.A.T.S."),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)),
-            new RedditSourceHealth());
-        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("balanced");
-        budget.MaxDecksPerSource = 1;
-        budget.MaxEvidencePerRecommendation = 1;
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(
-            new CorpusSignalQuery
-            {
-                Format = "commander",
-                Commander = "Galadriel, Elven-Queen",
-                Theme = "voting elves"
-            },
-            budget,
-            TestContext.Current.CancellationToken);
-
-        mockHttp.GetMatchCount(commanderSearch).Should().BeGreaterThan(0);
-        report.Discussions.Should().Contain(discussion =>
-            discussion.Title == "Galadriel voting upgrades"
-            && discussion.MentionedCards.Contains("Beast Whisperer")
-            && discussion.MentionedCards.Contains("Raise the Palisade")
-            && discussion.MentionedCards.Contains("V.A.T.S."));
-        report.Discussions.Should().NotContain(discussion =>
-            discussion.MentionedCards.Contains("Craterhoof Behemoth"));
-        report.Signals.Should().Contain(signal =>
-            signal.CardName == "Beast Whisperer"
-            && signal.SignalType == CorpusSignalTypes.Discussion);
-    }
-
-    /// <summary>
-    /// Verifies that Reddit HTTP 403 is reported as source status instead of failing the recommendation run.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_ReturnsAccessBlockedStatusForForbiddenResponse()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
-            .Respond(HttpStatusCode.Forbidden, "application/json", """{ "error": "forbidden" }""");
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true)),
-            new RedditSourceHealth());
-        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
-        budget.MaxDecksPerSource = 1;
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(
-            Query(),
-            budget,
-            TestContext.Current.CancellationToken);
-
-        report.Signals.Should().BeEmpty();
-        report.Discussions.Should().BeEmpty();
-        report.Sources.Should().ContainSingle(source =>
-            source.Key == "reddit-discussions"
-            && source.Status == CorpusSourceStatuses.AccessBlocked
-            && !source.Enabled
-            && source.LastCheckedAt.HasValue
-            && source.Notes.Any(note => note.Contains("403", StringComparison.OrdinalIgnoreCase)));
-        report.Notes.Should().Contain(note => note.Contains("Continuing without Reddit", StringComparison.OrdinalIgnoreCase));
-
-        CorpusSourceStatus status = provider.GetStatus();
-        status.Status.Should().Be(CorpusSourceStatuses.AccessBlocked);
-        status.Enabled.Should().BeFalse();
-        status.LastCheckedAt.Should().NotBeNull();
-        status.Notes.Should().Contain(note => note.Contains("OAuth", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Verifies that Reddit health observations are shared across provider instances for source_list.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_SharedHealthReportsBlockedStatusBeforeNextQuery()
-    {
-        RedditSourceHealth sourceHealth = new();
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://reddit.test/r/EDH/search.json*")
-            .Respond(HttpStatusCode.Forbidden, "application/json", """{ "error": "forbidden" }""");
-        IOptions<MtgMcpOptions> options = Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: true));
-        RedditDiscussionCorpusSignalProvider queryProvider = new(
-            CreateClient(mockHttp, "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            options,
-            sourceHealth);
-
-        await queryProvider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-        RedditDiscussionCorpusSignalProvider statusProvider = new(
-            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            options,
-            sourceHealth);
-
-        CorpusSourceStatus status = statusProvider.GetStatus();
-
-        status.Status.Should().Be(CorpusSourceStatuses.AccessBlocked);
-        status.Enabled.Should().BeFalse();
-        status.LastCheckedAt.Should().NotBeNull();
-    }
-
-    /// <summary>
-    /// Verifies that Reddit public discussion evidence is enabled by default.
-    /// </summary>
-    [Fact]
-    public void RedditProvider_IsEnabledByDefault()
-    {
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(new MtgMcpOptions()),
-            new RedditSourceHealth());
-
-        CorpusSourceStatus status = provider.GetStatus();
-
-        status.Enabled.Should().BeTrue();
-        status.Status.Should().Be(CorpusSourceStatuses.Available);
-        status.ApiType.Should().Be(CorpusSourceApiTypes.UnofficialApi);
-        status.UnofficialApi.Should().BeTrue();
-    }
-
-    /// <summary>
-    /// Verifies that Reddit public discussion evidence respects an explicit unofficial endpoint opt-out.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_RespectsUnofficialApiOptOut()
-    {
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
-            new RedditSourceHealth());
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        report.Discussions.Should().BeEmpty();
-        report.Sources.Should().ContainSingle(source =>
-            source.Key == "reddit-discussions"
-            && !source.Enabled
-            && !source.UnofficialApi
-            && source.RequiresKey
-            && source.Status == CorpusSourceStatuses.NeedsOAuth
-            && source.Notes.Any(note => note.Contains("OAuth credentials", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    /// <summary>
-    /// Verifies that a Reddit OAuth bearer token enables the official API path without unofficial opt-in.
-    /// </summary>
-    [Fact]
-    public void RedditProvider_BearerTokenEnablesOfficialApiStatus()
-    {
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
-            new RedditSourceHealth(),
-            Options.Create(new RedditOptions
-            {
-                BearerToken = "token",
-                ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1)
-            }));
-
-        CorpusSourceStatus status = provider.GetStatus();
-
-        status.Enabled.Should().BeTrue();
-        status.ApiType.Should().Be(CorpusSourceApiTypes.Official);
-        status.UnofficialApi.Should().BeFalse();
-    }
-
-    /// <summary>
-    /// Verifies that Reddit source API keys are ignored by the OAuth credential path.
-    /// </summary>
-    [Fact]
-    public void RedditProvider_SourceApiKeyDoesNotEnableOAuth()
-    {
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(new MockHttpMessageHandler(), "https://reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "ignored-api-key", allowUnofficialApi: false)),
-            new RedditSourceHealth());
-
-        CorpusSourceStatus status = provider.GetStatus();
-
-        status.Status.Should().Be(CorpusSourceStatuses.NeedsOAuth);
-        status.RequiresKey.Should().BeTrue();
-        status.UnofficialApi.Should().BeFalse();
-    }
-
-    /// <summary>
-    /// Verifies that a Reddit refresh token is exchanged before OAuth search requests.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_RefreshTokenExchangesAccessTokenForOAuthSearch()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.Expect(HttpMethod.Post, "https://www.reddit.test/api/v1/access_token")
-            .WithContent("grant_type=refresh_token&refresh_token=refresh-token")
-            .Respond("application/json", """{ "access_token": "access-token", "expires_in": 3600 }""");
-        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
-            .Respond("application/json", EmptyRedditSearchResponseJson);
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://oauth.reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
-            new RedditSourceHealth(),
-            Options.Create(new RedditOptions
-            {
-                ClientId = "client-id",
-                ClientSecret = "client-secret",
-                RefreshToken = "refresh-token",
-                OAuthBaseAddress = new Uri("https://oauth.reddit.test/"),
-                TokenEndpoint = new Uri("https://www.reddit.test/api/v1/access_token"),
-            }));
-        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
-        budget.MaxDecksPerSource = 1;
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(
-            Query(),
-            budget,
-            TestContext.Current.CancellationToken);
-
-        report.Sources.Should().ContainSingle(source =>
-            source.Key == "reddit-discussions"
-            && source.ApiType == CorpusSourceApiTypes.Official);
-        mockHttp.VerifyNoOutstandingExpectation();
-    }
-
-    /// <summary>
-    /// Verifies that short-lived Reddit tokens are refreshed on later requests.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_RefreshesExpiredAccessToken()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.Expect(HttpMethod.Post, "https://www.reddit.test/api/v1/access_token")
-            .Respond("application/json", """{ "access_token": "first-token", "expires_in": 1 }""");
-        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
-            .Respond("application/json", EmptyRedditSearchResponseJson);
-        mockHttp.Expect(HttpMethod.Post, "https://www.reddit.test/api/v1/access_token")
-            .Respond("application/json", """{ "access_token": "second-token", "expires_in": 3600 }""");
-        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
-            .Respond("application/json", EmptyRedditSearchResponseJson);
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://oauth.reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
-            new RedditSourceHealth(),
-            Options.Create(new RedditOptions
-            {
-                ClientId = "client-id",
-                ClientSecret = "client-secret",
-                RefreshToken = "refresh-token",
-                OAuthBaseAddress = new Uri("https://oauth.reddit.test/"),
-                TokenEndpoint = new Uri("https://www.reddit.test/api/v1/access_token"),
-            }));
-        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
-        budget.MaxDecksPerSource = 1;
-
-        await provider.GetSignalsAsync(Query(), budget, TestContext.Current.CancellationToken);
-        await provider.GetSignalsAsync(Query(), budget, TestContext.Current.CancellationToken);
-
-        mockHttp.VerifyNoOutstandingExpectation();
-    }
-
-    /// <summary>
-    /// Verifies that Reddit OAuth search 403 responses are surfaced as access-blocked status.
-    /// </summary>
-    [Fact]
-    public async Task RedditProvider_OAuthSearchForbiddenReportsAccessBlocked()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.Expect(HttpMethod.Get, "https://oauth.reddit.test/r/EDH/search.json*")
-            .Respond(HttpStatusCode.Forbidden, "application/json", """{ "message": "forbidden" }""");
-        RedditDiscussionCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://oauth.reddit.test/"),
-            new FakeCardCatalog(),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Reddit", "", allowUnofficialApi: false)),
-            new RedditSourceHealth(),
-            Options.Create(new RedditOptions
-            {
-                BearerToken = "access-token",
-                ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
-                OAuthBaseAddress = new Uri("https://oauth.reddit.test/")
-            }));
-        RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth("minimal");
-        budget.MaxDecksPerSource = 1;
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(
-            Query(),
-            budget,
-            TestContext.Current.CancellationToken);
-
-        report.Sources.Should().ContainSingle(source =>
-            source.Key == "reddit-discussions"
-            && source.Status == CorpusSourceStatuses.AccessBlocked
-            && source.Notes.Any(note => note.Contains("OAuth API path", StringComparison.OrdinalIgnoreCase)));
-        mockHttp.VerifyNoOutstandingExpectation();
-    }
-
-    /// <summary>
     /// Verifies that providers reject HTML payloads instead of scraping them.
     /// </summary>
     [Fact]
@@ -751,26 +345,6 @@ public sealed class DecklistCorpusProviderTests
             CreateClient(mockHttp, "https://topdeck.test/"),
             new NullCorpusCache(),
             Options.Create(OptionsWithSource("TopDeck", "key")));
-
-        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*HTML*");
-    }
-
-    /// <summary>
-    /// Verifies that Spicerack rejects HTML payloads instead of scraping them.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_RejectsHtmlPayloads()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
-            .Respond("text/html", "<html><body>nope</body></html>");
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Spicerack", "key")));
 
         Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
 
@@ -820,25 +394,6 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that malformed Spicerack JSON is surfaced as a contract failure.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_ThrowsForMalformedJson()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
-            .Respond("application/json", "{ nope");
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Spicerack", "key")));
-
-        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        await act.Should().ThrowAsync<JsonException>();
-    }
-
-    /// <summary>
     /// Verifies that malformed EDHREC JSON is surfaced as a contract failure.
     /// </summary>
     [Fact]
@@ -880,26 +435,6 @@ public sealed class DecklistCorpusProviderTests
     }
 
     /// <summary>
-    /// Verifies that Spicerack auth failures fail clearly instead of returning partial evidence.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_ThrowsForAuthFailure()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
-            .Respond(HttpStatusCode.Unauthorized, "application/json", """{ "error": "bad key" }""");
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Spicerack", "key")));
-
-        Func<Task> act = () => provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        await act.Should().ThrowAsync<HttpRequestException>()
-            .Where(exception => exception.StatusCode == HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
     /// Verifies that unsupported TopDeck envelopes produce no evidence without fabricating cards.
     /// </summary>
     [Fact]
@@ -917,28 +452,7 @@ public sealed class DecklistCorpusProviderTests
 
         report.ExemplarDecks.Should().BeEmpty();
         report.Signals.Should().BeEmpty();
-        report.Sources.Should().ContainSingle(source => source.Key == "topdeck" && source.Status == CorpusSourceStatuses.Available);
-    }
-
-    /// <summary>
-    /// Verifies that unsupported Spicerack envelopes produce no evidence without fabricating cards.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_ReturnsEmptyReportForUnsupportedEnvelope()
-    {
-        MockHttpMessageHandler mockHttp = new();
-        mockHttp.When(HttpMethod.Get, "https://spicerack.test/api/export-decklists/*")
-            .Respond("application/json", """{ "records": [{ "decklist": "1 Waste Not" }] }""");
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(mockHttp, "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(OptionsWithSource("Spicerack", "key")));
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        report.ExemplarDecks.Should().BeEmpty();
-        report.Signals.Should().BeEmpty();
-        report.Sources.Should().ContainSingle(source => source.Key == "spicerack" && source.Status == CorpusSourceStatuses.Available);
+        report.Sources.Should().ContainSingle(source => source.Key == "topdeck" && source.Status == CorpusSourceStatusKind.Available);
     }
 
     /// <summary>
@@ -956,26 +470,7 @@ public sealed class DecklistCorpusProviderTests
 
         report.Sources.Should().ContainSingle(source =>
             source.Key == "topdeck"
-            && source.Status == CorpusSourceStatuses.MissingConfig
-            && source.RequiresKey);
-    }
-
-    /// <summary>
-    /// Verifies that Spicerack reports missing API keys without a network call.
-    /// </summary>
-    [Fact]
-    public async Task SpicerackProvider_ReportsMissingApiKey()
-    {
-        SpicerackCorpusSignalProvider provider = new(
-            CreateClient(new MockHttpMessageHandler(), "https://spicerack.test/"),
-            new NullCorpusCache(),
-            Options.Create(new MtgMcpOptions()));
-
-        CorpusSignalReport report = await provider.GetSignalsAsync(Query(), Budget(), TestContext.Current.CancellationToken);
-
-        report.Sources.Should().ContainSingle(source =>
-            source.Key == "spicerack"
-            && source.Status == CorpusSourceStatuses.MissingConfig
+            && source.Status == CorpusSourceStatusKind.MissingConfig
             && source.RequiresKey);
     }
 
@@ -1011,10 +506,8 @@ public sealed class DecklistCorpusProviderTests
                         BaseAddress = source switch
                         {
                             "TopDeck" => new Uri("https://topdeck.test/"),
-                            "Spicerack" => new Uri("https://spicerack.test/"),
                             "Edhrec" => new Uri("https://edhrec.test/pages/"),
                             "EdhTop16" => new Uri("https://edhtop16.test/"),
-                            "Reddit" => new Uri("https://reddit.test/"),
                             _ => new Uri("https://decklist-source.test/")
                         }
                     }
@@ -1071,21 +564,6 @@ public sealed class DecklistCorpusProviderTests
         ]
       }
     ]
-    """;
-
-    /// <summary>
-    /// Provides a representative Spicerack decklist response.
-    /// </summary>
-    private const string SpicerackResponseJson = """
-    {
-      "data": [
-        {
-          "deck_name": "Tinybones League",
-          "decklist_url": "https://spicerack.test/deck/1",
-          "decklist_text": "1 Tinybones, Trinket Thief\n1 Waste Not\n1 Dark Deal\n1 Geier Reach Sanitarium"
-        }
-      ]
-    }
     """;
 
     /// <summary>
@@ -1221,233 +699,4 @@ public sealed class DecklistCorpusProviderTests
     }
     """;
 
-    /// <summary>
-    /// Provides an empty Reddit search response.
-    /// </summary>
-    private const string EmptyRedditSearchResponseJson = """
-        {
-          "data": { "children": [] }
-        }
-        """;
-
-    /// <summary>
-    /// Provides a representative Reddit search response.
-    /// </summary>
-    private const string RedditSearchResponseJson = """
-        {
-          "data": {
-        "children": [
-          {
-            "kind": "t3",
-            "data": {
-              "id": "abc123",
-              "subreddit": "EDH",
-              "title": "Tinybones discard package",
-              "selftext": "I would start with [[Waste Not]] and a few wheel effects.",
-              "permalink": "/r/EDH/comments/abc123/tinybones_discard_package/",
-              "score": 42,
-              "created_utc": 1767225600
-            }
-          }
-        ]
-      }
-    }
-    """;
-
-    /// <summary>
-    /// Provides a Reddit response with one recent plain-text post and one stale post.
-    /// </summary>
-    private static string RedditSearchResponseWithPlainTextJson(long recentCreatedAt, long staleCreatedAt)
-    {
-        return $$"""
-        {
-          "data": {
-            "children": [
-              {
-                "kind": "t3",
-                "data": {
-                  "id": "plain123",
-                  "subreddit": "Commander",
-                  "title": "Galadriel voting upgrades",
-                  "selftext": "[Beast Whisperer] keeps the cards flowing, [V.A.T.S.] buys time, and Raise the Palisade is a clean finisher.",
-                  "permalink": "/r/Commander/comments/plain123/galadriel_voting_upgrades/",
-                  "score": 150,
-                  "created_utc": {{recentCreatedAt}}
-                }
-              },
-              {
-                "kind": "t3",
-                "data": {
-                  "id": "stale123",
-                  "subreddit": "Commander",
-                  "title": "Old Galadriel finisher thread",
-                  "selftext": "Craterhoof Behemoth was the old plan.",
-                  "permalink": "/r/Commander/comments/stale123/old_galadriel_finisher_thread/",
-                  "score": 999,
-                  "created_utc": {{staleCreatedAt}}
-                }
-              }
-            ]
-          }
-        }
-        """;
-    }
-
-    /// <summary>
-    /// Provides a representative Reddit comments response.
-    /// </summary>
-    private const string RedditCommentsResponseJson = """
-    [
-      {
-        "data": {
-          "children": []
-        }
-      },
-      {
-        "data": {
-          "children": [
-            {
-              "kind": "t1",
-              "data": {
-                "subreddit": "EDH",
-                "body": "[[Dark Deal]] is clunky but strong with Tinybones. My list is https://archidekt.com/decks/12345/tinybones.",
-                "permalink": "/r/EDH/comments/abc123/comment/def456/",
-                "score": 12,
-                "created_utc": 1767229200
-              }
-            }
-          ]
-        }
-      }
-    ]
-    """;
-
-    /// <summary>
-    /// Provides a representative Reddit comments response with plain-text card names.
-    /// </summary>
-    private const string RedditPlainTextCommentsResponseJson = """
-    [
-      {
-        "data": {
-          "children": []
-        }
-      },
-      {
-        "data": {
-          "children": [
-            {
-              "kind": "t1",
-              "data": {
-                "subreddit": "Commander",
-                "body": "[Beast Whisperer] overperformed for me, and Raise the Palisade ended stalled boards.",
-                "permalink": "/r/Commander/comments/plain123/comment/plain456/",
-                "score": 31,
-                "created_utc": 1767229200
-              }
-            }
-          ]
-        }
-      }
-    ]
-    """;
-
-    /// <summary>
-    /// Resolves a fixed set of exact card names for decklist provider tests.
-    /// </summary>
-    private sealed class FakeCardCatalog : ICardCatalog
-    {
-        /// <summary>
-        /// Stores card names that exact-name validation should resolve.
-        /// </summary>
-        private readonly HashSet<string> names;
-
-        /// <summary>
-        /// Creates a fake catalog that resolves the provided card names.
-        /// </summary>
-        public FakeCardCatalog(params string[] names)
-        {
-            this.names = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Returns no search results.
-        /// </summary>
-        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
-            string query,
-            int limit,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
-        }
-
-        /// <summary>
-        /// Returns no semantic search results.
-        /// </summary>
-        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
-            CardSearchRequest request,
-            int limit,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
-        }
-
-        /// <summary>
-        /// Returns one fake card when the name is configured.
-        /// </summary>
-        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(names.Contains(nameOrId) ? new CardInfo { Name = nameOrId } : null);
-        }
-
-        /// <summary>
-        /// Resolves configured exact names.
-        /// </summary>
-        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
-            IReadOnlyList<string> names,
-            CancellationToken cancellationToken)
-        {
-            Dictionary<string, CardInfo> result = new(StringComparer.OrdinalIgnoreCase);
-            foreach (string name in names)
-            {
-                if (this.names.Contains(name))
-                {
-                    result[name] = new CardInfo { Name = name };
-                }
-            }
-
-            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(result);
-        }
-
-        /// <summary>
-        /// Returns no rulings.
-        /// </summary>
-        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
-            string nameOrId,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
-        }
-
-        /// <summary>
-        /// Returns no print rows.
-        /// </summary>
-        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
-            string nameOrId,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
-        }
-
-        /// <summary>
-        /// Returns no suggestions.
-        /// </summary>
-        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
-            string prompt,
-            string? format,
-            int limit,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
-        }
-    }
 }

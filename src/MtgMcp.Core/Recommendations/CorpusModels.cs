@@ -77,10 +77,6 @@ public static class CorpusSourceStatuses
     /// </summary>
     public const string AccessBlocked = "access-blocked";
 
-    /// <summary>
-    /// Indicates a source needs OAuth credentials before it can be queried.
-    /// </summary>
-    public const string NeedsOAuth = "needs-oauth";
 }
 
 /// <summary>
@@ -549,7 +545,7 @@ public sealed class DiscussionEvidence
     public string Query { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the subreddit or community name when known.
+    /// Gets or sets the discussion community name when known.
     /// </summary>
     public string? Community { get; set; }
 

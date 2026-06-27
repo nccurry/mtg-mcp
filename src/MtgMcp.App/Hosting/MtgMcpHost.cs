@@ -136,7 +136,6 @@ public static class MtgMcpHost
                 value => options.CredentialsFile = value
             )
         );
-
         builder
             .Services.AddMcpServer(options =>
             {

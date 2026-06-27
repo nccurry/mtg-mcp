@@ -17,8 +17,8 @@ concerns into Core.
 - **P18 - no shared resiliency.** Scryfall/Archidekt hand-roll retry/backoff; Moxfield,
   CommanderSpellbook, and the five Decklists providers have none (a 429 just throws).
 - **P19 - inconsistent error model.** Gateways throw redacted `HttpRequestException`;
-  corpus providers call `EnsureSuccessStatusCode()` (uninformative); only Reddit returns a
-  typed, degrading status.
+  corpus providers still have inconsistent failure handling and should return typed,
+  degrading statuses where possible.
 - **P20 (safety) - coarse secret redaction.** `SecretRedactor.Redact(string)`
   (`Options.cs:240-256`) replaces the whole value if it merely contains a keyword like
   "token"/"secret"; conversely a raw bearer/JWT without those keywords is not redacted. It
@@ -53,8 +53,7 @@ Non-goals:
 - `SecretRedactor` has a precise key-based path for dicts/JSON (`Options.cs:261-322`) and a
   coarse substring path for raw strings (`:240-256`). The coarse path is the risk.
 - Auth flows: Archidekt username/password -> JWT cached for process lifetime, no expiry
-  check; Playgroup API key set per request; Reddit OAuth with real refresh + 5-minute
-  buffer + 403 degradation (the model to generalize).
+  check; Playgroup API key set per request.
 - Caching: `ICorpusCache` (shared, configurable), Archidekt disk card-id cache, and a
   Scryfall `ProviderCache` (in-memory, ignores configured mode/TTLs).
 - Rate limiting: Scryfall proactive-by-default (125ms) + 429 handling; Archidekt optional
@@ -83,8 +82,8 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   taxonomy): success vs typed failure (auth, rate-limited, unavailable, blocked,
   malformed). Replace bare `EnsureSuccessStatusCode()` paths with consistent handling that
   includes a redacted, useful message.
-- Generalize Reddit's graceful 403 degradation pattern so a single failing source returns
-  a typed status without aborting the run.
+- Add graceful source-local degradation so a single failing source returns a typed status
+  without aborting the run.
 - **Cross-phase contract (neither phase blocks the other):** Phase 6 *defines* the typed
   adapter failure shapes; Phase 3 *maps* them to the MCP error taxonomy at the App boundary.
   Phase 6 can land before or in parallel with Phase 3 - until Phase 3 ships, the existing

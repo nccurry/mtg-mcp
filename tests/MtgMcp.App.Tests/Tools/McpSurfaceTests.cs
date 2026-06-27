@@ -169,7 +169,6 @@ public sealed class McpSurfaceTests
             "source_explain_card_signal",
             "source_list",
             "source_search_evidence",
-            "source_search_reddit_discussions",
             "workspace_checkpoint_create",
             "workspace_checkpoint_delete",
             "workspace_checkpoint_get",
@@ -406,7 +405,7 @@ public sealed class McpSurfaceTests
         GetParameterDescription(typeof(CorpusTools), nameof(CorpusTools.SearchCorpusEvidenceAsync), "sourceKey")
             .Should()
             .Contain("topdeck")
-            .And.Contain("reddit-discussions");
+            .And.Contain("edhtop16");
         GetParameterDescription(typeof(CorpusTools), nameof(CorpusTools.SearchCorpusEvidenceAsync), "analysisDepth")
             .Should()
             .Contain("minimal")
@@ -498,7 +497,7 @@ public sealed class McpSurfaceTests
             .Should()
             .Contain("archidekt")
             .And.Contain("playgroup")
-            .And.Contain("reddit");
+            .And.NotContain("reddit");
     }
 
     /// <summary>
@@ -649,9 +648,6 @@ public sealed class McpSurfaceTests
         {
             ["MtgMcp:Archidekt:Password"] = "secret",
             ["MtgMcp:Playgroup:ApiKey"] = "playgroup-secret",
-            ["MtgMcp:Reddit:ClientSecret"] = "reddit-secret",
-            ["MtgMcp:Reddit:RefreshToken"] = "reddit-refresh-token",
-            ["MtgMcp:Reddit:BearerToken"] = "reddit-bearer-token",
             ["MtgMcp:DataDir"] = "C:/data",
         };
 
@@ -659,9 +655,6 @@ public sealed class McpSurfaceTests
 
         redacted["MtgMcp:Archidekt:Password"].Should().Be("***REDACTED***");
         redacted["MtgMcp:Playgroup:ApiKey"].Should().Be("***REDACTED***");
-        redacted["MtgMcp:Reddit:ClientSecret"].Should().Be("***REDACTED***");
-        redacted["MtgMcp:Reddit:RefreshToken"].Should().Be("***REDACTED***");
-        redacted["MtgMcp:Reddit:BearerToken"].Should().Be("***REDACTED***");
         redacted["MtgMcp:DataDir"].Should().Be("C:/data");
     }
 
@@ -2189,27 +2182,15 @@ public sealed class McpSurfaceTests
             ["INTELLIGENCE:SOURCES:COMMANDERSPELLBOOK:ENABLED"] = "false",
             ["INTELLIGENCE:SOURCES:TOPDECK:API_KEY"] = "topdeck-key",
             ["INTELLIGENCE:SOURCES:TOPDECK:BASE_ADDRESS"] = "https://topdeck.test/api/",
+            ["INTELLIGENCE:SOURCES:SPICERACK:API_KEY"] = "ignored-spicerack-key",
             ["INTELLIGENCE:SOURCES:EDHREC:ENABLED"] = "true",
             ["INTELLIGENCE:SOURCES:EDHREC:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:EDHREC:BASE_ADDRESS"] = "https://edhrec.test/pages/",
             ["INTELLIGENCE:SOURCES:EDHTOP16:ENABLED"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS"] = "https://edhtop16.test/",
-            ["INTELLIGENCE:SOURCES:REDDIT:ENABLED"] = "true",
-            ["INTELLIGENCE:SOURCES:REDDIT:ALLOW_UNOFFICIAL_API"] = "true",
-            ["INTELLIGENCE:SOURCES:REDDIT:BASE_ADDRESS"] = "https://reddit.test/",
-            ["REDDIT:CLIENT_ID"] = "reddit-client",
-            ["REDDIT:CLIENT_SECRET"] = "reddit-secret",
-            ["REDDIT:REFRESH_TOKEN"] = "reddit-refresh",
-            ["REDDIT:ACCESS_TOKEN"] = "reddit-access",
-            ["REDDIT:BEARER_TOKEN"] = "reddit-bearer",
-            ["REDDIT:EXPIRES_AT_UTC"] = "2030-01-02T03:04:05Z",
-            ["REDDIT:USER_AGENT"] = "mtg-mcp-test-reddit",
-            ["REDDIT:SCOPE"] = "read",
-            ["REDDIT:DEVICE_ID"] = "reddit-device",
-            ["REDDIT:CREDENTIALS_FILE"] = "C:/reddit-creds.json",
-            ["REDDIT:OAUTH_BASE_ADDRESS"] = "https://oauth.reddit.test/",
-            ["REDDIT:TOKEN_ENDPOINT"] = "https://www.reddit.test/api/v1/access_token",
+            ["INTELLIGENCE:SOURCES:REDDIT:ENABLED"] = "ignored",
+            ["REDDIT:CLIENT_SECRET"] = "ignored-reddit-secret",
             ["ARCHIDEKT:USERNAME"] = "archidekt-user",
             ["ARCHIDEKT:PASSWORD"] = "archidekt-password",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
@@ -2248,28 +2229,15 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Intelligence:Sources:CommanderSpellbook:Enabled"].Should().Be("false");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:ApiKey"].Should().Be("topdeck-key");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:BaseAddress"].Should().Be("https://topdeck.test/api/");
+        aliases.Should().NotContainKey("MtgMcp:Intelligence:Sources:Spicerack:ApiKey");
         aliases["MtgMcp:Intelligence:Sources:Edhrec:Enabled"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:Edhrec:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:Edhrec:BaseAddress"].Should().Be("https://edhrec.test/pages/");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:Enabled"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"].Should().Be("https://edhtop16.test/");
-        aliases["MtgMcp:Intelligence:Sources:Reddit:Enabled"].Should().Be("true");
-        aliases.Should().NotContainKey("MtgMcp:Intelligence:Sources:Reddit:ApiKey");
-        aliases["MtgMcp:Intelligence:Sources:Reddit:AllowUnofficialApi"].Should().Be("true");
-        aliases["MtgMcp:Intelligence:Sources:Reddit:BaseAddress"].Should().Be("https://reddit.test/");
-        aliases["MtgMcp:Reddit:ClientId"].Should().Be("reddit-client");
-        aliases["MtgMcp:Reddit:ClientSecret"].Should().Be("reddit-secret");
-        aliases["MtgMcp:Reddit:RefreshToken"].Should().Be("reddit-refresh");
-        aliases["MtgMcp:Reddit:AccessToken"].Should().Be("reddit-access");
-        aliases["MtgMcp:Reddit:BearerToken"].Should().Be("reddit-bearer");
-        aliases["MtgMcp:Reddit:ExpiresAtUtc"].Should().Be("2030-01-02T03:04:05Z");
-        aliases["MtgMcp:Reddit:UserAgent"].Should().Be("mtg-mcp-test-reddit");
-        aliases["MtgMcp:Reddit:Scope"].Should().Be("read");
-        aliases["MtgMcp:Reddit:DeviceId"].Should().Be("reddit-device");
-        aliases["MtgMcp:Reddit:CredentialsFile"].Should().Be("C:/reddit-creds.json");
-        aliases["MtgMcp:Reddit:OAuthBaseAddress"].Should().Be("https://oauth.reddit.test/");
-        aliases["MtgMcp:Reddit:TokenEndpoint"].Should().Be("https://www.reddit.test/api/v1/access_token");
+        aliases.Should().NotContainKey("MtgMcp:Intelligence:Sources:Reddit:Enabled");
+        aliases.Should().NotContainKey("MtgMcp:Reddit:ClientSecret");
         aliases["MtgMcp:Archidekt:Username"].Should().Be("archidekt-user");
         aliases["MtgMcp:Archidekt:Password"].Should().Be("archidekt-password");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
@@ -2384,15 +2352,12 @@ public sealed class McpSurfaceTests
             && source.UnofficialApi
             && source.PermissionSensitive);
         host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
-            source.Key == "reddit-discussions"
-            && source.Status == CorpusSourceStatuses.Available
-            && source.UnofficialApi
-            && source.PermissionSensitive);
-        host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
             source.Key == "edhtop16"
             && source.Status == CorpusSourceStatuses.Disabled
             && source.UnofficialApi
             && source.PermissionSensitive);
+        host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().NotContain(source =>
+            source.Key == "reddit-discussions");
         host.Services.GetRequiredService<IOptions<MtgMcpOptions>>()
             .Value.DataDir.Should()
             .NotBeNullOrWhiteSpace();

@@ -83,8 +83,8 @@ public sealed class MtgPrompts
             Source: {source}
 
             Use commander_get_aggregate_cards and commander_get_tags. Keep source populations separate,
-            cite source metadata, and do not merge counts across unlike sources. Treat Reddit as raw
-            discussion evidence and TopDeck as tournament/decklist sample evidence.
+            cite source metadata, and do not merge counts across unlike sources. Treat TopDeck as
+            tournament/decklist sample evidence.
             """;
     }
 

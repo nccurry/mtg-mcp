@@ -52,8 +52,8 @@ public sealed partial class DeckAnalysisService
             Status = "not-queried",
             Notes =
             [
-                "Call source_search_evidence, source_search_reddit_discussions, "
-                    + "or commander_get_aggregate_cards when source-backed popularity evidence is needed."
+                "Call source_search_evidence or commander_get_aggregate_cards "
+                    + "when source-backed popularity evidence is needed."
             ]
         });
         review.Notes.Add(

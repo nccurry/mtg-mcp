@@ -36,7 +36,7 @@ public sealed class CorpusTools
     /// Analyzes commander and deck-context trends from enabled recommendation sources.
     /// </summary>
     [McpServerTool(Name = "deck_analyze_commander_trends", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Analyze commander or deck-context card trends using enabled API-backed recommendation sources. AnalysisDepth can be minimal, balanced, or best; bypassCache bypasses source-fact cache. Use source_search_evidence or source_search_reddit_discussions when raw deterministic source rows are needed instead of ranked recommendations.")]
+    [Description("Analyze commander or deck-context card trends using enabled API-backed recommendation sources. AnalysisDepth can be minimal, balanced, or best; bypassCache bypasses source-fact cache. Use source_search_evidence when raw deterministic source rows are needed instead of ranked recommendations.")]
     public Task<CorpusRecommendationResult> AnalyzeCommanderTrendsAsync(
         string workspaceId,
         int limit = 10,
@@ -127,7 +127,7 @@ public sealed class CorpusTools
     [Description("Search one enabled recommendation source by sourceKey and return deterministic card evidence rows plus raw discussions or exemplar decks. This tool does not infer card quality or choose cuts.")]
     public Task<CorpusEvidenceSearchResult> SearchCorpusEvidenceAsync(
         string workspaceId,
-        [Description("Recommendation source key such as edhrec, edhtop16, topdeck, spicerack, or reddit-discussions.")]
+        [Description("Recommendation source key such as edhrec, edhtop16, or topdeck.")]
         string sourceKey,
         string goal = "",
         int limit = 20,
@@ -139,30 +139,6 @@ public sealed class CorpusTools
         return recommendations.SearchCorpusEvidenceAsync(
             workspaceId,
             sourceKey,
-            goal,
-            limit,
-            EffectiveAnalysisDepth(analysisDepth),
-            bypassCache,
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Searches Reddit EDH and Commander communities for raw discussion evidence.
-    /// </summary>
-    [McpServerTool(Name = "source_search_reddit_discussions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Search popular EDH and Commander subreddits for the commander, theme, or goal and return bounded raw posts/comments, exact card references, linked deck URLs, and deterministic card evidence rows.")]
-    public Task<CorpusEvidenceSearchResult> SearchRedditDiscussionsAsync(
-        string workspaceId,
-        string goal = "",
-        int limit = 20,
-        [Description("Recommendation source analysis depth: minimal, balanced, or best.")]
-        string? analysisDepth = null,
-        bool bypassCache = false,
-        CancellationToken cancellationToken = default)
-    {
-        return recommendations.SearchCorpusEvidenceAsync(
-            workspaceId,
-            "reddit-discussions",
             goal,
             limit,
             EffectiveAnalysisDepth(analysisDepth),

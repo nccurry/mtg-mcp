@@ -142,7 +142,7 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 | Playgroup.gg | Check auth, get playgroups and decks, list playgroup users/decks, list user decks, rank decks by power, Elo, win rate, competitive rating, games played, or average win turn, and score candidate cards against local-meta pressure. |
 | Analysis | Mana base, curve, colors, categories, cost, legality, draw odds, consistency, best practices, Commander bracket, card facets, and explicit facet predicates. |
 | Simulation | Goldfish runs, projected board states, win-turn estimates, deterministic performance analysis, plan comparisons, and Archidekt reference comparisons. |
-| Recommendations | New-card swap evidence, Commander aggregate cards/tags, win-condition evidence, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, raw source evidence, and Reddit discussion evidence. |
+| Recommendations | New-card swap evidence, Commander aggregate cards/tags, win-condition evidence, caller-supplied Scryfall queries, lesser-known cards, commander trends, exemplar decks, and raw source evidence. |
 | Combos | Catalog-backed combo search/details, deck combo analysis, route labels, terminal/needs-payoff flags, near-misses, and clearly separated local heuristics. |
 | Deck intent | Optional human-readable deck goals, budgets, local meta, role targets, simulation profiles, win routes, preferences, avoided cards, and protected cards. |
 
@@ -206,9 +206,6 @@ Common credential config:
     },
     "Playgroup": {
       "CredentialsFile": "C:/Users/you/.mtg-mcp/playgroup.json"
-    },
-    "Reddit": {
-      "CredentialsFile": "C:/Users/you/.mtg-mcp/reddit.json"
     }
   }
 }
@@ -235,28 +232,11 @@ The `username` value can be your Archidekt username or account email address.
 }
 ```
 
-`reddit.json`:
-
-```json
-{
-  "clientId": "...",
-  "clientSecret": "...",
-  "refreshToken": "...",
-  "userAgent": "mtg-mcp/1.0 by your-reddit-username",
-  "scope": "read"
-}
-```
-
-Reddit uses OAuth bearer tokens through `https://oauth.reddit.com`, not a
-long-lived API key. A refresh token plus app client id is the preferred local
-setup; a temporary `accessToken` or `bearerToken` can be stored for short-lived
-testing.
-
-mtg-mcp reads `~/.mtg-mcp/archidekt.json` and `~/.mtg-mcp/playgroup.json`
-automatically when they exist, so the `mtg-mcp auth` helpers are enough to
-configure credentials with no extra MCP configuration. Set the matching
-`MTGMCP__..._CREDENTIALS_FILE` only when you store the file in a non-default
-location.
+mtg-mcp reads `~/.mtg-mcp/archidekt.json` and
+`~/.mtg-mcp/playgroup.json` automatically when they exist, so the
+`mtg-mcp auth` helpers are enough to configure credentials with no extra MCP
+configuration. Set the matching `MTGMCP__..._CREDENTIALS_FILE` only when you
+store the file in a non-default location.
 
 Create an Archidekt credentials file with:
 
@@ -288,28 +268,6 @@ mtg-mcp auth playgroup `
   --api-key "..."
 ```
 
-Create a Reddit OAuth credentials file with:
-
-```bash
-mtg-mcp auth reddit \
-  --credentials-file "$HOME/.mtg-mcp/reddit.json" \
-  --client-id "..." \
-  --client-secret "..." \
-  --refresh-token "..." \
-  --user-agent "mtg-mcp/1.0 by your-reddit-username"
-```
-
-PowerShell equivalent:
-
-```powershell
-mtg-mcp auth reddit `
-  --credentials-file "$env:USERPROFILE\.mtg-mcp\reddit.json" `
-  --client-id "..." `
-  --client-secret "..." `
-  --refresh-token "..." `
-  --user-agent "mtg-mcp/1.0 by your-reddit-username"
-```
-
 Supported environment settings. In rows with slashes, repeat the full prefix for
 each abbreviated suffix.
 
@@ -322,18 +280,14 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__CACHE__MODE` | Source-fact cache: `persisted`, `memory`, or `off`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` / `MAX_ENTRIES` | Persisted cache limits. |
 | `MTGMCP__INTELLIGENCE__CACHE__TTLS__SCRYFALL_CARD_METADATA` / `SCRYFALL_SEARCH` / `COMMANDERSPELLBOOK` / `DECK_SEARCH` / `DECK_DETAILS` / `CORPUS_SIGNALS` | Per-source cache TTLs such as `24h` or `7d`. |
-| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` / `SCRYFALL_TAGGER__ENABLED` / `COMMANDERSPELLBOOK__ENABLED` / `TOPDECK__ENABLED` / `SPICERACK__ENABLED` / `EDHREC__ENABLED` / `EDHTOP16__ENABLED` / `REDDIT__ENABLED` | Enable or disable recommendation sources. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` / `SPICERACK__API_KEY` | Optional source API keys. |
-| `MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API` / `EDHTOP16__ALLOW_UNOFFICIAL_API` / `REDDIT__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
-| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `SPICERACK__BASE_ADDRESS` / `EDHREC__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` / `REDDIT__BASE_ADDRESS` | Source API URL overrides. |
+| `MTGMCP__INTELLIGENCE__SOURCES__SCRYFALL__ENABLED` / `SCRYFALL_TAGGER__ENABLED` / `COMMANDERSPELLBOOK__ENABLED` / `TOPDECK__ENABLED` / `EDHREC__ENABLED` / `EDHTOP16__ENABLED` | Enable or disable recommendation sources. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` | Optional TopDeck source API key. |
+| `MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API` / `EDHTOP16__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
+| `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `EDHREC__BASE_ADDRESS` / `EDHTOP16__BASE_ADDRESS` | Source API URL overrides. |
 | `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `CREDENTIALS_FILE` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. The username value may be an Archidekt username or account email. |
 | `MTGMCP__ARCHIDEKT__RATE_LIMIT__MAX_REQUESTS` / `WINDOW_SECONDS` | Optional process-local Archidekt pacing. For example, `30` requests per `60` seconds leaves room for browser activity; `0` max requests disables proactive pacing. |
 | `MTGMCP__MOXFIELD__BASE_ADDRESS` / `USER_AGENT` / `CURL_FALLBACK_ENABLED` / `CURL_PATH` | Moxfield import endpoint settings. Imports use an anonymous, unofficial endpoint; when Moxfield blocks .NET HTTP requests, the adapter can retry through `curl` if available. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
-| `MTGMCP__REDDIT__CLIENT_ID` / `CLIENT_SECRET` / `REFRESH_TOKEN` | Reddit OAuth app credentials. `CLIENT_SECRET` is optional for installed-client style flows. |
-| `MTGMCP__REDDIT__ACCESS_TOKEN` / `BEARER_TOKEN` / `EXPIRES_AT_UTC` | Temporary Reddit bearer token override for short-lived local testing. |
-| `MTGMCP__REDDIT__USER_AGENT` / `SCOPE` / `DEVICE_ID` / `CREDENTIALS_FILE` | Reddit request identity and local credential file settings. `SCOPE` defaults to `read`. |
-| `MTGMCP__REDDIT__OAUTH_BASE_ADDRESS` / `TOKEN_ENDPOINT` | Reddit OAuth endpoint overrides for tests or controlled environments. Defaults target Reddit's OAuth API path and token endpoint. |
 | `MTGMCP__SIMULATION__PROFILE_PATHS__0` / `MTGMCP__SIMULATION__ALLOW_EXTERNAL_PROFILE_OVERRIDES` | Optional external simulation profile JSON files or simple glob paths. Built-in profiles always remain available. |
 | `MTGMCP__SCRYFALL__BASE_ADDRESS` / `USER_AGENT` / `MAX_RATE_LIMIT_RETRIES` | Scryfall API settings. |
 | `MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS` | Commander Spellbook API setting. |
@@ -349,13 +303,11 @@ report the current source status:
 - `disabled`: the provider is implemented, but disabled by configuration.
 - `failed`: the provider failed during a lookup; other sources still run.
 
-TopDeck.gg and Spicerack are API-backed decklist recommendation sources. They are
-enabled by default, but they do not make network calls until an API key is
-configured.
+TopDeck.gg is an API-backed decklist recommendation source. It is enabled by
+default, but it does not make network calls until an API key is configured.
 
 ```powershell
 $env:MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY = "..."
-$env:MTGMCP__INTELLIGENCE__SOURCES__SPICERACK__API_KEY = "..."
 ```
 
 Equivalent `mtg-mcp.json`:
@@ -367,9 +319,6 @@ Equivalent `mtg-mcp.json`:
       "Sources": {
         "TopDeck": {
           "ApiKey": "..."
-        },
-        "Spicerack": {
-          "ApiKey": "..."
         }
       }
     }
@@ -377,7 +326,7 @@ Equivalent `mtg-mcp.json`:
 }
 ```
 
-Set `Enabled` to `false` for either source to exclude it:
+Set `Enabled` to `false` to exclude TopDeck:
 
 ```json
 {
@@ -395,8 +344,7 @@ Set `Enabled` to `false` for either source to exclude it:
 
 TopDeck.gg uses the documented tournaments v2 API for tournament standings and
 decklists. Get a key from TopDeck.gg and keep visible attribution when using
-its data in user-facing output. Spicerack uses the documented public decklist
-database API for recent tournament results and decklist text.
+its data in user-facing output.
 
 EDHREC is enabled by default as an unofficial source for broad Commander
 aggregate inclusion and synergy evidence. It uses structured JSON pages only,
@@ -429,13 +377,11 @@ performance or source decklist evidence. Commander theme filters are used only
 when a source exposes deterministic theme slugs; other sources return an
 `unsupported-theme` note instead of silently falling back to broader rows.
 
-Reddit discussion evidence is also enabled by default for bounded searches over
-Commander-focused subreddits. Configure Reddit OAuth credentials with
-`mtg-mcp auth reddit` or `MTGMCP__REDDIT__...` settings to use bearer requests
-against `https://oauth.reddit.com`. Public JSON fallback remains available only
-when OAuth credentials are absent and `AllowUnofficialApi` permits it; treat that
-fallback as unreliable and less preferred. EDHTop16 remains opt-in because it
-uses an unofficial cEDH-focused endpoint rather than broad casual Commander data.
+Reddit discussion evidence is not currently supported because usable local MCP
+access requires approved Reddit OAuth/API access, and Devvit is intended for
+apps running on Reddit rather than external local tools. EDHTop16 remains
+opt-in because it uses an unofficial cEDH-focused endpoint rather than broad
+casual Commander data.
 
 These tools consume recommendation sources or source-backed catalog evidence:
 
@@ -452,12 +398,10 @@ These tools consume recommendation sources or source-backed catalog evidence:
 - `deck_find_lesser_known_cards`: finds lower-known candidates with source evidence.
 - `source_explain_card_signal`: explains one card's source signal in a deck context.
 - `source_search_evidence`: inspects one source by key, such as `topdeck`,
-  `spicerack`, or `edhrec`, without making deckbuilding choices.
-- `source_search_reddit_discussions`: returns bounded raw discussion rows and
-  card mentions; Reddit is never treated as prevalence evidence.
+  `edhrec`, or `edhtop16`, without making deckbuilding choices.
 
-TopDeck and Spicerack evidence is tournament and event decklist evidence. It is
-not broad casual Commander inclusion data. Use `bypassCache=true` on source-backed
+TopDeck evidence is tournament and event decklist evidence. It is not broad
+casual Commander inclusion data. Use `bypassCache=true` on source-backed
 recommendation tools to bypass fresh source-fact cache entries for one call.
 
 Use these resources inside an MCP client to verify setup without exposing
@@ -535,8 +479,7 @@ Complete registered tool names:
   `commander_get_tags`, `commander_get_win_condition_evidence`,
   `commander_search_candidates`, `combo_get_details`,
   `combo_search_by_card`, `source_explain_card_signal`, `source_list`,
-  `source_search_evidence`, `source_search_reddit_discussions`,
-  `wincon_find_payoffs`.
+  `source_search_evidence`, `wincon_find_payoffs`.
 - Deck analysis and simulation: `deck_analyze_best_practices`,
   `deck_analyze_combos`, `deck_analyze_commander_trends`,
   `deck_analyze_consistency`, `deck_analyze_cost`, `deck_analyze_draw_odds`,

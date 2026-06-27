@@ -41,7 +41,7 @@ public sealed class RecommendationTools
     public Task<CommanderAggregateCardsResult> GetCommanderAggregateCardsAsync(
         string commanderName,
         string? theme = null,
-        [Description("Recommendation source key such as edhrec, edhtop16, topdeck, spicerack, or reddit-discussions.")]
+        [Description("Recommendation source key such as edhrec, edhtop16, or topdeck.")]
         string? source = null,
         int limit = 50,
         bool bypassCache = false,
@@ -63,7 +63,7 @@ public sealed class RecommendationTools
     [Description("Return source-backed commander tags or theme sections only. Tags are not inferred unless backed by source fields or configured deterministic rules.")]
     public Task<CommanderTagsResult> GetCommanderTagsAsync(
         string commanderName,
-        [Description("Recommendation source key such as edhrec, edhtop16, topdeck, spicerack, or reddit-discussions.")]
+        [Description("Recommendation source key such as edhrec, edhtop16, or topdeck.")]
         string? source = null,
         int limit = 50,
         bool bypassCache = false,

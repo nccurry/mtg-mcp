@@ -806,9 +806,8 @@ public sealed partial class DeckRecommendationService
         {
             CorpusSourceStatuses.AccessBlocked => 0,
             CorpusSourceStatuses.Failed => 1,
-            CorpusSourceStatuses.NeedsOAuth => 2,
-            CorpusSourceStatuses.MissingConfig => 3,
-            CorpusSourceStatuses.Disabled => 4,
+            CorpusSourceStatuses.MissingConfig => 2,
+            CorpusSourceStatuses.Disabled => 3,
             _ => 5
         };
     }

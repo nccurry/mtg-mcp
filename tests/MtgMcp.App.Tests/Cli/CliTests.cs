@@ -4,7 +4,6 @@ using Microsoft.Extensions.Options;
 using MtgMcp.Archidekt;
 using MtgMcp.App;
 using MtgMcp.Core;
-using MtgMcp.Decklists;
 using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Tests;
@@ -566,153 +565,6 @@ public sealed class CliTests
     }
 
     /// <summary>
-    /// Verifies that auth reddit writes a credentials file and redacted setup output.
-    /// </summary>
-    [Fact]
-    public void AuthReddit_WritesCredentialsFileAndRedactedSnippet()
-    {
-        string tempRoot = CreateTempRoot();
-        try
-        {
-            string credentialsFile = Path.Combine(tempRoot, "nested", "reddit.json");
-            using StringWriter output = new();
-            using StringWriter error = new();
-
-            int exitCode = RedditAuthCommand.Run(
-                [
-                    "auth",
-                    "reddit",
-                    "--credentials-file",
-                    credentialsFile,
-                    "--client-id",
-                    "reddit-client",
-                    "--client-secret",
-                    "reddit-secret",
-                    "--refresh-token",
-                    "reddit-refresh",
-                    "--user-agent",
-                    "mtg-mcp-test",
-                ],
-                output,
-                error
-            );
-
-            exitCode.Should().Be(0);
-            error.ToString().Should().BeEmpty();
-            File.Exists(credentialsFile).Should().BeTrue();
-
-            RedditCredentials credentials = RedditCredentialsFile.Load(credentialsFile);
-            credentials.ClientId.Should().Be("reddit-client");
-            credentials.ClientSecret.Should().Be("reddit-secret");
-            credentials.RefreshToken.Should().Be("reddit-refresh");
-            credentials.UserAgent.Should().Be("mtg-mcp-test");
-            credentials.Scope.Should().Be("read");
-
-            string text = output.ToString();
-            text.Should().Contain("MTGMCP__REDDIT__CREDENTIALS_FILE");
-            text.Should().Contain(credentialsFile);
-            text.Should().Contain("clientId");
-            text.Should().Contain("refreshToken");
-            text.Should().NotContain("reddit-secret");
-            text.Should().NotContain("reddit-refresh");
-        }
-        finally
-        {
-            DeleteTempRoot(tempRoot);
-        }
-    }
-
-    /// <summary>
-    /// Verifies that auth reddit does not overwrite credentials by default.
-    /// </summary>
-    [Fact]
-    public void AuthReddit_RefusesOverwriteWithoutForce()
-    {
-        string tempRoot = CreateTempRoot();
-        try
-        {
-            string credentialsFile = Path.Combine(tempRoot, "reddit.json");
-            File.WriteAllText(credentialsFile, "original");
-            using StringWriter output = new();
-            using StringWriter error = new();
-
-            int exitCode = RedditAuthCommand.Run(
-                [
-                    "auth",
-                    "reddit",
-                    "--credentials-file",
-                    credentialsFile,
-                    "--bearer-token",
-                    "reddit-bearer",
-                ],
-                output,
-                error
-            );
-
-            exitCode.Should().Be(1);
-            File.ReadAllText(credentialsFile).Should().Be("original");
-            output.ToString().Should().BeEmpty();
-            error.ToString().Should().Contain("already exists");
-            error.ToString().Should().NotContain("reddit-bearer");
-        }
-        finally
-        {
-            DeleteTempRoot(tempRoot);
-        }
-    }
-
-    /// <summary>
-    /// Verifies that auth reddit requires at least one usable OAuth credential shape.
-    /// </summary>
-    [Fact]
-    public void AuthReddit_RequiresUsableCredential()
-    {
-        string tempRoot = CreateTempRoot();
-        try
-        {
-            string credentialsFile = Path.Combine(tempRoot, "reddit.json");
-            using StringWriter output = new();
-            using StringWriter error = new();
-
-            int exitCode = RedditAuthCommand.Run(
-                ["auth", "reddit", "--credentials-file", credentialsFile],
-                output,
-                error
-            );
-
-            exitCode.Should().Be(1);
-            File.Exists(credentialsFile).Should().BeFalse();
-            error.ToString().Should().Contain("Provide --access-token/--bearer-token");
-        }
-        finally
-        {
-            DeleteTempRoot(tempRoot);
-        }
-    }
-
-    /// <summary>
-    /// Verifies that auth reddit prints usage successfully when help is requested.
-    /// </summary>
-    [Fact]
-    public void AuthReddit_PrintsHelp()
-    {
-        using StringWriter output = new();
-        using StringWriter error = new();
-
-        int exitCode = RedditAuthCommand.Run(
-            ["auth", "reddit", "--help"],
-            output,
-            error
-        );
-
-        exitCode.Should().Be(0);
-        output.ToString().Should().Contain("Usage:");
-        output.ToString().Should().Contain("auth reddit");
-        output.ToString().Should().Contain("--bearer-token");
-        error.ToString().Should().BeEmpty();
-    }
-
-    /// <summary>
     /// Verifies that top-level help prints without building the MCP host.
     /// </summary>
     [Fact]
@@ -732,7 +584,7 @@ public sealed class CliTests
         output.ToString().Should().Contain("mtg-mcp [--smoke|--version]");
         output.ToString().Should().Contain("auth archidekt");
         output.ToString().Should().Contain("auth playgroup");
-        output.ToString().Should().Contain("auth reddit");
+        output.ToString().Should().NotContain("auth reddit");
         error.ToString().Should().BeEmpty();
     }
 
@@ -797,9 +649,33 @@ public sealed class CliTests
         output.ToString().Should().Contain("--username <name-or-email>");
         output.ToString().Should().Contain("mtg-mcp auth playgroup");
         output.ToString().Should().Contain("--api-key <key>");
-        output.ToString().Should().Contain("mtg-mcp auth reddit");
-        output.ToString().Should().Contain("--bearer-token <token>");
+        output.ToString().Should().NotContain("mtg-mcp auth reddit");
+        output.ToString().Should().NotContain("--client-secret <secret>");
         error.ToString().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that removed auth providers fail before the MCP host is built.
+    /// </summary>
+    [Fact]
+    public async Task CliRunAsync_UnknownAuthProviderDoesNotBuildMcpHost()
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+
+        int exitCode = await MtgMcpCli.RunAsync(
+            ["auth", "reddit"],
+            output,
+            error,
+            _ => throw new InvalidOperationException("Host should not be built.")
+        );
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().BeEmpty();
+        error.ToString().Should().Contain("Unknown auth provider 'reddit'.");
+        error.ToString().Should().Contain("mtg-mcp auth archidekt");
+        error.ToString().Should().Contain("mtg-mcp auth playgroup");
+        error.ToString().Should().NotContain("mtg-mcp auth reddit");
     }
 
     /// <summary>
