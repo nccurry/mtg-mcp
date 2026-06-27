@@ -10,7 +10,7 @@ vars:
   CALIBRATION_PROJECT: tests/MtgMcp.Calibration/MtgMcp.Calibration.csproj
   CONFIGURATION: Release
   DOTNET: '{{if eq OS "windows"}}.dotnet/dotnet.exe{{else}}./.dotnet/dotnet{{end}}'
-  POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}pwsh -NoProfile{{end}}'
+  POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}{{.TASKFILE_DIR}}/.tools/bin/pwsh -NoProfile{{end}}'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
   VERSION: 0.0.0-dev
@@ -34,47 +34,17 @@ tasks:
   setup:
     desc: Install local development dependencies and restore the repo
     cmds:
-      - task: deps:sync
+      - task: setup:powershell
       - task: setup:dotnet
       - task: tools:restore
       - task: restore
       - task: setup:verify
 
   deps:sync:
-    desc: Sync generated dependency version files from versions.env
+    desc: Sync derived version references from the authored sources (global.json, versions.env)
+    deps: [setup:powershell]
     cmds:
-      - cmd: |
-          powershell -NoProfile -ExecutionPolicy Bypass -Command '& {
-            $ErrorActionPreference = "Stop"
-            $globalJsonLines = @(
-              "{",
-              "  `"sdk`": {",
-              "    `"version`": `"{{.DOTNET_SDK_VERSION}}`",",
-              "    `"allowPrerelease`": true,",
-              "    `"rollForward`": `"latestFeature`",",
-              "    `"paths`": [`".dotnet`", `"`$host`$`"],",
-              "    `"errorMessage`": `"Required .NET SDK not found. Run ./bootstrap.sh, ./bootstrap.ps1, or install the .NET 11 preview SDK listed in global.json.`"",
-              "  }",
-              "}"
-            )
-            $globalJson = [string]::Join([Environment]::NewLine, $globalJsonLines) + [Environment]::NewLine
-            $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-            [System.IO.File]::WriteAllText((Join-Path (Get-Location) "global.json"), $globalJson, $utf8NoBom)
-          }'
-        platforms: [windows]
-      - cmd: |
-          cat > global.json <<EOF
-          {
-            "sdk": {
-              "version": "{{.DOTNET_SDK_VERSION}}",
-              "allowPrerelease": true,
-              "rollForward": "latestFeature",
-              "paths": [".dotnet", "\$host\$"],
-              "errorMessage": "Required .NET SDK not found. Run ./bootstrap.sh, ./bootstrap.ps1, or install the .NET 11 preview SDK listed in global.json."
-            }
-          }
-          EOF
-        platforms: [linux, darwin]
+      - '{{.POWERSHELL}} -File scripts/sync-versions.ps1 {{.CLI_ARGS}}'
 
   setup:linux:
     desc: Install local Linux prerequisites and restore the repo
@@ -91,20 +61,83 @@ tasks:
     cmds:
       - task: setup
 
-  setup:dotnet:
-    desc: Install the pinned .NET SDK under .dotnet when missing
+  setup:powershell:
+    desc: Install the pinned PowerShell under .tools when missing
     cmds:
-      - cmd: '{{.POWERSHELL}} -File scripts/install-dotnet.ps1 -Version "{{.DOTNET_SDK_VERSION}}" -InstallDir ".dotnet"'
+      - cmd: echo "Windows uses the built-in PowerShell; nothing to install."
         platforms: [windows]
       - cmd: |
-          expected="{{.DOTNET_SDK_VERSION}}"
+          expected="{{.POWERSHELL_VERSION}}"
+          tools_dir="{{.TASKFILE_DIR}}/.tools"
+          tools_bin="$tools_dir/bin"
+          mkdir -p "$tools_bin"
+
+          if [ -x "$tools_bin/pwsh" ] \
+            && [ "$("$tools_bin/pwsh" -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null)" = "$expected" ]; then
+            echo "PowerShell $expected is already installed under $tools_dir."
+            exit 0
+          fi
+
+          if command -v pwsh >/dev/null 2>&1 \
+            && [ "$(pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null)" = "$expected" ]; then
+            ln -sfn "$(command -v pwsh)" "$tools_bin/pwsh"
+            echo "Linked system PowerShell $expected into $tools_bin."
+            exit 0
+          fi
+
+          case "$(uname -s)" in
+            Linux) platform=linux ;;
+            Darwin) platform=osx ;;
+            *) echo "Unsupported operating system: $(uname -s)" >&2; exit 1 ;;
+          esac
+          case "$(uname -m)" in
+            x86_64 | amd64) arch=x64 ;;
+            arm64 | aarch64) arch=arm64 ;;
+            *) echo "Unsupported processor architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+
+          install_dir="$tools_dir/powershell-$expected-$platform-$arch"
+          if [ -x "$install_dir/pwsh" ] \
+            && [ "$("$install_dir/pwsh" -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null)" = "$expected" ]; then
+            ln -sfn "$install_dir/pwsh" "$tools_bin/pwsh"
+            echo "PowerShell $expected is already present under $install_dir."
+            exit 0
+          fi
+
+          archive="$tools_dir/powershell-$expected-$platform-$arch.tar.gz"
+          url="https://github.com/PowerShell/PowerShell/releases/download/v$expected/powershell-$expected-$platform-$arch.tar.gz"
+
+          echo "Installing PowerShell $expected into $install_dir."
+          rm -rf "$install_dir"
+          mkdir -p "$install_dir"
+          if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$url" -o "$archive"
+          elif command -v wget >/dev/null 2>&1; then
+            wget -q "$url" -O "$archive"
+          else
+            echo "curl or wget is required to install PowerShell." >&2
+            exit 1
+          fi
+
+          tar -xzf "$archive" -C "$install_dir"
+          chmod +x "$install_dir/pwsh"
+          ln -sfn "$install_dir/pwsh" "$tools_bin/pwsh"
+          echo "PowerShell $expected installed under $install_dir."
+        platforms: [linux, darwin]
+
+  setup:dotnet:
+    desc: Install the .NET SDK pinned in global.json under .dotnet when missing
+    cmds:
+      - cmd: '{{.POWERSHELL}} -File scripts/install-dotnet.ps1 -JsonFile "global.json" -InstallDir ".dotnet"'
+        platforms: [windows]
+      - cmd: |
           install_dir=".dotnet"
           dotnet_path="$install_dir/dotnet"
+          expected="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' global.json | head -n 1)"
 
-          if [ -x "$dotnet_path" ]; then
-            actual="$($dotnet_path --version 2>/dev/null || true)"
-            if [ "$actual" = "$expected" ]; then
-              echo ".NET SDK $actual is already installed under $install_dir."
+          if [ -n "$expected" ] && [ -x "$dotnet_path" ]; then
+            if "$dotnet_path" --list-sdks 2>/dev/null | grep -q "^$expected "; then
+              echo ".NET SDK $expected is already installed under $install_dir."
               exit 0
             fi
           fi
@@ -121,9 +154,9 @@ tasks:
           fi
 
           chmod +x "$installer"
-          "$installer" --version "$expected" --install-dir "$install_dir" --no-path
+          "$installer" --jsonfile global.json --install-dir "$install_dir" --no-path
           rm -f "$installer"
-          echo ".NET SDK $expected installed under $install_dir."
+          echo ".NET SDK from global.json installed under $install_dir."
         platforms: [linux, darwin]
 
   setup:verify:
@@ -368,7 +401,7 @@ tasks:
 
   install:local:
     desc: Pack, globally install, publish, and copy the current branch to the configured local MCP command path
-    deps: [setup:dotnet, restore]
+    deps: [setup:dotnet, setup:powershell, restore]
     env:
       DOTNET_ROOT: '{{.TASKFILE_DIR}}/.dotnet'
       DOTNET_ROOT_X64: '{{.TASKFILE_DIR}}/.dotnet'
@@ -492,10 +525,11 @@ tasks:
       - '{{.DOTNET}} list {{.SOLUTION}} package --outdated'
 
   deps:update:
-    desc: Restore after editing Directory.Packages.props
-    deps: [setup:dotnet]
+    desc: Bump pinned tool and SDK versions to the latest and sync derived files
+    deps: [setup:powershell]
     cmds:
-      - '{{.DOTNET}} restore {{.SOLUTION}}'
+      - '{{.POWERSHELL}} -File scripts/update-versions.ps1 {{.CLI_ARGS}}'
+      - task: deps:sync
 
   clean:
     desc: Remove build outputs

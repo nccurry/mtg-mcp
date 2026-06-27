@@ -28,7 +28,7 @@ packages=(
 if [[ "${1:-}" == "--check" ]]; then
     missing=()
     for package in "${packages[@]}"; do
-        if ! dpkg -l 2>/dev/null | grep -q "^ii  ${package}[[:space:]]"; then
+        if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
             missing+=("$package")
         fi
     done

@@ -640,8 +640,8 @@ HTML, parse page markup, or use browser automation for source data.
 Development is supported without installing the pinned SDK globally. From a
 fresh checkout, run the bootstrap script for your platform. It installs Go Task
 under `.tools` when needed, then delegates to `task setup`, which installs the
-pinned .NET SDK under `.dotnet`, restores dotnet tools, and restores NuGet
-packages:
+pinned PowerShell and .NET SDK under `.tools` and `.dotnet`, restores dotnet
+tools, and restores NuGet packages:
 
 ```bash
 ./bootstrap.sh
@@ -666,9 +666,11 @@ task install:local
 task install:local:cleanup
 ```
 
-On Linux, `scripts/setup-linux.sh` remains available when you also want local
-PowerShell and repo-local .NET/NuGet cache paths. Source `scripts/env-linux.sh`
-after using it to carry those paths into future shells.
+`./bootstrap.sh` installs everything the Task workflows need, including
+PowerShell, so `task install:local` works from a fresh checkout. On Linux,
+`scripts/setup-linux.sh` additionally installs the apt native dependencies and
+wires repo-local .NET/NuGet cache paths; source `scripts/env-linux.sh` after it
+to carry those paths into future shells.
 
 `task install:local` publishes the current host runtime by default, so Linux
 uses `linux-x64` or `linux-arm64` depending on the machine. Override it only
@@ -678,10 +680,10 @@ when cross-publishing:
 task publish:runtime RUNTIME=linux-x64
 ```
 
-For a system-wide setup instead of the local bootstrap, install the .NET SDK,
-Task CLI, and PowerShell versions listed in `versions.env`, then run
-`task setup`. You also need `curl`, which is used by the setup script and
-optional Moxfield HTTP fallback.
+For a system-wide setup instead of the local bootstrap, install the .NET SDK
+pinned in `global.json` and the Task CLI and PowerShell versions listed in
+`versions.env`, then run `task setup`. You also need `curl`, which is used by
+the setup script and optional Moxfield HTTP fallback.
 
 ### Common Workflows
 
@@ -705,3 +707,28 @@ only when you need an explicit one-off package version.
 
 `task install:local:cleanup` removes old unlocked versioned local binaries while
 keeping the currently configured MCP command path.
+
+### Updating Pinned Versions
+
+Each version is authored in the most idiomatic place for its tool:
+
+- `global.json`: the .NET SDK.
+- `Directory.Packages.props`: NuGet packages, including the
+  `Microsoft.Extensions.*` packages that track the SDK runtime.
+- `versions.env`: Go Task, PowerShell, and the CI base image, which have no
+  idiomatic .NET home.
+
+Bump the toolchain and SDK to the latest with:
+
+```bash
+task deps:update
+```
+
+It queries the latest Go Task, PowerShell, and .NET SDK (channel `11.0` by
+default; pass `task deps:update -- -DotnetChannel 12.0` to target another),
+rewrites `global.json` and `versions.env`, then runs `task deps:sync`.
+
+`task deps:sync` propagates the authored versions to files that cannot reference
+them directly, keeping the `Microsoft.Extensions.*` packages and the README
+.NET badge aligned with `global.json`. Run `task deps:sync -- -Check` to fail
+when anything has drifted, which is useful in CI.

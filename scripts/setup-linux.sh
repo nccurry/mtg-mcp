@@ -32,10 +32,15 @@ set +a
 
 task_version="${TASK_VERSION:-${GO_TASK_VERSION:-}}"
 powershell_version="${POWERSHELL_VERSION:-}"
-sdk_version="${DOTNET_SDK_VERSION:-}"
 
-if [[ -z "$task_version" || -z "$powershell_version" || -z "$sdk_version" ]]; then
-    echo "GO_TASK_VERSION, POWERSHELL_VERSION, and DOTNET_SDK_VERSION must be set in versions.env." >&2
+if [[ -z "$task_version" || -z "$powershell_version" ]]; then
+    echo "GO_TASK_VERSION and POWERSHELL_VERSION must be set in versions.env." >&2
+    exit 1
+fi
+
+global_json="$repo_root/global.json"
+if [[ ! -f "$global_json" ]]; then
+    echo "global.json was not found at $global_json." >&2
     exit 1
 fi
 
@@ -69,21 +74,28 @@ export DOTNET_NOLOGO=1
 export PATH="$dotnet_dir:$tools_bin:$dotnet_cli_home/.dotnet/tools:$HOME/.dotnet/tools:$HOME/.local/bin:$PATH"
 
 install_dotnet() {
+    local sdk_version
+    if command -v jq >/dev/null 2>&1; then
+        sdk_version="$(jq -r '.sdk.version' "$global_json")"
+    else
+        sdk_version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$global_json" | head -n 1)"
+    fi
+
     local installed_sdks=""
     if [[ -x "$dotnet_dir/dotnet" ]]; then
         installed_sdks="$("$dotnet_dir/dotnet" --list-sdks || true)"
     fi
 
-    if grep -q "^$sdk_version " <<< "$installed_sdks"; then
+    if [[ -n "$sdk_version" ]] && grep -q "^$sdk_version " <<< "$installed_sdks"; then
         echo ".NET SDK $sdk_version is already installed in $dotnet_dir."
         return
     fi
 
     local installer="$tools_dir/dotnet-install.sh"
-    echo "Installing .NET SDK $sdk_version into $dotnet_dir."
+    echo "Installing the .NET SDK pinned in global.json into $dotnet_dir."
     curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$installer"
     chmod +x "$installer"
-    "$installer" --version "$sdk_version" --install-dir "$dotnet_dir" --no-path
+    "$installer" --jsonfile "$global_json" --install-dir "$dotnet_dir" --no-path
 }
 
 install_task() {
