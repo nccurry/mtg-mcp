@@ -873,6 +873,43 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies MCP detail-level parameters use the shared public vocabulary.
+    /// </summary>
+    [Fact]
+    public void DetailLevelParameters_UseSharedVocabulary()
+    {
+        List<string> invalidParameters = [];
+        foreach (ToolRegistryEntry entry in ToolRegistry.Entries)
+        {
+            ParameterInfo? parameter = entry.Method
+                .GetParameters()
+                .FirstOrDefault(parameter => parameter.Name == "detailLevel");
+            if (parameter is null)
+            {
+                continue;
+            }
+
+            if (parameter.ParameterType != typeof(string))
+            {
+                invalidParameters.Add($"{entry.Name}: detailLevel must be string.");
+                continue;
+            }
+
+            string? defaultValue = parameter.DefaultValue as string;
+            try
+            {
+                DetailLevelParser.Parse(defaultValue, allowCompactAlias: true);
+            }
+            catch (ArgumentException exception)
+            {
+                invalidParameters.Add($"{entry.Name}: {exception.Message}");
+            }
+        }
+
+        invalidParameters.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that the method-level tool registry covers every attributed tool.
     /// </summary>
     [Fact]

@@ -90,9 +90,10 @@ mechanical duplication, not deliberate per-tool design.
   docs don't produce three subtly different envelopes. Write the envelope as an ADR
   (`docs/adr/`) here; Phases 3 and 4 reference that ADR rather than redefining the shape.
 - Define a shared envelope for analytical tools: `status`, `warnings`, `assumptions`, and
-  determinism/source metadata, applied consistently (today `Status`/`Severity`/`Outcome`/
-  `Notes` are ad hoc). In Phase 2, agree the shape (ADR) and apply it to the C# return
-  types; Phase 4 types the closed-set fields; Phase 3 exposes the output schema.
+  determinism/source metadata (today `Status`/`Severity`/`Outcome`/`Notes` are ad hoc).
+  In Phase 2, agree the shape in an ADR. Apply it to C# return types when those models are
+  already touched for Phase 3 output schemas, Phase 4 closed-set typing, or Phase 7
+  analytical changes; do not do one high-risk model-wide wrapper rewrite.
 
 ## 5. Files to create / change
 
@@ -120,8 +121,8 @@ Deprecation release (0.10.0):
 - The new unified `detailLevel` is in place on every tool; `includeWorkspace` and the
   `compact/full` variant still work but are marked deprecated in their descriptions and the
   changelog, and emit no behavior surprises.
-- Parameter naming/order consistent and test-enforced; one documented analytical result
-  envelope applied to return types.
+- Parameter naming/order consistent and test-enforced where changed; one documented
+  analytical result envelope governs new and touched return types.
 - Extra knobs (`analysisMode`, `sourceSupportDepth`) documented in one place.
 - A deprecation test asserts the legacy `includeWorkspace`/`compact` inputs still resolve.
 
