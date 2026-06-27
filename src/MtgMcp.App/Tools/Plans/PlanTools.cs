@@ -132,12 +132,19 @@ public sealed class PlanTools
     /// Lists saved deck edit plans.
     /// </summary>
     [McpServerTool(Name = "deck_plan_list", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("List persisted deck edit plans, optionally filtered by workspace id.")]
-    public Task<IReadOnlyList<DeckEditPlan>> ListDeckPlansAsync(
+    [Description("List persisted deck edit plans, optionally filtered by workspace id. Supports cursor paging with limit and nextCursor.")]
+    public async Task<PagedToolResult<DeckEditPlan>> ListDeckPlansAsync(
         string? workspaceId = null,
+        [Description("Maximum rows to return, clamped to 1-200.")]
+        int limit = 50,
+        [Description("Opaque cursor from a previous deck_plan_list nextCursor.")]
+        string? cursor = null,
         CancellationToken cancellationToken = default)
     {
-        return plans.ListDeckPlansAsync(workspaceId, cancellationToken);
+        IReadOnlyList<DeckEditPlan> result = await plans
+            .ListDeckPlansAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return ToolPagination.Page(result, limit, cursor);
     }
 
     /// <summary>

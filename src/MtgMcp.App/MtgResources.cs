@@ -86,6 +86,31 @@ public sealed class MtgResources
     }
 
     /// <summary>
+    /// Returns a discoverable index of saved workspaces.
+    /// </summary>
+    [McpServerResource(UriTemplate = "mtg://workspaces", Name = "Workspaces", MimeType = "application/json")]
+    [Description("Discoverable index of saved workspace ids, names, formats, modes, and update timestamps.")]
+    public async Task<string> ListWorkspacesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<DeckWorkspace> workspaces = await decks
+            .ListLocalWorkspacesAsync(cancellationToken)
+            .ConfigureAwait(false);
+        object index = new
+        {
+            Workspaces = workspaces.Select(workspace => new
+            {
+                WorkspaceId = workspace.Id,
+                workspace.Name,
+                workspace.Format,
+                workspace.Mode,
+                workspace.UpdatedAt
+            }).ToList()
+        };
+
+        return JsonSerializer.Serialize(index, JsonOptions);
+    }
+
+    /// <summary>
     /// Returns the full JSON representation for a saved workspace.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://workspace/{workspaceId}", Name = "Workspace")]

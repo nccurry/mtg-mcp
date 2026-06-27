@@ -252,6 +252,7 @@ public sealed class McpSurfaceTests
     {
         string[] expected =
         [
+            "mtg://workspaces",
             "mtg://workspace/{workspaceId}",
             "mtg://workspace/{workspaceId}/summary",
             "mtg://workspace/{workspaceId}/intent",
@@ -907,6 +908,46 @@ public sealed class McpSurfaceTests
         }
 
         invalidParameters.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies registry-created tools have client-facing titles and schemas for typed results.
+    /// </summary>
+    [Fact]
+    public void ToolRegistry_CreatesTitlesAndStructuredSchemasForTypedTools()
+    {
+        IReadOnlyList<McpServerTool> tools = ToolRegistry.CreateTools(new MtgMcpOptions
+        {
+            OperationMode = OperationModeGuard.Apply
+        });
+        Dictionary<string, McpServerTool> byName = tools.ToDictionary(
+            tool => tool.ProtocolTool.Name,
+            StringComparer.Ordinal);
+
+        tools.Should().OnlyContain(tool => !string.IsNullOrWhiteSpace(tool.ProtocolTool.Title));
+        byName["server_get_info"].ProtocolTool.Title.Should().Be("Server Get Info");
+        byName["server_get_info"].ProtocolTool.OutputSchema.Should().NotBeNull();
+        byName["workspace_list"].ProtocolTool.OutputSchema.Should().NotBeNull();
+        byName["deck_plan_list"].ProtocolTool.OutputSchema.Should().NotBeNull();
+        byName["workspace_start"].ProtocolTool.OutputSchema.Should().BeNull();
+        byName["workspace_checkpoint_delete"].ProtocolTool.OutputSchema.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies the shared cursor envelope pages list-style tool output.
+    /// </summary>
+    [Fact]
+    public void ToolPagination_PagesWithOpaqueCursor()
+    {
+        PagedToolResult<int> first = ToolPagination.Page([1, 2, 3], limit: 2, cursor: null);
+        PagedToolResult<int> second = ToolPagination.Page([1, 2, 3], limit: 2, first.NextCursor);
+
+        first.Items.Should().Equal([1, 2]);
+        first.NextCursor.Should().NotBeNullOrWhiteSpace();
+        first.Limit.Should().Be(2);
+        first.TotalCount.Should().Be(3);
+        second.Items.Should().Equal([3]);
+        second.NextCursor.Should().BeNull();
     }
 
     /// <summary>

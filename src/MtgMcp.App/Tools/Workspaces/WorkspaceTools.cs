@@ -105,15 +105,19 @@ public sealed class WorkspaceTools
         Idempotent = true,
         OpenWorld = false
     )]
-    [Description("List compact saved local deck workspace summaries without card snapshots; use workspace_open for full cards.")]
-    public async Task<IReadOnlyList<DeckWorkspaceSummary>> ListLocalDecksAsync(
+    [Description("List compact saved local deck workspace summaries without card snapshots; use workspace_open for full cards. Supports cursor paging with limit and nextCursor.")]
+    public async Task<PagedToolResult<DeckWorkspaceSummary>> ListLocalDecksAsync(
+        [Description("Maximum rows to return, clamped to 1-200.")]
+        int limit = 50,
+        [Description("Opaque cursor from a previous workspace_list nextCursor.")]
+        string? cursor = null,
         CancellationToken cancellationToken = default
     )
     {
         IReadOnlyList<DeckWorkspace> workspaces = await decks
             .ListLocalWorkspacesAsync(cancellationToken)
             .ConfigureAwait(false);
-        return workspaces.Select(CreateWorkspaceSummary).ToList();
+        return ToolPagination.Page(workspaces.Select(CreateWorkspaceSummary).ToList(), limit, cursor);
     }
 
     /// <summary>

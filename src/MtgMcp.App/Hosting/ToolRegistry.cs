@@ -1,5 +1,8 @@
+using System.Collections;
 using System.ComponentModel;
 using System.Reflection;
+using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -12,6 +15,11 @@ namespace MtgMcp.App;
 /// </summary>
 public static class ToolRegistry
 {
+    /// <summary>
+    /// Serializes structured MCP payloads and schemas with web JSON casing.
+    /// </summary>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>
     /// Lists every tool wrapper type that contributes to the public MCP tool surface.
     /// </summary>
@@ -47,10 +55,27 @@ public static class ToolRegistry
         List<McpServerTool> tools = [];
         foreach (ToolRegistryEntry entry in SelectEntries(options))
         {
-            tools.Add(McpServerTool.Create(
+            bool useStructuredContent = CanUseStructuredContent(entry.Method);
+            JsonElement? outputSchema = useStructuredContent ? CreateOutputSchema(entry.Method) : null;
+            McpServerTool tool = McpServerTool.Create(
                 entry.Method,
                 request => CreateTarget(request, entry.OwnerType),
-                new McpServerToolCreateOptions()));
+                new McpServerToolCreateOptions
+                {
+                    Title = CreateTitle(entry.Name),
+                    ReadOnly = entry.ReadOnly,
+                    Destructive = entry.Destructive,
+                    Idempotent = entry.Idempotent,
+                    OpenWorld = entry.OpenWorld,
+                    UseStructuredContent = useStructuredContent,
+                    OutputSchema = outputSchema
+                });
+            if (outputSchema.HasValue)
+            {
+                tool.ProtocolTool.OutputSchema = outputSchema;
+            }
+
+            tools.Add(tool);
         }
 
         return tools;
@@ -159,6 +184,81 @@ public static class ToolRegistry
             ?? request.Server.Services
             ?? throw new InvalidOperationException("MCP request did not include a service provider.");
         return ActivatorUtilities.CreateInstance(services, ownerType);
+    }
+
+    /// <summary>
+    /// Builds a readable display title from the stable MCP tool name.
+    /// </summary>
+    private static string CreateTitle(string name)
+    {
+        string[] parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        List<string> words = new(parts.Length);
+        foreach (string part in parts)
+        {
+            words.Add(part switch
+            {
+                "id" => "ID",
+                "ids" => "IDs",
+                "mcp" => "MCP",
+                _ => char.ToUpperInvariant(part[0]) + part[1..]
+            });
+        }
+
+        return string.Join(' ', words);
+    }
+
+    /// <summary>
+    /// Returns whether the method has a stable, non-anonymous return type the SDK can describe.
+    /// </summary>
+    private static bool CanUseStructuredContent(MethodInfo method)
+    {
+        Type returnType = UnwrapAsyncReturnType(method.ReturnType);
+        return returnType != typeof(void)
+            && returnType != typeof(object)
+            && returnType != typeof(string)
+            && returnType != typeof(CallToolResult)
+            && !typeof(IEnumerable).IsAssignableFrom(returnType);
+    }
+
+    /// <summary>
+    /// Generates the schema advertised for typed structured-content results.
+    /// </summary>
+    private static JsonElement CreateOutputSchema(MethodInfo method)
+    {
+        Type returnType = UnwrapAsyncReturnType(method.ReturnType);
+        return AIJsonUtilities.CreateJsonSchema(
+            returnType,
+            description: null,
+            hasDefaultValue: false,
+            defaultValue: null,
+            serializerOptions: JsonOptions,
+            inferenceOptions: AIJsonSchemaCreateOptions.Default);
+    }
+
+    /// <summary>
+    /// Resolves Task and ValueTask wrappers to the payload type.
+    /// </summary>
+    private static Type UnwrapAsyncReturnType(Type returnType)
+    {
+        if (returnType == typeof(Task)
+            || returnType == typeof(ValueTask))
+        {
+            return typeof(void);
+        }
+
+        if (returnType.IsGenericType
+            && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+        {
+            return returnType.GetGenericArguments()[0];
+        }
+
+        if (returnType.IsGenericType
+            && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
+        {
+            return returnType.GetGenericArguments()[0];
+        }
+
+        return returnType;
     }
 
     /// <summary>

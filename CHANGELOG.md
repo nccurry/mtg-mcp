@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added MCP protocol conformance improvements: object-root typed tools now
+  advertise titles and output schemas with structured content, tool validation
+  errors return a coded structured payload, `workspace_list` and
+  `deck_plan_list` use cursor-paged envelopes, and `mtg://workspaces` is
+  discoverable as a resource.
 - Unified MCP `detailLevel` parsing across presenters while keeping legacy
   `compact` and `includeWorkspace` inputs during the deprecation window.
 - Added method-level MCP toolset and operation-mode filtering so deployments

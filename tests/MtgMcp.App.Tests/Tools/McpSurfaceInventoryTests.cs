@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using FluentAssertions;
 using MtgMcp.App;
+using MtgMcp.Core;
 
 namespace MtgMcp.App.Tests;
 
@@ -49,8 +50,17 @@ public sealed class McpSurfaceInventoryTests
     [Fact]
     public void SurfaceMetrics_ReportCurrentInventory()
     {
+        Dictionary<string, string?> toolTitles = ToolRegistry
+            .CreateTools(new MtgMcpOptions { OperationMode = OperationModeGuard.Apply })
+            .ToDictionary(tool => tool.ProtocolTool.Name, tool => tool.ProtocolTool.Title, StringComparer.Ordinal);
         SurfaceMember[] tools = ToolTypes
             .SelectMany(type => GetSurfaceMembers(type, "McpServerToolAttribute", "Name"))
+            .Select(member => member with
+            {
+                Title = toolTitles.TryGetValue(member.Name, out string? title)
+                    ? title
+                    : member.Title
+            })
             .ToArray();
         SurfaceMember[] resources = ResourceTypes
             .SelectMany(type => GetSurfaceMembers(type, "McpServerResourceAttribute", "UriTemplate"))

@@ -18,13 +18,16 @@ with output schemas, structured errors, paginable lists, and resource-based disc
   from anonymous types (mutations, category edits, simulation/plan presenters,
   `deck_evaluate_card`, `deck_batch_tuning_report`, workspace start/refresh/validate,
   re-evaluation, facets, intent). The SDK defaults `UseStructuredContent=false`, so today no
-  tool emits `structuredContent` or an `outputSchema`.
+  anonymous/object tool emits `structuredContent` or an `outputSchema`. Raw enumerable
+  returns also cannot be used directly for MCP `structuredContent` because the protocol
+  requires an object root.
 - **P7 - errors are thrown exceptions.** All validation/guard failures throw
   `ArgumentException`/`InvalidOperationException` (e.g. `RecommendationTools.cs:289`,
   `OperationModeGuard.cs:57`). The SDK maps these to an error result with a prose message;
   there is no machine-readable error code/shape and no `McpException` usage.
-- **P8 - no continuation for large lists.** `workspace_list`, `deck_plan_list`, and
-  source/search tools bound with `limit` only.
+- **P8 - no continuation for large persisted lists.** `workspace_list` and `deck_plan_list`
+  are persisted local lists and need cursor continuation. Source/search tools stay bounded
+  by `limit` until their provider adapters expose stable continuation tokens.
 - **P9 - no enumerable workspace resource.** All workspace resources are parameterized
   templates (`MtgResources.cs:91-166`); resource-browsing clients cannot discover saved
   decks without a tool call.
@@ -44,15 +47,17 @@ Non-goals:
 ## 3. Current state (investigation)
 
 - SDK levers available now (`ModelContextProtocol` 1.4.0):
-  - `[McpServerTool].UseStructuredContent`, `.OutputSchemaType`, `.Title`, `.IconSource`
-    (all currently unset). `McpServerToolCreateOptions.UseStructuredContent` /
-    `.OutputSchema` for programmatic control.
+  - `[McpServerTool].UseStructuredContent`, `.OutputSchemaType`, `.Title`, `.IconSource`.
+    `McpServerToolCreateOptions.UseStructuredContent` / `.OutputSchema` are available for
+    programmatic control; for method-level registry tools, assign `ProtocolTool.OutputSchema`
+    after creation when the SDK overload does not copy the explicit schema.
   - `CallToolResult.StructuredContent` + `IsError`; `Tool.OutputSchema`.
   - `WithCallToolHandler` and `WithRequestFilters` for centralized result/error mapping.
   - `WithListResourcesHandler` / static resources for discovery; protocol pagination
     (`cursor`) for primitive listings.
-- All tool exceptions are plain BCL exceptions; messages are user-facing prose. Some are
-  already careful (redaction in adapters), but there is no error taxonomy.
+- Tool exceptions were plain BCL exceptions; messages are user-facing prose. Phase 3 adds an
+  App-boundary mapper for validation, operation-mode-blocked, and conflict errors. Provider
+  auth/unavailable/rate-limit taxonomy expands in Phase 6 with adapter outcomes.
 - Presenters (`GoldfishOutputPresenter`, `PerformanceOutputPresenter`,
   `PlanPreviewPresenter`, `CompactMutationPresenter`, `DeckNormalizationPresenter`,
   `CardFacetOutputPresenter`) emit anonymous objects, so typed tool signatures alone are
@@ -64,8 +69,9 @@ Non-goals:
 - Convert anonymous/`object` returns into typed result records (coordinated with Phase 2's
   envelope). Each presenter returns a concrete `record`/`sealed class` per detail level, or
   one type with nullable sections, so the SDK can derive a schema.
-- Enable `UseStructuredContent` (globally via the server's tool create options, or
-  per-tool) and verify `structuredContent` + `outputSchema` appear for converted tools.
+- Enable `UseStructuredContent` per object-root typed tool. Skip `object`, `string`,
+  `CallToolResult`, and raw enumerable returns until they have typed object-root envelopes.
+  Verify `structuredContent` + `outputSchema` appear for converted tools.
 - Where a tool genuinely returns heterogeneous shapes by `detailLevel`, prefer one stable
   superset type with optional members over `object`, so the schema stays meaningful.
 - **Ship an in-phase client smoke with the structured-content flip.** Enabling
@@ -75,9 +81,9 @@ Non-goals:
   as its own test deliverable. The full multi-client matrix stays in Phase 9.
 
 ### 4.2 Structured error model
-- Define an error taxonomy (e.g. `validation`, `not-found`, `operation-mode-blocked`,
-  `provider-auth`, `provider-unavailable`, `rate-limited`, `conflict`) with a small typed
-  payload (code, message, retriable, hint).
+- Define an error taxonomy. Phase 3 ships `validation`, `operation-mode-blocked`, and
+  `conflict`; Phase 6 adds provider-specific `provider-auth`, `provider-unavailable`, and
+  `rate-limited` once adapters share typed outcomes.
 - **Decision: where errors live.** The error *taxonomy DTO is an App/MCP-boundary type*,
   not a Core type - this preserves Core's independence from MCP (the repo rule that Core
   must not reference adapter/host concerns). Core (and adapters) raise typed *domain*
@@ -106,10 +112,11 @@ Non-goals:
   ```
 
 ### 4.3 Pagination / continuation
-- Add an opt-in continuation pattern to list-style tool results: accept `cursor`
-  (or `offset`) and return `nextCursor` alongside bounded rows for `workspace_list`,
-  `deck_plan_list`, and source/search results. Keep `limit` as the page size.
-- For Archidekt listing, align the existing `page`/`pageSize` with the shared pattern.
+- Add an opt-in continuation pattern to persisted list-style tool results: accept `cursor`
+  and return `items`, `nextCursor`, `limit`, and `totalCount` for `workspace_list` and
+  `deck_plan_list`.
+- Keep Archidekt's existing `page`/`pageSize` contract until Phase 6 normalizes adapter
+  paging; do not invent opaque cursors without provider-backed continuation semantics.
 
 ### 4.4 Resource discovery
 - Add an enumerable workspace resource (e.g. static `mtg://workspaces` returning id/name/
@@ -119,27 +126,28 @@ Non-goals:
   advertises the parameterized ones.
 
 ### 4.5 Titles, icons, annotation re-verification
-- Set human-readable `[McpServerTool].Title` for each tool (cheap UX win for clients that
-  render titles). Optionally set `IconSource`.
+- Set human-readable tool titles through the method-level registry (cheap UX win for
+  clients that render titles). Optionally set `IconSource` later.
 - Re-verify `ReadOnly`/`Destructive`/`Idempotent`/`OpenWorld` on the consolidated surface
   (Phase 1 may have merged tools with mixed semantics - a merged tool that can mutate must
   not be `ReadOnly`).
 
 ## 5. Files to create / change
 
-- Create: `src/MtgMcp.App/Hosting/McpErrorMapping.cs` (filter/handler + taxonomy),
-  `src/MtgMcp.Core/.../McpToolError.cs` (or App-level error DTO),
-  result record types per presenter, `mtg://workspaces` resource.
-- Change: `Hosting/MtgMcpHost.cs` (enable structured content, register error filter,
-  set tool create options), all `object`-returning tools + presenters, list tools
-  (`workspace_list`, `deck_plan_list`, source tools), `OperationModeGuard` (typed error),
-  `McpSurfaceTests.cs` (schemas/titles now part of the surface).
+- Create: `src/MtgMcp.App/Hosting/McpErrorMapping.cs` (filter + App-boundary taxonomy),
+  `src/MtgMcp.App/Tools/PagedToolResult.cs`, `mtg://workspaces` resource.
+- Change: `Hosting/MtgMcpHost.cs` (register error filter), `ToolRegistry.cs` (titles,
+  structured-content selection, output schemas), list tools (`workspace_list`,
+  `deck_plan_list`), `OperationModeGuard` (typed blocked-mode exception),
+  `McpSurfaceTests.cs` and E2E tests (schemas/titles/errors/paging/resource discovery).
+- Follow-up with presenter result records for the remaining `object` tools when those models
+  are touched by Phase 4/7 work.
 
 ## 6. Testing
 
-- E2E (`tests/MtgMcp.E2E.Tests`): assert representative tools return `structuredContent`
-  with an `outputSchema`; assert error cases return `IsError` with the taxonomy payload
-  (matching the example in 4.2); assert pagination round-trips with `nextCursor`.
+- E2E (`tests/MtgMcp.E2E.Tests`): assert a representative object-root typed tool returns
+  `structuredContent` with an `outputSchema`; assert error cases return `IsError` with the
+  taxonomy payload; assert paged list envelopes and `mtg://workspaces` discovery.
 - **Backward-compat test for structured content:** after enabling `UseStructuredContent`,
   assert that each converted tool still returns usable human-readable text content in
   `CallToolResult.Content` (structured content is additive, not a replacement). This guards
@@ -149,18 +157,20 @@ Non-goals:
 
 ## 7. Definition of done
 
-- High-traffic tools expose `structuredContent` + `outputSchema`.
-- Tool errors are structured, coded, secret-free, and tested.
-- List tools support cursor continuation; Archidekt listing aligned.
+- Object-root typed tools expose `structuredContent` + `outputSchema`; raw enumerable and
+  anonymous/object presenter tools are explicitly skipped until they gain typed envelopes.
+- Validation, operation-mode, and conflict tool errors are structured, coded, secret-free,
+  and tested.
+- Persisted local list tools support cursor continuation.
 - Saved workspaces are discoverable via a resource.
 - Titles set; annotations re-verified on the consolidated surface.
 
 ## 8. Risks & mitigations
 
 - Risk: enabling structured content changes payload shape for existing clients.
-  Mitigation: structured content is additive (text content remains); validate with the
-  in-phase minimal client smoke (4.1) when the flip ships, the full client matrix later
-  (Phase 9), and changelog the change.
+  Mitigation: enable it only for object-root typed tools, keep text content, validate with
+  the in-phase E2E smoke (4.1), run the full client matrix later (Phase 9), and changelog
+  the change.
 - Risk: typed supersets for multi-detail-level tools get awkward. Mitigation: prefer a
   small number of detail-specific record types over one bloated type when nullability
   would dominate.
@@ -169,10 +179,8 @@ Non-goals:
 
 ## 9. Open questions
 
-- Enable `UseStructuredContent` globally or per-tool? (Recommend global default with
-  per-tool opt-out for any tool that must stay text-only.)
-- Continuation as opaque `cursor` vs numeric `offset`? (Recommend opaque cursor to allow
-  future backing changes.)
-- Error location is decided (4.2): App-boundary MCP error DTO + Core domain exceptions
-  mapped in one filter. Residual detail: exact set of domain exception types to introduce
-  in Core vs reuse of existing exceptions.
+- Structured content is per object-root typed tool; raw enumerable and `object` tools stay
+  text-only until their return contracts are shaped.
+- Continuation uses opaque cursor strings in the public contract.
+- Error location is decided (4.2): App-boundary MCP error DTO + App/Core domain exceptions
+  mapped in one filter. Residual Phase 6 detail: exact provider outcome types.

@@ -143,6 +143,7 @@ public static class MtgMcpHost
                 options.ServerInstructions = RecommendationPresentationInstructions;
             })
             .WithStdioServerTransport()
+            .WithRequestFilters(filters => filters.AddCallToolFilter(McpErrorMapping.CreateCallToolFilter()))
             .WithTools(ToolRegistry.CreateTools(startupOptions))
             .WithResourcesFromAssembly()
             .WithPromptsFromAssembly();

@@ -54,13 +54,19 @@ public sealed class OperationModeGuard
 
         if (mode == Plan)
         {
-            throw new InvalidOperationException(
+            throw new OperationModeBlockedException(
+                toolName,
+                mode,
+                Apply,
                 $"mtg-mcp is running in plan mode. Tool '{toolName}' would modify deck state. "
                     + "Ask the user to switch MTGMCP__OPERATION_MODE=apply before applying changes."
             );
         }
 
-        throw new InvalidOperationException(
+        throw new OperationModeBlockedException(
+            toolName,
+            mode,
+            Apply,
             $"mtg-mcp is running in read-only mode. Tool '{toolName}' would modify deck state. "
                 + "Ask the user to switch MTGMCP__OPERATION_MODE=apply before applying changes."
         );
@@ -77,7 +83,10 @@ public sealed class OperationModeGuard
             return;
         }
 
-        throw new InvalidOperationException(
+        throw new OperationModeBlockedException(
+            toolName,
+            mode,
+            Plan,
             $"mtg-mcp is running in read-only mode. Tool '{toolName}' would write local planning state. "
                 + "Ask the user to switch MTGMCP__OPERATION_MODE=plan or apply before creating plans or refreshing local metadata."
         );
@@ -114,4 +123,40 @@ public sealed class OperationModeGuard
             ),
         };
     }
+}
+
+/// <summary>
+/// Signals that a tool was blocked by the configured operation mode.
+/// </summary>
+public sealed class OperationModeBlockedException : InvalidOperationException
+{
+    /// <summary>
+    /// Creates an exception with structured operation-mode details.
+    /// </summary>
+    public OperationModeBlockedException(
+        string toolName,
+        string currentMode,
+        string requiredMode,
+        string message)
+        : base(message)
+    {
+        ToolName = toolName;
+        CurrentMode = currentMode;
+        RequiredMode = requiredMode;
+    }
+
+    /// <summary>
+    /// Gets the MCP tool name that was blocked.
+    /// </summary>
+    public string ToolName { get; }
+
+    /// <summary>
+    /// Gets the normalized mode active when the tool was blocked.
+    /// </summary>
+    public string CurrentMode { get; }
+
+    /// <summary>
+    /// Names the least-permissive operation mode that can run the blocked tool.
+    /// </summary>
+    public string RequiredMode { get; }
 }

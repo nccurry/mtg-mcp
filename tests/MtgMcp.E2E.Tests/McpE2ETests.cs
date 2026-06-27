@@ -43,6 +43,8 @@ public sealed class McpE2ETests
 
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken);
+        IList<McpClientResource> resources = await session.Client.ListResourcesAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
 
         tools.Select(tool => tool.Name).Should().Contain(
         [
@@ -66,12 +68,26 @@ public sealed class McpE2ETests
             "server_get_info"
         ]);
 
-        JsonElement serverInfo = await CallJsonAsync(
-            session.Client,
+        McpClientTool serverInfoTool = tools.Single(tool => tool.Name == "server_get_info");
+        serverInfoTool.Title.Should().Be("Server Get Info");
+        serverInfoTool.ReturnJsonSchema.Should().NotBeNull();
+
+        CallToolResult serverInfoResult = await session.Client.CallToolAsync(
             "server_get_info",
-            new Dictionary<string, object?>());
+            new Dictionary<string, object?>(),
+            cancellationToken: TestContext.Current.CancellationToken);
+        serverInfoResult.IsError.Should().NotBeTrue(ReadText(serverInfoResult));
+        serverInfoResult.StructuredContent.Should().NotBeNull();
+
+        using JsonDocument serverInfoDocument = JsonDocument.Parse(ReadText(serverInfoResult));
+        JsonElement serverInfo = serverInfoDocument.RootElement.Clone();
+        JsonElement structuredServerInfo = serverInfoResult.StructuredContent!.Value;
+
         GetString(serverInfo, "assemblyName").Should().Be("MtgMcp.App");
         GetString(serverInfo, "operationMode").Should().Be("apply");
+        GetString(structuredServerInfo, "assemblyName").Should().Be("MtgMcp.App");
+        GetString(structuredServerInfo, "operationMode").Should().Be("apply");
+        resources.Select(resource => resource.Uri).Should().Contain("mtg://workspaces");
     }
 
     /// <summary>
@@ -270,7 +286,12 @@ public sealed class McpE2ETests
             .Should()
             .Be(100);
         invalidDetailLevel.IsError.Should().BeTrue();
-        ReadText(invalidDetailLevel).Should().Contain("deck_analyze_performance");
+        ReadText(invalidDetailLevel).Should().Contain("summary, normal, or full");
+        invalidDetailLevel.StructuredContent.Should().NotBeNull();
+        JsonElement error = invalidDetailLevel.StructuredContent!.Value.GetProperty("error");
+        GetString(error, "code").Should().Be("validation");
+        GetProperty(error, "retriable").GetBoolean().Should().BeFalse();
+        GetString(GetObject(error, "details"), "tool").Should().Be("deck_analyze_performance");
         JsonElement reference = GetArray(goldfishComparison, "referenceDecks").Should().ContainSingle().Subject;
         GetString(reference, "source").Should().Be("archidekt");
         GetString(GetObject(goldfishComparison, "activeDeck"), "source").Should().Be("workspace");
@@ -507,7 +528,13 @@ public sealed class McpE2ETests
                 ["seed"] = 42
             });
 
-        JsonElement workspaceSummary = workspaceList.EnumerateArray().Should().ContainSingle().Subject;
+        JsonElement workspaceSummary = GetArray(workspaceList, "items").Should().ContainSingle().Subject;
+        if (workspaceList.TryGetProperty("nextCursor", out JsonElement nextCursor))
+        {
+            nextCursor.ValueKind.Should().Be(JsonValueKind.Null);
+        }
+
+        GetInt32(workspaceList, "totalCount").Should().Be(1);
         workspaceSummary.TryGetProperty("cards", out _).Should().BeFalse();
         GetString(workspaceSummary, "workspaceId").Should().Be(workspaceId);
         GetInt32(workspaceSummary, "totalCards").Should().Be(39);

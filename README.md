@@ -478,6 +478,8 @@ Workflow-first tools:
   `workspace_export`, `workspace_validate`, `workspace_validate_legality`,
   `workspace_checkpoint_create`, `workspace_refresh_from_source`, and
   `workspace_diff_last_import`.
+  `workspace_list` returns `items`, `nextCursor`, `limit`, and `totalCount` for
+  cursor-based paging.
 - Search cards with `card_search`, `card_get`, `card_get_prints`, and
   `card_get_rulings`.
 - Inspect decks with `deck_summarize`, `deck_analyze_structure`,
@@ -504,6 +506,8 @@ Workflow-first tools:
   source tools, and Playgroup tools.
 - Preview edits with `deck_plan_create`, `deck_plan_preview`, and
   `deck_plan_compare_performance`; apply only with `deck_plan_apply`.
+  `deck_plan_list` uses the same `items` and `nextCursor` paging envelope as
+  workspace lists.
 - Apply package-style local edits with `deck_add_cards_bulk`,
   `deck_update_card_categories_bulk`, and `deck_move_cards_bulk` when many
   candidates or category changes should validate together and persist once.
@@ -573,7 +577,7 @@ Complete registered tool names:
 
 Useful resources:
 
-- Workspace data: `mtg://workspace/{workspaceId}`,
+- Workspace data: `mtg://workspaces`, `mtg://workspace/{workspaceId}`,
   `mtg://workspace/{workspaceId}/summary`,
   `mtg://workspace/{workspaceId}/state`,
   `mtg://workspace/{workspaceId}/intent`,
