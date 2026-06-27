@@ -43,7 +43,7 @@ public sealed class CommanderSpellbookCorpusSignalProvider : ICorpusSignalProvid
             Enabled = sourceOptions.Enabled,
             StableApi = true,
             ApiType = CorpusSourceApiTypes.Official,
-            Status = sourceOptions.Enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.Disabled,
+            Status = sourceOptions.Enabled ? CorpusSourceStatusKind.Available : CorpusSourceStatusKind.Disabled,
             AttributionRequired = true,
             Uri = "https://commanderspellbook.com/about/",
             Notes = ["Provides combo and near-miss data from the public find-my-combos endpoint."]

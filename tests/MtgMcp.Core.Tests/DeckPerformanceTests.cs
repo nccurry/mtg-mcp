@@ -134,27 +134,9 @@ public sealed class DeckPerformanceTests
             Kind = "performance",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Plains",
-                    Category = DeckDefaults.Mainboard,
-                    Quantity = 18,
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Island",
-                    Category = DeckDefaults.Mainboard,
-                    Quantity = 18,
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Utility Spell",
-                    Category = DeckDefaults.Mainboard,
-                    Quantity = 29,
-                },
+                DeckEditOperation.SetCardQuantity("Plains", 18, DeckDefaults.Mainboard),
+                DeckEditOperation.SetCardQuantity("Island", 18, DeckDefaults.Mainboard),
+                DeckEditOperation.SetCardQuantity("Utility Spell", 29, DeckDefaults.Mainboard),
             ],
         };
         await plans.SaveAsync(plan, CancellationToken.None);

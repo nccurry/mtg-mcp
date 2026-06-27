@@ -485,7 +485,7 @@ public sealed partial class DeckIntelligenceTests
 
         result.Sources.Should().Contain(source =>
             source.Key == "failing-corpus"
-            && source.Status == CorpusSourceStatuses.Failed);
+            && source.Status == CorpusSourceStatusKind.Failed);
         result.Recommendations.Should().Contain(recommendation => recommendation.CardName == "Illness in the Ranks");
         result.Notes.Should().Contain(note => note.Contains("failed", StringComparison.OrdinalIgnoreCase));
     }
@@ -512,7 +512,7 @@ public sealed partial class DeckIntelligenceTests
 
         result.Sources.Should().Contain(source =>
             source.Key == "timeout-corpus"
-            && source.Status == CorpusSourceStatuses.Failed
+            && source.Status == CorpusSourceStatusKind.Failed
             && source.Notes.Any(note => note.Contains("Timed out", StringComparison.OrdinalIgnoreCase)));
         result.Recommendations.Should().Contain(recommendation => recommendation.CardName == "Illness in the Ranks");
     }
@@ -1086,7 +1086,7 @@ public sealed partial class DeckIntelligenceTests
                 Kind = kind,
                 Enabled = true,
                 StableApi = true,
-                Status = CorpusSourceStatuses.Available,
+                Status = CorpusSourceStatusKind.Available,
                 Uri = $"https://example.test/{key}"
             };
         }
@@ -1206,7 +1206,7 @@ public sealed partial class DeckIntelligenceTests
                 Kind = "commander-aggregate",
                 Enabled = true,
                 StableApi = false,
-                Status = CorpusSourceStatuses.Available,
+                Status = CorpusSourceStatusKind.Available,
                 Uri = "https://edhrec.test/"
             };
         }
@@ -1286,7 +1286,7 @@ public sealed partial class DeckIntelligenceTests
                 Name = "Plan Fit",
                 Enabled = true,
                 StableApi = true,
-                Status = CorpusSourceStatuses.Available,
+                Status = CorpusSourceStatusKind.Available,
             };
         }
 
@@ -1371,7 +1371,7 @@ public sealed partial class DeckIntelligenceTests
                 Kind = "commander-aggregate",
                 Enabled = true,
                 StableApi = false,
-                Status = CorpusSourceStatuses.Available,
+                Status = CorpusSourceStatusKind.Available,
                 Uri = "https://edhrec.com/"
             };
         }
@@ -1434,7 +1434,7 @@ public sealed partial class DeckIntelligenceTests
                 Kind = "test",
                 Enabled = true,
                 StableApi = true,
-                Status = CorpusSourceStatuses.Available
+                Status = CorpusSourceStatusKind.Available
             };
         }
 
@@ -1467,7 +1467,7 @@ public sealed partial class DeckIntelligenceTests
                 Kind = "test",
                 Enabled = true,
                 StableApi = true,
-                Status = CorpusSourceStatuses.Available
+                Status = CorpusSourceStatusKind.Available
             };
         }
 

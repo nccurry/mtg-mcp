@@ -181,14 +181,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 continue;
             }
 
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.RemoveCard,
-                CardName = card.Name,
-                Quantity = card.Quantity,
-                Category = DeckCategoryOrdering.PrimaryCategory(card),
-                Rationale = $"Remove {card.Name} to reduce bracket pressure."
-            });
+            plan.Operations.Add(DeckEditOperation.RemoveCard(
+                card.Name,
+                card.Quantity,
+                DeckCategoryOrdering.PrimaryCategory(card),
+                $"Remove {card.Name} to reduce bracket pressure."));
         }
 
         AddReplacementOperations(plan, workspace, suggestions);
@@ -567,22 +564,16 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 ? DeckDefaults.Mainboard
                 : DeckCategoryOrdering.PrimaryCategory(currentCard);
 
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.RemoveCard,
-                CardName = suggestion.ReplaceCard,
-                Quantity = quantity,
-                Category = category,
-                Rationale = suggestion.Rationale
-            });
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.AddCard,
-                CardName = suggestion.WithCard,
-                Quantity = quantity,
-                Category = category,
-                Rationale = suggestion.Rationale
-            });
+            plan.Operations.Add(DeckEditOperation.RemoveCard(
+                suggestion.ReplaceCard,
+                quantity,
+                category,
+                suggestion.Rationale));
+            plan.Operations.Add(DeckEditOperation.AddCard(
+                suggestion.WithCard,
+                quantity,
+                category,
+                suggestion.Rationale));
         }
     }
 
@@ -923,14 +914,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static DeckEditOperation CreateAddOperation(CardInfo card, string role, string rationale)
     {
-        return new DeckEditOperation
-        {
-            Operation = DeckEditOperations.AddCard,
-            CardName = card.Name,
-            Quantity = 1,
-            Category = role,
-            Rationale = rationale
-        };
+        return DeckEditOperation.AddCard(card.Name, 1, role, rationale);
     }
 
     /// <summary>

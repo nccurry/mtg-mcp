@@ -26,14 +26,14 @@ public sealed partial class DeckWorkspaceService
 
         if (source is null)
         {
-            result.Status = WorkspaceRefreshFromSourceStatuses.WorkspaceHasNoSource;
+            result.Status = WorkspaceRefreshFromSourceStatus.WorkspaceHasNoSource;
             result.Notes.Add("Workspace does not have a provider source reference.");
             return result;
         }
 
         if (!IsImportHistoryProvider(source.Provider))
         {
-            result.Status = WorkspaceRefreshFromSourceStatuses.SourceUnsupported;
+            result.Status = WorkspaceRefreshFromSourceStatus.SourceUnsupported;
             result.Notes.Add($"Provider '{source.Provider}' is not supported by workspace refresh.");
             return result;
         }
@@ -46,7 +46,7 @@ public sealed partial class DeckWorkspaceService
                     writeBack,
                     cancellationToken)
                 .ConfigureAwait(false);
-            result.Status = WorkspaceRefreshFromSourceStatuses.Refreshed;
+            result.Status = WorkspaceRefreshFromSourceStatus.Refreshed;
             result.Workspace = refreshed;
             result.DiffLastImport = await DiffLastImportAsync(refreshed.Id, cancellationToken)
                 .ConfigureAwait(false);
@@ -59,7 +59,7 @@ public sealed partial class DeckWorkspaceService
         }
         catch (Exception ex)
         {
-            result.Status = WorkspaceRefreshFromSourceStatuses.SourceUnavailable;
+            result.Status = WorkspaceRefreshFromSourceStatus.SourceUnavailable;
             result.Notes.Add($"Source refresh failed: {ex.Message}");
             return result;
         }

@@ -9,6 +9,11 @@ namespace MtgMcp.Core.Tests;
 public sealed partial class DeckIntelligenceTests
 {
     /// <summary>
+    /// Uses the same casing policy as persisted plan files.
+    /// </summary>
+    private static readonly JsonSerializerOptions WebPlanJsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
     /// Verifies that preview deck plan applies operations only to a clone.
     /// </summary>
     [Fact]
@@ -27,20 +32,8 @@ public sealed partial class DeckIntelligenceTests
             Name = "Swap",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.RemoveCard,
-                    CardName = "Mana Crypt",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Arcane Signet",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.RemoveCard("Mana Crypt", 1, DeckRoles.Ramp),
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -109,13 +102,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add card",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Arcane Signet",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(
@@ -154,13 +141,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add card",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Arcane Signet",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(
@@ -208,13 +189,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add ramp",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Arcane Signet",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -260,20 +235,8 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add sideboard cards",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.RemoveCard,
-                    CardName = "Active Package",
-                    Quantity = 3,
-                    Category = DeckDefaults.Mainboard
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Sideboard Upgrade",
-                    Quantity = 3,
-                    Category = DeckDefaults.Sideboard
-                }
+                DeckEditOperation.RemoveCard("Active Package", 3, DeckDefaults.Mainboard),
+                DeckEditOperation.AddCard("Sideboard Upgrade", 3, DeckDefaults.Sideboard)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -311,24 +274,9 @@ public sealed partial class DeckIntelligenceTests
             Name = "Move to maybeboard",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCardCategory,
-                    CardName = "Mana Crypt",
-                    Category = DeckDefaults.Maybeboard
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetPrimaryCardCategory,
-                    CardName = "Mana Crypt",
-                    Category = DeckDefaults.Maybeboard
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.RemoveCardCategory,
-                    CardName = "Mana Crypt",
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCardCategory("Mana Crypt", DeckDefaults.Maybeboard),
+                DeckEditOperation.SetPrimaryCardCategory("Mana Crypt", DeckDefaults.Maybeboard),
+                DeckEditOperation.RemoveCardCategory("Mana Crypt", DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -361,13 +309,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add card",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Sol Ring",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCard("Sol Ring", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -409,13 +351,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add card",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Sol Ring",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCard("Sol Ring", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(
@@ -471,20 +407,8 @@ public sealed partial class DeckIntelligenceTests
             Name = "Add before cut",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Arcane Signet",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.RemoveCard,
-                    CardName = "Existing Package",
-                    Quantity = 1,
-                    Category = DeckDefaults.Mainboard
-                }
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp),
+                DeckEditOperation.RemoveCard("Existing Package", 1, DeckDefaults.Mainboard)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidekt, plans);
@@ -535,13 +459,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Overfill",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.AddCard,
-                    CardName = "Arcane Signet",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -577,13 +495,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Bad remove",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.RemoveCard,
-                    CardName = "Missing Card",
-                    Quantity = 1,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.RemoveCard("Missing Card", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -955,14 +867,11 @@ public sealed partial class DeckIntelligenceTests
             Confidence = 1,
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.MoveCard,
-                    CardName = "Beast Whisperer",
-                    FromCategory = DeckRoles.Draw,
-                    ToCategory = DeckDefaults.Maybeboard,
-                    Rationale = "Caller-approved move."
-                }
+                DeckEditOperation.MoveCard(
+                    "Beast Whisperer",
+                    DeckRoles.Draw,
+                    DeckDefaults.Maybeboard,
+                    "Caller-approved move.")
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -1000,13 +909,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Move parked card",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.MoveCard,
-                    CardName = "Beast Whisperer",
-                    FromCategory = DeckRoles.Draw,
-                    ToCategory = DeckDefaults.Maybeboard
-                }
+                DeckEditOperation.MoveCard("Beast Whisperer", DeckRoles.Draw, DeckDefaults.Maybeboard)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -1057,16 +960,16 @@ public sealed partial class DeckIntelligenceTests
             Name = "Many edits",
             Operations =
             [
-                new DeckEditOperation { Operation = DeckEditOperations.CreateCategory, Category = DeckRoles.Ramp, IncludedInDeck = true, IncludedInPrice = true },
-                new DeckEditOperation { Operation = DeckEditOperations.MoveCard, CardName = "Sol Ring", FromCategory = DeckDefaults.Mainboard, ToCategory = DeckRoles.Ramp },
-                new DeckEditOperation { Operation = DeckEditOperations.AddCardCategory, CardName = "Sol Ring", Category = "Testing" },
-                new DeckEditOperation { Operation = DeckEditOperations.SetPrimaryCardCategory, CardName = "Sol Ring", Category = DeckRoles.Ramp },
-                new DeckEditOperation { Operation = DeckEditOperations.RemoveCardCategory, CardName = "Sol Ring", Category = "Testing" },
-                new DeckEditOperation { Operation = DeckEditOperations.SetCardQuantity, CardName = "Sol Ring", Quantity = 2, Category = DeckRoles.Ramp },
-                new DeckEditOperation { Operation = DeckEditOperations.UpdateDeckMetadata, Name = "Updated", Format = "commander", Description = "Edited" },
-                new DeckEditOperation { Operation = DeckEditOperations.RenameCategory, FromCategory = DeckRoles.Ramp, ToCategory = "Mana" },
-                new DeckEditOperation { Operation = DeckEditOperations.DeleteCategory, Category = "Mana", ToCategory = DeckDefaults.Mainboard },
-                new DeckEditOperation { Operation = DeckEditOperations.RemoveCard, CardName = "Lightning Bolt", Quantity = 1, Category = DeckDefaults.Mainboard }
+                DeckEditOperation.CreateCategory(DeckRoles.Ramp, includedInDeck: true, includedInPrice: true),
+                DeckEditOperation.MoveCard("Sol Ring", DeckDefaults.Mainboard, DeckRoles.Ramp),
+                DeckEditOperation.AddCardCategory("Sol Ring", "Testing"),
+                DeckEditOperation.SetPrimaryCardCategory("Sol Ring", DeckRoles.Ramp),
+                DeckEditOperation.RemoveCardCategory("Sol Ring", "Testing"),
+                DeckEditOperation.SetCardQuantity("Sol Ring", 2, DeckRoles.Ramp),
+                DeckEditOperation.UpdateDeckMetadata("Updated", "commander", "Edited"),
+                DeckEditOperation.RenameCategory(DeckRoles.Ramp, "Mana"),
+                DeckEditOperation.DeleteCategory("Mana", DeckDefaults.Mainboard),
+                DeckEditOperation.RemoveCard("Lightning Bolt", 1, DeckDefaults.Mainboard)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
@@ -1108,8 +1011,8 @@ public sealed partial class DeckIntelligenceTests
             Name = "Remote edits",
             Operations =
             [
-                new DeckEditOperation { Operation = DeckEditOperations.AddCard, CardName = "Sol Ring", Quantity = 1, Category = DeckRoles.Ramp },
-                new DeckEditOperation { Operation = DeckEditOperations.AddCard, CardName = "Arcane Signet", Quantity = 1, Category = DeckRoles.Ramp }
+                DeckEditOperation.AddCard("Sol Ring", 1, DeckRoles.Ramp),
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidekt, plans);
@@ -1161,8 +1064,8 @@ public sealed partial class DeckIntelligenceTests
             Name = "Remote timeout edits",
             Operations =
             [
-                new DeckEditOperation { Operation = DeckEditOperations.AddCard, CardName = "Sol Ring", Quantity = 1, Category = DeckRoles.Ramp },
-                new DeckEditOperation { Operation = DeckEditOperations.AddCard, CardName = "Arcane Signet", Quantity = 1, Category = DeckRoles.Ramp }
+                DeckEditOperation.AddCard("Sol Ring", 1, DeckRoles.Ramp),
+                DeckEditOperation.AddCard("Arcane Signet", 1, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckPlanService service = CreatePlanService(workspaces, new FakeCardCatalog(), archidekt, plans);
@@ -1187,6 +1090,144 @@ public sealed partial class DeckIntelligenceTests
             .Status
             .Should()
             .Be(DeckEditPlanStatus.ApplyStateUnknown);
+    }
+
+    /// <summary>
+    /// Verifies that legacy flat operation json still deserializes into the typed operation union.
+    /// </summary>
+    [Fact]
+    public void DeckEditOperation_DeserializesLegacyFlatJson()
+    {
+        const string json = """
+            {
+              "operation": "deck_move_card",
+              "cardName": "Sol Ring",
+              "replacementCardName": null,
+              "quantity": null,
+              "category": null,
+              "fromCategory": "Mainboard",
+              "toCategory": "Ramp",
+              "name": null,
+              "format": null,
+              "description": null,
+              "includedInDeck": null,
+              "includedInPrice": null,
+              "rationale": "Move ramp card."
+            }
+            """;
+
+        DeckEditOperation operation = JsonSerializer.Deserialize<DeckEditOperation>(json, WebPlanJsonOptions);
+
+        (operation is DeckEditOperation.MoveCardOperation).Should().BeTrue();
+        operation.Operation.Should().Be(DeckEditOperations.MoveCard);
+        operation.CardName.Should().Be("Sol Ring");
+        operation.FromCategory.Should().Be("Mainboard");
+        operation.ToCategory.Should().Be("Ramp");
+        operation.Rationale.Should().Be("Move ramp card.");
+    }
+
+    /// <summary>
+    /// Verifies that the operation reader tolerates the temporary type discriminator fallback.
+    /// </summary>
+    [Fact]
+    public void DeckEditOperation_DeserializesTypeDiscriminatorFallback()
+    {
+        const string json = """
+            {
+              "type": "deck_create_category",
+              "category": "Testing",
+              "includedInDeck": false,
+              "includedInPrice": true,
+              "rationale": "Create a test category."
+            }
+            """;
+
+        DeckEditOperation operation = JsonSerializer.Deserialize<DeckEditOperation>(json, WebPlanJsonOptions);
+
+        (operation is DeckEditOperation.CreateCategoryOperation).Should().BeTrue();
+        operation.Operation.Should().Be(DeckEditOperations.CreateCategory);
+        operation.Category.Should().Be("Testing");
+        operation.IncludedInDeck.Should().BeFalse();
+        operation.IncludedInPrice.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that every typed operation case round-trips through the legacy flat operation shape.
+    /// </summary>
+    [Fact]
+    public void DeckEditOperation_SerializesTypedCasesAsLegacyFlatJson()
+    {
+        DeckEditOperation[] operations =
+        [
+            DeckEditOperation.AddCard("Sol Ring", 1, DeckRoles.Ramp, "Add ramp."),
+            DeckEditOperation.RemoveCard("Mana Crypt", 1, DeckRoles.Ramp, "Cut fast mana."),
+            DeckEditOperation.SetCardQuantity("Island", 12, DeckDefaults.Mainboard, "Tune mana."),
+            DeckEditOperation.MoveCard("Beast Whisperer", DeckRoles.Draw, DeckDefaults.Maybeboard, "Park card."),
+            DeckEditOperation.AddCardCategory("Sol Ring", "Testing", "Add tag."),
+            DeckEditOperation.RemoveCardCategory("Sol Ring", "Testing", "Remove tag."),
+            DeckEditOperation.SetPrimaryCardCategory("Sol Ring", DeckRoles.Ramp, "Promote category."),
+            DeckEditOperation.CreateCategory(DeckRoles.Ramp, includedInDeck: true, includedInPrice: true, "Create ramp."),
+            DeckEditOperation.RenameCategory(DeckRoles.Ramp, "Mana", "Rename category."),
+            DeckEditOperation.DeleteCategory("Mana", DeckDefaults.Mainboard, "Delete category."),
+            DeckEditOperation.UpdateDeckMetadata("Updated", "commander", "Edited", "Update metadata.")
+        ];
+        string[] legacyProperties =
+        [
+            "operation",
+            "cardName",
+            "replacementCardName",
+            "quantity",
+            "category",
+            "fromCategory",
+            "toCategory",
+            "name",
+            "format",
+            "description",
+            "includedInDeck",
+            "includedInPrice",
+            "rationale"
+        ];
+
+        foreach (DeckEditOperation operation in operations)
+        {
+            string json = JsonSerializer.Serialize(operation, WebPlanJsonOptions);
+            using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement root = document.RootElement;
+
+            root.EnumerateObject().Select(property => property.Name).Should().Equal(legacyProperties);
+            root.GetProperty("operation").GetString().Should().Be(operation.Operation);
+            root.TryGetProperty("type", out _).Should().BeFalse();
+            root.GetProperty("rationale").GetString().Should().Be(operation.Rationale);
+
+            DeckEditOperation roundTripped = JsonSerializer.Deserialize<DeckEditOperation>(json, WebPlanJsonOptions);
+            JsonSerializer.Serialize(roundTripped, WebPlanJsonOptions).Should().Be(json);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that typed status enums keep their legacy wire strings.
+    /// </summary>
+    [Fact]
+    public void StatusEnums_SerializeToLegacyWireStrings()
+    {
+        JsonSerializer.Serialize(DeckEditPlanStatus.PartiallyApplied, WebPlanJsonOptions)
+            .Should()
+            .Be("\"partially-applied\"");
+        JsonSerializer.Deserialize<DeckEditPlanStatus>("\"apply-state-unknown\"", WebPlanJsonOptions)
+            .Should()
+            .Be(DeckEditPlanStatus.ApplyStateUnknown);
+        JsonSerializer.Serialize(WorkspaceDiffLastImportStatus.NoPriorBaseline, WebPlanJsonOptions)
+            .Should()
+            .Be("\"noPriorBaseline\"");
+        JsonSerializer.Deserialize<WorkspaceRefreshFromSourceStatus>("\"sourceUnavailable\"", WebPlanJsonOptions)
+            .Should()
+            .Be(WorkspaceRefreshFromSourceStatus.SourceUnavailable);
+        JsonSerializer.Serialize(CorpusSourceStatusKind.AccessBlocked, WebPlanJsonOptions)
+            .Should()
+            .Be("\"access-blocked\"");
+        JsonSerializer.Serialize(CorpusSourceStatusKind.NeedsOAuth, WebPlanJsonOptions)
+            .Should()
+            .Be("\"needs-oauth\"");
     }
 
     /// <summary>

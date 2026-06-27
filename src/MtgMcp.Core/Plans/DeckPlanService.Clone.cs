@@ -175,7 +175,7 @@ public sealed partial class DeckPlanService
         foreach (DeckEditOperation operation in plan.Operations)
         {
             if (string.IsNullOrWhiteSpace(operation.CardName)
-                || operation.Operation.Equals(DeckEditOperations.AddCard, StringComparison.OrdinalIgnoreCase))
+                || operation is DeckEditOperation.AddCardOperation)
             {
                 continue;
             }
@@ -236,21 +236,6 @@ public sealed partial class DeckPlanService
     /// </summary>
     private static DeckEditOperation CloneOperation(DeckEditOperation operation)
     {
-        return new DeckEditOperation
-        {
-            Operation = operation.Operation,
-            CardName = operation.CardName,
-            ReplacementCardName = operation.ReplacementCardName,
-            Quantity = operation.Quantity,
-            Category = operation.Category,
-            FromCategory = operation.FromCategory,
-            ToCategory = operation.ToCategory,
-            Name = operation.Name,
-            Format = operation.Format,
-            Description = operation.Description,
-            IncludedInDeck = operation.IncludedInDeck,
-            IncludedInPrice = operation.IncludedInPrice,
-            Rationale = operation.Rationale
-        };
+        return operation.Clone();
     }
 }

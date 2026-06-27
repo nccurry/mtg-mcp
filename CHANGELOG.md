@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Replaced persisted deck edit operations and several closed-set statuses with
+  typed union/enum models while preserving legacy JSON strings and flat plan
+  operation payloads.
+- Removed unsupported Reddit discussion and Spicerack source integrations from
+  registration, CLI auth help, docs, and surface tests.
 - Added MCP protocol conformance improvements: object-root typed tools now
   advertise titles and output schemas with structured content, tool validation
   errors return a coded structured payload, `workspace_list` and

@@ -27,14 +27,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
             if (!workspace.Categories.Any(category => category.Name.Equals(role, StringComparison.OrdinalIgnoreCase)))
             {
-                plan.Operations.Add(new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.CreateCategory,
-                    Category = role,
-                    IncludedInDeck = true,
-                    IncludedInPrice = true,
-                    Rationale = $"Create standard role category {role}."
-                });
+                plan.Operations.Add(DeckEditOperation.CreateCategory(
+                    role,
+                    includedInDeck: true,
+                    includedInPrice: true,
+                    rationale: $"Create standard role category {role}."));
             }
         }
 
@@ -59,14 +56,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             if (!string.Equals(card.PrimaryCategory, assignment.PrimaryRole, StringComparison.OrdinalIgnoreCase)
                 && assignment.Confidence >= 0.55)
             {
-                plan.Operations.Add(new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.MoveCard,
-                    CardName = card.Name,
-                    FromCategory = card.PrimaryCategory,
-                    ToCategory = assignment.PrimaryRole,
-                    Rationale = $"Classified as {assignment.PrimaryRole} with {assignment.Confidence:0.00} confidence."
-                });
+                plan.Operations.Add(DeckEditOperation.MoveCard(
+                    card.Name,
+                    card.PrimaryCategory,
+                    assignment.PrimaryRole,
+                    $"Classified as {assignment.PrimaryRole} with {assignment.Confidence:0.00} confidence."));
             }
         }
 

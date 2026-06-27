@@ -51,7 +51,7 @@ public sealed class ScryfallCorpusSignalProvider : ICorpusSignalProvider
             Enabled = sourceOptions.Enabled,
             StableApi = true,
             ApiType = CorpusSourceApiTypes.Official,
-            Status = sourceOptions.Enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.Disabled,
+            Status = sourceOptions.Enabled ? CorpusSourceStatusKind.Available : CorpusSourceStatusKind.Disabled,
             AttributionRequired = true,
             Uri = "https://scryfall.com/docs/api",
             Notes =

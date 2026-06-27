@@ -64,8 +64,8 @@ public sealed class TopDeckCorpusSignalProvider : ICorpusSignalProvider
             RequiresKey = true,
             AttributionRequired = true,
             Status = sourceOptions.Enabled
-                ? hasKey ? CorpusSourceStatuses.Available : CorpusSourceStatuses.MissingConfig
-                : CorpusSourceStatuses.Disabled,
+                ? hasKey ? CorpusSourceStatusKind.Available : CorpusSourceStatusKind.MissingConfig
+                : CorpusSourceStatusKind.Disabled,
             Uri = "https://topdeck.gg/docs/tournaments-v2",
             Notes = ["Uses the documented TopDeck.gg tournaments v2 API for structured tournament decklist evidence."]
         };

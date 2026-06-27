@@ -251,7 +251,7 @@ public sealed class ScryfallProviderTests
         report.Sources.Should().ContainSingle(source =>
             source.Key == "scryfall-edhrec-rank"
             && !source.Enabled
-            && source.Status == CorpusSourceStatuses.Disabled);
+            && source.Status == CorpusSourceStatusKind.Disabled);
         catalog.SearchCalls.Should().Be(0);
     }
 

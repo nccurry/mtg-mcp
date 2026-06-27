@@ -92,9 +92,7 @@ internal static class CompactMutationPresenter
         CompactMutationSnapshot after,
         DeckEditPlanApplyResult result)
     {
-        bool applyStateUnknown = result.Status?.Equals(
-            DeckEditPlanStatus.ApplyStateUnknown,
-            StringComparison.OrdinalIgnoreCase) == true;
+        bool applyStateUnknown = result.Status == DeckEditPlanStatus.ApplyStateUnknown;
         CompactMutationDelta delta = applyStateUnknown
             ? CompactMutationDelta.Empty
             : CompactMutationDelta.Build(before, after);

@@ -1977,11 +1977,11 @@ public sealed class DeckWorkspaceServiceTests
             imported.Id,
             TestContext.Current.CancellationToken);
 
-        sourceMissing.Status.Should().Be(WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource);
-        baselineMissing.Status.Should().Be(WorkspaceDiffLastImportStatuses.NoPriorBaseline);
-        unsupportedSource.Status.Should().Be(WorkspaceDiffLastImportStatuses.SourceUnsupported);
-        unavailableHistory.Status.Should().Be(WorkspaceDiffLastImportStatuses.HistoryUnavailable);
-        diff.Status.Should().Be(WorkspaceDiffLastImportStatuses.BaselineFound);
+        sourceMissing.Status.Should().Be(WorkspaceDiffLastImportStatus.WorkspaceHasNoSource);
+        baselineMissing.Status.Should().Be(WorkspaceDiffLastImportStatus.NoPriorBaseline);
+        unsupportedSource.Status.Should().Be(WorkspaceDiffLastImportStatus.SourceUnsupported);
+        unavailableHistory.Status.Should().Be(WorkspaceDiffLastImportStatus.HistoryUnavailable);
+        diff.Status.Should().Be(WorkspaceDiffLastImportStatus.BaselineFound);
         diff.Diff.Should().NotBeNull();
         diff.Diff!.AddedCards.Should().ContainSingle(card => card.CardName == "Beast Whisperer");
         imported.ImportHistory.Should().ContainSingle();
@@ -2029,13 +2029,13 @@ public sealed class DeckWorkspaceServiceTests
             writeBack: null,
             TestContext.Current.CancellationToken);
 
-        result.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.Refreshed);
+        result.Status.Should().Be(WorkspaceRefreshFromSourceStatus.Refreshed);
         result.WorkspaceId.Should().Be(current.Id);
         result.Workspace.Should().NotBeNull();
         result.Workspace!.Id.Should().Be(current.Id);
         result.Workspace.WriteBack.Should().BeTrue();
         result.Workspace.LocalCheckpoints.Should().ContainSingle(checkpoint => checkpoint.Id == "checkpoint");
-        result.DiffLastImport!.Status.Should().Be(WorkspaceDiffLastImportStatuses.BaselineFound);
+        result.DiffLastImport!.Status.Should().Be(WorkspaceDiffLastImportStatus.BaselineFound);
         result.DiffLastImport.Diff!.AddedCards.Should().ContainSingle(card => card.CardName == "Beast Whisperer");
         result.Workspace.ImportHistory.Should().ContainSingle();
         result.Workspace.ImportHistory[0].BaselineWorkspace!.LocalCheckpoints.Should().BeEmpty();
@@ -2083,12 +2083,12 @@ public sealed class DeckWorkspaceServiceTests
             writeBack: true,
             TestContext.Current.CancellationToken);
 
-        result.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.Refreshed);
+        result.Status.Should().Be(WorkspaceRefreshFromSourceStatus.Refreshed);
         result.Workspace!.Id.Should().Be(current.Id);
         result.Workspace.Mode.Should().Be(WorkspaceMode.Local);
         result.Workspace.WriteBack.Should().BeFalse();
         result.Workspace.Cards.Should().Contain(card => card.Name == "Cultivate");
-        result.DiffLastImport!.Status.Should().Be(WorkspaceDiffLastImportStatuses.BaselineFound);
+        result.DiffLastImport!.Status.Should().Be(WorkspaceDiffLastImportStatus.BaselineFound);
         moxfield.ImportRequests.Should().Equal("mox-1", "mox-1");
     }
 
@@ -2130,9 +2130,9 @@ public sealed class DeckWorkspaceServiceTests
             null,
             TestContext.Current.CancellationToken);
 
-        sourceMissing.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.WorkspaceHasNoSource);
-        unsupportedSource.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.SourceUnsupported);
-        unavailableSource.Status.Should().Be(WorkspaceRefreshFromSourceStatuses.SourceUnavailable);
+        sourceMissing.Status.Should().Be(WorkspaceRefreshFromSourceStatus.WorkspaceHasNoSource);
+        unsupportedSource.Status.Should().Be(WorkspaceRefreshFromSourceStatus.SourceUnsupported);
+        unavailableSource.Status.Should().Be(WorkspaceRefreshFromSourceStatus.SourceUnavailable);
     }
 
     /// <summary>

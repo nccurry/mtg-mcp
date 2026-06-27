@@ -73,8 +73,8 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
             PermissionSensitive = true,
             AttributionRequired = true,
             Status = sourceOptions.Enabled
-                ? enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.Disabled
-                : CorpusSourceStatuses.Disabled,
+                ? enabled ? CorpusSourceStatusKind.Available : CorpusSourceStatusKind.Disabled
+                : CorpusSourceStatusKind.Disabled,
             Uri = "https://edhrec.com/",
             Notes =
             [

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -339,7 +341,7 @@ public sealed class CompactMutationResult
     /// <summary>
     /// Gets or sets the saved plan status when this compact result comes from plan application.
     /// </summary>
-    public string? Status { get; set; }
+    public DeckEditPlanStatus? Status { get; set; }
 
     /// <summary>
     /// Gets or sets a checkpoint id created before applying a plan, when one exists.
@@ -913,32 +915,38 @@ public sealed class WorkspaceDiffResult
 /// <summary>
 /// Lists statuses returned by the last-import diff workflow.
 /// </summary>
-public static class WorkspaceDiffLastImportStatuses
+[JsonConverter(typeof(JsonStringEnumConverter<WorkspaceDiffLastImportStatus>))]
+public enum WorkspaceDiffLastImportStatus
 {
     /// <summary>
     /// A matching import-history baseline was found.
     /// </summary>
-    public const string BaselineFound = "baselineFound";
+    [JsonStringEnumMemberName("baselineFound")]
+    BaselineFound,
 
     /// <summary>
     /// The workspace has a supported source but no prior baseline snapshot.
     /// </summary>
-    public const string NoPriorBaseline = "noPriorBaseline";
+    [JsonStringEnumMemberName("noPriorBaseline")]
+    NoPriorBaseline,
 
     /// <summary>
     /// The workspace source provider is not supported by import history.
     /// </summary>
-    public const string SourceUnsupported = "sourceUnsupported";
+    [JsonStringEnumMemberName("sourceUnsupported")]
+    SourceUnsupported,
 
     /// <summary>
     /// The workspace does not identify an imported provider deck source.
     /// </summary>
-    public const string WorkspaceHasNoSource = "workspaceHasNoSource";
+    [JsonStringEnumMemberName("workspaceHasNoSource")]
+    WorkspaceHasNoSource,
 
     /// <summary>
     /// History metadata exists but the prior snapshot is unavailable.
     /// </summary>
-    public const string HistoryUnavailable = "historyUnavailable";
+    [JsonStringEnumMemberName("historyUnavailable")]
+    HistoryUnavailable,
 }
 
 /// <summary>
@@ -949,7 +957,7 @@ public sealed class WorkspaceDiffLastImportResult
     /// <summary>
     /// Gets or sets the status describing whether a baseline was available.
     /// </summary>
-    public string Status { get; set; } = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+    public WorkspaceDiffLastImportStatus Status { get; set; } = WorkspaceDiffLastImportStatus.WorkspaceHasNoSource;
 
     /// <summary>
     /// Gets or sets the current workspace id.
@@ -990,27 +998,32 @@ public sealed class WorkspaceDiffLastImportResult
 /// <summary>
 /// Lists statuses returned by in-place provider refresh.
 /// </summary>
-public static class WorkspaceRefreshFromSourceStatuses
+[JsonConverter(typeof(JsonStringEnumConverter<WorkspaceRefreshFromSourceStatus>))]
+public enum WorkspaceRefreshFromSourceStatus
 {
     /// <summary>
     /// The workspace was refreshed from its provider source.
     /// </summary>
-    public const string Refreshed = "refreshed";
+    [JsonStringEnumMemberName("refreshed")]
+    Refreshed,
 
     /// <summary>
     /// The workspace does not identify an imported provider deck source.
     /// </summary>
-    public const string WorkspaceHasNoSource = "workspaceHasNoSource";
+    [JsonStringEnumMemberName("workspaceHasNoSource")]
+    WorkspaceHasNoSource,
 
     /// <summary>
     /// The workspace source provider is not refreshable.
     /// </summary>
-    public const string SourceUnsupported = "sourceUnsupported";
+    [JsonStringEnumMemberName("sourceUnsupported")]
+    SourceUnsupported,
 
     /// <summary>
     /// The source provider could not return the deck for this refresh.
     /// </summary>
-    public const string SourceUnavailable = "sourceUnavailable";
+    [JsonStringEnumMemberName("sourceUnavailable")]
+    SourceUnavailable,
 }
 
 /// <summary>
@@ -1021,7 +1034,7 @@ public sealed class WorkspaceRefreshFromSourceResult
     /// <summary>
     /// Gets or sets the refresh status.
     /// </summary>
-    public string Status { get; set; } = WorkspaceRefreshFromSourceStatuses.WorkspaceHasNoSource;
+    public WorkspaceRefreshFromSourceStatus Status { get; set; } = WorkspaceRefreshFromSourceStatus.WorkspaceHasNoSource;
 
     /// <summary>
     /// Gets or sets the refreshed workspace id.
@@ -1067,7 +1080,7 @@ public sealed class WorkspaceImportBaselineResolution
     /// <summary>
     /// Gets or sets the baseline resolution status.
     /// </summary>
-    public string Status { get; set; } = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+    public WorkspaceDiffLastImportStatus Status { get; set; } = WorkspaceDiffLastImportStatus.WorkspaceHasNoSource;
 
     /// <summary>
     /// Gets or sets the current workspace id.

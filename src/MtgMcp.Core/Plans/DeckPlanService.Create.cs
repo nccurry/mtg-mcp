@@ -45,14 +45,11 @@ public sealed partial class DeckPlanService
     {
         foreach (ExplicitDeckPlanCardChange change in changes ?? [])
         {
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.AddCard,
-                CardName = RequireChangeCardName(change),
-                Quantity = NormalizeChangeQuantity(change.Quantity),
-                Category = NormalizeChangeCategory(change.Category) ?? DeckDefaults.Mainboard,
-                Rationale = change.Rationale?.Trim() ?? ""
-            });
+            plan.Operations.Add(DeckEditOperation.AddCard(
+                RequireChangeCardName(change),
+                NormalizeChangeQuantity(change.Quantity),
+                NormalizeChangeCategory(change.Category) ?? DeckDefaults.Mainboard,
+                change.Rationale?.Trim() ?? ""));
         }
     }
 
@@ -65,14 +62,11 @@ public sealed partial class DeckPlanService
     {
         foreach (ExplicitDeckPlanCardChange change in changes ?? [])
         {
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.RemoveCard,
-                CardName = RequireChangeCardName(change),
-                Quantity = NormalizeChangeQuantity(change.Quantity),
-                Category = NormalizeChangeCategory(change.Category),
-                Rationale = change.Rationale?.Trim() ?? ""
-            });
+            plan.Operations.Add(DeckEditOperation.RemoveCard(
+                RequireChangeCardName(change),
+                NormalizeChangeQuantity(change.Quantity),
+                NormalizeChangeCategory(change.Category),
+                change.Rationale?.Trim() ?? ""));
         }
     }
 
@@ -85,14 +79,11 @@ public sealed partial class DeckPlanService
     {
         foreach (ExplicitDeckPlanMoveCardChange change in changes ?? [])
         {
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.MoveCard,
-                CardName = RequireMoveCardName(change),
-                FromCategory = NormalizeChangeCategory(change.FromCategory),
-                ToCategory = RequireMoveDestination(change),
-                Rationale = change.Rationale?.Trim() ?? ""
-            });
+            plan.Operations.Add(DeckEditOperation.MoveCard(
+                RequireMoveCardName(change),
+                NormalizeChangeCategory(change.FromCategory),
+                RequireMoveDestination(change),
+                change.Rationale?.Trim() ?? ""));
         }
     }
 

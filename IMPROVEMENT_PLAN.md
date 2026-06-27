@@ -264,7 +264,7 @@ Solutions (high level):
   as Scryfall/Archidekt.
 - Unify the adapter error model: replace bare `EnsureSuccessStatusCode` paths with a
   consistent typed result/outcome, redacted and informative, with graceful per-source
-  degradation (Reddit's 403 handling is the model to generalize).
+  degradation for source failures, access blocks, missing config, and OAuth gaps.
 - Harden secret handling: make `SecretRedactor` precise (prefer structured/keyed
   redaction over substring whole-body replacement) to remove both false positives and
   the more dangerous keyword-less token false negatives; never apply coarse string

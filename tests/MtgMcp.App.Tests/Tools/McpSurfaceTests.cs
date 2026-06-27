@@ -1461,7 +1461,7 @@ public sealed class McpSurfaceTests
             baselineMode: "last-import",
             cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
 
-        result.GetProperty("status").GetString().Should().Be(WorkspaceDiffLastImportStatuses.NoPriorBaseline);
+        result.GetProperty("status").GetString().Should().Be("noPriorBaseline");
         result.TryGetProperty("current", out _).Should().BeFalse();
     }
 
@@ -1753,20 +1753,8 @@ public sealed class McpSurfaceTests
             Name = "Swap curve slots",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Ramp Stone",
-                    Quantity = 10,
-                    Category = DeckRoles.Ramp
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Heavy Spell",
-                    Quantity = 54,
-                    Category = DeckRoles.Utility
-                }
+                DeckEditOperation.SetCardQuantity("Ramp Stone", 10, DeckRoles.Ramp),
+                DeckEditOperation.SetCardQuantity("Heavy Spell", 54, DeckRoles.Utility)
             ]
         }, TestContext.Current.CancellationToken);
         SimulationTools tools = new(new DeckSimulationService(
@@ -1925,19 +1913,8 @@ public sealed class McpSurfaceTests
             Name = "Partial",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Sol Ring",
-                    Quantity = 3,
-                    Category = DeckRoles.Ramp
-                },
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.RenameCategory,
-                    FromCategory = "Missing Category",
-                    ToCategory = "New Category"
-                }
+                DeckEditOperation.SetCardQuantity("Sol Ring", 3, DeckRoles.Ramp),
+                DeckEditOperation.RenameCategory("Missing Category", "New Category")
             ]
         }, TestContext.Current.CancellationToken);
         DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog(), planRepository: plans);
@@ -2002,13 +1979,7 @@ public sealed class McpSurfaceTests
             Name = "Quantity preview",
             Operations =
             [
-                new DeckEditOperation
-                {
-                    Operation = DeckEditOperations.SetCardQuantity,
-                    CardName = "Sol Ring",
-                    Quantity = 2,
-                    Category = DeckRoles.Ramp
-                }
+                DeckEditOperation.SetCardQuantity("Sol Ring", 2, DeckRoles.Ramp)
             ]
         }, TestContext.Current.CancellationToken);
         DeckWorkspaceService deckService = new(repository, new EmptyCardCatalog(), planRepository: plans);
@@ -2344,16 +2315,16 @@ public sealed class McpSurfaceTests
         host.Services.GetServices<ICorpusSignalProvider>().Should().NotBeEmpty();
         host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
             source.Key == "topdeck"
-            && source.Status == CorpusSourceStatuses.MissingConfig
+            && source.Status == CorpusSourceStatusKind.MissingConfig
             && source.RequiresKey);
         host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
             source.Key == "edhrec"
-            && source.Status == CorpusSourceStatuses.Available
+            && source.Status == CorpusSourceStatusKind.Available
             && source.UnofficialApi
             && source.PermissionSensitive);
         host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().Contain(source =>
             source.Key == "edhtop16"
-            && source.Status == CorpusSourceStatuses.Disabled
+            && source.Status == CorpusSourceStatusKind.Disabled
             && source.UnofficialApi
             && source.PermissionSensitive);
         host.Services.GetRequiredService<DeckRecommendationService>().ListCorpusSources().Sources.Should().NotContain(source =>

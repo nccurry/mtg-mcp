@@ -76,8 +76,8 @@ public sealed class EdhTop16CorpusSignalProvider : ICorpusSignalProvider
             UnofficialApi = true,
             PermissionSensitive = true,
             Status = sourceOptions.Enabled
-                ? enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.Disabled
-                : CorpusSourceStatuses.Disabled,
+                ? enabled ? CorpusSourceStatusKind.Available : CorpusSourceStatusKind.Disabled
+                : CorpusSourceStatusKind.Disabled,
             Uri = "https://edhtop16.com/about",
             Notes =
             [

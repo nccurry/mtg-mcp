@@ -405,14 +405,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
         foreach (DeckQueryCandidate candidate in ranking.Candidates)
         {
-            plan.Operations.Add(new DeckEditOperation
-            {
-                Operation = DeckEditOperations.AddCard,
-                CardName = candidate.CardName,
-                Quantity = 1,
-                Category = string.IsNullOrWhiteSpace(category) ? candidate.Role : category,
-                Rationale = candidate.Rationale
-            });
+            plan.Operations.Add(DeckEditOperation.AddCard(
+                candidate.CardName,
+                1,
+                string.IsNullOrWhiteSpace(category) ? candidate.Role : category,
+                candidate.Rationale));
         }
 
         plan.Confidence = ranking.Candidates.Count == 0 ? 0 : ranking.Candidates.Average(candidate => candidate.Score);

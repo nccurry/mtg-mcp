@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -28,7 +30,7 @@ public sealed class DeckEditPlan
     /// <summary>
     /// Gets or sets the status.
     /// </summary>
-    public string Status { get; set; } = DeckEditPlanStatus.Draft;
+    public DeckEditPlanStatus Status { get; set; } = DeckEditPlanStatus.Draft;
 
     /// <summary>
     /// Gets or sets the persistence.
@@ -72,74 +74,508 @@ public sealed class DeckEditPlan
 }
 
 /// <summary>
-/// Provides deck edit operation behavior.
+/// Represents the closed set of deck edit steps that can be stored in a plan.
 /// </summary>
-public sealed class DeckEditOperation
+[JsonConverter(typeof(DeckEditOperationJsonConverter))]
+public readonly union DeckEditOperation(
+    DeckEditOperation.AddCardOperation,
+    DeckEditOperation.RemoveCardOperation,
+    DeckEditOperation.SetCardQuantityOperation,
+    DeckEditOperation.MoveCardOperation,
+    DeckEditOperation.AddCardCategoryOperation,
+    DeckEditOperation.RemoveCardCategoryOperation,
+    DeckEditOperation.SetPrimaryCardCategoryOperation,
+    DeckEditOperation.CreateCategoryOperation,
+    DeckEditOperation.RenameCategoryOperation,
+    DeckEditOperation.DeleteCategoryOperation,
+    DeckEditOperation.UpdateDeckMetadataOperation
+)
 {
     /// <summary>
-    /// Gets or sets the edit operation name.
+    /// Gets the stable serialized operation token.
     /// </summary>
-    public string Operation { get; set; } = "";
+    public string Operation => this switch
+    {
+        AddCardOperation => DeckEditOperations.AddCard,
+        RemoveCardOperation => DeckEditOperations.RemoveCard,
+        SetCardQuantityOperation => DeckEditOperations.SetCardQuantity,
+        MoveCardOperation => DeckEditOperations.MoveCard,
+        AddCardCategoryOperation => DeckEditOperations.AddCardCategory,
+        RemoveCardCategoryOperation => DeckEditOperations.RemoveCardCategory,
+        SetPrimaryCardCategoryOperation => DeckEditOperations.SetPrimaryCardCategory,
+        CreateCategoryOperation => DeckEditOperations.CreateCategory,
+        RenameCategoryOperation => DeckEditOperations.RenameCategory,
+        DeleteCategoryOperation => DeckEditOperations.DeleteCategory,
+        UpdateDeckMetadataOperation => DeckEditOperations.UpdateDeckMetadata
+    };
 
     /// <summary>
-    /// Gets or sets the card name.
+    /// Gets the card name for card-targeted operations.
     /// </summary>
-    public string? CardName { get; set; }
+    public string? CardName => this switch
+    {
+        AddCardOperation operation => operation.CardName,
+        RemoveCardOperation operation => operation.CardName,
+        SetCardQuantityOperation operation => operation.CardName,
+        MoveCardOperation operation => operation.CardName,
+        AddCardCategoryOperation operation => operation.CardName,
+        RemoveCardCategoryOperation operation => operation.CardName,
+        SetPrimaryCardCategoryOperation operation => operation.CardName,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the replacement card name.
+    /// Gets the optional replacement card name retained for legacy flat JSON compatibility.
     /// </summary>
-    public string? ReplacementCardName { get; set; }
+    public string? ReplacementCardName => null;
 
     /// <summary>
-    /// Gets or sets the quantity.
+    /// Gets the quantity used by card add, remove, and set-quantity operations.
     /// </summary>
-    public int? Quantity { get; set; }
+    public int? Quantity => this switch
+    {
+        AddCardOperation operation => operation.Quantity,
+        RemoveCardOperation operation => operation.Quantity,
+        SetCardQuantityOperation operation => operation.Quantity,
+        MoveCardOperation => null,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the category.
+    /// Gets the category used by single-category operations.
     /// </summary>
-    public string? Category { get; set; }
+    public string? Category => this switch
+    {
+        AddCardOperation operation => operation.Category,
+        RemoveCardOperation operation => operation.Category,
+        SetCardQuantityOperation operation => operation.Category,
+        MoveCardOperation => null,
+        AddCardCategoryOperation operation => operation.Category,
+        RemoveCardCategoryOperation operation => operation.Category,
+        SetPrimaryCardCategoryOperation operation => operation.Category,
+        CreateCategoryOperation operation => operation.Category,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation operation => operation.Category,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the from category.
+    /// Gets the source category used by move and rename operations.
     /// </summary>
-    public string? FromCategory { get; set; }
+    public string? FromCategory => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation operation => operation.FromCategory,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation operation => operation.FromCategory,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the to category.
+    /// Gets the destination category used by move, rename, and delete operations.
     /// </summary>
-    public string? ToCategory { get; set; }
+    public string? ToCategory => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation operation => operation.ToCategory,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation operation => operation.ToCategory,
+        DeleteCategoryOperation operation => operation.ToCategory,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the name.
+    /// Gets the replacement deck name for metadata updates.
     /// </summary>
-    public string? Name { get; set; }
+    public string? Name => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation => null,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation operation => operation.Name
+    };
 
     /// <summary>
-    /// Gets or sets the format.
+    /// Gets the replacement deck format for metadata updates.
     /// </summary>
-    public string? Format { get; set; }
+    public string? Format => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation => null,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation operation => operation.Format
+    };
 
     /// <summary>
-    /// Gets or sets the description.
+    /// Gets the replacement deck description for metadata updates.
     /// </summary>
-    public string? Description { get; set; }
+    public string? Description => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation => null,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation => null,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation operation => operation.Description
+    };
 
     /// <summary>
-    /// Gets or sets the included in deck.
+    /// Gets whether a created category contributes cards to deck legality and count totals.
     /// </summary>
-    public bool? IncludedInDeck { get; set; }
+    public bool? IncludedInDeck => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation => null,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation operation => operation.IncludedInDeck,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the included in price.
+    /// Gets whether a created category contributes cards to price totals.
     /// </summary>
-    public bool? IncludedInPrice { get; set; }
+    public bool? IncludedInPrice => this switch
+    {
+        AddCardOperation => null,
+        RemoveCardOperation => null,
+        SetCardQuantityOperation => null,
+        MoveCardOperation => null,
+        AddCardCategoryOperation => null,
+        RemoveCardCategoryOperation => null,
+        SetPrimaryCardCategoryOperation => null,
+        CreateCategoryOperation operation => operation.IncludedInPrice,
+        RenameCategoryOperation => null,
+        DeleteCategoryOperation => null,
+        UpdateDeckMetadataOperation => null
+    };
 
     /// <summary>
-    /// Gets or sets the rationale.
+    /// Gets the human rationale for the edit step.
     /// </summary>
-    public string Rationale { get; set; } = "";
+    public string Rationale => this switch
+    {
+        AddCardOperation operation => operation.Rationale,
+        RemoveCardOperation operation => operation.Rationale,
+        SetCardQuantityOperation operation => operation.Rationale,
+        MoveCardOperation operation => operation.Rationale,
+        AddCardCategoryOperation operation => operation.Rationale,
+        RemoveCardCategoryOperation operation => operation.Rationale,
+        SetPrimaryCardCategoryOperation operation => operation.Rationale,
+        CreateCategoryOperation operation => operation.Rationale,
+        RenameCategoryOperation operation => operation.Rationale,
+        DeleteCategoryOperation operation => operation.Rationale,
+        UpdateDeckMetadataOperation operation => operation.Rationale
+    };
+
+    /// <summary>
+    /// Gets whether this operation can be combined into the optimized card-mutation batch.
+    /// </summary>
+    public bool IsCardBatchOperation => this switch
+    {
+        AddCardOperation => true,
+        RemoveCardOperation => true,
+        SetCardQuantityOperation => true,
+        MoveCardOperation => true,
+        AddCardCategoryOperation => true,
+        RemoveCardCategoryOperation => true,
+        SetPrimaryCardCategoryOperation => true,
+        CreateCategoryOperation => false,
+        RenameCategoryOperation => false,
+        DeleteCategoryOperation => false,
+        UpdateDeckMetadataOperation => false
+    };
+
+    /// <summary>
+    /// Gets whether this operation can increase the included Commander card count.
+    /// </summary>
+    public bool CanIncreaseCommanderIncludedCount => this switch
+    {
+        AddCardOperation => true,
+        RemoveCardOperation => false,
+        SetCardQuantityOperation => true,
+        MoveCardOperation => true,
+        AddCardCategoryOperation => false,
+        RemoveCardCategoryOperation => false,
+        SetPrimaryCardCategoryOperation => true,
+        CreateCategoryOperation => false,
+        RenameCategoryOperation => false,
+        DeleteCategoryOperation => false,
+        UpdateDeckMetadataOperation => false
+    };
+
+    /// <summary>
+    /// Returns this immutable operation for call sites that previously cloned mutable DTOs.
+    /// </summary>
+    public DeckEditOperation Clone()
+    {
+        return this;
+    }
+
+    /// <summary>
+    /// Builds a typed edit that adds a card to the deck or a category.
+    /// </summary>
+    public static DeckEditOperation AddCard(
+        string cardName,
+        int? quantity = null,
+        string? category = null,
+        string rationale = "")
+    {
+        return new AddCardOperation(cardName, quantity, category, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that removes one or more copies of a card.
+    /// </summary>
+    public static DeckEditOperation RemoveCard(
+        string cardName,
+        int? quantity = null,
+        string? category = null,
+        string rationale = "")
+    {
+        return new RemoveCardOperation(cardName, quantity, category, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that changes a card count to an explicit quantity.
+    /// </summary>
+    public static DeckEditOperation SetCardQuantity(
+        string cardName,
+        int? quantity = null,
+        string? category = null,
+        string rationale = "")
+    {
+        return new SetCardQuantityOperation(cardName, quantity, category, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that moves a card between categories.
+    /// </summary>
+    public static DeckEditOperation MoveCard(
+        string cardName,
+        string? fromCategory,
+        string toCategory,
+        string rationale = "")
+    {
+        return new MoveCardOperation(cardName, fromCategory, toCategory, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that assigns an additional category to a card.
+    /// </summary>
+    public static DeckEditOperation AddCardCategory(
+        string cardName,
+        string category,
+        string rationale = "")
+    {
+        return new AddCardCategoryOperation(cardName, category, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that removes a category assignment from a card.
+    /// </summary>
+    public static DeckEditOperation RemoveCardCategory(
+        string cardName,
+        string category,
+        string rationale = "")
+    {
+        return new RemoveCardCategoryOperation(cardName, category, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that makes a category the card's primary grouping.
+    /// </summary>
+    public static DeckEditOperation SetPrimaryCardCategory(
+        string cardName,
+        string category,
+        string rationale = "")
+    {
+        return new SetPrimaryCardCategoryOperation(cardName, category, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that defines a deck category and its inclusion flags.
+    /// </summary>
+    public static DeckEditOperation CreateCategory(
+        string category,
+        bool? includedInDeck = null,
+        bool? includedInPrice = null,
+        string rationale = "")
+    {
+        return new CreateCategoryOperation(category, includedInDeck, includedInPrice, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that renames one deck category across the workspace.
+    /// </summary>
+    public static DeckEditOperation RenameCategory(
+        string fromCategory,
+        string toCategory,
+        string rationale = "")
+    {
+        return new RenameCategoryOperation(fromCategory, toCategory, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that deletes a category and optionally moves its cards.
+    /// </summary>
+    public static DeckEditOperation DeleteCategory(
+        string category,
+        string? toCategory = null,
+        string rationale = "")
+    {
+        return new DeleteCategoryOperation(category, toCategory, rationale);
+    }
+
+    /// <summary>
+    /// Builds a typed edit that changes deck-level metadata.
+    /// </summary>
+    public static DeckEditOperation UpdateDeckMetadata(
+        string? name = null,
+        string? format = null,
+        string? description = null,
+        string rationale = "")
+    {
+        return new UpdateDeckMetadataOperation(name, format, description, rationale);
+    }
+
+    /// <summary>
+    /// Adds card copies to a category.
+    /// </summary>
+    public sealed record AddCardOperation(
+        string CardName,
+        int? Quantity,
+        string? Category,
+        string Rationale);
+
+    /// <summary>
+    /// Removes card copies from a category or from the first matching card.
+    /// </summary>
+    public sealed record RemoveCardOperation(
+        string CardName,
+        int? Quantity,
+        string? Category,
+        string Rationale);
+
+    /// <summary>
+    /// Sets the quantity of a card in a category or on the first matching card.
+    /// </summary>
+    public sealed record SetCardQuantityOperation(
+        string CardName,
+        int? Quantity,
+        string? Category,
+        string Rationale);
+
+    /// <summary>
+    /// Moves a card from one category to another primary category.
+    /// </summary>
+    public sealed record MoveCardOperation(
+        string CardName,
+        string? FromCategory,
+        string ToCategory,
+        string Rationale);
+
+    /// <summary>
+    /// Adds a secondary category to a card.
+    /// </summary>
+    public sealed record AddCardCategoryOperation(
+        string CardName,
+        string Category,
+        string Rationale);
+
+    /// <summary>
+    /// Removes a category from a card.
+    /// </summary>
+    public sealed record RemoveCardCategoryOperation(
+        string CardName,
+        string Category,
+        string Rationale);
+
+    /// <summary>
+    /// Makes a card category the primary category.
+    /// </summary>
+    public sealed record SetPrimaryCardCategoryOperation(
+        string CardName,
+        string Category,
+        string Rationale);
+
+    /// <summary>
+    /// Creates a deck category and its inclusion flags.
+    /// </summary>
+    public sealed record CreateCategoryOperation(
+        string Category,
+        bool? IncludedInDeck,
+        bool? IncludedInPrice,
+        string Rationale);
+
+    /// <summary>
+    /// Renames a deck category.
+    /// </summary>
+    public sealed record RenameCategoryOperation(
+        string FromCategory,
+        string ToCategory,
+        string Rationale);
+
+    /// <summary>
+    /// Deletes a deck category and moves cards to a fallback category.
+    /// </summary>
+    public sealed record DeleteCategoryOperation(
+        string Category,
+        string? ToCategory,
+        string Rationale);
+
+    /// <summary>
+    /// Updates deck metadata fields.
+    /// </summary>
+    public sealed record UpdateDeckMetadataOperation(
+        string? Name,
+        string? Format,
+        string? Description,
+        string Rationale);
 }
 
 /// <summary>
@@ -201,7 +637,7 @@ public sealed class DeckEditPlanApplyResult
     /// <summary>
     /// Gets or sets the saved status of the plan after the apply attempt.
     /// </summary>
-    public string Status { get; set; } = DeckEditPlanStatus.Applied;
+    public DeckEditPlanStatus Status { get; set; } = DeckEditPlanStatus.Applied;
 
     /// <summary>
     /// Gets or sets the applied operations.
@@ -256,34 +692,40 @@ public sealed class DeckEditPlanDeleteResult
 }
 
 /// <summary>
-/// Provides deck edit plan statuses.
+/// Lists the closed set of deck edit plan apply states.
 /// </summary>
-public static class DeckEditPlanStatus
+[JsonConverter(typeof(JsonStringEnumConverter<DeckEditPlanStatus>))]
+public enum DeckEditPlanStatus
 {
     /// <summary>
-    /// Stores the draft status.
+    /// The plan is saved but has not been applied.
     /// </summary>
-    public const string Draft = "draft";
+    [JsonStringEnumMemberName("draft")]
+    Draft,
 
     /// <summary>
-    /// Stores the applied status.
+    /// Every operation completed and the plan was saved as applied.
     /// </summary>
-    public const string Applied = "applied";
+    [JsonStringEnumMemberName("applied")]
+    Applied,
 
     /// <summary>
-    /// Stores the failed status.
+    /// No operation completed and the plan was saved as failed.
     /// </summary>
-    public const string Failed = "failed";
+    [JsonStringEnumMemberName("failed")]
+    Failed,
 
     /// <summary>
-    /// Stores the partially applied status.
+    /// At least one operation completed before a later failure.
     /// </summary>
-    public const string PartiallyApplied = "partially-applied";
+    [JsonStringEnumMemberName("partially-applied")]
+    PartiallyApplied,
 
     /// <summary>
-    /// Stores the status used when a remote write may have succeeded but the client did not receive confirmation.
+    /// A remote write may have succeeded but the client did not receive confirmation.
     /// </summary>
-    public const string ApplyStateUnknown = "apply-state-unknown";
+    [JsonStringEnumMemberName("apply-state-unknown")]
+    ApplyStateUnknown,
 }
 
 /// <summary>

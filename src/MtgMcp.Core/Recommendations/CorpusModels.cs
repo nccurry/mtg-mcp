@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -50,33 +52,44 @@ public static class CorpusSourceApiTypes
 /// <summary>
 /// Lists corpus source status labels.
 /// </summary>
-public static class CorpusSourceStatuses
+[JsonConverter(typeof(JsonStringEnumConverter<CorpusSourceStatusKind>))]
+public enum CorpusSourceStatusKind
 {
     /// <summary>
     /// Indicates a source can be queried.
     /// </summary>
-    public const string Available = "available";
+    [JsonStringEnumMemberName("available")]
+    Available,
 
     /// <summary>
     /// Indicates a source is disabled by configuration.
     /// </summary>
-    public const string Disabled = "disabled";
+    [JsonStringEnumMemberName("disabled")]
+    Disabled,
 
     /// <summary>
     /// Indicates a source needs a configured API key.
     /// </summary>
-    public const string MissingConfig = "missing-config";
+    [JsonStringEnumMemberName("missing-config")]
+    MissingConfig,
 
     /// <summary>
     /// Indicates a source query failed.
     /// </summary>
-    public const string Failed = "failed";
+    [JsonStringEnumMemberName("failed")]
+    Failed,
 
     /// <summary>
     /// Indicates the source rejected access without making the recommendation run fail.
     /// </summary>
-    public const string AccessBlocked = "access-blocked";
+    [JsonStringEnumMemberName("access-blocked")]
+    AccessBlocked,
 
+    /// <summary>
+    /// Indicates a source needs an OAuth grant before it can be queried.
+    /// </summary>
+    [JsonStringEnumMemberName("needs-oauth")]
+    NeedsOAuth,
 }
 
 /// <summary>
@@ -313,7 +326,7 @@ public sealed class CorpusSourceStatus
     /// <summary>
     /// Gets or sets the source status label.
     /// </summary>
-    public string Status { get; set; } = "available";
+    public CorpusSourceStatusKind Status { get; set; } = CorpusSourceStatusKind.Available;
 
     /// <summary>
     /// Gets or sets the source URL.

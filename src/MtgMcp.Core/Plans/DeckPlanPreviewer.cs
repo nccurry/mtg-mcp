@@ -101,95 +101,72 @@ internal sealed class DeckPlanPreviewer
         DeckEditOperation operation,
         CancellationToken cancellationToken)
     {
-        switch (operation.Operation)
+        Task applyTask = operation switch
         {
-            case DeckEditOperations.AddCard:
-                await workspaceService.AddCardAsync(
+            DeckEditOperation.AddCardOperation add => workspaceService.AddCardAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    operation.Quantity ?? 1,
-                    operation.Category ?? DeckDefaults.Mainboard,
+                    Require(add.CardName, "cardName"),
+                    add.Quantity ?? 1,
+                    add.Category ?? DeckDefaults.Mainboard,
                     force: true,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.RemoveCard:
-                await workspaceService.RemoveCardAsync(
+                    cancellationToken: cancellationToken),
+            DeckEditOperation.RemoveCardOperation remove => workspaceService.RemoveCardAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    operation.Quantity ?? 1,
-                    operation.Category,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.SetCardQuantity:
-                await workspaceService.SetCardQuantityAsync(
+                    Require(remove.CardName, "cardName"),
+                    remove.Quantity ?? 1,
+                    remove.Category,
+                    cancellationToken),
+            DeckEditOperation.SetCardQuantityOperation setQuantity => workspaceService.SetCardQuantityAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    operation.Quantity ?? 1,
-                    operation.Category,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.MoveCard:
-                await workspaceService.MoveCardAsync(
+                    Require(setQuantity.CardName, "cardName"),
+                    setQuantity.Quantity ?? 1,
+                    setQuantity.Category,
+                    cancellationToken),
+            DeckEditOperation.MoveCardOperation move => workspaceService.MoveCardAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    Require(operation.ToCategory, "toCategory"),
-                    operation.FromCategory,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.AddCardCategory:
-                await workspaceService.AddCardCategoryAsync(
+                    Require(move.CardName, "cardName"),
+                    Require(move.ToCategory, "toCategory"),
+                    move.FromCategory,
+                    cancellationToken),
+            DeckEditOperation.AddCardCategoryOperation addCategory => workspaceService.AddCardCategoryAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    Require(operation.Category, "category"),
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.RemoveCardCategory:
-                await workspaceService.RemoveCardCategoryAsync(
+                    Require(addCategory.CardName, "cardName"),
+                    Require(addCategory.Category, "category"),
+                    cancellationToken),
+            DeckEditOperation.RemoveCardCategoryOperation removeCategory => workspaceService.RemoveCardCategoryAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    Require(operation.Category, "category"),
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.SetPrimaryCardCategory:
-                await workspaceService.SetPrimaryCardCategoryAsync(
+                    Require(removeCategory.CardName, "cardName"),
+                    Require(removeCategory.Category, "category"),
+                    cancellationToken),
+            DeckEditOperation.SetPrimaryCardCategoryOperation setPrimaryCategory => workspaceService.SetPrimaryCardCategoryAsync(
                     workspaceId,
-                    Require(operation.CardName, "cardName"),
-                    Require(operation.Category, "category"),
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.CreateCategory:
-                await workspaceService.CreateCategoryAsync(
+                    Require(setPrimaryCategory.CardName, "cardName"),
+                    Require(setPrimaryCategory.Category, "category"),
+                    cancellationToken),
+            DeckEditOperation.CreateCategoryOperation createCategory => workspaceService.CreateCategoryAsync(
                     workspaceId,
-                    Require(operation.Category, "category"),
-                    operation.IncludedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(Require(operation.Category, "category")),
-                    operation.IncludedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(Require(operation.Category, "category")),
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.RenameCategory:
-                await workspaceService.RenameCategoryAsync(
+                    Require(createCategory.Category, "category"),
+                    createCategory.IncludedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(Require(createCategory.Category, "category")),
+                    createCategory.IncludedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(Require(createCategory.Category, "category")),
+                    cancellationToken),
+            DeckEditOperation.RenameCategoryOperation renameCategory => workspaceService.RenameCategoryAsync(
                     workspaceId,
-                    Require(operation.FromCategory, "fromCategory"),
-                    Require(operation.ToCategory, "toCategory"),
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.DeleteCategory:
-                await workspaceService.DeleteCategoryAsync(
+                    Require(renameCategory.FromCategory, "fromCategory"),
+                    Require(renameCategory.ToCategory, "toCategory"),
+                    cancellationToken),
+            DeckEditOperation.DeleteCategoryOperation deleteCategory => workspaceService.DeleteCategoryAsync(
                     workspaceId,
-                    Require(operation.Category, "category"),
-                    operation.ToCategory ?? DeckDefaults.Mainboard,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case DeckEditOperations.UpdateDeckMetadata:
-                await workspaceService.UpdateDeckMetadataAsync(
+                    Require(deleteCategory.Category, "category"),
+                    deleteCategory.ToCategory ?? DeckDefaults.Mainboard,
+                    cancellationToken),
+            DeckEditOperation.UpdateDeckMetadataOperation updateMetadata => workspaceService.UpdateDeckMetadataAsync(
                     workspaceId,
-                    operation.Name,
-                    operation.Format,
-                    operation.Description,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown deck edit operation '{operation.Operation}'.");
-        }
+                    updateMetadata.Name,
+                    updateMetadata.Format,
+                    updateMetadata.Description,
+                    cancellationToken)
+        };
+        await applyTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -303,13 +280,13 @@ internal sealed class DeckPlanPreviewer
             List<string> names = [];
             foreach (DeckEditOperation operation in operations)
             {
-                if (!operation.Operation.Equals(DeckEditOperations.AddCard, StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(operation.CardName))
+                if (operation is not DeckEditOperation.AddCardOperation add
+                    || string.IsNullOrWhiteSpace(add.CardName))
                 {
                     continue;
                 }
 
-                string cardName = operation.CardName.Trim();
+                string cardName = add.CardName.Trim();
                 if (!names.Contains(cardName, StringComparer.OrdinalIgnoreCase))
                 {
                     names.Add(cardName);

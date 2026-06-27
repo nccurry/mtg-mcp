@@ -56,7 +56,7 @@ public sealed class ScryfallTaggerCorpusSignalProvider : ICorpusSignalProvider
             Enabled = sourceOptions.Enabled,
             StableApi = true,
             ApiType = CorpusSourceApiTypes.Official,
-            Status = sourceOptions.Enabled ? CorpusSourceStatuses.Available : CorpusSourceStatuses.Disabled,
+            Status = sourceOptions.Enabled ? CorpusSourceStatusKind.Available : CorpusSourceStatusKind.Disabled,
             AttributionRequired = true,
             Uri = "https://tagger.scryfall.com/",
             Notes =

@@ -152,7 +152,7 @@ public sealed class DeckReEvaluationTools
         int boundedLimit = Math.Clamp(limit, 1, MaxLimit);
         DeckWorkspace current = await decks.OpenLocalDeckAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
-        (string baselineStatus, DeckWorkspace? baselineWorkspace, List<string> baselineNotes) = await ResolveBaselineAsync(
+        (WorkspaceDiffLastImportStatus baselineStatus, DeckWorkspace? baselineWorkspace, List<string> baselineNotes) = await ResolveBaselineAsync(
                 normalizedBaselineMode,
                 baselineWorkspaceId,
                 workspaceId,
@@ -229,7 +229,7 @@ public sealed class DeckReEvaluationTools
     /// <summary>
     /// Resolves the requested analysis baseline without hiding unavailable states.
     /// </summary>
-    private async Task<(string Status, DeckWorkspace? Baseline, List<string> Notes)> ResolveBaselineAsync(
+    private async Task<(WorkspaceDiffLastImportStatus Status, DeckWorkspace? Baseline, List<string> Notes)> ResolveBaselineAsync(
         string normalizedBaselineMode,
         string? baselineWorkspaceId,
         string workspaceId,
@@ -246,7 +246,7 @@ public sealed class DeckReEvaluationTools
 
             DeckWorkspace baseline = await decks.OpenLocalDeckAsync(baselineWorkspaceId, cancellationToken)
                 .ConfigureAwait(false);
-            return ("baselineFound", baseline, [$"Compared against explicit baseline workspace '{baseline.Id}'."]);
+            return (WorkspaceDiffLastImportStatus.BaselineFound, baseline, [$"Compared against explicit baseline workspace '{baseline.Id}'."]);
         }
 
         WorkspaceImportBaselineResolution resolution = await decks

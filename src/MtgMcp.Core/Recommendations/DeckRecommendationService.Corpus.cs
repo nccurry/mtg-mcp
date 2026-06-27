@@ -454,13 +454,13 @@ public sealed partial class DeckRecommendationService
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                status.Status = CorpusSourceStatuses.Failed;
+                status.Status = CorpusSourceStatusKind.Failed;
                 status.Notes.Add($"Timed out after {budget.SourceTimeoutSeconds} second(s).");
                 combined.Notes.Add($"{status.Name} timed out; continuing with remaining recommendation sources.");
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {
-                status.Status = CorpusSourceStatuses.Failed;
+                status.Status = CorpusSourceStatusKind.Failed;
                 status.Notes.Add($"{exception.GetType().Name}: {exception.Message}");
                 combined.Notes.Add($"{status.Name} failed; continuing with remaining recommendation sources.");
             }
@@ -800,14 +800,16 @@ public sealed partial class DeckRecommendationService
     /// <summary>
     /// Ranks source statuses so blocked or failed query statuses are not hidden by an initial available row.
     /// </summary>
-    private static int SourceStatusPriority(string status)
+    private static int SourceStatusPriority(CorpusSourceStatusKind status)
     {
         return status switch
         {
-            CorpusSourceStatuses.AccessBlocked => 0,
-            CorpusSourceStatuses.Failed => 1,
-            CorpusSourceStatuses.MissingConfig => 2,
-            CorpusSourceStatuses.Disabled => 3,
+            CorpusSourceStatusKind.AccessBlocked => 0,
+            CorpusSourceStatusKind.Failed => 1,
+            CorpusSourceStatusKind.MissingConfig => 2,
+            CorpusSourceStatusKind.NeedsOAuth => 2,
+            CorpusSourceStatusKind.Disabled => 3,
+            CorpusSourceStatusKind.Available => 4,
             _ => 5
         };
     }

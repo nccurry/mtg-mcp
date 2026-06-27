@@ -397,7 +397,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
             catch (Exception exception) when (!IsCancellation(exception))
             {
-                status.Status = CorpusSourceStatuses.Failed;
+                status.Status = CorpusSourceStatusKind.Failed;
                 status.Notes.Add($"{exception.GetType().Name}: {exception.Message}");
                 combined.Notes.Add($"{status.Name} failed; continuing with remaining recommendation sources.");
             }

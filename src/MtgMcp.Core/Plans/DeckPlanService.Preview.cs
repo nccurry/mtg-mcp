@@ -150,22 +150,7 @@ public sealed partial class DeckPlanService
             Confidence = plan.Confidence,
             Warnings = plan.Warnings.ToList(),
             Operations = plan.Operations
-                .Select(operation => new DeckEditOperation
-                {
-                    Operation = operation.Operation,
-                    CardName = operation.CardName,
-                    ReplacementCardName = operation.ReplacementCardName,
-                    Quantity = operation.Quantity,
-                    Category = operation.Category,
-                    FromCategory = operation.FromCategory,
-                    ToCategory = operation.ToCategory,
-                    Name = operation.Name,
-                    Format = operation.Format,
-                    Description = operation.Description,
-                    IncludedInDeck = operation.IncludedInDeck,
-                    IncludedInPrice = operation.IncludedInPrice,
-                    Rationale = operation.Rationale
-                })
+                .Select(operation => operation.Clone())
                 .ToList()
         };
     }
@@ -268,11 +253,19 @@ public sealed partial class DeckPlanService
         List<string> categories = [];
         foreach (DeckEditOperation operation in plan.Operations)
         {
-            string? category = operation.Operation switch
+            string? category = operation switch
             {
-                DeckEditOperations.AddCard => operation.Category ?? DeckDefaults.Mainboard,
-                DeckEditOperations.MoveCard => operation.ToCategory,
-                _ => null
+                DeckEditOperation.AddCardOperation add => add.Category ?? DeckDefaults.Mainboard,
+                DeckEditOperation.RemoveCardOperation => null,
+                DeckEditOperation.SetCardQuantityOperation => null,
+                DeckEditOperation.MoveCardOperation move => move.ToCategory,
+                DeckEditOperation.AddCardCategoryOperation => null,
+                DeckEditOperation.RemoveCardCategoryOperation => null,
+                DeckEditOperation.SetPrimaryCardCategoryOperation => null,
+                DeckEditOperation.CreateCategoryOperation => null,
+                DeckEditOperation.RenameCategoryOperation => null,
+                DeckEditOperation.DeleteCategoryOperation => null,
+                DeckEditOperation.UpdateDeckMetadataOperation => null
             };
             if (string.IsNullOrWhiteSpace(category)
                 || DeckCategoryInclusion.IsIncludedInDeck(categoryMap, category))
@@ -599,7 +592,7 @@ public sealed partial class DeckPlanService
             return null;
         }
 
-        DeckWorkspace preferred = operation.Operation.Equals(DeckEditOperations.RemoveCard, StringComparison.OrdinalIgnoreCase)
+        DeckWorkspace preferred = operation is DeckEditOperation.RemoveCardOperation
             ? before
             : after;
         DeckCard? card = FindCard(preferred, operation.CardName);

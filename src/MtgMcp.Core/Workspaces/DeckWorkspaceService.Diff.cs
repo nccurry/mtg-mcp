@@ -52,14 +52,14 @@ public sealed partial class DeckWorkspaceService
         };
         if (source is null)
         {
-            result.Status = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+            result.Status = WorkspaceDiffLastImportStatus.WorkspaceHasNoSource;
             result.Notes.Add("Workspace does not have a provider source reference.");
             return result;
         }
 
         if (!IsImportHistoryProvider(source.Provider))
         {
-            result.Status = WorkspaceDiffLastImportStatuses.SourceUnsupported;
+            result.Status = WorkspaceDiffLastImportStatus.SourceUnsupported;
             result.Notes.Add($"Import history does not support provider '{source.Provider}'.");
             return result;
         }
@@ -67,7 +67,7 @@ public sealed partial class DeckWorkspaceService
         DeckImportHistoryEntry? entry = FindLatestImportHistoryEntry(current, source);
         if (entry is null)
         {
-            result.Status = WorkspaceDiffLastImportStatuses.NoPriorBaseline;
+            result.Status = WorkspaceDiffLastImportStatus.NoPriorBaseline;
             result.Notes.Add("No prior import baseline exists for this provider, external deck id, and local workspace id.");
             return result;
         }
@@ -75,12 +75,12 @@ public sealed partial class DeckWorkspaceService
         result.ImportedAt = entry.ImportedAt;
         if (entry.BaselineWorkspace is null)
         {
-            result.Status = WorkspaceDiffLastImportStatuses.HistoryUnavailable;
+            result.Status = WorkspaceDiffLastImportStatus.HistoryUnavailable;
             result.Notes.Add("The matching import history entry does not contain a baseline workspace snapshot.");
             return result;
         }
 
-        result.Status = WorkspaceDiffLastImportStatuses.BaselineFound;
+        result.Status = WorkspaceDiffLastImportStatus.BaselineFound;
         result.Diff = BuildWorkspaceDiff(current, entry.BaselineWorkspace);
         result.Notes.Add($"Compared against import history captured at {entry.ImportedAt:O}.");
         return result;
@@ -105,14 +105,14 @@ public sealed partial class DeckWorkspaceService
         };
         if (source is null)
         {
-            result.Status = WorkspaceDiffLastImportStatuses.WorkspaceHasNoSource;
+            result.Status = WorkspaceDiffLastImportStatus.WorkspaceHasNoSource;
             result.Notes.Add("Workspace does not have a provider source reference.");
             return result;
         }
 
         if (!IsImportHistoryProvider(source.Provider))
         {
-            result.Status = WorkspaceDiffLastImportStatuses.SourceUnsupported;
+            result.Status = WorkspaceDiffLastImportStatus.SourceUnsupported;
             result.Notes.Add($"Import history does not support provider '{source.Provider}'.");
             return result;
         }
@@ -120,7 +120,7 @@ public sealed partial class DeckWorkspaceService
         DeckImportHistoryEntry? entry = FindLatestImportHistoryEntry(current, source);
         if (entry is null)
         {
-            result.Status = WorkspaceDiffLastImportStatuses.NoPriorBaseline;
+            result.Status = WorkspaceDiffLastImportStatus.NoPriorBaseline;
             result.Notes.Add("No prior import baseline exists for this provider, external deck id, and local workspace id.");
             return result;
         }
@@ -128,12 +128,12 @@ public sealed partial class DeckWorkspaceService
         result.ImportedAt = entry.ImportedAt;
         if (entry.BaselineWorkspace is null)
         {
-            result.Status = WorkspaceDiffLastImportStatuses.HistoryUnavailable;
+            result.Status = WorkspaceDiffLastImportStatus.HistoryUnavailable;
             result.Notes.Add("The matching import history entry does not contain a baseline workspace snapshot.");
             return result;
         }
 
-        result.Status = WorkspaceDiffLastImportStatuses.BaselineFound;
+        result.Status = WorkspaceDiffLastImportStatus.BaselineFound;
         result.BaselineWorkspace = entry.BaselineWorkspace;
         return result;
     }
