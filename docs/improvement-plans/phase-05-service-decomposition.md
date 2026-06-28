@@ -96,6 +96,9 @@ Status update after Sub-PRs A-I:
 - Recent-card radar now lives in
   `src/MtgMcp.Core/Recommendations/DeckNewCardService.cs`, with the facade method retained
   for current recommendation tool wiring.
+- Commander metagame comparison and missing-popular-card planning now live in
+  `src/MtgMcp.Core/Recommendations/DeckCommanderMetaService.cs`, with facade methods
+  retained for current recommendation tool wiring.
 
 ## 4. Workstreams
 

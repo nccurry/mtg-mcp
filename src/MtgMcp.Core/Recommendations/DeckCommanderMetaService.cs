@@ -1,0 +1,209 @@
+namespace MtgMcp.Core;
+
+/// <summary>
+/// Compares saved decks against Commander metagame context and plans missing popular cards.
+/// </summary>
+public sealed class DeckCommanderMetaService
+{
+    /// <summary>
+    /// Loads local workspaces for Commander meta comparison.
+    /// </summary>
+    private readonly IDeckWorkspaceRepository repository;
+
+    /// <summary>
+    /// Resolves catalog metadata for missing popular card plans.
+    /// </summary>
+    private readonly ICardCatalog cardCatalog;
+
+    /// <summary>
+    /// Supplies Commander metagame context when configured.
+    /// </summary>
+    private readonly ICommanderMetaProvider? commanderMetaProvider;
+
+    /// <summary>
+    /// Persists generated missing-popular-card plans.
+    /// </summary>
+    private readonly IDeckPlanRepository? planRepository;
+
+    /// <summary>
+    /// Creates a Commander meta collaborator with explicit storage, catalog, and provider dependencies.
+    /// </summary>
+    public DeckCommanderMetaService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        IDeckPlanRepository? planRepository = null)
+    {
+        this.repository = repository;
+        this.cardCatalog = cardCatalog;
+        this.commanderMetaProvider = commanderMetaProvider;
+        this.planRepository = planRepository;
+    }
+
+    /// <summary>
+    /// Compares a deck with optional Commander metagame data.
+    /// </summary>
+    public async Task<CommanderMetaReport> CompareToCommanderMetaAsync(
+        string workspaceId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
+        CommanderMetaQuery query = new()
+        {
+            Commander = FindCommanderName(workspace, intent),
+            Theme = intent?.Archetype,
+            Format = workspace.Format,
+            Limit = Math.Clamp(limit, 1, 100)
+        };
+        CommanderMetaReport report;
+        if (commanderMetaProvider is null)
+        {
+            report = new CommanderMetaReport
+            {
+                WorkspaceId = workspace.Id,
+                Commander = query.Commander,
+                Theme = query.Theme,
+                Source = "unconfigured"
+            };
+            report.Notes.Add("No Commander meta provider is configured; no popularity rows were inferred.");
+        }
+        else
+        {
+            try
+            {
+                report = await commanderMetaProvider.GetCommanderMetaAsync(query, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (!IsCancellation(exception))
+            {
+                report = new CommanderMetaReport
+                {
+                    WorkspaceId = workspace.Id,
+                    Commander = query.Commander,
+                    Theme = query.Theme,
+                    Source = "provider-error"
+                };
+                report.Notes.Add($"Commander meta provider failed; no popularity rows were inferred. {exception.GetType().Name}: {exception.Message}");
+            }
+        }
+
+        report.WorkspaceId = workspace.Id;
+        report.Commander ??= query.Commander;
+        report.Theme ??= query.Theme;
+        HashSet<string> existing = workspace.Cards.Select(card => card.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        report.IncludedPopularCards = report.PopularCards
+            .Where(card => existing.Contains(card.Name))
+            .Take(query.Limit)
+            .ToList();
+        report.MissingPopularCards = report.PopularCards
+            .Where(card => !existing.Contains(card.Name))
+            .Take(query.Limit)
+            .ToList();
+
+        return report;
+    }
+
+    /// <summary>
+    /// Creates a plan for popular cards missing from a deck.
+    /// </summary>
+    public async Task<GoalPackagePlanResult> FindMissingPopularCardsAsync(
+        string workspaceId,
+        int limit,
+        decimal? maxPrice,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
+        CommanderMetaReport report = await CompareToCommanderMetaAsync(workspaceId, Math.Clamp(limit, 1, 25), cancellationToken)
+            .ConfigureAwait(false);
+        IReadOnlyDictionary<string, CardInfo> cards = await cardCatalog
+            .GetCardsByNamesAsync(report.MissingPopularCards.Select(card => card.Name).ToList(), cancellationToken)
+            .ConfigureAwait(false);
+        (bool colorKnown, HashSet<string> colors) = DeckRecommendationCardFacts.GetDeckColorIdentity(workspace);
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, "Missing popular cards plan", "missing-popular-cards");
+        List<GoalCardSuggestion> suggestions = [];
+
+        foreach (CommanderMetaCard metaCard in report.MissingPopularCards)
+        {
+            if (!cards.TryGetValue(metaCard.Name, out CardInfo? card)
+                || !DeckRecommendationCardFacts.IsLegalInFormat(card, workspace.Format)
+                || !DeckRecommendationCardFacts.IsInDeckColorIdentity(card, colorKnown, colors)
+                || (maxPrice.HasValue && DeckRecommendationCardFacts.ReadUsdPrice(card).GetValueOrDefault(decimal.MaxValue) > maxPrice.Value))
+            {
+                continue;
+            }
+
+            DeckCard candidate = DeckRecommendationCardFacts.CreateCandidateCard(card);
+            CardRoleAssignment role = DeckRoleClassifier.Classify(candidate);
+            suggestions.Add(new GoalCardSuggestion
+            {
+                CardName = card.Name,
+                Role = role.PrimaryRole,
+                Tags = role.Tags,
+                FitScore = Math.Clamp(0.60 + metaCard.InclusionRate + metaCard.SynergyScore, 0, 1),
+                Price = DeckRecommendationCardFacts.ReadUsdPrice(card),
+                ScryfallUri = card.ScryfallUri,
+                Rationale = $"{card.Name} is a popular {metaCard.Category} candidate from {report.Source}."
+            });
+            plan.Operations.Add(DeckEditOperation.AddCard(card.Name, 1, role.PrimaryRole, $"Add popular card from {report.Source}: {metaCard.Category}."));
+            if (plan.Operations.Count >= Math.Clamp(limit, 1, 25))
+            {
+                break;
+            }
+        }
+
+        plan.Rationale = "Adds high-context popular cards missing from the current commander or theme profile.";
+        plan.Confidence = suggestions.Count == 0 ? 0 : suggestions.Average(suggestion => suggestion.FitScore);
+        if (suggestions.Count == 0)
+        {
+            plan.Warnings.Add("No missing popular cards met legality, color identity, and price filters.");
+        }
+
+        await DeckServiceHelpers.RequirePlanRepository(planRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        return new GoalPackagePlanResult
+        {
+            Plan = plan,
+            Goal = "missing popular cards",
+            Strategy = "commander-meta",
+            Suggestions = suggestions
+        };
+    }
+
+    /// <summary>
+    /// Finds the commander query name, preferring active multi-card command zones over stale saved intent.
+    /// </summary>
+    private static string? FindCommanderName(DeckWorkspace workspace, DeckIntent? intent)
+    {
+        CommandZoneContext commandZone = CommandZoneContext.FromWorkspace(workspace);
+        if (commandZone.HasPartnerPair || commandZone.HasBackgroundPair)
+        {
+            return commandZone.DisplayName;
+        }
+
+        return string.IsNullOrWhiteSpace(intent?.Commander)
+            ? commandZone.DisplayName
+            : intent.Commander;
+    }
+
+    /// <summary>
+    /// Checks whether an exception represents cooperative cancellation.
+    /// </summary>
+    private static bool IsCancellation(Exception exception)
+    {
+        return exception is OperationCanceledException;
+    }
+
+    /// <summary>
+    /// Loads a workspace by id or throws when it is unknown.
+    /// </summary>
+    private async Task<DeckWorkspace> LoadWorkspaceAsync(
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
+        DeckWorkspace? workspace = await repository
+            .GetAsync(workspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return workspace
+            ?? throw new InvalidOperationException($"Workspace '{workspaceId}' was not found.");
+    }
+}

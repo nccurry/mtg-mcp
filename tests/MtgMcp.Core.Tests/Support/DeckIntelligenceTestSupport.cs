@@ -211,6 +211,23 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a Commander meta service with explicit storage, catalog, and provider dependencies.
+    /// </summary>
+    private static DeckCommanderMetaService CreateCommanderMetaService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        return new DeckCommanderMetaService(repository, cardCatalog, commanderMetaProvider, planRepository);
+    }
+
+    /// <summary>
     /// Creates a recommendation service with explicit analysis and simulation collaborators.
     /// </summary>
     private static DeckRecommendationService CreateRecommendationService(

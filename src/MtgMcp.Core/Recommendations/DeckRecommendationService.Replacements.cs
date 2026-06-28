@@ -189,11 +189,4 @@ public sealed partial class DeckRecommendationService
         return !maxPrice.HasValue || (price.HasValue && price.Value <= maxPrice.Value);
     }
 
-    /// <summary>
-    /// Builds a plan operation that adds a recommended role card.
-    /// </summary>
-    private static DeckEditOperation CreateAddOperation(CardInfo card, string role, string rationale)
-    {
-        return DeckEditOperation.AddCard(card.Name, 1, role, rationale);
-    }
 }

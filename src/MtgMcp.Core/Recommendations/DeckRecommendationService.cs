@@ -11,16 +11,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly IArchidektGateway? archidektGateway;
 
     /// <summary>
-    /// Supplies Commander metagame context when a provider is configured.
-    /// </summary>
-    private readonly ICommanderMetaProvider? commanderMetaProvider;
-
-    /// <summary>
-    /// Supplies recent-card suggestions beyond direct catalog searches.
-    /// </summary>
-    private readonly ICardTrendProvider? cardTrendProvider;
-
-    /// <summary>
     /// Supplies corpus-backed card evidence, exemplar decks, and discussions.
     /// </summary>
     private readonly IReadOnlyList<ICorpusSignalProvider> corpusSignalProviders;
@@ -66,6 +56,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckNewCardService newCards;
 
     /// <summary>
+    /// Compares decks against Commander metagame context and plans missing popular cards.
+    /// </summary>
+    private readonly DeckCommanderMetaService commanderMeta;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -108,7 +103,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckReplacementService? replacements = null,
         DeckCategorySuggestionService? categories = null,
         DeckCardEvaluationService? cardEvaluation = null,
-        DeckNewCardService? newCards = null
+        DeckNewCardService? newCards = null,
+        DeckCommanderMetaService? commanderMeta = null
     )
         : base(
             repository,
@@ -117,8 +113,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             currentDateOverride)
     {
         this.archidektGateway = archidektGateway;
-        this.commanderMetaProvider = commanderMetaProvider;
-        this.cardTrendProvider = cardTrendProvider;
         this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
         this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
@@ -129,6 +123,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.categories = categories ?? new DeckCategorySuggestionService(repository, planRepository);
         this.cardEvaluation = cardEvaluation ?? new DeckCardEvaluationService(repository, cardCatalog);
         this.newCards = newCards ?? new DeckNewCardService(repository, cardCatalog, cardTrendProvider, currentDateOverride);
+        this.commanderMeta = commanderMeta ?? new DeckCommanderMetaService(repository, cardCatalog, commanderMetaProvider, planRepository);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
         this.playgroups = playgroups;

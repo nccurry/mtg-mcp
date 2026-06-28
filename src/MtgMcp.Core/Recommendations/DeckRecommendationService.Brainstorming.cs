@@ -16,7 +16,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckBestPracticeAnalysis best = await analysis.AnalyzeDeckBestPracticesAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        CommanderMetaReport meta = await CompareToCommanderMetaAsync(workspaceId, limit: 15, cancellationToken).ConfigureAwait(false);
+        CommanderMetaReport meta = await commanderMeta
+            .CompareToCommanderMetaAsync(workspaceId, limit: 15, cancellationToken)
+            .ConfigureAwait(false);
         NewCardsForDeckResult newCardReport = await newCards
             .FindNewCardsForDeckAsync(
                 workspaceId,

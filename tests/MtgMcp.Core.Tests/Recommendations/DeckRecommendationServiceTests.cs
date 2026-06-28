@@ -729,7 +729,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderMetaService service = CreateCommanderMetaService(
             workspaces,
             new FakeCardCatalog(),
             commanderMetaProvider: new ThrowingCommanderMetaProvider());
@@ -742,6 +742,52 @@ public sealed partial class DeckIntelligenceTests
         result.Source.Should().Be("provider-error");
         result.MissingPopularCards.Should().BeEmpty();
         result.Notes.Should().Contain(note => note.Contains("provider failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that missing popular cards become a persisted deck edit plan.
+    /// </summary>
+    [Fact]
+    public async Task FindMissingPopularCards_CreatesPlanForLegalMissingCards()
+    {
+        InMemoryRepository workspaces = new();
+        InMemoryPlanRepository plans = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Missing Meta",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        CommanderMetaReport report = new()
+        {
+            Source = "fixed-meta",
+            PopularCards =
+            [
+                new CommanderMetaCard { Name = "Swamp", Category = DeckRoles.Lands, InclusionRate = 0.90, Source = "fixed-meta" },
+                new CommanderMetaCard { Name = "Syphon Mind", Category = DeckRoles.Draw, InclusionRate = 0.20, SynergyScore = 0.10, Source = "fixed-meta" }
+            ]
+        };
+        DeckCommanderMetaService service = CreateCommanderMetaService(
+            workspaces,
+            new GoalBudgetCatalog(),
+            planRepository: plans,
+            commanderMetaProvider: new FixedCommanderMetaProvider(report));
+
+        GoalPackagePlanResult result = await service.FindMissingPopularCardsAsync(
+            workspace.Id,
+            limit: 5,
+            maxPrice: 1,
+            TestContext.Current.CancellationToken);
+
+        result.Strategy.Should().Be("commander-meta");
+        result.Suggestions.Should().ContainSingle(suggestion => suggestion.CardName == "Syphon Mind");
+        result.Plan.Kind.Should().Be("missing-popular-cards");
+        result.Plan.Operations.Should().ContainSingle();
+        DeckEditPlan? saved = await plans.GetAsync(result.Plan.PlanId, TestContext.Current.CancellationToken);
+        saved.Should().NotBeNull();
     }
 
     /// <summary>

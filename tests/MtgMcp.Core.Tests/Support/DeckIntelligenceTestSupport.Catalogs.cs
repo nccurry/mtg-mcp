@@ -239,6 +239,35 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Provides fixed Commander meta rows.
+    /// </summary>
+    private sealed class FixedCommanderMetaProvider : ICommanderMetaProvider
+    {
+        /// <summary>
+        /// Stores fixed Commander meta data.
+        /// </summary>
+        private readonly CommanderMetaReport report;
+
+        /// <summary>
+        /// Creates a fixed Commander meta provider.
+        /// </summary>
+        public FixedCommanderMetaProvider(CommanderMetaReport report)
+        {
+            this.report = report;
+        }
+
+        /// <summary>
+        /// Returns fixed Commander meta data.
+        /// </summary>
+        public Task<CommanderMetaReport> GetCommanderMetaAsync(
+            CommanderMetaQuery query,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(report);
+        }
+    }
+
+    /// <summary>
     /// Provides fixed trend suggestions.
     /// </summary>
     private sealed class FixedCardTrendProvider : ICardTrendProvider
