@@ -153,6 +153,10 @@ Status update after completed Phase 5 slices:
   replacement search/scoring, plan persistence, add-candidate selection, contextual
   feature scoring, and shared helpers. A reconstruction check proved the split preserves
   the pre-split implementation order and behavior.
+- `DeckPlaygroupMetaScoringService` now uses focused partials for public orchestration,
+  meta-deck evidence imports, candidate scoring, pressure inference, scoring factors, and
+  shared helpers. A reconstruction check proved the split preserves the pre-split
+  implementation order and behavior.
 
 ## 4. Workstreams
 
