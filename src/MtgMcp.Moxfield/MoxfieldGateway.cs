@@ -175,16 +175,13 @@ public sealed partial class MoxfieldGateway : IMoxfieldGateway
         string responseBody
     )
     {
-        string hint = response.StatusCode switch
+        string? hint = response.StatusCode switch
         {
-            System.Net.HttpStatusCode.Forbidden => " Moxfield may have blocked anonymous API access.",
-            System.Net.HttpStatusCode.TooManyRequests => " Moxfield rate-limited anonymous API access.",
-            System.Net.HttpStatusCode.NotFound => " The deck may be private, deleted, or mistyped.",
-            _ => "",
+            HttpStatusCode.Forbidden => "Moxfield may have blocked anonymous API access.",
+            HttpStatusCode.TooManyRequests => "Moxfield rate-limited anonymous API access.",
+            HttpStatusCode.NotFound => "The deck may be private, deleted, or mistyped.",
+            _ => null,
         };
-        return new HttpRequestException(
-            $"Moxfield request failed with {(int)response.StatusCode}.{hint} "
-                + SecretRedactor.Redact(responseBody)
-        );
+        return MtgMcpHttpRetry.CreateRequestException("Moxfield", response, responseBody, hint);
     }
 }

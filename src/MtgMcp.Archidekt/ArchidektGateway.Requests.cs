@@ -209,9 +209,7 @@ public sealed partial class ArchidektGateway
         string responseBody
     )
     {
-        return new HttpRequestException(
-            $"Archidekt request failed with {(int)response.StatusCode}: {SecretRedactor.Redact(responseBody)}"
-        );
+        return MtgMcpHttpRetry.CreateRequestException("Archidekt", response, responseBody);
     }
 
     /// <summary>

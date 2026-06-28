@@ -18,9 +18,9 @@ concerns into Core.
   retry/backoff; CommanderSpellbook and Decklists now share a package-free
   text-response retry helper; Moxfield/Playgroup still use custom request paths.
 - **P19 - inconsistent error model.** Bare `EnsureSuccessStatusCode` paths are gone, and
-  corpus providers now throw redacted `HttpRequestException` failures from a shared
-  helper. The remaining gap is a typed adapter outcome model with source-local
-  degradation where a failed optional source should not abort the whole run.
+  adapter HTTP failures now use one redacted/truncated `HttpRequestException` factory.
+  The remaining gap is a typed adapter outcome model with source-local degradation where
+  a failed optional source should not abort the whole run.
 - **P20 (safety) - coarse secret redaction (addressed by 4.3).** Before the Phase 6
   redaction slice, `SecretRedactor.Redact(string)` replaced the whole value if it merely
   contained a keyword like "token"/"secret"; conversely a raw bearer/JWT without those
@@ -114,6 +114,11 @@ Non-goals:
   transient statuses with `Retry-After`, returns explicitly allowed non-success statuses
   for graceful missing-page paths, and throws redacted `HttpRequestException` failures.
   The repo no longer has bare `EnsureSuccessStatusCode()` adapter/corpus paths.
+- **4.2 shared adapter HTTP exception factory:** complete for Scryfall, Archidekt,
+  Moxfield, Playgroup, CommanderSpellbook, and Decklists. Adapter HTTP error bodies now
+  pass through `MtgMcpHttpRetry.CreateRequestException`, which redacts, truncates, and
+  preserves `HttpRequestException.StatusCode`; Moxfield keeps source-specific diagnostic
+  hints via the shared factory.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -137,8 +142,9 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   Archidekt throttle awareness.
 
 ### 4.2 Unified error/result model
-- Status: partially complete. Bare `EnsureSuccessStatusCode()` paths have been replaced
-  with consistent redacted `HttpRequestException` failures for text/json corpus calls.
+- Status: partially complete. Bare `EnsureSuccessStatusCode()` paths have been replaced,
+  and adapter HTTP failures share the same redacted/truncated `HttpRequestException`
+  factory.
 - Remaining: define a shared adapter outcome shape (coordinate with Phase 4 unions and
   Phase 3 error taxonomy): success vs typed failure (auth, rate-limited, unavailable,
   blocked, malformed).

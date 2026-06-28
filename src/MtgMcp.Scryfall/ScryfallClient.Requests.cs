@@ -56,9 +56,7 @@ public sealed partial class ScryfallClient
                 string errorBody = await response
                     .Content.ReadAsStringAsync(cancellationToken)
                     .ConfigureAwait(false);
-                throw new HttpRequestException(
-                    $"Scryfall request failed with {(int)response.StatusCode}: {errorBody}"
-                );
+                throw MtgMcpHttpRetry.CreateRequestException("Scryfall", response, errorBody);
             }
 
             string successBody = await response.Content.ReadAsStringAsync(cancellationToken)
@@ -119,9 +117,7 @@ public sealed partial class ScryfallClient
                 string errorBody = await response
                     .Content.ReadAsStringAsync(cancellationToken)
                     .ConfigureAwait(false);
-                throw new HttpRequestException(
-                    $"Scryfall request failed with {(int)response.StatusCode}: {errorBody}"
-                );
+                throw MtgMcpHttpRetry.CreateRequestException("Scryfall", response, errorBody);
             }
 
             string successBody = await response.Content.ReadAsStringAsync(cancellationToken)

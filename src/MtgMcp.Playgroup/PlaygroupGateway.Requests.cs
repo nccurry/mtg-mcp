@@ -78,9 +78,7 @@ public sealed partial class PlaygroupGateway
         string responseBody
     )
     {
-        return new HttpRequestException(
-            $"Playgroup request failed with {(int)response.StatusCode}: {SecretRedactor.Redact(responseBody)}"
-        );
+        return MtgMcpHttpRetry.CreateRequestException("Playgroup", response, responseBody);
     }
 
     /// <summary>

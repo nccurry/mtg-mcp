@@ -90,14 +90,26 @@ public static class MtgMcpHttpRetry
     public static HttpRequestException CreateRequestException(
         string serviceName,
         HttpResponseMessage response,
-        string? responseBody)
+        string? responseBody,
+        string? diagnosticHint = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
         ArgumentNullException.ThrowIfNull(response);
 
         string safeBody = SummarizeFailureBody(responseBody);
+        string message = $"{serviceName} request failed with {(int)response.StatusCode}";
+        if (!string.IsNullOrWhiteSpace(diagnosticHint))
+        {
+            message += $". {diagnosticHint.Trim()}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(safeBody))
+        {
+            message += $": {safeBody}";
+        }
+
         return new HttpRequestException(
-            $"{serviceName} request failed with {(int)response.StatusCode}: {safeBody}",
+            message,
             inner: null,
             response.StatusCode);
     }
@@ -205,7 +217,12 @@ public static class MtgMcpHttpRetry
     /// </summary>
     private static string SummarizeFailureBody(string? responseBody)
     {
-        string safeBody = SecretRedactor.Redact(responseBody ?? "");
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return "";
+        }
+
+        string safeBody = SecretRedactor.Redact(responseBody);
         return safeBody.Length <= MaxFailureBodyLength
             ? safeBody
             : string.Concat(safeBody.AsSpan(0, MaxFailureBodyLength), "...");

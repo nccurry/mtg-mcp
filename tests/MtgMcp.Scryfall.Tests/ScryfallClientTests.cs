@@ -899,6 +899,37 @@ public sealed class ScryfallClientTests
     }
 
     /// <summary>
+    /// Verifies that Scryfall failure bodies are redacted before they reach exceptions.
+    /// </summary>
+    [Fact]
+    public async Task GetCard_RedactsFailureBody()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        mockHttp
+            .When(HttpMethod.Post, "https://api.scryfall.test/cards/collection")
+            .Respond("application/json", """{ "data": [] }""");
+        mockHttp
+            .When("https://api.scryfall.test/cards/named*")
+            .Respond(
+                HttpStatusCode.BadRequest,
+                "application/json",
+                """{ "token": "secret-token-value", "details": "syntax failed" }"""
+            );
+
+        ScryfallClient client = CreateClient(mockHttp);
+        Func<Task> act = () =>
+            client.GetCardAsync("not a card", TestContext.Current.CancellationToken);
+
+        HttpRequestException exception = (await act.Should()
+            .ThrowAsync<HttpRequestException>()
+            .Where(exception => exception.StatusCode == HttpStatusCode.BadRequest))
+            .Which;
+        exception.Message.Should().Contain("***REDACTED***");
+        exception.Message.Should().Contain("syntax failed");
+        exception.Message.Should().NotContain("secret-token-value");
+    }
+
+    /// <summary>
     /// Verifies that get card returns null for scryfall not found.
     /// </summary>
     [Fact]
