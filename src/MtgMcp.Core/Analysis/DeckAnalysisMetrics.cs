@@ -531,8 +531,15 @@ public sealed class DeckAnalysisMetrics
         IReadOnlySet<string> gameChangers)
     {
         CommanderBracketEstimate estimate = new() { WorkspaceId = workspace.Id };
+        int fastManaCount = 0;
+        int tutorCount = 0;
+        int comboCount = 0;
+        int staxCount = 0;
+        int extraTurnCount = 0;
+        int massLandDenialCount = 0;
         foreach (DeckCard card in IncludedCards(workspace))
         {
+            int quantity = Math.Max(1, card.Quantity);
             CardSnapshot snapshot = GetSnapshot(card);
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
             string text = $"{card.Name} {snapshot.TypeLine} {snapshot.OracleText}";
@@ -545,31 +552,37 @@ public sealed class DeckAnalysisMetrics
 
             if (IsFastMana(card))
             {
+                fastManaCount += quantity;
                 AddSignal(estimate, card.Name, "fast-mana", 3, 3, "Fast mana pushes decks toward higher-power tables.");
             }
 
             if (role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase))
             {
+                tutorCount += quantity;
                 AddSignal(estimate, card.Name, "tutor", 2, 2, "Tutors increase consistency.");
             }
 
             if (role.Tags.Contains(DeckTags.Stax))
             {
+                staxCount += quantity;
                 AddSignal(estimate, card.Name, "stax", 3, 3, "Stax effects can create high-pressure games.");
             }
 
             if (role.Tags.Contains(DeckTags.ComboPiece))
             {
+                comboCount += quantity;
                 AddSignal(estimate, card.Name, "combo", 2, 3, "Combo pieces can raise deck speed and ceiling.");
             }
 
             if (ContainsAny(text, "extra turn", "takes an extra turn"))
             {
+                extraTurnCount += quantity;
                 AddSignal(estimate, card.Name, "extra-turn", 3, 4, "Extra turn effects are strong bracket pressure.");
             }
 
             if (ContainsAny(text, "destroy all lands", "each player sacrifices all lands", "lands don't untap"))
             {
+                massLandDenialCount += quantity;
                 AddSignal(estimate, card.Name, "mass-land-denial", 4, 4, "Mass land denial is high-impact table pressure.");
             }
         }
@@ -580,7 +593,6 @@ public sealed class DeckAnalysisMetrics
             .ToList();
         estimate.GameChangerCount = estimate.GameChangers.Count;
 
-        int tutorCount = estimate.Signals.Count(signal => signal.Signal.Equals("tutor", StringComparison.OrdinalIgnoreCase));
         if (tutorCount >= 5)
         {
             AddSignal(estimate, "", "high-tutor-density", 4, 4, "Five or more tutors suggest a highly consistent deck.");
@@ -595,16 +607,130 @@ public sealed class DeckAnalysisMetrics
             AddSignal(estimate, "", "multiple-game-changers", 4, 4, "Multiple Game Changers usually push a deck up.");
         }
 
-        estimate.BracketFloor = estimate.Signals.Count == 0
-            ? 1
-            : Math.Clamp(estimate.Signals.Max(signal => signal.SuggestedBracket), 1, 4);
-        estimate.EstimatedBracket = estimate.BracketFloor;
+        int densityBracket = EstimateBracketFromDensity(
+            estimate.GameChangerCount,
+            fastManaCount,
+            tutorCount,
+            comboCount,
+            staxCount,
+            extraTurnCount,
+            massLandDenialCount);
+        estimate.BracketFloor = EstimateBracketFloor(
+            estimate.GameChangerCount,
+            fastManaCount,
+            tutorCount,
+            comboCount,
+            staxCount,
+            extraTurnCount,
+            massLandDenialCount);
+        estimate.EstimatedBracket = Math.Clamp(Math.Max(estimate.BracketFloor, densityBracket), 1, 4);
+        if (densityBracket >= 3)
+        {
+            AddSignal(
+                estimate,
+                "",
+                $"density-bracket-{densityBracket}",
+                densityBracket,
+                densityBracket,
+                "Combined density of fast mana, tutors, combo, stax, extra turns, Game Changers, and land denial raises the estimate.");
+        }
+
         estimate.Confidence = estimate.Signals.Count == 0
             ? 0.35
-            : Math.Clamp(0.45 + (estimate.Signals.Count * 0.07), 0.45, 0.90);
+            : Math.Clamp(0.45 + (estimate.Signals.Count * 0.05) + ((estimate.EstimatedBracket - 1) * 0.05), 0.45, 0.90);
         estimate.Notes.Add("Commander bracket output is an advisory estimate for pregame discussion, not an official determination.");
+        estimate.Notes.Add("The model uses signal density; one high-severity card is pressure evidence, not by itself a formal bracket assignment.");
         estimate.Notes.Add("Game Changer data is fetched live from Scryfall using is:game-changer.");
         return estimate;
+    }
+
+    /// <summary>
+    /// Estimates bracket from combined signal density instead of the single largest signal.
+    /// </summary>
+    private static int EstimateBracketFromDensity(
+        int gameChangerCount,
+        int fastManaCount,
+        int tutorCount,
+        int comboCount,
+        int staxCount,
+        int extraTurnCount,
+        int massLandDenialCount)
+    {
+        double score = 0;
+        score += Math.Min(gameChangerCount, 4) * 1.00;
+        score += Math.Min(fastManaCount, 8) * 0.15;
+        score += Math.Min(tutorCount, 8) * 0.12;
+        score += Math.Min(comboCount, 8) * 0.10;
+        score += Math.Min(staxCount, 5) * 0.18;
+        score += Math.Min(extraTurnCount, 4) * 0.35;
+        score += Math.Min(massLandDenialCount, 4) * 0.45;
+
+        if (fastManaCount >= 6 && tutorCount >= 3)
+        {
+            score += 0.35;
+        }
+
+        if (tutorCount >= 4 && comboCount >= 4)
+        {
+            score += 0.35;
+        }
+
+        if (gameChangerCount >= 2)
+        {
+            score += 0.50;
+        }
+
+        if (staxCount + extraTurnCount + massLandDenialCount >= 2)
+        {
+            score += 0.35;
+        }
+
+        if (score >= 2.80)
+        {
+            return 4;
+        }
+
+        if (score >= 1.50)
+        {
+            return 3;
+        }
+
+        return score >= 0.50 ? 2 : 1;
+    }
+
+    /// <summary>
+    /// Computes a conservative floor from strong single signals and dense combinations.
+    /// </summary>
+    private static int EstimateBracketFloor(
+        int gameChangerCount,
+        int fastManaCount,
+        int tutorCount,
+        int comboCount,
+        int staxCount,
+        int extraTurnCount,
+        int massLandDenialCount)
+    {
+        if (gameChangerCount >= 3
+            || tutorCount >= 5
+            || massLandDenialCount >= 2
+            || (fastManaCount >= 5 && tutorCount >= 3)
+            || (comboCount >= 5 && tutorCount >= 3))
+        {
+            return 4;
+        }
+
+        if (gameChangerCount > 0
+            || fastManaCount > 0
+            || staxCount > 0
+            || extraTurnCount > 0
+            || massLandDenialCount > 0
+            || tutorCount >= 3
+            || comboCount >= 3)
+        {
+            return 3;
+        }
+
+        return tutorCount > 0 || comboCount > 0 ? 2 : 1;
     }
 
     /// <summary>

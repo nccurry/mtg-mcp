@@ -14,7 +14,7 @@ task calibrate:stats-lab
 Generated artifacts are written under `artifacts/stats-lab-calibration`:
 
 - `report.json`: machine-readable fixture, expectation, pressure diagnostic,
-  and drift results.
+  bracket diagnostic, and drift results.
 - `report.md`: human-readable summary.
 - `baseline.json`: compact current metric baseline that can be supplied to a
   later run with `--baseline <path>`.
@@ -39,6 +39,8 @@ calibration runs do not require network access.
 Benchmark labels are advisory. Pairwise expectations compare Stats Lab metric
 ordering, not objective deck strength and not real multiplayer win rates.
 Pressure diagnostics compare a deck's scorecard metrics against source-derived
-benchmark pressure profiles; they are not matchup simulations. Profile sweeps
-compare existing `SimulationProfile` behavior only; they do not introduce a
-separate decision-policy layer or affect pass/fail.
+benchmark pressure profiles; they are not matchup simulations. Bracket
+diagnostics compare advisory Commander bracket ranges; they are not official
+bracket rulings. Profile sweeps compare existing `SimulationProfile` behavior
+only; they do not introduce a separate decision-policy layer or affect
+pass/fail.

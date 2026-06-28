@@ -32,6 +32,7 @@ public static class Program
                 $"{report.Summary.PassedRequiredExpectations}/{report.Summary.RequiredExpectationCount} required expectations passed; "
                 + $"{report.Summary.PassedAdvisoryExpectations}/{report.Summary.AdvisoryExpectationCount} advisory expectations passed; "
                 + $"{report.Summary.PressureDiagnosticCount} pressure diagnostics; "
+                + $"{report.Summary.BracketDiagnosticCount} bracket diagnostics; "
                 + $"{report.Summary.DriftFailures} drift failures.");
             if (options.AllowFailures || (report.Summary.FailedRequiredExpectations == 0 && report.Summary.DriftFailures == 0))
             {

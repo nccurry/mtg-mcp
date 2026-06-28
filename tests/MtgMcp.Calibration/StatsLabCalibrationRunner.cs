@@ -72,11 +72,18 @@ public sealed class StatsLabCalibrationRunner
             byId[result.FixtureId] = result;
         }
 
+        Dictionary<string, CalibrationFixture> sourceById = fixtures.ToDictionary(
+            fixture => fixture.FixtureId,
+            StringComparer.OrdinalIgnoreCase);
         foreach (CalibrationExpectation expectation in expectations)
         {
             if (IsPressureExpectation(expectation))
             {
                 report.PressureDiagnostics.Add(EvaluatePressureExpectation(expectation, byId));
+            }
+            else if (IsBracketRangeExpectation(expectation))
+            {
+                report.BracketDiagnostics.Add(EvaluateBracketExpectation(expectation, sourceById));
             }
             else
             {
@@ -176,6 +183,17 @@ public sealed class StatsLabCalibrationRunner
                 {
                     throw new InvalidOperationException(
                         $"Calibration expectation '{expectation.ExpectationId}' references unknown fixture '{expectation.PressureSourceFixtureId}'.");
+                }
+
+                continue;
+            }
+
+            if (IsBracketRangeExpectation(expectation))
+            {
+                if (!fixtureIds.Contains(expectation.TargetFixtureId))
+                {
+                    throw new InvalidOperationException(
+                        $"Calibration expectation '{expectation.ExpectationId}' references unknown fixture '{expectation.TargetFixtureId}'.");
                 }
 
                 continue;
@@ -288,10 +306,33 @@ public sealed class StatsLabCalibrationRunner
             return;
         }
 
+        if (IsBracketRangeExpectation(expectation))
+        {
+            if (string.IsNullOrWhiteSpace(expectation.TargetFixtureId))
+            {
+                throw new InvalidOperationException(
+                    $"Calibration bracket expectation '{expectation.ExpectationId}' is missing targetFixtureId.");
+            }
+
+            if (expectation.MinimumBracket is < 1 or > 4 || expectation.MaximumBracket is < 1 or > 4)
+            {
+                throw new InvalidOperationException(
+                    $"Calibration bracket expectation '{expectation.ExpectationId}' bracket range must stay between 1 and 4.");
+            }
+
+            if (expectation.MinimumBracket > expectation.MaximumBracket)
+            {
+                throw new InvalidOperationException(
+                    $"Calibration bracket expectation '{expectation.ExpectationId}' minimumBracket cannot exceed maximumBracket.");
+            }
+
+            return;
+        }
+
         if (!expectation.Kind.Equals(CalibrationExpectationKind.Pairwise, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Calibration expectation '{expectation.ExpectationId}' kind must be 'pairwise' or 'pressure'.");
+                $"Calibration expectation '{expectation.ExpectationId}' kind must be 'pairwise', 'pressure', or 'bracket-range'.");
         }
 
         if (string.IsNullOrWhiteSpace(expectation.Metric)
@@ -569,7 +610,7 @@ public sealed class StatsLabCalibrationRunner
 
         foreach (CalibrationExpectation expectation in expectations)
         {
-            if (IsPressureExpectation(expectation))
+            if (IsPressureExpectation(expectation) || IsBracketRangeExpectation(expectation))
             {
                 continue;
             }
@@ -809,6 +850,47 @@ public sealed class StatsLabCalibrationRunner
             AffectedScenarios = BuildPressureAffectedScenarios(),
             Thresholds = thresholds,
             FailedThresholds = failedThresholds,
+            Rationale = expectation.Rationale,
+        };
+    }
+
+    /// <summary>
+    /// Evaluates one Commander bracket expectation against an expected range.
+    /// </summary>
+    private static CalibrationBracketDiagnosticResult EvaluateBracketExpectation(
+        CalibrationExpectation expectation,
+        IReadOnlyDictionary<string, CalibrationFixture> fixtures)
+    {
+        CalibrationFixture target = fixtures[expectation.TargetFixtureId];
+        HashSet<string> gameChangers = expectation.GameChangers.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        DeckAnalysisMetrics metrics = new(EmptyCardCatalog.Instance);
+        CommanderBracketEstimate estimate = metrics.EstimateCommanderBracket(target.Workspace, gameChangers);
+        List<string> signals = [];
+        foreach (BracketSignal signal in estimate.Signals)
+        {
+            signals.Add(string.IsNullOrWhiteSpace(signal.CardName)
+                ? signal.Signal
+                : $"{signal.Signal}:{signal.CardName}");
+        }
+
+        bool passed = estimate.EstimatedBracket >= expectation.MinimumBracket
+            && estimate.EstimatedBracket <= expectation.MaximumBracket;
+        return new CalibrationBracketDiagnosticResult
+        {
+            ExpectationId = expectation.ExpectationId,
+            GroupId = expectation.GroupId,
+            Severity = expectation.Severity,
+            Tags = expectation.Tags.ToList(),
+            TargetFixtureId = target.FixtureId,
+            TargetFixtureLabel = target.Label,
+            MinimumBracket = expectation.MinimumBracket,
+            MaximumBracket = expectation.MaximumBracket,
+            EstimatedBracket = estimate.EstimatedBracket,
+            BracketFloor = estimate.BracketFloor,
+            Confidence = estimate.Confidence,
+            GameChangerCount = estimate.GameChangerCount,
+            Signals = signals,
+            Passed = passed,
             Rationale = expectation.Rationale,
         };
     }
@@ -1226,6 +1308,31 @@ public sealed class StatsLabCalibrationRunner
             }
         }
 
+        foreach (CalibrationBracketDiagnosticResult diagnostic in report.BracketDiagnostics)
+        {
+            if (diagnostic.Passed)
+            {
+                passedExpectations++;
+            }
+
+            if (IsRequired(diagnostic.Severity))
+            {
+                requiredExpectations++;
+                if (diagnostic.Passed)
+                {
+                    passedRequiredExpectations++;
+                }
+            }
+            else
+            {
+                advisoryExpectations++;
+                if (diagnostic.Passed)
+                {
+                    passedAdvisoryExpectations++;
+                }
+            }
+        }
+
         int driftFailures = 0;
         foreach (CalibrationDriftResult drift in report.Drift)
         {
@@ -1238,9 +1345,12 @@ public sealed class StatsLabCalibrationRunner
         report.Summary = new CalibrationSummary
         {
             FixtureCount = report.Fixtures.Count,
-            ExpectationCount = report.Expectations.Count + report.PressureDiagnostics.Count,
+            ExpectationCount = report.Expectations.Count + report.PressureDiagnostics.Count + report.BracketDiagnostics.Count,
             PassedExpectations = passedExpectations,
-            FailedExpectations = report.Expectations.Count + report.PressureDiagnostics.Count - passedExpectations,
+            FailedExpectations = report.Expectations.Count
+                + report.PressureDiagnostics.Count
+                + report.BracketDiagnostics.Count
+                - passedExpectations,
             RequiredExpectationCount = requiredExpectations,
             PassedRequiredExpectations = passedRequiredExpectations,
             FailedRequiredExpectations = requiredExpectations - passedRequiredExpectations,
@@ -1251,6 +1361,7 @@ public sealed class StatsLabCalibrationRunner
             ProfileSweepCount = report.ProfileSweeps.Count,
             ProfileSensitivityCount = report.ProfileSensitivity.Count,
             PressureDiagnosticCount = report.PressureDiagnostics.Count,
+            BracketDiagnosticCount = report.BracketDiagnostics.Count,
             DriftFailures = driftFailures,
             ModelVersion = report.Fixtures.Count == 0 ? "" : report.Fixtures[0].ModelVersion,
         };
@@ -1264,6 +1375,7 @@ public sealed class StatsLabCalibrationRunner
         report.Notes.Add("Calibration labels are advisory benchmark labels, not ground truth win-rate labels.");
         report.Notes.Add("Pairwise expectations compare Stats Lab metric behavior, not true multiplayer win rates.");
         report.Notes.Add("Pressure diagnostics compare heuristic metric resilience against source-fixture pressure profiles, not game outcomes.");
+        report.Notes.Add("Bracket diagnostics compare advisory Commander bracket ranges, not official bracket determinations.");
         report.Notes.Add("Required expectation failures fail the CLI by default; advisory expectation failures are diagnostic warnings.");
         if (options.SyntheticOnly)
         {
@@ -1300,5 +1412,100 @@ public sealed class StatsLabCalibrationRunner
     private static bool IsPressureExpectation(CalibrationExpectation expectation)
     {
         return expectation.Kind.Equals(CalibrationExpectationKind.Pressure, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks whether an expectation uses the Commander bracket range shape.
+    /// </summary>
+    private static bool IsBracketRangeExpectation(CalibrationExpectation expectation)
+    {
+        return expectation.Kind.Equals(CalibrationExpectationKind.BracketRange, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Provides the unused catalog dependency required by DeckAnalysisMetrics.
+    /// </summary>
+    private sealed class EmptyCardCatalog : ICardCatalog
+    {
+        /// <summary>
+        /// Shared empty catalog instance.
+        /// </summary>
+        public static readonly EmptyCardCatalog Instance = new();
+
+        /// <summary>
+        /// Prevents callers from creating redundant empty catalog instances.
+        /// </summary>
+        private EmptyCardCatalog()
+        {
+        }
+
+        /// <summary>
+        /// Returns no cards for text searches because bracket calibration only needs deck-level metrics.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
+        /// Returns no cards for structured searches because bracket calibration supplies cards directly.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
+        /// Returns no card detail because bracket calibration does not look up catalog metadata.
+        /// </summary>
+        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CardInfo?>(null);
+        }
+
+        /// <summary>
+        /// Returns no card details for batch lookups because calibration fixtures already contain names.
+        /// </summary>
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(
+                new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Returns no rulings because bracket calibration does not evaluate card rules text.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
+        }
+
+        /// <summary>
+        /// Returns no print variants because calibration fixtures are already normalized.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
+        }
+
+        /// <summary>
+        /// Returns no suggestions because bracket calibration never asks the catalog to recommend cards.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
+            string prompt,
+            string? format,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
     }
 }

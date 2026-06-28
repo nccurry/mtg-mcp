@@ -2210,6 +2210,45 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies one high-severity signal no longer forces the whole estimate to bracket 4.
+    /// </summary>
+    [Fact]
+    public void EstimateCommanderBracket_UsesDensityBeyondSingleMaxSignal()
+    {
+        DeckWorkspace workspace = new()
+        {
+            Id = "single-mld",
+            Name = "Single MLD",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Armageddon Test",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Utility,
+                    Categories = [DeckRoles.Utility],
+                    Snapshot = new CardSnapshot
+                    {
+                        TypeLine = "Sorcery",
+                        ManaValue = 4,
+                        OracleText = "Destroy all lands.",
+                        ColorIdentity = ["W"]
+                    }
+                }
+            ]
+        };
+        DeckAnalysisMetrics metrics = new(new FakeCardCatalog());
+
+        CommanderBracketEstimate estimate = metrics.EstimateCommanderBracket(workspace, new HashSet<string>());
+
+        estimate.Signals.Should().Contain(signal =>
+            signal.Signal == "mass-land-denial"
+            && signal.SuggestedBracket == 4);
+        estimate.EstimatedBracket.Should().Be(3);
+        estimate.Notes.Should().Contain(note => note.Contains("signal density", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies that unavailable Game Changer data fails clearly.
     /// </summary>
     [Fact]

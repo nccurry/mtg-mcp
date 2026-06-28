@@ -53,7 +53,7 @@ regressed:
 | P9 | MCP protocol | No enumerable resource for saved workspaces (resource browsing can't discover decks) | Low | 3 |
 | P10 | Feature coherence | `deck_evaluate_card` started as ramp-only; Phase 7 now evaluates ramp, draw, and interaction, with explicit `unsupportedRole` output for roles outside the current rubric | High | 0,7 |
 | P11 | Feature coherence | Undocumented tools (`commander_search_candidates`, `deck_evaluate_card`, `deck_batch_tuning_report`) and resources (`.../state`, `.../assistant-context`) | Medium | 0 |
-| P12 | Feature coherence | `deck_estimate_commander_bracket` is a coarse max-signal floor; low density sensitivity | Medium | 7 |
+| P12 | Feature coherence | Phase 7 replaced `deck_estimate_commander_bracket`'s coarse max-signal floor with a density-aware advisory model and calibration bracket-range benchmarks | Medium | 7 |
 | P13 | Feature coherence | Phase 7 unified goldfish-family and draw-odds Monte Carlo RNG on `DeterministicSimulationRandom`; keep replay metadata/docs/tests aligned as analytical models evolve | Medium | 0,7 |
 | P14 | Feature coherence | Phase 7 replaced the offline/no-catalog combo fallback with a bounded checked-in `docs/reference/local-combos.json` dataset | Low | 7 |
 | P15 | Domain/code | Union types used once despite `net11.0`/preview bet; outcomes encoded as `bool Success` + `string Status`; string-discriminated `DeckEditOperation` god-DTO | Medium | 4 |
@@ -306,7 +306,8 @@ Solutions (high level):
   operational-fact framework. Phase 7 now covers ramp, draw, and interaction first,
   with explicit unsupported-role output for future roles such as tutors and payoffs.
 - Make `deck_estimate_commander_bracket` density-aware (not just max-signal floor),
-  while keeping it advisory and explainable; expand calibration coverage.
+  while keeping it advisory and explainable; Phase 7 added bracket-range calibration
+  coverage and model docs.
 - Unify simulation determinism: the goldfish family and draw/land odds Monte Carlo now
   use the deterministic RNG used by Stats Lab/race, with `rngKind` stamped on those
   result shapes where replay metadata is exposed.

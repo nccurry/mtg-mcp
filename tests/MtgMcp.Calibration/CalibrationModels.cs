@@ -11,7 +11,7 @@ public sealed class StatsLabCalibrationReport
     /// <summary>
     /// Gets or sets the calibration contract version.
     /// </summary>
-    public int SchemaVersion { get; set; } = 5;
+    public int SchemaVersion { get; set; } = 6;
 
     /// <summary>
     /// Gets or sets the deterministic run settings used for every fixture.
@@ -37,6 +37,11 @@ public sealed class StatsLabCalibrationReport
     /// Gets or sets opponent-pressure diagnostic outcomes.
     /// </summary>
     public List<CalibrationPressureDiagnosticResult> PressureDiagnostics { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets Commander bracket benchmark diagnostics.
+    /// </summary>
+    public List<CalibrationBracketDiagnosticResult> BracketDiagnostics { get; set; } = [];
 
     /// <summary>
     /// Gets or sets optional alternate-profile analyses for calibration diagnostics.
@@ -179,6 +184,11 @@ public sealed class CalibrationSummary
     /// Gets or sets the number of pressure diagnostic checks.
     /// </summary>
     public int PressureDiagnosticCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of bracket benchmark diagnostics.
+    /// </summary>
+    public int BracketDiagnosticCount { get; set; }
 
     /// <summary>
     /// Gets or sets the number of drift checks that exceeded tolerance.
@@ -775,6 +785,87 @@ public sealed class CalibrationPressureDiagnosticResult
 }
 
 /// <summary>
+/// Reports one Commander bracket benchmark range check.
+/// </summary>
+public sealed class CalibrationBracketDiagnosticResult
+{
+    /// <summary>
+    /// Gets or sets the stable expectation id.
+    /// </summary>
+    public string ExpectationId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the benchmark group id.
+    /// </summary>
+    public string GroupId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets whether the expectation should fail the CLI or only warn.
+    /// </summary>
+    public string Severity { get; set; } = CalibrationExpectationSeverity.Required;
+
+    /// <summary>
+    /// Gets or sets tags that describe the bracket benchmark.
+    /// </summary>
+    public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the fixture being evaluated.
+    /// </summary>
+    public string TargetFixtureId { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the target fixture's advisory label.
+    /// </summary>
+    public string TargetFixtureLabel { get; set; } = "";
+
+    /// <summary>
+    /// Gets or sets the minimum acceptable bracket.
+    /// </summary>
+    public int MinimumBracket { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum acceptable bracket.
+    /// </summary>
+    public int MaximumBracket { get; set; }
+
+    /// <summary>
+    /// Gets or sets the estimated bracket produced by the current model.
+    /// </summary>
+    public int EstimatedBracket { get; set; }
+
+    /// <summary>
+    /// Gets or sets the hard-signal floor produced by the current model.
+    /// </summary>
+    public int BracketFloor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the estimate confidence.
+    /// </summary>
+    public double Confidence { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of Game Changers found by the bracket model.
+    /// </summary>
+    public int GameChangerCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets compact signal labels emitted by the bracket model.
+    /// </summary>
+    public List<string> Signals { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets whether the estimated bracket fell within the expected range.
+    /// </summary>
+    public bool Passed { get; set; }
+
+    /// <summary>
+    /// Gets or sets why this bracket range is expected.
+    /// </summary>
+    public string Rationale { get; set; } = "";
+}
+
+/// <summary>
 /// Captures one pressure threshold comparison.
 /// </summary>
 public sealed class CalibrationPressureThresholdResult
@@ -1085,6 +1176,21 @@ internal sealed class CalibrationExpectation
     public string PressureProfileId { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the minimum acceptable Commander bracket for a bracket-range expectation.
+    /// </summary>
+    public int MinimumBracket { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum acceptable Commander bracket for a bracket-range expectation.
+    /// </summary>
+    public int MaximumBracket { get; set; }
+
+    /// <summary>
+    /// Gets or sets offline Game Changer names used by a bracket-range expectation.
+    /// </summary>
+    public List<string> GameChangers { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the required pressure diagnostic score.
     /// </summary>
     public double Threshold { get; set; }
@@ -1114,6 +1220,11 @@ internal static class CalibrationExpectationKind
     /// Compares a fixture against a benchmark-derived pressure profile.
     /// </summary>
     public const string Pressure = "pressure";
+
+    /// <summary>
+    /// Checks one fixture's Commander bracket estimate against an expected range.
+    /// </summary>
+    public const string BracketRange = "bracket-range";
 }
 
 /// <summary>

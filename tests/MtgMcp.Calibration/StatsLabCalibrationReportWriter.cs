@@ -52,6 +52,7 @@ public static class StatsLabCalibrationReportWriter
             $"- Advisory expectations: {report.Summary.PassedAdvisoryExpectations}/{report.Summary.AdvisoryExpectationCount} passed");
         AppendInvariant(builder, $"- Near misses: {report.Summary.NearMissExpectations}");
         AppendInvariant(builder, $"- Pressure diagnostics: {report.Summary.PressureDiagnosticCount}");
+        AppendInvariant(builder, $"- Bracket diagnostics: {report.Summary.BracketDiagnosticCount}");
         AppendInvariant(builder, $"- Profile sweeps: {report.Summary.ProfileSweepCount}");
         AppendInvariant(builder, $"- Profile sensitivity diagnostics: {report.Summary.ProfileSensitivityCount}");
         AppendInvariant(builder, $"- Drift failures: {report.Summary.DriftFailures}");
@@ -87,6 +88,7 @@ public static class StatsLabCalibrationReportWriter
 
         AppendExpectationGroups(builder, report.Expectations);
         AppendPressureDiagnostics(builder, report.PressureDiagnostics);
+        AppendBracketDiagnostics(builder, report.BracketDiagnostics);
         AppendProfileSweeps(builder, report.ProfileSweeps);
         AppendProfileSensitivity(builder, report.ProfileSensitivity);
 
@@ -435,6 +437,77 @@ public static class StatsLabCalibrationReportWriter
     }
 
     /// <summary>
+    /// Appends bracket diagnostics grouped by benchmark group.
+    /// </summary>
+    private static void AppendBracketDiagnostics(
+        StringBuilder builder,
+        List<CalibrationBracketDiagnosticResult> diagnostics)
+    {
+        if (diagnostics.Count == 0)
+        {
+            return;
+        }
+
+        Dictionary<string, List<CalibrationBracketDiagnosticResult>> byGroup = new(StringComparer.OrdinalIgnoreCase);
+        foreach (CalibrationBracketDiagnosticResult diagnostic in diagnostics)
+        {
+            string groupId = string.IsNullOrWhiteSpace(diagnostic.GroupId) ? "ungrouped" : diagnostic.GroupId;
+            if (!byGroup.TryGetValue(groupId, out List<CalibrationBracketDiagnosticResult>? group))
+            {
+                group = [];
+                byGroup[groupId] = group;
+            }
+
+            group.Add(diagnostic);
+        }
+
+        List<string> groupIds = byGroup.Keys.ToList();
+        groupIds.Sort(StringComparer.OrdinalIgnoreCase);
+        builder.AppendLine();
+        builder.AppendLine("## Bracket Diagnostics");
+        foreach (string groupId in groupIds)
+        {
+            builder.AppendLine();
+            AppendInvariant(builder, $"### `{groupId}`");
+            builder.AppendLine();
+            builder.AppendLine("| Status | Severity | Expectation | Tags | Target | Expected | Estimated | Floor | Confidence | Game Changers | Signals |");
+            builder.AppendLine("|---|---|---|---|---|---:|---:|---:|---:|---:|---|");
+            foreach (CalibrationBracketDiagnosticResult diagnostic in byGroup[groupId])
+            {
+                AppendBracketDiagnosticRow(builder, diagnostic);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appends one bracket diagnostic row.
+    /// </summary>
+    private static void AppendBracketDiagnosticRow(
+        StringBuilder builder,
+        CalibrationBracketDiagnosticResult diagnostic)
+    {
+        string expectedRange = diagnostic.MinimumBracket == diagnostic.MaximumBracket
+            ? diagnostic.MinimumBracket.ToString(CultureInfo.InvariantCulture)
+            : $"{diagnostic.MinimumBracket}-{diagnostic.MaximumBracket}";
+        string[] columns =
+        [
+            BracketDiagnosticStatus(diagnostic),
+            diagnostic.Severity,
+            $"`{diagnostic.ExpectationId}`",
+            string.Join(", ", diagnostic.Tags),
+            $"{diagnostic.TargetFixtureId} ({diagnostic.TargetFixtureLabel})",
+            expectedRange,
+            diagnostic.EstimatedBracket.ToString(CultureInfo.InvariantCulture),
+            diagnostic.BracketFloor.ToString(CultureInfo.InvariantCulture),
+            diagnostic.Confidence.ToString("0.000", CultureInfo.InvariantCulture),
+            diagnostic.GameChangerCount.ToString(CultureInfo.InvariantCulture),
+            string.Join(", ", diagnostic.Signals),
+        ];
+
+        AppendMarkdownRow(builder, columns);
+    }
+
+    /// <summary>
     /// Appends one pairwise expectation row to the Markdown report.
     /// </summary>
     private static void AppendExpectationRow(
@@ -563,6 +636,24 @@ public static class StatsLabCalibrationReportWriter
     /// Formats pressure diagnostic pass/fail state while distinguishing advisory warnings.
     /// </summary>
     private static string PressureDiagnosticStatus(CalibrationPressureDiagnosticResult diagnostic)
+    {
+        if (diagnostic.Passed)
+        {
+            return "pass";
+        }
+
+        if (diagnostic.Severity.Equals(CalibrationExpectationSeverity.Advisory, StringComparison.OrdinalIgnoreCase))
+        {
+            return "warn";
+        }
+
+        return "fail";
+    }
+
+    /// <summary>
+    /// Formats bracket diagnostic pass/fail state while distinguishing advisory warnings.
+    /// </summary>
+    private static string BracketDiagnosticStatus(CalibrationBracketDiagnosticResult diagnostic)
     {
         if (diagnostic.Passed)
         {

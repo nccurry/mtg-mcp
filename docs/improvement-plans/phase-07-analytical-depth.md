@@ -17,9 +17,10 @@ becoming a Magic rules engine (a stated non-goal).
   `CardOperationalFacts` to ramp, draw, and interaction facts, and the scorer now declares
   `evaluatedRoles`, selects `evaluatedRole`, and returns `unsupportedRole=true` for roles
   outside the current deterministic rubric.
-- **P12 - bracket estimator is a coarse max-signal floor.**
-  `EstimatedBracket = max(signal.SuggestedBracket)` (`Analysis/DeckAnalysisMetrics.cs:529-601`);
-  one mass-land-denial card forces bracket 4 with little density sensitivity.
+- **P12 - bracket estimator is now density-aware.** Phase 7 moved from
+  `EstimatedBracket = max(signal.SuggestedBracket)` to a density/threshold model with
+  bracket-range calibration fixtures; one high-severity card is no longer enough by itself
+  to force bracket 4.
 - **P13 (real fix) - goldfish determinism.** Phase 7 now routes goldfish-family shuffles
   and `DeckStatistics` Monte Carlo through `DeterministicSimulationRandom`; keep
   deterministic replay metadata, docs, and tests aligned as analytical models evolve.
@@ -48,7 +49,8 @@ Non-goals:
   still deliberately does not score tutors, payoffs, finishers, or other future roles; those
   return an explicit unsupported-role status instead of an unexplained zero.
 - Bracket signals are real (live Game Changers via `is:game-changer`, fast mana, tutors,
-  stax, combo, extra-turn, mass-land-denial) but combined by max, not density.
+  stax, combo, extra-turn, mass-land-denial) and are now combined by density thresholds and
+  strong-signal floors instead of a single max signal.
 - Determinism: `DeterministicSimulationRandom` (SplitMix64) is used by Stats Lab, the
   rules-backed race, the goldfish/board/win-turn family, and `DeckStatistics` draw/land
   odds Monte Carlo. Goldfish and odds outputs now stamp the same RNG label where those
@@ -83,16 +85,15 @@ Non-goals:
   existing tool under the same name.
 
 ### 4.2 Bracket estimator depth
-- **Gate: agree benchmark expectations before implementation.** First, add bracket
-  benchmark cases to the calibration corpus with maintainer-agreed expected bracket ranges
-  for known decks (precon/casual/tuned/high-power/cedh examples). Only after those
-  expectations are signed off should the model change land - the benchmarks define
-  "correct," so they come first, not after.
-- Then move from `max(SuggestedBracket)` to a density/threshold model: weight signal counts
-  and combinations (number of tutors, fast-mana density, Game Changer count, presence of
-  multiple bracket-4 signals) rather than a single floor. Keep it advisory; keep the
-  rationale and confidence; keep Game Changer data live from Scryfall.
-- Document the model and its benchmark expectations in `docs/`.
+- Done in the fourth Phase 7 slice: bracket benchmark expectations were added first in
+  `tests/MtgMcp.Calibration/Corpus/bracket-benchmarks.json` as executable
+  `bracket-range` checks for precon-style, upgraded casual, high-power, and cEDH-density
+  fixtures.
+- Done in the same slice after the benchmark gate: move from `max(SuggestedBracket)` to a
+  density/threshold model that weights signal counts and combinations (tutors, fast mana,
+  Game Changers, combo, stax, extra turns, mass land denial). The model remains advisory,
+  keeps rationale and confidence, and keeps live Game Changer data from Scryfall.
+- Documented in `docs/commander-bracket-model.md`.
 
 ### 4.3 Determinism unification
 - Done in the first Phase 7 slice: the goldfish family and `DeckStatistics` Monte Carlo
@@ -120,18 +121,21 @@ Non-goals:
 - Changed in earlier Phase 7 slices: `Simulation/DeckSimulationService.Goldfish.Run.cs` +
   `Analysis/DeckStatistics.cs` (RNG), and `Analysis/DeckAnalysisService.Combos.cs`
   (dataset fallback).
-- Still to change: `Analysis/DeckAnalysisMetrics.cs` (bracket model).
-- Created: `docs/reference/local-combos.json` (+ embedded loader).
-- Still to create: bracket benchmark JSON in `tests/MtgMcp.Calibration/Corpus/`, docs
-  updates for that model change, and broader evaluator calibration fixtures if a future
-  role expansion needs them.
+- Changed in the bracket slice: `Analysis/DeckAnalysisMetrics.cs`, calibration models,
+  calibration loader/runner/report writer, and bracket tests.
+- Created: `docs/reference/local-combos.json` (+ embedded loader),
+  `tests/MtgMcp.Calibration/Corpus/bracket-benchmarks.json`, and
+  `docs/commander-bracket-model.md`.
+- Future-only: broader evaluator calibration fixtures if a future role expansion needs
+  them.
 - Tests: per-kind evaluator tests now cover ramp/draw/interaction and unsupported-role
   output; bracket benchmark tests; determinism tests (same seed
   -> identical results) for goldfish family; combo-fallback tests.
 
 ## 6. Testing
 
-- Calibration suite extended and run in CI (or as a gated task) for eval/bracket/sim.
+- Calibration suite extended with `bracket-range` diagnostics and run in CI (or as a gated
+  task) for eval/bracket/sim.
 - Determinism: snapshot a seeded goldfish run and assert byte-stable repeat.
 - Evaluator: draw and interaction/removal cards now return meaningful, role-correct output;
   unsupported roles such as finishers return `unsupportedRole=true` rather than an
@@ -143,8 +147,8 @@ Non-goals:
 - `deck_evaluate_card` evaluates ramp + draw + interaction, declares
   supported/unsupported roles in output, and has no misleading unsupported-role zero;
   covered by tests.
-- Bracket estimate is density-aware and advisory, with maintainer-agreed benchmark
-  expectations added to the calibration corpus *before* the model change and checked in CI.
+- Bracket estimate is density-aware and advisory, with benchmark expectations added to the
+  calibration corpus before the model change and checked in the calibration suite.
 - All simulation tools share the deterministic RNG and stamp `RngKind`; docs describe one
   determinism model.
 - Local combo fallback is a real dataset, catalog-first.
@@ -166,6 +170,5 @@ Non-goals:
 
 - `deck_evaluate_card` rename timing is decided by implementation: no ramp-scoped alias was
   introduced; the existing tool is now the general supported-role evaluator.
-- Bracket model: rules-of-thumb thresholds vs a small weighted score - which best matches
-  the Commander brackets beta guidance the prompt cites? (Decide alongside the agreed
-  benchmark expectations in 4.2.)
+- Bracket model approach is decided for this phase: use a small weighted density score plus
+  conservative strong-signal floors, documented in `docs/commander-bracket-model.md`.

@@ -270,10 +270,14 @@ internal static class CalibrationCorpusLoader
         {
             ValidatePressureExpectationShape(expectation);
         }
+        else if (expectation.Kind.Equals(CalibrationExpectationKind.BracketRange, StringComparison.OrdinalIgnoreCase))
+        {
+            ValidateBracketRangeExpectationShape(expectation);
+        }
         else
         {
             throw new InvalidOperationException(
-                $"Corpus expectation '{expectation.ExpectationId}' kind must be 'pairwise' or 'pressure'.");
+                $"Corpus expectation '{expectation.ExpectationId}' kind must be 'pairwise', 'pressure', or 'bracket-range'.");
         }
     }
 
@@ -344,6 +348,30 @@ internal static class CalibrationCorpusLoader
     }
 
     /// <summary>
+    /// Validates required fields for a Commander bracket range expectation.
+    /// </summary>
+    private static void ValidateBracketRangeExpectationShape(CalibrationExpectation expectation)
+    {
+        if (string.IsNullOrWhiteSpace(expectation.TargetFixtureId))
+        {
+            throw new InvalidOperationException(
+                $"Corpus expectation '{expectation.ExpectationId}' is missing targetFixtureId.");
+        }
+
+        if (expectation.MinimumBracket is < 1 or > 4 || expectation.MaximumBracket is < 1 or > 4)
+        {
+            throw new InvalidOperationException(
+                $"Corpus expectation '{expectation.ExpectationId}' bracket range must stay between 1 and 4.");
+        }
+
+        if (expectation.MinimumBracket > expectation.MaximumBracket)
+        {
+            throw new InvalidOperationException(
+                $"Corpus expectation '{expectation.ExpectationId}' minimumBracket cannot exceed maximumBracket.");
+        }
+    }
+
+    /// <summary>
     /// Applies schema-compatible defaults before validation.
     /// </summary>
     private static void NormalizeExpectation(CalibrationExpectation expectation)
@@ -367,9 +395,15 @@ internal static class CalibrationCorpusLoader
         }
 
         expectation.Tags ??= [];
+        expectation.GameChangers ??= [];
         for (int index = 0; index < expectation.Tags.Count; index++)
         {
             expectation.Tags[index] = expectation.Tags[index].Trim();
+        }
+
+        for (int index = 0; index < expectation.GameChangers.Count; index++)
+        {
+            expectation.GameChangers[index] = expectation.GameChangers[index].Trim();
         }
     }
 
@@ -393,6 +427,17 @@ internal static class CalibrationCorpusLoader
                 {
                     throw new InvalidOperationException(
                         $"Corpus expectation '{expectation.ExpectationId}' references unknown fixture '{expectation.PressureSourceFixtureId}'.");
+                }
+
+                continue;
+            }
+
+            if (expectation.Kind.Equals(CalibrationExpectationKind.BracketRange, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!fixtureIds.Contains(expectation.TargetFixtureId))
+                {
+                    throw new InvalidOperationException(
+                        $"Corpus expectation '{expectation.ExpectationId}' references unknown fixture '{expectation.TargetFixtureId}'.");
                 }
 
                 continue;

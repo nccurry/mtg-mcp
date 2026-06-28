@@ -25,12 +25,13 @@ public sealed class StatsLabCalibrationTests
             Seed = 2026,
         });
 
-        report.SchemaVersion.Should().Be(5);
-        report.Summary.FixtureCount.Should().Be(16);
+        report.SchemaVersion.Should().Be(6);
+        report.Summary.FixtureCount.Should().Be(20);
         report.Summary.ExpectationCount.Should().BeGreaterThan(0);
         report.Summary.FailedRequiredExpectations.Should().Be(0);
         report.Summary.AdvisoryExpectationCount.Should().BeGreaterThan(0);
         report.Summary.PressureDiagnosticCount.Should().Be(4);
+        report.Summary.BracketDiagnosticCount.Should().Be(4);
         report.Summary.ProfileSweepCount.Should().Be(0);
         report.Summary.ProfileSensitivityCount.Should().Be(0);
         report.PressureDiagnostics.Should().HaveCount(4);
@@ -41,6 +42,11 @@ public sealed class StatsLabCalibrationTests
             .Where(diagnostic => diagnostic.Severity == "required")
             .Should()
             .OnlyContain(diagnostic => diagnostic.Passed);
+        report.BracketDiagnostics.Should().HaveCount(4);
+        report.BracketDiagnostics.Should().OnlyContain(diagnostic => diagnostic.Passed);
+        report.BracketDiagnostics.Should().Contain(diagnostic =>
+            diagnostic.TargetFixtureId == "bracket-cedh-density"
+            && diagnostic.EstimatedBracket == 4);
         report.ProfileSweeps.Should().BeEmpty();
         report.ProfileSensitivity.Should().BeEmpty();
         report.Fixtures.Should().OnlyContain(fixture => fixture.DeckSize == 100);
@@ -113,7 +119,7 @@ public sealed class StatsLabCalibrationTests
             ProfileSweepIds = { "value", "combo" },
         });
 
-        report.SchemaVersion.Should().Be(5);
+        report.SchemaVersion.Should().Be(6);
         report.Summary.FailedRequiredExpectations.Should().Be(0);
         report.ProfileSweeps.Should().HaveCountGreaterThan(report.Fixtures.Count);
         report.Summary.ProfileSweepCount.Should().Be(report.ProfileSweeps.Count);
@@ -145,9 +151,9 @@ public sealed class StatsLabCalibrationTests
             ValidateOnly = true,
         });
 
-        result.FixtureCount.Should().Be(16);
-        result.ExpectationCount.Should().Be(23);
-        result.RequiredExpectationCount.Should().Be(18);
+        result.FixtureCount.Should().Be(20);
+        result.ExpectationCount.Should().Be(27);
+        result.RequiredExpectationCount.Should().Be(22);
         result.AdvisoryExpectationCount.Should().Be(5);
     }
 
