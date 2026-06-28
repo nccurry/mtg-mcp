@@ -1154,6 +1154,64 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that the local combo fallback is loaded from the checked-in dataset.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_UsesLocalComboDatasetBeyondLegacyPatterns()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Oracle Combo Fallback",
+            Cards =
+            [
+                new DeckCard { Name = "Thassa's Oracle", Quantity = 1, PrimaryCategory = DeckRoles.Wincons, Categories = [DeckRoles.Wincons] },
+                new DeckCard { Name = "Demonic Consultation", Quantity = 1, PrimaryCategory = DeckRoles.Tutors, Categories = [DeckRoles.Tutors] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckComboReport result = await service.FindDeckCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        DeckCombo combo = result.Combos.Should()
+            .ContainSingle(combo => combo.Name == "Thassa's Oracle + Demonic Consultation")
+            .Subject;
+        combo.Kind.Should().Be("local-pattern");
+        combo.Source.Should().Be("local-pattern");
+        combo.RouteLabels.Should().Contain(WinRouteLabels.AlternateWin);
+        combo.Metadata.SourceKind.Should().Be("local-combo-pattern");
+    }
+
+    /// <summary>
+    /// Verifies that multi-card local dataset rows report missing cards as near misses.
+    /// </summary>
+    [Fact]
+    public async Task FindNearMissCombos_UsesLocalComboDatasetMissingCards()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Breach Near Miss",
+            Cards =
+            [
+                new DeckCard { Name = "Underworld Breach", Quantity = 1, PrimaryCategory = DeckRoles.Synergy, Categories = [DeckRoles.Synergy] },
+                new DeckCard { Name = "Brain Freeze", Quantity = 1, PrimaryCategory = DeckRoles.Wincons, Categories = [DeckRoles.Wincons] }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckComboReport result = await service.FindNearMissCombosAsync(workspace.Id, TestContext.Current.CancellationToken);
+
+        DeckCombo nearMiss = result.NearMisses.Should()
+            .ContainSingle(combo => combo.Name == "Underworld Breach + Brain Freeze + Lion's Eye Diamond")
+            .Subject;
+        nearMiss.Kind.Should().Be("local-near-miss");
+        nearMiss.Cards.Should().BeEquivalentTo(["Underworld Breach", "Brain Freeze"]);
+        nearMiss.MissingCards.Should().ContainSingle("Lion's Eye Diamond");
+        nearMiss.RouteLabels.Should().Contain(WinRouteLabels.Storm);
+    }
+
+    /// <summary>
     /// Verifies that duplicate copies of one combo-tagged card do not form a completed combo.
     /// </summary>
     [Fact]

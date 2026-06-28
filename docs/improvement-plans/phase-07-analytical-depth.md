@@ -23,8 +23,9 @@ becoming a Magic rules engine (a stated non-goal).
 - **P13 (real fix) - goldfish determinism.** Phase 7 now routes goldfish-family shuffles
   and `DeckStatistics` Monte Carlo through `DeterministicSimulationRandom`; keep
   deterministic replay metadata, docs, and tests aligned as analytical models evolve.
-- **P14 - offline combo fallback is 3 hardcoded combos**
-  (`Analysis/DeckAnalysisService.Combos.cs:351-353`).
+- **P14 - offline combo fallback is now dataset-backed.** Phase 7 replaced the three
+  hardcoded fallback pairs with a bounded embedded dataset sourced from
+  `docs/reference/local-combos.json`.
 
 ## 2. Goals / non-goals
 
@@ -57,7 +58,7 @@ Non-goals:
   `expanded-public-benchmarks.json`) + `tests/MtgMcp.Calibration.Tests/StatsLabCalibrationTests.cs`
   and a `task calibrate:stats-lab` workflow. This is the vehicle for regression safety.
 - Combos are catalog-first (Commander Spellbook) with clearly labeled local heuristics;
-  only the no-catalog fallback is thin.
+  the no-catalog fallback now reads a small checked-in local-pattern dataset.
 
 ## 4. Workstreams
 
@@ -101,9 +102,10 @@ Non-goals:
   `docs/simulation-profiles.md` current when future analytical models change.
 
 ### 4.4 Local combo dataset
-- Replace the 3 hardcoded combos with a small checked-in dataset under `docs/reference/`
-  (the architecture doc already sanctions local fixtures there), still catalog-first and
-  still labeled `local-pattern`/heuristic. Keep it bounded and attribution-aware.
+- Done in the second Phase 7 slice: replace the three hardcoded combos with a small
+  checked-in dataset under `docs/reference/` (the architecture doc already sanctions local
+  fixtures there), still catalog-first and still labeled `local-pattern`/heuristic. Keep
+  it bounded and attribution-aware.
 
 ### 4.5 Calibration + regression safety
 - Expand the calibration corpus (more archetypes/colors/power levels) and wire calibration
@@ -117,8 +119,9 @@ Non-goals:
   scorers; `Analysis/DeckAnalysisMetrics.cs` (bracket model);
   `Simulation/DeckSimulationService.Goldfish.Run.cs` + `Analysis/DeckStatistics.cs` (RNG);
   `Analysis/DeckAnalysisService.Combos.cs` (dataset fallback).
-- Create: `docs/reference/local-combos.json` (+ loader), bracket/eval benchmark JSON in
-  `tests/MtgMcp.Calibration/Corpus/`, docs updates.
+- Created: `docs/reference/local-combos.json` (+ embedded loader).
+- Still to create: bracket/eval benchmark JSON in `tests/MtgMcp.Calibration/Corpus/`,
+  docs updates for those model changes.
 - Tests: per-kind evaluator tests; bracket benchmark tests; determinism tests (same seed
   -> identical results) for goldfish family; combo-fallback tests.
 

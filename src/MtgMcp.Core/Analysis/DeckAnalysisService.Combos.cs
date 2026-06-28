@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Text.Json;
+
 namespace MtgMcp.Core;
 
 /// <summary>
@@ -5,6 +8,21 @@ namespace MtgMcp.Core;
 /// </summary>
 public sealed partial class DeckAnalysisService : DeckServiceBase
 {
+    /// <summary>
+    /// Identifies the embedded local combo pattern dataset.
+    /// </summary>
+    private const string LocalComboPatternResourceName = "MtgMcp.Core.LocalCombos.json";
+
+    /// <summary>
+    /// Reads local combo pattern JSON using web-style property names.
+    /// </summary>
+    private static readonly JsonSerializerOptions LocalComboPatternJsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Lazily loads the bounded local combo pattern dataset.
+    /// </summary>
+    private static readonly Lazy<IReadOnlyList<LocalComboPattern>> LocalComboPatterns = new(LoadLocalComboPatterns);
+
     /// <summary>
     /// Finds combos that are already present in a deck.
     /// </summary>
@@ -348,9 +366,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             });
         }
 
-        AddKnownCombo(report, workspace, "Exquisite Blood", "Sanguine Bond", "life-drain loop");
-        AddKnownCombo(report, workspace, "Heliod, Sun-Crowned", "Walking Ballista", "damage loop");
-        AddKnownCombo(report, workspace, "Kiki-Jiki, Mirror Breaker", "Zealous Conscripts", "infinite creatures");
+        AddLocalComboPatterns(report, workspace);
         if (comboCards.Count == 1)
         {
             report.NearMisses.Add(new DeckCombo
@@ -379,40 +395,92 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     }
 
     /// <summary>
-    /// Adds a known combo or near miss.
+    /// Adds known local combo dataset matches and near misses.
     /// </summary>
-    private static void AddKnownCombo(DeckComboReport report, DeckWorkspace workspace, string first, string second, string route)
+    private static void AddLocalComboPatterns(DeckComboReport report, DeckWorkspace workspace)
     {
-        HashSet<string> names = workspace.Cards.Select(card => card.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool hasFirst = names.Contains(first);
-        bool hasSecond = names.Contains(second);
-        if (hasFirst && hasSecond)
+        HashSet<string> names = DeckServiceHelpers.IncludedCards(workspace)
+            .Select(card => card.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (LocalComboPattern pattern in LocalComboPatterns.Value)
         {
-            report.Combos.Add(new DeckCombo
+            List<string> present = [];
+            List<string> missing = [];
+            foreach (string card in pattern.Cards)
             {
-                Name = $"{first} + {second}",
-                Cards = [first, second],
-                WinRoute = route,
-                Kind = "local-pattern",
-                Confidence = 0.85,
-                Source = "local-pattern",
-                Rationale = "Known two-card combo detected from local pattern data."
-            });
+                if (names.Contains(card))
+                {
+                    present.Add(card);
+                }
+                else
+                {
+                    missing.Add(card);
+                }
+            }
+
+            if (present.Count == pattern.Cards.Count)
+            {
+                report.Combos.Add(CreateLocalCombo(pattern, present, missing, complete: true));
+            }
+            else if (present.Count > 0)
+            {
+                report.NearMisses.Add(CreateLocalCombo(pattern, present, missing, complete: false));
+            }
         }
-        else if (hasFirst || hasSecond)
+    }
+
+    /// <summary>
+    /// Converts one local dataset row into MCP-facing combo evidence.
+    /// </summary>
+    private static DeckCombo CreateLocalCombo(
+        LocalComboPattern pattern,
+        List<string> present,
+        List<string> missing,
+        bool complete)
+    {
+        double confidence = complete ? pattern.Confidence : Math.Min(pattern.Confidence, 0.65);
+        return new DeckCombo
         {
-            report.NearMisses.Add(new DeckCombo
+            Name = pattern.Name,
+            Cards = present,
+            MissingCards = missing,
+            ProducedFeatures = pattern.ProducedFeatures.ToList(),
+            WinRoute = pattern.WinRoute,
+            Kind = complete ? "local-pattern" : "local-near-miss",
+            Confidence = confidence,
+            Source = "local-pattern",
+            Rationale = complete
+                ? pattern.Rationale
+                : "One or more cards from a known local combo pattern are present.",
+            SourceUri = pattern.SourceUri,
+            Metadata = new SourceEvidenceMetadata
             {
-                Name = $"{first} + {second}",
-                Cards = [hasFirst ? first : second],
-                MissingCards = [hasFirst ? second : first],
-                WinRoute = route,
-                Kind = "local-near-miss",
-                Confidence = 0.65,
                 Source = "local-pattern",
-                Rationale = "One card from a known two-card combo is present."
-            });
-        }
+                SourceKind = complete ? "local-combo-pattern" : "local-combo-near-miss",
+                SourceUri = pattern.SourceUri,
+                RetrievedAt = DateTimeOffset.UnixEpoch,
+                CacheStatus = "local",
+                Confidence = confidence,
+                Deterministic = true,
+                Notes = ["Local combo patterns are checked into docs/reference/local-combos.json; catalog evidence remains preferred."]
+            }
+        };
+    }
+
+    /// <summary>
+    /// Loads the local combo pattern dataset from the embedded resource.
+    /// </summary>
+    private static IReadOnlyList<LocalComboPattern> LoadLocalComboPatterns()
+    {
+        Assembly assembly = typeof(DeckAnalysisService).Assembly;
+        using Stream stream = assembly.GetManifestResourceStream(LocalComboPatternResourceName)
+            ?? throw new InvalidOperationException("Embedded local combo pattern data is missing.");
+        List<LocalComboPattern>? patterns = JsonSerializer.Deserialize<List<LocalComboPattern>>(
+            stream,
+            LocalComboPatternJsonOptions);
+        return patterns?
+            .Where(pattern => !string.IsNullOrWhiteSpace(pattern.Name) && pattern.Cards.Count >= 2)
+            .ToList() ?? [];
     }
 
     /// <summary>
@@ -559,5 +627,46 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             Legalities = legalities,
             Prices = new Dictionary<string, string>(snapshot.Prices, StringComparer.OrdinalIgnoreCase)
         };
+    }
+
+    /// <summary>
+    /// Represents one checked-in local combo pattern row.
+    /// </summary>
+    private sealed class LocalComboPattern
+    {
+        /// <summary>
+        /// Display name used for reports and dedupe-visible evidence.
+        /// </summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// Exact card names required to complete the pattern.
+        /// </summary>
+        public List<string> Cards { get; set; } = [];
+
+        /// <summary>
+        /// Compact win route summary shown to clients.
+        /// </summary>
+        public string WinRoute { get; set; } = "";
+
+        /// <summary>
+        /// Deterministic feature phrases used by the route classifier.
+        /// </summary>
+        public List<string> ProducedFeatures { get; set; } = [];
+
+        /// <summary>
+        /// Confidence assigned to completed local-pattern matches.
+        /// </summary>
+        public double Confidence { get; set; } = 0.80;
+
+        /// <summary>
+        /// Report-facing explanation for a completed pattern match.
+        /// </summary>
+        public string Rationale { get; set; } = "";
+
+        /// <summary>
+        /// Optional attribution URI for the pattern source.
+        /// </summary>
+        public string? SourceUri { get; set; }
     }
 }

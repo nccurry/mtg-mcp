@@ -1,0 +1,98 @@
+[
+  {
+    "name": "Exquisite Blood + Sanguine Bond",
+    "cards": ["Exquisite Blood", "Sanguine Bond"],
+    "winRoute": "life-drain loop",
+    "producedFeatures": ["life drain loop", "each opponent loses life"],
+    "confidence": 0.85,
+    "rationale": "Known two-card life-drain loop detected from local pattern data."
+  },
+  {
+    "name": "Heliod, Sun-Crowned + Walking Ballista",
+    "cards": ["Heliod, Sun-Crowned", "Walking Ballista"],
+    "winRoute": "damage loop",
+    "producedFeatures": ["damage loop", "damage to each opponent"],
+    "confidence": 0.85,
+    "rationale": "Known two-card damage loop detected from local pattern data."
+  },
+  {
+    "name": "Kiki-Jiki, Mirror Breaker + Zealous Conscripts",
+    "cards": ["Kiki-Jiki, Mirror Breaker", "Zealous Conscripts"],
+    "winRoute": "infinite creatures",
+    "producedFeatures": ["infinite creatures", "token copies"],
+    "confidence": 0.85,
+    "rationale": "Known creature-copy loop detected from local pattern data."
+  },
+  {
+    "name": "Kiki-Jiki, Mirror Breaker + Village Bell-Ringer",
+    "cards": ["Kiki-Jiki, Mirror Breaker", "Village Bell-Ringer"],
+    "winRoute": "infinite creatures",
+    "producedFeatures": ["infinite creatures", "token copies"],
+    "confidence": 0.82,
+    "rationale": "Known creature-copy loop detected from local pattern data."
+  },
+  {
+    "name": "Dualcaster Mage + Twinflame",
+    "cards": ["Dualcaster Mage", "Twinflame"],
+    "winRoute": "infinite creatures",
+    "producedFeatures": ["infinite creatures", "copy target sorcery"],
+    "confidence": 0.82,
+    "rationale": "Known spell-copy creature loop detected from local pattern data."
+  },
+  {
+    "name": "Thassa's Oracle + Demonic Consultation",
+    "cards": ["Thassa's Oracle", "Demonic Consultation"],
+    "winRoute": "alternate win",
+    "producedFeatures": ["you win the game", "self mill"],
+    "confidence": 0.88,
+    "rationale": "Known alternate-win pattern detected from local pattern data."
+  },
+  {
+    "name": "Thassa's Oracle + Tainted Pact",
+    "cards": ["Thassa's Oracle", "Tainted Pact"],
+    "winRoute": "alternate win",
+    "producedFeatures": ["you win the game", "self mill"],
+    "confidence": 0.86,
+    "rationale": "Known alternate-win pattern detected from local pattern data."
+  },
+  {
+    "name": "Devoted Druid + Vizier of Remedies",
+    "cards": ["Devoted Druid", "Vizier of Remedies"],
+    "winRoute": "infinite mana",
+    "producedFeatures": ["infinite mana"],
+    "confidence": 0.82,
+    "rationale": "Known infinite-mana creature pattern detected from local pattern data."
+  },
+  {
+    "name": "Mikaeus, the Unhallowed + Triskelion",
+    "cards": ["Mikaeus, the Unhallowed", "Triskelion"],
+    "winRoute": "damage loop",
+    "producedFeatures": ["dies", "damage to each opponent"],
+    "confidence": 0.82,
+    "rationale": "Known undying damage loop detected from local pattern data."
+  },
+  {
+    "name": "Niv-Mizzet, Parun + Curiosity",
+    "cards": ["Niv-Mizzet, Parun", "Curiosity"],
+    "winRoute": "draw-damage loop",
+    "producedFeatures": ["draw your deck", "damage to each opponent"],
+    "confidence": 0.82,
+    "rationale": "Known draw-damage loop detected from local pattern data."
+  },
+  {
+    "name": "Basalt Monolith + Rings of Brighthearth",
+    "cards": ["Basalt Monolith", "Rings of Brighthearth"],
+    "winRoute": "infinite mana",
+    "producedFeatures": ["infinite colorless mana"],
+    "confidence": 0.80,
+    "rationale": "Known infinite-colorless-mana pattern detected from local pattern data."
+  },
+  {
+    "name": "Underworld Breach + Brain Freeze + Lion's Eye Diamond",
+    "cards": ["Underworld Breach", "Brain Freeze", "Lion's Eye Diamond"],
+    "winRoute": "storm self-mill loop",
+    "producedFeatures": ["storm count", "self mill", "mill your library"],
+    "confidence": 0.78,
+    "rationale": "Known three-card storm loop detected from local pattern data."
+  }
+]

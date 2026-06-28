@@ -55,7 +55,7 @@ regressed:
 | P11 | Feature coherence | Undocumented tools (`commander_search_candidates`, `deck_evaluate_card`, `deck_batch_tuning_report`) and resources (`.../state`, `.../assistant-context`) | Medium | 0 |
 | P12 | Feature coherence | `deck_estimate_commander_bracket` is a coarse max-signal floor; low density sensitivity | Medium | 7 |
 | P13 | Feature coherence | Phase 7 unified goldfish-family and draw-odds Monte Carlo RNG on `DeterministicSimulationRandom`; keep replay metadata/docs/tests aligned as analytical models evolve | Medium | 0,7 |
-| P14 | Feature coherence | Offline/no-catalog combo fallback hardcodes 3 combos | Low | 7 |
+| P14 | Feature coherence | Phase 7 replaced the offline/no-catalog combo fallback with a bounded checked-in `docs/reference/local-combos.json` dataset | Low | 7 |
 | P15 | Domain/code | Union types used once despite `net11.0`/preview bet; outcomes encoded as `bool Success` + `string Status`; string-discriminated `DeckEditOperation` god-DTO | Medium | 4 |
 | P16 | Domain/code | God services (`DeckRecommendationService` ~6k LOC, concrete service-to-service coupling); fat shared `DeckServiceBase`; duplicated JSON repositories | Medium | 5 |
 | P17 | Domain/code | Domain entities and tool-response DTOs mixed in large `Models/*.cs` files | Low | 4 |
@@ -311,8 +311,8 @@ Solutions (high level):
 - Unify simulation determinism: the goldfish family and draw/land odds Monte Carlo now
   use the deterministic RNG used by Stats Lab/race, with `rngKind` stamped on those
   result shapes where replay metadata is exposed.
-- Replace the 3-combo hardcoded fallback with a small, checked-in local combo dataset
-  (still catalog-first), so the offline/no-catalog experience is meaningful.
+- Keep the checked-in local combo dataset bounded and clearly labeled as fallback
+  evidence (still catalog-first), so the offline/no-catalog experience is meaningful.
 - Grow the offline calibration/benchmark suite so analytical changes are regression-safe.
 
 Done when: card evaluation is honestly general (or honestly named/scoped); bracket and
