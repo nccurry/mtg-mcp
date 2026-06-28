@@ -61,6 +61,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckPlaygroupMetaScoringService playgroupMeta;
 
     /// <summary>
+    /// Resolves Commander theme hints against deterministic corpus source tags.
+    /// </summary>
+    private readonly CommanderThemeResolver commanderThemes;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -95,7 +100,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckCardEvaluationService? cardEvaluation = null,
         DeckNewCardService? newCards = null,
         DeckCommanderMetaService? commanderMeta = null,
-        DeckPlaygroupMetaScoringService? playgroupMeta = null
+        DeckPlaygroupMetaScoringService? playgroupMeta = null,
+        CommanderThemeResolver? commanderThemes = null
     )
         : base(
             repository,
@@ -122,6 +128,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             this.analysisMetrics,
             resolvedSimulationProfiles,
             playgroups);
+        this.commanderThemes = commanderThemes ?? new CommanderThemeResolver(this.corpusSignalProviders);
         this.simulation = simulation;
     }
 }

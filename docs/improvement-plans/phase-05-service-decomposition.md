@@ -120,6 +120,9 @@ Status update after completed Phase 5 slices:
   deduplication now live in
   `src/MtgMcp.Core/Recommendations/CorpusRecommendationBuilder.cs`, leaving the corpus
   partial focused on provider orchestration and facade methods.
+- Commander theme hint resolution and deterministic source-tag matching now live in
+  `src/MtgMcp.Core/Recommendations/CommanderThemeResolver.cs`, shared by corpus and
+  evidence workflows before the larger commander evidence split.
 
 ## 4. Workstreams
 

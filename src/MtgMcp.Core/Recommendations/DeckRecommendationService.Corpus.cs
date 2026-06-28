@@ -408,7 +408,7 @@ public sealed partial class DeckRecommendationService
             combined.Notes.Add("Partner commander evidence defaults to the broad pair aggregate instead of narrowing by saved archetype.");
         }
 
-        CommanderThemeResolution themeResolution = await ResolveCommanderThemeAsync(
+        CommanderThemeResolution themeResolution = await commanderThemes.ResolveAsync(
             query.Commander,
             query.Theme,
             goal,
