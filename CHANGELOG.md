@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-06-28
+
+- Audited package boundaries, release metadata, docs, and local build coverage
+  for the refactor release.
 - Added MCP host observability with redacted per-tool completion logs,
   OpenTelemetry-ready tool-call metrics/traces, `logging/setLevel` handling,
   and `mcpLoggingLevel` in server diagnostics.
 - Added report-only performance ratchet output for release review.
+- Fixed local release smoke and install validation to use the repo-pinned .NET
+  runtime when validating the packaged tool.
 - Added observability, MCP compatibility, performance ratchet, and 1.0 readiness documentation.
 - Replaced persisted deck edit operations and several closed-set statuses with
   typed union/enum models while preserving legacy JSON strings and flat plan

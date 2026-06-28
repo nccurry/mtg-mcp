@@ -44,22 +44,13 @@ windows from Phase 0's `docs/versioning.md` and the per-phase "deprecation relea
 ## Release train (single source of truth for versions)
 
 This table is authoritative for version targets; per-phase `Target version` metadata must
-match it. Where two phases share a minor, they touch different surfaces and land as ordered
-PRs within that minor (surface-phase PRs before others). Phase 6 (adapters) is an
-independent track that rides alongside the surface train.
+match it. The architecture refactor ships as a single pre-1.0 minor instead of one minor
+per phase.
 
 | Version | Phase(s) | Headline change |
 |---|---|---|
-| 0.8.0 | 0 | Surface metrics (report-only), deprecation policy + ADRs, doc reconciliation, honesty fixes (`RngKind`, evaluate-card status) |
-| 0.9.0 | 1 (deprecation) | Consolidated + toolset surface advertised; mode-aware advertising; old tool names deprecated |
-| 0.10.0 | 1 (removal) + 2 (deprecation) | Remove deprecated tool names; unified `detailLevel` in place; `includeWorkspace`/`compact` deprecated |
-| 0.11.0 | 2 (removal) + 6a | Remove `includeWorkspace`/`compact`; (parallel) secret-redaction hardening + Archidekt JWT refresh |
-| 0.12.0 | 3 | Structured output + structured errors + pagination + resource discovery; minimal in-proc client smoke |
-| 0.13.0 | 4 + 6b | Domain unions/enums (model separation as the last PR); (parallel) shared adapter resiliency + error model |
-| 0.14.0 | 5 | Core service decomposition (ordered sub-PRs) |
-| 0.15.0 | 7 | Analytical depth: evaluator roles (draw/interaction), density bracket, determinism unification |
-| 0.16.0 | 8 | Batch lookup/image/pricing (Track 1); collection subsystem (Track 2) |
-| 1.0.0 | 9 | Observability, client matrix, perf ratchet, deprecation completion, release |
+| 0.8.0 | 0-9 refactor | Architecture refactor, protocol hardening, adapters, analytical depth, new capabilities, observability, package audit |
+| 1.0.0 | 9 readiness | Broader client matrix, source-fetch metrics, deprecation completion, release |
 
 Guiding principles and the problem inventory live in the master
 [`IMPROVEMENT_PLAN.md`](../../IMPROVEMENT_PLAN.md) - this directory does not restate them.

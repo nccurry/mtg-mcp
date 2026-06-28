@@ -6,7 +6,7 @@
 | Risk | Low-Medium |
 | Depends on | runs throughout; finalized after Phases 1-3 land |
 | Unblocks | a confident 1.0 |
-| Target version | 1.0.0 |
+| Target version | 0.8.0 hardening -> 1.0.0 readiness |
 
 Goal: operational maturity - observability, a client-compatibility safety net, performance
 budgets, and a clean 1.0 with a documented support policy.
@@ -48,6 +48,8 @@ Non-goals:
   BenchmarkDotNet; `task bench*`). Calibration exists (`task calibrate:stats-lab`).
 - `server_get_info` / `mtg://server/info` / `ServerInfoService` already expose version/git;
   reuse for diagnostics.
+- 0.8.0 is the safe pre-1.0 release target for the observability/perf hardening
+  slices. 1.0.0 remains blocked on the readiness checklist.
 
 ## 4. Workstreams
 
@@ -103,6 +105,8 @@ Non-goals:
 - Finalize `CHANGELOG.md` (currently a stub) with the cumulative surface changes, write a
   1.0 support/compatibility policy, validate the MCP Registry entry (`server.json`), and
   cut 1.0 via the existing release workflow + `task release:verify`.
+  The 0.8.0 hardening release can be cut before this checklist is fully green,
+  because it does not claim 1.0 compatibility.
 - **1.0 readiness checklist** (all must be true to tag 1.0; checked in as
   `docs/release-1.0-readiness.md`; audit "what shipped in which minor" against the release
   train table in `docs/improvement-plans/README.md`, the single source of truth, so

@@ -82,11 +82,9 @@ function Use-LocalDotnetRootForAppHosts {
         return
     }
 
-    if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
-        $env:DOTNET_ROOT = $localRoot
-    }
+    $env:DOTNET_ROOT = $localRoot
 
-    if ($IsWindows -and [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT_X64)) {
+    if ($IsWindows) {
         $env:DOTNET_ROOT_X64 = $localRoot
     }
 }
