@@ -228,13 +228,10 @@ Counts are current per tool class. "->" is the proposed action.
   `commander_get_*`, `wincon_find_payoffs`, `deck_score_cards_for_playgroup_meta`; review
   `commander_search_candidates` and `deck_batch_tuning_report` (heavy; consider gating
   behind a toolset).
-  - **`deck_evaluate_card` rename decision (resolved, spans Phases 1/7):** this phase
-    renames it to an honest ramp-scoped name (e.g. `deck_evaluate_ramp_card`) under the
-    deprecation/removal flow, because the tool is ramp-only until Phase 7. Phase 7 then
-    introduces the general evaluator (under `deck_evaluate_card` or a clear general name),
-    accepting one deprecation of the interim ramp-scoped name. This keeps every shipped
-    version honest (no generically-named-but-ramp-only tool for several minors) and avoids a
-    silent multi-minor mismatch. Do not leave this as an open question.
+  - **`deck_evaluate_card` rename decision (resolved by Phase 7 implementation):** no
+    ramp-scoped alias was introduced. Phase 0 made the ramp-only behavior honest in the
+    description and status fields, and Phase 7 broadened the existing `deck_evaluate_card`
+    tool to the supported-role evaluator for ramp, draw, and interaction.
 - Sources (`CorpusTools`, 7): keep; demote `source_list` to the existing resource.
 - Intent (4), Facets (5), Playgroup (7): keep; gate behind their toolsets.
 - Server (1): demote `server_get_info` to `mtg://server/info`.

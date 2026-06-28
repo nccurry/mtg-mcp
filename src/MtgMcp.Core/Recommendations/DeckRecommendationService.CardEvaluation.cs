@@ -6,7 +6,7 @@ namespace MtgMcp.Core;
 public sealed partial class DeckRecommendationService
 {
     /// <summary>
-    /// Evaluates a card's operational ramp facts and context score without creating deck edits.
+    /// Evaluates supported operational facts and context score without creating deck edits.
     /// </summary>
     public async Task<RampContextEvaluation> EvaluateCardAsync(
         string workspaceId,

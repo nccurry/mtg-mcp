@@ -538,6 +538,8 @@ public sealed class McpSurfaceTests
             WorkspaceId = "workspace",
             CardName = "Wayfarer's Bauble",
             Role = DeckRoles.Ramp,
+            EvaluatedRole = CardEvaluationRoles.Ramp,
+            DetectedRoles = [CardEvaluationRoles.Ramp],
             RampKind = "activatedLandRamp",
             Score = 54,
             TopIssues = ["requires 2 future activation mana"],
@@ -563,6 +565,7 @@ public sealed class McpSurfaceTests
                 {
                     CardName = "Nature's Lore",
                     Role = DeckRoles.Ramp,
+                    EvaluatedRole = CardEvaluationRoles.Ramp,
                     RampKind = "spellLandRampUntapped",
                     Score = 90,
                     Facts = new CardOperationalFacts
@@ -578,11 +581,16 @@ public sealed class McpSurfaceTests
 
         JsonElement compact = JsonSerializer.SerializeToElement(method.Invoke(null, [evaluation]));
 
-        compact.GetProperty("Evaluator").GetString().Should().Be("ramp");
+        compact.GetProperty("Evaluator").GetString().Should().Be("card-operational");
         compact.GetProperty("Applicable").GetBoolean().Should().BeTrue();
         compact.GetProperty("EvaluationStatus").GetString().Should().Be("evaluated");
+        compact.GetProperty("EvaluatedRole").GetString().Should().Be(CardEvaluationRoles.Ramp);
+        compact.GetProperty("EvaluatedRoles").GetArrayLength().Should().Be(3);
+        compact.GetProperty("DetectedRoles").GetArrayLength().Should().Be(1);
+        compact.GetProperty("UnsupportedRole").GetBoolean().Should().BeFalse();
         compact.TryGetProperty("TopCandidates", out JsonElement topCandidates).Should().BeTrue();
         topCandidates.GetArrayLength().Should().Be(1);
+        topCandidates[0].GetProperty("EvaluatedRole").GetString().Should().Be(CardEvaluationRoles.Ramp);
         compact.TryGetProperty("Facts", out _).Should().BeFalse();
         compact.TryGetProperty("SubScores", out _).Should().BeFalse();
         compact.TryGetProperty("CandidateEvaluations", out _).Should().BeFalse();

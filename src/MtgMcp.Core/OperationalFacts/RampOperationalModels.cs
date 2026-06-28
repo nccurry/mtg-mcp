@@ -21,6 +21,16 @@ public sealed class CardOperationalFacts
     public RampOperationalFacts? Ramp { get; set; }
 
     /// <summary>
+    /// Gets or sets draw-specific operational facts when the card is draw-shaped.
+    /// </summary>
+    public DrawOperationalFacts? Draw { get; set; }
+
+    /// <summary>
+    /// Gets or sets interaction-specific operational facts when the card is answer-shaped.
+    /// </summary>
+    public InteractionOperationalFacts? Interaction { get; set; }
+
+    /// <summary>
     /// Gets or sets source or parser evidence used to derive these facts.
     /// </summary>
     public List<CardFactEvidence> Evidence { get; set; } = [];
@@ -29,6 +39,32 @@ public sealed class CardOperationalFacts
     /// Gets or sets deterministic confidence and source-data caveats.
     /// </summary>
     public List<string> Warnings { get; set; } = [];
+}
+
+/// <summary>
+/// Names the operational roles currently supported by the deterministic card evaluator.
+/// </summary>
+public static class CardEvaluationRoles
+{
+    /// <summary>
+    /// Ramp timing, fixing, and mana-development evaluation.
+    /// </summary>
+    public const string Ramp = "ramp";
+
+    /// <summary>
+    /// Card draw, card advantage, and card-selection evaluation.
+    /// </summary>
+    public const string Draw = "draw";
+
+    /// <summary>
+    /// Removal, counterspell, board-wipe, and protection evaluation.
+    /// </summary>
+    public const string Interaction = "interaction";
+
+    /// <summary>
+    /// Supported roles advertised by every card-evaluation result.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Supported = [Ramp, Draw, Interaction];
 }
 
 /// <summary>
@@ -93,6 +129,108 @@ public sealed class RampOperationalFacts
 }
 
 /// <summary>
+/// Describes deterministic draw or card-advantage facts for one card.
+/// </summary>
+public sealed class DrawOperationalFacts
+{
+    /// <summary>
+    /// Gets or sets the normalized draw shape.
+    /// </summary>
+    public string Kind { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets mana needed to cast the card.
+    /// </summary>
+    public int CastMana { get; set; }
+
+    /// <summary>
+    /// Gets or sets a bounded estimate of cards immediately gained.
+    /// </summary>
+    public int ImmediateCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card can produce draw value repeatedly.
+    /// </summary>
+    public bool Repeatable { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card primarily filters or selects rather than gaining cards.
+    /// </summary>
+    public bool SelectionOnly { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the draw pattern requires or includes discarding cards.
+    /// </summary>
+    public bool DiscardsCards { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card uses exile-and-play impulse draw.
+    /// </summary>
+    public bool ImpulseDraw { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the draw depends on a trigger, condition, or later payment.
+    /// </summary>
+    public bool Conditional { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the draw can normally be used at instant speed.
+    /// </summary>
+    public bool InstantSpeed { get; set; }
+}
+
+/// <summary>
+/// Describes deterministic interaction facts for one card.
+/// </summary>
+public sealed class InteractionOperationalFacts
+{
+    /// <summary>
+    /// Gets or sets the normalized interaction shape.
+    /// </summary>
+    public string Kind { get; set; } = "unknown";
+
+    /// <summary>
+    /// Gets or sets mana needed to cast the card.
+    /// </summary>
+    public int CastMana { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card can normally answer threats at instant speed.
+    /// </summary>
+    public bool InstantSpeed { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card interacts with spells on the stack.
+    /// </summary>
+    public bool StackInteraction { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the effect can answer several opposing resources at once.
+    /// </summary>
+    public bool BoardWide { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the effect can answer permanents on the battlefield.
+    /// </summary>
+    public bool PermanentAnswer { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card protects the pilot's resources instead of removing threats.
+    /// </summary>
+    public bool Protection { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the card presents multiple answer modes.
+    /// </summary>
+    public bool Modal { get; set; }
+
+    /// <summary>
+    /// Gets or sets coarse target classes recognized from the card text.
+    /// </summary>
+    public List<string> Targets { get; set; } = [];
+}
+
+/// <summary>
 /// Records one source-backed or parser-derived reason for an operational fact.
 /// </summary>
 public sealed class CardFactEvidence
@@ -126,7 +264,7 @@ public sealed class RampContextEvaluation
     /// <summary>
     /// Gets or sets the evaluator that produced this context result.
     /// </summary>
-    public string Evaluator { get; set; } = "ramp";
+    public string Evaluator { get; set; } = "card-operational";
 
     /// <summary>
     /// Gets or sets whether the evaluator can score the card's operational facts.
@@ -157,6 +295,36 @@ public sealed class RampContextEvaluation
     /// Gets or sets the normalized ramp kind when available.
     /// </summary>
     public string? RampKind { get; set; }
+
+    /// <summary>
+    /// Gets or sets the normalized draw kind when available.
+    /// </summary>
+    public string? DrawKind { get; set; }
+
+    /// <summary>
+    /// Gets or sets the normalized interaction kind when available.
+    /// </summary>
+    public string? InteractionKind { get; set; }
+
+    /// <summary>
+    /// Gets or sets the evaluator role selected for the card.
+    /// </summary>
+    public string? EvaluatedRole { get; set; }
+
+    /// <summary>
+    /// Gets or sets the roles supported by this evaluator version.
+    /// </summary>
+    public List<string> EvaluatedRoles { get; set; } = CardEvaluationRoles.Supported.ToList();
+
+    /// <summary>
+    /// Gets or sets supported operational roles detected for this card.
+    /// </summary>
+    public List<string> DetectedRoles { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets whether the card's role is outside this evaluator's current scope.
+    /// </summary>
+    public bool UnsupportedRole { get; set; }
 
     /// <summary>
     /// Gets or sets the deterministic context score from 0 to 100.

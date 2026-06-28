@@ -51,7 +51,7 @@ regressed:
 | P7 | MCP protocol | Errors are thrown exceptions (prose only); no machine-readable error codes/shape | Medium | 3 |
 | P8 | MCP protocol | No cursor/continuation for large result sets; only `limit` bounding | Low | 3 |
 | P9 | MCP protocol | No enumerable resource for saved workspaces (resource browsing can't discover decks) | Low | 3 |
-| P10 | Feature coherence | `deck_evaluate_card` advertised as general evaluation but is ramp-only (`RampContextEvaluation`); non-ramp cards return `Score: 0` | High | 0,7 |
+| P10 | Feature coherence | `deck_evaluate_card` started as ramp-only; Phase 7 now evaluates ramp, draw, and interaction, with explicit `unsupportedRole` output for roles outside the current rubric | High | 0,7 |
 | P11 | Feature coherence | Undocumented tools (`commander_search_candidates`, `deck_evaluate_card`, `deck_batch_tuning_report`) and resources (`.../state`, `.../assistant-context`) | Medium | 0 |
 | P12 | Feature coherence | `deck_estimate_commander_bracket` is a coarse max-signal floor; low density sensitivity | Medium | 7 |
 | P13 | Feature coherence | Phase 7 unified goldfish-family and draw-odds Monte Carlo RNG on `DeterministicSimulationRandom`; keep replay metadata/docs/tests aligned as analytical models evolve | Medium | 0,7 |
@@ -90,9 +90,9 @@ Solutions (high level):
   `deck_evaluate_card`, `deck_batch_tuning_report`, and the `mtg://workspace/{id}/state`
   and `.../assistant-context` resources. The README claims to enumerate the surface.
 - Honesty fixes that do not need redesign:
-  - Re-scope `deck_evaluate_card` description (and/or rename to a ramp-specific name)
-    so it stops implying general card evaluation; have non-ramp cards return an
-    explicit "no general evaluator" status instead of a misleading `Score: 0`.
+  - Phase 0 re-scoped the then-ramp-only `deck_evaluate_card` description and status
+    output. Phase 7 now broadens that same tool to ramp, draw, and interaction with
+    explicit unsupported-role output for future roles.
   - Stamp the goldfish-family results with their RNG kind. Phase 7 later replaces
     the original `system-random` label with the shared stable deterministic RNG.
 
@@ -303,9 +303,8 @@ Problems addressed: P10 (real fix), P12, P13 (real fix), P14.
 
 Solutions (high level):
 - Replace the ramp-only evaluator behind `deck_evaluate_card` with a general
-  operational-fact framework that covers draw, interaction/removal, tutors, and payoffs
-  (not just ramp), or formally split per-role evaluators. Remove the misleading
-  `Score: 0` path.
+  operational-fact framework. Phase 7 now covers ramp, draw, and interaction first,
+  with explicit unsupported-role output for future roles such as tutors and payoffs.
 - Make `deck_estimate_commander_bracket` density-aware (not just max-signal floor),
   while keeping it advisory and explainable; expand calibration coverage.
 - Unify simulation determinism: the goldfish family and draw/land odds Monte Carlo now

@@ -27,7 +27,7 @@ public sealed class DeckCardEvaluationService
     }
 
     /// <summary>
-    /// Evaluates a card's operational ramp facts and context score without creating deck edits.
+    /// Evaluates supported operational facts and context score without creating deck edits.
     /// </summary>
     public async Task<RampContextEvaluation> EvaluateCardAsync(
         string workspaceId,
@@ -93,7 +93,7 @@ public sealed class DeckCardEvaluationService
     }
 
     /// <summary>
-    /// Evaluates one resolved deck card.
+    /// Evaluates one resolved deck card with the supported operational scorers.
     /// </summary>
     private static RampContextEvaluation EvaluateCard(DeckWorkspace workspace, DeckCard card)
     {

@@ -84,6 +84,54 @@ public sealed class RampOperationalFactExtractorTests
     }
 
     /// <summary>
+    /// Verifies draw facts are extracted without using a card-name override table.
+    /// </summary>
+    [Fact]
+    public void Extract_RecognizesDrawFacts()
+    {
+        DeckCard card = Card(
+            "Chart a Course",
+            "Sorcery",
+            "{1}{U}",
+            2,
+            "Draw two cards. Then discard a card unless you attacked this turn.",
+            ["U"]);
+
+        CardOperationalFacts facts = RampOperationalFactExtractor.Extract(card);
+
+        facts.Role.Should().Be(DeckRoles.Draw);
+        facts.Draw.Should().NotBeNull();
+        facts.Draw!.Kind.Should().Be("looting");
+        facts.Draw.ImmediateCards.Should().Be(2);
+        facts.Draw.DiscardsCards.Should().BeTrue();
+        facts.Evidence.Should().Contain(evidence => evidence.Label == "card-draw");
+    }
+
+    /// <summary>
+    /// Verifies interaction facts are extracted for common answer text.
+    /// </summary>
+    [Fact]
+    public void Extract_RecognizesInteractionFacts()
+    {
+        DeckCard card = Card(
+            "Counterspell",
+            "Instant",
+            "{U}{U}",
+            2,
+            "Counter target spell.",
+            ["U"]);
+
+        CardOperationalFacts facts = RampOperationalFactExtractor.Extract(card);
+
+        facts.Role.Should().Be(DeckRoles.Interaction);
+        facts.Interaction.Should().NotBeNull();
+        facts.Interaction!.Kind.Should().Be("stackAnswer");
+        facts.Interaction.StackInteraction.Should().BeTrue();
+        facts.Interaction.Targets.Should().Contain("spell");
+        facts.Evidence.Should().Contain(evidence => evidence.Label == "interaction");
+    }
+
+    /// <summary>
     /// Verifies sacrifice costs only mark the card as self-sacrificing when the cost names the card or says this.
     /// </summary>
     [Fact]
@@ -147,10 +195,10 @@ public sealed class RampOperationalFactExtractorTests
     }
 
     /// <summary>
-    /// Verifies non-ramp cards return an explicit not-applicable status instead of only a zero score.
+    /// Verifies draw cards return a real supported-role evaluation instead of the old ramp-only zero score.
     /// </summary>
     [Fact]
-    public void Evaluate_NonRampCardReportsNotApplicableStatus()
+    public void Evaluate_DrawCardReturnsSupportedRoleScore()
     {
         DeckWorkspace workspace = CreateRampContextDeck();
         DeckCard card = Card(
@@ -166,11 +214,70 @@ public sealed class RampOperationalFactExtractorTests
             card,
             RampOperationalFactExtractor.Extract(card));
 
-        evaluation.Evaluator.Should().Be("ramp");
+        evaluation.Evaluator.Should().Be("card-operational");
+        evaluation.Applicable.Should().BeTrue();
+        evaluation.EvaluationStatus.Should().Be("evaluated");
+        evaluation.EvaluatedRole.Should().Be(CardEvaluationRoles.Draw);
+        evaluation.DrawKind.Should().Be("cardDraw");
+        evaluation.Score.Should().BeGreaterThan(0);
+        evaluation.TopStrengths.Should().Contain(strength => strength.Contains("2 cards", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies interaction cards return a real supported-role evaluation.
+    /// </summary>
+    [Fact]
+    public void Evaluate_InteractionCardReturnsSupportedRoleScore()
+    {
+        DeckWorkspace workspace = CreateRampContextDeck();
+        DeckCard card = Card(
+            "Counterspell",
+            "Instant",
+            "{U}{U}",
+            2,
+            "Counter target spell.",
+            ["U"]);
+
+        RampContextEvaluation evaluation = RampContextScorer.Evaluate(
+            workspace,
+            card,
+            RampOperationalFactExtractor.Extract(card));
+
+        evaluation.Applicable.Should().BeTrue();
+        evaluation.EvaluationStatus.Should().Be("evaluated");
+        evaluation.EvaluatedRole.Should().Be(CardEvaluationRoles.Interaction);
+        evaluation.InteractionKind.Should().Be("stackAnswer");
+        evaluation.Score.Should().BeGreaterThan(0);
+        evaluation.TopStrengths.Should().Contain(strength => strength.Contains("stack", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies unsupported roles return an explicit status instead of an unexplained zero score.
+    /// </summary>
+    [Fact]
+    public void Evaluate_UnsupportedCardReportsUnsupportedRoleStatus()
+    {
+        DeckWorkspace workspace = CreateRampContextDeck();
+        DeckCard card = Card(
+            "Vanilla Attacker",
+            "Creature - Dinosaur",
+            "{3}{G}",
+            4,
+            "Trample.",
+            ["G"]);
+
+        RampContextEvaluation evaluation = RampContextScorer.Evaluate(
+            workspace,
+            card,
+            RampOperationalFactExtractor.Extract(card));
+
+        evaluation.Evaluator.Should().Be("card-operational");
         evaluation.Applicable.Should().BeFalse();
-        evaluation.EvaluationStatus.Should().Be("not-applicable");
+        evaluation.EvaluationStatus.Should().Be("unsupported-role");
+        evaluation.UnsupportedRole.Should().BeTrue();
+        evaluation.EvaluatedRoles.Should().Equal(CardEvaluationRoles.Ramp, CardEvaluationRoles.Draw, CardEvaluationRoles.Interaction);
         evaluation.Score.Should().Be(0);
-        evaluation.TopIssues.Should().Contain(issue => issue.Contains("not applicable", StringComparison.OrdinalIgnoreCase));
+        evaluation.TopIssues.Should().Contain(issue => issue.Contains("supported operational facts", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

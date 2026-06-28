@@ -13,10 +13,10 @@ becoming a Magic rules engine (a stated non-goal).
 
 ## 1. Problems addressed
 
-- **P10 (real fix) - `deck_evaluate_card` is ramp-only.** `CardOperationalFacts` has a
-  single typed fact slot, `Ramp?` (`OperationalFacts/RampOperationalModels.cs:21`); the
-  scorer returns `Score = 0` for non-ramp cards (`RampContextScorer.cs:26-31`). The tool is
-  advertised generically.
+- **P10 (real fix) - `deck_evaluate_card` is no longer ramp-only.** Phase 7 broadened
+  `CardOperationalFacts` to ramp, draw, and interaction facts, and the scorer now declares
+  `evaluatedRoles`, selects `evaluatedRole`, and returns `unsupportedRole=true` for roles
+  outside the current deterministic rubric.
 - **P12 - bracket estimator is a coarse max-signal floor.**
   `EstimatedBracket = max(signal.SuggestedBracket)` (`Analysis/DeckAnalysisMetrics.cs:529-601`);
   one mass-land-denial card forces bracket 4 with little density sensitivity.
@@ -30,8 +30,8 @@ becoming a Magic rules engine (a stated non-goal).
 ## 2. Goals / non-goals
 
 Goals:
-- A general, honest card-evaluation framework covering more than ramp, or a clearly scoped
-  set of per-role evaluators with no misleading `Score: 0`.
+- A general, honest card-evaluation framework covering ramp, draw, and interaction first,
+  with future roles added only when they can be scored honestly.
 - A density-aware, still-advisory, still-explainable Commander bracket estimate.
 - One determinism model across all simulation tools.
 - A meaningful local combo dataset (catalog-first, dataset fallback).
@@ -44,9 +44,9 @@ Non-goals:
 
 ## 3. Current state (investigation)
 
-- Operational facts are ramp-only by type (`CardOperationalFacts.Ramp?`), so the evaluator
-  cannot represent draw/interaction/removal/tutor/payoff value. Evidence/Warnings lists
-  exist and are reusable.
+- Operational facts now include `Ramp`, `Draw`, and `Interaction` slots. The evaluator
+  still deliberately does not score tutors, payoffs, finishers, or other future roles; those
+  return an explicit unsupported-role status instead of an unexplained zero.
 - Bracket signals are real (live Game Changers via `is:game-changer`, fast mana, tutors,
   stax, combo, extra-turn, mass-land-denial) but combined by max, not density.
 - Determinism: `DeterministicSimulationRandom` (SplitMix64) is used by Stats Lab, the
@@ -63,24 +63,24 @@ Non-goals:
 ## 4. Workstreams
 
 ### 4.1 General card evaluation framework
-- Extend `CardOperationalFacts` from a single `Ramp?` slot to a family of operational fact
-  kinds, modeled as a union/closed set (coordinate with Phase 4). Each kind has a
-  deterministic extractor and a scorer.
-- **Explicit first scope: `Draw` and `Interaction`** (in addition to the existing `Ramp`).
-  Land these three first; `Removal`, `Tutor`, `Payoff`, `Protection`, etc. are later,
-  incremental slices. Keep each addition small.
-- **Output must declare coverage.** Every evaluation result lists which roles are supported
-  and explicitly states when a card's role is *not yet supported* (e.g.
-  `evaluatedRoles: ["ramp","draw","interaction"]`, `unsupportedRole: true` with a clear
-  note), instead of returning a misleading `Score: 0`. Remove the ramp-only short-circuit.
+- Done in the third Phase 7 slice: extend `CardOperationalFacts` from a single `Ramp?`
+  slot to supported ramp/draw/interaction fact slots, each with deterministic extraction
+  and scoring.
+- **Explicit first scope landed: `Ramp`, `Draw`, and `Interaction`.** `Removal` is handled
+  inside interaction; `Tutor`, `Payoff`, broader `Protection`, etc. remain later,
+  incremental slices.
+- **Output declares coverage.** Every evaluation result lists supported roles
+  (`evaluatedRoles: ["ramp","draw","interaction"]`), selects `evaluatedRole` when a
+  supported fact is scored, and sets `unsupportedRole: true` with a clear warning for
+  roles outside the current scope.
 - Hard guardrail: extractors/scorers are **deterministic text/facet classifiers and
   bounded heuristics only** - no stack/sequencing/interaction simulation. This is a
   rubric, not a rules engine (see Risks).
-- Coordinate with Phase 5 (extract a `CardEvaluationService`) and Phase 1/2 (`detailLevel`).
-- Rename timing (resolved, see Phase 1): Phase 1 already renamed the ramp-only tool to an
-  honest ramp-scoped name (e.g. `deck_evaluate_ramp_card`). This phase introduces the
-  *general* evaluator under `deck_evaluate_card` (or a clear general name) and deprecates the
-  interim ramp-scoped name through the normal window. Every shipped version stays honest.
+- Coordinate with Phase 5 (`DeckCardEvaluationService` already exists) and Phase 1/2
+  (`detailLevel` already accepts `summary`, `normal`, `full`, with compact alias).
+- Rename timing resolved by implementation: the tool stayed `deck_evaluate_card`. Phase 0
+  made the ramp-only implementation honest in its description; Phase 7 broadened the
+  existing tool under the same name.
 
 ### 4.2 Bracket estimator depth
 - **Gate: agree benchmark expectations before implementation.** First, add bracket
@@ -114,29 +114,34 @@ Non-goals:
 
 ## 5. Files to create / change
 
-- Change: `OperationalFacts/RampOperationalModels.cs` (-> general fact family),
-  `RampContextScorer.cs` (-> role-aware scorer/dispatcher) and new per-kind extractors/
-  scorers; `Analysis/DeckAnalysisMetrics.cs` (bracket model);
-  `Simulation/DeckSimulationService.Goldfish.Run.cs` + `Analysis/DeckStatistics.cs` (RNG);
-  `Analysis/DeckAnalysisService.Combos.cs` (dataset fallback).
+- Changed: `OperationalFacts/RampOperationalModels.cs` (supported fact family),
+  `RampOperationalFactExtractor.cs`, `RampContextScorer.cs` (role-aware scorer/dispatcher),
+  and `RecommendationTools.cs` card-evaluation presenter.
+- Changed in earlier Phase 7 slices: `Simulation/DeckSimulationService.Goldfish.Run.cs` +
+  `Analysis/DeckStatistics.cs` (RNG), and `Analysis/DeckAnalysisService.Combos.cs`
+  (dataset fallback).
+- Still to change: `Analysis/DeckAnalysisMetrics.cs` (bracket model).
 - Created: `docs/reference/local-combos.json` (+ embedded loader).
-- Still to create: bracket/eval benchmark JSON in `tests/MtgMcp.Calibration/Corpus/`,
-  docs updates for those model changes.
-- Tests: per-kind evaluator tests; bracket benchmark tests; determinism tests (same seed
+- Still to create: bracket benchmark JSON in `tests/MtgMcp.Calibration/Corpus/`, docs
+  updates for that model change, and broader evaluator calibration fixtures if a future
+  role expansion needs them.
+- Tests: per-kind evaluator tests now cover ramp/draw/interaction and unsupported-role
+  output; bracket benchmark tests; determinism tests (same seed
   -> identical results) for goldfish family; combo-fallback tests.
 
 ## 6. Testing
 
 - Calibration suite extended and run in CI (or as a gated task) for eval/bracket/sim.
 - Determinism: snapshot a seeded goldfish run and assert byte-stable repeat.
-- Evaluator: non-ramp cards (removal, draw, finisher) now return meaningful, role-correct
-  output rather than `Score: 0`.
+- Evaluator: draw and interaction/removal cards now return meaningful, role-correct output;
+  unsupported roles such as finishers return `unsupportedRole=true` rather than an
+  unexplained `Score: 0`.
 - All offline.
 
 ## 7. Definition of done
 
-- `deck_evaluate_card` (or its renamed successor) evaluates ramp + draw + interaction,
-  declares supported/unsupported roles in output, and has no misleading `Score: 0`;
+- `deck_evaluate_card` evaluates ramp + draw + interaction, declares
+  supported/unsupported roles in output, and has no misleading unsupported-role zero;
   covered by tests.
 - Bracket estimate is density-aware and advisory, with maintainer-agreed benchmark
   expectations added to the calibration corpus *before* the model change and checked in CI.
@@ -159,9 +164,8 @@ Non-goals:
 
 ## 9. Open questions
 
-- `deck_evaluate_card` rename timing is decided (see Phase 1 and 4.1 above): ramp-scoped
-  rename in Phase 1, general evaluator under the general name here, one deprecation of the
-  interim name. No longer open.
+- `deck_evaluate_card` rename timing is decided by implementation: no ramp-scoped alias was
+  introduced; the existing tool is now the general supported-role evaluator.
 - Bracket model: rules-of-thumb thresholds vs a small weighted score - which best matches
   the Commander brackets beta guidance the prompt cites? (Decide alongside the agreed
   benchmark expectations in 4.2.)

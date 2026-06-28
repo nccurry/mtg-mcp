@@ -99,11 +99,10 @@ Non-goals (deferred):
   README surface section so docs can never silently drift again.
 
 ### 4.4 Honesty quick wins (no redesign)
-- `deck_evaluate_card`: tighten the `[Description]` to say it evaluates ramp fit, and make
-  the non-ramp path return an explicit status (e.g. `evaluator: "ramp"`,
-  `applicable: false`) instead of a bare `Score: 0`. Keep the method name for now; the
-  honest *rename* is owned by Phase 1 and the general evaluator by Phase 7 (see the
-  resolved rename-timing decision in Phase 1 and Phase 7).
+- `deck_evaluate_card`: Phase 0 made the then-ramp-only implementation honest by
+  tightening the `[Description]` and returning an explicit non-applicable status instead
+  of a bare `Score: 0`. Phase 7 supersedes this with the current supported-role evaluator
+  for ramp, draw, and interaction under the same tool name.
 - Goldfish determinism labeling: add `RngKind` (and a short determinism note) to
   `GoldfishSimulationResult`, `ProjectedTurnState`, and `WinTurnEstimate`, populated with
   the actual generator kind. Phase 0 labeled the then-current generator honestly; Phase 7
@@ -116,9 +115,10 @@ Non-goals (deferred):
 - Create: `docs/versioning.md`, `docs/adr/0001-*.md` (+ template),
   `tests/MtgMcp.App.Tests/Tools/McpSurfaceMetricsTests.cs`,
   `tests/MtgMcp.App.Tests/DocumentationSurfaceTests.cs`.
-- Change: `README.md` (surface section), `RecommendationTools.cs` (evaluate description +
-  non-ramp status), `OperationalFacts/RampContextScorer.cs` (explicit not-applicable
-  result), `Simulation/GoldfishModels.cs` (+`RngKind`),
+- Change: `README.md` (surface section), `RecommendationTools.cs` (Phase 0 evaluate
+  description + non-ramp status; Phase 7 later broadens it), `OperationalFacts/RampContextScorer.cs`
+  (explicit Phase 0 not-applicable result; Phase 7 later replaces this with supported-role
+  output), `Simulation/GoldfishModels.cs` (+`RngKind`),
   `Simulation/DeckSimulationService.Goldfish*.cs` (stamp `RngKind`),
   `McpSurfaceTests.cs` (snapshot update), `Taskfile.yml`/`ci.yml` (run metrics check).
 - Update: `CHANGELOG.md`.
@@ -136,7 +136,7 @@ Non-goals (deferred):
 - `docs/versioning.md` + ADR process exist and are linked from `CONTRIBUTING.md`.
 - A test enforces README-vs-registered-surface parity; it passes.
 - No tool/resource description over-claims; `deck_evaluate_card` returns an explicit
-  not-applicable signal for non-ramp cards; goldfish results carry `RngKind`.
+  status for roles outside its current scope; goldfish results carry `RngKind`.
 
 ## 8. Risks & mitigations
 

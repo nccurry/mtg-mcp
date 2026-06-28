@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Extracts ramp operational facts from cached Scryfall text, produced-mana fields, and saved Tagger evidence.
+/// Extracts supported operational facts from cached Scryfall text, produced-mana fields, and saved Tagger evidence.
 /// </summary>
 public static partial class RampOperationalFactExtractor
 {
@@ -23,7 +23,12 @@ public static partial class RampOperationalFactExtractor
             Role = role.PrimaryRole,
         };
 
-        bool taggerRamp = AddTaggerEvidence(taggerTags, facts);
+        AddTaggerEvidence(
+            taggerTags,
+            facts,
+            out bool taggerRamp,
+            out bool taggerDraw,
+            out bool taggerInteraction);
         RampOperationalFacts? ramp = TryParseRamp(card, snapshot, typeLine, oracleText, facts);
         if (ramp is not null)
         {
@@ -33,6 +38,28 @@ public static partial class RampOperationalFactExtractor
         {
             facts.Ramp = UnknownRampShape(card, snapshot);
             facts.Warnings.Add("unknownShape: ramp role evidence exists, but operational timing shape was not recognized.");
+        }
+
+        DrawOperationalFacts? draw = TryParseDraw(snapshot, typeLine, oracleText, facts);
+        if (draw is not null)
+        {
+            facts.Draw = draw;
+        }
+        else if (taggerDraw || role.PrimaryRole.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase))
+        {
+            facts.Draw = UnknownDrawShape(snapshot);
+            facts.Warnings.Add("unknownShape: draw role evidence exists, but operational draw shape was not recognized.");
+        }
+
+        InteractionOperationalFacts? interaction = TryParseInteraction(snapshot, typeLine, oracleText, facts);
+        if (interaction is not null)
+        {
+            facts.Interaction = interaction;
+        }
+        else if (taggerInteraction || IsInteractionRole(role.PrimaryRole))
+        {
+            facts.Interaction = UnknownInteractionShape(snapshot);
+            facts.Warnings.Add("unknownShape: interaction role evidence exists, but operational answer shape was not recognized.");
         }
 
         if (string.IsNullOrWhiteSpace(oracleText) && snapshot.ProducedMana.Count == 0)
@@ -190,6 +217,103 @@ public static partial class RampOperationalFactExtractor
     }
 
     /// <summary>
+    /// Parses a recognized draw or card-selection shape from Oracle text.
+    /// </summary>
+    private static DrawOperationalFacts? TryParseDraw(
+        CardSnapshot snapshot,
+        string typeLine,
+        string oracleText,
+        CardOperationalFacts facts)
+    {
+        string text = oracleText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        bool drawsCards = ContainsAny(text, "draw a card", "draw two cards", "draw three cards", "draw cards", "draw X cards");
+        bool impulseDraw = ContainsAny(text, "exile the top", "exile cards from the top")
+            && ContainsAny(text, "you may play", "you may cast");
+        bool selectionOnly = !drawsCards
+            && ContainsAny(text, "scry", "surveil", "look at the top", "reveal the top");
+        if (!drawsCards && !impulseDraw && !selectionOnly)
+        {
+            return null;
+        }
+
+        bool permanent = ContainsAny(typeLine, "Artifact", "Creature", "Enchantment", "Planeswalker");
+        bool repeatable = permanent
+            && ContainsAny(text, "whenever", "at the beginning", "{T}", "tap:");
+        bool discardsCards = ContainsAny(text, "discard a card", "discard your hand", "then discard", "as an additional cost");
+        bool conditional = repeatable || ContainsAny(text, "whenever", "if ", "when ", "at the beginning", "unless");
+        int immediateCards = selectionOnly ? 0 : EstimateImmediateDrawCount(text, impulseDraw);
+        AddParserEvidence(facts, selectionOnly ? "card-selection" : "card-draw", "Draw or card-selection pattern.");
+        return new DrawOperationalFacts
+        {
+            Kind = selectionOnly
+                ? "cardSelection"
+                : repeatable
+                    ? "repeatableDraw"
+                    : impulseDraw
+                        ? "impulseDraw"
+                        : discardsCards
+                            ? "looting"
+                            : immediateCards >= 3
+                                ? "largeDraw"
+                                : "cardDraw",
+            CastMana = ManaValue(snapshot),
+            ImmediateCards = immediateCards,
+            Repeatable = repeatable,
+            SelectionOnly = selectionOnly,
+            DiscardsCards = discardsCards,
+            ImpulseDraw = impulseDraw,
+            Conditional = conditional,
+            InstantSpeed = ContainsAny(typeLine, "Instant") || (permanent && ContainsAny(text, ":") && !ContainsAny(text, "activate only as a sorcery")),
+        };
+    }
+
+    /// <summary>
+    /// Parses a recognized removal, counterspell, board-wipe, or protection shape from Oracle text.
+    /// </summary>
+    private static InteractionOperationalFacts? TryParseInteraction(
+        CardSnapshot snapshot,
+        string typeLine,
+        string oracleText,
+        CardOperationalFacts facts)
+    {
+        string text = oracleText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        bool counterspell = ContainsAny(text, "counter target spell", "counter target activated", "counter target triggered");
+        bool boardWide = ContainsAny(text, "destroy all", "exile all", "return all", "each opponent sacrifices", "each player sacrifices")
+            || ContainsAny(text, "damage to each creature", "damage to all creatures");
+        bool permanentAnswer = ContainsAny(text, "destroy target", "exile target", "return target")
+            || ContainsAny(text, "damage to target", "any target");
+        bool protection = ContainsAny(text, "indestructible until", "gain hexproof", "gains hexproof", "protection from", "prevent all damage", "phase out");
+        bool graveyardHate = ContainsAny(text, "exile target card from a graveyard", "exile all graveyards", "exile target player's graveyard");
+        if (!counterspell && !boardWide && !permanentAnswer && !protection && !graveyardHate)
+        {
+            return null;
+        }
+
+        List<string> targets = InteractionTargets(text, counterspell, boardWide, graveyardHate);
+        AddParserEvidence(facts, "interaction", "Removal, counterspell, board-wipe, graveyard-hate, or protection pattern.");
+        return new InteractionOperationalFacts
+        {
+            Kind = boardWide
+                ? "boardWideAnswer"
+                : counterspell
+                    ? "stackAnswer"
+                    : protection
+                        ? "protection"
+                        : graveyardHate
+                            ? "graveyardHate"
+                            : "singleTargetAnswer",
+            CastMana = ManaValue(snapshot),
+            InstantSpeed = ContainsAny(typeLine, "Instant") || ContainsAny(text, "flash") || counterspell || protection,
+            StackInteraction = counterspell,
+            BoardWide = boardWide,
+            PermanentAnswer = permanentAnswer || boardWide,
+            Protection = protection,
+            Modal = ContainsAny(text, "choose one", "choose two", "choose up to"),
+            Targets = targets,
+        };
+    }
+
+    /// <summary>
     /// Creates an unknown ramp shape while keeping role evidence visible.
     /// </summary>
     private static RampOperationalFacts UnknownRampShape(DeckCard card, CardSnapshot snapshot)
@@ -207,11 +331,43 @@ public static partial class RampOperationalFactExtractor
     }
 
     /// <summary>
-    /// Adds source-backed evidence for saved Scryfall Tagger ramp tags.
+    /// Creates an unknown draw shape while keeping role evidence visible.
     /// </summary>
-    private static bool AddTaggerEvidence(List<string> taggerTags, CardOperationalFacts facts)
+    private static DrawOperationalFacts UnknownDrawShape(CardSnapshot snapshot)
     {
-        bool ramp = false;
+        return new DrawOperationalFacts
+        {
+            Kind = "unknownShape",
+            CastMana = ManaValue(snapshot),
+            Conditional = true,
+        };
+    }
+
+    /// <summary>
+    /// Creates an unknown interaction shape while keeping role evidence visible.
+    /// </summary>
+    private static InteractionOperationalFacts UnknownInteractionShape(CardSnapshot snapshot)
+    {
+        return new InteractionOperationalFacts
+        {
+            Kind = "unknownShape",
+            CastMana = ManaValue(snapshot),
+        };
+    }
+
+    /// <summary>
+    /// Adds source-backed evidence for supported saved Scryfall Tagger tags.
+    /// </summary>
+    private static void AddTaggerEvidence(
+        List<string> taggerTags,
+        CardOperationalFacts facts,
+        out bool ramp,
+        out bool draw,
+        out bool interaction)
+    {
+        ramp = false;
+        draw = false;
+        interaction = false;
         foreach (string tag in taggerTags)
         {
             if (!DeckTaggerTaxonomy.TryGetRule(tag, out DeckTaggerRule rule))
@@ -222,17 +378,109 @@ public static partial class RampOperationalFactExtractor
             if (rule.Role.Equals(DeckRoles.Ramp, StringComparison.OrdinalIgnoreCase))
             {
                 ramp = true;
-                facts.Evidence.Add(new CardFactEvidence
-                {
-                    Source = CardFacetSourceNames.Tagger,
-                    Kind = "sourceBacked",
-                    Label = rule.Slug,
-                    Detail = $"Saved Scryfall Tagger oracle tag maps to {DeckRoles.Ramp}."
-                });
+            }
+            else if (rule.Role.Equals(DeckRoles.Draw, StringComparison.OrdinalIgnoreCase))
+            {
+                draw = true;
+            }
+            else if (IsInteractionRole(rule.Role))
+            {
+                interaction = true;
+            }
+            else
+            {
+                continue;
+            }
+
+            facts.Evidence.Add(new CardFactEvidence
+            {
+                Source = CardFacetSourceNames.Tagger,
+                Kind = "sourceBacked",
+                Label = rule.Slug,
+                Detail = $"Saved Scryfall Tagger oracle tag maps to {rule.Role}."
+            });
+        }
+    }
+
+    /// <summary>
+    /// Estimates the immediate cards gained by common draw phrases.
+    /// </summary>
+    private static int EstimateImmediateDrawCount(string oracleText, bool impulseDraw)
+    {
+        if (ContainsAny(oracleText, "draw seven cards", "draw seven"))
+        {
+            return 7;
+        }
+
+        if (ContainsAny(oracleText, "draw three cards", "draw three"))
+        {
+            return 3;
+        }
+
+        if (ContainsAny(oracleText, "draw two cards", "draw two"))
+        {
+            return 2;
+        }
+
+        if (ContainsAny(oracleText, "draw a card", "draw one card"))
+        {
+            return 1;
+        }
+
+        if (ContainsAny(oracleText, "draw cards equal", "draw X cards"))
+        {
+            return 3;
+        }
+
+        return impulseDraw ? 2 : 1;
+    }
+
+    /// <summary>
+    /// Reads coarse answer target labels from interaction text.
+    /// </summary>
+    private static List<string> InteractionTargets(string oracleText, bool counterspell, bool boardWide, bool graveyardHate)
+    {
+        List<string> targets = [];
+        AddTarget(targets, "spell", counterspell || ContainsAny(oracleText, "target spell"));
+        AddTarget(targets, "creature", ContainsAny(oracleText, "target creature", "all creatures", "each creature"));
+        AddTarget(targets, "artifact", ContainsAny(oracleText, "target artifact", "artifacts"));
+        AddTarget(targets, "enchantment", ContainsAny(oracleText, "target enchantment", "enchantments"));
+        AddTarget(targets, "planeswalker", ContainsAny(oracleText, "target planeswalker", "planeswalkers"));
+        AddTarget(targets, "permanent", ContainsAny(oracleText, "target permanent", "nonland permanent", "all permanents"));
+        AddTarget(targets, "graveyard", graveyardHate);
+        AddTarget(targets, "board", boardWide);
+        return targets;
+    }
+
+    /// <summary>
+    /// Adds a target label when a parser condition matches.
+    /// </summary>
+    private static void AddTarget(List<string> targets, string target, bool condition)
+    {
+        if (!condition)
+        {
+            return;
+        }
+
+        foreach (string existing in targets)
+        {
+            if (existing.Equals(target, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
             }
         }
 
-        return ramp;
+        targets.Add(target);
+    }
+
+    /// <summary>
+    /// Checks whether the role is treated as interaction by the evaluator.
+    /// </summary>
+    private static bool IsInteractionRole(string role)
+    {
+        return role.Equals(DeckRoles.Interaction, StringComparison.OrdinalIgnoreCase)
+            || role.Equals(DeckRoles.BoardWipes, StringComparison.OrdinalIgnoreCase)
+            || role.Equals(DeckRoles.Protection, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
