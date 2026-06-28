@@ -66,9 +66,9 @@ regressed:
 | P22 | Adapters | Scryfall caches use `ICorpusCache`; Archidekt card-id cache is documented; adapter pacing is host-owned | Low | 6 |
 | P23 | Missing | No collection/ownership awareness ("which of these do I own?") | Medium | 8 |
 | P24 | Missing | No toolset/subset selection mechanism | High | 1 |
-| P25 | Missing | No batch card lookup (`card_get` is one-at-a-time) | Medium | 8 |
-| P26 | Missing | No image/art access for multimodal clients | Low | 8 |
-| P27 | Missing | Pricing is Scryfall-only; no price-source abstraction | Low | 8 |
+| P25 | Missing | Phase 8 Track 1 added `card_get_batch` for bounded multi-card hydration | Medium | 8 |
+| P26 | Missing | Phase 8 Track 1 added `card_get_image` link-only image/art access for multimodal clients | Low | 8 |
+| P27 | Missing | Pricing outputs have provenance fields; remaining Phase 8 work is an explicit price-source port | Low | 8 |
 | P28 | Quality | No structured logging/metrics; client-compatibility matrix untested | Medium | 9 |
 
 ---
@@ -334,13 +334,14 @@ Solutions (high level):
 - Collection/ownership awareness: a way to record owned cards and answer "which cards
   in this deck/these candidates do I already own?" and budget-vs-owned framing. Keep it
   local-first and provider-neutral.
-- Batch card lookup (`card_get_batch` / collection lookup) to hydrate many names in one
-  call, using Scryfall's collection endpoint; reduces N tool calls to one.
-- Optional image/art access (tool or resource) for multimodal clients, reusing existing
-  Scryfall URIs.
-- Price-source abstraction so pricing is not hard-bound to Scryfall USD (allow foil/
-  market distinctions and alternative sources behind a port), respecting the API-only
-  policy.
+- Batch card lookup (`card_get_batch`) to hydrate many names in one call, using
+  Scryfall's collection endpoint through the existing card catalog; reduces N tool calls
+  to one.
+- Optional image/art access (`card_get_image`) for multimodal clients, reusing existing
+  Scryfall image URIs and returning links rather than binary image payloads.
+- Price-source abstraction follow-up so pricing is not hard-bound to Scryfall USD
+  internals. Current outputs already expose source/provenance fields; the remaining work
+  is a formal port that preserves default behavior.
 
 Done when: each capability ships behind a stable, schema-typed tool/resource with tests
 and docs, and within a toolset so it can be enabled/disabled.

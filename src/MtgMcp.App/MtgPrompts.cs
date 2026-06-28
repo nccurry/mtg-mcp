@@ -335,7 +335,7 @@ public sealed class MtgPrompts
             Check Magic rules and card rulings for: {cardsOrWorkspace}
             Question: {question}
 
-            Use card_get and card_get_rulings for the named cards. Separate official rulings from strategic interpretation.
+            Use card_get_batch for multiple named cards, card_get for one card, and card_get_rulings for official rulings. Separate official rulings from strategic interpretation.
             """;
     }
 }

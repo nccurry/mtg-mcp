@@ -100,8 +100,8 @@ synthesis for the user.
 
 Core workflow groups are:
 
-- Card facts: `card_search`, `card_get`, `card_get_prints`, and
-  `card_get_rulings`.
+- Card facts: `card_search`, `card_get`, `card_get_batch`,
+  `card_get_image`, `card_get_prints`, and `card_get_rulings`.
 - Workspace lifecycle: `workspace_start`, `workspace_list`, `workspace_open`,
   `workspace_parse_decklist`, `workspace_export`, `workspace_validate`, and
   `workspace_validate_legality`, `workspace_checkpoint_*`,

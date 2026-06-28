@@ -15,9 +15,16 @@ internal capability," which lowers the cost.
 ## 1. Problems addressed
 
 - **P23 - no collection/ownership awareness** ("which of these do I own?").
-- **P25 - no batch card lookup** exposed (`card_get` is one-at-a-time).
-- **P26 - no image/art access** for multimodal clients.
-- **P27 - pricing is Scryfall-USD-centric** with no first-class price-source abstraction.
+- **P25 - batch card lookup is now exposed.** Track 1 added `card_get_batch`,
+  backed by the existing `ICardCatalog.GetCardsByNamesAsync` / Scryfall
+  `cards/collection` path.
+- **P26 - image/art access is now exposed as links.** Track 1 added
+  `card_get_image`, reusing `CardInfo.ImageUris` and returning URI metadata
+  rather than inline image bytes.
+- **P27 - pricing has provenance fields but no formal price-source port yet.**
+  Cost and candidate outputs already carry `priceSource`, `printingStatus`, and
+  `selectedPrintingReason`; the remaining work is to promote that behavior
+  behind an explicit source port.
 
 ## 2. Goals / non-goals
 
@@ -25,7 +32,7 @@ Goals:
 - A local-first card collection so deck/candidate tools can answer ownership and
   owned-vs-budget questions.
 - A batch card lookup tool.
-- Optional image/art access.
+- Optional image/art access as link metadata.
 - A clearer price-source abstraction.
 
 Non-goals:
@@ -39,22 +46,24 @@ Non-goals:
   (`ScryfallClient.cs:277`). It is simply not exposed as an MCP tool.
 - Images and prices already flow through the model: `CardInfo`/`CardSnapshot` carry
   `ImageUris` and `Prices` dictionaries (`ScryfallClient.Mapping.cs:77-89`,
-  `DeckServiceBase.WorkspaceHelpers.cs:47-48`). `card_get` returns `CardInfo` but there is
-  no image-focused affordance and prices are surfaced narrowly (USD).
-- Pricing already has partial abstraction: `CardPriceEvaluation` / `PriceSource`
-  (`ScryfallClient.Mapping.cs:35`, `Core/Pricing`), and `ScryfallOptions` has a
-  "budget-playable pricing may use foil/etched/market fallback" flag
-  (`ScryfallOptions.cs:46`). There is no multi-source price port.
+  `DeckServiceBase.WorkspaceHelpers.cs:47-48`). `card_get_image` now exposes
+  the image URI path as a link-only affordance.
+- Pricing already has partial abstraction and provenance: `CardPriceEvaluation`
+  / `PriceSource` (`ScryfallClient.Mapping.cs:35`, `Core/Pricing`),
+  `DeckCostDriver.PriceSource`, `PrintingStatus`, and
+  `SelectedPrintingReason`, plus the Scryfall "budget-playable pricing may use
+  foil/etched/market fallback" flag (`ScryfallOptions.cs:46`). There is still no
+  multi-source price port.
 - Collection/ownership: nothing exists. This is the only genuinely net-new subsystem.
 
 ## 4. Workstreams
 
 Split into two independently shippable tracks, smallest-value-first:
 
-- Track 1 (cheap, ship first): batch card lookup (4.2) and the image affordance (4.3).
-  Both mostly expose data that already flows through `ICardCatalog`/`CardInfo`, so they are
-  low-risk, no-new-persistence PRs that can land immediately on the Phase 3 conformant
-  surface. The price-source abstraction (4.4) can follow in the same track.
+- Track 1 (cheap, shipped first): batch card lookup (4.2) and the image affordance
+  (4.3). Both expose data that already flows through `ICardCatalog`/`CardInfo`,
+  so they are low-risk, no-new-persistence slices on the conformant surface. The
+  price-source port (4.4) remains a follow-up Track 1 hardening slice.
 - Track 2 (its own design decision + PR): the card collection subsystem (4.1). It is the
   only net-new persisted state and needs an explicit design decision before coding -
   persistence shape (name+quantity vs printings/foils/conditions), operation-mode
@@ -78,15 +87,15 @@ Split into two independently shippable tracks, smallest-value-first:
 - Guard mutations with `OperationModeGuard` (write to local planning state).
 
 ### 4.2 Batch card lookup (expose existing)
-- Add `card_get_batch(names[])` returning a typed map/rows, delegating to the existing
-  `GetCardsByNamesAsync`. Bounded by a `limit`, structured output (Phase 3). Update prompts
-  that hydrate many names to prefer it.
+- Done in the first Phase 8 slice: `card_get_batch(names[], limit)` returns
+  normalized request-order rows plus missing names, delegates to the existing
+  `GetCardsByNamesAsync`, and clamps the effective limit to 1-75. Hydration-heavy
+  prompt guidance now prefers it for multiple named cards.
 
 ### 4.3 Image / art access (expose existing)
-- Add either a tool (`card_get_image(nameOrId, kind)`) returning the relevant
-  `ImageUris` entry as a resource link / image content block, or a resource
-  (`mtg://card/{nameOrId}/image`). Reuse `CardInfo.ImageUris`; no new fetching of binary
-  data unless a client needs inline image content (the SDK supports image content blocks).
+- Done in the first Phase 8 slice: `card_get_image(nameOrId, kind)` returns a
+  Scryfall-hosted image URI, requested/resolved kind, available kinds, and
+  status (`ok`, `not-found`, `no-image`) without fetching image bytes.
 
 ### 4.4 Price-source abstraction
 - Promote pricing behind an `IPriceSource` port (Scryfall as the default implementation),
@@ -98,13 +107,13 @@ Split into two independently shippable tracks, smallest-value-first:
 
 ## 5. Files to create / change
 
-- Create: `Core/Collection/CollectionService.cs` + models + `ICollectionStore`,
-  `Core/Pricing/IPriceSource.cs` (+ Scryfall impl in `MtgMcp.Scryfall`),
-  new tool classes (`CollectionTools`, batch/image tools), `docs/collection.md`.
-- Change: `card_*` tools (+batch/image), `deck_analyze_cost` and candidate tools
-  (ownership/price provenance), `Hosting/MtgMcpHost.cs` DI + toolsets, `README.md`.
-- Tests: collection round-trip + ownership diff; batch lookup (MockHttp); price-source
-  selection; image affordance.
+- Create later: `Core/Collection/CollectionService.cs` + models + `ICollectionStore`,
+  `Core/Pricing/IPriceSource.cs` (+ Scryfall impl in `MtgMcp.Scryfall`), and
+  `docs/collection.md`.
+- Changed in Track 1: `CardTools`, MCP surface tests, prompt guidance,
+  `README.md`, `docs/architecture.md`, and `docs/toolsets.md`.
+- Tests: collection round-trip + ownership diff later; Track 1 has direct batch
+  lookup and image affordance tests plus MCP surface inventory coverage.
 
 ## 6. Testing
 
@@ -114,9 +123,11 @@ Split into two independently shippable tracks, smallest-value-first:
 
 ## 7. Definition of done
 
-Track 1 (ships first):
-- `card_get_batch` exposed and used by hydration-heavy prompts.
-- Image affordance available; price-source abstraction in place with provenance in output.
+Track 1:
+- Done: `card_get_batch` exposed and used by hydration-heavy prompts.
+- Done: image affordance available as link-only `card_get_image`.
+- Remaining: price-source port in place. Provenance already exists in output, so
+  the port should avoid changing default price behavior.
 
 Track 2 (separate, after its design ADR):
 - Collection capability ships behind a `collection` toolset with ownership-aware cost and

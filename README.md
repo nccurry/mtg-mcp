@@ -134,7 +134,7 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 
 | Area | What the MCP exposes |
 | --- | --- |
-| Card data | Scryfall search with optional format legality filtering, fuzzy card lookup, prints, rulings, and Scryfall query syntax guidance. |
+| Card data | Scryfall search with optional format legality filtering, single or batch fuzzy card lookup, image URI lookup, prints, rulings, and Scryfall query syntax guidance. |
 | Workspaces | Create, import, parse, export, open, validate, summarize, migrate, and update local or Archidekt-backed decks. |
 | Deck editing | Add, remove, move, categorize, annotate, and set quantities; create, preview, list, apply, or delete persisted edit plans. |
 | Moxfield | Import public or unlisted decks as generic local workspaces while preserving boards, tags, and print metadata when available. |
@@ -427,8 +427,9 @@ Workflow-first tools:
   `workspace_diff_last_import`.
   `workspace_list` returns `items`, `nextCursor`, `limit`, and `totalCount` for
   cursor-based paging.
-- Search cards with `card_search`, `card_get`, `card_get_prints`, and
-  `card_get_rulings`.
+- Search cards with `card_search`, hydrate one or many cards with `card_get`
+  and `card_get_batch`, inspect image links with `card_get_image`, and fetch
+  prints/rulings with `card_get_prints` and `card_get_rulings`.
 - Inspect decks with `deck_summarize`, `deck_analyze_structure`,
   `deck_analyze_mana`, `deck_analyze_consistency`, and
   `deck_analyze_performance`; use `deck_analyze_land_drop_odds` for the
@@ -476,7 +477,7 @@ Complete registered tool names:
   `archidekt_list_folders`, `archidekt_move_decks`.
 - Cards and facets: `card_classify_win_routes`, `card_facets_explain_match`,
   `card_facets_get`, `card_facets_set_annotations`, `card_get`,
-  `card_get_prints`, `card_get_rulings`, `card_search`,
+  `card_get_batch`, `card_get_image`, `card_get_prints`, `card_get_rulings`, `card_search`,
   `deck_facets_count`, `deck_facets_get`.
 - Commander, combos, and sources: `commander_get_aggregate_cards`,
   `commander_get_tags`, `commander_get_win_condition_evidence`,

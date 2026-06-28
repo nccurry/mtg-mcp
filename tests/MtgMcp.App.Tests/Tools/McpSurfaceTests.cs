@@ -89,6 +89,8 @@ public sealed class McpSurfaceTests
             "card_facets_get",
             "card_facets_set_annotations",
             "card_get",
+            "card_get_batch",
+            "card_get_image",
             "card_get_prints",
             "card_get_rulings",
             "card_search",
@@ -699,6 +701,8 @@ public sealed class McpSurfaceTests
     public void ToolAnnotations_MarkReadOnlyAndMutatingTools()
     {
         CustomAttributeData searchCards = GetToolAttribute(nameof(CardTools.SearchCardsAsync));
+        CustomAttributeData batchCards = GetToolAttribute(nameof(CardTools.GetCardsBatchAsync));
+        CustomAttributeData cardImage = GetToolAttribute(nameof(CardTools.GetCardImageAsync));
         CustomAttributeData addCard = GetToolAttribute(nameof(DeckMutationTools.AddCardAsync));
         CustomAttributeData bulkMoveCards = GetToolAttribute(nameof(DeckMutationTools.MoveCardsBulkAsync));
         CustomAttributeData removeCard = GetToolAttribute(
@@ -729,6 +733,10 @@ public sealed class McpSurfaceTests
 
         GetNamedBool(searchCards, "ReadOnly").Should().BeTrue();
         GetNamedBool(searchCards, "OpenWorld").Should().BeTrue();
+        GetNamedBool(batchCards, "ReadOnly").Should().BeTrue();
+        GetNamedBool(batchCards, "OpenWorld").Should().BeTrue();
+        GetNamedBool(cardImage, "ReadOnly").Should().BeTrue();
+        GetNamedBool(cardImage, "OpenWorld").Should().BeTrue();
         GetNamedBool(addCard, "ReadOnly").Should().BeFalse();
         GetNamedBool(addCard, "Destructive").Should().BeFalse();
         GetNamedBool(bulkMoveCards, "ReadOnly").Should().BeFalse();
@@ -779,6 +787,69 @@ public sealed class McpSurfaceTests
         GetNamedBool(clonePlan, "OpenWorld").Should().BeFalse();
         GetNamedBool(listPlaygroupDecks, "ReadOnly").Should().BeTrue();
         GetNamedBool(listPlaygroupDecks, "OpenWorld").Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that batch card lookup preserves request order and reports misses.
+    /// </summary>
+    [Fact]
+    public async Task CardGetBatch_NormalizesNamesAndReportsMissingRows()
+    {
+        SeededCardCatalog catalog = new(
+            CreateToolCard("Sol Ring"),
+            CreateToolCard("Arcane Signet"));
+        CardTools tools = new(catalog);
+
+        CardBatchLookupResult result = await tools.GetCardsBatchAsync(
+            [" Sol Ring ", "sol ring", "Missing Card", "Arcane Signet", "Too Far"],
+            limit: 3,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        catalog.LastBatchNames.Should().Equal("Sol Ring", "Missing Card", "Arcane Signet");
+        result.RequestedCount.Should().Be(3);
+        result.ReturnedCount.Should().Be(2);
+        result.MissingCount.Should().Be(1);
+        result.Limit.Should().Be(3);
+        result.Truncated.Should().BeTrue();
+        result.Cards.Select(row => row.RequestedName).Should().Equal("Sol Ring", "Arcane Signet");
+        result.Cards.Select(row => row.Card.Name).Should().Equal("Sol Ring", "Arcane Signet");
+        result.MissingNames.Should().Equal("Missing Card");
+    }
+
+    /// <summary>
+    /// Verifies that image lookup returns a link-only result with fallback status.
+    /// </summary>
+    [Fact]
+    public async Task CardGetImage_ReturnsImageUriAndStructuredMisses()
+    {
+        CardInfo lightningBolt = CreateToolCard("Lightning Bolt");
+        lightningBolt.ScryfallUri = "https://scryfall.com/card/test/1/lightning-bolt";
+        lightningBolt.ImageUris["normal"] = "https://cards.scryfall.io/normal/front/bolt.jpg";
+        lightningBolt.ImageUris["art_crop"] = "https://cards.scryfall.io/art_crop/front/bolt.jpg";
+        CardInfo textOnly = CreateToolCard("Text Only");
+        SeededCardCatalog catalog = new(lightningBolt, textOnly);
+        CardTools tools = new(catalog);
+
+        CardImageLookupResult fallback = await tools.GetCardImageAsync(
+            "Lightning Bolt",
+            kind: "png",
+            cancellationToken: TestContext.Current.CancellationToken);
+        CardImageLookupResult noImage = await tools.GetCardImageAsync(
+            "Text Only",
+            cancellationToken: TestContext.Current.CancellationToken);
+        CardImageLookupResult missing = await tools.GetCardImageAsync(
+            "Not A Card",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        fallback.Status.Should().Be("ok");
+        fallback.RequestedKind.Should().Be("png");
+        fallback.ResolvedKind.Should().Be("normal");
+        fallback.Uri.Should().Be("https://cards.scryfall.io/normal/front/bolt.jpg");
+        fallback.AvailableKinds.Should().Equal("art_crop", "normal");
+        fallback.ScryfallUri.Should().Be("https://scryfall.com/card/test/1/lightning-bolt");
+        noImage.Status.Should().Be("no-image");
+        noImage.AvailableKinds.Should().BeEmpty();
+        missing.Status.Should().Be("not-found");
     }
 
     /// <summary>
@@ -3111,6 +3182,19 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Creates a minimal card fixture for direct card-tool tests.
+    /// </summary>
+    private static CardInfo CreateToolCard(string name)
+    {
+        return new CardInfo
+        {
+            Id = name.ToLowerInvariant().Replace(' ', '-'),
+            Name = name,
+            ScryfallUri = $"https://scryfall.com/card/test/{name.ToLowerInvariant().Replace(' ', '-')}",
+        };
+    }
+
+    /// <summary>
     /// Provides empty card catalog behavior.
     /// </summary>
     private sealed class EmptyCardCatalog : ICardCatalog
@@ -3190,6 +3274,118 @@ public sealed class McpSurfaceTests
             int limit,
             CancellationToken cancellationToken
         )
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+    }
+
+    /// <summary>
+    /// Provides deterministic card catalog behavior for direct card tool tests.
+    /// </summary>
+    private sealed class SeededCardCatalog : ICardCatalog
+    {
+        /// <summary>
+        /// Stores cards by name using provider-like case-insensitive lookup.
+        /// </summary>
+        private readonly Dictionary<string, CardInfo> cardsByName;
+
+        /// <summary>
+        /// Creates a catalog from known card fixtures.
+        /// </summary>
+        public SeededCardCatalog(params CardInfo[] cards)
+        {
+            cardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (CardInfo card in cards)
+            {
+                cardsByName[card.Name] = card;
+            }
+        }
+
+        /// <summary>
+        /// Gets the most recent normalized batch names requested by a test.
+        /// </summary>
+        public List<string> LastBatchNames { get; } = [];
+
+        /// <summary>
+        /// Returns no search results because these tests call direct lookup tools.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
+        /// Returns no structured search results because these tests call direct lookup tools.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SearchCardsAsync(
+            CardSearchRequest request,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
+        }
+
+        /// <summary>
+        /// Looks up one seeded card by name.
+        /// </summary>
+        public Task<CardInfo?> GetCardAsync(string nameOrId, CancellationToken cancellationToken)
+        {
+            cardsByName.TryGetValue(nameOrId, out CardInfo? card);
+            return Task.FromResult(card);
+        }
+
+        /// <summary>
+        /// Looks up seeded cards and records the normalized batch request.
+        /// </summary>
+        public Task<IReadOnlyDictionary<string, CardInfo>> GetCardsByNamesAsync(
+            IReadOnlyList<string> names,
+            CancellationToken cancellationToken)
+        {
+            LastBatchNames.Clear();
+            LastBatchNames.AddRange(names);
+            Dictionary<string, CardInfo> result = new(StringComparer.OrdinalIgnoreCase);
+            foreach (string name in names)
+            {
+                if (cardsByName.TryGetValue(name, out CardInfo? card))
+                {
+                    result[name] = card;
+                }
+            }
+
+            return Task.FromResult<IReadOnlyDictionary<string, CardInfo>>(result);
+        }
+
+        /// <summary>
+        /// Returns no rulings because direct card tool tests do not need them.
+        /// </summary>
+        public Task<IReadOnlyList<RulingInfo>> GetRulingsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<RulingInfo>>([]);
+        }
+
+        /// <summary>
+        /// Returns no prints because direct card tool tests do not need them.
+        /// </summary>
+        public Task<IReadOnlyList<CardInfo>> GetPrintsAsync(
+            string nameOrId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CardInfo>>([]);
+        }
+
+        /// <summary>
+        /// Returns no suggestions because direct card tool tests do not need them.
+        /// </summary>
+        public Task<IReadOnlyList<CardSearchResult>> SuggestCardsAsync(
+            string prompt,
+            string? format,
+            int limit,
+            CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<CardSearchResult>>([]);
         }

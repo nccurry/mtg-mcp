@@ -24,7 +24,7 @@ Add `archidekt`, `playgroup`, `intent`, or `facets` when those workflows are nee
 |---|---|
 | `analysis` | Deck summaries, structure, mana, cost, bracket, weak-spot, and re-evaluation tools. |
 | `archidekt` | Archidekt deck, folder, checkpoint, copy, and comparison tools. |
-| `cards` | Scryfall card lookup, search, rulings, and prints. |
+| `cards` | Scryfall card search, single/batch lookup, image links, rulings, and prints. |
 | `combos` | Combo lookup and win-route classification. |
 | `editing` | Deck and category mutation tools. |
 | `facets` | Card/deck facet read tools and local facet annotations. |

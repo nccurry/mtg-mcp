@@ -197,7 +197,8 @@ this phase, not just a checklist.
 
 Counts are current per tool class. "->" is the proposed action.
 
-- Cards (4): keep. Add `card_get_batch` is Phase 8, not here.
+- Cards (4 at Phase 1 start): keep. Phase 8 Track 1 later added
+  `card_get_batch` and `card_get_image`.
 - Workspace lifecycle (`WorkspaceTools`, 19): keep core
   (`workspace_start/list/open/export/parse/validate/validate_legality/refresh/diff/diff_last_import`);
   move `deck_analyze_structure` into the analysis group; fold `workspace_diff` +
