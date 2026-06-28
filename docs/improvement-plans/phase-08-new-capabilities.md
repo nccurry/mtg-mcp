@@ -21,10 +21,10 @@ internal capability," which lowers the cost.
 - **P26 - image/art access is now exposed as links.** Track 1 added
   `card_get_image`, reusing `CardInfo.ImageUris` and returning URI metadata
   rather than inline image bytes.
-- **P27 - pricing has provenance fields but no formal price-source port yet.**
-  Cost and candidate outputs already carry `priceSource`, `printingStatus`, and
-  `selectedPrintingReason`; the remaining work is to promote that behavior
-  behind an explicit source port.
+- **P27 - pricing now has an explicit price-source port.** Cost and candidate
+  outputs already carried `priceSource`, `printingStatus`, and
+  `selectedPrintingReason`; Track 1 added `IPriceSource` and routes cost
+  analysis through the default normalized catalog source.
 
 ## 2. Goals / non-goals
 
@@ -48,22 +48,23 @@ Non-goals:
   `ImageUris` and `Prices` dictionaries (`ScryfallClient.Mapping.cs:77-89`,
   `DeckServiceBase.WorkspaceHelpers.cs:47-48`). `card_get_image` now exposes
   the image URI path as a link-only affordance.
-- Pricing already has partial abstraction and provenance: `CardPriceEvaluation`
+- Pricing has a first explicit port plus provenance: `IPriceSource`,
+  `CatalogPriceSource`, `CardPriceEvaluation`
   / `PriceSource` (`ScryfallClient.Mapping.cs:35`, `Core/Pricing`),
   `DeckCostDriver.PriceSource`, `PrintingStatus`, and
   `SelectedPrintingReason`, plus the Scryfall "budget-playable pricing may use
   foil/etched/market fallback" flag (`ScryfallOptions.cs:46`). There is still no
-  multi-source price port.
+  configured alternate provider.
 - Collection/ownership: nothing exists. This is the only genuinely net-new subsystem.
 
 ## 4. Workstreams
 
 Split into two independently shippable tracks, smallest-value-first:
 
-- Track 1 (cheap, shipped first): batch card lookup (4.2) and the image affordance
-  (4.3). Both expose data that already flows through `ICardCatalog`/`CardInfo`,
-  so they are low-risk, no-new-persistence slices on the conformant surface. The
-  price-source port (4.4) remains a follow-up Track 1 hardening slice.
+- Track 1 (cheap, shipped first): batch card lookup (4.2), the image affordance
+  (4.3), and the initial price-source port (4.4). These expose or wrap data that
+  already flows through `ICardCatalog`/`CardInfo`, so they are low-risk,
+  no-new-persistence slices on the conformant surface.
 - Track 2 (its own design decision + PR): the card collection subsystem (4.1). It is the
   only net-new persisted state and needs an explicit design decision before coding -
   persistence shape (name+quantity vs printings/foils/conditions), operation-mode
@@ -98,20 +99,21 @@ Split into two independently shippable tracks, smallest-value-first:
   status (`ok`, `not-found`, `no-image`) without fetching image bytes.
 
 ### 4.4 Price-source abstraction
-- Promote pricing behind an `IPriceSource` port (Scryfall as the default implementation),
-  exposing more than USD (foil/market where available) and allowing a configured source.
-  Fold the existing `CardPriceEvaluation`/`PriceSource` and the foil/market fallback flag
-  into the port. Keep API-only.
-- Surface price provenance in cost output (which source, foil vs nonfoil) so budgeting is
-  transparent.
+- Done in the second Phase 8 Track 1 slice: promote cost analysis behind
+  `IPriceSource`, with `CatalogPriceSource` preserving the existing normalized
+  catalog/Scryfall-shaped price-field policy (`usd`, foil/etched, TCG fallback)
+  and provenance. Alternative provider selection remains future work.
+- Price provenance was already present in cost and candidate outputs
+  (`priceSource`, `printingStatus`, `selectedPrintingReason`); the port keeps
+  that default output stable.
 
 ## 5. Files to create / change
 
 - Create later: `Core/Collection/CollectionService.cs` + models + `ICollectionStore`,
-  `Core/Pricing/IPriceSource.cs` (+ Scryfall impl in `MtgMcp.Scryfall`), and
-  `docs/collection.md`.
-- Changed in Track 1: `CardTools`, MCP surface tests, prompt guidance,
-  `README.md`, `docs/architecture.md`, and `docs/toolsets.md`.
+  and `docs/collection.md`.
+- Changed in Track 1: `CardTools`, `Core/Pricing/IPriceSource.cs`,
+  `DeckAnalysisMetrics`, host DI, MCP surface tests, pricing/cost tests, prompt
+  guidance, `README.md`, `docs/architecture.md`, and `docs/toolsets.md`.
 - Tests: collection round-trip + ownership diff later; Track 1 has direct batch
   lookup and image affordance tests plus MCP surface inventory coverage.
 
@@ -126,8 +128,8 @@ Split into two independently shippable tracks, smallest-value-first:
 Track 1:
 - Done: `card_get_batch` exposed and used by hydration-heavy prompts.
 - Done: image affordance available as link-only `card_get_image`.
-- Remaining: price-source port in place. Provenance already exists in output, so
-  the port should avoid changing default price behavior.
+- Done: price-source port in place for cost analysis, preserving existing
+  provenance output and default price behavior.
 
 Track 2 (separate, after its design ADR):
 - Collection capability ships behind a `collection` toolset with ownership-aware cost and

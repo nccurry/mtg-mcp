@@ -43,13 +43,15 @@ public sealed partial class DeckIntelligenceTests
         ICardTrendProvider? cardTrendProvider = null,
         IComboCatalog? comboCatalog = null,
         DateOnly? currentDateOverride = null,
-        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
+        DeckAnalysisMetrics? metrics = null)
     {
         return new DeckAnalysisService(
             repository,
             cardCatalog,
             comboCatalog: comboCatalog,
-            currentDateOverride: currentDateOverride);
+            currentDateOverride: currentDateOverride,
+            metrics: metrics);
     }
 
     /// <summary>

@@ -62,6 +62,7 @@ public static class MtgMcpHost
         services.GetRequiredService<SimulationProfileCatalog>();
         services.GetRequiredService<CardFacetService>();
         services.GetRequiredService<ICardCatalog>();
+        services.GetRequiredService<IPriceSource>();
         services.GetRequiredService<IArchidektGateway>();
         services.GetRequiredService<IMoxfieldGateway>();
         services.GetRequiredService<IPlaygroupGateway>();
@@ -114,6 +115,7 @@ public static class MtgMcpHost
             return CorpusCacheFactory.Create(options.DataDir, options.Intelligence.Cache);
         });
         builder.Services.AddTransient<DeckWorkspaceService>();
+        builder.Services.AddSingleton<IPriceSource, CatalogPriceSource>();
         builder.Services.AddTransient<DeckAnalysisMetrics>();
         builder.Services.AddTransient<DeckAnalysisService>();
         builder.Services.AddTransient<DeckBatchTuningService>();

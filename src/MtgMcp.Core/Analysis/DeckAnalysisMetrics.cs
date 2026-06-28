@@ -12,6 +12,11 @@ public sealed class DeckAnalysisMetrics
     private readonly ICardCatalog cardCatalog;
 
     /// <summary>
+    /// Evaluates local card price metadata for cost analysis.
+    /// </summary>
+    private readonly IPriceSource priceSource;
+
+    /// <summary>
     /// Supplies the reference date used for deterministic price evaluation.
     /// </summary>
     private readonly Func<DateOnly> currentDateProvider;
@@ -20,7 +25,15 @@ public sealed class DeckAnalysisMetrics
     /// Creates metrics using the current UTC date for price-sensitive evaluations.
     /// </summary>
     public DeckAnalysisMetrics(ICardCatalog cardCatalog)
-        : this(cardCatalog, CurrentUtcDate)
+        : this(cardCatalog, CatalogPriceSource.Instance, CurrentUtcDate)
+    {
+    }
+
+    /// <summary>
+    /// Creates metrics with an explicit price source.
+    /// </summary>
+    public DeckAnalysisMetrics(ICardCatalog cardCatalog, IPriceSource priceSource)
+        : this(cardCatalog, priceSource, CurrentUtcDate)
     {
     }
 
@@ -28,8 +41,20 @@ public sealed class DeckAnalysisMetrics
     /// Creates metrics with an explicit date provider for deterministic tests and previews.
     /// </summary>
     internal DeckAnalysisMetrics(ICardCatalog cardCatalog, Func<DateOnly> currentDateProvider)
+        : this(cardCatalog, CatalogPriceSource.Instance, currentDateProvider)
+    {
+    }
+
+    /// <summary>
+    /// Creates metrics with explicit price and date providers for deterministic tests and previews.
+    /// </summary>
+    internal DeckAnalysisMetrics(
+        ICardCatalog cardCatalog,
+        IPriceSource priceSource,
+        Func<DateOnly> currentDateProvider)
     {
         this.cardCatalog = cardCatalog;
+        this.priceSource = priceSource;
         this.currentDateProvider = currentDateProvider;
     }
 
@@ -87,7 +112,7 @@ public sealed class DeckAnalysisMetrics
                 continue;
             }
 
-            CardPriceEvaluation price = EvaluateUsdPrice(GetSnapshot(card), CurrentDate());
+            CardPriceEvaluation price = priceSource.Evaluate(GetSnapshot(card), CurrentDate());
             string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
             bool isMaybeboard = string.Equals(primaryCategory, DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase);
             bool includedInDeck = IsIncluded(workspace, card);
@@ -1028,29 +1053,6 @@ public sealed class DeckAnalysisMetrics
         return DeckCategoryOrdering.PrimaryCategory(card).Equals(
             DeckRoles.Commander,
             StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Evaluates whether a cached snapshot has a usable released-printing price.
-    /// </summary>
-    private CardPriceEvaluation EvaluateUsdPrice(CardSnapshot? snapshot, DateOnly referenceDate)
-    {
-        return snapshot is null
-            ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
-            : CardPriceEvaluator.Evaluate(snapshot, referenceDate);
-    }
-
-    /// <summary>
-    /// Builds an unknown price evaluation with a deterministic reason.
-    /// </summary>
-    private static CardPriceEvaluation MissingPrice(string printingStatus, string reason)
-    {
-        return new CardPriceEvaluation
-        {
-            PriceKnown = false,
-            PrintingStatus = printingStatus,
-            SelectedPrintingReason = reason
-        };
     }
 
     /// <summary>

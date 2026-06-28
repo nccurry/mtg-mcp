@@ -1727,6 +1727,50 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that deck cost analysis uses the injected price source port.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeDeckCost_UsesInjectedPriceSource()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Injected Price",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Port Price Card",
+                    Quantity = 2,
+                    PrimaryCategory = DeckRoles.Draw,
+                    Categories = [DeckRoles.Draw],
+                    Snapshot = new CardSnapshot()
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        FakeCardCatalog catalog = new();
+        DeckAnalysisMetrics metrics = new(
+            catalog,
+            new FixedPriceSource(3.25m),
+            () => new DateOnly(2026, 1, 1));
+        DeckAnalysisService service = CreateAnalysisService(
+            workspaces,
+            catalog,
+            metrics: metrics);
+
+        DeckCostAnalysis analysis = await service.AnalyzeDeckCostAsync(
+            workspace.Id,
+            maxBudget: null,
+            TestContext.Current.CancellationToken);
+
+        analysis.IncludedTotal.Should().Be(6.50m);
+        DeckCostDriver driver = analysis.TopCostDrivers.Should().ContainSingle().Subject;
+        driver.PriceSource.Should().Be("fixture-source");
+        driver.PrintingStatus.Should().Be("fixture-status");
+        driver.SelectedPrintingReason.Should().Be("fixture price source");
+    }
+
+    /// <summary>
     /// Verifies that budget status treats missing prices as risk instead of free cards.
     /// </summary>
     [Fact]
@@ -2295,5 +2339,75 @@ public sealed partial class DeckIntelligenceTests
             cancellation.Token);
 
         await estimate.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    /// <summary>
+    /// Provides deterministic fixed prices for price-source port tests.
+    /// </summary>
+    private sealed class FixedPriceSource : IPriceSource
+    {
+        /// <summary>
+        /// Stores the price returned for every card.
+        /// </summary>
+        private readonly decimal price;
+
+        /// <summary>
+        /// Creates a source that returns the supplied price.
+        /// </summary>
+        public FixedPriceSource(decimal price)
+        {
+            this.price = price;
+        }
+
+        /// <summary>
+        /// Gets the fixture price-source label.
+        /// </summary>
+        public string SourceName => "fixture";
+
+        /// <summary>
+        /// Evaluates any snapshot as a known fixed-price card.
+        /// </summary>
+        public CardPriceEvaluation Evaluate(CardSnapshot? snapshot, DateOnly referenceDate)
+        {
+            return Evaluation();
+        }
+
+        /// <summary>
+        /// Evaluates any catalog card as a known fixed-price card.
+        /// </summary>
+        public CardPriceEvaluation Evaluate(CardInfo card, DateOnly referenceDate)
+        {
+            return Evaluation();
+        }
+
+        /// <summary>
+        /// Selects the canonical printing with the fixed fixture price.
+        /// </summary>
+        public CardPriceEvaluator.CardPrintingSelection SelectPrinting(
+            CardInfo canonical,
+            IReadOnlyList<CardInfo> printings,
+            DateOnly referenceDate,
+            CardPrintingSelectionOptions options)
+        {
+            return new CardPriceEvaluator.CardPrintingSelection(
+                canonical,
+                Evaluation(),
+                ChangedPrinting: false);
+        }
+
+        /// <summary>
+        /// Builds the fixed price evaluation.
+        /// </summary>
+        private CardPriceEvaluation Evaluation()
+        {
+            return new CardPriceEvaluation
+            {
+                Price = price,
+                PriceKnown = true,
+                PriceSource = "fixture-source",
+                PrintingStatus = "fixture-status",
+                SelectedPrintingReason = "fixture price source",
+            };
+        }
     }
 }

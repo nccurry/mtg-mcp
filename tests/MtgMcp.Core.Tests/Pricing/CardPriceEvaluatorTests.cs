@@ -9,6 +9,32 @@ namespace MtgMcp.Core.Tests;
 public sealed class CardPriceEvaluatorTests
 {
     /// <summary>
+    /// Verifies that the default price source preserves evaluator semantics.
+    /// </summary>
+    [Fact]
+    public void CatalogPriceSource_EvaluatesNormalizedCatalogPriceFields()
+    {
+        CardSnapshot snapshot = new()
+        {
+            ReleasedAt = new DateOnly(2025, 1, 1),
+            Games = ["paper"],
+            Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["usd_foil"] = "4.25"
+            }
+        };
+
+        CardPriceEvaluation evaluation = CatalogPriceSource.Instance.Evaluate(
+            snapshot,
+            new DateOnly(2026, 1, 1));
+
+        evaluation.PriceKnown.Should().BeTrue();
+        evaluation.Price.Should().Be(4.25m);
+        evaluation.PriceSource.Should().Be("usd_foil");
+        evaluation.PrintingStatus.Should().Be("released-low-confidence-price");
+    }
+
+    /// <summary>
     /// Verifies that released English paper USD printings beat future canonical snapshots.
     /// </summary>
     [Fact]
