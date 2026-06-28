@@ -123,6 +123,9 @@ Status update after completed Phase 5 slices:
 - Commander theme hint resolution and deterministic source-tag matching now live in
   `src/MtgMcp.Core/Recommendations/CommanderThemeResolver.cs`, shared by corpus and
   evidence workflows before the larger commander evidence split.
+- Recent-card swap review and deterministic cut scoring now live in
+  `src/MtgMcp.Core/Recommendations/DeckNewCardSwapReviewService.cs`, with the
+  recommendation facade retaining the current MCP-facing method.
 
 ## 4. Workstreams
 

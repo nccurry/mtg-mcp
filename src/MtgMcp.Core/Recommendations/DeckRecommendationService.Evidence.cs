@@ -296,50 +296,13 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         int limit,
         CancellationToken cancellationToken)
     {
-        DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
-        NewCardsForDeckResult newCards = await FindNewCardsForDeckAsync(
+        return await newCardSwaps.ReviewNewCardSwapsAsync(
             workspaceId,
             since,
             setCode,
-            limit,
             maxPrice,
+            limit,
             cancellationToken).ConfigureAwait(false);
-        IReadOnlyDictionary<string, CardInfo> candidateCards = await CardCatalog.GetCardsByNamesAsync(
-            newCards.Suggestions.Select(suggestion => suggestion.CardName).ToList(),
-            cancellationToken).ConfigureAwait(false);
-        NewCardSwapReviewResult result = new()
-        {
-            WorkspaceId = workspace.Id
-        };
-        foreach (NewCardSuggestion suggestion in newCards.Suggestions)
-        {
-            candidateCards.TryGetValue(suggestion.CardName, out CardInfo? candidateInfo);
-            DeckCard candidateCard = candidateInfo is null
-                ? new DeckCard { Name = suggestion.CardName, PrimaryCategory = suggestion.Role }
-                : CreateCandidateCard(candidateInfo);
-            CardRoleAssignment candidateRole = DeckRoleClassifier.Classify(candidateCard);
-            result.Candidates.Add(new NewCardSwapCandidate
-            {
-                CardName = suggestion.CardName,
-                Role = suggestion.Role,
-                Tags = suggestion.Tags,
-                ReleasedAt = suggestion.ReleasedAt,
-                Set = suggestion.Set,
-                Price = suggestion.Price,
-                ScryfallUri = candidateInfo?.ScryfallUri ?? suggestion.ScryfallUri,
-                Score = suggestion.Score,
-                Rationale = suggestion.Rationale,
-                CutCandidates = BuildCutEvidence(workspace, intent, candidateRole, candidateInfo, suggestion.Price)
-                    .Take(5)
-                    .ToList(),
-                Metadata = BuildMetadata("scryfall", "recent-card-swap-review", candidateInfo?.ScryfallUri ?? suggestion.ScryfallUri, confidence: 0.70)
-            });
-        }
-
-        result.Notes.AddRange(newCards.Notes);
-        result.Notes.Add("Cut evidence is deterministic: role overlap, mana curve slot, duplicate effect density, theme mismatch, price delta, and protected-card warnings.");
-        return result;
     }
 
     /// <summary>
@@ -555,117 +518,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             ScryfallUri = CorpusEvidenceTableBuilder.ResolveScryfallUri(signal.CardName, signal.ScryfallUri, scryfallUris),
             Metadata = BuildMetadata(signal.Source, "commander-aggregate-card", signal.Uri, signal.Score)
         };
-    }
-
-    /// <summary>
-    /// Builds deterministic cut evidence for one candidate.
-    /// </summary>
-    private static List<NewCardCutEvidence> BuildCutEvidence(
-        DeckWorkspace workspace,
-        DeckIntent? intent,
-        CardRoleAssignment candidateRole,
-        CardInfo? candidateInfo,
-        decimal? candidatePrice)
-    {
-        List<DeckCard> included = DeckServiceHelpers.IncludedCards(workspace).Where(card => !IsCommanderCard(card)).ToList();
-        Dictionary<string, int> roleCounts = included
-            .Select(card => DeckRoleClassifier.Classify(card).PrimaryRole)
-            .GroupBy(role => role, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
-        List<NewCardCutEvidence> cuts = [];
-        foreach (DeckCard card in included)
-        {
-            CardRoleAssignment currentRole = DeckRoleClassifier.Classify(card);
-            bool roleOverlap = currentRole.PrimaryRole.Equals(candidateRole.PrimaryRole, StringComparison.OrdinalIgnoreCase)
-                || currentRole.Tags.Intersect(candidateRole.Tags, StringComparer.OrdinalIgnoreCase).Any();
-            bool curveSlot = IsSameCurveSlot(DeckServiceHelpers.GetSnapshot(card).ManaValue, candidateInfo?.ManaValue);
-            double duplicateDensity = roleCounts.TryGetValue(currentRole.PrimaryRole, out int count)
-                ? Math.Clamp(count / 10.0, 0, 1)
-                : 0;
-            bool themeMismatch = candidateRole.Tags.Count > 0
-                && !currentRole.Tags.Intersect(candidateRole.Tags, StringComparer.OrdinalIgnoreCase).Any()
-                && !currentRole.PrimaryRole.Equals(candidateRole.PrimaryRole, StringComparison.OrdinalIgnoreCase);
-            decimal? currentPrice = ReadUsdPrice(DeckServiceHelpers.GetSnapshot(card));
-            decimal? priceDelta = currentPrice.HasValue && candidatePrice.HasValue
-                ? currentPrice.Value - candidatePrice.Value
-                : null;
-            List<string> protectedWarnings = [];
-            if (DeckIntentProtection.IsProtectedCard(card, intent))
-            {
-                protectedWarnings.Add("Card is protected by deck intent.");
-            }
-
-            double score = 0;
-            score += roleOverlap ? 0.45 : 0;
-            score += curveSlot ? 0.20 : 0;
-            score += duplicateDensity * 0.20;
-            score += themeMismatch ? 0.10 : 0;
-            score += priceDelta is > 0 ? 0.05 : 0;
-            if (protectedWarnings.Count > 0)
-            {
-                score *= 0.25;
-            }
-
-            NewCardCutEvidence evidence = new()
-            {
-                CardName = card.Name,
-                Role = currentRole.PrimaryRole,
-                RoleOverlap = roleOverlap,
-                ManaCurveSlot = curveSlot,
-                DuplicateEffectDensity = duplicateDensity,
-                ThemeMismatch = themeMismatch,
-                PriceDelta = priceDelta,
-                ScryfallUri = DeckServiceHelpers.GetSnapshot(card).ScryfallUri,
-                ProtectedCardWarnings = protectedWarnings,
-                Score = Math.Clamp(score, 0, 1)
-            };
-            AddCutReasons(evidence);
-            cuts.Add(evidence);
-        }
-
-        return cuts
-            .OrderByDescending(cut => cut.Score)
-            .ThenBy(cut => cut.CardName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    /// <summary>
-    /// Adds exact scoring reasons to a cut row.
-    /// </summary>
-    private static void AddCutReasons(NewCardCutEvidence evidence)
-    {
-        if (evidence.RoleOverlap)
-        {
-            evidence.Reasons.Add("Role or tag overlaps the new card.");
-        }
-
-        if (evidence.ManaCurveSlot)
-        {
-            evidence.Reasons.Add("Mana value is in the same curve slot.");
-        }
-
-        if (evidence.DuplicateEffectDensity > 0)
-        {
-            evidence.Reasons.Add($"Duplicate effect density for role is {evidence.DuplicateEffectDensity:0.00}.");
-        }
-
-        if (evidence.ThemeMismatch)
-        {
-            evidence.Reasons.Add("Existing card has weaker tag overlap with the new card's route/theme.");
-        }
-
-        if (evidence.PriceDelta is > 0)
-        {
-            evidence.Reasons.Add("Candidate is cheaper than the existing card.");
-        }
-    }
-
-    /// <summary>
-    /// Checks whether two mana values share a curve slot.
-    /// </summary>
-    private static bool IsSameCurveSlot(double? current, double? candidate)
-    {
-        return current.HasValue && candidate.HasValue && Math.Abs(current.Value - candidate.Value) <= 1;
     }
 
     /// <summary>

@@ -293,7 +293,7 @@ public sealed partial class DeckIntelligenceTests
                 }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+        DeckQueryService service = CreateQueryService(workspaces, new FakeCardCatalog());
 
         DeckQueryDataResult interaction = await service.QueryCardsForDeckAsync(
             redWorkspace.Id,
@@ -498,7 +498,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 37, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+        DeckNewCardSwapReviewService service = CreateNewCardSwapReviewService(workspaces, new FakeCardCatalog());
 
         NewCardSwapReviewResult result = await service.ReviewNewCardSwapsAsync(
             workspace.Id,

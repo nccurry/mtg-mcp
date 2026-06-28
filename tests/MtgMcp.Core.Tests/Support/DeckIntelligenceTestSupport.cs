@@ -211,6 +211,28 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a new-card swap review service with explicit storage and new-card dependencies.
+    /// </summary>
+    private static DeckNewCardSwapReviewService CreateNewCardSwapReviewService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckNewCardService newCards = CreateNewCardService(
+            repository,
+            cardCatalog,
+            cardTrendProvider: cardTrendProvider,
+            currentDateOverride: currentDateOverride);
+        return new DeckNewCardSwapReviewService(repository, cardCatalog, newCards);
+    }
+
+    /// <summary>
     /// Creates a Commander meta service with explicit storage, catalog, and provider dependencies.
     /// </summary>
     private static DeckCommanderMetaService CreateCommanderMetaService(
