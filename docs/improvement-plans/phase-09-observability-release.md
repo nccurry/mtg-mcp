@@ -40,8 +40,8 @@ Non-goals:
   `ActivitySource`, a `Meter`, tool-call count/duration instruments, and an MCP
   `logging/setLevel` handler. `server_get_info` / `mtg://server/info` now expose
   the current `mcpLoggingLevel`.
-- Remaining: source-fetch metrics, broader client compatibility matrix, perf
-  ratchet reporting, and final release/version execution.
+- Remaining: source-fetch metrics, broader client compatibility matrix, and
+  final release/version execution.
 - CI (`.github/workflows/ci.yml`) already runs `task lint`, CodeQL, gitleaks, coverage
   report + 85% gates, `task smoke:mcp`, pack, release archives, and tool-smoke. Release is
   `.github/workflows/release.yml`. Benchmarks exist (`tests/MtgMcp.Benchmarks`,
@@ -85,13 +85,17 @@ Non-goals:
   output/error contracts from Phase 3.
 
 ### 4.4 Performance budgets
-- Define budgets for hot paths (large-deck analysis, 50k-sim performance, source fan-out,
-  combo analysis).
-- **Start with ratcheted reporting, not hard gates.** Emit timings and compare against a
-  recorded baseline as report-only output; only promote to a build-failing gate if/when CI
-  hardware proves stable enough for low-variance timing. On shared/containerized CI runners,
-  keep it report-only with a generous ratchet to avoid flaky failures. Use BenchmarkDotNet
-  in-process (as today) for the measurements.
+- Done for the first slice: `task perf:report` emits
+  `artifacts/performance-report.txt` with report-only hot-path timings for wide
+  deck analysis, role classification, and 1,000-run Stats Lab performance
+  analysis. CI uploads the artifact and does not fail on timing variance.
+- Remaining: add source fan-out and combo-analysis rows once the source-fetch
+  instrumentation boundary is shared.
+- **Start with ratcheted reporting, not hard gates.** Emit timings and compare against
+  recorded report budgets; only promote to a build-failing gate if/when CI hardware proves
+  stable enough for low-variance timing. On shared/containerized CI runners, keep it
+  report-only with a generous ratchet to avoid flaky failures. Use BenchmarkDotNet in-process
+  (as today) for deeper measurements.
 
 ### 4.5 Versioning, deprecation execution, 1.0
 - Complete deprecation windows opened in Phases 1-3 (remove deprecated tool names/params on
@@ -131,7 +135,7 @@ Non-goals:
 
 - Client-matrix E2E run in CI (offline, in-process transport).
 - Calibration + adapter contract gates green.
-- Perf budgets enforced (or reported with a ratchet).
+- Perf budgets reported with a ratchet.
 - `task release:verify` passes end to end.
 
 ## 7. Definition of done

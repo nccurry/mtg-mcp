@@ -394,6 +394,18 @@ tasks:
         --logger "console;verbosity=detailed"
       - '{{.POWERSHELL}} -Command "Get-Content artifacts/surface-report.txt"'
 
+  perf:report:
+    desc: Print report-only hot-path performance ratchet metrics
+    deps: [build]
+    cmds:
+      - >
+        {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --no-build
+        --filter "FullyQualifiedName~PerformanceRatchetReportTests.HotPathTimings_ReportCurrentRatchet"
+        --logger "console;verbosity=detailed"
+      - '{{.POWERSHELL}} -Command "Get-Content artifacts/performance-report.txt"'
+
   ci:
     desc: Run the CI validation suite
     cmds:
@@ -401,6 +413,7 @@ tasks:
       - task: surface:report
       - task: coverage:report
       - task: coverage:gates
+      - task: perf:report
       - task: smoke:mcp
 
   smoke:mcp:

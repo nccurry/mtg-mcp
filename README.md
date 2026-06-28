@@ -297,7 +297,8 @@ Adapter User-Agent defaults and the Moxfield curl fallback are detailed in
 [`docs/adapters.md`](docs/adapters.md).
 Runtime diagnostics and tested MCP client paths are documented in
 [`docs/observability.md`](docs/observability.md) and
-[`docs/compatibility.md`](docs/compatibility.md).
+[`docs/compatibility.md`](docs/compatibility.md). Report-only hot-path timing is
+documented in [`docs/performance-ratchet.md`](docs/performance-ratchet.md).
 
 ### Recommendation sources
 

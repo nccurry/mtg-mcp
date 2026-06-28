@@ -74,6 +74,15 @@ jobs:
       - name: Enforce coverage gates
         run: task coverage:gates
 
+      - name: Report performance ratchet
+        run: task perf:report
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-report
+          path: artifacts/performance-report.txt
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v6
         with:

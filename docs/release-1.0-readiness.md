@@ -18,7 +18,7 @@ with the public compatibility policy in [`docs/versioning.md`](versioning.md).
 | Phase 6 adapter hardening | Partial | Redaction and local adapter tests exist. Registry/release checks still need a final pass with release artifacts. |
 | Phase 7 analytical depth | Complete for planned slice | Draw/interaction evaluation, density-aware bracket, deterministic metadata, and local combo fallback are covered by tests. |
 | Phase 8 new capabilities | Complete for planned slice | Batch lookup, image lookup, price source port, and local collection ownership diffs are implemented and documented. |
-| Phase 9 observability | Partial | Tool-call logs, `Meter`, `ActivitySource`, and MCP `logging/setLevel` are implemented. Source-fetch metrics and broader client matrix are not complete. |
+| Phase 9 observability | Partial | Tool-call logs, `Meter`, `ActivitySource`, MCP `logging/setLevel`, and report-only `task perf:report` are implemented. Source-fetch metrics and broader client matrix are not complete. |
 | Version metadata | Blocked | `server.json` and `src/MtgMcp.App/MtgMcp.App.csproj` still declare `0.8.0`; do not tag `1.0.0` until versions and changelog are finalized. |
 | Deprecation removals | Blocked | 0.x compatibility shims must be audited and removed on schedule before `1.0.0`. |
 | MCP Registry validation | Pending | The release workflow validates and publishes registry metadata, but this branch has not completed final registry validation for `1.0.0`. |
