@@ -122,6 +122,24 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a goal-package service with explicit storage and query dependencies.
+    /// </summary>
+    private static DeckGoalPackageService CreateGoalPackageService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckQueryService queries = CreateQueryService(repository, cardCatalog, planRepository: planRepository);
+        return new DeckGoalPackageService(repository, queries);
+    }
+
+    /// <summary>
     /// Creates a replacement service with explicit storage, catalog, and metric dependencies.
     /// </summary>
     private static DeckReplacementService CreateReplacementService(

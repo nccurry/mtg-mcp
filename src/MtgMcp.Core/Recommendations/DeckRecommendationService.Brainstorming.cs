@@ -24,13 +24,15 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             limit: 10,
             maxPrice: budget > 0 ? budget : null,
             cancellationToken).ConfigureAwait(false);
-        GoalPackagePlanResult package = await FindCardsForDeckGoalAsync(
-            workspaceId,
-            string.IsNullOrWhiteSpace(goal) ? "improve weak roles" : goal,
-            count: 3,
-            maxPrice: budget > 0 ? budget : 10,
-            strategy: targetPower,
-            cancellationToken).ConfigureAwait(false);
+        GoalPackagePlanResult package = await goalPackages
+            .FindCardsForDeckGoalAsync(
+                workspaceId,
+                string.IsNullOrWhiteSpace(goal) ? "improve weak roles" : goal,
+                count: 3,
+                maxPrice: budget > 0 ? budget : 10,
+                strategy: targetPower,
+                cancellationToken)
+            .ConfigureAwait(false);
         DeckComboReport completedCombos = await analysis.FindDeckCombosAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckComboReport nearMissCombos = await analysis.FindNearMissCombosAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckComboReport combos = new()

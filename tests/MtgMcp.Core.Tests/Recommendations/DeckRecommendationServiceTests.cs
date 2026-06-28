@@ -95,7 +95,7 @@ public sealed partial class DeckIntelligenceTests
             ]
         }, TestContext.Current.CancellationToken);
         FakeCardCatalog catalog = new();
-        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog, archidektGateway: null, plans);
+        DeckGoalPackageService service = CreateGoalPackageService(workspaces, catalog, archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -135,7 +135,7 @@ public sealed partial class DeckIntelligenceTests
             ]
         }, TestContext.Current.CancellationToken);
         FakeCardCatalog catalog = new();
-        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog, archidektGateway: null, plans);
+        DeckGoalPackageService service = CreateGoalPackageService(workspaces, catalog, archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -176,7 +176,7 @@ public sealed partial class DeckIntelligenceTests
             ]
         }, TestContext.Current.CancellationToken);
         FakeCardCatalog catalog = new();
-        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog, archidektGateway: null, plans);
+        DeckGoalPackageService service = CreateGoalPackageService(workspaces, catalog, archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -402,7 +402,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        DeckGoalPackageService service = CreateGoalPackageService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -574,7 +574,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new GoalBudgetCatalog(), archidektGateway: null, plans);
+        DeckGoalPackageService service = CreateGoalPackageService(workspaces, new GoalBudgetCatalog(), archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,
@@ -628,7 +628,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        DeckGoalPackageService service = CreateGoalPackageService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
 
         GoalPackagePlanResult result = await service.FindCardsForDeckGoalAsync(
             workspace.Id,

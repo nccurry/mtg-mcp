@@ -87,6 +87,9 @@ Status update after Sub-PRs A/B:
 - Category cleanup planning now lives in
   `src/MtgMcp.Core/Recommendations/DeckCategorySuggestionService.cs`, with a facade
   delegate preserving the current recommendation service call.
+- Goal-package planning now lives in
+  `src/MtgMcp.Core/Recommendations/DeckGoalPackageService.cs`, with the current facade
+  method retained for MCP tool wiring.
 
 ## 4. Workstreams
 

@@ -41,6 +41,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckQueryService queries;
 
     /// <summary>
+    /// Builds goal-driven card package plans.
+    /// </summary>
+    private readonly DeckGoalPackageService goalPackages;
+
+    /// <summary>
     /// Builds replacement, upgrade, and consistency improvement plans.
     /// </summary>
     private readonly DeckReplacementService replacements;
@@ -89,6 +94,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckAnalysisMetrics? analysisMetrics = null,
         DeckBatchTuningService? batchTuning = null,
         DeckQueryService? queries = null,
+        DeckGoalPackageService? goalPackages = null,
         DeckReplacementService? replacements = null,
         DeckCategorySuggestionService? categories = null
     )
@@ -106,6 +112,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
         this.batchTuning = batchTuning ?? new DeckBatchTuningService(repository, analysis, simulation);
         this.queries = queries ?? new DeckQueryService(repository, cardCatalog, planRepository);
+        this.goalPackages = goalPackages ?? new DeckGoalPackageService(repository, this.queries);
         this.replacements = replacements ?? new DeckReplacementService(repository, cardCatalog, this.analysisMetrics, planRepository);
         this.categories = categories ?? new DeckCategorySuggestionService(repository, planRepository);
         this.simulation = simulation;
