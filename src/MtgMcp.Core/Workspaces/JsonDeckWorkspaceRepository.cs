@@ -1,37 +1,28 @@
-using System.Text.Json;
-
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Provides json deck workspace Repository behavior.
+/// Persists deck workspaces as JSON files under the local data directory.
 /// </summary>
 public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
 {
     /// <summary>
-    /// Configures persisted workspace JSON formatting.
+    /// Owns atomic JSON persistence and legacy filename migration for workspace files.
     /// </summary>
-    private static readonly JsonSerializerOptions SerializerOptions = new(
-        JsonSerializerDefaults.Web
-    )
-    {
-        WriteIndented = true,
-    };
-
-    /// <summary>
-    /// Stores the workspace directory.
-    /// </summary>
-    private readonly string workspaceDirectory;
+    private readonly JsonFileStore<DeckWorkspace> store;
 
     /// <summary>
     /// Creates a repository rooted under the mtg-mcp data directory.
     /// </summary>
     public JsonDeckWorkspaceRepository(string dataDirectory)
     {
-        workspaceDirectory = Path.Combine(dataDirectory, "workspaces");
+        store = new JsonFileStore<DeckWorkspace>(
+            Path.Combine(dataDirectory, "workspaces"),
+            "Workspace",
+            static workspace => workspace.Id);
     }
 
     /// <summary>
-    /// Saves the workspace.
+    /// Saves a workspace and refreshes its local update timestamp.
     /// </summary>
     public async Task<DeckWorkspace> SaveAsync(
         DeckWorkspace workspace,
@@ -39,46 +30,10 @@ public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
     )
     {
         ArgumentNullException.ThrowIfNull(workspace);
-        Directory.CreateDirectory(workspaceDirectory);
         workspace.UpdatedAt = DateTimeOffset.UtcNow;
 
-        string path = GetWorkspacePath(workspace.Id);
-        string tempPath = Path.Combine(
-            workspaceDirectory,
-            $"{Path.GetFileNameWithoutExtension(path)}.{Guid.NewGuid():N}.tmp"
-        );
-
-        try
-        {
-            // Write to a unique temp file first so interrupted saves do not leave
-            // a partially written workspace JSON file behind.
-            await using (
-                FileStream stream = new(
-                    tempPath,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None
-                )
-            )
-            {
-                await JsonSerializer
-                    .SerializeAsync(stream, workspace, SerializerOptions, cancellationToken)
-                    .ConfigureAwait(false);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(tempPath))
-            {
-                File.Delete(tempPath);
-            }
-        }
-
-        return workspace;
+        return await store.SaveAsync(workspace.Id, workspace, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -89,58 +44,16 @@ public sealed class JsonDeckWorkspaceRepository : IDeckWorkspaceRepository
         CancellationToken cancellationToken
     )
     {
-        string path = GetWorkspacePath(workspaceId);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        await using FileStream stream = File.OpenRead(path);
-        return await JsonSerializer
-            .DeserializeAsync<DeckWorkspace>(stream, SerializerOptions, cancellationToken)
-            .ConfigureAwait(false);
+        return await store.GetAsync(workspaceId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Lists the cancellation token.
+    /// Lists saved workspaces with the newest updates first.
     /// </summary>
     public async Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(workspaceDirectory))
-        {
-            return [];
-        }
-
-        List<DeckWorkspace> workspaces = [];
-        foreach (string path in Directory.EnumerateFiles(workspaceDirectory, "*.json"))
-        {
-            await using FileStream stream = File.OpenRead(path);
-            DeckWorkspace? workspace = await JsonSerializer
-                .DeserializeAsync<DeckWorkspace>(stream, SerializerOptions, cancellationToken)
-                .ConfigureAwait(false);
-            if (workspace is not null)
-            {
-                workspaces.Add(workspace);
-            }
-        }
-
-        return workspaces.OrderByDescending(workspace => workspace.UpdatedAt).ToList();
-    }
-
-    /// <summary>
-    /// Builds a safe filesystem path for a workspace id.
-    /// </summary>
-    private string GetWorkspacePath(string workspaceId)
-    {
-        string safeId = string.Concat(workspaceId.Where(char.IsLetterOrDigit));
-        if (string.IsNullOrWhiteSpace(safeId))
-        {
-            throw new ArgumentException(
-                "Workspace id must contain at least one alphanumeric character.",
-                nameof(workspaceId)
-            );
-        }
-
-        return Path.Combine(workspaceDirectory, $"{safeId}.json");
+        List<DeckWorkspace> workspaces = [.. await store.ListAsync(cancellationToken).ConfigureAwait(false)];
+        workspaces.Sort(static (left, right) => right.UpdatedAt.CompareTo(left.UpdatedAt));
+        return workspaces;
     }
 }

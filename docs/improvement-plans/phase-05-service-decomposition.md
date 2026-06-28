@@ -6,7 +6,7 @@
 | Risk | Medium-High (large internal refactor) |
 | Depends on | Phase 4 (typed contracts) recommended first |
 | Unblocks | sustainable change velocity; easier Phase 7 |
-| Target version | 0.14.0 |
+| Target version | 0.12.0 |
 
 Goal: tame the largest services and the shared base so Core stays changeable and testable,
 without altering external behavior.
@@ -119,7 +119,7 @@ out of scope for this phase.
 ## 5. Files to create / change
 
 - Create: focused service classes under `Recommendations/`, `Analysis/`,
-  `Playgroups/`; `Workspaces/JsonFileStore.cs`.
+  `Playgroups/`; neutral storage helpers under `Storage/` such as `JsonFileStore.cs`.
 - Change: `DeckRecommendationService*` (shrunk/removed), `DeckServiceBase*` (slimmed),
   `JsonDeckWorkspaceRepository`/`JsonDeckPlanRepository` (delegate to store),
   `Hosting/MtgMcpHost.cs` DI registrations, `DeckSimulationService.Goldfish.cs` (optional

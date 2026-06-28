@@ -1,63 +1,33 @@
-using System.Text.Json;
-
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Persists deck edit plans as json files.
+/// Persists deck edit plans as JSON files under the local data directory.
 /// </summary>
 public sealed class JsonDeckPlanRepository : IDeckPlanRepository
 {
     /// <summary>
-    /// Stores serializer options.
+    /// Owns atomic JSON persistence and legacy filename migration for plan files.
     /// </summary>
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
-
-    /// <summary>
-    /// Stores the plan directory.
-    /// </summary>
-    private readonly string planDirectory;
+    private readonly JsonFileStore<DeckEditPlan> store;
 
     /// <summary>
     /// Creates a repository rooted under the mtg-mcp data directory.
     /// </summary>
     public JsonDeckPlanRepository(string dataDirectory)
     {
-        planDirectory = Path.Combine(dataDirectory, "plans");
+        store = new JsonFileStore<DeckEditPlan>(
+            Path.Combine(dataDirectory, "plans"),
+            "Plan",
+            static plan => plan.PlanId);
     }
 
     /// <summary>
-    /// Saves the plan.
+    /// Saves a deck edit plan under its stable plan id.
     /// </summary>
     public async Task<DeckEditPlan> SaveAsync(DeckEditPlan plan, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        Directory.CreateDirectory(planDirectory);
-
-        string path = GetPlanPath(plan.PlanId);
-        string tempPath = Path.Combine(planDirectory, $"{Path.GetFileNameWithoutExtension(path)}.{Guid.NewGuid():N}.tmp");
-
-        try
-        {
-            await using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await JsonSerializer.SerializeAsync(stream, plan, SerializerOptions, cancellationToken).ConfigureAwait(false);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(tempPath))
-            {
-                File.Delete(tempPath);
-            }
-        }
-
-        return plan;
+        return await store.SaveAsync(plan.PlanId, plan, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -65,39 +35,21 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
     /// </summary>
     public async Task<DeckEditPlan?> GetAsync(string planId, CancellationToken cancellationToken)
     {
-        string path = GetPlanPath(planId);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        await using FileStream stream = File.OpenRead(path);
-        return await JsonSerializer.DeserializeAsync<DeckEditPlan>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        return await store.GetAsync(planId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Lists the plans.
+    /// Lists saved plans, optionally scoped to one workspace, with the newest plans first.
     /// </summary>
     public async Task<IReadOnlyList<DeckEditPlan>> ListAsync(
         string? workspaceId,
         CancellationToken cancellationToken
     )
     {
-        if (!Directory.Exists(planDirectory))
-        {
-            return [];
-        }
-
         List<DeckEditPlan> plans = [];
-        foreach (string path in Directory.EnumerateFiles(planDirectory, "*.json"))
+        IReadOnlyList<DeckEditPlan> storedPlans = await store.ListAsync(cancellationToken).ConfigureAwait(false);
+        foreach (DeckEditPlan plan in storedPlans)
         {
-            await using FileStream stream = File.OpenRead(path);
-            DeckEditPlan? plan = await JsonSerializer.DeserializeAsync<DeckEditPlan>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
-            if (plan is null)
-            {
-                continue;
-            }
-
             if (!string.IsNullOrWhiteSpace(workspaceId)
                 && !string.Equals(plan.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
             {
@@ -107,9 +59,8 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
             plans.Add(plan);
         }
 
-        return plans
-            .OrderByDescending(plan => plan.CreatedAt)
-            .ToList();
+        plans.Sort(static (left, right) => right.CreatedAt.CompareTo(left.CreatedAt));
+        return plans;
     }
 
     /// <summary>
@@ -117,27 +68,6 @@ public sealed class JsonDeckPlanRepository : IDeckPlanRepository
     /// </summary>
     public Task<bool> DeleteAsync(string planId, CancellationToken cancellationToken)
     {
-        string path = GetPlanPath(planId);
-        bool exists = File.Exists(path);
-        if (exists)
-        {
-            File.Delete(path);
-        }
-
-        return Task.FromResult(exists);
-    }
-
-    /// <summary>
-    /// Builds a safe filesystem path for a plan id.
-    /// </summary>
-    private string GetPlanPath(string planId)
-    {
-        string safeId = string.Concat(planId.Where(char.IsLetterOrDigit));
-        if (string.IsNullOrWhiteSpace(safeId))
-        {
-            throw new ArgumentException("Plan id must contain at least one alphanumeric character.", nameof(planId));
-        }
-
-        return Path.Combine(planDirectory, $"{safeId}.json");
+        return store.DeleteAsync(planId, cancellationToken);
     }
 }
