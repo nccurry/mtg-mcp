@@ -14,11 +14,13 @@ concerns into Core.
 
 ## 1. Problems addressed
 
-- **P18 - no shared resiliency.** Scryfall/Archidekt hand-roll retry/backoff; Moxfield,
-  CommanderSpellbook, and the five Decklists providers have none (a 429 just throws).
-- **P19 - inconsistent error model.** Gateways throw redacted `HttpRequestException`;
-  corpus providers still have inconsistent failure handling and should return typed,
-  degrading statuses where possible.
+- **P18 - split resiliency.** Scryfall/Archidekt retain robust adapter-specific
+  retry/backoff; CommanderSpellbook and Decklists now share a package-free
+  text-response retry helper; Moxfield/Playgroup still use custom request paths.
+- **P19 - inconsistent error model.** Bare `EnsureSuccessStatusCode` paths are gone, and
+  corpus providers now throw redacted `HttpRequestException` failures from a shared
+  helper. The remaining gap is a typed adapter outcome model with source-local
+  degradation where a failed optional source should not abort the whole run.
 - **P20 (safety) - coarse secret redaction (addressed by 4.3).** Before the Phase 6
   redaction slice, `SecretRedactor.Redact(string)` replaced the whole value if it merely
   contained a keyword like "token"/"secret"; conversely a raw bearer/JWT without those
@@ -34,7 +36,8 @@ concerns into Core.
 ## 2. Goals / non-goals
 
 Goals:
-- One shared resiliency layer (retry/backoff/timeout) across all adapters.
+- One shared resiliency convention (retry/backoff/timeout where useful) across all
+  adapters.
 - One adapter error/result model with graceful degradation; informative + redacted.
 - Precise secret redaction as a backstop, plus minimized raw-body exposure in logs/errors
   (do not rely on redaction alone).
@@ -48,9 +51,10 @@ Non-goals:
 
 ## 3. Current state (investigation)
 
-- Adapters already reference `Microsoft.Extensions.Http` (e.g.
-  `MtgMcp.Scryfall.csproj:11`), so `Microsoft.Extensions.Http.Resilience` (Polly-backed)
-  drops in naturally at the `AddHttpClient<>` registrations.
+- Adapters already reference `Microsoft.Extensions.Http` where they use named clients, so
+  `Microsoft.Extensions.Http.Resilience` (Polly-backed) remains a viable later option at
+  the `AddHttpClient<>` registrations. The implemented Phase 6 slices intentionally took
+  a smaller package-free route for current retry/error gaps.
 - `SecretRedactor` now has precise key-based redaction for dicts/JSON, raw JSON-body
   parsing for string inputs, and token-shape redaction for authorization headers, JWTs,
   URL credentials, and long high-entropy strings. The original coarse substring path has
@@ -64,8 +68,10 @@ Non-goals:
 - Rate limiting: Scryfall proactive-by-default (125ms) + 429 handling; Archidekt optional
   sliding window (off by default) + 429/throttle body parsing; both use host-owned
   `MtgMcpRequestPacer` instances instead of adapter static state. Retry-After and
-  body-marker delay parsing now share `MtgMcpHttpRetry`.
-  Moxfield/Spellbook/Decklists have none.
+  body-marker delay parsing now share `MtgMcpHttpRetry`. CommanderSpellbook and
+  Decklists use `MtgMcpHttpRetry.SendForStringAsync` for text/json request retry and
+  redacted terminal failures. Moxfield/Playgroup still have adapter-local request
+  handling.
 - Moxfield `curl` fallback on 403 is contained, injection-safe, bounded by curl
   `--max-time 30`, disable-able, and documented in `docs/adapters.md`.
 
@@ -103,6 +109,11 @@ Non-goals:
 - **4.5 limiter replacement:** complete for the existing proactive pacing paths. Scryfall
   and Archidekt now use adapter-specific singleton `MtgMcpRequestPacer` registrations, so
   pacing state is host-owned rather than process-static.
+- **4.1/4.2 shared text-response retry and redacted failures:** complete for
+  CommanderSpellbook and Decklists. `MtgMcpHttpRetry.SendForStringAsync` retries
+  transient statuses with `Retry-After`, returns explicitly allowed non-success statuses
+  for graceful missing-page paths, and throws redacted `HttpRequestException` failures.
+  The repo no longer has bare `EnsureSuccessStatusCode()` adapter/corpus paths.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -117,18 +128,20 @@ their own early PRs (they are the items with security/correctness impact and sma
 radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 
 ### 4.1 Shared resiliency
-- Add `Microsoft.Extensions.Http.Resilience` to the adapter projects; apply a standard
-  resilience handler (retry with jittered backoff, timeout, optional circuit breaker) at
-  each `AddHttpClient<>` registration via a shared extension
-  (e.g. `AddMtgMcpHttpResilience`).
-- Keep per-source etiquette (Scryfall pacing, Archidekt throttle awareness) but express it
-  through the shared pipeline; bring Moxfield/Spellbook/Decklists up to the same baseline.
+- Status: partially complete. `MtgMcpHttpRetry.SendForStringAsync` is the current shared
+  baseline for text/json corpus requests, covering CommanderSpellbook and Decklists with
+  transient retry, `Retry-After`, and redacted terminal failures.
+- Remaining: decide whether the adapter projects need `Microsoft.Extensions.Http.Resilience`
+  for a richer registration-time pipeline (retry with jittered backoff, timeout, optional
+  circuit breaker). If added, keep per-source etiquette such as Scryfall pacing and
+  Archidekt throttle awareness.
 
 ### 4.2 Unified error/result model
-- Define a shared adapter outcome shape (coordinate with Phase 4 unions and Phase 3 error
-  taxonomy): success vs typed failure (auth, rate-limited, unavailable, blocked,
-  malformed). Replace bare `EnsureSuccessStatusCode()` paths with consistent handling that
-  includes a redacted, useful message.
+- Status: partially complete. Bare `EnsureSuccessStatusCode()` paths have been replaced
+  with consistent redacted `HttpRequestException` failures for text/json corpus calls.
+- Remaining: define a shared adapter outcome shape (coordinate with Phase 4 unions and
+  Phase 3 error taxonomy): success vs typed failure (auth, rate-limited, unavailable,
+  blocked, malformed).
 - Add graceful source-local degradation so a single failing source returns a typed status
   without aborting the run.
 - **Cross-phase contract (neither phase blocks the other):** Phase 6 *defines* the typed
@@ -186,14 +199,18 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 
 ## 5. Files to create / change
 
-- Create: `Directory.Packages.props` (+`Microsoft.Extensions.Http.Resilience`), a shared
-  `AddMtgMcpHttpResilience` extension, shared adapter-support helpers. `docs/adapters.md`
+- Created/changed: `Core/HttpRetry.cs` now contains the shared retry-delay parsing,
+  text-response send helper, and redacted request-exception factory. `docs/adapters.md`
   is complete for the 4.6/4.7 and Archidekt cache-disposition slices.
+- Remaining if richer policies become useful: `Directory.Packages.props`
+  (`Microsoft.Extensions.Http.Resilience`) and a shared `AddMtgMcpHttpResilience`
+  extension in adapter registration code.
 - Change: each adapter's `Add*` registration and request paths; `ArchidektGateway.Auth.cs`
   (refresh); `Core/Options.cs` `SecretRedactor`; Scryfall optional-context cache wiring;
   per-adapter UA usage.
-- Tests: per-adapter fixture/MockHttp tests for retry/timeout, error taxonomy mapping,
-  redaction false-positive/negative cases, and JWT-expiry re-login.
+- Tests: shared HTTP retry tests, per-adapter fixture/MockHttp tests for retry/timeout,
+  error taxonomy mapping, redaction false-positive/negative cases, and JWT-expiry
+  re-login.
 
 ## 6. Testing
 
@@ -204,9 +221,10 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 
 ## 7. Definition of done
 
-- All adapters share the resilience pipeline; no adapter throws on a transient 429 without
-  retry.
-- One error model with graceful degradation; `EnsureSuccessStatusCode()`-only paths gone.
+- Existing text/json corpus request paths share the retry helper; remaining custom
+  adapter paths have an explicit disposition or migrate to the same convention.
+- One error model with graceful degradation; `EnsureSuccessStatusCode()`-only paths are
+  gone.
 - `SecretRedactor` is precise and test-covered for FP/FN, and raw-body exposure in
   logs/errors is minimized (status + redacted, truncated summaries) rather than relying on
   redaction alone.
@@ -225,11 +243,11 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 
 ## 9. Open questions
 
-- Where to host shared adapter helpers given Core must stay package-free - a new
-  `MtgMcp.Adapters.Common` project, or Core utilities that need no packages? (Recommend a
-  small shared adapter library that references Core.) **Constraint:** it must hold only
-  generic infrastructure (resilience pipeline, JSON-element readers, credential parsing,
-  rate-limit parsing). Per `AGENTS.md`, Scryfall/Archidekt own their third-party contracts,
-  so provider-specific DTOs/contracts must not migrate into the shared library.
+- Where to host package-backed adapter helpers if `Microsoft.Extensions.Http.Resilience`
+  lands later? The no-package utilities now live in Core; any package-backed resilience
+  extension should live in an adapter-support project or in adapter projects, not in Core.
+  **Constraint:** it must hold only generic infrastructure. Per `AGENTS.md`,
+  Scryfall/Archidekt own their third-party contracts, so provider-specific DTOs/contracts
+  must not migrate into shared infrastructure.
 - Add a circuit breaker, or retry+timeout only? (Recommend retry+timeout first; breaker if
   a source proves flaky.)

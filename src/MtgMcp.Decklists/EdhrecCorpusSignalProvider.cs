@@ -212,15 +212,23 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
         string path,
         CancellationToken cancellationToken)
     {
-        using HttpRequestMessage request = new(HttpMethod.Get, path);
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        string payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        MtgMcpHttpTextResponse response = await MtgMcpHttpRetry
+            .SendForStringAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, path),
+                "EDHREC",
+                2,
+                TimeSpan.FromSeconds(1),
+                cancellationToken,
+                HttpStatusCode.Forbidden,
+                HttpStatusCode.NotFound)
+            .ConfigureAwait(false);
+        string payload = response.Body;
         if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
         {
             return (response.StatusCode, null);
         }
 
-        response.EnsureSuccessStatusCode();
         if (DecklistCorpusProviderSupport.LooksLikeHtml(payload))
         {
             throw new InvalidOperationException("EDHREC returned HTML; recommendation sources only accept structured API payloads.");

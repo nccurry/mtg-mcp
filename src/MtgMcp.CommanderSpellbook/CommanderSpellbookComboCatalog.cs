@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -77,14 +78,19 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
             }
         }
 
-        using StringContent content = new(cardList, Encoding.UTF8, "text/plain");
-        using HttpResponseMessage response = await httpClient
-            .PostAsync("find-my-combos", content, cancellationToken)
+        MtgMcpHttpTextResponse response = await MtgMcpHttpRetry
+            .SendForStringAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Post, "find-my-combos")
+                {
+                    Content = new StringContent(cardList, Encoding.UTF8, "text/plain")
+                },
+                "Commander Spellbook",
+                2,
+                TimeSpan.FromSeconds(1),
+                cancellationToken)
             .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        using JsonDocument document = JsonDocument.Parse(response.Body);
 
         DeckComboReport report = new();
         if (document.RootElement.TryGetProperty("results", out JsonElement results)
@@ -143,11 +149,16 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
 
         string search = Uri.EscapeDataString($"card:\"{normalizedCardName}\"");
         string path = $"variants?search={search}&limit={limit}&ordering=-popularity";
-        using HttpResponseMessage response = await httpClient.GetAsync(path, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+        MtgMcpHttpTextResponse response = await MtgMcpHttpRetry
+            .SendForStringAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, path),
+                "Commander Spellbook",
+                2,
+                TimeSpan.FromSeconds(1),
+                cancellationToken)
             .ConfigureAwait(false);
+        using JsonDocument document = JsonDocument.Parse(response.Body);
         List<ComboEvidence> results = [];
         JsonElement root = document.RootElement;
         if (root.TryGetProperty("results", out JsonElement pagedResults) && pagedResults.ValueKind == JsonValueKind.Array)
@@ -211,18 +222,22 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
             }
         }
 
-        using HttpResponseMessage response = await httpClient
-            .GetAsync($"variants/{Uri.EscapeDataString(comboId)}", cancellationToken)
+        MtgMcpHttpTextResponse response = await MtgMcpHttpRetry
+            .SendForStringAsync(
+                httpClient,
+                () => new HttpRequestMessage(HttpMethod.Get, $"variants/{Uri.EscapeDataString(comboId)}"),
+                "Commander Spellbook",
+                2,
+                TimeSpan.FromSeconds(1),
+                cancellationToken,
+                HttpStatusCode.NotFound)
             .ConfigureAwait(false);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
 
-        response.EnsureSuccessStatusCode();
-        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        using JsonDocument document = JsonDocument.Parse(response.Body);
         ComboEvidence evidence = ReadComboEvidence(document.RootElement, present: null, nearMiss: false);
         await cache.SetAsync(cacheKey, evidence, cancellationToken).ConfigureAwait(false);
         return evidence;

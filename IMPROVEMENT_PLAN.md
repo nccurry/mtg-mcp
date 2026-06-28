@@ -59,8 +59,8 @@ regressed:
 | P15 | Domain/code | Union types used once despite `net11.0`/preview bet; outcomes encoded as `bool Success` + `string Status`; string-discriminated `DeckEditOperation` god-DTO | Medium | 4 |
 | P16 | Domain/code | God services (`DeckRecommendationService` ~6k LOC, concrete service-to-service coupling); fat shared `DeckServiceBase`; duplicated JSON repositories | Medium | 5 |
 | P17 | Domain/code | Domain entities and tool-response DTOs mixed in large `Models/*.cs` files | Low | 4 |
-| P18 | Adapters | No shared resiliency; robust retry in Scryfall/Archidekt, none in Moxfield/CommanderSpellbook/Decklists | Medium | 6 |
-| P19 | Adapters | Inconsistent error model (throw-redacted vs `EnsureSuccessStatusCode` vs status object) | Medium | 6 |
+| P18 | Adapters | Resiliency is still split across custom paths; Scryfall/Archidekt are robust, CommanderSpellbook/Decklists now share a small retry helper, and Moxfield/Playgroup remain custom | Medium | 6 |
+| P19 | Adapters | Inconsistent error model remains (redacted `HttpRequestException` helper/custom paths vs source status objects), but bare `EnsureSuccessStatusCode` paths are gone | Medium | 6 |
 | P20 | Adapters | `SecretRedactor.Redact(string)` is coarse: whole-body false positives, keyword-less token false negatives | High (safety) | 6 |
 | P21 | Adapters | Archidekt JWT cached for process lifetime with no expiry/refresh | Medium | 6 |
 | P22 | Adapters | Scryfall caches use `ICorpusCache`; Archidekt card-id cache is documented; adapter pacing is host-owned | Low | 6 |
@@ -258,13 +258,16 @@ Theme: consistency, resiliency, and safety across the six adapters.
 Problems addressed: P18, P19, P20, P21, P22.
 
 Solutions (high level):
-- Introduce a shared resiliency layer in the adapter projects (e.g.
-  `Microsoft.Extensions.Http.Resilience`/Polly) for retry, backoff, and timeout; keep
-  it out of Core. Bring Moxfield/CommanderSpellbook/Decklists up to the same standard
-  as Scryfall/Archidekt.
-- Unify the adapter error model: replace bare `EnsureSuccessStatusCode` paths with a
-  consistent typed result/outcome, redacted and informative, with graceful per-source
-  degradation for source failures, access blocks, missing config, and OAuth gaps.
+- Introduce shared resiliency incrementally. The current code has a package-free
+  `MtgMcpHttpRetry.SendForStringAsync` helper for text/json corpus requests, covering
+  CommanderSpellbook and Decklists with transient retry, `Retry-After` handling, and
+  redacted final failures. A richer `Microsoft.Extensions.Http.Resilience`/Polly
+  pipeline can still land later at adapter registrations if the extra timeout/circuit
+  policy surface proves worth it.
+- Unify the adapter error model: bare `EnsureSuccessStatusCode` paths have been replaced
+  with redacted adapter failures. The remaining work is a consistent typed
+  result/outcome with graceful per-source degradation for source failures, access blocks,
+  missing config, and OAuth gaps.
 - Harden secret handling: make `SecretRedactor` precise (prefer structured/keyed
   redaction over substring whole-body replacement) to remove both false positives and
   the more dangerous keyword-less token false negatives; never apply coarse string
@@ -279,8 +282,9 @@ Solutions (high level):
 - Re-evaluate or document the Moxfield `curl` fallback (external-binary dependency,
   fingerprint-fragile) and keep it disable-able and injection-safe.
 
-Done when: all adapters share resiliency and a common error model; secret redaction is
-precise and tested; Archidekt re-authenticates on expiry; caching honors one policy.
+Done when: remaining custom adapter paths share the same resiliency/error conventions;
+secret redaction is precise and tested; Archidekt re-authenticates on expiry; caching
+honors one policy.
 
 Effort: L-XL. Independent of Phases 4/5 (can run in parallel).
 

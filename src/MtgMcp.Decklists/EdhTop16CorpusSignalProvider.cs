@@ -168,20 +168,29 @@ public sealed class EdhTop16CorpusSignalProvider : ICorpusSignalProvider
         object variables,
         CancellationToken cancellationToken)
     {
-        using HttpRequestMessage request = new(HttpMethod.Post, "api/graphql");
-        request.Content = JsonContent.Create(new
-        {
-            query = (string?)null,
-            variables,
-            extensions = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["pastoria-id"] = queryId
-            }
-        });
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        string payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        MtgMcpHttpTextResponse response = await MtgMcpHttpRetry
+            .SendForStringAsync(
+                httpClient,
+                () =>
+                {
+                    HttpRequestMessage request = new(HttpMethod.Post, "api/graphql");
+                    request.Content = JsonContent.Create(new
+                    {
+                        query = (string?)null,
+                        variables,
+                        extensions = new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["pastoria-id"] = queryId
+                        }
+                    });
+                    return request;
+                },
+                "EDHTop16",
+                2,
+                TimeSpan.FromSeconds(1),
+                cancellationToken)
+            .ConfigureAwait(false);
+        string payload = response.Body;
         if (DecklistCorpusProviderSupport.LooksLikeHtml(payload))
         {
             throw new InvalidOperationException("EDHTop16 returned HTML; corpus providers only accept structured API payloads.");

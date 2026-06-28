@@ -108,18 +108,27 @@ public sealed class TopDeckCorpusSignalProvider : ICorpusSignalProvider
             }
         }
 
-        using HttpRequestMessage request = new(HttpMethod.Post, "v2/tournaments");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SourceOptions().ApiKey);
-        request.Content = JsonContent.Create(new
-        {
-            game = "Magic: The Gathering",
-            format = NormalizeFormat(query.Format),
-            last = 90
-        });
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        string payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        MtgMcpHttpTextResponse response = await MtgMcpHttpRetry
+            .SendForStringAsync(
+                httpClient,
+                () =>
+                {
+                    HttpRequestMessage request = new(HttpMethod.Post, "v2/tournaments");
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SourceOptions().ApiKey);
+                    request.Content = JsonContent.Create(new
+                    {
+                        game = "Magic: The Gathering",
+                        format = NormalizeFormat(query.Format),
+                        last = 90
+                    });
+                    return request;
+                },
+                "TopDeck.gg",
+                2,
+                TimeSpan.FromSeconds(1),
+                cancellationToken)
+            .ConfigureAwait(false);
+        string payload = response.Body;
         if (DecklistCorpusProviderSupport.LooksLikeHtml(payload))
         {
             throw new InvalidOperationException("TopDeck.gg returned HTML; corpus providers only accept structured API payloads.");

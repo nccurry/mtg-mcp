@@ -1,12 +1,107 @@
 using System.Globalization;
+using System.Net;
 
 namespace MtgMcp.Core;
+
+/// <summary>
+/// Stores a text HTTP response after shared retry and error handling has completed.
+/// </summary>
+public readonly struct MtgMcpHttpTextResponse
+{
+    /// <summary>
+    /// Creates a text HTTP response snapshot.
+    /// </summary>
+    public MtgMcpHttpTextResponse(HttpStatusCode statusCode, string body)
+    {
+        StatusCode = statusCode;
+        Body = body;
+    }
+
+    /// <summary>
+    /// Gets the final response status code.
+    /// </summary>
+    public HttpStatusCode StatusCode { get; }
+
+    /// <summary>
+    /// Gets the response body that was read from the final response.
+    /// </summary>
+    public string Body { get; }
+}
 
 /// <summary>
 /// Provides shared HTTP retry timing helpers for external service adapters.
 /// </summary>
 public static class MtgMcpHttpRetry
 {
+    /// <summary>
+    /// Limits response-body text included in adapter failure messages.
+    /// </summary>
+    private const int MaxFailureBodyLength = 2048;
+
+    /// <summary>
+    /// Sends a request, retries transient response statuses, and returns the final text body.
+    /// </summary>
+    public static async Task<MtgMcpHttpTextResponse> SendForStringAsync(
+        HttpClient httpClient,
+        Func<HttpRequestMessage> createRequest,
+        string serviceName,
+        int maxRetries,
+        TimeSpan fallbackDelay,
+        CancellationToken cancellationToken,
+        params HttpStatusCode[] allowedNonSuccessStatusCodes)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(createRequest);
+
+        int safeMaxRetries = Math.Max(0, maxRetries);
+        TimeSpan safeFallbackDelay = NormalizeDelay(fallbackDelay);
+        for (int attempt = 0; attempt <= safeMaxRetries; attempt++)
+        {
+            using HttpRequestMessage request = createRequest();
+            using HttpResponseMessage response = await httpClient
+                .SendAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+            string responseBody = await response.Content
+                .ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode
+                || IsAllowedNonSuccessStatus(response.StatusCode, allowedNonSuccessStatusCodes))
+            {
+                return new MtgMcpHttpTextResponse(response.StatusCode, responseBody);
+            }
+
+            if (IsTransientStatus(response.StatusCode) && attempt < safeMaxRetries)
+            {
+                TimeSpan delay = GetRetryAfterDelay(response) ?? safeFallbackDelay;
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            throw CreateRequestException(serviceName, response, responseBody);
+        }
+
+        throw new InvalidOperationException($"{serviceName} request retry loop ended unexpectedly.");
+    }
+
+    /// <summary>
+    /// Creates a redacted HTTP request exception for a provider response.
+    /// </summary>
+    public static HttpRequestException CreateRequestException(
+        string serviceName,
+        HttpResponseMessage response,
+        string? responseBody)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        ArgumentNullException.ThrowIfNull(response);
+
+        string safeBody = SummarizeFailureBody(responseBody);
+        return new HttpRequestException(
+            $"{serviceName} request failed with {(int)response.StatusCode}: {safeBody}",
+            inner: null,
+            response.StatusCode);
+    }
+
     /// <summary>
     /// Resolves retry delay from Retry-After headers, a body marker, or a fallback.
     /// </summary>
@@ -85,5 +180,44 @@ public static class MtgMcpHttpRetry
     public static TimeSpan NormalizeDelay(TimeSpan delay)
     {
         return delay < TimeSpan.Zero ? TimeSpan.Zero : delay;
+    }
+
+    /// <summary>
+    /// Gets whether callers explicitly want a non-success status returned.
+    /// </summary>
+    private static bool IsAllowedNonSuccessStatus(
+        HttpStatusCode statusCode,
+        HttpStatusCode[] allowedNonSuccessStatusCodes)
+    {
+        foreach (HttpStatusCode allowedStatusCode in allowedNonSuccessStatusCodes)
+        {
+            if (statusCode == allowedStatusCode)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Redacts and bounds provider response bodies before they enter exceptions.
+    /// </summary>
+    private static string SummarizeFailureBody(string? responseBody)
+    {
+        string safeBody = SecretRedactor.Redact(responseBody ?? "");
+        return safeBody.Length <= MaxFailureBodyLength
+            ? safeBody
+            : string.Concat(safeBody.AsSpan(0, MaxFailureBodyLength), "...");
+    }
+
+    /// <summary>
+    /// Gets whether a response status is safe to retry for idempotent read-style adapter requests.
+    /// </summary>
+    private static bool IsTransientStatus(HttpStatusCode statusCode)
+    {
+        int status = (int)statusCode;
+        return statusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout
+            || status is >= 500 and <= 599;
     }
 }

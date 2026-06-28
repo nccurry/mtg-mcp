@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
@@ -422,7 +423,16 @@ public sealed class DecklistCorpusProviderTests
     {
         MockHttpMessageHandler mockHttp = new();
         mockHttp.When(HttpMethod.Post, "https://topdeck.test/v2/tournaments")
-            .Respond(HttpStatusCode.TooManyRequests, "application/json", """{ "error": "rate limited" }""");
+            .Respond(_ =>
+            {
+                HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
+                {
+                    Content = new StringContent("""{ "error": "rate limited" }""")
+                };
+                response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.Zero);
+                return response;
+            });
         TopDeckCorpusSignalProvider provider = new(
             CreateClient(mockHttp, "https://topdeck.test/"),
             new NullCorpusCache(),
