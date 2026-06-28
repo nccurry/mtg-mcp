@@ -53,7 +53,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         {
             CommanderName = normalizedCommander,
             Theme = themeResolution.Theme,
-            Sources = MergeSourceStatuses(report.Sources),
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(report.Sources),
             Cards = aggregateSignals.Select(signal => BuildAggregateRow(signal, scryfallUris)).ToList()
         };
         result.Notes.AddRange(themeResolution.Notes);
@@ -94,7 +94,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CommanderTagsResult result = new()
         {
             CommanderName = commanderName.Trim(),
-            Sources = MergeSourceStatuses(report.Sources),
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(report.Sources),
             Tags = report.Signals
                 .Select(signal => new
                 {
@@ -367,7 +367,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         foreach (ICorpusSignalProvider provider in corpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
-            if (sourceFilterActive && !MatchesSourceFilter(status, source))
+            if (sourceFilterActive && !CorpusSourceStatusHelpers.MatchesSourceFilter(status, source))
             {
                 continue;
             }
@@ -408,7 +408,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             combined.Notes.Add($"No configured recommendation source matched '{source}'.");
         }
 
-        combined.Sources = MergeSourceStatuses(combined.Sources);
+        combined.Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(combined.Sources);
         return combined;
     }
 
@@ -492,7 +492,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         foreach (ICorpusSignalProvider provider in corpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
-            if (!MatchesSourceFilter(status, source)
+            if (!CorpusSourceStatusHelpers.MatchesSourceFilter(status, source)
                 || !status.Enabled
                 || !SupportsCommanderTheme(status))
             {
@@ -546,7 +546,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         foreach (ICorpusSignalProvider provider in corpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
-            if (MatchesSourceFilter(status, source)
+            if (CorpusSourceStatusHelpers.MatchesSourceFilter(status, source)
                 && status.Enabled
                 && SupportsCommanderTheme(status))
             {
@@ -795,7 +795,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             combined.Notes.AddRange(sourceResult.Notes);
         }
 
-        combined.Sources = MergeSourceStatuses(combined.Sources);
+        combined.Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(combined.Sources);
         combined.Cards.Sort(CompareAggregateRows);
         if (combined.Cards.Count > boundedLimit)
         {
@@ -854,7 +854,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             combined.Notes.AddRange(sourceResult.Notes);
         }
 
-        combined.Sources = MergeSourceStatuses(combined.Sources);
+        combined.Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(combined.Sources);
         combined.Tags.Sort(CompareTagRows);
         if (combined.Tags.Count > boundedLimit)
         {

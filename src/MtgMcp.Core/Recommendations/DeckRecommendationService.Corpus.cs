@@ -126,7 +126,7 @@ public sealed partial class DeckRecommendationService
         {
             Plan = planResult.Plan,
             Recommendations = recommendations,
-            Sources = MergeSourceStatuses(report.Sources),
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(report.Sources),
             AnalysisDepth = budget.AnalysisDepth,
             Notes = report.Notes
         };
@@ -160,7 +160,7 @@ public sealed partial class DeckRecommendationService
                 .OrderByDescending(deck => deck.Weight)
                 .Take(Math.Min(Math.Clamp(limit, 1, 50), budget.MaxDecksPerSource))
                 .ToList(),
-            Sources = MergeSourceStatuses(report.Sources)
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(report.Sources)
         };
         result.Notes.AddRange(report.Notes);
         if (result.ExemplarDecks.Count == 0)
@@ -275,7 +275,7 @@ public sealed partial class DeckRecommendationService
                 .OrderByDescending(deck => deck.Weight)
                 .Take(Math.Clamp(boundedLimit, 1, budget.MaxDecksPerSource))
                 .ToList(),
-            Sources = MergeSourceStatuses(report.Sources)
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(report.Sources)
         };
         result.Notes.AddRange(report.Notes);
         if (result.CardEvidence.Count == 0 && result.Discussions.Count == 0 && result.ExemplarDecks.Count == 0)
@@ -293,7 +293,7 @@ public sealed partial class DeckRecommendationService
     {
         return new CorpusSourceStatusResult
         {
-            Sources = MergeSourceStatuses(corpusSignalProviders.Select(provider => provider.GetStatus()))
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(corpusSignalProviders.Select(provider => provider.GetStatus()))
         };
     }
 
@@ -354,7 +354,7 @@ public sealed partial class DeckRecommendationService
                 .ThenBy(recommendation => recommendation.EdhrecRank ?? int.MaxValue)
                 .Take(budget.MaxRecommendations)
                 .ToList(),
-            Sources = MergeSourceStatuses(report.Sources),
+            Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(report.Sources),
             ExemplarDecks = budget.IncludeExemplarDecks
                 ? report.ExemplarDecks.OrderByDescending(deck => deck.Weight).Take(budget.MaxDecksPerSource).ToList()
                 : [],
@@ -424,7 +424,7 @@ public sealed partial class DeckRecommendationService
         foreach (ICorpusSignalProvider provider in corpusSignalProviders)
         {
             CorpusSourceStatus status = provider.GetStatus();
-            if (sourceFilterActive && !MatchesSourceFilter(status, sourceKey))
+            if (sourceFilterActive && !CorpusSourceStatusHelpers.MatchesSourceFilter(status, sourceKey))
             {
                 continue;
             }
@@ -480,7 +480,7 @@ public sealed partial class DeckRecommendationService
             .ThenByDescending(discussion => discussion.CreatedAt ?? DateTimeOffset.MinValue)
             .Take(Math.Clamp(budget.MaxDecksPerSource * budget.MaxEvidencePerRecommendation, 5, 100))
             .ToList();
-        combined.Sources = MergeSourceStatuses(combined.Sources);
+        combined.Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(combined.Sources);
         return combined;
     }
 
@@ -779,49 +779,6 @@ public sealed partial class DeckRecommendationService
                 StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(discussion => discussion.Score ?? 0).First())
             .ToList();
-    }
-
-    /// <summary>
-    /// Merges duplicate source rows by key.
-    /// </summary>
-    private static List<CorpusSourceStatus> MergeSourceStatuses(IEnumerable<CorpusSourceStatus> sources)
-    {
-        return sources
-            .Where(source => !string.IsNullOrWhiteSpace(source.Key) || !string.IsNullOrWhiteSpace(source.Name))
-            .GroupBy(source => string.IsNullOrWhiteSpace(source.Key) ? source.Name : source.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group
-                .OrderBy(source => SourceStatusPriority(source.Status))
-                .First())
-            .OrderBy(source => source.Enabled ? 0 : 1)
-            .ThenBy(source => source.Name)
-            .ToList();
-    }
-
-    /// <summary>
-    /// Ranks source statuses so blocked or failed query statuses are not hidden by an initial available row.
-    /// </summary>
-    private static int SourceStatusPriority(CorpusSourceStatusKind status)
-    {
-        return status switch
-        {
-            CorpusSourceStatusKind.AccessBlocked => 0,
-            CorpusSourceStatusKind.Failed => 1,
-            CorpusSourceStatusKind.MissingConfig => 2,
-            CorpusSourceStatusKind.NeedsOAuth => 2,
-            CorpusSourceStatusKind.Disabled => 3,
-            CorpusSourceStatusKind.Available => 4,
-            _ => 5
-        };
-    }
-
-    /// <summary>
-    /// Checks whether a source row matches a requested source key or display name.
-    /// </summary>
-    private static bool MatchesSourceFilter(CorpusSourceStatus source, string? sourceKey)
-    {
-        return string.IsNullOrWhiteSpace(sourceKey)
-            || source.Key.Equals(sourceKey, StringComparison.OrdinalIgnoreCase)
-            || source.Name.Equals(sourceKey, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

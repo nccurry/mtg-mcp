@@ -99,6 +99,9 @@ Status update after Sub-PRs A-I:
 - Commander metagame comparison and missing-popular-card planning now live in
   `src/MtgMcp.Core/Recommendations/DeckCommanderMetaService.cs`, with facade methods
   retained for current recommendation tool wiring.
+- Corpus source-status merging and source filtering now live in
+  `src/MtgMcp.Core/Recommendations/CorpusSourceStatusHelpers.cs`, preparing the larger
+  corpus/evidence split without changing source semantics.
 
 ## 4. Workstreams
 

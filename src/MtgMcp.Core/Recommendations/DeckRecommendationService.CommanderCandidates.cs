@@ -134,7 +134,7 @@ public sealed partial class DeckRecommendationService
             });
         }
 
-        result.Sources = MergeSourceStatuses(result.Sources);
+        result.Sources = CorpusSourceStatusHelpers.MergeSourceStatuses(result.Sources);
         if (fetched >= boundedFetchCap && result.Commanders.Count < boundedLimit)
         {
             result.Notes.Add("EDHREC fetch cap was reached before filling the requested result limit.");
