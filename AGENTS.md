@@ -7,6 +7,31 @@
 - Normal tests must not require network access or mutate real Archidekt decks.
 - Use `Taskfile.yml` for common development workflows.
 
+## Source Of Truth
+
+- This file is the authoritative durable instruction file for coding agents in this repository.
+- Current code, tests, project files, `Taskfile.yml`, `Directory.Build.props`,
+  `Directory.Packages.props`, `global.json`, `.editorconfig`, and human-facing docs win over stale planning notes.
+- `llms.txt` is a compact orientation map, not a second rulebook.
+- `docs/llms/` contains supplemental agent workflow notes, durable plans, and PLC packets.
+- `.codex/` contains supplemental Codex playbooks distilled from this file and
+  the human docs; those notes must not override this file.
+- Use scoped `AGENTS.md` files under `src/`, `tests/`, and `docs/` for local defaults when working in those trees.
+
+## Planning And Validation
+
+- Use `task --list` as the menu of supported repo operations.
+- For tiny single-area fixes, inspect the relevant files, make the smallest safe change, run the narrow check, and report what ran.
+- Put durable ordinary implementation plans under `docs/llms/plans/`.
+- Put larger Plan-Led Change packets under `docs/llms/plcs/`.
+- Keep planned PLCs under `docs/llms/plcs/planned/`, active PLCs under
+  `docs/llms/plcs/in-progress/`, and finished PLCs under
+  `docs/llms/plcs/completed/`.
+- Keep ignored `/plans/` for local scratch notes only.
+- Use a PLC when a change crosses project boundaries, changes the public MCP surface, alters operation modes, introduces or changes adapter contracts, affects persistence formats, changes Stats Lab/performance assumptions, or needs phased delivery.
+- For docs-only agent guidance changes, run `git diff --check` and inspect the changed docs. A .NET build is not required unless commands, project files, or executable code changed.
+- For shared behavior, public MCP shape, project references, or adapter contracts, run the narrow relevant test first, then `task lint` or `task test` as risk warrants.
+
 ## Style and Safety
 
 ### Simplicity
@@ -43,6 +68,20 @@
 - Never expose Archidekt secrets in errors, logs, config output, or tests; use redaction patterns already in the repo.
 - Prefer fixture, fake HTTP, and in-memory repository tests. Mark live network tests as `Category=Live`, and keep normal `task test` safe for offline runs.
 - Before wrapping up changes, run the narrow relevant test first, then `task lint` or `task test` when the change touches shared behavior.
+
+## Architecture
+
+- Keep dependency-light domain logic in `MtgMcp.Core`.
+- Keep MCP host, tool, resource, prompt, operation-mode, and server-info concerns in `MtgMcp.App`.
+- Keep provider HTTP contracts in adapter projects such as `MtgMcp.Scryfall`,
+  `MtgMcp.Archidekt`, `MtgMcp.Moxfield`, `MtgMcp.Playgroup`,
+  `MtgMcp.CommanderSpellbook`, and `MtgMcp.Decklists`.
+- Adapter projects may translate third-party payloads into Core models, but Core must not reference adapters or host projects.
+- Source-backed recommendation providers should be deterministic, cache-aware, bounded, and explicit about source availability, confidence, and permission sensitivity.
+- Treat `docs/architecture.md`, `docs/adapters.md`, `docs/toolsets.md`,
+  `docs/output-control.md`, `docs/simulation-profiles.md`, and
+  `docs/stats-lab-metrics.md` as the durable architecture map for affected areas.
+- Do not hand-edit generated build artifacts, packages, coverage output, benchmark output, or release archives unless the task explicitly targets those baselines.
 
 ## Design Feedback
 
