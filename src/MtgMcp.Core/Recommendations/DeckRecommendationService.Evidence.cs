@@ -882,7 +882,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             InclusionRate = signal.InclusionRate,
             SynergyScore = signal.SynergyScore,
             Score = signal.Score,
-            ScryfallUri = ResolveScryfallUri(signal.CardName, signal.ScryfallUri, scryfallUris),
+            ScryfallUri = CorpusEvidenceTableBuilder.ResolveScryfallUri(signal.CardName, signal.ScryfallUri, scryfallUris),
             Metadata = BuildMetadata(signal.Source, "commander-aggregate-card", signal.Uri, signal.Score)
         };
     }

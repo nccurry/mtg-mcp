@@ -112,6 +112,10 @@ Status update after completed Phase 5 slices:
   collaborator directly.
 - Category creation now lives in `src/MtgMcp.Core/Workspaces/DeckServiceHelpers.cs`,
   with the base class retaining a protected wrapper for workspace and plan partials.
+- Raw corpus evidence row construction now lives in
+  `src/MtgMcp.Core/Recommendations/CorpusEvidenceTableBuilder.cs`, shared by corpus and
+  evidence workflows so the larger split can move without duplicating location and
+  Scryfall-URI rules.
 
 ## 4. Workstreams
 
