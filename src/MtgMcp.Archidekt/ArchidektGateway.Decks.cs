@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.Core;
+using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Archidekt;
 
@@ -31,7 +32,7 @@ public sealed partial class ArchidektGateway
         using JsonDocument document = await GetJsonAsync(path, cancellationToken)
             .ConfigureAwait(false);
         List<ArchidektDeckSummary> decks = [];
-        foreach (JsonElement item in EnumerateCollection(document.RootElement))
+        foreach (JsonElement item in EnumerateCollection(document.RootElement, "results", "data", "decks"))
         {
             decks.Add(
                 new ArchidektDeckSummary

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.Core;
+using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Archidekt;
 
@@ -47,7 +48,7 @@ public sealed partial class ArchidektGateway
             )
             .ConfigureAwait(false);
         List<DeckCheckpoint> checkpoints = [];
-        foreach (JsonElement item in EnumerateCollection(document.RootElement))
+        foreach (JsonElement item in EnumerateCollection(document.RootElement, "results", "data", "decks"))
         {
             checkpoints.Add(ParseCheckpoint(item, deckId));
         }

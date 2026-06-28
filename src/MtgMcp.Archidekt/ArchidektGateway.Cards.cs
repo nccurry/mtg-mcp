@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.Core;
+using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Archidekt;
 
@@ -681,7 +682,7 @@ public sealed partial class ArchidektGateway
         string? fallback = null;
         string? exactNameFallback = null;
 
-        foreach (JsonElement item in EnumerateCollection(document.RootElement))
+        foreach (JsonElement item in EnumerateCollection(document.RootElement, "results", "data", "decks"))
         {
             string? id = GetString(item, "id");
             fallback ??= id;

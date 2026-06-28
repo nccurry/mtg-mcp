@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.Core;
+using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Scryfall;
 
@@ -51,7 +52,7 @@ public sealed partial class ScryfallClient
             Name = GetString(element, "name") ?? "",
             ManaCost = GetString(element, "mana_cost") ?? GetFaceString(element, "mana_cost"),
             Layout = GetString(element, "layout"),
-            ManaValue = GetDouble(element, "cmc"),
+            ManaValue = GetDouble(element, "cmc", allowString: false),
             TypeLine = GetString(element, "type_line") ?? GetFaceString(element, "type_line"),
             OracleText = GetString(element, "oracle_text") ?? GetFaceText(element, "oracle_text"),
             Power = GetString(element, "power"),
@@ -64,7 +65,7 @@ public sealed partial class ScryfallClient
             Language = GetString(element, "lang"),
             ReleasedAt = GetDateOnly(element, "released_at"),
             ScryfallUri = GetString(element, "scryfall_uri"),
-            EdhrecRank = GetInt(element, "edhrec_rank"),
+            EdhrecRank = GetInt(element, "edhrec_rank", allowString: false),
         };
 
         AddStringArray(element, "colors", card.Colors);
@@ -128,22 +129,6 @@ public sealed partial class ScryfallClient
     }
 
     /// <summary>
-    /// Reads an optional string property from a Scryfall JSON object.
-    /// </summary>
-    private static string? GetString(JsonElement element, string propertyName)
-    {
-        if (
-            !element.TryGetProperty(propertyName, out JsonElement value)
-            || value.ValueKind == JsonValueKind.Null
-        )
-        {
-            return null;
-        }
-
-        return value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText();
-    }
-
-    /// <summary>
     /// Reads an optional date-only property from a Scryfall JSON object.
     /// </summary>
     private static DateOnly? GetDateOnly(JsonElement element, string propertyName)
@@ -151,34 +136,6 @@ public sealed partial class ScryfallClient
         return DateOnly.TryParse(GetString(element, propertyName), out DateOnly date)
             ? date
             : null;
-    }
-
-    /// <summary>
-    /// Reads an optional numeric property from a Scryfall JSON object.
-    /// </summary>
-    private static double? GetDouble(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out JsonElement value))
-        {
-            return null;
-        }
-
-        return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out double result)
-            ? result
-            : null;
-    }
-
-    /// <summary>
-    /// Reads an optional integer property from a Scryfall JSON object.
-    /// </summary>
-    private static int? GetInt(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out JsonElement value))
-        {
-            return null;
-        }
-
-        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int result) ? result : null;
     }
 
     /// <summary>

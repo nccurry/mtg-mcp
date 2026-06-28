@@ -63,7 +63,7 @@ regressed:
 | P19 | Adapters | Inconsistent error model (throw-redacted vs `EnsureSuccessStatusCode` vs status object) | Medium | 6 |
 | P20 | Adapters | `SecretRedactor.Redact(string)` is coarse: whole-body false positives, keyword-less token false negatives | High (safety) | 6 |
 | P21 | Adapters | Archidekt JWT cached for process lifetime with no expiry/refresh | Medium | 6 |
-| P22 | Adapters | Duplicated JSON readers, credentials-file parsing, rate-limit body parsing; three divergent caches | Low | 6 |
+| P22 | Adapters | Duplicated credentials-file parsing; three divergent caches; process-static rate limiter | Low | 6 |
 | P23 | Missing | No collection/ownership awareness ("which of these do I own?") | Medium | 8 |
 | P24 | Missing | No toolset/subset selection mechanism | High | 1 |
 | P25 | Missing | No batch card lookup (`card_get` is one-at-a-time) | Medium | 8 |
@@ -271,15 +271,15 @@ Solutions (high level):
   redaction to raw bodies.
 - Add Archidekt JWT expiry detection and re-login (currently cached for process
   lifetime, so expiry causes silent write failures).
-- Extract shared helpers into Core-adjacent utilities: JSON element readers,
-  credentials-file parsing, `FirstNonEmpty`, rate-limit body parsing; unify the three
-  divergent caches behind the configured cache policy; consider a shared
-  `RateLimiter` abstraction instead of process-static mutable state.
+- Extract remaining shared helpers into Core-adjacent utilities: credentials-file parsing.
+  JSON element readers, `FirstNonEmpty`, and rate-limit body parsing are already shared;
+  next, unify the three divergent caches behind the configured cache policy and consider
+  a shared `RateLimiter` abstraction instead of process-static mutable state.
 - Re-evaluate or document the Moxfield `curl` fallback (external-binary dependency,
   fingerprint-fragile) and keep it disable-able and injection-safe.
 
 Done when: all adapters share resiliency and a common error model; secret redaction is
-precise and tested; Archidekt re-authenticates on expiry; duplicated readers/parsers
+precise and tested; Archidekt re-authenticates on expiry; remaining duplicated parsers
 are consolidated; caching honors one policy.
 
 Effort: L-XL. Independent of Phases 4/5 (can run in parallel).

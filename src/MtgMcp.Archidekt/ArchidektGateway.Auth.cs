@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using MtgMcp.Core;
+using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Archidekt;
 

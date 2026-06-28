@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MtgMcp.Core;
+using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Moxfield;
 
@@ -680,78 +681,6 @@ public sealed partial class MoxfieldGateway
         {
             card.Metadata[key] = value.Trim();
         }
-    }
-
-    /// <summary>
-    /// Gets a string value from a JSON property.
-    /// </summary>
-    private static string? GetString(JsonElement element, string propertyName)
-    {
-        if (
-            !element.TryGetProperty(propertyName, out JsonElement property)
-            || property.ValueKind == JsonValueKind.Null
-        )
-        {
-            return null;
-        }
-
-        return property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : property.GetRawText();
-    }
-
-    /// <summary>
-    /// Gets an integer value from a JSON property.
-    /// </summary>
-    private static int? GetInt(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out JsonElement property))
-        {
-            return null;
-        }
-
-        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out int value))
-        {
-            return value;
-        }
-
-        return
-            property.ValueKind == JsonValueKind.String
-            && int.TryParse(
-                property.GetString(),
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out value
-            )
-            ? value
-            : null;
-    }
-
-    /// <summary>
-    /// Gets a floating-point value from a JSON property.
-    /// </summary>
-    private static double? GetDouble(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out JsonElement property))
-        {
-            return null;
-        }
-
-        if (property.ValueKind == JsonValueKind.Number && property.TryGetDouble(out double value))
-        {
-            return value;
-        }
-
-        return
-            property.ValueKind == JsonValueKind.String
-            && double.TryParse(
-                property.GetString(),
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out value
-            )
-            ? value
-            : null;
     }
 
     /// <summary>
