@@ -90,6 +90,9 @@ Status update after Sub-PRs A/B:
 - Goal-package planning now lives in
   `src/MtgMcp.Core/Recommendations/DeckGoalPackageService.cs`, with the current facade
   method retained for MCP tool wiring.
+- Read-only card evaluation now lives in
+  `src/MtgMcp.Core/Recommendations/DeckCardEvaluationService.cs`, with the facade method
+  retained for the current recommendation tool wiring.
 
 ## 4. Workstreams
 

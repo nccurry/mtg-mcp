@@ -20,7 +20,7 @@ public sealed partial class DeckIntelligenceTests
         DeckWorkspace workspace = await workspaces.SaveAsync(
             CreateRampEvaluationWorkspace(),
             TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCardEvaluationService service = CreateCardEvaluationService(
             workspaces,
             new FakeCardCatalog(),
             archidektGateway: null,
@@ -57,7 +57,7 @@ public sealed partial class DeckIntelligenceTests
         DeckWorkspace workspace = await workspaces.SaveAsync(
             CreateRampEvaluationWorkspace(),
             TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+        DeckCardEvaluationService service = CreateCardEvaluationService(workspaces, new FakeCardCatalog());
 
         RampContextEvaluation first = await service.EvaluateCardAsync(
             workspace.Id,
