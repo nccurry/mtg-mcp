@@ -295,6 +295,9 @@ each abbreviated suffix.
 
 Adapter User-Agent defaults and the Moxfield curl fallback are detailed in
 [`docs/adapters.md`](docs/adapters.md).
+Runtime diagnostics and tested MCP client paths are documented in
+[`docs/observability.md`](docs/observability.md) and
+[`docs/compatibility.md`](docs/compatibility.md).
 
 ### Recommendation sources
 
@@ -464,9 +467,10 @@ Workflow-first tools:
   `archidekt_checkpoint_create`, and `playgroup_rank_decks` when the workflow
   needs provider-specific behavior.
 
-Public tool prefixes are `archidekt_`, `card_`, `commander_`, `combo_`,
-`deck_`, `playgroup_`, `server_`, `source_`, `wincon_`, and `workspace_`.
-Compatibility aliases from older 0.x releases are intentionally not exposed.
+Public tool prefixes are `archidekt_`, `card_`, `collection_`,
+`commander_`, `combo_`, `deck_`, `playgroup_`, `server_`, `source_`,
+`wincon_`, and `workspace_`. Compatibility aliases from older 0.x releases are
+intentionally not exposed.
 
 Complete registered tool names:
 

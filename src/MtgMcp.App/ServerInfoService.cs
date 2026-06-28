@@ -27,14 +27,21 @@ public sealed class ServerInfoService
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
+    /// Stores the client-requested MCP host diagnostic level.
+    /// </summary>
+    private readonly McpRuntimeLoggingLevel loggingLevel;
+
+    /// <summary>
     /// Creates a service that reads assembly metadata, operation mode, and local git metadata.
     /// </summary>
     public ServerInfoService(
         IOptions<MtgMcpOptions> options,
-        OperationModeGuard operationMode)
+        OperationModeGuard operationMode,
+        McpRuntimeLoggingLevel loggingLevel)
     {
         this.options = options.Value;
         this.operationMode = operationMode;
+        this.loggingLevel = loggingLevel;
     }
 
     /// <summary>
@@ -66,6 +73,7 @@ public sealed class ServerInfoService
             GitDirty = DetectGitDirty(repositoryRoot),
             GitRepositoryRoot = repositoryRoot?.FullName,
             OperationMode = operationMode.EffectiveMode,
+            McpLoggingLevel = loggingLevel.MinimumLevel.ToString(),
             DataDirectory = options.DataDir,
             BaseDirectory = AppContext.BaseDirectory,
             CurrentDirectory = Environment.CurrentDirectory,

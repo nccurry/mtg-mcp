@@ -69,16 +69,13 @@ Guiding principles and the problem inventory live in the master
 - Target framework: `net11.0`, `LangVersion=preview`, `Nullable=enable`,
   `TreatWarningsAsErrors=true`, central package management
   (`Directory.Build.props`, `Directory.Packages.props`).
-- MCP SDK: `ModelContextProtocol` (currently `1.4.0`). Relevant capabilities the
-  server is not yet using:
-  - `[McpServerTool]` supports `Title`, `UseStructuredContent`, `OutputSchemaType`,
-    and `IconSource` (none currently set; `UseStructuredContent` defaults to false,
-    so no structured content/output schema is emitted today).
-  - Builder offers `WithTools<T>()` / `WithTools(types)` (selective registration),
-    `WithListToolsHandler` / `WithCallToolHandler` (dynamic surface), and
-    `WithRequestFilters` / `WithMessageFilters` (cross-cutting middleware).
-  - `McpServerPrimitiveCollection<T>` raises `Changed` and the protocol supports
-    `notifications/tools/list_changed`.
+- MCP SDK: `ModelContextProtocol` (currently `1.4.0`). The server uses method-level
+  MCP tool registration with titles/output schemas/structured content, selective
+  `WithTools(types)` registration, request filters, and the MCP logging-level
+  handler. Still-relevant SDK capabilities for future phases include
+  `WithListToolsHandler` / `WithCallToolHandler` for fully dynamic surfaces,
+  `WithMessageFilters`, `IconSource`, and `McpServerPrimitiveCollection<T>.Changed`
+  for list-changed notifications.
 - Build/test workflows live in `Taskfile.yml`; CI is `.github/workflows/ci.yml`
   (runs `task lint`, coverage gates at 85%, `task smoke:mcp`, pack + archive smoke).
 - The public surface is pinned by a snapshot test:

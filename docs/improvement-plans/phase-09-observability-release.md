@@ -34,11 +34,14 @@ Non-goals:
 ## 3. Current state (investigation)
 
 - Logging: `builder.Logging.ClearProviders(); AddConsole(LogToStandardErrorThreshold=Trace)`
-  (`MtgMcpHost.cs:79-80`) - correct for stdio (logs to stderr) but unstructured and with no
-  tool-call instrumentation.
-- SDK levers: `WithRequestFilters`/`WithMessageFilters` (per-call middleware for
-  timing/metrics/error mapping) and `WithSetLoggingLevelHandler` (MCP `logging` capability)
-  are available and unused.
+  (`MtgMcpHost.cs`) remains correct for stdio because logs go to stderr.
+- Done in the first Phase 9 slice: `Hosting/McpObservability.cs` adds a
+  call-tool request filter with redacted per-tool completion logs, an
+  `ActivitySource`, a `Meter`, tool-call count/duration instruments, and an MCP
+  `logging/setLevel` handler. `server_get_info` / `mtg://server/info` now expose
+  the current `mcpLoggingLevel`.
+- Remaining: source-fetch metrics, broader client compatibility matrix, perf
+  ratchet reporting, and final release/version execution.
 - CI (`.github/workflows/ci.yml`) already runs `task lint`, CodeQL, gitleaks, coverage
   report + 85% gates, `task smoke:mcp`, pack, release archives, and tool-smoke. Release is
   `.github/workflows/release.yml`. Benchmarks exist (`tests/MtgMcp.Benchmarks`,
@@ -49,14 +52,15 @@ Non-goals:
 ## 4. Workstreams
 
 ### 4.1 Structured logging + metrics
-- Add a request-filter/middleware that logs tool name, duration, success/error taxonomy,
-  and detail level per call, with structured scopes (no secrets - reuse `SecretRedactor`).
-  Keep everything on stderr to preserve stdio framing.
-- Add lightweight counters/timers (tool-call latency, source-fetch latency, cache hit/miss)
-  exposed via the existing diagnostics surface or logs; consider `System.Diagnostics`
-  `Meter`/`ActivitySource` so external collectors can attach without coupling.
-- Wire the MCP `logging` capability (`WithSetLoggingLevelHandler`) so clients can set the
-  server log level.
+- Done: add a request filter that logs tool name, duration, success/error taxonomy,
+  and detail level per call. It logs no arguments and keeps everything on stderr to
+  preserve stdio framing.
+- Done: add `System.Diagnostics` `Meter`/`ActivitySource` tool-call telemetry so
+  external collectors can attach without a hard dependency.
+- Remaining: add source-fetch latency and cache hit/miss metrics once the adapter
+  boundary has a shared instrumentation point.
+- Done: wire the MCP `logging` capability (`WithSetLoggingLevelHandler`) so clients can
+  set the host diagnostic level.
 - Extend the Phase 0 `--surface-report`/metrics into a runtime diagnostics view if useful.
 
 ### 4.2 Client-compatibility matrix
@@ -69,7 +73,10 @@ Non-goals:
   `tools/call` for each category returning structured content, `resources/list` +
   read, and `prompts/list` + get. Run across the supported SDK/protocol versions the
   project targets.
-- Document a tested-clients table in `docs/`.
+- Done for the current coverage: document the tested .NET SDK stdio path in
+  `docs/compatibility.md`.
+- Remaining: expand that table and CI coverage into the official multi-client /
+  multi-version matrix before 1.0.
 
 ### 4.3 Expand test + calibration gates
 - Promote the calibration suite (Phase 7) and adapter contract fixtures (Phase 6) to CI
@@ -112,10 +119,12 @@ Non-goals:
 
 ## 5. Files to create / change
 
-- Create: `src/MtgMcp.App/Hosting/ToolCallLoggingFilter.cs` (+ metrics), client-matrix
-  E2E tests, `docs/observability.md`, `docs/compatibility.md`, perf-budget check.
+- Create: `src/MtgMcp.App/Hosting/McpObservability.cs` (+ metrics),
+  `docs/observability.md`, `docs/compatibility.md`,
+  `docs/release-1.0-readiness.md`, client-matrix E2E tests, perf-budget check.
 - Change: `Hosting/MtgMcpHost.cs` (filters, logging-level handler, structured logging),
-  `Taskfile.yml`/`ci.yml` (calibration + perf gates, client matrix), `CHANGELOG.md`,
+  `ServerInfoService.cs`/`ServerInfo.cs` (diagnostic level), `Taskfile.yml`/`ci.yml`
+  (calibration + perf gates, client matrix), `CHANGELOG.md`, `README.md`,
   `docs/versioning.md`, `server.json` (1.0).
 
 ## 6. Testing

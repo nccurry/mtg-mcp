@@ -152,6 +152,7 @@ public static class MtgMcpCli
         output.WriteLine($"gitBranch: {info.GitBranch ?? "unknown"}");
         output.WriteLine($"gitDirty: {FormatNullableBoolean(info.GitDirty)}");
         output.WriteLine($"operationMode: {info.OperationMode}");
+        output.WriteLine($"mcpLoggingLevel: {info.McpLoggingLevel}");
     }
 
     /// <summary>

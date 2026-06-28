@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added MCP host observability with redacted per-tool completion logs,
+  OpenTelemetry-ready tool-call metrics/traces, `logging/setLevel` handling,
+  and `mcpLoggingLevel` in server diagnostics.
+- Added observability, MCP compatibility, and 1.0 readiness documentation.
 - Replaced persisted deck edit operations and several closed-set statuses with
   typed union/enum models while preserving legacy JSON strings and flat plan
   operation payloads.

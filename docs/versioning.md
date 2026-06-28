@@ -64,4 +64,6 @@ Before tagging a release:
 - Confirm `README.md` covers every registered tool/resource/prompt.
 - Confirm `CHANGELOG.md` describes public surface changes.
 - Confirm any ADR referenced by the change is accepted and linked.
+- For `1.0.0`, confirm `docs/release-1.0-readiness.md` is fully green or has
+  explicit accepted exceptions.
 - Build the package and run the local install smoke path from `Taskfile.yml`.

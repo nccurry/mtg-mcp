@@ -85,8 +85,20 @@ public sealed class McpE2ETests
 
         GetString(serverInfo, "assemblyName").Should().Be("MtgMcp.App");
         GetString(serverInfo, "operationMode").Should().Be("apply");
+        GetString(serverInfo, "mcpLoggingLevel").Should().Be("Information");
         GetString(structuredServerInfo, "assemblyName").Should().Be("MtgMcp.App");
         GetString(structuredServerInfo, "operationMode").Should().Be("apply");
+        GetString(structuredServerInfo, "mcpLoggingLevel").Should().Be("Information");
+
+        await session.Client.SetLoggingLevelAsync(
+            LoggingLevel.Warning,
+            cancellationToken: TestContext.Current.CancellationToken);
+        JsonElement updatedServerInfo = await CallJsonAsync(
+            session.Client,
+            "server_get_info",
+            new Dictionary<string, object?>());
+        GetString(updatedServerInfo, "mcpLoggingLevel").Should().Be("Warning");
+
         resources.Select(resource => resource.Uri).Should().Contain("mtg://workspaces");
     }
 

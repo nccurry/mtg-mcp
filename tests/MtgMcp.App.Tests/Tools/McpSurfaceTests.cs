@@ -685,7 +685,8 @@ public sealed class McpSurfaceTests
                 DataDir = "C:/mtg-mcp-test-data",
                 OperationMode = "plan",
             }),
-            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "plan" })));
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "plan" })),
+            new McpRuntimeLoggingLevel());
 
         ServerInfo info = service.GetInfo();
 
@@ -695,6 +696,7 @@ public sealed class McpSurfaceTests
         info.SemVer.Should().NotBeNullOrWhiteSpace();
         info.InformationalVersion.Should().NotBeNullOrWhiteSpace();
         info.OperationMode.Should().Be(OperationModeGuard.Plan);
+        info.McpLoggingLevel.Should().Be("Information");
         info.DataDirectory.Should().Be("C:/mtg-mcp-test-data");
         info.FrameworkDescription.Should().Contain(".NET");
     }
@@ -2431,6 +2433,7 @@ public sealed class McpSurfaceTests
         host.Services.GetRequiredService<IMoxfieldGateway>().Should().NotBeNull();
         host.Services.GetRequiredService<IPlaygroupGateway>().Should().NotBeNull();
         host.Services.GetRequiredService<PlaygroupService>().Should().NotBeNull();
+        host.Services.GetRequiredService<McpRuntimeLoggingLevel>().Should().NotBeNull();
         host.Services.GetRequiredService<ServerInfoService>().Should().NotBeNull();
         host.Services.GetRequiredService<ICorpusCache>().Should().NotBeNull();
         host.Services.GetServices<ICorpusSignalProvider>().Should().NotBeEmpty();

@@ -625,6 +625,7 @@ public sealed class CliTests
         output.ToString().Should().Contain("serverAssemblyPath:");
         output.ToString().Should().Contain("gitCommit:");
         output.ToString().Should().Contain("operationMode:");
+        output.ToString().Should().Contain("mcpLoggingLevel:");
         error.ToString().Should().BeEmpty();
     }
 

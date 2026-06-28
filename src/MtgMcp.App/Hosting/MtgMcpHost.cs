@@ -75,6 +75,7 @@ public static class MtgMcpHost
         services.GetRequiredService<ICorpusCache>();
         _ = services.GetServices<ICorpusSignalProvider>().ToList();
         _ = services.GetRequiredService<OperationModeGuard>().EffectiveMode;
+        services.GetRequiredService<McpRuntimeLoggingLevel>();
         services.GetRequiredService<ServerInfoService>();
     }
 
@@ -152,6 +153,7 @@ public static class MtgMcpHost
             .GetRequiredService<SimulationProfileLoader>()
             .Load());
         builder.Services.AddSingleton<OperationModeGuard>();
+        builder.Services.AddSingleton<McpRuntimeLoggingLevel>();
         builder.Services.AddSingleton<ServerInfoService>();
         builder.Services.AddScryfall(builder.Configuration);
         builder.Services.AddArchidekt(builder.Configuration);
@@ -185,7 +187,12 @@ public static class MtgMcpHost
                 options.ServerInstructions = RecommendationPresentationInstructions;
             })
             .WithStdioServerTransport()
-            .WithRequestFilters(filters => filters.AddCallToolFilter(McpErrorMapping.CreateCallToolFilter()))
+            .WithSetLoggingLevelHandler(McpObservability.CreateSetLoggingLevelHandler())
+            .WithRequestFilters(filters =>
+            {
+                filters.AddCallToolFilter(McpObservability.CreateCallToolFilter());
+                filters.AddCallToolFilter(McpErrorMapping.CreateCallToolFilter());
+            })
             .WithTools(ToolRegistry.CreateTools(startupOptions))
             .WithResourcesFromAssembly()
             .WithPromptsFromAssembly();

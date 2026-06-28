@@ -68,6 +68,11 @@ public sealed class ServerInfo
     public string OperationMode { get; set; } = "";
 
     /// <summary>
+    /// Gets or sets the current MCP host-boundary logging threshold.
+    /// </summary>
+    public string McpLoggingLevel { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the configured data directory.
     /// </summary>
     public string DataDirectory { get; set; } = "";
