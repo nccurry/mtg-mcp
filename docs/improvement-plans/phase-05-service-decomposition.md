@@ -84,6 +84,9 @@ Status update after Sub-PRs A/B:
 - Replacement, upgrade, mana-base, and consistency improvement workflows now live in
   `src/MtgMcp.Core/Recommendations/DeckReplacementService.cs`, with
   `DeckRecommendationService` retaining facade delegates for existing callers.
+- Category cleanup planning now lives in
+  `src/MtgMcp.Core/Recommendations/DeckCategorySuggestionService.cs`, with a facade
+  delegate preserving the current recommendation service call.
 
 ## 4. Workstreams
 

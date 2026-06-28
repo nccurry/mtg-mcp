@@ -1160,7 +1160,7 @@ public sealed partial class DeckIntelligenceTests
     /// Verifies that suggest deck categories persists move plan.
     /// </summary>
     [Fact]
-    public async Task SuggestDeckCategories_PersistsMovePlan()
+    public async Task CategorySuggestionService_PersistsMovePlan()
     {
         InMemoryRepository workspaces = new();
         InMemoryPlanRepository plans = new();
@@ -1178,7 +1178,7 @@ public sealed partial class DeckIntelligenceTests
                 }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        DeckCategorySuggestionService service = CreateCategorySuggestionService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
 
         CategoryPlanResult result = await service.SuggestDeckCategoriesAsync(workspace.Id, TestContext.Current.CancellationToken);
 

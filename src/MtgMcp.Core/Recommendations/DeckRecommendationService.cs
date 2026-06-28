@@ -46,6 +46,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckReplacementService replacements;
 
     /// <summary>
+    /// Builds deck category cleanup plans.
+    /// </summary>
+    private readonly DeckCategorySuggestionService categories;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -84,7 +89,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckAnalysisMetrics? analysisMetrics = null,
         DeckBatchTuningService? batchTuning = null,
         DeckQueryService? queries = null,
-        DeckReplacementService? replacements = null
+        DeckReplacementService? replacements = null,
+        DeckCategorySuggestionService? categories = null
     )
         : base(
             repository,
@@ -101,6 +107,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.batchTuning = batchTuning ?? new DeckBatchTuningService(repository, analysis, simulation);
         this.queries = queries ?? new DeckQueryService(repository, cardCatalog, planRepository);
         this.replacements = replacements ?? new DeckReplacementService(repository, cardCatalog, this.analysisMetrics, planRepository);
+        this.categories = categories ?? new DeckCategorySuggestionService(repository, planRepository);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
         this.playgroups = playgroups;

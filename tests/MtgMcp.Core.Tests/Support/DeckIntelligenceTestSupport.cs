@@ -142,6 +142,23 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a category suggestion service with explicit storage dependencies.
+    /// </summary>
+    private static DeckCategorySuggestionService CreateCategorySuggestionService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        return new DeckCategorySuggestionService(repository, planRepository);
+    }
+
+    /// <summary>
     /// Creates a recommendation service with explicit analysis and simulation collaborators.
     /// </summary>
     private static DeckRecommendationService CreateRecommendationService(
