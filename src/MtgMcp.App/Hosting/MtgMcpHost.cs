@@ -15,7 +15,7 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App;
 
 /// <summary>
-/// Provides mtg mcp host behavior.
+/// Configures the stdio MCP host, services, tools, resources, and prompts for mtg-mcp.
 /// </summary>
 public static class MtgMcpHost
 {
@@ -26,7 +26,7 @@ public static class MtgMcpHost
         "When presenting card recommendations, link card names to their Scryfall URI when available.";
 
     /// <summary>
-    /// Builds the args.
+    /// Builds the host used by the CLI entry point.
     /// </summary>
     public static IHost Build(string[] args)
     {
@@ -34,7 +34,7 @@ public static class MtgMcpHost
     }
 
     /// <summary>
-    /// Validates the services.
+    /// Resolves host services during smoke checks so registration failures fail fast.
     /// </summary>
     public static void ValidateServices(IServiceProvider services)
     {
@@ -80,7 +80,7 @@ public static class MtgMcpHost
     }
 
     /// <summary>
-    /// Creates the builder.
+    /// Creates the host builder with mtg-mcp configuration sources and service registrations.
     /// </summary>
     public static HostApplicationBuilder CreateBuilder(string[] args)
     {

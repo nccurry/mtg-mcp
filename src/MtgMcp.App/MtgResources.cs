@@ -7,7 +7,7 @@ using MtgMcp.Core;
 namespace MtgMcp.App;
 
 /// <summary>
-/// Provides mtg resources behavior.
+/// Exposes discoverable MCP resources for workspaces, usage guidance, config, sources, and diagnostics.
 /// </summary>
 [McpServerResourceType]
 public sealed class MtgResources
@@ -21,7 +21,7 @@ public sealed class MtgResources
     };
 
     /// <summary>
-    /// Stores the decks.
+    /// Loads saved workspaces and workspace-derived resource payloads.
     /// </summary>
     private readonly DeckWorkspaceService decks;
 
@@ -31,27 +31,27 @@ public sealed class MtgResources
     private readonly DeckRecommendationService recommendations;
 
     /// <summary>
-    /// Stores the configuration.
+    /// Provides effective mtg-mcp configuration values for redacted diagnostics.
     /// </summary>
     private readonly IConfiguration configuration;
 
     /// <summary>
-    /// Stores the archidekt gateway.
+    /// Reports Archidekt credential status without exposing secrets.
     /// </summary>
     private readonly IArchidektGateway archidektGateway;
 
     /// <summary>
-    /// Stores the operation mode.
+    /// Supplies the current write-safety policy for usage guidance.
     /// </summary>
     private readonly OperationModeGuard operationMode;
 
     /// <summary>
-    /// Stores the Playgroup aggregation service.
+    /// Reports Playgroup.gg credential status through the aggregation service.
     /// </summary>
     private readonly PlaygroupService playgroups;
 
     /// <summary>
-    /// Stores server version and runtime diagnostics.
+    /// Builds server version and runtime diagnostics.
     /// </summary>
     private readonly ServerInfoService serverInfo;
 
@@ -332,7 +332,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets deck intent guidance.
+    /// Returns guidance for reading and updating deck intent sections.
     /// </summary>
     [McpServerResource(
         UriTemplate = "mtg://usage/deck-intent",
@@ -405,7 +405,7 @@ public sealed class MtgResources
     }
 
     /// <summary>
-    /// Gets deck recommendation source status.
+    /// Returns configured recommendation source status and attribution notes.
     /// </summary>
     [McpServerResource(UriTemplate = "mtg://sources/status", Name = "Recommendation Sources")]
     [Description("Configured deck recommendation source providers with stability, attribution, and permission notes.")]
