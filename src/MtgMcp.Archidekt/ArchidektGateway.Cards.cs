@@ -654,7 +654,7 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private static string GetResolutionCacheKey(DeckCard card)
     {
-        string printKey = FirstNonEmpty(
+        string printKey = MtgMcpText.FirstNonEmpty(
                 card.ScryfallId,
                 string.IsNullOrWhiteSpace(card.Snapshot.Set)
                     || string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber)

@@ -540,7 +540,7 @@ public sealed partial class DeckPlanService
     {
         string cardName = operation.CardName ?? "";
         CardSnapshot? snapshot = workspaceCard?.Snapshot;
-        string? scryfallUri = FirstNonEmpty(snapshot?.ScryfallUri, resolvedCard?.ScryfallUri);
+        string? scryfallUri = MtgMcpText.FirstNonEmpty(snapshot?.ScryfallUri, resolvedCard?.ScryfallUri);
         int? edhrecRank = snapshot?.EdhrecRank ?? resolvedCard?.EdhrecRank;
         (decimal? price, string? priceSource) = ReadSupportPrice(snapshot?.Prices, resolvedCard?.Prices);
         CardRoleAssignment? assignment = sourceSupportDepth.Equals(PreviewSourceSupportDepths.Balanced, StringComparison.OrdinalIgnoreCase)
@@ -670,22 +670,6 @@ public sealed partial class DeckPlanService
         }
 
         return (null, null);
-    }
-
-    /// <summary>
-    /// Returns the first non-empty string from a small set of candidates.
-    /// </summary>
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (string? value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

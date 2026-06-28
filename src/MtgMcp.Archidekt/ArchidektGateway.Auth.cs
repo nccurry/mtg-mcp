@@ -46,17 +46,17 @@ public sealed partial class ArchidektGateway
 
         ArchidektCredentials loaded = new()
         {
-            Username = FirstNonEmpty(
+            Username = MtgMcpText.FirstNonEmpty(
                 options.Username,
                 Environment.GetEnvironmentVariable("ARCHIDEKT_USERNAME")
             ),
-            Password = FirstNonEmpty(
+            Password = MtgMcpText.FirstNonEmpty(
                 options.Password,
                 Environment.GetEnvironmentVariable("ARCHIDEKT_PASSWORD")
             ),
         };
 
-        string? credentialsFile = FirstNonEmpty(
+        string? credentialsFile = MtgMcpText.FirstNonEmpty(
             options.CredentialsFile,
             Environment.GetEnvironmentVariable("ARCHIDEKT_CREDENTIALS_FILE")
         );
@@ -65,8 +65,8 @@ public sealed partial class ArchidektGateway
             try
             {
                 ArchidektCredentials fromFile = LoadCredentialsFile(credentialsFile);
-                loaded.Username = FirstNonEmpty(loaded.Username, fromFile.Username);
-                loaded.Password = FirstNonEmpty(loaded.Password, fromFile.Password);
+                loaded.Username = MtgMcpText.FirstNonEmpty(loaded.Username, fromFile.Username);
+                loaded.Password = MtgMcpText.FirstNonEmpty(loaded.Password, fromFile.Password);
             }
             catch (InvalidDataException exception)
             {

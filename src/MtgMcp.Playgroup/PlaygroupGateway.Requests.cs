@@ -259,19 +259,4 @@ public sealed partial class PlaygroupGateway
         return Uri.EscapeDataString(value.ToString(CultureInfo.InvariantCulture));
     }
 
-    /// <summary>
-    /// Returns the first non-blank string.
-    /// </summary>
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (string? value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
 }

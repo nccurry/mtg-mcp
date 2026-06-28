@@ -40,7 +40,7 @@ public sealed partial class PlaygroupGateway
 
         PlaygroupCredentials loaded = new()
         {
-            ApiKey = FirstNonEmpty(
+            ApiKey = MtgMcpText.FirstNonEmpty(
                 options.ApiKey,
                 Environment.GetEnvironmentVariable("PLAYGROUP_API_KEY")
             ),
@@ -52,7 +52,7 @@ public sealed partial class PlaygroupGateway
             try
             {
                 PlaygroupCredentials fromFile = LoadCredentialsFile(credentialsFile);
-                loaded.ApiKey = FirstNonEmpty(
+                loaded.ApiKey = MtgMcpText.FirstNonEmpty(
                     loaded.ApiKey,
                     fromFile.ApiKey,
                     fromFile.AccessToken
@@ -73,7 +73,7 @@ public sealed partial class PlaygroupGateway
     /// </summary>
     private string? GetCredentialsFilePath()
     {
-        return FirstNonEmpty(
+        return MtgMcpText.FirstNonEmpty(
             options.CredentialsFile,
             Environment.GetEnvironmentVariable("PLAYGROUP_CREDENTIALS_FILE")
         );

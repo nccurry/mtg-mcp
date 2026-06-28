@@ -165,7 +165,7 @@ public sealed partial class PlaygroupService
                     references.Add(reference.UserId, reference);
                 }
 
-                reference.UserName = FirstNonEmpty(reference.UserName, participation.UserName);
+                reference.UserName = MtgMcpText.FirstNonEmpty(reference.UserName, participation.UserName);
                 reference.GamesSeen++;
                 if (participation.DeckId is > 0)
                 {

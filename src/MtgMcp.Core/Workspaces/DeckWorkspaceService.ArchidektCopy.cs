@@ -453,7 +453,7 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static string GetCopyResolutionEstimateKey(DeckCard card)
     {
-        string printKey = FirstNonEmpty(
+        string printKey = MtgMcpText.FirstNonEmpty(
                 card.ScryfallId,
                 string.IsNullOrWhiteSpace(card.Snapshot.Set)
                     || string.IsNullOrWhiteSpace(card.Snapshot.CollectorNumber)
@@ -462,22 +462,6 @@ public sealed partial class DeckWorkspaceService
                 card.Name)
             ?? "";
         return $"{card.Name}|{printKey}";
-    }
-
-    /// <summary>
-    /// Picks the first stable identity component available for a copied card.
-    /// </summary>
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (string? value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

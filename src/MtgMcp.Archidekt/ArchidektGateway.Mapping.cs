@@ -128,17 +128,17 @@ public sealed partial class ArchidektGateway
         // keep the mapper tolerant so cached workspaces survive response drift.
         return new CardSnapshot
         {
-            ManaCost = FirstNonEmpty(
+            ManaCost = MtgMcpText.FirstNonEmpty(
                 GetString(cardElement, "manaCost"),
                 GetString(cardElement, "mana_cost"),
                 GetNestedString(cardElement, "oracleCard", "manaCost"),
                 GetNestedString(cardElement, "oracleCard", "mana_cost"),
                 GetNestedFaceString(cardElement, "manaCost"),
                 GetNestedFaceString(cardElement, "mana_cost")),
-            Layout = FirstNonEmpty(
+            Layout = MtgMcpText.FirstNonEmpty(
                 GetString(cardElement, "layout"),
                 GetNestedString(cardElement, "oracleCard", "layout")),
-            TypeLine = FirstNonEmpty(
+            TypeLine = MtgMcpText.FirstNonEmpty(
                 GetNestedString(cardElement, "oracleCard", "typeLine"),
                 BuildNestedTypeLine(cardElement),
                 GetNestedString(cardElement, "oracleCard", "type")),
@@ -147,19 +147,19 @@ public sealed partial class ArchidektGateway
                 ?? GetDouble(cardElement, "cmc")
                 ?? GetNestedDouble(cardElement, "oracleCard", "manaValue")
                 ?? GetNestedDouble(cardElement, "oracleCard", "cmc"),
-            OracleText = FirstNonEmpty(
+            OracleText = MtgMcpText.FirstNonEmpty(
                 GetString(cardElement, "oracleText"),
                 GetString(cardElement, "oracle_text"),
                 GetNestedString(cardElement, "oracleCard", "oracleText"),
                 GetNestedString(cardElement, "oracleCard", "oracle_text"),
                 GetNestedString(cardElement, "oracleCard", "text"),
                 GetNestedFaceText(cardElement)),
-            Power = FirstNonEmpty(GetString(cardElement, "power"), GetNestedFaceString(cardElement, "power")),
-            Toughness = FirstNonEmpty(GetString(cardElement, "toughness"), GetNestedFaceString(cardElement, "toughness")),
-            Loyalty = FirstNonEmpty(GetString(cardElement, "loyalty"), GetNestedFaceString(cardElement, "loyalty")),
-            Defense = FirstNonEmpty(GetString(cardElement, "defense"), GetNestedFaceString(cardElement, "defense")),
+            Power = MtgMcpText.FirstNonEmpty(GetString(cardElement, "power"), GetNestedFaceString(cardElement, "power")),
+            Toughness = MtgMcpText.FirstNonEmpty(GetString(cardElement, "toughness"), GetNestedFaceString(cardElement, "toughness")),
+            Loyalty = MtgMcpText.FirstNonEmpty(GetString(cardElement, "loyalty"), GetNestedFaceString(cardElement, "loyalty")),
+            Defense = MtgMcpText.FirstNonEmpty(GetString(cardElement, "defense"), GetNestedFaceString(cardElement, "defense")),
             ColorIdentity = ParseColorIdentity(cardElement),
-            Set = FirstNonEmpty(
+            Set = MtgMcpText.FirstNonEmpty(
                 GetNestedString(cardElement, "edition", "editioncode"),
                 GetNestedString(cardElement, "edition", "code"),
                 GetString(cardElement, "set"),
@@ -208,9 +208,9 @@ public sealed partial class ArchidektGateway
             CardFaceSnapshot snapshot = new()
             {
                 Name = GetString(face, "name"),
-                ManaCost = FirstNonEmpty(GetString(face, "manaCost"), GetString(face, "mana_cost")),
+                ManaCost = MtgMcpText.FirstNonEmpty(GetString(face, "manaCost"), GetString(face, "mana_cost")),
                 TypeLine = BuildTypeLine(face),
-                OracleText = FirstNonEmpty(
+                OracleText = MtgMcpText.FirstNonEmpty(
                     GetString(face, "oracleText"),
                     GetString(face, "oracle_text"),
                     GetString(face, "text")),
@@ -271,7 +271,7 @@ public sealed partial class ArchidektGateway
         List<string> values = [];
         foreach (JsonElement face in faces.EnumerateArray())
         {
-            string? value = FirstNonEmpty(
+            string? value = MtgMcpText.FirstNonEmpty(
                 GetString(face, "oracleText"),
                 GetString(face, "oracle_text"),
                 GetString(face, "text"));
@@ -323,7 +323,7 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private static string? BuildTypeLine(JsonElement source)
     {
-        string? directTypeLine = FirstNonEmpty(
+        string? directTypeLine = MtgMcpText.FirstNonEmpty(
             GetString(source, "typeLine"),
             GetString(source, "type_line"));
         if (!string.IsNullOrWhiteSpace(directTypeLine))
@@ -338,7 +338,7 @@ public sealed partial class ArchidektGateway
         string afterDash = string.Join(' ', subtypes);
 
         return string.IsNullOrWhiteSpace(afterDash)
-            ? FirstNonEmpty(beforeDash)
+            ? MtgMcpText.FirstNonEmpty(beforeDash)
             : $"{beforeDash} - {afterDash}";
     }
 

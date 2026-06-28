@@ -137,22 +137,6 @@ public sealed partial class PlaygroupService
     }
 
     /// <summary>
-    /// Returns the first non-blank string.
-    /// </summary>
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (string? value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// Tracks one deck observed in fetched playgroup game participations.
     /// </summary>
     private sealed class DeckReference

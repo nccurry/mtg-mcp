@@ -137,10 +137,10 @@ public sealed partial class MoxfieldGateway
             Quantity = Math.Max(1, GetInt(relation, "quantity") ?? GetInt(cardElement, "quantity") ?? 1),
             PrimaryCategory = categories[0],
             Categories = categories,
-            ScryfallId = FirstNonEmpty(
+            ScryfallId = MtgMcpText.FirstNonEmpty(
                 GetString(cardElement, "scryfall_id"),
                 GetString(cardElement, "scryfallId")),
-            ScryfallOracleId = FirstNonEmpty(
+            ScryfallOracleId = MtgMcpText.FirstNonEmpty(
                 GetString(cardElement, "oracle_id"),
                 GetString(cardElement, "oracleId")),
             Companion = boardType.Equals("companions", StringComparison.OrdinalIgnoreCase),
@@ -752,22 +752,6 @@ public sealed partial class MoxfieldGateway
             )
             ? value
             : null;
-    }
-
-    /// <summary>
-    /// Returns the first non-empty value.
-    /// </summary>
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (string? value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

@@ -542,19 +542,4 @@ public sealed partial class ArchidektGateway
             : null;
     }
 
-    /// <summary>
-    /// Returns the first non-empty value from equivalent Archidekt fields.
-    /// </summary>
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (string? value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
 }

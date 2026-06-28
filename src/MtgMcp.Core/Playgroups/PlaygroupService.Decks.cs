@@ -153,9 +153,9 @@ public sealed partial class PlaygroupService
         return new PlaygroupDeckSummary
         {
             DeckId = deckId,
-            Name = FirstNonEmpty(deck?.Name, observed?.DeckName) ?? $"Playgroup Deck {deckId}",
+            Name = MtgMcpText.FirstNonEmpty(deck?.Name, observed?.DeckName) ?? $"Playgroup Deck {deckId}",
             UserId = deck?.UserId ?? observed?.UserId,
-            OwnerName = FirstNonEmpty(ownerName, observed?.UserName),
+            OwnerName = MtgMcpText.FirstNonEmpty(ownerName, observed?.UserName),
             CommanderNames = GetCommanderNames(deck),
             ColorIdentity = deck?.ColorIdentity ?? [],
             DecklistUrl = deck?.DecklistUrl,
@@ -205,8 +205,8 @@ public sealed partial class PlaygroupService
                 }
 
                 reference.UserId ??= participation.UserId;
-                reference.DeckName = FirstNonEmpty(reference.DeckName, participation.DeckName);
-                reference.UserName = FirstNonEmpty(reference.UserName, participation.UserName);
+                reference.DeckName = MtgMcpText.FirstNonEmpty(reference.DeckName, participation.DeckName);
+                reference.UserName = MtgMcpText.FirstNonEmpty(reference.UserName, participation.UserName);
                 reference.GamesSeen++;
                 reference.WinsSeen += participation.Winner ? 1 : 0;
                 reference.LastPlayedAt = Later(reference.LastPlayedAt, playedAt);

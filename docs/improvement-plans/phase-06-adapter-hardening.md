@@ -81,6 +81,8 @@ Non-goals:
   `MtgMcpHttpRetry` centralizes Retry-After header parsing, provider body-marker parsing,
   and negative-delay clamping. Cache unification and process-local limiter replacement are
   still open.
+- **4.5 common text helper dedupe:** complete. `MtgMcpText.FirstNonEmpty` replaces the
+  repeated local implementations in Core services and adapter mapping/auth paths.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -137,8 +139,8 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   failed request after refresh. Do not log token contents.
 
 ### 4.5 De-duplicate + unify
-- Status: rate-limit retry-delay parsing is complete; JSON readers, credentials parsing,
-  cache unification, and limiter replacement remain open.
+- Status: rate-limit retry-delay parsing and `FirstNonEmpty` are complete; JSON readers,
+  credentials parsing, cache unification, and limiter replacement remain open.
 - Extract shared helpers (a small adapter-support library or Core-adjacent utilities, not
   in Core if it must stay package-free): JSON element readers (`GetString/GetInt/...`),
   credentials-file parsing (JSON or `key=value`), `FirstNonEmpty`, rate-limit `Retry-After`
