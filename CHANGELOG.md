@@ -28,7 +28,7 @@
 - Added method-level MCP toolset and operation-mode filtering so deployments
   advertise only selected tools that can run in the configured mode.
 - Added report-only MCP surface metrics, README surface parity coverage, a
-  pre-1.0 versioning/deprecation policy, and initial ADR process docs.
+  pre-1.0 versioning/deprecation policy.
 - Documented the full registered MCP tool/resource/prompt surface in the README.
 - Added explicit ramp-evaluator applicability metadata to `deck_evaluate_card`
   and labeled non-ramp cards with `not-applicable` instead of relying on a bare

@@ -42,9 +42,6 @@ removed or renamed:
 5. Remove the old surface only in the planned removal release and update the
    README complete surface list in the same change.
 
-For high-risk changes, add an ADR before implementation so the trade-offs are
-visible to later phases.
-
 ## Result Shape Changes
 
 Additive fields are allowed in minor and patch releases, but they still need a
@@ -63,7 +60,4 @@ Before tagging a release:
 - Run `task lint`, `task test`, and `task smoke:mcp`.
 - Confirm `README.md` covers every registered tool/resource/prompt.
 - Confirm `CHANGELOG.md` describes public surface changes.
-- Confirm any ADR referenced by the change is accepted and linked.
-- For `1.0.0`, confirm `docs/release-1.0-readiness.md` is fully green or has
-  explicit accepted exceptions.
 - Build the package and run the local install smoke path from `Taskfile.yml`.
