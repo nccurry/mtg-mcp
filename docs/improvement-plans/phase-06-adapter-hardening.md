@@ -62,7 +62,8 @@ Non-goals:
   Scryfall `ProviderCache` (in-memory, ignores configured mode/TTLs).
 - Rate limiting: Scryfall proactive-by-default (125ms) + 429 handling; Archidekt optional
   sliding window (off by default) + 429/throttle body parsing; both use process-static
-  state. Moxfield/Spellbook/Decklists have none.
+  state. Retry-After and body-marker delay parsing now share `MtgMcpHttpRetry`.
+  Moxfield/Spellbook/Decklists have none.
 - Moxfield `curl` fallback on 403 is contained, injection-safe, bounded by curl
   `--max-time 30`, disable-able, and documented in `docs/adapters.md`.
 
@@ -76,6 +77,10 @@ Non-goals:
 - **4.4 Archidekt JWT refresh:** complete. The gateway decodes JWT `exp` when present,
   refreshes before an owned session token expires, clears stale tokens before login, and
   retries a failed authenticated request once after a successful re-login on 401.
+- **4.5 rate-limit parser dedupe:** complete for Scryfall/Archidekt retry-delay parsing.
+  `MtgMcpHttpRetry` centralizes Retry-After header parsing, provider body-marker parsing,
+  and negative-delay clamping. Cache unification and process-local limiter replacement are
+  still open.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -132,6 +137,8 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   failed request after refresh. Do not log token contents.
 
 ### 4.5 De-duplicate + unify
+- Status: rate-limit retry-delay parsing is complete; JSON readers, credentials parsing,
+  cache unification, and limiter replacement remain open.
 - Extract shared helpers (a small adapter-support library or Core-adjacent utilities, not
   in Core if it must stay package-free): JSON element readers (`GetString/GetInt/...`),
   credentials-file parsing (JSON or `key=value`), `FirstNonEmpty`, rate-limit `Retry-After`

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -147,48 +146,15 @@ public sealed partial class ScryfallClient
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        TimeSpan delay = response.Headers.RetryAfter?.Delta
-            ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow)
-            ?? await GetRateLimitDelayFromBodyAsync(response, cancellationToken)
-                .ConfigureAwait(false)
-            ?? DefaultRateLimitDelay;
-        if (delay < TimeSpan.Zero)
+        TimeSpan? delay = MtgMcpHttpRetry.GetRetryAfterDelay(response);
+        if (delay is null)
         {
-            delay = TimeSpan.Zero;
+            string body = await response.Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+            delay = MtgMcpHttpRetry.TryReadDelayAfterMarker(body, "after ");
         }
 
-        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Reads Scryfall error details for retry timing when headers are absent.
-    /// </summary>
-    private static async Task<TimeSpan?> GetRateLimitDelayFromBodyAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        string body = await response.Content.ReadAsStringAsync(cancellationToken)
-            .ConfigureAwait(false);
-        const string marker = "after ";
-        int start = body.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        start += marker.Length;
-        int end = start;
-        while (end < body.Length && char.IsDigit(body[end]))
-        {
-            end++;
-        }
-
-        if (end <= start || !int.TryParse(body.AsSpan(start, end - start), out int seconds))
-        {
-            return null;
-        }
-
-        return TimeSpan.FromSeconds(seconds);
+        await Task.Delay(delay ?? DefaultRateLimitDelay, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

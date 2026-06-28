@@ -287,50 +287,12 @@ public sealed partial class ArchidektGateway
         CancellationToken cancellationToken
     )
     {
-        return Task.Delay(GetRateLimitDelay(response, responseBody), cancellationToken);
-    }
-
-    /// <summary>
-    /// Reads retry timing from Retry-After headers or Archidekt's JSON detail string.
-    /// </summary>
-    private static TimeSpan GetRateLimitDelay(HttpResponseMessage response, string responseBody)
-    {
-        if (response.Headers.RetryAfter?.Delta is { } delta)
-        {
-            return delta < TimeSpan.Zero ? TimeSpan.Zero : delta;
-        }
-
-        if (response.Headers.RetryAfter?.Date is { } date)
-        {
-            TimeSpan delay = date - DateTimeOffset.UtcNow;
-            return delay < TimeSpan.Zero ? TimeSpan.Zero : delay;
-        }
-
-        int markerIndex = responseBody.IndexOf("available in ", StringComparison.OrdinalIgnoreCase);
-        if (markerIndex >= 0)
-        {
-            int start = markerIndex + "available in ".Length;
-            int end = start;
-            while (end < responseBody.Length && char.IsDigit(responseBody[end]))
-            {
-                end++;
-            }
-
-            if (
-                end > start
-                && int.TryParse(
-                    responseBody[start..end],
-                    System.Globalization.NumberStyles.Integer,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out int seconds
-                )
-            )
-            {
-                return TimeSpan.FromSeconds(Math.Max(0, seconds));
-            }
-        }
-
-        return TimeSpan.FromSeconds(5);
+        TimeSpan delay = MtgMcpHttpRetry.GetRetryDelay(
+            response,
+            responseBody,
+            "available in ",
+            TimeSpan.FromSeconds(5));
+        return Task.Delay(delay, cancellationToken);
     }
 
     /// <summary>
