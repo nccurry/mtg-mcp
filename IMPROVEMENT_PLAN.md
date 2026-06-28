@@ -59,8 +59,8 @@ regressed:
 | P15 | Domain/code | Union types used once despite `net11.0`/preview bet; outcomes encoded as `bool Success` + `string Status`; string-discriminated `DeckEditOperation` god-DTO | Medium | 4 |
 | P16 | Domain/code | God services (`DeckRecommendationService` ~6k LOC, concrete service-to-service coupling); fat shared `DeckServiceBase`; duplicated JSON repositories | Medium | 5 |
 | P17 | Domain/code | Domain entities and tool-response DTOs mixed in large `Models/*.cs` files | Low | 4 |
-| P18 | Adapters | Resiliency is still split across custom paths; Scryfall/Archidekt are robust, CommanderSpellbook/Decklists now share a small retry helper, and Moxfield/Playgroup remain custom | Medium | 6 |
-| P19 | Adapters | Error model still mixes redacted `HttpRequestException` failures with source status objects; adapter HTTP exceptions and source failure notes are redacted/truncated, source-local degradation is in place, and bare `EnsureSuccessStatusCode` paths are gone | Medium | 6 |
+| P18 | Adapters | Phase 6 established a shared resiliency convention: Scryfall/Archidekt keep provider-specific pacing/retry, CommanderSpellbook/Decklists share text-response retry, Moxfield/Playgroup keep adapter-local request loops with shared redacted failure handling | Medium | 6 |
+| P19 | Adapters | Phase 6 removed bare `EnsureSuccessStatusCode` paths; adapter HTTP exceptions and source failure notes are redacted/truncated, and optional corpus sources degrade into source status rows | Medium | 6 |
 | P20 | Adapters | `SecretRedactor.Redact(string)` is coarse: whole-body false positives, keyword-less token false negatives | High (safety) | 6 |
 | P21 | Adapters | Archidekt JWT cached for process lifetime with no expiry/refresh | Medium | 6 |
 | P22 | Adapters | Scryfall caches use `ICorpusCache`; Archidekt card-id cache is documented; adapter pacing is host-owned | Low | 6 |
@@ -261,9 +261,12 @@ Solutions (high level):
 - Introduce shared resiliency incrementally. The current code has a package-free
   `MtgMcpHttpRetry.SendForStringAsync` helper for text/json corpus requests, covering
   CommanderSpellbook and Decklists with transient retry, `Retry-After` handling, and
-  redacted final failures. A richer `Microsoft.Extensions.Http.Resilience`/Polly
-  pipeline can still land later at adapter registrations if the extra timeout/circuit
-  policy surface proves worth it.
+  redacted final failures. Scryfall and Archidekt retain source-specific pacing/retry
+  because they have provider etiquette and mutation semantics. Moxfield and Playgroup
+  keep adapter-local request loops because of Moxfield's curl fallback and Playgroup's
+  per-request auth, but they share the redacted/truncated failure factory. A richer
+  `Microsoft.Extensions.Http.Resilience`/Polly pipeline is deferred unless a future
+  release needs registration-time timeout/circuit policy.
 - Unify the adapter error model: bare `EnsureSuccessStatusCode` paths have been replaced,
   adapter HTTP failures share one redacted/truncated exception factory, and corpus
   aggregators degrade per source with redacted source-status notes. The remaining design
@@ -283,9 +286,9 @@ Solutions (high level):
 - Re-evaluate or document the Moxfield `curl` fallback (external-binary dependency,
   fingerprint-fragile) and keep it disable-able and injection-safe.
 
-Done when: remaining custom adapter paths share the same resiliency/error conventions;
-secret redaction is precise and tested; Archidekt re-authenticates on expiry; caching
-honors one policy.
+Done when: custom adapter paths have explicit dispositions and share the same failure
+conventions; secret redaction is precise and tested; Archidekt re-authenticates on
+expiry; caching honors one policy.
 
 Effort: L-XL. Independent of Phases 4/5 (can run in parallel).
 
