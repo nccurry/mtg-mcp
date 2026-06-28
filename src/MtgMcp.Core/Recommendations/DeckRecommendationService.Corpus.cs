@@ -92,7 +92,7 @@ public sealed partial class DeckRecommendationService
         IReadOnlyDictionary<string, CardInfo> cards = await CardCatalog
             .GetCardsByNamesAsync(planResult.Suggestions.Select(suggestion => suggestion.WithCard).ToList(), cancellationToken)
             .ConfigureAwait(false);
-        Dictionary<string, List<CardCorpusSignal>> signalsByName = GroupSignalsByCard(report.Signals);
+        Dictionary<string, List<CardCorpusSignal>> signalsByName = CorpusRecommendationBuilder.GroupSignalsByCard(report.Signals);
         List<CorpusRecommendation> recommendations = [];
 
         foreach (ReplacementSuggestion suggestion in planResult.Suggestions.Take(budget.MaxRecommendations))
@@ -101,7 +101,7 @@ public sealed partial class DeckRecommendationService
             List<CardCorpusSignal> signals = signalsByName.TryGetValue(suggestion.WithCard, out List<CardCorpusSignal>? values)
                 ? values
                 : [];
-            List<CorpusEvidence> evidence = BuildEvidence(signals, budget);
+            List<CorpusEvidence> evidence = CorpusRecommendationBuilder.BuildEvidence(signals, budget);
             recommendations.Add(new CorpusRecommendation
             {
                 CardName = suggestion.WithCard,
@@ -109,7 +109,7 @@ public sealed partial class DeckRecommendationService
                 RecommendationKind = "budget-replacement",
                 Role = suggestion.Role,
                 Tags = card is null ? [] : DeckRoleClassifier.Classify(CreateCandidateCard(card)).Tags,
-                Score = Math.Clamp((suggestion.Score * 0.70) + (AverageSignalScore(signals) * 0.30), 0, 1),
+                Score = Math.Clamp((suggestion.Score * 0.70) + (CorpusRecommendationBuilder.AverageSignalScore(signals) * 0.30), 0, 1),
                 Confidence = Math.Clamp(0.45 + (evidence.Count * 0.10), 0, 0.90),
                 Price = suggestion.CandidatePrice,
                 EdhrecRank = card?.EdhrecRank,
@@ -201,7 +201,7 @@ public sealed partial class DeckRecommendationService
             CardInfo? card = await CardCatalog.GetCardAsync(cardName, cancellationToken).ConfigureAwait(false);
             if (card is not null)
             {
-                CorpusRecommendation recommendation = BuildRecommendation(
+                CorpusRecommendation recommendation = CorpusRecommendationBuilder.BuildRecommendation(
                     card,
                     [],
                     recommendationKind: "explain-card",
@@ -315,7 +315,7 @@ public sealed partial class DeckRecommendationService
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         CorpusSignalReport report = await CollectCorpusSignalsAsync(workspace, goal, maxPrice, budget, refresh, cancellationToken).ConfigureAwait(false);
         HashSet<string> existing = workspace.Cards.Select(card => card.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, List<CardCorpusSignal>> signalsByName = GroupSignalsByCard(report.Signals);
+        Dictionary<string, List<CardCorpusSignal>> signalsByName = CorpusRecommendationBuilder.GroupSignalsByCard(report.Signals);
         List<string> candidateNames = signalsByName.Keys
             .Where(name => includeExistingCards || !existing.Contains(name))
             .Take(budget.MaxCandidates)
@@ -330,7 +330,7 @@ public sealed partial class DeckRecommendationService
                 || !IsLegalInFormat(card, workspace.Format)
                 || !IsInDeckColorIdentity(card, colorKnown, colors)
                 || !IsPriceWithinBudget(ReadUsdPrice(card), maxPrice)
-                || (lesserKnownOnly && !IsLesserKnown(card)))
+                || (lesserKnownOnly && !CorpusRecommendationBuilder.IsLesserKnown(card)))
             {
                 continue;
             }
@@ -338,7 +338,7 @@ public sealed partial class DeckRecommendationService
             List<CardCorpusSignal> signals = signalsByName.TryGetValue(card.Name, out List<CardCorpusSignal>? values)
                 ? values
                 : [];
-            CorpusRecommendation recommendation = BuildRecommendation(card, signals, recommendationKind, goal ?? intent?.Archetype, budget, replaceCard: null);
+            CorpusRecommendation recommendation = CorpusRecommendationBuilder.BuildRecommendation(card, signals, recommendationKind, goal ?? intent?.Archetype, budget, replaceCard: null);
             recommendations.Add(recommendation);
         }
 
@@ -471,11 +471,11 @@ public sealed partial class DeckRecommendationService
             combined.Notes.Add($"No configured recommendation source matched '{sourceKey}'.");
         }
 
-        combined.Signals = DeduplicateSignals(combined.Signals)
+        combined.Signals = CorpusRecommendationBuilder.DeduplicateSignals(combined.Signals)
             .OrderByDescending(signal => signal.Score)
             .Take(budget.MaxCandidates * Math.Max(1, budget.MaxSources))
             .ToList();
-        combined.Discussions = DeduplicateDiscussions(combined.Discussions)
+        combined.Discussions = CorpusRecommendationBuilder.DeduplicateDiscussions(combined.Discussions)
             .OrderByDescending(discussion => discussion.Score ?? 0)
             .ThenByDescending(discussion => discussion.CreatedAt ?? DateTimeOffset.MinValue)
             .Take(Math.Clamp(budget.MaxDecksPerSource * budget.MaxEvidencePerRecommendation, 5, 100))
@@ -497,180 +497,6 @@ public sealed partial class DeckRecommendationService
         return commandZone.HasPartnerPair && string.IsNullOrWhiteSpace(goal)
             ? null
             : theme;
-    }
-
-    /// <summary>
-    /// Builds a recommendation from card data and corpus signals.
-    /// </summary>
-    private static CorpusRecommendation BuildRecommendation(
-        CardInfo card,
-        IReadOnlyList<CardCorpusSignal> signals,
-        string recommendationKind,
-        string? goal,
-        RecommendationAnalysisBudget budget,
-        string? replaceCard)
-    {
-        DeckCard candidate = CreateCandidateCard(card);
-        CardRoleAssignment role = DeckRoleClassifier.Classify(candidate);
-        double signalScore = AverageSignalScore(signals);
-        HashSet<string> sources = new(StringComparer.OrdinalIgnoreCase);
-        foreach (CardCorpusSignal signal in signals)
-        {
-            sources.Add(signal.Source);
-        }
-
-        double sourceAgreement = sources.Count / (double)Math.Max(1, budget.MaxSources);
-        double roleScore = ScoreRoleFit(role, goal);
-        double noveltyScore = IsLesserKnown(card) ? 0.75 : 0.35;
-        double priceScore = ReadUsdPrice(card) is null ? 0.45 : 0.65;
-        bool lesserKnownRecommendation = recommendationKind.Equals("lesser-known", StringComparison.OrdinalIgnoreCase);
-        bool offPlanComboEvidence = lesserKnownRecommendation && IsOffPlanComboEvidence(signals, goal);
-        double effectiveSignalScore = offPlanComboEvidence ? Math.Min(signalScore, 0.55) : signalScore;
-        double score = lesserKnownRecommendation
-            ? Math.Clamp((roleScore * 0.45) + (effectiveSignalScore * 0.25) + (noveltyScore * 0.20) + (sourceAgreement * 0.05) + (priceScore * 0.05), 0, 1)
-            : Math.Clamp((signalScore * 0.45) + (roleScore * 0.25) + (sourceAgreement * 0.15) + (noveltyScore * 0.10) + (priceScore * 0.05), 0, 1);
-        List<CorpusEvidence> evidence = BuildEvidence(signals, budget);
-        return new CorpusRecommendation
-        {
-            CardName = card.Name,
-            ReplaceCard = replaceCard,
-            RecommendationKind = recommendationKind,
-            Role = role.PrimaryRole,
-            Tags = role.Tags,
-            Score = score,
-            Confidence = Math.Clamp(0.35 + (evidence.Count * 0.10) + (sourceAgreement * 0.20), 0, 0.95),
-            Price = ReadUsdPrice(card),
-            EdhrecRank = card.EdhrecRank,
-            ScryfallUri = card.ScryfallUri,
-            Rationale = BuildCorpusRationale(card.Name, role.PrimaryRole, recommendationKind, evidence.Count, goal),
-            Evidence = evidence
-        };
-    }
-
-    /// <summary>
-    /// Groups signals by case-insensitive card name.
-    /// </summary>
-    private static Dictionary<string, List<CardCorpusSignal>> GroupSignalsByCard(IEnumerable<CardCorpusSignal> signals)
-    {
-        return signals
-            .Where(signal => !string.IsNullOrWhiteSpace(signal.CardName))
-            .GroupBy(signal => signal.CardName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Builds compact evidence rows from card signals.
-    /// </summary>
-    private static List<CorpusEvidence> BuildEvidence(
-        IReadOnlyList<CardCorpusSignal> signals,
-        RecommendationAnalysisBudget budget)
-    {
-        return signals
-            .OrderByDescending(signal => signal.Score)
-            .ThenBy(signal => signal.Source)
-            .Take(budget.MaxEvidencePerRecommendation)
-            .Select(signal => new CorpusEvidence
-            {
-                Source = signal.Source,
-                SignalType = signal.SignalType,
-                Score = signal.Score,
-                Summary = string.IsNullOrWhiteSpace(signal.Rationale)
-                    ? $"{signal.SignalType} signal from {signal.Source}."
-                    : signal.Rationale,
-                Uri = budget.IncludeSourceUrls ? signal.Uri : null
-            })
-            .ToList();
-    }
-
-    /// <summary>
-    /// Removes duplicate source/type/card signal rows.
-    /// </summary>
-    private static List<CardCorpusSignal> DeduplicateSignals(IEnumerable<CardCorpusSignal> signals)
-    {
-        return signals
-            .GroupBy(signal => $"{signal.CardName}|{signal.Source}|{signal.SignalType}|{signal.Uri}|{signal.Rationale}", StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.OrderByDescending(signal => signal.Score).First())
-            .ToList();
-    }
-
-    /// <summary>
-    /// Removes duplicate discussion rows by source URL and body.
-    /// </summary>
-    private static List<DiscussionEvidence> DeduplicateDiscussions(IEnumerable<DiscussionEvidence> discussions)
-    {
-        return discussions
-            .Where(discussion => !string.IsNullOrWhiteSpace(discussion.Uri) || !string.IsNullOrWhiteSpace(discussion.Body))
-            .GroupBy(
-                discussion => $"{discussion.Source}|{discussion.Uri}|{discussion.Body}",
-                StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.OrderByDescending(discussion => discussion.Score ?? 0).First())
-            .ToList();
-    }
-
-    /// <summary>
-    /// Scores role fit against a user goal or theme.
-    /// </summary>
-    private static double ScoreRoleFit(CardRoleAssignment role, string? goal)
-    {
-        if (string.IsNullOrWhiteSpace(goal))
-        {
-            return role.PrimaryRole.Equals(DeckRoles.Utility, StringComparison.OrdinalIgnoreCase) ? 0.35 : 0.65;
-        }
-
-        if (goal.Contains(role.PrimaryRole, StringComparison.OrdinalIgnoreCase)
-            || role.Tags.Any(tag => goal.Contains(tag, StringComparison.OrdinalIgnoreCase)))
-        {
-            return 0.95;
-        }
-
-        return 0.55;
-    }
-
-    /// <summary>
-    /// Checks whether combo-only evidence is off-plan for a non-combo lesser-known card request.
-    /// </summary>
-    private static bool IsOffPlanComboEvidence(IReadOnlyList<CardCorpusSignal> signals, string? goal)
-    {
-        return signals.Count > 0
-            && signals.All(signal => signal.SignalType.Equals(CorpusSignalTypes.Combo, StringComparison.OrdinalIgnoreCase))
-            && !GoalRequestsCombo(goal);
-    }
-
-    /// <summary>
-    /// Checks whether the user goal explicitly asks for combo recommendations.
-    /// </summary>
-    private static bool GoalRequestsCombo(string? goal)
-    {
-        return !string.IsNullOrWhiteSpace(goal)
-            && (goal.Contains("combo", StringComparison.OrdinalIgnoreCase)
-                || goal.Contains("infinite", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Computes the average source signal score.
-    /// </summary>
-    private static double AverageSignalScore(IReadOnlyList<CardCorpusSignal> signals)
-    {
-        return signals.Count == 0 ? 0.30 : signals.Average(signal => signal.Score);
-    }
-
-    /// <summary>
-    /// Checks whether a card is lower-known for Commander recommendation purposes.
-    /// </summary>
-    private static bool IsLesserKnown(CardInfo card)
-    {
-        return !card.EdhrecRank.HasValue || card.EdhrecRank.Value > 5_000;
-    }
-
-    /// <summary>
-    /// Builds a compact recommendation rationale.
-    /// </summary>
-    private static string BuildCorpusRationale(string cardName, string role, string kind, int evidenceCount, string? goal)
-    {
-        string goalText = string.IsNullOrWhiteSpace(goal) ? "the deck context" : goal;
-        return evidenceCount == 0
-            ? $"{cardName} is a {role} candidate for {goalText}."
-            : $"{cardName} is a {role} candidate for {goalText} with {evidenceCount} corpus signal(s) supporting the {kind} recommendation.";
     }
 
     /// <summary>

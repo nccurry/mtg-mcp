@@ -116,6 +116,10 @@ Status update after completed Phase 5 slices:
   `src/MtgMcp.Core/Recommendations/CorpusEvidenceTableBuilder.cs`, shared by corpus and
   evidence workflows so the larger split can move without duplicating location and
   Scryfall-URI rules.
+- Corpus recommendation scoring, source-signal grouping, evidence rows, and source-row
+  deduplication now live in
+  `src/MtgMcp.Core/Recommendations/CorpusRecommendationBuilder.cs`, leaving the corpus
+  partial focused on provider orchestration and facade methods.
 
 ## 4. Workstreams
 
