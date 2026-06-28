@@ -60,7 +60,7 @@ regressed:
 | P16 | Domain/code | God services (`DeckRecommendationService` ~6k LOC, concrete service-to-service coupling); fat shared `DeckServiceBase`; duplicated JSON repositories | Medium | 5 |
 | P17 | Domain/code | Domain entities and tool-response DTOs mixed in large `Models/*.cs` files | Low | 4 |
 | P18 | Adapters | Resiliency is still split across custom paths; Scryfall/Archidekt are robust, CommanderSpellbook/Decklists now share a small retry helper, and Moxfield/Playgroup remain custom | Medium | 6 |
-| P19 | Adapters | Error model still mixes redacted `HttpRequestException` failures with source status objects; adapter HTTP exceptions now share one redacted/truncated factory and bare `EnsureSuccessStatusCode` paths are gone | Medium | 6 |
+| P19 | Adapters | Error model still mixes redacted `HttpRequestException` failures with source status objects; adapter HTTP exceptions and source failure notes are redacted/truncated, source-local degradation is in place, and bare `EnsureSuccessStatusCode` paths are gone | Medium | 6 |
 | P20 | Adapters | `SecretRedactor.Redact(string)` is coarse: whole-body false positives, keyword-less token false negatives | High (safety) | 6 |
 | P21 | Adapters | Archidekt JWT cached for process lifetime with no expiry/refresh | Medium | 6 |
 | P22 | Adapters | Scryfall caches use `ICorpusCache`; Archidekt card-id cache is documented; adapter pacing is host-owned | Low | 6 |
@@ -265,9 +265,10 @@ Solutions (high level):
   pipeline can still land later at adapter registrations if the extra timeout/circuit
   policy surface proves worth it.
 - Unify the adapter error model: bare `EnsureSuccessStatusCode` paths have been replaced,
-  and adapter HTTP failures now share one redacted/truncated exception factory. The
-  remaining work is a consistent typed result/outcome with graceful per-source degradation
-  for source failures, access blocks, missing config, and OAuth gaps.
+  adapter HTTP failures share one redacted/truncated exception factory, and corpus
+  aggregators degrade per source with redacted source-status notes. The remaining design
+  question is whether Phase 3/4 should promote those failures into a richer typed
+  result/outcome rather than the current exception-to-status mapping.
 - Harden secret handling: make `SecretRedactor` precise (prefer structured/keyed
   redaction over substring whole-body replacement) to remove both false positives and
   the more dangerous keyword-less token false negatives; never apply coarse string

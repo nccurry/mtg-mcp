@@ -32,6 +32,24 @@ internal static class CorpusSourceStatusHelpers
     }
 
     /// <summary>
+    /// Marks one source as failed while keeping diagnostic notes safe to surface.
+    /// </summary>
+    public static void MarkFailed(CorpusSourceStatus source, Exception exception)
+    {
+        source.Status = CorpusSourceStatusKind.Failed;
+        source.Notes.Add($"{exception.GetType().Name}: {SecretRedactor.Redact(exception.Message)}");
+    }
+
+    /// <summary>
+    /// Marks one source as timed out while preserving the caller's timeout budget.
+    /// </summary>
+    public static void MarkTimedOut(CorpusSourceStatus source, int timeoutSeconds)
+    {
+        source.Status = CorpusSourceStatusKind.Failed;
+        source.Notes.Add($"Timed out after {timeoutSeconds} second(s).");
+    }
+
+    /// <summary>
     /// Ranks source statuses so blocked or failed query statuses are not hidden by an initial available row.
     /// </summary>
     private static int SourceStatusPriority(CorpusSourceStatusKind status)

@@ -483,9 +483,11 @@ public sealed partial class DeckIntelligenceTests
             refresh: false,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        result.Sources.Should().Contain(source =>
+        CorpusSourceStatus failedSource = result.Sources.Should().Contain(source =>
             source.Key == "failing-corpus"
-            && source.Status == CorpusSourceStatusKind.Failed);
+            && source.Status == CorpusSourceStatusKind.Failed).Subject;
+        failedSource.Notes.Should().Contain(note => note.Contains("***REDACTED***", StringComparison.Ordinal));
+        failedSource.Notes.Should().NotContain(note => note.Contains("secret-token-value", StringComparison.Ordinal));
         result.Recommendations.Should().Contain(recommendation => recommendation.CardName == "Illness in the Ranks");
         result.Notes.Should().Contain(note => note.Contains("failed", StringComparison.OrdinalIgnoreCase));
     }
@@ -1446,7 +1448,7 @@ public sealed partial class DeckIntelligenceTests
             RecommendationAnalysisBudget budget,
             CancellationToken cancellationToken)
         {
-            throw new InvalidOperationException("changed JSON shape");
+            throw new InvalidOperationException("changed JSON shape; authorization: Bearer secret-token-value");
         }
     }
 

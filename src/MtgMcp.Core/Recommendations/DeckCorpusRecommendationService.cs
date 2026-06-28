@@ -499,14 +499,12 @@ public sealed class DeckCorpusRecommendationService
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                status.Status = CorpusSourceStatusKind.Failed;
-                status.Notes.Add($"Timed out after {budget.SourceTimeoutSeconds} second(s).");
+                CorpusSourceStatusHelpers.MarkTimedOut(status, budget.SourceTimeoutSeconds);
                 combined.Notes.Add($"{status.Name} timed out; continuing with remaining recommendation sources.");
             }
             catch (Exception exception) when (!DeckServiceHelpers.IsCancellation(exception))
             {
-                status.Status = CorpusSourceStatusKind.Failed;
-                status.Notes.Add($"{exception.GetType().Name}: {exception.Message}");
+                CorpusSourceStatusHelpers.MarkFailed(status, exception);
                 combined.Notes.Add($"{status.Name} failed; continuing with remaining recommendation sources.");
             }
         }

@@ -312,8 +312,7 @@ public sealed class DeckCommanderEvidenceService
             }
             catch (Exception exception) when (!DeckServiceHelpers.IsCancellation(exception))
             {
-                status.Status = CorpusSourceStatusKind.Failed;
-                status.Notes.Add($"{exception.GetType().Name}: {exception.Message}");
+                CorpusSourceStatusHelpers.MarkFailed(status, exception);
                 combined.Notes.Add($"{status.Name} failed; continuing with remaining recommendation sources.");
             }
         }

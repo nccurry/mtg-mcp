@@ -19,8 +19,10 @@ concerns into Core.
   text-response retry helper; Moxfield/Playgroup still use custom request paths.
 - **P19 - inconsistent error model.** Bare `EnsureSuccessStatusCode` paths are gone, and
   adapter HTTP failures now use one redacted/truncated `HttpRequestException` factory.
-  The remaining gap is a typed adapter outcome model with source-local degradation where
-  a failed optional source should not abort the whole run.
+  Corpus aggregators already degrade source-locally when optional sources fail, and their
+  source-status notes now redact exception messages before surfacing them. The remaining
+  design question is whether Phase 3/4 should promote those failures into richer typed
+  outcomes rather than the current exception-to-status mapping.
 - **P20 (safety) - coarse secret redaction (addressed by 4.3).** Before the Phase 6
   redaction slice, `SecretRedactor.Redact(string)` replaced the whole value if it merely
   contained a keyword like "token"/"secret"; conversely a raw bearer/JWT without those
@@ -119,6 +121,10 @@ Non-goals:
   pass through `MtgMcpHttpRetry.CreateRequestException`, which redacts, truncates, and
   preserves `HttpRequestException.StatusCode`; Moxfield keeps source-specific diagnostic
   hints via the shared factory.
+- **4.2 source-local degradation hygiene:** complete for corpus recommendation and
+  commander evidence aggregation. Optional source failures already degraded into
+  `CorpusSourceStatusKind.Failed` without aborting the run; those status notes now use
+  `SecretRedactor` before surfacing exception messages.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -144,12 +150,11 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 ### 4.2 Unified error/result model
 - Status: partially complete. Bare `EnsureSuccessStatusCode()` paths have been replaced,
   and adapter HTTP failures share the same redacted/truncated `HttpRequestException`
-  factory.
-- Remaining: define a shared adapter outcome shape (coordinate with Phase 4 unions and
-  Phase 3 error taxonomy): success vs typed failure (auth, rate-limited, unavailable,
-  blocked, malformed).
-- Add graceful source-local degradation so a single failing source returns a typed status
-  without aborting the run.
+  factory. Corpus aggregators already provide source-local degradation and redacted
+  failure notes.
+- Remaining: decide with Phase 3/4 whether the current exception-to-status mapping should
+  become an explicit typed adapter outcome shape: success vs typed failure (auth,
+  rate-limited, unavailable, blocked, malformed).
 - **Cross-phase contract (neither phase blocks the other):** Phase 6 *defines* the typed
   adapter failure shapes; Phase 3 *maps* them to the MCP error taxonomy at the App boundary.
   Phase 6 can land before or in parallel with Phase 3 - until Phase 3 ships, the existing
