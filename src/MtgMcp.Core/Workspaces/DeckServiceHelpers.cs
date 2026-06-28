@@ -13,6 +13,82 @@ internal static class DeckServiceHelpers
     private static readonly TimeSpan SnapshotStaleAfter = TimeSpan.FromDays(30);
 
     /// <summary>
+    /// Finds the active command-zone commander display name.
+    /// </summary>
+    public static string? FindCommanderName(DeckWorkspace workspace)
+    {
+        return FindCommandZoneContext(workspace).DisplayName;
+    }
+
+    /// <summary>
+    /// Finds the commander query name, preferring active multi-card command zones over stale saved intent.
+    /// </summary>
+    public static string? FindCommanderName(DeckWorkspace workspace, DeckIntent? intent)
+    {
+        CommandZoneContext commandZone = FindCommandZoneContext(workspace);
+        if (commandZone.HasPartnerPair || commandZone.HasBackgroundPair)
+        {
+            return commandZone.DisplayName;
+        }
+
+        return string.IsNullOrWhiteSpace(intent?.Commander)
+            ? commandZone.DisplayName
+            : intent.Commander;
+    }
+
+    /// <summary>
+    /// Builds active command-zone facts for workspace-aware services.
+    /// </summary>
+    public static CommandZoneContext FindCommandZoneContext(DeckWorkspace workspace)
+    {
+        return CommandZoneContext.FromWorkspace(workspace);
+    }
+
+    /// <summary>
+    /// Finds a dominant theme from deck role tags.
+    /// </summary>
+    public static string? DominantTheme(DeckWorkspace workspace)
+    {
+        Dictionary<string, int> tags = new(StringComparer.OrdinalIgnoreCase);
+        foreach (DeckCard card in IncludedCards(workspace))
+        {
+            foreach (string tag in DeckRoleClassifier.Classify(card).Tags)
+            {
+                AddCount(tags, tag, card.Quantity);
+            }
+        }
+
+        string? dominantTheme = null;
+        int dominantCount = 0;
+        foreach (KeyValuePair<string, int> tag in tags)
+        {
+            if (dominantTheme is null || tag.Value > dominantCount)
+            {
+                dominantTheme = tag.Key;
+                dominantCount = tag.Value;
+            }
+        }
+
+        return dominantTheme;
+    }
+
+    /// <summary>
+    /// Parses an optional date value.
+    /// </summary>
+    public static DateOnly? ParseDateOnly(string? value)
+    {
+        return DateOnly.TryParse(value, out DateOnly date) ? date : null;
+    }
+
+    /// <summary>
+    /// Checks whether an exception represents cooperative cancellation.
+    /// </summary>
+    public static bool IsCancellation(Exception exception)
+    {
+        return exception is OperationCanceledException;
+    }
+
+    /// <summary>
     /// Refreshes cached card snapshots for cards matching a normalized scope.
     /// </summary>
     public static async Task<DeckNormalizationResult> NormalizeWorkspaceCardsAsync(

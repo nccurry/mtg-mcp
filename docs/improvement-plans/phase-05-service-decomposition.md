@@ -102,6 +102,10 @@ Status update after Sub-PRs A-I:
 - Corpus source-status merging and source filtering now live in
   `src/MtgMcp.Core/Recommendations/CorpusSourceStatusHelpers.cs`, preparing the larger
   corpus/evidence split without changing source semantics.
+- Commander-name, command-zone, dominant-theme, date parsing, and cancellation helpers
+  now live in `src/MtgMcp.Core/Workspaces/DeckServiceHelpers.cs`. The base class keeps
+  protected wrappers for existing partials, while extracted recommendation services call
+  the shared helper directly.
 
 ## 4. Workstreams
 

@@ -52,7 +52,7 @@ public sealed class DeckCommanderMetaService
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         CommanderMetaQuery query = new()
         {
-            Commander = FindCommanderName(workspace, intent),
+            Commander = DeckServiceHelpers.FindCommanderName(workspace, intent),
             Theme = intent?.Archetype,
             Format = workspace.Format,
             Limit = Math.Clamp(limit, 1, 100)
@@ -75,7 +75,7 @@ public sealed class DeckCommanderMetaService
             {
                 report = await commanderMetaProvider.GetCommanderMetaAsync(query, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (!IsCancellation(exception))
+            catch (Exception exception) when (!DeckServiceHelpers.IsCancellation(exception))
             {
                 report = new CommanderMetaReport
                 {
@@ -167,30 +167,6 @@ public sealed class DeckCommanderMetaService
             Strategy = "commander-meta",
             Suggestions = suggestions
         };
-    }
-
-    /// <summary>
-    /// Finds the commander query name, preferring active multi-card command zones over stale saved intent.
-    /// </summary>
-    private static string? FindCommanderName(DeckWorkspace workspace, DeckIntent? intent)
-    {
-        CommandZoneContext commandZone = CommandZoneContext.FromWorkspace(workspace);
-        if (commandZone.HasPartnerPair || commandZone.HasBackgroundPair)
-        {
-            return commandZone.DisplayName;
-        }
-
-        return string.IsNullOrWhiteSpace(intent?.Commander)
-            ? commandZone.DisplayName
-            : intent.Commander;
-    }
-
-    /// <summary>
-    /// Checks whether an exception represents cooperative cancellation.
-    /// </summary>
-    private static bool IsCancellation(Exception exception)
-    {
-        return exception is OperationCanceledException;
     }
 
     /// <summary>

@@ -56,8 +56,8 @@ public sealed class DeckNewCardService
         CardTrendQuery query = new()
         {
             Format = workspace.Format,
-            Theme = intent?.Archetype ?? DominantTheme(workspace),
-            Since = ParseDateOnly(since) ?? DefaultRecentReleaseDate(),
+            Theme = intent?.Archetype ?? DeckServiceHelpers.DominantTheme(workspace),
+            Since = DeckServiceHelpers.ParseDateOnly(since) ?? DefaultRecentReleaseDate(),
             SetCode = string.IsNullOrWhiteSpace(setCode) ? null : setCode.Trim(),
             Limit = Math.Clamp(limit, 1, 50),
             MaxPrice = maxPrice
@@ -79,7 +79,7 @@ public sealed class DeckNewCardService
                 suggestions = await ValidateProviderNewCardsAsync(workspace, query, providerSuggestions, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (Exception exception) when (!IsCancellation(exception))
+            catch (Exception exception) when (!DeckServiceHelpers.IsCancellation(exception))
             {
                 suggestions = await FindNewCardsViaCatalogAsync(workspace, query, cancellationToken).ConfigureAwait(false);
                 notes.Add($"Card trend provider failed; using Scryfall catalog fallback. {exception.GetType().Name}: {exception.Message}");
@@ -273,31 +273,6 @@ public sealed class DeckNewCardService
     }
 
     /// <summary>
-    /// Finds a dominant theme from deck role tags.
-    /// </summary>
-    private static string? DominantTheme(DeckWorkspace workspace)
-    {
-        Dictionary<string, int> tags = new(StringComparer.OrdinalIgnoreCase);
-        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace))
-        {
-            foreach (string tag in DeckRoleClassifier.Classify(card).Tags)
-            {
-                DeckServiceHelpers.AddCount(tags, tag, card.Quantity);
-            }
-        }
-
-        return tags.OrderByDescending(pair => pair.Value).FirstOrDefault().Key;
-    }
-
-    /// <summary>
-    /// Parses an optional date value.
-    /// </summary>
-    private static DateOnly? ParseDateOnly(string? value)
-    {
-        return DateOnly.TryParse(value, out DateOnly date) ? date : null;
-    }
-
-    /// <summary>
     /// Gets the current UTC date or the test override.
     /// </summary>
     private DateOnly CurrentDate()
@@ -311,14 +286,6 @@ public sealed class DeckNewCardService
     private DateOnly DefaultRecentReleaseDate()
     {
         return CurrentDate().AddYears(-1);
-    }
-
-    /// <summary>
-    /// Checks whether an exception represents cooperative cancellation.
-    /// </summary>
-    private static bool IsCancellation(Exception exception)
-    {
-        return exception is OperationCanceledException;
     }
 
     /// <summary>

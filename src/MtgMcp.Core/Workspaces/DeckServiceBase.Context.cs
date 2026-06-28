@@ -10,7 +10,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static string? FindCommanderName(DeckWorkspace workspace)
     {
-        return CommandZoneContext.FromWorkspace(workspace).DisplayName;
+        return DeckServiceHelpers.FindCommanderName(workspace);
     }
 
     /// <summary>
@@ -18,15 +18,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static string? FindCommanderName(DeckWorkspace workspace, DeckIntent? intent)
     {
-        CommandZoneContext commandZone = CommandZoneContext.FromWorkspace(workspace);
-        if (commandZone.HasPartnerPair || commandZone.HasBackgroundPair)
-        {
-            return commandZone.DisplayName;
-        }
-
-        return string.IsNullOrWhiteSpace(intent?.Commander)
-            ? commandZone.DisplayName
-            : intent.Commander;
+        return DeckServiceHelpers.FindCommanderName(workspace, intent);
     }
 
     /// <summary>
@@ -34,7 +26,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static CommandZoneContext FindCommandZoneContext(DeckWorkspace workspace)
     {
-        return CommandZoneContext.FromWorkspace(workspace);
+        return DeckServiceHelpers.FindCommandZoneContext(workspace);
     }
 
     /// <summary>
@@ -42,16 +34,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static string? DominantTheme(DeckWorkspace workspace)
     {
-        Dictionary<string, int> tags = new(StringComparer.OrdinalIgnoreCase);
-        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace))
-        {
-            foreach (string tag in DeckRoleClassifier.Classify(card).Tags)
-            {
-                DeckServiceHelpers.AddCount(tags, tag, card.Quantity);
-            }
-        }
-
-        return tags.OrderByDescending(pair => pair.Value).FirstOrDefault().Key;
+        return DeckServiceHelpers.DominantTheme(workspace);
     }
 
     /// <summary>
@@ -59,7 +42,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static DateOnly? ParseDateOnly(string? value)
     {
-        return DateOnly.TryParse(value, out DateOnly date) ? date : null;
+        return DeckServiceHelpers.ParseDateOnly(value);
     }
 
     /// <summary>
@@ -83,7 +66,7 @@ public abstract partial class DeckServiceBase
     /// </summary>
     protected static bool IsCancellation(Exception exception)
     {
-        return exception is OperationCanceledException;
+        return DeckServiceHelpers.IsCancellation(exception);
     }
 
 }
