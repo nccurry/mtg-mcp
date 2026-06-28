@@ -1353,16 +1353,41 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
-    /// Verifies that batch tuning reports return completed rows and per-workspace failures.
+    /// Verifies that the recommendation facade still exposes batch tuning reports.
     /// </summary>
     [Fact]
-    public async Task BuildBatchTuningReport_ReturnsRowsAndPartialFailures()
+    public async Task BuildBatchTuningReport_DelegatesToBatchTuningService()
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(
             CreateIngaAndEsikaFixtureWorkspace(),
             TestContext.Current.CancellationToken);
         DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+
+        DeckBatchTuningReport report = await service.BuildBatchTuningReportAsync(
+            [workspace.Id, "missing-workspace"],
+            maxBudget: 5,
+            targetTurn: 4,
+            simulations: 10,
+            seed: 2026,
+            TestContext.Current.CancellationToken);
+
+        report.Simulations.Should().Be(100);
+        report.Decks.Should().ContainSingle().Which.WorkspaceId.Should().Be(workspace.Id);
+        report.Failures.Should().ContainSingle().Which.WorkspaceId.Should().Be("missing-workspace");
+    }
+
+    /// <summary>
+    /// Verifies that the extracted batch tuning collaborator preserves batch row behavior.
+    /// </summary>
+    [Fact]
+    public async Task BatchTuningService_ReturnsRowsAndPartialFailures()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            CreateIngaAndEsikaFixtureWorkspace(),
+            TestContext.Current.CancellationToken);
+        DeckBatchTuningService service = CreateBatchTuningService(workspaces, new FakeCardCatalog());
 
         DeckBatchTuningReport report = await service.BuildBatchTuningReportAsync(
             [workspace.Id, "missing-workspace"],

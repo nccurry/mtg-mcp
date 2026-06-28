@@ -70,6 +70,10 @@ Status update after Sub-PRs A/B:
   also guarded by the architecture test.
 - Archidekt-required operation checks now share the same helper path instead of duplicating
   the null-check/error text between mutation and simulation services.
+- Batch tuning now has the first focused recommendation collaborator:
+  `src/MtgMcp.Core/Recommendations/DeckBatchTuningService.cs`. The existing
+  `DeckRecommendationService` methods remain as facade delegates for current MCP tool
+  wiring.
 
 ## 4. Workstreams
 

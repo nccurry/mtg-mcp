@@ -31,6 +31,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckAnalysisService analysis;
 
     /// <summary>
+    /// Builds read-only tuning reports across several workspaces.
+    /// </summary>
+    private readonly DeckBatchTuningService batchTuning;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -66,7 +71,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
         SimulationProfileCatalog? simulationProfiles = null,
         PlaygroupService? playgroups = null,
-        DeckAnalysisMetrics? analysisMetrics = null
+        DeckAnalysisMetrics? analysisMetrics = null,
+        DeckBatchTuningService? batchTuning = null
     )
         : base(
             repository,
@@ -79,6 +85,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.cardTrendProvider = cardTrendProvider;
         this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
+        this.batchTuning = batchTuning ?? new DeckBatchTuningService(repository, analysis, simulation);
         this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();

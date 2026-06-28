@@ -76,6 +76,35 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a batch tuning service with explicit analysis and simulation collaborators.
+    /// </summary>
+    private static DeckBatchTuningService CreateBatchTuningService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckAnalysisService analysis = CreateAnalysisService(
+            repository,
+            cardCatalog,
+            comboCatalog: comboCatalog,
+            currentDateOverride: currentDateOverride);
+        DeckSimulationService simulation = CreateSimulationService(
+            repository,
+            cardCatalog,
+            archidektGateway,
+            planRepository,
+            currentDateOverride: currentDateOverride);
+
+        return new DeckBatchTuningService(repository, analysis, simulation);
+    }
+
+    /// <summary>
     /// Creates a recommendation service with explicit analysis and simulation collaborators.
     /// </summary>
     private static DeckRecommendationService CreateRecommendationService(
