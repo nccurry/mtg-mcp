@@ -3,7 +3,7 @@ namespace MtgMcp.Core;
 /// <summary>
 /// Delegates unified deck brainstorming to the focused brainstorming collaborator.
 /// </summary>
-public sealed partial class DeckRecommendationService : DeckServiceBase
+public sealed partial class DeckRecommendationService
 {
     /// <summary>
     /// Runs the unified brewing workflow.

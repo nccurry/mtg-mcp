@@ -33,7 +33,7 @@ as contract changes, not invisible internals.
 - **P13 (label only) - goldfish determinism.** `GoldfishSimulationResult`
   (`Simulation/GoldfishModels.cs:204`) carries `ModelLabel` but no `RngKind` or
   determinism label, and the goldfish path uses `System.Random`
-  (`DeckSimulationService.Goldfish.cs:249`), unlike the deterministic
+  (`DeckSimulationService.Goldfish.Run.cs:20`), unlike the deterministic
   `DeckPerformanceAnalysis` which stamps
   `RngKind = DeterministicSimulationRandom.Kind` (`PerformanceModels.cs:46`).
 - **No surface metrics / no change policy.** There is a strong surface snapshot test
@@ -119,7 +119,7 @@ Non-goals (deferred):
 - Change: `README.md` (surface section), `RecommendationTools.cs` (evaluate description +
   non-ramp status), `OperationalFacts/RampContextScorer.cs` (explicit not-applicable
   result), `Simulation/GoldfishModels.cs` (+`RngKind`),
-  `Simulation/DeckSimulationService.Goldfish.cs` (stamp `RngKind`),
+  `Simulation/DeckSimulationService.Goldfish*.cs` (stamp `RngKind`),
   `McpSurfaceTests.cs` (snapshot update), `Taskfile.yml`/`ci.yml` (run metrics check).
 - Update: `CHANGELOG.md`.
 

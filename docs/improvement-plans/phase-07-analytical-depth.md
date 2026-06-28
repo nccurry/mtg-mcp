@@ -18,10 +18,10 @@ becoming a Magic rules engine (a stated non-goal).
   scorer returns `Score = 0` for non-ramp cards (`RampContextScorer.cs:26-31`). The tool is
   advertised generically.
 - **P12 - bracket estimator is a coarse max-signal floor.**
-  `EstimatedBracket = max(signal.SuggestedBracket)` (`DeckServiceBase.AnalysisMetrics.cs:571-574`);
+  `EstimatedBracket = max(signal.SuggestedBracket)` (`Analysis/DeckAnalysisMetrics.cs:529-601`);
   one mass-land-denial card forces bracket 4 with little density sensitivity.
 - **P13 (real fix) - goldfish determinism.** Goldfish family uses `System.Random`
-  (`DeckSimulationService.Goldfish.cs:249`) while Stats Lab/race use
+  (`Simulation/DeckSimulationService.Goldfish.Run.cs:20`) while Stats Lab/race use
   `DeterministicSimulationRandom`.
 - **P14 - offline combo fallback is 3 hardcoded combos**
   (`Analysis/DeckAnalysisService.Combos.cs:351-353`).
@@ -113,8 +113,8 @@ Non-goals:
 
 - Change: `OperationalFacts/RampOperationalModels.cs` (-> general fact family),
   `RampContextScorer.cs` (-> role-aware scorer/dispatcher) and new per-kind extractors/
-  scorers; `DeckServiceBase.AnalysisMetrics.cs` (bracket model);
-  `Simulation/DeckSimulationService.Goldfish.cs` + `DeckStatistics.cs` (RNG);
+  scorers; `Analysis/DeckAnalysisMetrics.cs` (bracket model);
+  `Simulation/DeckSimulationService.Goldfish.Run.cs` + `Analysis/DeckStatistics.cs` (RNG);
   `Analysis/DeckAnalysisService.Combos.cs` (dataset fallback).
 - Create: `docs/reference/local-combos.json` (+ loader), bracket/eval benchmark JSON in
   `tests/MtgMcp.Calibration/Corpus/`, docs updates.

@@ -3,7 +3,7 @@ namespace MtgMcp.Core;
 /// <summary>
 /// Provides evidence-first Commander, payoff, and new-card swap workflows.
 /// </summary>
-public sealed partial class DeckRecommendationService : DeckServiceBase
+public sealed partial class DeckRecommendationService
 {
     /// <summary>
     /// Gets source-backed aggregate cards for a commander.
