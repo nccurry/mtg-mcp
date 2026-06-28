@@ -1,3 +1,5 @@
+using MtgMcp.Core;
+
 namespace MtgMcp.Playgroup;
 
 /// <summary>
@@ -14,6 +16,11 @@ public sealed class PlaygroupOptions
     /// Gets or sets the authorization scheme for API-key requests.
     /// </summary>
     public string AuthScheme { get; set; } = "Bearer";
+
+    /// <summary>
+    /// Gets or sets the User-Agent used for Playgroup requests.
+    /// </summary>
+    public string UserAgent { get; set; } = MtgMcpHttpDefaults.UserAgent;
 
     /// <summary>
     /// Gets or sets an optional Playgroup API key.

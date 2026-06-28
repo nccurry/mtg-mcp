@@ -1,3 +1,5 @@
+using MtgMcp.Core;
+
 namespace MtgMcp.Moxfield;
 
 /// <summary>
@@ -13,7 +15,7 @@ public sealed class MoxfieldOptions
     /// <summary>
     /// Gets or sets the user agent used for anonymous Moxfield imports.
     /// </summary>
-    public string UserAgent { get; set; } = "mtg-mcp";
+    public string UserAgent { get; set; } = MtgMcpHttpDefaults.UserAgent;
 
     /// <summary>
     /// Gets or sets whether blocked anonymous requests may retry through curl when available.

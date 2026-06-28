@@ -39,8 +39,7 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
         this.cache = cache;
         this.mtgOptions = mtgOptions.Value;
         this.httpClient.BaseAddress ??= options.Value.BaseAddress;
-        this.httpClient.DefaultRequestHeaders.UserAgent.Clear();
-        this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("mtg-mcp/1.0 (+https://github.com/nccurry/mtg-mcp)");
+        MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, options.Value.UserAgent);
         this.httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 

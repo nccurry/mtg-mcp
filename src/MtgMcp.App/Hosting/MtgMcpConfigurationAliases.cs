@@ -30,13 +30,17 @@ public static class MtgMcpConfigurationAliases
         ("INTELLIGENCE:SOURCES:TOPDECK:ENABLED", "MtgMcp:Intelligence:Sources:TopDeck:Enabled"),
         ("INTELLIGENCE:SOURCES:TOPDECK:API_KEY", "MtgMcp:Intelligence:Sources:TopDeck:ApiKey"),
         ("INTELLIGENCE:SOURCES:TOPDECK:BASE_ADDRESS", "MtgMcp:Intelligence:Sources:TopDeck:BaseAddress"),
+        ("INTELLIGENCE:SOURCES:TOPDECK:USER_AGENT", "MtgMcp:Intelligence:Sources:TopDeck:UserAgent"),
         ("INTELLIGENCE:SOURCES:EDHREC:ENABLED", "MtgMcp:Intelligence:Sources:Edhrec:Enabled"),
         ("INTELLIGENCE:SOURCES:EDHREC:ALLOW_UNOFFICIAL_API", "MtgMcp:Intelligence:Sources:Edhrec:AllowUnofficialApi"),
         ("INTELLIGENCE:SOURCES:EDHREC:BASE_ADDRESS", "MtgMcp:Intelligence:Sources:Edhrec:BaseAddress"),
+        ("INTELLIGENCE:SOURCES:EDHREC:USER_AGENT", "MtgMcp:Intelligence:Sources:Edhrec:UserAgent"),
         ("INTELLIGENCE:SOURCES:EDHTOP16:ENABLED", "MtgMcp:Intelligence:Sources:EdhTop16:Enabled"),
         ("INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API", "MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"),
         ("INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS", "MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"),
+        ("INTELLIGENCE:SOURCES:EDHTOP16:USER_AGENT", "MtgMcp:Intelligence:Sources:EdhTop16:UserAgent"),
         ("ARCHIDEKT:BASE_ADDRESS", "MtgMcp:Archidekt:BaseAddress"),
+        ("ARCHIDEKT:USER_AGENT", "MtgMcp:Archidekt:UserAgent"),
         ("ARCHIDEKT:USERNAME", "MtgMcp:Archidekt:Username"),
         ("ARCHIDEKT:PASSWORD", "MtgMcp:Archidekt:Password"),
         ("ARCHIDEKT:CREDENTIALS_FILE", "MtgMcp:Archidekt:CredentialsFile"),
@@ -47,6 +51,7 @@ public static class MtgMcpConfigurationAliases
         ("MOXFIELD:CURL_FALLBACK_ENABLED", "MtgMcp:Moxfield:EnableCurlFallback"),
         ("MOXFIELD:CURL_PATH", "MtgMcp:Moxfield:CurlPath"),
         ("PLAYGROUP:BASE_ADDRESS", "MtgMcp:Playgroup:BaseAddress"),
+        ("PLAYGROUP:USER_AGENT", "MtgMcp:Playgroup:UserAgent"),
         ("PLAYGROUP:API_KEY", "MtgMcp:Playgroup:ApiKey"),
         ("PLAYGROUP:CREDENTIALS_FILE", "MtgMcp:Playgroup:CredentialsFile"),
         ("SIMULATION:ALLOW_EXTERNAL_PROFILE_OVERRIDES", "MtgMcp:Simulation:AllowExternalProfileOverrides"),
@@ -54,6 +59,7 @@ public static class MtgMcpConfigurationAliases
         ("SCRYFALL:USER_AGENT", "MtgMcp:Scryfall:UserAgent"),
         ("SCRYFALL:MAX_RATE_LIMIT_RETRIES", "MtgMcp:Scryfall:MaxRateLimitRetries"),
         ("COMMANDERSPELLBOOK:BASE_ADDRESS", "MtgMcp:CommanderSpellbook:BaseAddress"),
+        ("COMMANDERSPELLBOOK:USER_AGENT", "MtgMcp:CommanderSpellbook:UserAgent"),
     ];
 
     /// <summary>

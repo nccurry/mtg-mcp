@@ -15,7 +15,7 @@ public sealed class ScryfallOptions
     /// <summary>
     /// Gets or sets the user agent.
     /// </summary>
-    public string UserAgent { get; set; } = "mtg-mcp/0.1 (+https://github.com/nccurry/mtg-mcp)";
+    public string UserAgent { get; set; } = MtgMcpHttpDefaults.UserAgent;
 
     /// <summary>
     /// Gets or sets the minimum delay.

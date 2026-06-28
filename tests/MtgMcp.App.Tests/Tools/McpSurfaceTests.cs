@@ -2153,15 +2153,20 @@ public sealed class McpSurfaceTests
             ["INTELLIGENCE:SOURCES:COMMANDERSPELLBOOK:ENABLED"] = "false",
             ["INTELLIGENCE:SOURCES:TOPDECK:API_KEY"] = "topdeck-key",
             ["INTELLIGENCE:SOURCES:TOPDECK:BASE_ADDRESS"] = "https://topdeck.test/api/",
+            ["INTELLIGENCE:SOURCES:TOPDECK:USER_AGENT"] = "topdeck-agent",
             ["INTELLIGENCE:SOURCES:SPICERACK:API_KEY"] = "ignored-spicerack-key",
             ["INTELLIGENCE:SOURCES:EDHREC:ENABLED"] = "true",
             ["INTELLIGENCE:SOURCES:EDHREC:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:EDHREC:BASE_ADDRESS"] = "https://edhrec.test/pages/",
+            ["INTELLIGENCE:SOURCES:EDHREC:USER_AGENT"] = "edhrec-agent",
             ["INTELLIGENCE:SOURCES:EDHTOP16:ENABLED"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:ALLOW_UNOFFICIAL_API"] = "true",
             ["INTELLIGENCE:SOURCES:EDHTOP16:BASE_ADDRESS"] = "https://edhtop16.test/",
+            ["INTELLIGENCE:SOURCES:EDHTOP16:USER_AGENT"] = "edhtop16-agent",
             ["INTELLIGENCE:SOURCES:REDDIT:ENABLED"] = "ignored",
             ["REDDIT:CLIENT_SECRET"] = "ignored-reddit-secret",
+            ["COMMANDERSPELLBOOK:USER_AGENT"] = "spellbook-agent",
+            ["ARCHIDEKT:USER_AGENT"] = "archidekt-agent",
             ["ARCHIDEKT:USERNAME"] = "archidekt-user",
             ["ARCHIDEKT:PASSWORD"] = "archidekt-password",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
@@ -2172,6 +2177,7 @@ public sealed class McpSurfaceTests
             ["MOXFIELD:CURL_FALLBACK_ENABLED"] = "false",
             ["MOXFIELD:CURL_PATH"] = "custom-curl",
             ["PLAYGROUP:BASE_ADDRESS"] = "https://playgroup.test/api/public/v1/",
+            ["PLAYGROUP:USER_AGENT"] = "playgroup-agent",
             ["PLAYGROUP:API_KEY"] = "playgroup-key",
             ["PLAYGROUP:CREDENTIALS_FILE"] = "C:/playgroup-creds.json",
             ["SIMULATION:PROFILE_PATHS:0"] = "profiles/simulation/*.json",
@@ -2200,15 +2206,20 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Intelligence:Sources:CommanderSpellbook:Enabled"].Should().Be("false");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:ApiKey"].Should().Be("topdeck-key");
         aliases["MtgMcp:Intelligence:Sources:TopDeck:BaseAddress"].Should().Be("https://topdeck.test/api/");
+        aliases["MtgMcp:Intelligence:Sources:TopDeck:UserAgent"].Should().Be("topdeck-agent");
         aliases.Should().NotContainKey("MtgMcp:Intelligence:Sources:Spicerack:ApiKey");
         aliases["MtgMcp:Intelligence:Sources:Edhrec:Enabled"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:Edhrec:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:Edhrec:BaseAddress"].Should().Be("https://edhrec.test/pages/");
+        aliases["MtgMcp:Intelligence:Sources:Edhrec:UserAgent"].Should().Be("edhrec-agent");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:Enabled"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:AllowUnofficialApi"].Should().Be("true");
         aliases["MtgMcp:Intelligence:Sources:EdhTop16:BaseAddress"].Should().Be("https://edhtop16.test/");
+        aliases["MtgMcp:Intelligence:Sources:EdhTop16:UserAgent"].Should().Be("edhtop16-agent");
         aliases.Should().NotContainKey("MtgMcp:Intelligence:Sources:Reddit:Enabled");
         aliases.Should().NotContainKey("MtgMcp:Reddit:ClientSecret");
+        aliases["MtgMcp:CommanderSpellbook:UserAgent"].Should().Be("spellbook-agent");
+        aliases["MtgMcp:Archidekt:UserAgent"].Should().Be("archidekt-agent");
         aliases["MtgMcp:Archidekt:Username"].Should().Be("archidekt-user");
         aliases["MtgMcp:Archidekt:Password"].Should().Be("archidekt-password");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
@@ -2219,6 +2230,7 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Moxfield:EnableCurlFallback"].Should().Be("false");
         aliases["MtgMcp:Moxfield:CurlPath"].Should().Be("custom-curl");
         aliases["MtgMcp:Playgroup:BaseAddress"].Should().Be("https://playgroup.test/api/public/v1/");
+        aliases["MtgMcp:Playgroup:UserAgent"].Should().Be("playgroup-agent");
         aliases["MtgMcp:Playgroup:ApiKey"].Should().Be("playgroup-key");
         aliases["MtgMcp:Playgroup:CredentialsFile"].Should().Be("C:/playgroup-creds.json");
         aliases["MtgMcp:Simulation:ProfilePaths:0"].Should().Be("profiles/simulation/*.json");

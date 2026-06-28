@@ -405,9 +405,9 @@ tasks:
 
   smoke:mcp:
     desc: Build the MCP host and verify service registration
-    deps: [restore]
+    deps: [build]
     cmds:
-      - '{{.DOTNET}} run --project {{.APP_PROJECT}} -- --smoke'
+      - '{{.DOTNET}} run --project {{.APP_PROJECT}} --configuration {{.CONFIGURATION}} --no-build -- --smoke'
 
   install:
     desc: Install the current branch on this workstation

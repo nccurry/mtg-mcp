@@ -37,6 +37,7 @@ public sealed partial class PlaygroupGateway : IPlaygroupGateway
         this.httpClient = httpClient;
         this.options = options.Value;
         this.httpClient.BaseAddress ??= GetConfiguredBaseAddress(this.options);
+        MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, this.options.UserAgent);
         this.httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json")
         );

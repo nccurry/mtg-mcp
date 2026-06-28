@@ -35,10 +35,7 @@ public sealed partial class MoxfieldGateway : IMoxfieldGateway
             new MediaTypeWithQualityHeaderValue("application/json")
         );
 
-        if (!string.IsNullOrWhiteSpace(this.options.UserAgent))
-        {
-            this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(this.options.UserAgent);
-        }
+        MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, this.options.UserAgent);
     }
 
     /// <summary>
@@ -121,7 +118,7 @@ public sealed partial class MoxfieldGateway : IMoxfieldGateway
         startInfo.ArgumentList.Add("30");
         startInfo.ArgumentList.Add("-A");
         startInfo.ArgumentList.Add(string.IsNullOrWhiteSpace(options.UserAgent)
-            ? "mtg-mcp"
+            ? MtgMcpHttpDefaults.UserAgent
             : options.UserAgent);
         startInfo.ArgumentList.Add("-H");
         startInfo.ArgumentList.Add("Accept: application/json");

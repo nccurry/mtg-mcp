@@ -45,11 +45,8 @@ public sealed class EdhrecCorpusSignalProvider : ICorpusSignalProvider
         this.cache = cache;
         this.options = options.Value;
         this.httpClient.BaseAddress ??= SourceOptions().BaseAddress ?? DefaultBaseAddress;
+        MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, SourceOptions().UserAgent);
         this.httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        if (this.httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
-        {
-            this.httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("mtg-mcp", "0.0"));
-        }
     }
 
     /// <summary>

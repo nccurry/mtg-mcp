@@ -1,3 +1,5 @@
+using MtgMcp.Core;
+
 namespace MtgMcp.Archidekt;
 
 /// <summary>
@@ -14,6 +16,11 @@ public sealed class ArchidektOptions
     /// Gets or sets the auth scheme.
     /// </summary>
     public string AuthScheme { get; set; } = "JWT";
+
+    /// <summary>
+    /// Gets or sets the User-Agent used for Archidekt requests.
+    /// </summary>
+    public string UserAgent { get; set; } = MtgMcpHttpDefaults.UserAgent;
 
     /// <summary>
     /// Gets or sets the Archidekt username or account email used for login.

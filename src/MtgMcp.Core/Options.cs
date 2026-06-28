@@ -174,6 +174,11 @@ public sealed class MtgMcpCorpusSourceOptions
     /// Gets or sets an optional source base address override.
     /// </summary>
     public Uri? BaseAddress { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional User-Agent override for this corpus source.
+    /// </summary>
+    public string? UserAgent { get; set; }
 }
 
 /// <summary>

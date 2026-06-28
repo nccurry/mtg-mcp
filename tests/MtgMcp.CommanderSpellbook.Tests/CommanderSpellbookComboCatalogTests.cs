@@ -130,6 +130,29 @@ public sealed class CommanderSpellbookComboCatalogTests
     }
 
     /// <summary>
+    /// Verifies that configured User-Agent values flow through catalog options.
+    /// </summary>
+    [Fact]
+    public void Constructor_AppliesConfiguredUserAgent()
+    {
+        MockHttpMessageHandler mockHttp = new();
+        HttpClient httpClient = mockHttp.ToHttpClient();
+        httpClient.BaseAddress = new Uri("https://spellbook.test/");
+
+        _ = new CommanderSpellbookComboCatalog(
+            httpClient,
+            Options.Create(new CommanderSpellbookOptions
+            {
+                BaseAddress = new Uri("https://spellbook.test/"),
+                UserAgent = "spellbook-test/1.0",
+            }),
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(new MtgMcpOptions()));
+
+        httpClient.DefaultRequestHeaders.UserAgent.ToString().Should().Be("spellbook-test/1.0");
+    }
+
+    /// <summary>
     /// Creates a catalog with a mocked HTTP client.
     /// </summary>
     private static CommanderSpellbookComboCatalog CreateCatalog(MockHttpMessageHandler mockHttp)

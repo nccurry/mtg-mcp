@@ -170,7 +170,9 @@ public sealed class MoxfieldGatewayTests
         maybe.Categories.Should().Equal(DeckDefaults.Maybeboard, "Cantrip", "Card Draw");
         maybe.Metadata["moxfieldTags"].Should().Be("Cantrip, Card Draw");
 
-        handler.Requests.Should().ContainSingle().Which.Path.Should().Be("v3/decks/all/abc_123");
+        RecordedRequest request = handler.Requests.Should().ContainSingle().Subject;
+        request.Path.Should().Be("v3/decks/all/abc_123");
+        request.UserAgent.Should().Be("mtg-mcp-test");
     }
 
     /// <summary>
@@ -249,7 +251,10 @@ public sealed class MoxfieldGatewayTests
         )
         {
             string path = request.RequestUri?.PathAndQuery.TrimStart('/') ?? "";
-            Requests.Add(new RecordedRequest(request.Method, path));
+            Requests.Add(new RecordedRequest(
+                request.Method,
+                path,
+                request.Headers.UserAgent.ToString()));
             if (!responses.TryGetValue(path, out RecordedResponse? response))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)
@@ -276,5 +281,5 @@ public sealed class MoxfieldGatewayTests
     /// <summary>
     /// Represents a recorded request.
     /// </summary>
-    private sealed record RecordedRequest(HttpMethod Method, string Path);
+    private sealed record RecordedRequest(HttpMethod Method, string Path, string UserAgent);
 }

@@ -80,6 +80,7 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
         this.httpClient = httpClient;
         this.options = options.Value;
         this.httpClient.BaseAddress ??= this.options.BaseAddress;
+        MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, this.options.UserAgent);
         this.httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json")
         );

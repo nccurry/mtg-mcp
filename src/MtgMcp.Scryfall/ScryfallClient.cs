@@ -89,8 +89,7 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
         this.mtgOptions = mtgOptions?.Value ?? new MtgMcpOptions();
 
         this.httpClient.BaseAddress ??= this.options.BaseAddress;
-        this.httpClient.DefaultRequestHeaders.UserAgent.Clear();
-        this.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(this.options.UserAgent);
+        MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, this.options.UserAgent);
         this.httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json")
         );
