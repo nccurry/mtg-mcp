@@ -144,6 +144,11 @@ Status update after completed Phase 5 slices:
   `src/MtgMcp.Core/Recommendations/DeckCorpusRecommendationService.cs`, with the
   recommendation facade retaining the current MCP-facing corpus methods and corpus tests
   instantiating the collaborator directly.
+- The giant goldfish simulation partial has been split into focused partials for
+  entrypoints, run/opening-hand flow, cost estimation, spell effects, pressure heuristics,
+  summary builders, and private state types. The public
+  `DeckSimulationService.Goldfish.cs` entrypoint file now stays small while preserving
+  existing behavior.
 
 ## 4. Workstreams
 
