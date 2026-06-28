@@ -55,7 +55,10 @@ Non-goals:
   `SelectedPrintingReason`, plus the Scryfall "budget-playable pricing may use
   foil/etched/market fallback" flag (`ScryfallOptions.cs:46`). There is still no
   configured alternate provider.
-- Collection/ownership: nothing exists. This is the only genuinely net-new subsystem.
+- Collection/ownership now exists as a local-first subsystem: `CardCollectionService`,
+  `JsonCardCollectionRepository`, `collection_set`, `collection_get`, and
+  `collection_diff_workspace`, with ADR 0003 deciding name+quantity persistence and
+  plan-mode write semantics.
 
 ## 4. Workstreams
 
@@ -65,27 +68,29 @@ Split into two independently shippable tracks, smallest-value-first:
   (4.3), and the initial price-source port (4.4). These expose or wrap data that
   already flows through `ICardCatalog`/`CardInfo`, so they are low-risk,
   no-new-persistence slices on the conformant surface.
-- Track 2 (its own design decision + PR): the card collection subsystem (4.1). It is the
-  only net-new persisted state and needs an explicit design decision before coding -
-  persistence shape (name+quantity vs printings/foils/conditions), operation-mode
-  semantics (is writing the collection a `plan`-state write or `apply`?), and where it
-  lives relative to workspaces. Do not bundle it with Track 1.
+- Track 2 (shipped after ADR): the card collection subsystem (4.1). It is the
+  only net-new persisted state. ADR 0003 chooses name+quantity persistence, local
+  planning-state write semantics, and workspace ownership diff as the first
+  ownership/cost contract.
 
-### 4.1 Card collection / ownership (net-new; Track 2, design-gated)
-- **Design decision required first**: persistence shape and operation-mode semantics (see
-  Open questions). Land an ADR before implementation.
-- Add a local-first collection store, persisted under `MTGMCP__DATA_DIR`, provider-neutral:
-  owned card names/quantities/printings. Prefer reusing Phase 5's `JsonFileStore<T>`, but
-  this is a **soft** dependency - if Phase 5 has not landed, the collection store can ship
-  with its own minimal atomic-write persistence and adopt `JsonFileStore<T>` later. Phase 8
-  is not blocked by Phase 5.
-- Define a `CollectionService` and a port for future provider imports (kept local-only
-  initially). Support import from pasted text / decklist-style input and from a workspace.
-- Add ownership-aware affordances: an `owned`/`missing` annotation on candidate rows
-  (`deck_query_cards`, `deck_review_new_card_swaps`) and an "owned vs needs-buying" view in
-  cost analysis (`deck_analyze_cost`). Add tools `collection_set`/`collection_get`/
-  `collection_diff_workspace` (names indicative; place in a `collection` toolset).
-- Guard mutations with `OperationModeGuard` (write to local planning state).
+### 4.1 Card collection / ownership (net-new; Track 2, shipped)
+- Done: ADR 0003 accepts a local-first, provider-neutral collection persisted
+  under `MTGMCP__DATA_DIR/collection` with name+quantity rows only. Printings,
+  foils, condition, language, and account-import metadata are intentionally
+  deferred.
+- Done: `JsonCardCollectionRepository` reuses Phase 5's `JsonFileStore<T>`.
+- Done: `CardCollectionService` supports structured rows, decklist-style pasted
+  text, and included-card import from an existing workspace through
+  `collection_set`.
+- Done: `collection_get` returns the current local collection snapshot.
+- Done: `collection_diff_workspace` reports owned/missing quantities for a
+  workspace's included cards and known missing replacement cost from cached price
+  snapshots.
+- Hardened scope: `deck_analyze_cost` remains gross deck cost. Ownership-aware
+  "still need to buy" cost is reported by `collection_diff_workspace`, avoiding a
+  silent behavior change for existing cost-analysis callers.
+- Done: `collection_set` is guarded with `OperationModeGuard` as a local planning-state
+  write, so it is available in `plan`/`apply` and blocked in `read-only`.
 
 ### 4.2 Batch card lookup (expose existing)
 - Done in the first Phase 8 slice: `card_get_batch(names[], limit)` returns
@@ -109,19 +114,21 @@ Split into two independently shippable tracks, smallest-value-first:
 
 ## 5. Files to create / change
 
-- Create later: `Core/Collection/CollectionService.cs` + models + `ICollectionStore`,
-  and `docs/collection.md`.
-- Changed in Track 1: `CardTools`, `Core/Pricing/IPriceSource.cs`,
+- Created in Track 2: `Core/Collection/CardCollectionService.cs`,
+  `CardCollectionModels.cs`, `JsonCardCollectionRepository.cs`,
+  `App/Tools/Collection/CollectionTools.cs`, ADR 0003, and `docs/collection.md`.
+- Changed across Track 1/2: `CardTools`, `Core/Pricing/IPriceSource.cs`,
   `DeckAnalysisMetrics`, host DI, MCP surface tests, pricing/cost tests, prompt
   guidance, `README.md`, `docs/architecture.md`, and `docs/toolsets.md`.
-- Tests: collection round-trip + ownership diff later; Track 1 has direct batch
-  lookup and image affordance tests plus MCP surface inventory coverage.
+- Tests: collection round-trip, workspace import, ownership diff, operation-mode
+  guard coverage, direct batch lookup and image affordance tests, and MCP surface
+  inventory coverage.
 
 ## 6. Testing
 
-- Offline fixture tests for collection store and ownership diff.
+- Offline fixture tests for collection round-trip, workspace import, and ownership diff.
 - Batch lookup against `cards/collection` fixtures (MockHttp).
-- Cost analysis shows owned-vs-needed and price provenance deterministically.
+- Ownership diff shows owned-vs-needed and known missing replacement cost deterministically.
 
 ## 7. Definition of done
 
@@ -131,9 +138,13 @@ Track 1:
 - Done: price-source port in place for cost analysis, preserving existing
   provenance output and default price behavior.
 
-Track 2 (separate, after its design ADR):
-- Collection capability ships behind a `collection` toolset with ownership-aware cost and
-  candidate output, with persistence shape and operation-mode semantics decided in an ADR.
+Track 2:
+- Done: collection capability ships behind a `collection` toolset with
+  ownership-aware workspace diff and known missing replacement cost.
+- Done: persistence shape and operation-mode semantics are decided in ADR 0003.
+- Deferred: candidate-row annotations for `deck_query_cards` and
+  `deck_review_new_card_swaps`; add them after the collection contract has real
+  usage and fixture data.
 
 Both tracks:
 - All new tools are structured-output + structured-error conformant (Phase 3) and gated by
@@ -150,9 +161,6 @@ Both tracks:
 
 ## 9. Open questions
 
-- Collection persistence shape: name+quantity only first, or printings/foils/conditions? And
-  operation-mode semantics: is a collection write a `plan`-state write or `apply`-only?
-  (These are the ADR decisions that gate Track 2.)
-- Collection import sources beyond manual/text (account integrations) - defer or include a
-  read-only import? (Recommend manual/text + workspace diff first.)
+- Collection persistence shape and operation-mode semantics are resolved by ADR 0003.
+- Collection import sources beyond manual/text/workspace (account integrations) remain deferred.
 - Image as tool vs resource (or both) depending on target clients.

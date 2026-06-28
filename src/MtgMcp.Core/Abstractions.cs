@@ -214,6 +214,22 @@ public interface IDeckPlanRepository
 }
 
 /// <summary>
+/// Defines operations for the workstation-local card collection.
+/// </summary>
+public interface ICardCollectionRepository
+{
+    /// <summary>
+    /// Saves the local card collection.
+    /// </summary>
+    Task<CardCollectionDocument> SaveAsync(CardCollectionDocument collection, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads the local card collection when one has been saved.
+    /// </summary>
+    Task<CardCollectionDocument?> GetAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Defines operations for archidekt gateway.
 /// </summary>
 public interface IArchidektGateway

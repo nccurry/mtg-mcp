@@ -34,8 +34,8 @@ Phases are sequenced in the master plan, but several are explicitly expected to 
   PRs before the broad resiliency work.
 - Phase 7 - land evaluator roles incrementally (ramp -> draw -> interaction -> ...), and
   treat the bracket-model change as its own PR gated on agreed benchmark expectations.
-- Phase 8 - batch lookup and the image affordance ship first (cheap, expose existing
-  data); the collection subsystem is a separate design + PR.
+- Phase 8 - batch lookup and the image affordance shipped first (cheap, expose existing
+  data); the collection subsystem followed as an ADR-gated local persistence slice.
 
 Phases 1-3 are sequential and contain breaking surface changes; honor the deprecation
 windows from Phase 0's `docs/versioning.md` and the per-phase "deprecation release" vs

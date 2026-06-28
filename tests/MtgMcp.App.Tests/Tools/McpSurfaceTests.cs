@@ -49,6 +49,7 @@ public sealed class McpSurfaceTests
     private static readonly Type[] ToolTypes =
     [
         typeof(CardTools),
+        typeof(CollectionTools),
         typeof(WorkspaceTools),
         typeof(DeckMutationTools),
         typeof(CategoryTools),
@@ -95,6 +96,9 @@ public sealed class McpSurfaceTests
             "card_get_rulings",
             "card_search",
             "card_classify_win_routes",
+            "collection_diff_workspace",
+            "collection_get",
+            "collection_set",
             "commander_get_aggregate_cards",
             "commander_get_tags",
             "commander_get_win_condition_evidence",
@@ -211,6 +215,7 @@ public sealed class McpSurfaceTests
             "card_",
             "commander_",
             "combo_",
+            "collection_",
             "deck_",
             "playgroup_",
             "server_",
@@ -1188,6 +1193,29 @@ public sealed class McpSurfaceTests
         await act.Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*read-only mode*deck_move_cards_bulk*");
+    }
+
+    /// <summary>
+    /// Verifies that local collection writes are blocked in read-only mode.
+    /// </summary>
+    [Fact]
+    public async Task OperationModeGuard_BlocksCollectionSetWhenReadOnly()
+    {
+        CardCollectionService collectionService = new(
+            new InMemoryCollectionRepository(),
+            new InMemoryRepository(),
+            CatalogPriceSource.Instance);
+        CollectionTools tools = new(
+            collectionService,
+            new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "read-only" })));
+
+        Func<Task> act = () => tools.SetCollectionAsync(
+            [new CardCollectionEntry { CardName = "Sol Ring", Quantity = 1 }],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*read-only mode*collection_set*");
     }
 
     /// <summary>
@@ -3431,6 +3459,36 @@ public sealed class McpSurfaceTests
         public Task<IReadOnlyList<DeckWorkspace>> ListAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult<IReadOnlyList<DeckWorkspace>>(workspaces.Values.ToList());
+        }
+    }
+
+    /// <summary>
+    /// Provides in memory collection repository behavior.
+    /// </summary>
+    private sealed class InMemoryCollectionRepository : ICardCollectionRepository
+    {
+        /// <summary>
+        /// Stores the fake collection.
+        /// </summary>
+        private CardCollectionDocument? collection;
+
+        /// <summary>
+        /// Saves a collection in the fake repository.
+        /// </summary>
+        public Task<CardCollectionDocument> SaveAsync(
+            CardCollectionDocument collection,
+            CancellationToken cancellationToken)
+        {
+            this.collection = collection;
+            return Task.FromResult(collection);
+        }
+
+        /// <summary>
+        /// Gets the fake collection.
+        /// </summary>
+        public Task<CardCollectionDocument?> GetAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(collection);
         }
     }
 

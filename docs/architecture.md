@@ -25,6 +25,7 @@ Existing capabilities include:
 - Evidence-first source signals from Scryfall card facts, Commander Spellbook combo catalog rows, TopDeck decklist samples, EDHREC-style aggregate JSON, and EDHTop16 cEDH aggregates.
 - Playgroup.gg deck ranking and local-meta candidate scoring.
 - Previewable deck edit plans before any local or Archidekt mutation.
+- Local card collection ownership diffs for saved workspaces.
 - Stats Lab whole-deck performance analysis for opening hands, land drops, colors, castability, commander timing, combo/tutor assembly, stranded-card risk, and named scenarios.
 - Previewed plan performance comparison with before/after deltas and confidence interval context.
 

@@ -16,7 +16,8 @@ Toolset filtering intersects with operation-mode filtering:
 
 A practical starter profile for local deck work is
 `cards,workspace,editing,analysis,plans,simulation,recommendations,sources,combos`.
-Add `archidekt`, `playgroup`, `intent`, or `facets` when those workflows are needed.
+Add `archidekt`, `playgroup`, `intent`, `facets`, or `collection` when those
+workflows are needed.
 
 ## Current Toolsets
 
@@ -25,6 +26,7 @@ Add `archidekt`, `playgroup`, `intent`, or `facets` when those workflows are nee
 | `analysis` | Deck summaries, structure, mana, cost, bracket, weak-spot, and re-evaluation tools. |
 | `archidekt` | Archidekt deck, folder, checkpoint, copy, and comparison tools. |
 | `cards` | Scryfall card search, single/batch lookup, image links, rulings, and prints. |
+| `collection` | Local collection get/set tools and workspace ownership diffs. |
 | `combos` | Combo lookup and win-route classification. |
 | `editing` | Deck and category mutation tools. |
 | `facets` | Card/deck facet read tools and local facet annotations. |
@@ -49,6 +51,7 @@ Add `archidekt`, `playgroup`, `intent`, or `facets` when those workflows are nee
 | Run goldfish and performance simulations | `workspace`, `simulation` |
 | Query recommendation sources | `workspace`, `recommendations`, `sources` |
 | Use Commander combo evidence | `workspace`, `recommendations`, `combos` |
+| Check owned cards for a workspace | `workspace`, `collection` |
 | Use Archidekt writeback and remote checkpoints | `workspace`, `archidekt` |
 | Use Playgroup.gg ranking context | `playgroup` |
 

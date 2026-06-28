@@ -55,6 +55,7 @@ public static class MtgMcpHost
         services.GetRequiredService<DeckCommanderCandidateSearchService>();
         services.GetRequiredService<DeckCommanderMetaService>();
         services.GetRequiredService<DeckPlaygroupMetaScoringService>();
+        services.GetRequiredService<CardCollectionService>();
         services.GetRequiredService<CommanderThemeResolver>();
         services.GetRequiredService<DeckRecommendationService>();
         services.GetRequiredService<DeckPlanService>();
@@ -62,6 +63,7 @@ public static class MtgMcpHost
         services.GetRequiredService<SimulationProfileCatalog>();
         services.GetRequiredService<CardFacetService>();
         services.GetRequiredService<ICardCatalog>();
+        services.GetRequiredService<ICardCollectionRepository>();
         services.GetRequiredService<IPriceSource>();
         services.GetRequiredService<IArchidektGateway>();
         services.GetRequiredService<IMoxfieldGateway>();
@@ -109,6 +111,11 @@ public static class MtgMcpHost
             MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
             return new JsonDeckPlanRepository(options.DataDir);
         });
+        builder.Services.AddSingleton<ICardCollectionRepository>(serviceProvider =>
+        {
+            MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
+            return new JsonCardCollectionRepository(options.DataDir);
+        });
         builder.Services.AddSingleton<ICorpusCache>(serviceProvider =>
         {
             MtgMcpOptions options = serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>().Value;
@@ -133,6 +140,7 @@ public static class MtgMcpHost
         builder.Services.AddTransient<DeckCommanderCandidateSearchService>();
         builder.Services.AddTransient<DeckCommanderMetaService>();
         builder.Services.AddTransient<DeckPlaygroupMetaScoringService>();
+        builder.Services.AddTransient<CardCollectionService>();
         builder.Services.AddTransient<CommanderThemeResolver>();
         builder.Services.AddTransient<DeckRecommendationService>();
         builder.Services.AddTransient<DeckPlanService>();

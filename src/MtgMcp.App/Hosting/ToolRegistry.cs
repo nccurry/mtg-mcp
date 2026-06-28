@@ -26,6 +26,7 @@ public static class ToolRegistry
     public static readonly Type[] ToolTypes =
     [
         typeof(CardTools),
+        typeof(CollectionTools),
         typeof(WorkspaceTools),
         typeof(DeckMutationTools),
         typeof(CategoryTools),
@@ -288,6 +289,11 @@ public static class ToolRegistry
             return "combos";
         }
 
+        if (name.StartsWith("collection_", StringComparison.Ordinal))
+        {
+            return "collection";
+        }
+
         if (name.StartsWith("playgroup_", StringComparison.Ordinal))
         {
             return "playgroup";
@@ -364,6 +370,7 @@ public static class ToolRegistry
             or "deck_plan_clone"
             or "deck_plan_delete"
             or "card_facets_set_annotations"
+            or "collection_set"
             or "archidekt_copy_workspace"
             ? ToolCapability.Plan
             : ToolCapability.Mutate;

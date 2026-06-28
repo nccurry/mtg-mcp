@@ -64,7 +64,7 @@ regressed:
 | P20 | Adapters | `SecretRedactor.Redact(string)` is coarse: whole-body false positives, keyword-less token false negatives | High (safety) | 6 |
 | P21 | Adapters | Archidekt JWT cached for process lifetime with no expiry/refresh | Medium | 6 |
 | P22 | Adapters | Scryfall caches use `ICorpusCache`; Archidekt card-id cache is documented; adapter pacing is host-owned | Low | 6 |
-| P23 | Missing | No collection/ownership awareness ("which of these do I own?") | Medium | 8 |
+| P23 | Done | Local collection/ownership awareness answers "which of these do I own?" for workspaces | Medium | 8 |
 | P24 | Missing | No toolset/subset selection mechanism | High | 1 |
 | P25 | Missing | Phase 8 Track 1 added `card_get_batch` for bounded multi-card hydration | Medium | 8 |
 | P26 | Missing | Phase 8 Track 1 added `card_get_image` link-only image/art access for multimodal clients | Low | 8 |
@@ -332,8 +332,9 @@ Problems addressed: P23, P25, P26, P27.
 
 Solutions (high level):
 - Collection/ownership awareness: a way to record owned cards and answer "which cards
-  in this deck/these candidates do I already own?" and budget-vs-owned framing. Keep it
-  local-first and provider-neutral.
+  in this deck do I already own?" with known missing replacement cost. Implemented as
+  local-first, provider-neutral name+quantity collection tools; candidate-row
+  enrichment remains future work.
 - Batch card lookup (`card_get_batch`) to hydrate many names in one call, using
   Scryfall's collection endpoint through the existing card catalog; reduces N tool calls
   to one.

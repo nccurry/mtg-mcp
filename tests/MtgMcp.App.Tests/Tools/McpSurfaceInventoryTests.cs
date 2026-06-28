@@ -18,6 +18,7 @@ public sealed class McpSurfaceInventoryTests
     private static readonly Type[] ToolTypes =
     [
         typeof(CardTools),
+        typeof(CollectionTools),
         typeof(WorkspaceTools),
         typeof(DeckMutationTools),
         typeof(CategoryTools),

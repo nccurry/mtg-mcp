@@ -126,7 +126,7 @@ JSON MCP client example:
 Set `MTGMCP__OPERATION_MODE` explicitly:
 
 - `read-only`: lookup and analysis only.
-- `plan`: lookup, analysis, metadata refresh, and saved edit plans.
+- `plan`: lookup, analysis, metadata refresh, local collection writes, and saved edit plans.
 - `apply`: deck edits, checkpoints, and Archidekt writeback. Writeback still
   requires opening the Archidekt workspace with writeback enabled.
 
@@ -135,6 +135,7 @@ Set `MTGMCP__OPERATION_MODE` explicitly:
 | Area | What the MCP exposes |
 | --- | --- |
 | Card data | Scryfall search with optional format legality filtering, single or batch fuzzy card lookup, image URI lookup, prints, rulings, and Scryfall query syntax guidance. |
+| Collection | Local name-and-quantity collection storage, pasted decklist import, and workspace ownership diffs with known missing replacement cost. |
 | Workspaces | Create, import, parse, export, open, validate, summarize, migrate, and update local or Archidekt-backed decks. |
 | Deck editing | Add, remove, move, categorize, annotate, and set quantities; create, preview, list, apply, or delete persisted edit plans. |
 | Moxfield | Import public or unlisted decks as generic local workspaces while preserving boards, tags, and print metadata when available. |
@@ -275,7 +276,7 @@ each abbreviated suffix.
 | --- | --- |
 | `MTGMCP__OPERATION_MODE` | `read-only`, `plan`, or `apply`. Set explicitly; the app default is `apply`. |
 | `MTGMCP__TOOLSETS` | Optional comma-separated advertised toolsets. Blank keeps the compatibility profile and advertises all tools allowed by the operation mode; see [`docs/toolsets.md`](docs/toolsets.md). |
-| `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, and source-fact cache. |
+| `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, card collections, and source-fact cache. |
 | `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Recommendation source depth: `minimal`, `balanced`, or `best`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MODE` | Source-fact cache: `persisted`, `memory`, or `off`. |
 | `MTGMCP__INTELLIGENCE__CACHE__MAX_BYTES` / `MAX_ENTRIES` | Persisted cache limits. |
@@ -484,6 +485,8 @@ Complete registered tool names:
   `commander_search_candidates`, `combo_get_details`,
   `combo_search_by_card`, `source_explain_card_signal`, `source_list`,
   `source_search_evidence`, `wincon_find_payoffs`.
+- Collection ownership: `collection_diff_workspace`, `collection_get`,
+  `collection_set`.
 - Deck analysis and simulation: `deck_analyze_best_practices`,
   `deck_analyze_combos`, `deck_analyze_commander_trends`,
   `deck_analyze_consistency`, `deck_analyze_cost`, `deck_analyze_draw_odds`,
@@ -637,7 +640,7 @@ For the full syntax, read `mtg://usage/deck-intent` or
 ## How It Works
 
 `mtg-mcp` runs as a stdio MCP server. It stores local workspaces, edit plans,
-annotations, and cache data under `MTGMCP__DATA_DIR`.
+card collections, annotations, and cache data under `MTGMCP__DATA_DIR`.
 
 Archidekt writeback has two gates: the server must run in `apply` mode, and the
 deck must be opened with writeback enabled. Multi-card Archidekt edits require
