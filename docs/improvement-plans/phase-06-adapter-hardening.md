@@ -19,10 +19,10 @@ concerns into Core.
 - **P19 - inconsistent error model.** Gateways throw redacted `HttpRequestException`;
   corpus providers still have inconsistent failure handling and should return typed,
   degrading statuses where possible.
-- **P20 (safety) - coarse secret redaction.** `SecretRedactor.Redact(string)`
-  (`Options.cs:240-256`) replaces the whole value if it merely contains a keyword like
-  "token"/"secret"; conversely a raw bearer/JWT without those keywords is not redacted. It
-  is applied to whole HTTP bodies in gateway errors.
+- **P20 (safety) - coarse secret redaction (addressed by 4.3).** Before the Phase 6
+  redaction slice, `SecretRedactor.Redact(string)` replaced the whole value if it merely
+  contained a keyword like "token"/"secret"; conversely a raw bearer/JWT without those
+  keywords was not redacted. Gateway error bodies still route through the redactor.
 - **P21 - Archidekt JWT never refreshes.** Cached on `DefaultRequestHeaders` for process
   lifetime; expiry causes silent write failures.
 - **P22 - duplication + divergent caches.** Re-implemented JSON readers, credentials-file
@@ -50,8 +50,10 @@ Non-goals:
 - Adapters already reference `Microsoft.Extensions.Http` (e.g.
   `MtgMcp.Scryfall.csproj:11`), so `Microsoft.Extensions.Http.Resilience` (Polly-backed)
   drops in naturally at the `AddHttpClient<>` registrations.
-- `SecretRedactor` has a precise key-based path for dicts/JSON (`Options.cs:261-322`) and a
-  coarse substring path for raw strings (`:240-256`). The coarse path is the risk.
+- `SecretRedactor` now has precise key-based redaction for dicts/JSON, raw JSON-body
+  parsing for string inputs, and token-shape redaction for authorization headers, JWTs,
+  URL credentials, and long high-entropy strings. The original coarse substring path has
+  been removed.
 - Auth flows: Archidekt username/password -> JWT cached for process lifetime, no expiry
   check; Playgroup API key set per request.
 - Caching: `ICorpusCache` (shared, configurable), Archidekt disk card-id cache, and a
@@ -61,6 +63,14 @@ Non-goals:
   state. Moxfield/Spellbook/Decklists have none.
 - Moxfield `curl` fallback on 403 is contained and injection-safe
   (`MoxfieldGateway.cs:84-157`).
+
+### Completed Phase 6 slices
+
+- **4.3 secret-redaction hardening:** complete. `SecretRedactor.Redact(string)` preserves
+  diagnostic prose such as "token expired", structurally redacts raw JSON response bodies,
+  and redacts bearer/JWT values, compact JWTs, URL userinfo, and long high-entropy tokens.
+  Focused Core tests cover false positives/negatives, and adapter fixture tests cover the
+  Archidekt, Moxfield, and Playgroup failed-response consumers.
 
 ## 4. Workstreams
 
@@ -90,6 +100,8 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   exception-to-error behavior remains; once it ships, it consumes these typed shapes.
 
 ### 4.3 Harden secret redaction (early, standalone PR)
+- Status: complete for the early safety slice; broader raw-body truncation policy can land
+  with the unified adapter error model in 4.2.
 - Replace/augment `Redact(string)` with precise matching: redact known token shapes (JWT
   `eyJ...`, `Bearer <token>`, long high-entropy strings, URL credentials) and known JSON
   keys, rather than whole-value substring keyword matching.

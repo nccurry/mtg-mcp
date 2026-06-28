@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace MtgMcp.Core;
 
@@ -223,6 +224,34 @@ public static class AnalysisDepths
 public static class SecretRedactor
 {
     /// <summary>
+    /// Replaces authorization header values while preserving the auth scheme for diagnostics.
+    /// </summary>
+    private static readonly Regex AuthorizationTokenPattern = new(
+        @"\b(?<scheme>Bearer|JWT)\s+(?<secret>[^\s""',;<>]+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Replaces compact JWTs even when they appear without an authorization scheme.
+    /// </summary>
+    private static readonly Regex JwtPattern = new(
+        @"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Replaces credentials embedded in absolute URLs while preserving the target host.
+    /// </summary>
+    private static readonly Regex UrlCredentialsPattern = new(
+        @"(?<scheme>[A-Za-z][A-Za-z0-9+.-]*://)(?<userinfo>[^/\s@]+)@",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Replaces long base64/base64url-like strings that are likely bearer API tokens.
+    /// </summary>
+    private static readonly Regex HighEntropyTokenPattern = new(
+        @"(?<![A-Za-z0-9+/=_-])(?=[A-Za-z0-9+/=_-]{32,})(?=[A-Za-z0-9+/=_-]*[A-Za-z])(?=[A-Za-z0-9+/=_-]*\d)[A-Za-z0-9+/=_-]{32,}(?![A-Za-z0-9+/=_-])",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
     /// Stores the secret names.
     /// </summary>
     private static readonly string[] SecretNames =
@@ -249,15 +278,12 @@ public static class SecretRedactor
             return value;
         }
 
-        foreach (string secretName in SecretNames)
+        if (TryRedactJson(value, out string? redactedJson))
         {
-            if (value.Contains(secretName, StringComparison.OrdinalIgnoreCase))
-            {
-                return "***REDACTED***";
-            }
+            return RedactStringContent(redactedJson!);
         }
 
-        return value;
+        return RedactStringContent(value);
     }
 
     /// <summary>
@@ -301,7 +327,7 @@ public static class SecretRedactor
                 .EnumerateArray()
                 .Select(item => RedactElement(item, key: null))
                 .ToList(),
-            JsonValueKind.String => element.GetString(),
+            JsonValueKind.String => RedactStringContent(element.GetString() ?? ""),
             JsonValueKind.Number => element.TryGetInt64(out long longValue)
                 ? longValue
                 : element.GetDouble(),
@@ -324,6 +350,46 @@ public static class SecretRedactor
         }
 
         return redacted;
+    }
+
+    /// <summary>
+    /// Redacts secret-keyed JSON when a raw response body is passed as text.
+    /// </summary>
+    private static bool TryRedactJson(string value, out string? redactedJson)
+    {
+        redactedJson = null;
+        string trimmed = value.TrimStart();
+        if (!trimmed.StartsWith('{') && !trimmed.StartsWith('['))
+        {
+            return false;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(value);
+            object? redacted = RedactElement(document.RootElement, key: null);
+            redactedJson = JsonSerializer.Serialize(redacted);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Redacts known secret shapes while preserving non-secret diagnostic text.
+    /// </summary>
+    private static string RedactStringContent(string value)
+    {
+        string redacted = AuthorizationTokenPattern.Replace(
+            value,
+            match => $"{match.Groups["scheme"].Value} ***REDACTED***");
+        redacted = JwtPattern.Replace(redacted, "***REDACTED***");
+        redacted = UrlCredentialsPattern.Replace(
+            redacted,
+            match => $"{match.Groups["scheme"].Value}***REDACTED***@");
+        return HighEntropyTokenPattern.Replace(redacted, "***REDACTED***");
     }
 
     /// <summary>

@@ -182,7 +182,7 @@ public sealed class MoxfieldGatewayTests
         RecordingHandler handler = new();
         handler.Get(
             "v3/decks/all/blocked",
-            "<html>challenge token secret</html>",
+            "<html>challenge token expired</html>",
             HttpStatusCode.Forbidden
         );
         MoxfieldGateway gateway = CreateGateway(handler);
@@ -193,8 +193,7 @@ public sealed class MoxfieldGatewayTests
 
         await act.Should()
             .ThrowAsync<HttpRequestException>()
-            .WithMessage("*403*Moxfield may have blocked anonymous API access*REDACTED*")
-            .Where(exception => !exception.Message.Contains("secret", StringComparison.OrdinalIgnoreCase));
+            .WithMessage("*403*Moxfield may have blocked anonymous API access*challenge token expired*");
     }
 
     /// <summary>

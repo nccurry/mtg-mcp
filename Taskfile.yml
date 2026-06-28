@@ -9,6 +9,8 @@ vars:
   BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
   CALIBRATION_PROJECT: tests/MtgMcp.Calibration/MtgMcp.Calibration.csproj
   CONFIGURATION: Release
+  # The pinned .NET preview SDK intermittently fails solution restore/build with parallel MSBuild.
+  MSBUILD_MAXCPUCOUNT: 1
   DOTNET: '{{if eq OS "windows"}}.dotnet/dotnet.exe{{else}}./.dotnet/dotnet{{end}}'
   POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}{{.TASKFILE_DIR}}/.tools/bin/pwsh -NoProfile{{end}}'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
@@ -176,13 +178,13 @@ tasks:
     desc: Restore NuGet packages
     deps: [setup:dotnet]
     cmds:
-      - '{{.DOTNET}} restore {{.SOLUTION}}'
+      - '{{.DOTNET}} restore {{.SOLUTION}} -m:{{.MSBUILD_MAXCPUCOUNT}}'
 
   build:
     desc: Build the solution
     deps: [restore]
     cmds:
-      - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-restore'
+      - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-restore -m:{{.MSBUILD_MAXCPUCOUNT}}'
 
   test:
     desc: Run all non-live tests
@@ -378,7 +380,7 @@ tasks:
     desc: Build with analyzers
     deps: [setup:dotnet]
     cmds:
-      - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror'
+      - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror -m:{{.MSBUILD_MAXCPUCOUNT}}'
 
   surface:report:
     desc: Print report-only MCP surface inventory metrics

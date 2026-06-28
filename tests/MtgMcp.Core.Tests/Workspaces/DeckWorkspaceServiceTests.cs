@@ -3264,7 +3264,25 @@ public sealed class DeckWorkspaceServiceTests
     [Fact]
     public void SecretRedactor_RedactsStringAndJsonValues()
     {
-        SecretRedactor.Redact("authorization: Bearer secret").Should().Be("***REDACTED***");
+        const string jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        const string longToken = "abcDEF1234567890abcDEF1234567890abcDEF12";
+
+        SecretRedactor.Redact("authorization: Bearer short-secret")
+            .Should()
+            .Be("authorization: Bearer ***REDACTED***");
+        SecretRedactor.Redact("authorization: JWT login-jwt")
+            .Should()
+            .Be("authorization: JWT ***REDACTED***");
+        SecretRedactor.Redact($"raw jwt {jwt}")
+            .Should()
+            .Be("raw jwt ***REDACTED***");
+        SecretRedactor.Redact($"api token {longToken}")
+            .Should()
+            .Be("api token ***REDACTED***");
+        SecretRedactor.Redact("https://user:password@example.test/decks")
+            .Should()
+            .Be("https://***REDACTED***@example.test/decks");
+        SecretRedactor.Redact("challenge token expired").Should().Be("challenge token expired");
         SecretRedactor.Redact("ordinary text").Should().Be("ordinary text");
 
         using JsonDocument document = JsonDocument.Parse(
@@ -3280,6 +3298,14 @@ public sealed class DeckWorkspaceServiceTests
             .Should()
             .Be("deck");
         redacted.RootElement.GetProperty("count").GetInt64().Should().Be(3);
+
+        string redactedBody = SecretRedactor.Redact(
+            """{ "token": "secret-token", "message": "token expired", "authorization": "Bearer short-secret" }"""
+        );
+        using JsonDocument redactedBodyDocument = JsonDocument.Parse(redactedBody);
+        redactedBodyDocument.RootElement.GetProperty("token").GetString().Should().Be("***REDACTED***");
+        redactedBodyDocument.RootElement.GetProperty("message").GetString().Should().Be("token expired");
+        redactedBodyDocument.RootElement.GetProperty("authorization").GetString().Should().Be("***REDACTED***");
     }
 
     /// <summary>
