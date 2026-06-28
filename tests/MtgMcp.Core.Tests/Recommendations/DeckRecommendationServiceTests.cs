@@ -851,7 +851,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        DeckBrainstormingService service = CreateBrainstormingService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
 
         BrainstormDeckImprovementsResult result = await service.BrainstormDeckImprovementsAsync(
             workspace.Id,

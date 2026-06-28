@@ -21,6 +21,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckBatchTuningService batchTuning;
 
     /// <summary>
+    /// Orchestrates unified deck brainstorming from focused collaborators.
+    /// </summary>
+    private readonly DeckBrainstormingService brainstorming;
+
+    /// <summary>
     /// Runs deck-aware catalog query workflows for direct query and goal-package recommendations.
     /// </summary>
     private readonly DeckQueryService queries;
@@ -113,6 +118,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         PlaygroupService? playgroups = null,
         DeckAnalysisMetrics? analysisMetrics = null,
         DeckBatchTuningService? batchTuning = null,
+        DeckBrainstormingService? brainstorming = null,
         DeckQueryService? queries = null,
         DeckGoalPackageService? goalPackages = null,
         DeckReplacementService? replacements = null,
@@ -147,6 +153,12 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.newCardSwaps = newCardSwaps ?? new DeckNewCardSwapReviewService(repository, cardCatalog, this.newCards);
         this.payoffSearch = payoffSearch ?? new DeckWinconPayoffSearchService(cardCatalog);
         this.commanderMeta = commanderMeta ?? new DeckCommanderMetaService(repository, cardCatalog, commanderMetaProvider, planRepository);
+        this.brainstorming = brainstorming ?? new DeckBrainstormingService(
+            analysis,
+            simulation,
+            this.commanderMeta,
+            this.newCards,
+            this.goalPackages);
         this.playgroupMeta = playgroupMeta ?? new DeckPlaygroupMetaScoringService(
             repository,
             cardCatalog,

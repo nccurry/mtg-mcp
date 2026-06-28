@@ -137,6 +137,9 @@ Status update after completed Phase 5 slices:
 - Bounded commander candidate discovery now lives in
   `src/MtgMcp.Core/Recommendations/DeckCommanderCandidateSearchService.cs`, with the
   recommendation facade preserving the current MCP-facing method.
+- Unified brainstorming orchestration now lives in
+  `src/MtgMcp.Core/Recommendations/DeckBrainstormingService.cs`, composing the focused
+  analysis, simulation, Commander meta, recent-card, and goal-package collaborators.
 
 ## 4. Workstreams
 

@@ -105,6 +105,48 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a brainstorming service from focused analysis, simulation, and recommendation collaborators.
+    /// </summary>
+    private static DeckBrainstormingService CreateBrainstormingService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckAnalysisService analysis = CreateAnalysisService(
+            repository,
+            cardCatalog,
+            comboCatalog: comboCatalog,
+            currentDateOverride: currentDateOverride);
+        DeckSimulationService simulation = CreateSimulationService(
+            repository,
+            cardCatalog,
+            archidektGateway,
+            planRepository,
+            currentDateOverride: currentDateOverride);
+        DeckCommanderMetaService commanderMeta = CreateCommanderMetaService(
+            repository,
+            cardCatalog,
+            planRepository: planRepository,
+            commanderMetaProvider: commanderMetaProvider);
+        DeckNewCardService newCards = CreateNewCardService(
+            repository,
+            cardCatalog,
+            cardTrendProvider: cardTrendProvider,
+            currentDateOverride: currentDateOverride);
+        DeckGoalPackageService goalPackages = CreateGoalPackageService(
+            repository,
+            cardCatalog,
+            planRepository: planRepository);
+        return new DeckBrainstormingService(analysis, simulation, commanderMeta, newCards, goalPackages);
+    }
+
+    /// <summary>
     /// Creates a deck query service with explicit storage and catalog dependencies.
     /// </summary>
     private static DeckQueryService CreateQueryService(
