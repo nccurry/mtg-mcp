@@ -182,6 +182,14 @@ public sealed partial class DeckRecommendationService
     }
 
     /// <summary>
+    /// Checks whether a known price is within a requested cap for remaining facade-owned workflows.
+    /// </summary>
+    private static bool IsPriceWithinBudget(decimal? price, decimal? maxPrice)
+    {
+        return !maxPrice.HasValue || (price.HasValue && price.Value <= maxPrice.Value);
+    }
+
+    /// <summary>
     /// Builds a plan operation that adds a recommended role card.
     /// </summary>
     private static DeckEditOperation CreateAddOperation(CardInfo card, string role, string rationale)

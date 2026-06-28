@@ -55,7 +55,7 @@ Non-goals:
   `DeckSimulationService.cs:42-46`) because the two-level base split doesn't cleanly cover
   who needs the gateway.
 
-Status update after Sub-PRs A/B:
+Status update after Sub-PRs A-I:
 - `JsonFileStore<T>` now lives in `src/MtgMcp.Core/Storage/JsonFileStore.cs`, and both
   JSON-backed repositories delegate path sanitization, atomic writes, reads, deletes, and
   listing to it.
@@ -93,6 +93,9 @@ Status update after Sub-PRs A/B:
 - Read-only card evaluation now lives in
   `src/MtgMcp.Core/Recommendations/DeckCardEvaluationService.cs`, with the facade method
   retained for the current recommendation tool wiring.
+- Recent-card radar now lives in
+  `src/MtgMcp.Core/Recommendations/DeckNewCardService.cs`, with the facade method retained
+  for current recommendation tool wiring.
 
 ## 4. Workstreams
 

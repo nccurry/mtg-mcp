@@ -17,13 +17,15 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     {
         DeckBestPracticeAnalysis best = await analysis.AnalyzeDeckBestPracticesAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         CommanderMetaReport meta = await CompareToCommanderMetaAsync(workspaceId, limit: 15, cancellationToken).ConfigureAwait(false);
-        NewCardsForDeckResult newCards = await FindNewCardsForDeckAsync(
-            workspaceId,
-            since: null,
-            setCode: null,
-            limit: 10,
-            maxPrice: budget > 0 ? budget : null,
-            cancellationToken).ConfigureAwait(false);
+        NewCardsForDeckResult newCardReport = await newCards
+            .FindNewCardsForDeckAsync(
+                workspaceId,
+                since: null,
+                setCode: null,
+                limit: 10,
+                maxPrice: budget > 0 ? budget : null,
+                cancellationToken)
+            .ConfigureAwait(false);
         GoalPackagePlanResult package = await goalPackages
             .FindCardsForDeckGoalAsync(
                 workspaceId,
@@ -56,14 +58,14 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             WorkspaceId = workspaceId,
             BestPractices = best,
             Meta = meta,
-            NewCards = newCards,
+            NewCards = newCardReport,
             GoalPackage = package,
             Combos = combos,
             Goldfish = goldfish
         };
         result.RankedRecommendations.AddRange(best.Recommendations.Take(5));
         result.RankedRecommendations.AddRange(package.Suggestions.Select(suggestion => $"Consider {suggestion.CardName}: {suggestion.Rationale}").Take(3));
-        result.RankedRecommendations.AddRange(newCards.Suggestions.Select(suggestion => $"Review new card {suggestion.CardName}: {suggestion.Rationale}").Take(3));
+        result.RankedRecommendations.AddRange(newCardReport.Suggestions.Select(suggestion => $"Review new card {suggestion.CardName}: {suggestion.Rationale}").Take(3));
         result.RankedRecommendations.AddRange(combos.NearMisses.Select(combo => $"Combo near miss: {combo.Name} needs {string.Join(", ", combo.MissingCards)}.").Take(2));
         result.RankedRecommendations = result.RankedRecommendations
             .Distinct(StringComparer.OrdinalIgnoreCase)

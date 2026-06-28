@@ -61,6 +61,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckCardEvaluationService cardEvaluation;
 
     /// <summary>
+    /// Finds recently released cards that fit a saved deck.
+    /// </summary>
+    private readonly DeckNewCardService newCards;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -102,7 +107,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckGoalPackageService? goalPackages = null,
         DeckReplacementService? replacements = null,
         DeckCategorySuggestionService? categories = null,
-        DeckCardEvaluationService? cardEvaluation = null
+        DeckCardEvaluationService? cardEvaluation = null,
+        DeckNewCardService? newCards = null
     )
         : base(
             repository,
@@ -122,6 +128,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.replacements = replacements ?? new DeckReplacementService(repository, cardCatalog, this.analysisMetrics, planRepository);
         this.categories = categories ?? new DeckCategorySuggestionService(repository, planRepository);
         this.cardEvaluation = cardEvaluation ?? new DeckCardEvaluationService(repository, cardCatalog);
+        this.newCards = newCards ?? new DeckNewCardService(repository, cardCatalog, cardTrendProvider, currentDateOverride);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
         this.playgroups = playgroups;

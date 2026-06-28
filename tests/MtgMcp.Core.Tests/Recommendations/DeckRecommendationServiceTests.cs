@@ -443,7 +443,7 @@ public sealed partial class DeckIntelligenceTests
             ]
         }, TestContext.Current.CancellationToken);
         FakeCardCatalog catalog = new();
-        DeckRecommendationService service = CreateRecommendationService(workspaces, catalog);
+        DeckNewCardService service = CreateNewCardService(workspaces, catalog);
 
         NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
             workspace.Id,
@@ -533,7 +533,7 @@ public sealed partial class DeckIntelligenceTests
             ]
         }, TestContext.Current.CancellationToken);
         FakeCardCatalog catalog = new();
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckNewCardService service = CreateNewCardService(
             workspaces,
             catalog,
             currentDateOverride: new DateOnly(2026, 5, 10));
@@ -666,7 +666,7 @@ public sealed partial class DeckIntelligenceTests
                 }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new TrendMetadataCatalog());
+        DeckNewCardService service = CreateNewCardService(workspaces, new TrendMetadataCatalog());
 
         NewCardsForDeckResult result = await service.FindNewCardsForDeckAsync(
             workspace.Id,
@@ -697,7 +697,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckNewCardService service = CreateNewCardService(
             workspaces,
             new FakeCardCatalog(),
             cardTrendProvider: new ThrowingCardTrendProvider());
@@ -766,7 +766,7 @@ public sealed partial class DeckIntelligenceTests
                 }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckNewCardService service = CreateNewCardService(
             workspaces,
             new FakeCardCatalog(),
             cardTrendProvider: new FixedCardTrendProvider(

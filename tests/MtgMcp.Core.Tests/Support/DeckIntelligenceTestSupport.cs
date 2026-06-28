@@ -194,6 +194,23 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a new-card service with explicit storage, catalog, and trend dependencies.
+    /// </summary>
+    private static DeckNewCardService CreateNewCardService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        return new DeckNewCardService(repository, cardCatalog, cardTrendProvider, currentDateOverride);
+    }
+
+    /// <summary>
     /// Creates a recommendation service with explicit analysis and simulation collaborators.
     /// </summary>
     private static DeckRecommendationService CreateRecommendationService(
