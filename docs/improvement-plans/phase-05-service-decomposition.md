@@ -55,7 +55,7 @@ Non-goals:
   `DeckSimulationService.cs:42-46`) because the two-level base split doesn't cleanly cover
   who needs the gateway.
 
-Status update after Sub-PRs A-I:
+Status update after completed Phase 5 slices:
 - `JsonFileStore<T>` now lives in `src/MtgMcp.Core/Storage/JsonFileStore.cs`, and both
   JSON-backed repositories delegate path sanitization, atomic writes, reads, deletes, and
   listing to it.
@@ -106,6 +106,12 @@ Status update after Sub-PRs A-I:
   now live in `src/MtgMcp.Core/Workspaces/DeckServiceHelpers.cs`. The base class keeps
   protected wrappers for existing partials, while extracted recommendation services call
   the shared helper directly.
+- Playgroup local-meta candidate scoring now lives in
+  `src/MtgMcp.Core/Recommendations/DeckPlaygroupMetaScoringService.cs`, with the facade
+  method retained for current MCP tool wiring. The focused tests now instantiate the
+  collaborator directly.
+- Category creation now lives in `src/MtgMcp.Core/Workspaces/DeckServiceHelpers.cs`,
+  with the base class retaining a protected wrapper for workspace and plan partials.
 
 ## 4. Workstreams
 

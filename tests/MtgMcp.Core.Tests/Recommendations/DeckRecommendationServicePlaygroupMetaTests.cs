@@ -71,14 +71,11 @@ public sealed partial class DeckIntelligenceTests
         FakeArchidektGateway archidekt = new();
         archidekt.ImportedDecksByInput["https://archidekt.com/decks/999/raggadragga"] = RaggadraggaDeck();
         PlaygroupService playgroups = new(new MetaPlaygroupGateway());
-        DeckAnalysisService analysis = CreateAnalysisService(workspaces, catalog, archidekt);
-        DeckSimulationService simulation = CreateSimulationService(workspaces, catalog, archidekt);
-        DeckRecommendationService service = new(
+        DeckPlaygroupMetaScoringService service = new(
             workspaces,
             catalog,
-            analysis,
-            simulation,
             archidektGateway: archidekt,
+            analysisMetrics: new DeckAnalysisMetrics(catalog),
             simulationProfiles: SimulationProfileCatalog.CreateDefault(),
             playgroups: playgroups);
 
@@ -157,14 +154,11 @@ public sealed partial class DeckIntelligenceTests
         FakeArchidektGateway archidekt = new();
         archidekt.ImportedDecksByInput["https://archidekt.com/decks/999/raggadragga"] = RaggadraggaDeck();
         PlaygroupService playgroups = new(new MetaPlaygroupGateway());
-        DeckAnalysisService analysis = CreateAnalysisService(workspaces, catalog, archidekt);
-        DeckSimulationService simulation = CreateSimulationService(workspaces, catalog, archidekt);
-        DeckRecommendationService service = new(
+        DeckPlaygroupMetaScoringService service = new(
             workspaces,
             catalog,
-            analysis,
-            simulation,
             archidektGateway: archidekt,
+            analysisMetrics: new DeckAnalysisMetrics(catalog),
             simulationProfiles: SimulationProfileCatalog.CreateDefault(),
             playgroups: playgroups);
         string[] candidates = Enumerable.Range(1, 20)
@@ -249,14 +243,11 @@ public sealed partial class DeckIntelligenceTests
             DeckCount = 4,
             DistinctDecklistUrls = 2,
         });
-        DeckAnalysisService analysis = CreateAnalysisService(workspaces, catalog, archidekt);
-        DeckSimulationService simulation = CreateSimulationService(workspaces, catalog, archidekt);
-        DeckRecommendationService service = new(
+        DeckPlaygroupMetaScoringService service = new(
             workspaces,
             catalog,
-            analysis,
-            simulation,
             archidektGateway: archidekt,
+            analysisMetrics: new DeckAnalysisMetrics(catalog),
             simulationProfiles: SimulationProfileCatalog.CreateDefault(),
             playgroups: playgroups);
 

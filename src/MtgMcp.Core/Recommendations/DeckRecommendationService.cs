@@ -6,11 +6,6 @@ namespace MtgMcp.Core;
 public sealed partial class DeckRecommendationService : DeckServiceBase
 {
     /// <summary>
-    /// Imports Archidekt decks when recommendation scoring compares against Playgroup meta.
-    /// </summary>
-    private readonly IArchidektGateway? archidektGateway;
-
-    /// <summary>
     /// Supplies corpus-backed card evidence, exemplar decks, and discussions.
     /// </summary>
     private readonly IReadOnlyList<ICorpusSignalProvider> corpusSignalProviders;
@@ -61,6 +56,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckCommanderMetaService commanderMeta;
 
     /// <summary>
+    /// Scores candidate cards against Playgroup-derived local meta pressure.
+    /// </summary>
+    private readonly DeckPlaygroupMetaScoringService playgroupMeta;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -69,16 +69,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// Provides simulation workflows used by combined recommendation reports.
     /// </summary>
     private readonly DeckSimulationService simulation;
-
-    /// <summary>
-    /// Resolves simulation profiles for recommendation-side scoring workflows.
-    /// </summary>
-    private readonly SimulationProfileCatalog simulationProfiles;
-
-    /// <summary>
-    /// Supplies Playgroup-derived local meta context when configured.
-    /// </summary>
-    private readonly PlaygroupService? playgroups;
 
     /// <summary>
     /// Creates a recommendation service backed by explicit analysis and simulation collaborators.
@@ -104,7 +94,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckCategorySuggestionService? categories = null,
         DeckCardEvaluationService? cardEvaluation = null,
         DeckNewCardService? newCards = null,
-        DeckCommanderMetaService? commanderMeta = null
+        DeckCommanderMetaService? commanderMeta = null,
+        DeckPlaygroupMetaScoringService? playgroupMeta = null
     )
         : base(
             repository,
@@ -112,10 +103,10 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             planRepository,
             currentDateOverride)
     {
-        this.archidektGateway = archidektGateway;
         this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
         this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
+        SimulationProfileCatalog resolvedSimulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
         this.batchTuning = batchTuning ?? new DeckBatchTuningService(repository, analysis, simulation);
         this.queries = queries ?? new DeckQueryService(repository, cardCatalog, planRepository);
         this.goalPackages = goalPackages ?? new DeckGoalPackageService(repository, this.queries);
@@ -124,8 +115,13 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.cardEvaluation = cardEvaluation ?? new DeckCardEvaluationService(repository, cardCatalog);
         this.newCards = newCards ?? new DeckNewCardService(repository, cardCatalog, cardTrendProvider, currentDateOverride);
         this.commanderMeta = commanderMeta ?? new DeckCommanderMetaService(repository, cardCatalog, commanderMetaProvider, planRepository);
+        this.playgroupMeta = playgroupMeta ?? new DeckPlaygroupMetaScoringService(
+            repository,
+            cardCatalog,
+            archidektGateway,
+            this.analysisMetrics,
+            resolvedSimulationProfiles,
+            playgroups);
         this.simulation = simulation;
-        this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
-        this.playgroups = playgroups;
     }
 }

@@ -45,6 +45,36 @@ internal static class DeckServiceHelpers
     }
 
     /// <summary>
+    /// Ensures a category row exists in the workspace and returns it.
+    /// </summary>
+    public static DeckCategory EnsureCategory(DeckWorkspace workspace, string category)
+    {
+        DeckCategory? existing = workspace.Categories.FirstOrDefault(value =>
+            value.Name.Equals(category, StringComparison.OrdinalIgnoreCase)
+        );
+        if (existing is not null)
+        {
+            if (DeckDefaults.IsCommanderCategory(existing.Name))
+            {
+                existing.IsPremier = true;
+            }
+
+            return existing;
+        }
+
+        DeckCategory created = new()
+        {
+            Name = category,
+            IncludedInDeck = !DeckDefaults.IsDefaultExcludedCategory(category),
+            IncludedInPrice = !DeckDefaults.IsDefaultPriceExcludedCategory(category),
+            IsPremier = DeckDefaults.IsCommanderCategory(category),
+        };
+
+        workspace.Categories.Add(created);
+        return created;
+    }
+
+    /// <summary>
     /// Finds a dominant theme from deck role tags.
     /// </summary>
     public static string? DominantTheme(DeckWorkspace workspace)
