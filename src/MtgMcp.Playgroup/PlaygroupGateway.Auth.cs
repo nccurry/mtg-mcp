@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MtgMcp.Core;
 
 namespace MtgMcp.Playgroup;
@@ -84,98 +83,16 @@ public sealed partial class PlaygroupGateway
     /// </summary>
     private static PlaygroupCredentials LoadCredentialsFile(string credentialsFile)
     {
-        string text;
-        try
-        {
-            text = File.ReadAllText(credentialsFile);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new InvalidDataException(
-                $"Playgroup credentials file '{credentialsFile}' could not be read: {exception.Message}",
-                exception
-            );
-        }
-
-        string trimmed = text.TrimStart();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            return new PlaygroupCredentials();
-        }
-
-        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
-        {
-            return ParseJsonCredentials(credentialsFile, text);
-        }
-
-        return ParseKeyValueCredentials(credentialsFile, text);
-    }
-
-    /// <summary>
-    /// Parses a JSON credentials file while avoiding secret-bearing parse output.
-    /// </summary>
-    private static PlaygroupCredentials ParseJsonCredentials(string credentialsFile, string text)
-    {
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(text);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                throw new InvalidDataException(
-                    $"Playgroup credentials file '{credentialsFile}' must contain a JSON object or key=value lines."
-                );
-            }
-
-            PlaygroupCredentials credentials = new();
-            foreach (JsonProperty property in document.RootElement.EnumerateObject())
-            {
-                string? value = property.Value.ValueKind == JsonValueKind.String
-                    ? property.Value.GetString()
-                    : property.Value.GetRawText();
-                ApplyCredentialValue(credentials, property.Name, value ?? "");
-            }
-
-            return credentials;
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidDataException(
-                $"Playgroup credentials file '{credentialsFile}' looks like JSON but could not be parsed. "
-                    + "JSON requires double quotes around keys and string values; escape backslashes as \\\\ "
-                    + "and double quotes as \\\". To avoid JSON escaping, use key=value lines instead.",
-                exception
-            );
-        }
-    }
-
-    /// <summary>
-    /// Parses key-value credential lines.
-    /// </summary>
-    private static PlaygroupCredentials ParseKeyValueCredentials(string credentialsFile, string text)
-    {
+        IReadOnlyDictionary<string, string> values = MtgMcpCredentialsFile.Read(
+            credentialsFile,
+            providerName: "Playgroup",
+            keyValueExample: "apiKey=value, accessToken=value, or token=value",
+            jsonObjectRequirement: "must contain a JSON object or key=value lines.",
+            jsonArrayLooksLikeJson: true,
+            requireJsonStringValues: false);
         PlaygroupCredentials credentials = new();
-        using StringReader reader = new(text);
-        int lineNumber = 0;
-        while (reader.ReadLine() is { } line)
+        foreach ((string key, string value) in values)
         {
-            lineNumber++;
-            string trimmed = line.Trim();
-            if (trimmed.Length == 0 || trimmed.StartsWith('#') || trimmed.StartsWith(';'))
-            {
-                continue;
-            }
-
-            int separator = line.IndexOf('=');
-            if (separator <= 0)
-            {
-                throw new InvalidDataException(
-                    $"Playgroup credentials file '{credentialsFile}' is not valid JSON or key=value format. "
-                        + $"Line {lineNumber} must look like apiKey=value, accessToken=value, or token=value."
-                );
-            }
-
-            string key = line[..separator].Trim();
-            string value = line[(separator + 1)..].Trim();
             ApplyCredentialValue(credentials, key, value);
         }
 

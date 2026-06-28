@@ -26,8 +26,7 @@ concerns into Core.
 - **P21 - Archidekt JWT never refreshes (addressed by 4.4).** Before the Phase 6 JWT
   slice, the token was cached on `DefaultRequestHeaders` for process lifetime; expiry
   could cause write failures until the process restarted.
-- **P22 - duplication + divergent caches.** Re-implemented credentials-file parsing;
-  three caches (shared `ICorpusCache`,
+- **P22 - duplication + divergent caches.** Three caches (shared `ICorpusCache`,
   Archidekt's bespoke disk card-id cache, Scryfall trend/meta in-memory `ProviderCache`
   that ignores the configured cache policy); process-static mutable rate-limit state.
 
@@ -87,6 +86,10 @@ Non-goals:
   string, numeric, boolean, nested-object, collection-envelope, and string-array readers
   while preserving strict numeric parsing for Scryfall and tolerant numeric-string parsing
   for Archidekt, Moxfield, and Playgroup.
+- **4.5 credentials-file parser dedupe:** complete. `MtgMcpCredentialsFile` centralizes
+  safe file reading, JSON-vs-key-value detection, redacted parse errors, comment skipping,
+  and line diagnostics while leaving provider-specific key policy in Archidekt and
+  Playgroup.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -143,11 +146,11 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   failed request after refresh. Do not log token contents.
 
 ### 4.5 De-duplicate + unify
-- Status: rate-limit retry-delay parsing, JSON readers, and `FirstNonEmpty` are complete;
-  credentials parsing, cache unification, and limiter replacement remain open.
+- Status: rate-limit retry-delay parsing, JSON readers, credentials-file parsing, and
+  `FirstNonEmpty` are complete; cache unification and limiter replacement remain open.
 - Extract shared helpers (a small adapter-support library or Core-adjacent utilities, not
-  in Core if it must stay package-free): credentials-file parsing (JSON or `key=value`).
-  JSON element readers, `FirstNonEmpty`, and rate-limit `Retry-After` / body parsing are
+  in Core if it must stay package-free): JSON element readers, credentials-file parsing
+  (JSON or `key=value`), `FirstNonEmpty`, and rate-limit `Retry-After` / body parsing are
   now shared Core utilities with no adapter package dependencies.
 - Unify caching: route the Scryfall trend/meta `ProviderCache` through `ICorpusCache` so it
   honors the configured mode/TTLs; document why the Archidekt card-id cache is separate (it

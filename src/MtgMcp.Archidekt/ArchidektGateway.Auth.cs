@@ -346,109 +346,16 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private static ArchidektCredentials LoadCredentialsFile(string credentialsFile)
     {
-        string text;
-        try
-        {
-            text = File.ReadAllText(credentialsFile);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new InvalidDataException(
-                $"Archidekt credentials file '{credentialsFile}' could not be read: {exception.Message}",
-                exception
-            );
-        }
-
-        string trimmed = text.TrimStart();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            return new ArchidektCredentials();
-        }
-
-        if (trimmed.StartsWith('{'))
-        {
-            try
-            {
-                return LoadJsonCredentialsFile(credentialsFile, text);
-            }
-            catch (JsonException exception)
-            {
-                throw new InvalidDataException(
-                    $"Archidekt credentials file '{credentialsFile}' looks like JSON but could not be parsed. "
-                        + "JSON requires double quotes around keys and string values; escape backslashes as \\\\ "
-                        + "and double quotes as \\\". To avoid JSON escaping, use key=value lines instead.",
-                    exception
-                );
-            }
-        }
-
-        return ParseKeyValueCredentials(credentialsFile, text);
-    }
-
-    /// <summary>
-    /// Loads username/password credentials from a JSON credentials file.
-    /// </summary>
-    private static ArchidektCredentials LoadJsonCredentialsFile(string credentialsFile, string text)
-    {
-        using JsonDocument document = JsonDocument.Parse(text);
-        if (document.RootElement.ValueKind != JsonValueKind.Object)
-        {
-            throw new InvalidDataException(
-                $"Archidekt credentials file '{credentialsFile}' must contain a JSON object."
-            );
-        }
-
+        IReadOnlyDictionary<string, string> values = MtgMcpCredentialsFile.Read(
+            credentialsFile,
+            providerName: "Archidekt",
+            keyValueExample: "username=value or password=value",
+            jsonObjectRequirement: "must contain a JSON object.",
+            jsonArrayLooksLikeJson: false,
+            requireJsonStringValues: true);
         ArchidektCredentials credentials = new();
-        foreach (JsonProperty property in document.RootElement.EnumerateObject())
+        foreach ((string key, string value) in values)
         {
-            string value = property.Value.ValueKind == JsonValueKind.String
-                ? property.Value.GetString()
-                    ?? throw new InvalidDataException(
-                        $"Archidekt credentials file '{credentialsFile}' fields must be strings."
-                    )
-                : throw new InvalidDataException(
-                    $"Archidekt credentials file '{credentialsFile}' fields must be strings."
-                );
-
-            if (!ApplyCredentialValue(credentials, property.Name, value))
-            {
-                throw new InvalidDataException(
-                    $"Archidekt credentials file '{credentialsFile}' only supports username and password fields."
-                );
-            }
-        }
-
-        return credentials;
-    }
-
-    /// <summary>
-    /// Parses key-value credentials text.
-    /// </summary>
-    private static ArchidektCredentials ParseKeyValueCredentials(string credentialsFile, string text)
-    {
-        ArchidektCredentials credentials = new();
-        using StringReader reader = new(text);
-        int lineNumber = 0;
-        while (reader.ReadLine() is { } line)
-        {
-            lineNumber++;
-            string trimmed = line.Trim();
-            if (trimmed.Length == 0 || trimmed.StartsWith('#') || trimmed.StartsWith(';'))
-            {
-                continue;
-            }
-
-            int separator = line.IndexOf('=');
-            if (separator <= 0)
-            {
-                throw new InvalidDataException(
-                    $"Archidekt credentials file '{credentialsFile}' is not valid JSON or key=value format. "
-                        + $"Line {lineNumber} must look like username=value or password=value."
-                );
-            }
-
-            string key = line[..separator].Trim();
-            string value = line[(separator + 1)..].Trim();
             if (!ApplyCredentialValue(credentials, key, value))
             {
                 throw new InvalidDataException(
