@@ -38,6 +38,16 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     private readonly SemaphoreSlim cardIdCacheLock = new(1, 1);
 
     /// <summary>
+    /// Coordinates Archidekt request pacing for this host registration.
+    /// </summary>
+    private readonly MtgMcpRequestPacer requestPacer;
+
+    /// <summary>
+    /// Tracks whether this gateway owns its fallback request pacer.
+    /// </summary>
+    private readonly bool ownsRequestPacer;
+
+    /// <summary>
     /// Caches credentials loaded from configuration or the credentials file.
     /// </summary>
     private ArchidektCredentials? credentials;
@@ -75,10 +85,15 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     /// <summary>
     /// Creates a gateway that sends JSON requests to Archidekt.
     /// </summary>
-    public ArchidektGateway(HttpClient httpClient, IOptions<ArchidektOptions> options)
+    public ArchidektGateway(
+        HttpClient httpClient,
+        IOptions<ArchidektOptions> options,
+        MtgMcpRequestPacer? requestPacer = null)
     {
         this.httpClient = httpClient;
         this.options = options.Value;
+        this.requestPacer = requestPacer ?? new MtgMcpRequestPacer();
+        ownsRequestPacer = requestPacer is null;
         this.httpClient.BaseAddress ??= this.options.BaseAddress;
         MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, this.options.UserAgent);
         this.httpClient.DefaultRequestHeaders.Accept.Add(
@@ -93,5 +108,9 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     {
         authLock.Dispose();
         cardIdCacheLock.Dispose();
+        if (ownsRequestPacer)
+        {
+            requestPacer.Dispose();
+        }
     }
 }

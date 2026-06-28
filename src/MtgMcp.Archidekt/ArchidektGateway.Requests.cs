@@ -26,16 +26,6 @@ public sealed partial class ArchidektGateway
     private static readonly TimeSpan TransientWriteRetryDelay = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// Coordinates configured request pacing across Archidekt gateways in this process.
-    /// </summary>
-    private static readonly SemaphoreSlim RequestRateGate = new(1, 1);
-
-    /// <summary>
-    /// Stores recent Archidekt request timestamps for configured request pacing.
-    /// </summary>
-    private static readonly Queue<DateTimeOffset> RequestRateTimestamps = new();
-
-    /// <summary>
     /// Sends an authenticated GET request and parses a JSON response.
     /// </summary>
     private async Task<JsonDocument> GetJsonAsync(string uri, CancellationToken cancellationToken)
@@ -195,7 +185,7 @@ public sealed partial class ArchidektGateway
     }
 
     /// <summary>
-    /// Waits until the configured process-local Archidekt request budget has room.
+    /// Waits until the configured Archidekt request budget has room.
     /// </summary>
     private async Task WaitForConfiguredRateLimitAsync(CancellationToken cancellationToken)
     {
@@ -207,35 +197,8 @@ public sealed partial class ArchidektGateway
         }
 
         TimeSpan window = TimeSpan.FromSeconds(Math.Max(1, rateLimit.WindowSeconds));
-        while (true)
-        {
-            TimeSpan? delay = null;
-            await RequestRateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                DateTimeOffset now = DateTimeOffset.UtcNow;
-                while (RequestRateTimestamps.TryPeek(out DateTimeOffset oldest)
-                    && now - oldest >= window)
-                {
-                    RequestRateTimestamps.Dequeue();
-                }
-
-                if (RequestRateTimestamps.Count < maxRequests)
-                {
-                    RequestRateTimestamps.Enqueue(now);
-                    return;
-                }
-
-                delay = window - (now - RequestRateTimestamps.Peek()) + TimeSpan.FromMilliseconds(50);
-            }
-            finally
-            {
-                RequestRateGate.Release();
-            }
-
-            await Task.Delay(delay.Value < TimeSpan.Zero ? TimeSpan.Zero : delay.Value, cancellationToken)
-                .ConfigureAwait(false);
-        }
+        await requestPacer.WaitForSlidingWindowAsync(maxRequests, window, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

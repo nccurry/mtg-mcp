@@ -61,14 +61,14 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
     private readonly MtgMcpOptions mtgOptions;
 
     /// <summary>
-    /// Coordinates process-wide Scryfall request pacing across client instances.
+    /// Coordinates Scryfall request pacing for this host registration.
     /// </summary>
-    private static readonly SemaphoreSlim RequestLock = new(1, 1);
+    private readonly MtgMcpRequestPacer requestPacer;
 
     /// <summary>
-    /// Stores the last request at across all Scryfall client instances.
+    /// Tracks whether this client owns its fallback request pacer.
     /// </summary>
-    private static DateTimeOffset lastRequestAt = DateTimeOffset.MinValue;
+    private readonly bool ownsRequestPacer;
 
     /// <summary>
     /// Tracks request-local cache bypass scopes for refresh operations.
@@ -82,12 +82,15 @@ public sealed partial class ScryfallClient : ICardCatalog, IScryfallCacheBypass,
         HttpClient httpClient,
         IOptions<ScryfallOptions> options,
         ICorpusCache? cache = null,
-        IOptions<MtgMcpOptions>? mtgOptions = null)
+        IOptions<MtgMcpOptions>? mtgOptions = null,
+        MtgMcpRequestPacer? requestPacer = null)
     {
         this.httpClient = httpClient;
         this.options = options.Value;
         this.cache = cache ?? new NullCorpusCache();
         this.mtgOptions = mtgOptions?.Value ?? new MtgMcpOptions();
+        this.requestPacer = requestPacer ?? new MtgMcpRequestPacer();
+        ownsRequestPacer = requestPacer is null;
 
         this.httpClient.BaseAddress ??= this.options.BaseAddress;
         MtgMcpHttpDefaults.ApplyUserAgent(this.httpClient, this.options.UserAgent);

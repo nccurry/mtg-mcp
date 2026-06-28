@@ -230,26 +230,12 @@ public sealed partial class ScryfallClient
     }
 
     /// <summary>
-    /// Applies process-wide Scryfall pacing before an outbound request.
+    /// Applies configured Scryfall pacing before an outbound request.
     /// </summary>
     private async Task DelayIfNeededAsync(CancellationToken cancellationToken)
     {
-        await RequestLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            TimeSpan elapsed = DateTimeOffset.UtcNow - lastRequestAt;
-            if (elapsed < options.MinimumDelay)
-            {
-                await Task.Delay(options.MinimumDelay - elapsed, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            lastRequestAt = DateTimeOffset.UtcNow;
-        }
-        finally
-        {
-            RequestLock.Release();
-        }
+        await requestPacer.WaitForMinimumDelayAsync(options.MinimumDelay, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -257,6 +243,10 @@ public sealed partial class ScryfallClient
     /// </summary>
     public void Dispose()
     {
+        if (ownsRequestPacer)
+        {
+            requestPacer.Dispose();
+        }
     }
 
     /// <summary>

@@ -63,7 +63,7 @@ regressed:
 | P19 | Adapters | Inconsistent error model (throw-redacted vs `EnsureSuccessStatusCode` vs status object) | Medium | 6 |
 | P20 | Adapters | `SecretRedactor.Redact(string)` is coarse: whole-body false positives, keyword-less token false negatives | High (safety) | 6 |
 | P21 | Adapters | Archidekt JWT cached for process lifetime with no expiry/refresh | Medium | 6 |
-| P22 | Adapters | Scryfall caches now use `ICorpusCache`; Archidekt card-id cache documented; process-static limiter remains | Low | 6 |
+| P22 | Adapters | Scryfall caches use `ICorpusCache`; Archidekt card-id cache is documented; adapter pacing is host-owned | Low | 6 |
 | P23 | Missing | No collection/ownership awareness ("which of these do I own?") | Medium | 8 |
 | P24 | Missing | No toolset/subset selection mechanism | High | 1 |
 | P25 | Missing | No batch card lookup (`card_get` is one-at-a-time) | Medium | 8 |
@@ -274,8 +274,8 @@ Solutions (high level):
 - Shared helpers for JSON element readers, credentials-file parsing, `FirstNonEmpty`, and
   rate-limit body parsing are already in Core-adjacent utilities. Scryfall trend/meta now
   use the shared cache policy; Archidekt's card-id cache is documented as adapter-local
-  mutation support state. Next, consider a shared `RateLimiter` abstraction instead of
-  process-static mutable state.
+  mutation support state. Scryfall and Archidekt pacing now share a host-owned request
+  pacer instead of adapter process-static mutable state.
 - Re-evaluate or document the Moxfield `curl` fallback (external-binary dependency,
   fingerprint-fragile) and keep it disable-able and injection-safe.
 

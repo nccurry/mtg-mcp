@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using MtgMcp.Core;
 
 namespace MtgMcp.Scryfall;
@@ -18,7 +19,20 @@ public static class ScryfallServiceCollectionExtensions
     )
     {
         services.Configure<ScryfallOptions>(configuration.GetSection("MtgMcp:Scryfall"));
-        services.AddHttpClient<ICardCatalog, ScryfallClient>();
+        services.AddSingleton<ScryfallRequestPacer>();
+        services.AddHttpClient(nameof(ScryfallClient));
+        services.AddTransient<ICardCatalog>(serviceProvider =>
+        {
+            HttpClient httpClient = serviceProvider
+                .GetRequiredService<IHttpClientFactory>()
+                .CreateClient(nameof(ScryfallClient));
+            return new ScryfallClient(
+                httpClient,
+                serviceProvider.GetRequiredService<IOptions<ScryfallOptions>>(),
+                serviceProvider.GetRequiredService<ICorpusCache>(),
+                serviceProvider.GetRequiredService<IOptions<MtgMcpOptions>>(),
+                serviceProvider.GetRequiredService<ScryfallRequestPacer>());
+        });
         services.AddTransient<ICardTrendProvider, ScryfallCardTrendProvider>();
         services.AddTransient<ICommanderMetaProvider, ScryfallCommanderMetaProvider>();
         services.AddTransient<ICorpusSignalProvider, ScryfallCorpusSignalProvider>();

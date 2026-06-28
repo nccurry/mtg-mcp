@@ -28,7 +28,8 @@ concerns into Core.
   could cause write failures until the process restarted.
 - **P22 - duplication + divergent caches.** Scryfall trend/meta now route through the
   shared `ICorpusCache`; Archidekt's adapter-local card-id cache is documented as mutation
-  support state, leaving process-static mutable rate-limit state to replace.
+  support state; Scryfall and Archidekt request pacing now use host-owned pacers instead
+  of adapter process-static mutable state.
 
 ## 2. Goals / non-goals
 
@@ -61,8 +62,9 @@ Non-goals:
   corpus signals, and Scryfall trend/meta facts. Archidekt's separate disk card-id cache
   is documented as mutation support state rather than recommendation source facts.
 - Rate limiting: Scryfall proactive-by-default (125ms) + 429 handling; Archidekt optional
-  sliding window (off by default) + 429/throttle body parsing; both use process-static
-  state. Retry-After and body-marker delay parsing now share `MtgMcpHttpRetry`.
+  sliding window (off by default) + 429/throttle body parsing; both use host-owned
+  `MtgMcpRequestPacer` instances instead of adapter static state. Retry-After and
+  body-marker delay parsing now share `MtgMcpHttpRetry`.
   Moxfield/Spellbook/Decklists have none.
 - Moxfield `curl` fallback on 403 is contained, injection-safe, bounded by curl
   `--max-time 30`, disable-able, and documented in `docs/adapters.md`.
@@ -79,8 +81,8 @@ Non-goals:
   retries a failed authenticated request once after a successful re-login on 401.
 - **4.5 rate-limit parser dedupe:** complete for Scryfall/Archidekt retry-delay parsing.
   `MtgMcpHttpRetry` centralizes Retry-After header parsing, provider body-marker parsing,
-  and negative-delay clamping. Archidekt cache disposition and process-local limiter
-  replacement are still open.
+  and negative-delay clamping. Archidekt cache disposition and proactive limiter
+  replacement are complete.
 - **4.5 common text helper dedupe:** complete. `MtgMcpText.FirstNonEmpty` replaces the
   repeated local implementations in Core services and adapter mapping/auth paths.
 - **4.5 JSON reader dedupe:** complete. `MtgMcpJson` centralizes common `JsonElement`
@@ -98,6 +100,9 @@ Non-goals:
   document why this cache stays adapter-local: it stores mutation support state for
   Archidekt-specific card ids, upgrades legacy entries, and evicts stale ids on mutation
   rejection.
+- **4.5 limiter replacement:** complete for the existing proactive pacing paths. Scryfall
+  and Archidekt now use adapter-specific singleton `MtgMcpRequestPacer` registrations, so
+  pacing state is host-owned rather than process-static.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -156,7 +161,7 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 ### 4.5 De-duplicate + unify
 - Status: rate-limit retry-delay parsing, JSON readers, credentials-file parsing,
   `FirstNonEmpty`, Scryfall trend/meta cache unification, and Archidekt card-id cache
-  disposition are complete; limiter replacement remains open.
+  disposition are complete; proactive Scryfall/Archidekt limiter replacement is complete.
 - Extract shared helpers (a small adapter-support library or Core-adjacent utilities, not
   in Core if it must stay package-free): JSON element readers, credentials-file parsing
   (JSON or `key=value`), `FirstNonEmpty`, and rate-limit `Retry-After` / body parsing are
@@ -164,8 +169,9 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 - Unify caching: Scryfall trend/meta now route through `ICorpusCache` and honor the
   configured mode/TTLs; Archidekt's card-id cache is documented as adapter-local mutation
   support state, not source facts.
-- Replace process-static rate-limit state with `System.Threading.RateLimiting` limiters
-  registered per host, removing global mutable statics.
+- Replace process-static rate-limit state with host-registered `MtgMcpRequestPacer`
+  instances, removing global mutable statics. Revisit `System.Threading.RateLimiting`
+  during the broader HTTP resilience pipeline if richer policies become useful.
 
 ### 4.6 Moxfield curl fallback
 - Status: complete for the documentation/options slice.
@@ -180,9 +186,9 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 
 ## 5. Files to create / change
 
-- Create: `Directory.Packages.props` (+`Microsoft.Extensions.Http.Resilience`,
-  `System.Threading.RateLimiting`), a shared `AddMtgMcpHttpResilience` extension, shared
-  adapter-support helpers. `docs/adapters.md` is complete for the 4.6/4.7 slice.
+- Create: `Directory.Packages.props` (+`Microsoft.Extensions.Http.Resilience`), a shared
+  `AddMtgMcpHttpResilience` extension, shared adapter-support helpers. `docs/adapters.md`
+  is complete for the 4.6/4.7 and Archidekt cache-disposition slices.
 - Change: each adapter's `Add*` registration and request paths; `ArchidektGateway.Auth.cs`
   (refresh); `Core/Options.cs` `SecretRedactor`; Scryfall optional-context cache wiring;
   per-adapter UA usage.
@@ -206,7 +212,7 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   redaction alone.
 - Archidekt re-authenticates on expiry.
 - Shared helpers replace the duplicated readers/parsers; caches are unified or documented;
-  rate limiting uses a shared limiter.
+  existing proactive pacing uses host-owned limiter state.
 
 ## 8. Risks & mitigations
 
