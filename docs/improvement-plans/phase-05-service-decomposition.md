@@ -134,6 +134,9 @@ Status update after completed Phase 5 slices:
   recommendation facade retaining the current MCP-facing methods.
 - Source-only Scryfall URI resolution is shared by corpus and commander evidence through
   `src/MtgMcp.Core/Recommendations/CorpusEvidenceTableBuilder.cs`.
+- Bounded commander candidate discovery now lives in
+  `src/MtgMcp.Core/Recommendations/DeckCommanderCandidateSearchService.cs`, with the
+  recommendation facade preserving the current MCP-facing method.
 
 ## 4. Workstreams
 

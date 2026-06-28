@@ -280,6 +280,29 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a Commander candidate service with explicit catalog and evidence dependencies.
+    /// </summary>
+    private static DeckCommanderCandidateSearchService CreateCommanderCandidateSearchService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckCommanderEvidenceService commanderEvidence = CreateCommanderEvidenceService(
+            repository,
+            cardCatalog,
+            comboCatalog: comboCatalog,
+            currentDateOverride: currentDateOverride,
+            corpusSignalProviders: corpusSignalProviders);
+        return new DeckCommanderCandidateSearchService(cardCatalog, commanderEvidence);
+    }
+
+    /// <summary>
     /// Creates a Commander meta service with explicit storage, catalog, and provider dependencies.
     /// </summary>
     private static DeckCommanderMetaService CreateCommanderMetaService(

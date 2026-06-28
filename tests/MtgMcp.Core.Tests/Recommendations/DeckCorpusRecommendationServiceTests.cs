@@ -184,7 +184,7 @@ public sealed partial class DeckIntelligenceTests
                 ["Roon of the Hidden Realm"] = 2_800,
             },
             failingCommanders: ["Glissa Sunslayer"]);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderCandidateSearchService service = CreateCommanderCandidateSearchService(
             new InMemoryRepository(),
             catalog,
             corpusSignalProviders: [provider]);

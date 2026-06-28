@@ -66,6 +66,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckCommanderEvidenceService commanderEvidence;
 
     /// <summary>
+    /// Finds bounded Commander candidates using catalog and source-backed deck counts.
+    /// </summary>
+    private readonly DeckCommanderCandidateSearchService commanderCandidates;
+
+    /// <summary>
     /// Compares decks against Commander metagame context and plans missing popular cards.
     /// </summary>
     private readonly DeckCommanderMetaService commanderMeta;
@@ -119,7 +124,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckCommanderMetaService? commanderMeta = null,
         DeckPlaygroupMetaScoringService? playgroupMeta = null,
         CommanderThemeResolver? commanderThemes = null,
-        DeckCommanderEvidenceService? commanderEvidence = null
+        DeckCommanderEvidenceService? commanderEvidence = null,
+        DeckCommanderCandidateSearchService? commanderCandidates = null
     )
         : base(
             repository,
@@ -155,6 +161,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             this.corpusSignalProviders,
             this.commanderThemes,
             this.payoffSearch);
+        this.commanderCandidates = commanderCandidates ?? new DeckCommanderCandidateSearchService(
+            cardCatalog,
+            this.commanderEvidence);
         this.simulation = simulation;
     }
 }
