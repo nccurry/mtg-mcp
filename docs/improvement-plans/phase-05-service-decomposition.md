@@ -126,6 +126,9 @@ Status update after completed Phase 5 slices:
 - Recent-card swap review and deterministic cut scoring now live in
   `src/MtgMcp.Core/Recommendations/DeckNewCardSwapReviewService.cs`, with the
   recommendation facade retaining the current MCP-facing method.
+- Win-condition payoff search and route-specific Scryfall query building now live in
+  `src/MtgMcp.Core/Recommendations/DeckWinconPayoffSearchService.cs`, with commander
+  evidence bundles using the collaborator directly.
 
 ## 4. Workstreams
 

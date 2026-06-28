@@ -233,6 +233,23 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a win-condition payoff search service with an explicit catalog dependency.
+    /// </summary>
+    private static DeckWinconPayoffSearchService CreateWinconPayoffSearchService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        return new DeckWinconPayoffSearchService(cardCatalog);
+    }
+
+    /// <summary>
     /// Creates a Commander meta service with explicit storage, catalog, and provider dependencies.
     /// </summary>
     private static DeckCommanderMetaService CreateCommanderMetaService(

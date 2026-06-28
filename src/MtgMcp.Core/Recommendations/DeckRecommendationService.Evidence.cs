@@ -145,64 +145,13 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         int limit,
         CancellationToken cancellationToken)
     {
-        string normalizedRoute = NormalizeRoute(route);
-        if (!WinRouteLabels.All.Contains(normalizedRoute, StringComparer.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("route must be one of the approved win-route labels.", nameof(route));
-        }
-
-        string normalizedFormat = NormalizeFormat(format);
-        HashSet<string> colors = NormalizeColorIdentity(colorIdentity);
-        string query = BuildPayoffQuery(normalizedRoute, colors, normalizedFormat, maxPrice);
-        int boundedLimit = Math.Clamp(limit, 1, 50);
-        IReadOnlyList<CardSearchResult> searchResults = await CardCatalog.SearchCardsAsync(
-            query,
-            Math.Clamp(boundedLimit * 3, 10, 100),
+        return await payoffSearch.FindWinconPayoffsAsync(
+            route,
+            colorIdentity,
+            format,
+            maxPrice,
+            limit,
             cancellationToken).ConfigureAwait(false);
-        IReadOnlyDictionary<string, CardInfo> details = await CardCatalog.GetCardsByNamesAsync(
-            searchResults.Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            cancellationToken).ConfigureAwait(false);
-
-        WinconPayoffSearchResult result = new()
-        {
-            Route = normalizedRoute,
-            ColorIdentity = colors.Order(StringComparer.OrdinalIgnoreCase).ToList(),
-            Format = normalizedFormat,
-            ScryfallQuery = query
-        };
-        foreach (CardSearchResult searchResult in searchResults)
-        {
-            if (!details.TryGetValue(searchResult.Name, out CardInfo? card))
-            {
-                continue;
-            }
-
-            bool legal = IsLegalInFormat(card, normalizedFormat);
-            bool colorOk = IsInDeckColorIdentity(card, colorIdentityKnown: true, colors);
-            if (!legal || !colorOk || (maxPrice.HasValue && ReadUsdPrice(card).GetValueOrDefault(decimal.MaxValue) > maxPrice.Value))
-            {
-                continue;
-            }
-
-            result.Candidates.Add(new WinconPayoffCandidate
-            {
-                CardName = card.Name,
-                WhyItMatches = $"{card.Name} matched the fixed {normalizedRoute} Scryfall payoff query.",
-                LegalInFormat = legal,
-                ColorIdentityOk = colorOk,
-                Price = ReadUsdPrice(card),
-                EdhrecRank = card.EdhrecRank,
-                ScryfallUri = card.ScryfallUri,
-                Metadata = BuildMetadata("scryfall", "payoff-candidate-search", card.ScryfallUri, confidence: 0.70)
-            });
-            if (result.Candidates.Count >= boundedLimit)
-            {
-                break;
-            }
-        }
-
-        result.Notes.Add("Payoff rows are Scryfall-query-derived candidates, not popularity evidence unless joined with aggregate source rows.");
-        return result;
     }
 
     /// <summary>
@@ -258,7 +207,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         {
             foreach (string payoffRoute in payoffRoutes.Take(5))
             {
-                payoffSearches.Add(await FindWinconPayoffsAsync(
+                payoffSearches.Add(await payoffSearch.FindWinconPayoffsAsync(
                     payoffRoute,
                     commanderColorIdentity,
                     "commander",
@@ -583,70 +532,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         return deckCount != 0
             ? deckCount
             : string.Compare(left.TagName, right.TagName, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Normalizes a route label.
-    /// </summary>
-    private static string NormalizeRoute(string route)
-    {
-        return route.Trim().ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// Normalizes color identity text such as WUBRG, U,B, or colorless.
-    /// </summary>
-    private static HashSet<string> NormalizeColorIdentity(string colorIdentity)
-    {
-        HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
-        foreach (char character in colorIdentity.ToUpperInvariant())
-        {
-            string color = character.ToString();
-            if ("WUBRG".Contains(color, StringComparison.Ordinal))
-            {
-                colors.Add(color);
-            }
-        }
-
-        return colors;
-    }
-
-    /// <summary>
-    /// Builds a Scryfall query for payoff candidates.
-    /// </summary>
-    private static string BuildPayoffQuery(string route, HashSet<string> colors, string format, decimal? maxPrice)
-    {
-        string expression = route switch
-        {
-            WinRouteLabels.InfiniteMana => "(o:\"{X}\" or o:\"x damage\" or o:\"draw x\" or o:\"each opponent loses x\")",
-            WinRouteLabels.Storm => "(o:storm or o:\"copy target instant\" or o:\"copy target sorcery\" or o:\"whenever you cast\")",
-            WinRouteLabels.DrawDeck => "(o:\"win the game\" or o:\"if you would draw\" or o:\"no cards in your library\")",
-            WinRouteLabels.SelfMill => "(o:\"win the game\" o:graveyard or o:\"no cards in your library\")",
-            WinRouteLabels.Etb => "(o:\"whenever\" o:\"enters the battlefield\" o:\"each opponent\")",
-            WinRouteLabels.Tokens => "(o:\"tokens you control\" or o:\"creatures you control get\" or o:\"whenever you create\")",
-            WinRouteLabels.Aristocrats => "(o:\"whenever\" o:dies o:\"each opponent loses\" or o:sacrifice o:\"each opponent loses\")",
-            WinRouteLabels.Combat or WinRouteLabels.ValueCombat => "(o:\"creatures you control get\" or o:\"extra combat\" or o:trample)",
-            WinRouteLabels.OpponentMill => "(o:\"each opponent mills\" or o:\"target opponent mills\")",
-            WinRouteLabels.ExtraTurns => "(o:\"extra turn\" or o:\"additional turn\")",
-            WinRouteLabels.AlternateWin => "o:\"win the game\"",
-            _ => ""
-        };
-        List<string> parts = [expression, $"legal:{format}"];
-        if (colors.Count > 0)
-        {
-            parts.Add($"id<={string.Concat(colors.Order(StringComparer.OrdinalIgnoreCase)).ToLowerInvariant()}");
-        }
-        else
-        {
-            parts.Add("id<=c");
-        }
-
-        if (maxPrice.HasValue)
-        {
-            parts.Add($"usd<={maxPrice.Value:0.##}");
-        }
-
-        return string.Join(' ', parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     /// <summary>

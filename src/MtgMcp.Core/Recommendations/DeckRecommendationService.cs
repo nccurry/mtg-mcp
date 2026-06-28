@@ -56,6 +56,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckNewCardSwapReviewService newCardSwaps;
 
     /// <summary>
+    /// Finds deterministic payoff candidates for win-condition routes.
+    /// </summary>
+    private readonly DeckWinconPayoffSearchService payoffSearch;
+
+    /// <summary>
     /// Compares decks against Commander metagame context and plans missing popular cards.
     /// </summary>
     private readonly DeckCommanderMetaService commanderMeta;
@@ -105,6 +110,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckCardEvaluationService? cardEvaluation = null,
         DeckNewCardService? newCards = null,
         DeckNewCardSwapReviewService? newCardSwaps = null,
+        DeckWinconPayoffSearchService? payoffSearch = null,
         DeckCommanderMetaService? commanderMeta = null,
         DeckPlaygroupMetaScoringService? playgroupMeta = null,
         CommanderThemeResolver? commanderThemes = null
@@ -127,6 +133,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.cardEvaluation = cardEvaluation ?? new DeckCardEvaluationService(repository, cardCatalog);
         this.newCards = newCards ?? new DeckNewCardService(repository, cardCatalog, cardTrendProvider, currentDateOverride);
         this.newCardSwaps = newCardSwaps ?? new DeckNewCardSwapReviewService(repository, cardCatalog, this.newCards);
+        this.payoffSearch = payoffSearch ?? new DeckWinconPayoffSearchService(cardCatalog);
         this.commanderMeta = commanderMeta ?? new DeckCommanderMetaService(repository, cardCatalog, commanderMetaProvider, planRepository);
         this.playgroupMeta = playgroupMeta ?? new DeckPlaygroupMetaScoringService(
             repository,

@@ -253,7 +253,7 @@ public sealed partial class DeckIntelligenceTests
     [Fact]
     public async Task FindWinconPayoffsAsync_ReturnsScryfallQueryDerivedCandidates()
     {
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckWinconPayoffSearchService service = CreateWinconPayoffSearchService(
             new InMemoryRepository(),
             new FakeCardCatalog());
 
