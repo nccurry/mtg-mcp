@@ -38,7 +38,7 @@ public sealed partial class DeckPlanService
             Warnings = sourcePlan.Warnings.ToList()
         };
         clone.Warnings.Add($"Cloned from workspace {sourceWorkspace.Id}; validate preview before applying.");
-        return await RequirePlanRepository().SaveAsync(clone, cancellationToken).ConfigureAwait(false);
+        return await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(clone, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

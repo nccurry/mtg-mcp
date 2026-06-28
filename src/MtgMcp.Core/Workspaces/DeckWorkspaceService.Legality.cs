@@ -24,7 +24,7 @@ public sealed partial class DeckWorkspaceService
     public DeckLegalityAudit ValidateLegalitySnapshot(DeckWorkspace workspace, bool includeExcluded)
     {
         string format = NormalizeLegalityFormat(workspace.Format);
-        List<DeckCard> included = DeckCategoryInclusion.IncludedCards(workspace).ToList();
+        List<DeckCard> included = DeckServiceHelpers.IncludedCards(workspace).ToList();
         List<DeckCard> auditedCards = includeExcluded ? workspace.Cards.ToList() : included;
         CommandZoneContext commandZone = CommandZoneContext.FromWorkspace(workspace);
         DeckLegalityAudit audit = new()

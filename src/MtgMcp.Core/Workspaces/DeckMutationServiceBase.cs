@@ -36,8 +36,7 @@ public abstract partial class DeckMutationServiceBase : DeckServiceBase
     /// </summary>
     protected IArchidektGateway RequireArchidektGateway()
     {
-        return archidektGateway
-            ?? throw new InvalidOperationException("Archidekt support is not configured.");
+        return DeckServiceHelpers.RequireArchidektGateway(archidektGateway);
     }
 
     /// <summary>

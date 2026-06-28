@@ -205,7 +205,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
             result.InputKind = "workspace";
             result.WorkspaceId = workspace.Id;
-            foreach (DeckCard deckCard in IncludedCards(workspace))
+            foreach (DeckCard deckCard in DeckServiceHelpers.IncludedCards(workspace))
             {
                 result.Classifications.Add(WinRouteClassifier.ClassifyCard(CreateCardInfoFromDeckCard(deckCard, format)));
             }
@@ -243,7 +243,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         ComboCatalogQuery query = new()
         {
-            CardNames = IncludedCards(workspace).Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            CardNames = DeckServiceHelpers.IncludedCards(workspace).Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             Commander = FindCommanderName(workspace),
             Format = workspace.Format,
             Refresh = refresh
@@ -321,7 +321,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     private static DeckComboReport BuildHeuristicComboReport(DeckWorkspace workspace)
     {
         DeckComboReport report = new() { WorkspaceId = workspace.Id };
-        List<DeckCard> comboCards = IncludedCards(workspace)
+        List<DeckCard> comboCards = DeckServiceHelpers.IncludedCards(workspace)
             .Where(card => DeckRoleClassifier.Classify(card).Tags.Any(tag => tag is DeckTags.ComboPiece or DeckTags.ComboEnabler))
             .ToList();
         int distinctComboCards = comboCards.Select(card => card.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count();
@@ -420,8 +420,8 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// </summary>
     private static ComboPressureEstimate BuildComboPressure(DeckWorkspace workspace, DeckComboReport report)
     {
-        int tutorCount = IncludedCards(workspace).Count(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase));
-        int comboTagCount = IncludedCards(workspace)
+        int tutorCount = DeckServiceHelpers.IncludedCards(workspace).Count(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase));
+        int comboTagCount = DeckServiceHelpers.IncludedCards(workspace)
             .Where(card => DeckRoleClassifier.Classify(card).Tags.Contains(DeckTags.ComboPiece))
             .Sum(card => Math.Max(0, card.Quantity));
         double score = Math.Clamp((report.Combos.Count * 0.30) + (report.NearMisses.Count * 0.12) + (tutorCount * 0.06) + (comboTagCount * 0.08), 0, 1);

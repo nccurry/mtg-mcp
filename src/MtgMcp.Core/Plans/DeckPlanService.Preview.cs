@@ -45,7 +45,7 @@ public sealed partial class DeckPlanService
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken)
             .ConfigureAwait(false);
-        DeckEditPlan plan = CreatePlan(
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(
             workspace,
             string.IsNullOrWhiteSpace(name) ? "Transient card package preview" : name.Trim(),
             "transient-card-package");
@@ -176,7 +176,7 @@ public sealed partial class DeckPlanService
         {
             try
             {
-                gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+                gameChangers = await analysisMetrics.FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (InvalidOperationException exception)
             {
@@ -208,8 +208,8 @@ public sealed partial class DeckPlanService
             PlanId = plan.PlanId,
             WorkspaceId = plan.WorkspaceId,
             ResolveAddedCards = resolveAddedCards,
-            Before = BuildMetricSnapshot(workspace, gameChangers, gameChangerDataAvailable, gameChangerNote),
-            After = BuildMetricSnapshot(preview, gameChangers, gameChangerDataAvailable, gameChangerNote),
+            Before = analysisMetrics.BuildMetricSnapshot(workspace, gameChangers, gameChangerDataAvailable, gameChangerNote),
+            After = analysisMetrics.BuildMetricSnapshot(preview, gameChangers, gameChangerDataAvailable, gameChangerNote),
             Warnings = warnings
         };
 
@@ -288,7 +288,7 @@ public sealed partial class DeckPlanService
     private static int CountIncludedCards(DeckWorkspace workspace)
     {
         int total = 0;
-        foreach (DeckCard card in DeckCategoryInclusion.IncludedCards(workspace))
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace))
         {
             total += Math.Max(0, card.Quantity);
         }

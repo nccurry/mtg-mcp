@@ -42,8 +42,8 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         DeckHeuristicProfile selectedProfile = profiles.FirstOrDefault(value => value.Id.Equals(selectedProfileId, StringComparison.OrdinalIgnoreCase))
             ?? profiles[0];
         DeckNeedProfile needProfile = BuildNeedProfile(workspace, intent, selectedProfile);
-        ManaBaseAnalysis mana = AnalyzeManaBase(workspace);
-        DeckConsistencyAnalysis consistency = AnalyzeDeckConsistency(workspace);
+        ManaBaseAnalysis mana = metrics.AnalyzeManaBase(workspace);
+        DeckConsistencyAnalysis consistency = metrics.AnalyzeDeckConsistency(workspace);
         DeckAnalysis deck = DeckAnalyzer.Analyze(workspace);
         DeckBestPracticeAnalysis analysis = new()
         {
@@ -79,13 +79,13 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
 
         analysis.Risks.AddRange(mana.Risks);
         analysis.Risks.AddRange(consistency.Risks);
-        if (Count(deck.RoleCounts, DeckRoles.Wincons) + Count(deck.TagCounts, DeckTags.Finishers) == 0)
+        if (DeckServiceHelpers.Count(deck.RoleCounts, DeckRoles.Wincons) + DeckServiceHelpers.Count(deck.TagCounts, DeckTags.Finishers) == 0)
         {
             analysis.Risks.Add("No clear win condition or finisher package was detected.");
             analysis.Recommendations.Add("Add or tag finishers so win-turn projection can identify the deck's closing plan.");
         }
 
-        if (Count(deck.RoleCounts, DeckRoles.Interaction) + Count(deck.RoleCounts, DeckRoles.BoardWipes) >= 8)
+        if (DeckServiceHelpers.Count(deck.RoleCounts, DeckRoles.Interaction) + DeckServiceHelpers.Count(deck.RoleCounts, DeckRoles.BoardWipes) >= 8)
         {
             analysis.Strengths.Add("Interaction coverage appears reasonable for a Commander deck.");
         }
@@ -407,7 +407,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             penalty += CompareNeed(
                 comparison,
                 "Mana Sources",
-                Count(deck.RoleCounts, DeckRoles.Lands) + Count(deck.RoleCounts, DeckRoles.Ramp),
+                DeckServiceHelpers.Count(deck.RoleCounts, DeckRoles.Lands) + DeckServiceHelpers.Count(deck.RoleCounts, DeckRoles.Ramp),
                 50,
                 null);
         }

@@ -128,7 +128,7 @@ public sealed partial class DeckSimulationService
                 {
                     try
                     {
-                        gateway = RequireArchidektGateway();
+                        gateway = DeckServiceHelpers.RequireArchidektGateway(archidektGateway);
                     }
                     catch (Exception exception) when (exception is not OperationCanceledException)
                     {
@@ -325,7 +325,7 @@ public sealed partial class DeckSimulationService
             {
                 try
                 {
-                    gateway = RequireArchidektGateway();
+                    gateway = DeckServiceHelpers.RequireArchidektGateway(archidektGateway);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
@@ -580,7 +580,7 @@ public sealed partial class DeckSimulationService
             WorkspaceId = workspace.Id,
             Name = workspace.Name,
             ArchidektDeckId = workspace.ArchidektDeckId,
-            IncludedCards = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
+            IncludedCards = DeckServiceHelpers.IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
             Goldfish = goldfish,
             DeltaFromActive = delta,
         };

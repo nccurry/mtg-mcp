@@ -379,7 +379,7 @@ public sealed partial class DeckWorkspaceService
             Modifier = source.Modifier,
             Companion = source.Companion,
             FlippedDefault = source.FlippedDefault,
-            Snapshot = CopyCardSnapshot(source.Snapshot),
+            Snapshot = DeckServiceHelpers.CopyCardSnapshot(source.Snapshot),
             Metadata = new Dictionary<string, string>(source.Metadata, StringComparer.OrdinalIgnoreCase),
         };
         DeckCategoryOrdering.SetPrimary(clone, toCategory);
@@ -438,7 +438,7 @@ public sealed partial class DeckWorkspaceService
 
         if (cardInfo is not null)
         {
-            ApplyCardSnapshot(card, cardInfo);
+            DeckServiceHelpers.ApplyCardSnapshot(card, cardInfo);
         }
 
         DeckCategoryOrdering.Normalize(card, category);
@@ -519,7 +519,7 @@ public sealed partial class DeckWorkspaceService
             return;
         }
 
-        int includedCount = DeckCategoryInclusion.IncludedCards(workspace)
+        int includedCount = DeckServiceHelpers.IncludedCards(workspace)
             .Sum(card => Math.Max(0, card.Quantity));
         int projectedCount = includedCount + Math.Max(1, quantity);
         if (projectedCount <= CommanderDeckSizeLimit)
@@ -560,7 +560,7 @@ public sealed partial class DeckWorkspaceService
             return;
         }
 
-        int includedCount = DeckCategoryInclusion.IncludedCards(workspace)
+        int includedCount = DeckServiceHelpers.IncludedCards(workspace)
             .Sum(card => Math.Max(0, card.Quantity));
         int projectedCount = includedCount + includedAdditions;
         if (projectedCount <= CommanderDeckSizeLimit)

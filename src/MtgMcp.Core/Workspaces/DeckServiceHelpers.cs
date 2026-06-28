@@ -3,9 +3,9 @@ using System.Globalization;
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Shares role, count, snapshot, and plan helper methods across deck services.
+/// Provides shared card snapshot, role-count, and plan helpers without putting them on the service base.
 /// </summary>
-public abstract partial class DeckServiceBase
+internal static class DeckServiceHelpers
 {
     /// <summary>
     /// Refreshes Scryfall-backed snapshots after this age even when required fields are present.
@@ -15,17 +15,29 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Refreshes cached card snapshots for cards matching a normalized scope.
     /// </summary>
-    protected async Task<DeckNormalizationResult> NormalizeWorkspaceCardsAsync(
+    public static async Task<DeckNormalizationResult> NormalizeWorkspaceCardsAsync(
+        ICardCatalog cardCatalog,
         DeckWorkspace workspace,
         string normalizedScope,
         CancellationToken cancellationToken)
     {
-        List<DeckCard> targetCards = workspace.Cards
-            .Where(card => ShouldNormalize(card, workspace, normalizedScope))
-            .ToList();
+        List<DeckCard> targetCards = [];
+        foreach (DeckCard card in workspace.Cards)
+        {
+            if (ShouldNormalize(card, workspace, normalizedScope))
+            {
+                targetCards.Add(card);
+            }
+        }
 
-        IReadOnlyDictionary<string, CardInfo> cardsByName = await CardCatalog
-            .GetCardsByNamesAsync(targetCards.Select(card => card.Name).ToList(), cancellationToken)
+        List<string> targetNames = [];
+        foreach (DeckCard card in targetCards)
+        {
+            targetNames.Add(card.Name);
+        }
+
+        IReadOnlyDictionary<string, CardInfo> cardsByName = await cardCatalog
+            .GetCardsByNamesAsync(targetNames, cancellationToken)
             .ConfigureAwait(false);
 
         List<string> missingCards = [];
@@ -73,7 +85,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Determines whether a card should be normalized.
     /// </summary>
-    protected static bool ShouldNormalize(DeckCard card, DeckWorkspace workspace, string scope)
+    public static bool ShouldNormalize(DeckCard card, DeckWorkspace workspace, string scope)
     {
         return scope switch
         {
@@ -90,7 +102,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Checks whether a card lacks a resolvable Scryfall-backed snapshot identity.
     /// </summary>
-    protected static bool IsMissingScryfallSnapshot(DeckCard card)
+    public static bool IsMissingScryfallSnapshot(DeckCard card)
     {
         return card.Snapshot is null || string.IsNullOrWhiteSpace(card.ScryfallId);
     }
@@ -98,7 +110,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Checks whether a snapshot exists but is incomplete or past its freshness window.
     /// </summary>
-    protected static bool IsStaleSnapshot(DeckCard card, DeckWorkspace workspace)
+    public static bool IsStaleSnapshot(DeckCard card, DeckWorkspace workspace)
     {
         CardSnapshot snapshot = GetSnapshot(card);
         if (!IsScryfallSnapshot(snapshot))
@@ -208,7 +220,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Enumerates included workspace cards.
     /// </summary>
-    protected static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
+    public static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
     {
         return DeckCategoryInclusion.IncludedCards(workspace);
     }
@@ -216,7 +228,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Determines whether a card is included in the deck.
     /// </summary>
-    protected static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
+    public static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
     {
         return DeckCategoryInclusion.IsIncludedInDeck(workspace, card);
     }
@@ -224,17 +236,24 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Parses draw odds targets.
     /// </summary>
-    protected static List<string> ParseTargets(string? targets, DeckIntent? intent)
+    public static List<string> ParseTargets(string? targets, DeckIntent? intent)
     {
         if (string.IsNullOrWhiteSpace(targets))
         {
             if (intent?.Targets.Count > 0)
             {
-                return intent.Targets.Keys
-                    .Where(target => DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase)
-                        || DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                List<string> parsedTargets = [];
+                foreach (string target in intent.Targets.Keys)
+                {
+                    bool knownTarget = DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase)
+                        || DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase);
+                    if (knownTarget && !parsedTargets.Contains(target, StringComparer.OrdinalIgnoreCase))
+                    {
+                        parsedTargets.Add(target);
+                    }
+                }
+
+                return parsedTargets;
             }
 
             return
@@ -248,17 +267,23 @@ public abstract partial class DeckServiceBase
             ];
         }
 
-        return targets
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(target => !string.IsNullOrWhiteSpace(target))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<string> requestedTargets = [];
+        foreach (string target in targets.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!string.IsNullOrWhiteSpace(target)
+                && !requestedTargets.Contains(target, StringComparer.OrdinalIgnoreCase))
+            {
+                requestedTargets.Add(target);
+            }
+        }
+
+        return requestedTargets;
     }
 
     /// <summary>
     /// Adds summary notes.
     /// </summary>
-    protected static void AddSummaryNotes(DeckPlanSummary summary, DeckIntent? intent)
+    public static void AddSummaryNotes(DeckPlanSummary summary, DeckIntent? intent)
     {
         int lands = Count(summary.RoleCounts, DeckRoles.Lands);
         int ramp = Count(summary.RoleCounts, DeckRoles.Ramp);
@@ -317,7 +342,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Reads the minimum target for a role.
     /// </summary>
-    protected static int TargetMinimum(DeckIntent? intent, string role, int fallback)
+    public static int TargetMinimum(DeckIntent? intent, string role, int fallback)
     {
         return intent?.Targets.TryGetValue(role, out DeckIntentTarget? target) == true
             ? target.Minimum ?? fallback
@@ -327,22 +352,39 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Suggests a role for a category.
     /// </summary>
-    protected static string SuggestRoleForCategory(DeckWorkspace workspace, string category)
+    public static string SuggestRoleForCategory(DeckWorkspace workspace, string category)
     {
         Dictionary<string, int> counts = new(StringComparer.OrdinalIgnoreCase);
-        foreach (DeckCard card in workspace.Cards.Where(card => (card.Categories ?? []).Any(value => value.Equals(category, StringComparison.OrdinalIgnoreCase))))
+        foreach (DeckCard card in workspace.Cards)
         {
+            bool matchesCategory = false;
+            foreach (string cardCategory in card.Categories ?? [])
+            {
+                if (cardCategory.Equals(category, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchesCategory = true;
+                    break;
+                }
+            }
+
+            if (!matchesCategory)
+            {
+                continue;
+            }
+
             CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
             AddCount(counts, assignment.PrimaryRole, card.Quantity);
         }
 
-        return counts.OrderByDescending(pair => pair.Value).FirstOrDefault().Key ?? DeckRoles.Utility;
+        List<KeyValuePair<string, int>> sortedCounts = counts.ToList();
+        sortedCounts.Sort((left, right) => right.Value.CompareTo(left.Value));
+        return sortedCounts.Count == 0 ? DeckRoles.Utility : sortedCounts[0].Key;
     }
 
     /// <summary>
     /// Creates a deck edit plan.
     /// </summary>
-    protected static DeckEditPlan CreatePlan(DeckWorkspace workspace, string name, string kind)
+    public static DeckEditPlan CreatePlan(DeckWorkspace workspace, string name, string kind)
     {
         return new DeckEditPlan
         {
@@ -356,15 +398,122 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Gets a card snapshot safely.
     /// </summary>
-    protected static CardSnapshot GetSnapshot(DeckCard card)
+    public static CardSnapshot GetSnapshot(DeckCard card)
     {
         return card.Snapshot ?? new CardSnapshot();
     }
 
     /// <summary>
+    /// Copies catalog card facts into a workspace snapshot.
+    /// </summary>
+    public static void ApplyCardSnapshot(DeckCard card, CardInfo cardInfo)
+    {
+        card.Snapshot = new CardSnapshot
+        {
+            ManaCost = cardInfo.ManaCost,
+            Layout = cardInfo.Layout,
+            TypeLine = cardInfo.TypeLine,
+            ManaValue = cardInfo.ManaValue,
+            OracleText = cardInfo.OracleText,
+            Power = cardInfo.Power,
+            Toughness = cardInfo.Toughness,
+            Loyalty = cardInfo.Loyalty,
+            Defense = cardInfo.Defense,
+            ColorIdentity = cardInfo.ColorIdentity.ToList(),
+            Set = cardInfo.Set,
+            CollectorNumber = cardInfo.CollectorNumber,
+            Rarity = cardInfo.Rarity,
+            Language = cardInfo.Language,
+            ReleasedAt = cardInfo.ReleasedAt,
+            ScryfallUri = cardInfo.ScryfallUri,
+            SelectedPrintingReason = cardInfo.SelectedPrintingReason,
+            PricingMode = cardInfo.PricingMode,
+            Provenance = new CardSnapshotProvenance
+            {
+                Provider = "scryfall",
+                ProviderCardId = cardInfo.Id,
+                SchemaVersion = 1,
+                RefreshedAtUtc = DateTimeOffset.UtcNow,
+            },
+            EdhrecRank = cardInfo.EdhrecRank,
+            Keywords = cardInfo.Keywords.ToList(),
+            ProducedMana = cardInfo.ProducedMana.ToList(),
+            Games = cardInfo.Games.ToList(),
+            Finishes = cardInfo.Finishes.ToList(),
+            Faces = cardInfo.Faces.Select(CloneFace).ToList(),
+            Legalities = new Dictionary<string, string>(cardInfo.Legalities, StringComparer.OrdinalIgnoreCase),
+            Prices = new Dictionary<string, string>(cardInfo.Prices, StringComparer.OrdinalIgnoreCase),
+            ImageUris = new Dictionary<string, string>(cardInfo.ImageUris, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    /// <summary>
+    /// Copies cached snapshot facts without sharing mutable collections.
+    /// </summary>
+    public static CardSnapshot CopyCardSnapshot(CardSnapshot snapshot)
+    {
+        return new CardSnapshot
+        {
+            ManaCost = snapshot.ManaCost,
+            Layout = snapshot.Layout,
+            TypeLine = snapshot.TypeLine,
+            ManaValue = snapshot.ManaValue,
+            OracleText = snapshot.OracleText,
+            Power = snapshot.Power,
+            Toughness = snapshot.Toughness,
+            Loyalty = snapshot.Loyalty,
+            Defense = snapshot.Defense,
+            ColorIdentity = snapshot.ColorIdentity.ToList(),
+            Set = snapshot.Set,
+            CollectorNumber = snapshot.CollectorNumber,
+            Rarity = snapshot.Rarity,
+            Language = snapshot.Language,
+            ReleasedAt = snapshot.ReleasedAt,
+            ScryfallUri = snapshot.ScryfallUri,
+            SelectedPrintingReason = snapshot.SelectedPrintingReason,
+            PricingMode = snapshot.PricingMode,
+            Provenance = new CardSnapshotProvenance
+            {
+                Provider = snapshot.Provenance.Provider,
+                ProviderCardId = snapshot.Provenance.ProviderCardId,
+                SchemaVersion = snapshot.Provenance.SchemaVersion,
+                RefreshedAtUtc = snapshot.Provenance.RefreshedAtUtc,
+            },
+            EdhrecRank = snapshot.EdhrecRank,
+            Keywords = snapshot.Keywords.ToList(),
+            ProducedMana = snapshot.ProducedMana.ToList(),
+            Games = snapshot.Games.ToList(),
+            Finishes = snapshot.Finishes.ToList(),
+            Faces = snapshot.Faces.Select(CloneFace).ToList(),
+            Legalities = new Dictionary<string, string>(snapshot.Legalities, StringComparer.OrdinalIgnoreCase),
+            Prices = new Dictionary<string, string>(snapshot.Prices, StringComparer.OrdinalIgnoreCase),
+            ImageUris = new Dictionary<string, string>(snapshot.ImageUris, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    /// <summary>
+    /// Copies one face snapshot without sharing mutable color lists.
+    /// </summary>
+    public static CardFaceSnapshot CloneFace(CardFaceSnapshot face)
+    {
+        return new CardFaceSnapshot
+        {
+            Name = face.Name,
+            ManaCost = face.ManaCost,
+            TypeLine = face.TypeLine,
+            OracleText = face.OracleText,
+            Power = face.Power,
+            Toughness = face.Toughness,
+            Loyalty = face.Loyalty,
+            Defense = face.Defense,
+            Colors = face.Colors.ToList(),
+        };
+    }
+
+    /// <summary>
     /// Builds a bounded quality summary from current card snapshots.
     /// </summary>
-    protected static CardSnapshotQualitySummary BuildSnapshotQualitySummary(IReadOnlyList<DeckCard> cards)
+    public static CardSnapshotQualitySummary BuildSnapshotQualitySummary(IReadOnlyList<DeckCard> cards)
     {
         CardSnapshotQualitySummary summary = new()
         {
@@ -415,7 +564,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Adds a quantity to a count dictionary.
     /// </summary>
-    protected static void AddCount(Dictionary<string, int> counts, string key, int quantity)
+    public static void AddCount(Dictionary<string, int> counts, string key, int quantity)
     {
         counts[key] = counts.GetValueOrDefault(key) + Math.Max(0, quantity);
     }
@@ -423,7 +572,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Gets a count value.
     /// </summary>
-    protected static int Count(Dictionary<string, int> counts, string key)
+    public static int Count(Dictionary<string, int> counts, string key)
     {
         return counts.TryGetValue(key, out int count) ? count : 0;
     }
@@ -431,7 +580,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Requires an operation value.
     /// </summary>
-    protected static string Require(string? value, string name)
+    public static string Require(string? value, string name)
     {
         return !string.IsNullOrWhiteSpace(value)
             ? value
@@ -441,9 +590,18 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Requires the plan Repository.
     /// </summary>
-    protected IDeckPlanRepository RequirePlanRepository()
+    public static IDeckPlanRepository RequirePlanRepository(IDeckPlanRepository? planRepository)
     {
-        return PlanRepository ?? throw new InvalidOperationException("Deck edit plan persistence is not configured.");
+        return planRepository ?? throw new InvalidOperationException("Deck edit plan persistence is not configured.");
+    }
+
+    /// <summary>
+    /// Requires Archidekt support for operations that cannot run against local workspaces only.
+    /// </summary>
+    public static IArchidektGateway RequireArchidektGateway(IArchidektGateway? archidektGateway)
+    {
+        return archidektGateway
+            ?? throw new InvalidOperationException("Archidekt support is not configured.");
     }
 
     /// <summary>

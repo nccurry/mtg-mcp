@@ -2,14 +2,41 @@
 namespace MtgMcp.Core;
 
 /// <summary>
-/// Shares deck analysis metric helpers across services.
+/// Builds reusable deck metric snapshots, costs, mana-base health, consistency, and Commander bracket estimates.
 /// </summary>
-public abstract partial class DeckServiceBase
+public sealed class DeckAnalysisMetrics
 {
+    /// <summary>
+    /// Searches live card data for Commander Game Changer names.
+    /// </summary>
+    private readonly ICardCatalog cardCatalog;
+
+    /// <summary>
+    /// Supplies the reference date used for deterministic price evaluation.
+    /// </summary>
+    private readonly Func<DateOnly> currentDateProvider;
+
+    /// <summary>
+    /// Creates metrics using the current UTC date for price-sensitive evaluations.
+    /// </summary>
+    public DeckAnalysisMetrics(ICardCatalog cardCatalog)
+        : this(cardCatalog, CurrentUtcDate)
+    {
+    }
+
+    /// <summary>
+    /// Creates metrics with an explicit date provider for deterministic tests and previews.
+    /// </summary>
+    internal DeckAnalysisMetrics(ICardCatalog cardCatalog, Func<DateOnly> currentDateProvider)
+    {
+        this.cardCatalog = cardCatalog;
+        this.currentDateProvider = currentDateProvider;
+    }
+
     /// <summary>
     /// Builds a metric snapshot for a workspace.
     /// </summary>
-    protected DeckMetricSnapshot BuildMetricSnapshot(
+    public DeckMetricSnapshot BuildMetricSnapshot(
         DeckWorkspace workspace,
         IReadOnlySet<string> gameChangers,
         bool gameChangerDataAvailable = true,
@@ -43,7 +70,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Analyzes deck cost from local snapshots.
     /// </summary>
-    protected DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace, decimal? maxBudget = null)
+    public DeckCostAnalysis AnalyzeDeckCost(DeckWorkspace workspace, decimal? maxBudget = null)
     {
         DeckCostAnalysis analysis = new()
         {
@@ -129,7 +156,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Analyzes mana base metrics for the workspace.
     /// </summary>
-    protected static ManaBaseAnalysis AnalyzeManaBase(DeckWorkspace workspace)
+    public ManaBaseAnalysis AnalyzeManaBase(DeckWorkspace workspace)
     {
         ManaBaseAnalysis analysis = new() { WorkspaceId = workspace.Id };
         HashSet<string> deckColorIdentity = GetDeckColoredIdentity(workspace);
@@ -253,7 +280,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Builds one tapped-land contributor row from a classified land.
     /// </summary>
-    private static TappedLandContributor BuildTappedLandContributor(
+    private TappedLandContributor BuildTappedLandContributor(
         DeckCard card,
         CardSnapshot snapshot,
         int quantity,
@@ -275,7 +302,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Sorts tapped-land contributors into a bounded, high-signal list.
     /// </summary>
-    private static void TrimTappedLandContributors(List<TappedLandContributor> contributors)
+    private void TrimTappedLandContributors(List<TappedLandContributor> contributors)
     {
         contributors.Sort(CompareTappedLandContributors);
         if (contributors.Count > 10)
@@ -287,7 +314,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Compares tapped-land contributors by severity, quantity, then name.
     /// </summary>
-    private static int CompareTappedLandContributors(TappedLandContributor left, TappedLandContributor right)
+    private int CompareTappedLandContributors(TappedLandContributor left, TappedLandContributor right)
     {
         int timing = TappedLandTimingRank(left.Timing).CompareTo(TappedLandTimingRank(right.Timing));
         if (timing != 0)
@@ -304,7 +331,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Gets the stable timing label for tapped-land output.
     /// </summary>
-    private static string TappedLandTiming(LandEntryTiming entryTiming)
+    private string TappedLandTiming(LandEntryTiming entryTiming)
     {
         return entryTiming == LandEntryTiming.AlwaysTapped
             ? "alwaysTapped"
@@ -408,7 +435,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Analyzes consistency metrics for the workspace.
     /// </summary>
-    protected static DeckConsistencyAnalysis AnalyzeDeckConsistency(DeckWorkspace workspace)
+    public DeckConsistencyAnalysis AnalyzeDeckConsistency(DeckWorkspace workspace)
     {
         List<DeckCard> included = IncludedCards(workspace).ToList();
         DeckConsistencyAnalysis analysis = new()
@@ -499,7 +526,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Estimates Commander bracket from live Game Changers and deck heuristics.
     /// </summary>
-    protected static CommanderBracketEstimate EstimateCommanderBracket(
+    public CommanderBracketEstimate EstimateCommanderBracket(
         DeckWorkspace workspace,
         IReadOnlySet<string> gameChangers)
     {
@@ -583,11 +610,11 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Fetches live Game Changer names from Scryfall.
     /// </summary>
-    protected async Task<IReadOnlySet<string>> FetchGameChangerNamesAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlySet<string>> FetchGameChangerNamesAsync(CancellationToken cancellationToken)
     {
         try
         {
-            IReadOnlyList<CardSearchResult> results = await CardCatalog
+            IReadOnlyList<CardSearchResult> results = await cardCatalog
                 .SearchCardsAsync(
                     CardSearchRequest.ForPreset(CardSearchPreset.CommanderGameChangers),
                     limit: 250,
@@ -611,7 +638,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Checks whether a card price category is included.
     /// </summary>
-    protected static bool IsIncludedInPrice(DeckWorkspace workspace, DeckCard card)
+    private static bool IsIncludedInPrice(DeckWorkspace workspace, DeckCard card)
     {
         string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
         DeckCategory? category = workspace.Categories.FirstOrDefault(value =>
@@ -622,7 +649,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Reads produced mana with basic land and MDFC land-slot fallbacks.
     /// </summary>
-    protected static IReadOnlyList<string> ReadProducedMana(DeckCard card)
+    public static IReadOnlyList<string> ReadProducedMana(DeckCard card)
     {
         CardSnapshot snapshot = GetSnapshot(card);
         if (snapshot.ProducedMana.Count > 0)
@@ -685,7 +712,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Adds a basic land color fallback.
     /// </summary>
-    protected static void AddBasicLandColor(List<string> colors, string text, string landName, string color)
+    private static void AddBasicLandColor(List<string> colors, string text, string landName, string color)
     {
         if (text.Contains(landName, StringComparison.OrdinalIgnoreCase))
         {
@@ -696,7 +723,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Checks whether a land appears to enter tapped.
     /// </summary>
-    protected static bool LooksTapped(CardSnapshot snapshot)
+    public static bool LooksTapped(CardSnapshot snapshot)
     {
         return LandEntryClassifier.IsTappedPressure(snapshot);
     }
@@ -773,7 +800,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Checks whether a card is fast mana.
     /// </summary>
-    protected static bool IsFastMana(DeckCard card)
+    public static bool IsFastMana(DeckCard card)
     {
         string[] fastManaNames =
         [
@@ -803,7 +830,7 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Adds a bracket signal.
     /// </summary>
-    protected static void AddSignal(
+    private static void AddSignal(
         CommanderBracketEstimate estimate,
         string cardName,
         string signal,
@@ -824,8 +851,95 @@ public abstract partial class DeckServiceBase
     /// <summary>
     /// Checks whether text contains any needles.
     /// </summary>
-    protected static bool ContainsAny(string value, params string[] needles)
+    public static bool ContainsAny(string value, params string[] needles)
     {
         return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Enumerates cards that contribute to the active deck.
+    /// </summary>
+    private static IEnumerable<DeckCard> IncludedCards(DeckWorkspace workspace)
+    {
+        return DeckCategoryInclusion.IncludedCards(workspace);
+    }
+
+    /// <summary>
+    /// Checks whether a card contributes to the active deck.
+    /// </summary>
+    private static bool IsIncluded(DeckWorkspace workspace, DeckCard card)
+    {
+        return DeckCategoryInclusion.IsIncludedInDeck(workspace, card);
+    }
+
+    /// <summary>
+    /// Reads cached card metadata while tolerating legacy null snapshots.
+    /// </summary>
+    private static CardSnapshot GetSnapshot(DeckCard card)
+    {
+        return card.Snapshot ?? new CardSnapshot();
+    }
+
+    /// <summary>
+    /// Adds a positive quantity to a case-insensitive count dictionary.
+    /// </summary>
+    private static void AddCount(Dictionary<string, int> counts, string key, int quantity)
+    {
+        if (string.IsNullOrWhiteSpace(key) || quantity <= 0)
+        {
+            return;
+        }
+
+        counts.TryGetValue(key, out int current);
+        counts[key] = current + quantity;
+    }
+
+    /// <summary>
+    /// Checks whether a card occupies the command-zone commander category.
+    /// </summary>
+    private static bool IsCommanderCard(DeckCard card)
+    {
+        return DeckCategoryOrdering.PrimaryCategory(card).Equals(
+            DeckRoles.Commander,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Evaluates whether a cached snapshot has a usable released-printing price.
+    /// </summary>
+    private CardPriceEvaluation EvaluateUsdPrice(CardSnapshot? snapshot, DateOnly referenceDate)
+    {
+        return snapshot is null
+            ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
+            : CardPriceEvaluator.Evaluate(snapshot, referenceDate);
+    }
+
+    /// <summary>
+    /// Builds an unknown price evaluation with a deterministic reason.
+    /// </summary>
+    private static CardPriceEvaluation MissingPrice(string printingStatus, string reason)
+    {
+        return new CardPriceEvaluation
+        {
+            PriceKnown = false,
+            PrintingStatus = printingStatus,
+            SelectedPrintingReason = reason
+        };
+    }
+
+    /// <summary>
+    /// Reads the reference date for price-sensitive metrics.
+    /// </summary>
+    private DateOnly CurrentDate()
+    {
+        return currentDateProvider();
+    }
+
+    /// <summary>
+    /// Gets today's date in UTC for normal runtime metric evaluation.
+    /// </summary>
+    private static DateOnly CurrentUtcDate()
+    {
+        return DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
     }
 }

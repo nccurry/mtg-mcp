@@ -15,7 +15,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         List<CategorySuggestion> suggestions = [];
-        DeckEditPlan plan = CreatePlan(workspace, "Category cleanup plan", "category-cleanup");
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, "Category cleanup plan", "category-cleanup");
         plan.Rationale = "Groups cards into the standard role taxonomy while preserving existing deck contents until the plan is applied.";
 
         foreach (string role in DeckRoles.Primary)
@@ -44,7 +44,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 CurrentPrimaryCategory = card.PrimaryCategory,
                 SuggestedPrimaryRole = assignment.PrimaryRole,
                 Tags = assignment.Tags,
-                ScryfallUri = GetSnapshot(card).ScryfallUri,
+                ScryfallUri = DeckServiceHelpers.GetSnapshot(card).ScryfallUri,
                 Confidence = assignment.Confidence
             });
 
@@ -65,7 +65,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         }
 
         plan.Confidence = suggestions.Count == 0 ? 0 : suggestions.Average(suggestion => suggestion.Confidence);
-        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
 
         return new CategoryPlanResult { Plan = plan, Suggestions = suggestions };
     }

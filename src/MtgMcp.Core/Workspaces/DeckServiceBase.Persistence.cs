@@ -223,7 +223,7 @@ public abstract partial class DeckMutationServiceBase
     {
         target.ScryfallId = source.ScryfallId;
         target.ScryfallOracleId = source.ScryfallOracleId;
-        target.Snapshot = CopyCardSnapshot(source.Snapshot);
+        target.Snapshot = DeckServiceHelpers.CopyCardSnapshot(source.Snapshot);
     }
 
     /// <summary>
@@ -251,7 +251,7 @@ public abstract partial class DeckMutationServiceBase
         targetSnapshot.EdhrecRank = sourceSnapshot.EdhrecRank;
         targetSnapshot.Keywords = sourceSnapshot.Keywords.ToList();
         targetSnapshot.ProducedMana = sourceSnapshot.ProducedMana.ToList();
-        targetSnapshot.Faces = sourceSnapshot.Faces.Select(CloneFace).ToList();
+        targetSnapshot.Faces = sourceSnapshot.Faces.Select(DeckServiceHelpers.CloneFace).ToList();
         targetSnapshot.Legalities = new Dictionary<string, string>(
             sourceSnapshot.Legalities,
             StringComparer.OrdinalIgnoreCase);

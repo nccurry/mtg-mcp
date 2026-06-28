@@ -209,7 +209,7 @@ public sealed partial class DeckWorkspaceService
         DeckWorkspace workspace = await gateway
             .ImportDeckAsync(deckIdOrUrl, writeBack, cancellationToken)
             .ConfigureAwait(false);
-        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
+        await DeckServiceHelpers.NormalizeWorkspaceCardsAsync(CardCatalog, workspace, "missing", cancellationToken)
             .ConfigureAwait(false);
 
         return await SaveImportedWorkspaceAsync(workspace, localWorkspaceId, cancellationToken)
@@ -245,7 +245,7 @@ public sealed partial class DeckWorkspaceService
         DeckWorkspace workspace = await RequireMoxfieldGateway()
             .ImportDeckAsync(deckIdOrUrl, cancellationToken)
             .ConfigureAwait(false);
-        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
+        await DeckServiceHelpers.NormalizeWorkspaceCardsAsync(CardCatalog, workspace, "missing", cancellationToken)
             .ConfigureAwait(false);
 
         workspace.Mode = WorkspaceMode.Local;
@@ -401,7 +401,7 @@ public sealed partial class DeckWorkspaceService
             });
         }
 
-        await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken).ConfigureAwait(false);
+        await DeckServiceHelpers.NormalizeWorkspaceCardsAsync(CardCatalog, workspace, "missing", cancellationToken).ConfigureAwait(false);
         return await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
     }
 

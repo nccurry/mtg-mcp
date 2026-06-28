@@ -400,7 +400,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         string kind,
         CancellationToken cancellationToken)
     {
-        DeckEditPlan plan = CreatePlan(workspace, name, kind);
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, name, kind);
         plan.Rationale = rationale;
 
         foreach (DeckQueryCandidate candidate in ranking.Candidates)
@@ -421,7 +421,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             plan.Warnings.Add("No cards matched the query, deck constraints, and requested role/tag filters.");
         }
 
-        return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        return await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

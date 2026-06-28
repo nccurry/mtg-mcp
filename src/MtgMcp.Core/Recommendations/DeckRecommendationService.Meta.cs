@@ -85,7 +85,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             .GetCardsByNamesAsync(report.MissingPopularCards.Select(card => card.Name).ToList(), cancellationToken)
             .ConfigureAwait(false);
         (bool colorKnown, HashSet<string> colors) = GetDeckColorIdentity(workspace);
-        DeckEditPlan plan = CreatePlan(workspace, "Missing popular cards plan", "missing-popular-cards");
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, "Missing popular cards plan", "missing-popular-cards");
         List<GoalCardSuggestion> suggestions = [];
 
         foreach (CommanderMetaCard metaCard in report.MissingPopularCards)
@@ -124,7 +124,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             plan.Warnings.Add("No missing popular cards met legality, color identity, and price filters.");
         }
 
-        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
         return new GoalPackagePlanResult
         {
             Plan = plan,

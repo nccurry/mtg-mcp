@@ -18,7 +18,7 @@ public sealed partial class DeckPlanService
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        DeckEditPlan plan = CreatePlan(
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(
             workspace,
             string.IsNullOrWhiteSpace(name) ? "Explicit deck edit plan" : name.Trim(),
             "explicit-changes");
@@ -33,7 +33,7 @@ public sealed partial class DeckPlanService
             throw new InvalidOperationException("At least one explicit card add, remove, or move is required.");
         }
 
-        return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        return await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -23,11 +23,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         List<ReplacementSuggestion> suggestions = [];
         HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (DeckCard card in IncludedCards(workspace)
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace)
             .Where(card => !IsCommanderCard(card))
             .Where(card => !DeckIntentProtection.IsProtectedCard(card, intent))
-            .Where(card => ReadUsdPrice(GetSnapshot(card)) >= effectiveMaxPrice + minSavings)
-            .OrderByDescending(card => ReadUsdPrice(GetSnapshot(card)) ?? 0)
+            .Where(card => ReadUsdPrice(DeckServiceHelpers.GetSnapshot(card)) >= effectiveMaxPrice + minSavings)
+            .OrderByDescending(card => ReadUsdPrice(DeckServiceHelpers.GetSnapshot(card)) ?? 0)
             .Take(Math.Clamp(limit, 1, 25)))
         {
             ReplacementSuggestion? suggestion = await FindReplacementAsync(
@@ -95,11 +95,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         List<ReplacementSuggestion> suggestions = [];
         HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (DeckCard card in IncludedCards(workspace)
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace)
             .Where(ShouldConsiderUpgrade)
             .Where(card => !DeckIntentProtection.IsProtectedCard(card, intent))
             .OrderBy(card => DeckRoleClassifier.Classify(card).Confidence)
-            .ThenByDescending(card => GetSnapshot(card).EdhrecRank ?? int.MaxValue)
+            .ThenByDescending(card => DeckServiceHelpers.GetSnapshot(card).EdhrecRank ?? int.MaxValue)
             .Take(Math.Clamp(limit, 1, 25)))
         {
             ReplacementSuggestion? suggestion = await FindReplacementAsync(
@@ -142,12 +142,12 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
-        CommanderBracketEstimate estimate = EstimateCommanderBracket(workspace, gameChangers);
+        IReadOnlySet<string> gameChangers = await analysisMetrics.FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+        CommanderBracketEstimate estimate = analysisMetrics.EstimateCommanderBracket(workspace, gameChangers);
         ReplacementWeights weights = NormalizeWeights(new ReplacementWeights { Role = 0.55, Power = 0.15, Price = 0.30 });
         List<ReplacementSuggestion> suggestions = [];
         HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
-        DeckEditPlan plan = CreatePlan(workspace, "Commander bracket reduction plan", "bracket-reduction");
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, "Commander bracket reduction plan", "bracket-reduction");
         plan.Rationale = $"Targets bracket {Math.Clamp(targetBracket, 1, 4)} by reducing Game Changer, fast mana, tutor, stax, combo, and extra-turn pressure.";
 
         foreach (string cardName in estimate.Signals
@@ -207,7 +207,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         List<ReplacementSuggestion> suggestions = [];
         HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (DeckCard card in IncludedCards(workspace)
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace)
             .Where(card => ShouldReducePower(card, targetPower))
             .Take(Math.Clamp(limit, 1, 25)))
         {
@@ -238,7 +238,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             intent: null,
             cancellationToken).ConfigureAwait(false);
         plan.Rationale = $"Softens the deck toward {NormalizeFocus(targetPower)} tables by replacing fast mana, tutors, stax, combo, and extra-turn pressure.";
-        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
         return new RecommendationPlanResult { Plan = plan, Suggestions = suggestions };
     }
 
@@ -255,12 +255,12 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         ReplacementWeights weights = NormalizeWeights(new ReplacementWeights { Role = 0.70, Power = 0.10, Price = 0.20 });
         List<ReplacementSuggestion> suggestions = [];
         HashSet<string> selectedReplacementNames = new(StringComparer.OrdinalIgnoreCase);
-        DeckEditPlan plan = CreatePlan(workspace, "Mana base improvement plan", "mana-base-improvements");
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, "Mana base improvement plan", "mana-base-improvements");
         plan.Rationale = "Improves land count, fixing, and tapped-land pressure while preserving color identity.";
 
-        foreach (DeckCard card in IncludedCards(workspace)
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace)
             .Where(card => DeckRoleClassifier.Classify(card).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase))
-            .Where(card => LooksTapped(GetSnapshot(card)))
+            .Where(card => DeckAnalysisMetrics.LooksTapped(DeckServiceHelpers.GetSnapshot(card)))
             .Take(Math.Clamp(limit, 1, 25)))
         {
             ReplacementSuggestion? suggestion = await FindReplacementAsync(
@@ -281,7 +281,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
         }
 
-        ManaBaseAnalysis manaBase = AnalyzeManaBase(workspace);
+        ManaBaseAnalysis manaBase = analysisMetrics.AnalyzeManaBase(workspace);
         if (manaBase.LandCount < 36 && plan.Operations.Count + (suggestions.Count * 2) < Math.Clamp(limit, 1, 25))
         {
             HashSet<string> replacementNames = suggestions
@@ -317,8 +317,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        DeckConsistencyAnalysis consistency = AnalyzeDeckConsistency(workspace);
-        DeckEditPlan plan = CreatePlan(workspace, "Consistency improvement plan", "consistency-improvements");
+        DeckConsistencyAnalysis consistency = analysisMetrics.AnalyzeDeckConsistency(workspace);
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, "Consistency improvement plan", "consistency-improvements");
         plan.Rationale = $"Improves {NormalizeFocus(focus)} consistency by filling ramp, draw, tutor, or card-selection gaps.";
         HashSet<string> selectedAddNames = new(StringComparer.OrdinalIgnoreCase);
 
@@ -447,7 +447,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     {
         DeckCard candidateCard = CreateCandidateCard(candidate);
         CardRoleAssignment candidateRole = DeckRoleClassifier.Classify(candidateCard);
-        decimal? currentPrice = ReadUsdPrice(GetSnapshot(currentCard));
+        decimal? currentPrice = ReadUsdPrice(DeckServiceHelpers.GetSnapshot(currentCard));
         decimal? candidatePrice = ReadUsdPrice(candidate);
         decimal? estimatedSavings = currentPrice.HasValue && candidatePrice.HasValue
             ? currentPrice.Value - candidatePrice.Value
@@ -493,7 +493,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             CurrentPrice = currentPrice,
             CandidatePrice = candidatePrice,
             EstimatedSavings = estimatedSavings,
-            ReplaceCardScryfallUri = GetSnapshot(currentCard).ScryfallUri,
+            ReplaceCardScryfallUri = DeckServiceHelpers.GetSnapshot(currentCard).ScryfallUri,
             WithCardScryfallUri = candidate.ScryfallUri,
             Rationale = $"{candidate.Name} fits {currentRole.PrimaryRole} at score {score:0.00}; "
                 + "feature vector explains role, curve, tempo, fixing, synergy, floor, modality, price, and evidence."
@@ -512,7 +512,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckIntent? intent,
         CancellationToken cancellationToken)
     {
-        DeckEditPlan plan = CreatePlan(workspace, name, kind);
+        DeckEditPlan plan = DeckServiceHelpers.CreatePlan(workspace, name, kind);
         plan.Rationale = $"Weighted replacement plan using role={weights.Role:0.##}, power={weights.Power:0.##}, price={weights.Price:0.##}.";
         if (intent is not null)
         {
@@ -527,7 +527,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
 
         AddReplacementOperations(plan, workspace, suggestions);
 
-        return await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        return await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -544,7 +544,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         }
 
         plan.Confidence = plan.Operations.Count == 0 ? 0 : 0.65;
-        await RequirePlanRepository().SaveAsync(plan, cancellationToken).ConfigureAwait(false);
+        await DeckServiceHelpers.RequirePlanRepository(PlanRepository).SaveAsync(plan, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -680,8 +680,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return evaluation.Score / 100.0;
         }
 
-        double currentMana = GetSnapshot(currentCard).ManaValue ?? 0;
-        double candidateMana = GetSnapshot(candidateCard).ManaValue ?? currentMana;
+        double currentMana = DeckServiceHelpers.GetSnapshot(currentCard).ManaValue ?? 0;
+        double candidateMana = DeckServiceHelpers.GetSnapshot(candidateCard).ManaValue ?? currentMana;
         if (candidateMana <= Math.Max(1, currentMana - 1))
         {
             return 0.9;
@@ -700,7 +700,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static double ScoreTempoFeature(DeckCard currentCard, CardInfo candidate)
     {
-        double currentMana = GetSnapshot(currentCard).ManaValue ?? 0;
+        double currentMana = DeckServiceHelpers.GetSnapshot(currentCard).ManaValue ?? 0;
         double candidateMana = candidate.ManaValue ?? currentMana;
         double delta = candidateMana - currentMana;
         if (delta <= -2)
@@ -731,7 +731,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return 0.5;
         }
 
-        IReadOnlyList<string> producedMana = ReadProducedMana(candidateCard);
+        IReadOnlyList<string> producedMana = DeckAnalysisMetrics.ReadProducedMana(candidateCard);
         if (producedMana.Count >= 5)
         {
             return 1;
@@ -788,14 +788,14 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static double ScoreLateGameFloorFeature(DeckCard candidateCard, CardRoleAssignment candidateRole)
     {
-        string text = GetSnapshot(candidateCard).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(candidateCard).OracleText ?? "";
         if (candidateRole.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
-            || ContainsAny(text, "whenever", "at the beginning", "draw a card", "draw cards", "return", "recursion"))
+            || DeckAnalysisMetrics.ContainsAny(text, "whenever", "at the beginning", "draw a card", "draw cards", "return", "recursion"))
         {
             return 0.85;
         }
 
-        if (ContainsAny(text, "cycling", "flashback", "escape", "kicker", "activated ability"))
+        if (DeckAnalysisMetrics.ContainsAny(text, "cycling", "flashback", "escape", "kicker", "activated ability"))
         {
             return 0.7;
         }
@@ -816,10 +816,10 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return 0.5;
         }
 
-        string typeLine = GetSnapshot(candidateCard).TypeLine ?? "";
-        string text = GetSnapshot(candidateCard).OracleText ?? "";
+        string typeLine = DeckServiceHelpers.GetSnapshot(candidateCard).TypeLine ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(candidateCard).OracleText ?? "";
         double score = typeLine.Contains("Instant", StringComparison.OrdinalIgnoreCase) ? 0.85 : 0.55;
-        if (ContainsAny(text, "exile", "counter target", "phase out", "indestructible", "hexproof", "can't be countered"))
+        if (DeckAnalysisMetrics.ContainsAny(text, "exile", "counter target", "phase out", "indestructible", "hexproof", "can't be countered"))
         {
             score += 0.15;
         }
@@ -832,8 +832,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static bool IsReplacementPermanent(DeckCard candidateCard)
     {
-        string typeLine = GetSnapshot(candidateCard).TypeLine ?? "";
-        return ContainsAny(typeLine, "Creature", "Artifact", "Enchantment", "Planeswalker", "Battle", "Land");
+        string typeLine = DeckServiceHelpers.GetSnapshot(candidateCard).TypeLine ?? "";
+        return DeckAnalysisMetrics.ContainsAny(typeLine, "Creature", "Artifact", "Enchantment", "Planeswalker", "Battle", "Land");
     }
 
     /// <summary>
@@ -885,17 +885,17 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return false;
         }
 
-        CardSnapshot currentSnapshot = GetSnapshot(currentCard);
-        CardSnapshot candidateSnapshot = GetSnapshot(candidateCard);
-        if (LooksTapped(candidateSnapshot))
+        CardSnapshot currentSnapshot = DeckServiceHelpers.GetSnapshot(currentCard);
+        CardSnapshot candidateSnapshot = DeckServiceHelpers.GetSnapshot(candidateCard);
+        if (DeckAnalysisMetrics.LooksTapped(candidateSnapshot))
         {
             return false;
         }
 
-        int currentColors = ReadProducedMana(currentCard).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-        int candidateColors = ReadProducedMana(candidateCard).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        int currentColors = DeckAnalysisMetrics.ReadProducedMana(currentCard).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        int candidateColors = DeckAnalysisMetrics.ReadProducedMana(candidateCard).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         bool preservesSources = candidateColors >= currentColors || currentColors == 0;
-        return LooksTapped(currentSnapshot)
+        return DeckAnalysisMetrics.LooksTapped(currentSnapshot)
             && (preservesSources || candidateRole.Tags.Contains(DeckTags.ManaFixing));
     }
 
@@ -906,7 +906,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     {
         DeckCard candidateCard = CreateCandidateCard(candidate);
         return DeckRoleClassifier.Classify(candidateCard).PrimaryRole.Equals(DeckRoles.Lands, StringComparison.OrdinalIgnoreCase)
-            && !LooksTapped(GetSnapshot(candidateCard));
+            && !DeckAnalysisMetrics.LooksTapped(DeckServiceHelpers.GetSnapshot(candidateCard));
     }
 
     /// <summary>
@@ -941,14 +941,14 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return false;
         }
 
-        CardSnapshot snapshot = GetSnapshot(card);
+        CardSnapshot snapshot = DeckServiceHelpers.GetSnapshot(card);
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
         string text = $"{card.Name} {snapshot.TypeLine} {snapshot.OracleText}";
         bool casualTarget = NormalizeFocus(targetPower) is "casual" or "low" or "precon";
-        return IsFastMana(card)
+        return DeckAnalysisMetrics.IsFastMana(card)
             || role.Tags.Contains(DeckTags.Stax)
             || role.Tags.Contains(DeckTags.ComboPiece)
-            || ContainsAny(text, "extra turn", "destroy all lands")
+            || DeckAnalysisMetrics.ContainsAny(text, "extra turn", "destroy all lands")
             || (casualTarget && role.PrimaryRole.Equals(DeckRoles.Tutors, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -1005,7 +1005,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             ScryfallId = candidate.Id,
             ScryfallOracleId = candidate.OracleId
         };
-        ApplyCardSnapshot(card, candidate);
+        DeckServiceHelpers.ApplyCardSnapshot(card, candidate);
         return card;
     }
 
@@ -1125,7 +1125,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             _ => 0.25
         };
 
-        CardSnapshot snapshot = GetSnapshot(currentCard);
+        CardSnapshot snapshot = DeckServiceHelpers.GetSnapshot(currentCard);
         double manaDelta = (candidate.ManaValue ?? snapshot.ManaValue ?? 0) - (snapshot.ManaValue ?? 0);
         double efficiency = manaDelta <= 0 ? 1 : Math.Max(0.2, 1 - (manaDelta * 0.15));
         string legalityKey = NormalizeFormat(format);
@@ -1200,7 +1200,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             }
 
             foundCommander = true;
-            AddColors(colors, GetSnapshot(card).ColorIdentity);
+            AddColors(colors, DeckServiceHelpers.GetSnapshot(card).ColorIdentity);
         }
 
         if (foundCommander)
@@ -1208,9 +1208,9 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             return (true, colors);
         }
 
-        foreach (DeckCard card in IncludedCards(workspace))
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace))
         {
-            AddColors(colors, GetSnapshot(card).ColorIdentity);
+            AddColors(colors, DeckServiceHelpers.GetSnapshot(card).ColorIdentity);
         }
 
         return (colors.Count > 0, colors);

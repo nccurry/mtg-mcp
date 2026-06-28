@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace MtgMcp.Architecture.Tests;
@@ -165,6 +166,47 @@ public sealed class ProjectBoundaryTests
     }
 
     /// <summary>
+    /// Verifies that heavy analysis and recommendation helpers stay out of the shared deck base.
+    /// </summary>
+    [Fact]
+    public void DeckServiceBase_DoesNotRegainAnalysisOrRecommendationHelpers()
+    {
+        string root = FindRepoRoot();
+        string[] forbiddenBaseFiles =
+        [
+            "src/MtgMcp.Core/Analysis/DeckServiceBase.AnalysisMetrics.cs",
+            "src/MtgMcp.Core/Recommendations/DeckServiceBase.RecommendationHelpers.cs",
+        ];
+        string[] forbiddenBaseMethods =
+        [
+            "BuildMetricSnapshot",
+            "AnalyzeDeckCost",
+            "AnalyzeManaBase",
+            "AnalyzeDeckConsistency",
+            "EstimateCommanderBracket",
+            "FindReplacementAsync",
+            "CreatePlan",
+            "ApplyCardSnapshot",
+            "CopyCardSnapshot",
+            "CloneFace",
+        ];
+        string baseText = string.Join(
+            Environment.NewLine,
+            Directory
+                .EnumerateFiles(Path.Combine(root, "src/MtgMcp.Core"), "DeckServiceBase*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+
+        forbiddenBaseFiles
+            .Select(path => File.Exists(Path.Combine(root, path)))
+            .Should()
+            .OnlyContain(exists => !exists);
+        forbiddenBaseMethods
+            .Where(method => HasMethodDeclaration(baseText, method))
+            .Should()
+            .BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that old tool-facing names do not linger in source or tests.
     /// </summary>
     [Fact]
@@ -191,6 +233,17 @@ public sealed class ProjectBoundaryTests
             .Where(name => combinedText.Contains(name, StringComparison.OrdinalIgnoreCase))
             .Should()
             .BeEmpty();
+    }
+
+    /// <summary>
+    /// Checks for a source-level method declaration rather than an explicit helper call.
+    /// </summary>
+    private static bool HasMethodDeclaration(string source, string methodName)
+    {
+        string pattern = @"\b(?:public|private|protected|internal)\s+(?:static\s+)?[A-Za-z0-9_<>,\[\]\?\s]+\s+"
+            + Regex.Escape(methodName)
+            + @"\s*\(";
+        return Regex.IsMatch(source, pattern, RegexOptions.CultureInvariant);
     }
 
     /// <summary>

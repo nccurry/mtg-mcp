@@ -31,6 +31,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckAnalysisService analysis;
 
     /// <summary>
+    /// Builds reusable analysis metrics used by recommendation scoring heuristics.
+    /// </summary>
+    private readonly DeckAnalysisMetrics analysisMetrics;
+
+    /// <summary>
     /// Provides simulation workflows used by combined recommendation reports.
     /// </summary>
     private readonly DeckSimulationService simulation;
@@ -60,7 +65,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DateOnly? currentDateOverride = null,
         IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null,
         SimulationProfileCatalog? simulationProfiles = null,
-        PlaygroupService? playgroups = null
+        PlaygroupService? playgroups = null,
+        DeckAnalysisMetrics? analysisMetrics = null
     )
         : base(
             repository,
@@ -73,6 +79,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.cardTrendProvider = cardTrendProvider;
         this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
+        this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
         this.playgroups = playgroups;

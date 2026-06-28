@@ -63,7 +63,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int seed,
         CancellationToken cancellationToken)
     {
-        DeckEditPlan plan = await RequirePlanRepository()
+        DeckEditPlan plan = await DeckServiceHelpers.RequirePlanRepository(PlanRepository)
             .GetAsync(planId, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Deck plan '{planId}' was not found.");

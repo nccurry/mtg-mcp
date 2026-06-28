@@ -11,13 +11,19 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     private readonly IComboCatalog? comboCatalog;
 
     /// <summary>
+    /// Builds reusable cost, mana, consistency, bracket, and preview metric snapshots.
+    /// </summary>
+    private readonly DeckAnalysisMetrics metrics;
+
+    /// <summary>
     /// Creates an analysis service backed by workspace storage and card-data providers.
     /// </summary>
     public DeckAnalysisService(
         IDeckWorkspaceRepository repository,
         ICardCatalog cardCatalog,
         IComboCatalog? comboCatalog = null,
-        DateOnly? currentDateOverride = null
+        DateOnly? currentDateOverride = null,
+        DeckAnalysisMetrics? metrics = null
     )
         : base(
             repository,
@@ -25,5 +31,6 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             currentDateOverride: currentDateOverride)
     {
         this.comboCatalog = comboCatalog;
+        this.metrics = metrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
     }
 }

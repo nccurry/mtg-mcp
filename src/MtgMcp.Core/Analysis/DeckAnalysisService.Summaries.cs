@@ -15,7 +15,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         string normalizedScope = string.IsNullOrWhiteSpace(scope) ? "all" : scope.Trim().ToLowerInvariant();
-        DeckNormalizationResult result = await NormalizeWorkspaceCardsAsync(workspace, normalizedScope, cancellationToken)
+        DeckNormalizationResult result = await DeckServiceHelpers.NormalizeWorkspaceCardsAsync(CardCatalog, workspace, normalizedScope, cancellationToken)
             .ConfigureAwait(false);
 
         await Repository.SaveAsync(workspace, cancellationToken).ConfigureAwait(false);
@@ -39,7 +39,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             Format = workspace.Format,
             Intent = intent,
             Persistence = DeckPersistence.For(workspace),
-            IncludedCards = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
+            IncludedCards = DeckServiceHelpers.IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity)),
             MaybeboardCards = workspace.Cards
                 .Where(card => DeckCategoryOrdering.PrimaryCategory(card)
                     .Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
@@ -56,7 +56,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
                 {
                     if (!category.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
                     {
-                        AddCount(summary.MaybeboardCategoryCounts, category, card.Quantity);
+                        DeckServiceHelpers.AddCount(summary.MaybeboardCategoryCounts, category, card.Quantity);
                     }
                 }
 
@@ -69,15 +69,15 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             }
 
             CardRoleAssignment assignment = DeckRoleClassifier.Classify(card);
-            AddCount(summary.RoleCounts, assignment.PrimaryRole, card.Quantity);
+            DeckServiceHelpers.AddCount(summary.RoleCounts, assignment.PrimaryRole, card.Quantity);
             foreach (string functionalRole in assignment.FunctionalRoles)
             {
-                AddCount(summary.FunctionalRoleCounts, functionalRole, card.Quantity);
+                DeckServiceHelpers.AddCount(summary.FunctionalRoleCounts, functionalRole, card.Quantity);
             }
 
             foreach (string tag in assignment.Tags)
             {
-                AddCount(summary.TagCounts, tag, card.Quantity);
+                DeckServiceHelpers.AddCount(summary.TagCounts, tag, card.Quantity);
             }
 
             if (assignment.PrimaryRole == DeckRoles.Commander)
@@ -88,11 +88,11 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
 
         foreach (DeckCategory category in workspace.Categories)
         {
-            string suggestedRole = SuggestRoleForCategory(workspace, category.Name);
+            string suggestedRole = DeckServiceHelpers.SuggestRoleForCategory(workspace, category.Name);
             summary.CategoryMap[category.Name] = suggestedRole;
         }
 
-        AddSummaryNotes(summary, intent);
+        DeckServiceHelpers.AddSummaryNotes(summary, intent);
         return summary;
     }
 
@@ -110,7 +110,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
-        List<string> requestedTargets = ParseTargets(targets, intent);
+        List<string> requestedTargets = DeckServiceHelpers.ParseTargets(targets, intent);
         return DeckStatistics.AnalyzeDrawOdds(
             workspace,
             requestedTargets,

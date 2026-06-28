@@ -1181,7 +1181,7 @@ public sealed partial class DeckWorkspaceService
     /// </summary>
     private static CardSnapshot CloneSnapshot(CardSnapshot snapshot)
     {
-        return CopyCardSnapshot(snapshot);
+        return DeckServiceHelpers.CopyCardSnapshot(snapshot);
     }
 
     /// <summary>

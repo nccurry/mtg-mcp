@@ -25,7 +25,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        return AnalyzeDeckCost(workspace, maxBudget);
+        return metrics.AnalyzeDeckCost(workspace, maxBudget);
     }
 
     /// <summary>
@@ -33,7 +33,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// </summary>
     public DeckCostAnalysis AnalyzeDeckCostSnapshot(DeckWorkspace workspace, decimal? maxBudget = null)
     {
-        return AnalyzeDeckCost(workspace, maxBudget);
+        return metrics.AnalyzeDeckCost(workspace, maxBudget);
     }
 
     /// <summary>
@@ -44,8 +44,8 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
-        return EstimateCommanderBracket(workspace, gameChangers);
+        IReadOnlySet<string> gameChangers = await metrics.FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+        return metrics.EstimateCommanderBracket(workspace, gameChangers);
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        return AnalyzeManaBase(workspace);
+        return metrics.AnalyzeManaBase(workspace);
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// </summary>
     public ManaBaseAnalysis AnalyzeManaBaseSnapshot(DeckWorkspace workspace)
     {
-        return AnalyzeManaBase(workspace);
+        return metrics.AnalyzeManaBase(workspace);
     }
 
     /// <summary>
@@ -75,7 +75,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
         CancellationToken cancellationToken)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
-        return AnalyzeDeckConsistency(workspace);
+        return metrics.AnalyzeDeckConsistency(workspace);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
     /// </summary>
     public DeckConsistencyAnalysis AnalyzeDeckConsistencySnapshot(DeckWorkspace workspace)
     {
-        return AnalyzeDeckConsistency(workspace);
+        return metrics.AnalyzeDeckConsistency(workspace);
     }
 
 }

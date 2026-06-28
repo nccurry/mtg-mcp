@@ -111,7 +111,7 @@ public sealed partial class DeckRecommendationService
         IReadOnlyDictionary<string, CardInfo> candidateDetails = await CardCatalog
             .GetCardsByNamesAsync(candidateNames, cancellationToken)
             .ConfigureAwait(false);
-        IReadOnlySet<string> gameChangers = await FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
+        IReadOnlySet<string> gameChangers = await analysisMetrics.FetchGameChangerNamesAsync(cancellationToken).ConfigureAwait(false);
         List<string> warnings = [.. rankings.Warnings, .. intentResult.Warnings, .. profileResolution.Warnings];
         List<PlaygroupDeckRanking> rankedMetaDecks = rankings.Rankings.Take(safeMetaDeckLimit).ToList();
         List<PlaygroupMetaDeckEvidence> metaDecks = await BuildMetaDeckEvidenceBatchAsync(
@@ -502,9 +502,9 @@ public sealed partial class DeckRecommendationService
     /// </summary>
     private static List<PlaygroupMetaPressureEvidence> InferImportedDeckPressures(DeckWorkspace imported)
     {
-        List<DeckCard> cards = DeckCategoryInclusion.IncludedCards(imported).ToList();
+        List<DeckCard> cards = DeckServiceHelpers.IncludedCards(imported).ToList();
         int creatures = cards
-            .Where(card => ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"))
+            .Where(card => DeckAnalysisMetrics.ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Creature"))
             .Sum(card => Math.Max(1, card.Quantity));
         int ramp = CountCards(cards, role: DeckRoles.Ramp);
         int tutors = CountCards(cards, role: DeckRoles.Tutors);
@@ -514,10 +514,10 @@ public sealed partial class DeckRecommendationService
         int graveyard = CountTaggedCards(cards, DeckTags.GraveyardHate) + CountTaggedCards(cards, DeckTags.Reanimation);
         int combo = CountTaggedCards(cards, DeckTags.ComboPiece) + CountTaggedCards(cards, DeckTags.ComboEnabler);
         int artifacts = cards
-            .Where(card => ContainsAny(GetSnapshot(card).TypeLine ?? "", "Artifact"))
+            .Where(card => DeckAnalysisMetrics.ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Artifact"))
             .Sum(card => Math.Max(1, card.Quantity));
         int enchantments = cards
-            .Where(card => ContainsAny(GetSnapshot(card).TypeLine ?? "", "Enchantment"))
+            .Where(card => DeckAnalysisMetrics.ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Enchantment"))
             .Sum(card => Math.Max(1, card.Quantity));
         List<PlaygroupMetaPressureEvidence> pressures = [];
         AddImportedPressure(pressures, FastComboPressure, ramp >= 12 || tutors + combo >= 5, $"ramp {ramp}, tutors {tutors}, combo tags {combo}");
@@ -657,17 +657,17 @@ public sealed partial class DeckRecommendationService
         SimulationProfile profile,
         DeckIntent? intent)
     {
-        string text = $"{candidate.Name} {GetSnapshot(candidate).OracleText}";
+        string text = $"{candidate.Name} {DeckServiceHelpers.GetSnapshot(candidate).OracleText}";
         double penalty = 0;
         bool blinkDeck = profile.ThemeTags.Contains("blink", StringComparer.OrdinalIgnoreCase)
             || intent?.ArchetypeTags.Contains("blink", StringComparer.OrdinalIgnoreCase) == true;
-        if (blinkDeck && ContainsAny(text, "entering the battlefield don't cause", "entering the battlefield doesn't cause"))
+        if (blinkDeck && DeckAnalysisMetrics.ContainsAny(text, "entering the battlefield don't cause", "entering the battlefield doesn't cause"))
         {
             penalty = Math.Max(penalty, 0.90);
         }
 
         if (profile.Id.Equals(SimulationProfileIds.Combo, StringComparison.OrdinalIgnoreCase)
-            && ContainsAny(text, "each player can't cast more than one spell", "players can't cast more than one spell"))
+            && DeckAnalysisMetrics.ContainsAny(text, "each player can't cast more than one spell", "players can't cast more than one spell"))
         {
             penalty = Math.Max(penalty, 0.35);
         }
@@ -741,7 +741,7 @@ public sealed partial class DeckRecommendationService
     /// </summary>
     private static double CoverageForPressure(DeckCard candidate, CardRoleAssignment role, string pressure)
     {
-        string text = $"{candidate.Name} {GetSnapshot(candidate).TypeLine} {GetSnapshot(candidate).OracleText}";
+        string text = $"{candidate.Name} {DeckServiceHelpers.GetSnapshot(candidate).TypeLine} {DeckServiceHelpers.GetSnapshot(candidate).OracleText}";
         return pressure switch
         {
             FastComboPressure => Max(
@@ -805,7 +805,7 @@ public sealed partial class DeckRecommendationService
     /// </summary>
     private static CardInfo CardInfoFromWorkspaceCard(DeckCard card)
     {
-        CardSnapshot snapshot = GetSnapshot(card);
+        CardSnapshot snapshot = DeckServiceHelpers.GetSnapshot(card);
         return new CardInfo
         {
             Name = card.Name,
@@ -976,7 +976,7 @@ public sealed partial class DeckRecommendationService
     /// </summary>
     private static double TextScore(string text, double score, params string[] phrases)
     {
-        return ContainsAny(text, phrases) ? score : 0;
+        return DeckAnalysisMetrics.ContainsAny(text, phrases) ? score : 0;
     }
 
     /// <summary>

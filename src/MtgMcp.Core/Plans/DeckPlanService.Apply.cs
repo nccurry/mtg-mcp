@@ -15,7 +15,7 @@ public sealed partial class DeckPlanService
         CancellationToken cancellationToken
     )
     {
-        return RequirePlanRepository().ListAsync(workspaceId, cancellationToken);
+        return DeckServiceHelpers.RequirePlanRepository(PlanRepository).ListAsync(workspaceId, cancellationToken);
     }
 
     /// <summary>
@@ -26,7 +26,7 @@ public sealed partial class DeckPlanService
         CancellationToken cancellationToken
     )
     {
-        return await RequirePlanRepository().GetAsync(planId, cancellationToken).ConfigureAwait(false)
+        return await DeckServiceHelpers.RequirePlanRepository(PlanRepository).GetAsync(planId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Deck edit plan '{planId}' was not found.");
     }
 
@@ -35,7 +35,7 @@ public sealed partial class DeckPlanService
     /// </summary>
     public async Task<DeckEditPlanDeleteResult> DeleteDeckPlanAsync(string planId, CancellationToken cancellationToken)
     {
-        bool deleted = await RequirePlanRepository().DeleteAsync(planId, cancellationToken).ConfigureAwait(false);
+        bool deleted = await DeckServiceHelpers.RequirePlanRepository(PlanRepository).DeleteAsync(planId, cancellationToken).ConfigureAwait(false);
         return new DeckEditPlanDeleteResult
         {
             PlanId = planId,
@@ -52,7 +52,7 @@ public sealed partial class DeckPlanService
         string? checkpointName,
         CancellationToken cancellationToken)
     {
-        IDeckPlanRepository plans = RequirePlanRepository();
+        IDeckPlanRepository plans = DeckServiceHelpers.RequirePlanRepository(PlanRepository);
         DeckEditPlan plan = await GetDeckPlanAsync(planId, cancellationToken).ConfigureAwait(false);
         if (plan.Status != DeckEditPlanStatus.Draft)
         {
@@ -354,7 +354,7 @@ public sealed partial class DeckPlanService
         HashSet<DeckCard> removedCards,
         CancellationToken cancellationToken)
     {
-        string cardName = Require(operation.CardName, "cardName");
+        string cardName = DeckServiceHelpers.Require(operation.CardName, "cardName");
         string category = NormalizeCategoryName(operation.Category ?? DeckDefaults.Mainboard);
         int amount = Math.Max(1, operation.Quantity ?? 1);
         EnsureCategory(workspace, category);
@@ -388,7 +388,7 @@ public sealed partial class DeckPlanService
     {
         DeckCard card = FindRequiredPlanCard(
             workspace,
-            Require(operation.CardName, "cardName"),
+            DeckServiceHelpers.Require(operation.CardName, "cardName"),
             operation.Category);
         int amount = Math.Max(1, operation.Quantity ?? 1);
         if (card.Quantity <= amount)
@@ -416,7 +416,7 @@ public sealed partial class DeckPlanService
     {
         DeckCard card = FindRequiredPlanCard(
             workspace,
-            Require(operation.CardName, "cardName"),
+            DeckServiceHelpers.Require(operation.CardName, "cardName"),
             operation.Category);
         int quantity = operation.Quantity ?? 1;
         if (quantity <= 0)
@@ -444,9 +444,9 @@ public sealed partial class DeckPlanService
     {
         DeckCard card = FindRequiredPlanCard(
             workspace,
-            Require(operation.CardName, "cardName"),
+            DeckServiceHelpers.Require(operation.CardName, "cardName"),
             operation.FromCategory);
-        string category = NormalizeCategoryName(Require(operation.ToCategory, "toCategory"));
+        string category = NormalizeCategoryName(DeckServiceHelpers.Require(operation.ToCategory, "toCategory"));
         EnsureCategory(workspace, category);
         DeckCategoryOrdering.SetPrimary(card, category);
         TrackChanged(upsertedCards, removedCards, card);
@@ -464,9 +464,9 @@ public sealed partial class DeckPlanService
     {
         DeckCard card = FindRequiredPlanCard(
             workspace,
-            Require(operation.CardName, "cardName"),
+            DeckServiceHelpers.Require(operation.CardName, "cardName"),
             category: null);
-        string category = NormalizeCategoryName(Require(operation.Category, "category"));
+        string category = NormalizeCategoryName(DeckServiceHelpers.Require(operation.Category, "category"));
         EnsureCategory(workspace, category);
         DeckCategoryOrdering.AddSecondary(card, category);
         TrackChanged(upsertedCards, removedCards, card);
@@ -484,9 +484,9 @@ public sealed partial class DeckPlanService
     {
         DeckCard card = FindRequiredPlanCard(
             workspace,
-            Require(operation.CardName, "cardName"),
+            DeckServiceHelpers.Require(operation.CardName, "cardName"),
             category: null);
-        string category = NormalizeCategoryName(Require(operation.Category, "category"));
+        string category = NormalizeCategoryName(DeckServiceHelpers.Require(operation.Category, "category"));
         DeckCategoryOrdering.Remove(card, category);
         EnsureCategory(workspace, card.PrimaryCategory);
         TrackChanged(upsertedCards, removedCards, card);
@@ -504,9 +504,9 @@ public sealed partial class DeckPlanService
     {
         DeckCard card = FindRequiredPlanCard(
             workspace,
-            Require(operation.CardName, "cardName"),
+            DeckServiceHelpers.Require(operation.CardName, "cardName"),
             category: null);
-        string category = NormalizeCategoryName(Require(operation.Category, "category"));
+        string category = NormalizeCategoryName(DeckServiceHelpers.Require(operation.Category, "category"));
         EnsureCategory(workspace, category);
         DeckCategoryOrdering.SetPrimary(card, category);
         TrackChanged(upsertedCards, removedCards, card);
@@ -544,7 +544,7 @@ public sealed partial class DeckPlanService
 
         if (cardInfo is not null)
         {
-            ApplyCardSnapshot(card, cardInfo);
+            DeckServiceHelpers.ApplyCardSnapshot(card, cardInfo);
         }
 
         DeckCategoryOrdering.Normalize(card, category);
@@ -635,7 +635,7 @@ public sealed partial class DeckPlanService
             return 0;
         }
 
-        return DeckCategoryInclusion.IncludedCards(workspace)
+        return DeckServiceHelpers.IncludedCards(workspace)
             .Sum(card => Math.Max(0, card.Quantity));
     }
 
@@ -860,57 +860,57 @@ public sealed partial class DeckPlanService
         {
             DeckEditOperation.AddCardOperation add => await workspaces.AddCardAsync(
                 workspaceId,
-                Require(add.CardName, "cardName"),
+                DeckServiceHelpers.Require(add.CardName, "cardName"),
                 add.Quantity ?? 1,
                 add.Category ?? DeckDefaults.Mainboard,
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.RemoveCardOperation remove => await workspaces.RemoveCardAsync(
                 workspaceId,
-                Require(remove.CardName, "cardName"),
+                DeckServiceHelpers.Require(remove.CardName, "cardName"),
                 remove.Quantity ?? 1,
                 remove.Category,
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.SetCardQuantityOperation setQuantity => await workspaces.SetCardQuantityAsync(
                 workspaceId,
-                Require(setQuantity.CardName, "cardName"),
+                DeckServiceHelpers.Require(setQuantity.CardName, "cardName"),
                 setQuantity.Quantity ?? 1,
                 setQuantity.Category,
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.MoveCardOperation move => await workspaces.MoveCardAsync(
                 workspaceId,
-                Require(move.CardName, "cardName"),
-                Require(move.ToCategory, "toCategory"),
+                DeckServiceHelpers.Require(move.CardName, "cardName"),
+                DeckServiceHelpers.Require(move.ToCategory, "toCategory"),
                 move.FromCategory,
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.AddCardCategoryOperation addCategory => await workspaces.AddCardCategoryAsync(
                 workspaceId,
-                Require(addCategory.CardName, "cardName"),
-                Require(addCategory.Category, "category"),
+                DeckServiceHelpers.Require(addCategory.CardName, "cardName"),
+                DeckServiceHelpers.Require(addCategory.Category, "category"),
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.RemoveCardCategoryOperation removeCategory => await workspaces.RemoveCardCategoryAsync(
                 workspaceId,
-                Require(removeCategory.CardName, "cardName"),
-                Require(removeCategory.Category, "category"),
+                DeckServiceHelpers.Require(removeCategory.CardName, "cardName"),
+                DeckServiceHelpers.Require(removeCategory.Category, "category"),
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.SetPrimaryCardCategoryOperation setPrimaryCategory => await workspaces.SetPrimaryCardCategoryAsync(
                 workspaceId,
-                Require(setPrimaryCategory.CardName, "cardName"),
-                Require(setPrimaryCategory.Category, "category"),
+                DeckServiceHelpers.Require(setPrimaryCategory.CardName, "cardName"),
+                DeckServiceHelpers.Require(setPrimaryCategory.Category, "category"),
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.CreateCategoryOperation createCategory => await workspaces.CreateCategoryAsync(
                 workspaceId,
-                Require(createCategory.Category, "category"),
-                createCategory.IncludedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(Require(createCategory.Category, "category")),
-                createCategory.IncludedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(Require(createCategory.Category, "category")),
+                DeckServiceHelpers.Require(createCategory.Category, "category"),
+                createCategory.IncludedInDeck ?? !DeckDefaults.IsDefaultExcludedCategory(DeckServiceHelpers.Require(createCategory.Category, "category")),
+                createCategory.IncludedInPrice ?? !DeckDefaults.IsDefaultPriceExcludedCategory(DeckServiceHelpers.Require(createCategory.Category, "category")),
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.RenameCategoryOperation renameCategory => await workspaces.RenameCategoryAsync(
                 workspaceId,
-                Require(renameCategory.FromCategory, "fromCategory"),
-                Require(renameCategory.ToCategory, "toCategory"),
+                DeckServiceHelpers.Require(renameCategory.FromCategory, "fromCategory"),
+                DeckServiceHelpers.Require(renameCategory.ToCategory, "toCategory"),
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.DeleteCategoryOperation deleteCategory => await workspaces.DeleteCategoryAsync(
                 workspaceId,
-                Require(deleteCategory.Category, "category"),
+                DeckServiceHelpers.Require(deleteCategory.Category, "category"),
                 deleteCategory.ToCategory ?? DeckDefaults.Mainboard,
                 cancellationToken).ConfigureAwait(false),
             DeckEditOperation.UpdateDeckMetadataOperation updateMetadata => await workspaces.UpdateDeckMetadataAsync(

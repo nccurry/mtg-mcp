@@ -6,7 +6,7 @@
 | Risk | Medium-High (large internal refactor) |
 | Depends on | Phase 4 (typed contracts) recommended first |
 | Unblocks | sustainable change velocity; easier Phase 7 |
-| Target version | 0.12.0 |
+| Target version | 0.14.0 |
 
 Goal: tame the largest services and the shared base so Core stays changeable and testable,
 without altering external behavior.
@@ -55,6 +55,22 @@ Non-goals:
   `DeckSimulationService.cs:42-46`) because the two-level base split doesn't cleanly cover
   who needs the gateway.
 
+Status update after Sub-PRs A/B:
+- `JsonFileStore<T>` now lives in `src/MtgMcp.Core/Storage/JsonFileStore.cs`, and both
+  JSON-backed repositories delegate path sanitization, atomic writes, reads, deletes, and
+  listing to it.
+- Analysis metrics now live in `src/MtgMcp.Core/Analysis/DeckAnalysisMetrics.cs` and are
+  injected where needed. The deleted `DeckServiceBase.AnalysisMetrics.cs` file is guarded
+  by an architecture test.
+- The old recommendation helper partial contained workspace normalization, snapshot,
+  counting, and plan helpers used across analysis, plans, simulation, workspaces, and
+  recommendations. It now lives as a shared internal helper in
+  `src/MtgMcp.Core/Workspaces/DeckServiceHelpers.cs`; keeping it under `Recommendations/`
+  would misstate ownership. The deleted `DeckServiceBase.RecommendationHelpers.cs` file is
+  also guarded by the architecture test.
+- Archidekt-required operation checks now share the same helper path instead of duplicating
+  the null-check/error text between mutation and simulation services.
+
 ## 4. Workstreams
 
 This phase is the most likely to sprawl, so it is structured as **independent, ordered
@@ -92,8 +108,9 @@ out of scope for this phase.
 
 ### 4.2 Retire the fat base class
 - Move `DeckServiceBase.AnalysisMetrics.cs` into an injectable `DeckAnalysisMetrics`
-  collaborator and `DeckServiceBase.RecommendationHelpers.cs` into recommendation-side
-  helpers; inject where used instead of inheriting everywhere.
+  collaborator and `DeckServiceBase.RecommendationHelpers.cs` into shared deck-service
+  helpers; inject metrics where used and call helpers explicitly instead of inheriting
+  them everywhere.
 - Reduce the base to the genuinely shared minimum (repo/catalog access, workspace load
   helpers). Resolve the duplicated `RequireArchidektGateway` by giving gateway-needing
   services a shared small helper or a dedicated base that actually matches need.
@@ -119,7 +136,9 @@ out of scope for this phase.
 ## 5. Files to create / change
 
 - Create: focused service classes under `Recommendations/`, `Analysis/`,
-  `Playgroups/`; neutral storage helpers under `Storage/` such as `JsonFileStore.cs`.
+  `Playgroups/`; neutral storage helpers under `Storage/` such as `JsonFileStore.cs`;
+  shared base-adjacent helpers under `Workspaces/` when callers span multiple deck
+  subdomains.
 - Change: `DeckRecommendationService*` (shrunk/removed), `DeckServiceBase*` (slimmed),
   `JsonDeckWorkspaceRepository`/`JsonDeckPlanRepository` (delegate to store),
   `Hosting/MtgMcpHost.cs` DI registrations, `DeckSimulationService.Goldfish.cs` (optional

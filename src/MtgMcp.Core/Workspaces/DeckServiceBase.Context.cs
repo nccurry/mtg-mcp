@@ -43,11 +43,11 @@ public abstract partial class DeckServiceBase
     protected static string? DominantTheme(DeckWorkspace workspace)
     {
         Dictionary<string, int> tags = new(StringComparer.OrdinalIgnoreCase);
-        foreach (DeckCard card in IncludedCards(workspace))
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace))
         {
             foreach (string tag in DeckRoleClassifier.Classify(card).Tags)
             {
-                AddCount(tags, tag, card.Quantity);
+                DeckServiceHelpers.AddCount(tags, tag, card.Quantity);
             }
         }
 

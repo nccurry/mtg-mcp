@@ -98,6 +98,7 @@ public static class MtgMcpHost
             return CorpusCacheFactory.Create(options.DataDir, options.Intelligence.Cache);
         });
         builder.Services.AddTransient<DeckWorkspaceService>();
+        builder.Services.AddTransient<DeckAnalysisMetrics>();
         builder.Services.AddTransient<DeckAnalysisService>();
         builder.Services.AddTransient<DeckRecommendationService>();
         builder.Services.AddTransient<DeckPlanService>();

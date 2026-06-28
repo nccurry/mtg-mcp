@@ -89,7 +89,7 @@ public sealed partial class DeckWorkspaceService
             DeckWorkspace workspace = await RequireMoxfieldGateway()
                 .ImportDeckAsync(source.ExternalId, cancellationToken)
                 .ConfigureAwait(false);
-            await NormalizeWorkspaceCardsAsync(workspace, "missing", cancellationToken)
+            await DeckServiceHelpers.NormalizeWorkspaceCardsAsync(CardCatalog, workspace, "missing", cancellationToken)
                 .ConfigureAwait(false);
             workspace.Mode = WorkspaceMode.Local;
             workspace.WriteBack = false;

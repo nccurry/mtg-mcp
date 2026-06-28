@@ -897,7 +897,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         CardInfo? candidateInfo,
         decimal? candidatePrice)
     {
-        List<DeckCard> included = IncludedCards(workspace).Where(card => !IsCommanderCard(card)).ToList();
+        List<DeckCard> included = DeckServiceHelpers.IncludedCards(workspace).Where(card => !IsCommanderCard(card)).ToList();
         Dictionary<string, int> roleCounts = included
             .Select(card => DeckRoleClassifier.Classify(card).PrimaryRole)
             .GroupBy(role => role, StringComparer.OrdinalIgnoreCase)
@@ -908,14 +908,14 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             CardRoleAssignment currentRole = DeckRoleClassifier.Classify(card);
             bool roleOverlap = currentRole.PrimaryRole.Equals(candidateRole.PrimaryRole, StringComparison.OrdinalIgnoreCase)
                 || currentRole.Tags.Intersect(candidateRole.Tags, StringComparer.OrdinalIgnoreCase).Any();
-            bool curveSlot = IsSameCurveSlot(GetSnapshot(card).ManaValue, candidateInfo?.ManaValue);
+            bool curveSlot = IsSameCurveSlot(DeckServiceHelpers.GetSnapshot(card).ManaValue, candidateInfo?.ManaValue);
             double duplicateDensity = roleCounts.TryGetValue(currentRole.PrimaryRole, out int count)
                 ? Math.Clamp(count / 10.0, 0, 1)
                 : 0;
             bool themeMismatch = candidateRole.Tags.Count > 0
                 && !currentRole.Tags.Intersect(candidateRole.Tags, StringComparer.OrdinalIgnoreCase).Any()
                 && !currentRole.PrimaryRole.Equals(candidateRole.PrimaryRole, StringComparison.OrdinalIgnoreCase);
-            decimal? currentPrice = ReadUsdPrice(GetSnapshot(card));
+            decimal? currentPrice = ReadUsdPrice(DeckServiceHelpers.GetSnapshot(card));
             decimal? priceDelta = currentPrice.HasValue && candidatePrice.HasValue
                 ? currentPrice.Value - candidatePrice.Value
                 : null;
@@ -945,7 +945,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
                 DuplicateEffectDensity = duplicateDensity,
                 ThemeMismatch = themeMismatch,
                 PriceDelta = priceDelta,
-                ScryfallUri = GetSnapshot(card).ScryfallUri,
+                ScryfallUri = DeckServiceHelpers.GetSnapshot(card).ScryfallUri,
                 ProtectedCardWarnings = protectedWarnings,
                 Score = Math.Clamp(score, 0, 1)
             };

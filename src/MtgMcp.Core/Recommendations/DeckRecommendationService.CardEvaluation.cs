@@ -117,7 +117,7 @@ public sealed partial class DeckRecommendationService
             PrimaryCategory = DeckDefaults.Mainboard,
             Categories = [DeckDefaults.Mainboard],
         };
-        ApplyCardSnapshot(card, info);
+        DeckServiceHelpers.ApplyCardSnapshot(card, info);
         return card;
     }
 }

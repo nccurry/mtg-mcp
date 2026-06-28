@@ -169,10 +169,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         ResolvedSimulationProfile profileResolution = (simulationProfiles ?? SimulationProfileCatalog.CreateDefault())
             .Resolve(workspace, requestedProfile, intent);
         CommandZonePlan commandZonePlan = CommandZonePlanner.Build(
-            IncludedCards(workspace),
+            DeckServiceHelpers.IncludedCards(workspace),
             profileResolution.Profile);
         CommanderSpecificSimulationRules commanderRules = CommanderSpecificSimulationRules.Build(
-            IncludedCards(workspace));
+            DeckServiceHelpers.IncludedCards(workspace));
         List<GoldfishRun> runs = [];
         for (int index = 0; index < safeSimulations; index++)
         {
@@ -535,7 +535,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static List<DeckCard> ExpandLibrary(DeckWorkspace workspace)
     {
         List<DeckCard> cards = [];
-        foreach (DeckCard card in IncludedCards(workspace).Where(card => !IsCommanderCard(card)))
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace).Where(card => !IsCommanderCard(card)))
         {
             for (int copy = 0; copy < Math.Max(0, card.Quantity); copy++)
             {
@@ -706,7 +706,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static string? BuildPartialCommanderDeckWarning(DeckWorkspace workspace)
     {
-        int includedCount = IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity));
+        int includedCount = DeckServiceHelpers.IncludedCards(workspace).Sum(card => Math.Max(0, card.Quantity));
         if (!MulliganHeuristics.UsesCommanderDeckConstruction(workspace.Format) || includedCount == 100)
         {
             return null;
@@ -744,7 +744,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int GoldfishManaValue(DeckCard card)
     {
-        return Math.Max(0, (int)Math.Ceiling(GetSnapshot(card).ManaValue ?? 2));
+        return Math.Max(0, (int)Math.Ceiling(DeckServiceHelpers.GetSnapshot(card).ManaValue ?? 2));
     }
 
     /// <summary>
@@ -759,7 +759,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int availableMana,
         bool commanderOnline)
     {
-        CardSnapshot snapshot = GetSnapshot(card);
+        CardSnapshot snapshot = DeckServiceHelpers.GetSnapshot(card);
         string text = snapshot.OracleText ?? "";
         int printedCost = GoldfishManaValue(card);
         int requiredMana = printedCost;
@@ -838,7 +838,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int artifactTokens,
         int foodTokens)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         if (!ContainsAny(text, "costs {1} less", "cost {1} less", "costs one less", "cost one less"))
         {
             return 0;
@@ -866,7 +866,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
         if (ContainsAny(text, "for each enchantment"))
         {
-            return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Enchantment"));
+            return battlefield.Count(permanent => ContainsAny(DeckServiceHelpers.GetSnapshot(permanent).TypeLine ?? "", "Enchantment"));
         }
 
         return 0;
@@ -881,7 +881,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int tokens,
         int artifactTokens)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         if (!ContainsAny(text, "affinity for"))
         {
             return 0;
@@ -904,7 +904,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
         if (ContainsAny(text, "affinity for enchantments"))
         {
-            return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Enchantment"));
+            return battlefield.Count(permanent => ContainsAny(DeckServiceHelpers.GetSnapshot(permanent).TypeLine ?? "", "Enchantment"));
         }
 
         return 0;
@@ -915,7 +915,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int CountArtifactPermanents(IReadOnlyList<DeckCard> battlefield)
     {
-        return battlefield.Count(permanent => ContainsAny(GetSnapshot(permanent).TypeLine ?? "", "Artifact"));
+        return battlefield.Count(permanent => ContainsAny(DeckServiceHelpers.GetSnapshot(permanent).TypeLine ?? "", "Artifact"));
     }
 
     /// <summary>
@@ -928,7 +928,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             return 0;
         }
 
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return ContainsAny(text, "if you control your commander", "if you control a commander", "as long as you control your commander")
             && ContainsAny(text, "costs {1} less", "cost {1} less", "costs one less", "cost one less")
             ? 1
@@ -957,13 +957,13 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool CostReducerApplies(DeckCard reducer, DeckCard spell)
     {
-        string text = GetSnapshot(reducer).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(reducer).OracleText ?? "";
         if (!ContainsAny(text, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast"))
         {
             return false;
         }
 
-        string typeLine = GetSnapshot(spell).TypeLine ?? "";
+        string typeLine = DeckServiceHelpers.GetSnapshot(spell).TypeLine ?? "";
         if (ContainsAny(text, "commander spells") && !IsCommanderCard(spell))
         {
             return false;
@@ -1035,7 +1035,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool HasGoldfishXCost(DeckCard card)
     {
-        CardSnapshot snapshot = GetSnapshot(card);
+        CardSnapshot snapshot = DeckServiceHelpers.GetSnapshot(card);
         return ContainsAny(snapshot.ManaCost ?? "", "{X}", "{x}");
     }
 
@@ -1044,7 +1044,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool UsesXAsScalingPayoff(DeckCard card)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return ContainsAny(text, "create X", "draw X", "deals X", "get +X/+X", "gets +X/+X", "lose X life");
     }
 
@@ -1056,7 +1056,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         CardRoleAssignment role,
         int xValue)
     {
-        string text = GetSnapshot(spell).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(spell).OracleText ?? "";
         int food = EstimateNamedTokenCount(text, "Food");
         int artifact = food;
         artifact += EstimateNamedTokenCount(text, "Treasure");
@@ -1142,7 +1142,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int EstimateImmediateLifeGain(DeckCard spell, GoldfishTokenProduction tokenProduction)
     {
-        string text = GetSnapshot(spell).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(spell).OracleText ?? "";
         int life = 0;
         if (ContainsAny(text, "gain 3 life", "gain three life"))
         {
@@ -1170,7 +1170,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int EstimateTokenScaling(DeckCard spell, int xValue)
     {
-        string text = GetSnapshot(spell).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(spell).OracleText ?? "";
         if (xValue > 0 && ContainsAny(text, "create X"))
         {
             return Math.Min(8, xValue);
@@ -1194,7 +1194,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             return 0;
         }
 
-        string text = GetSnapshot(spell).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(spell).OracleText ?? "";
         return ContainsAny(text, "deals X", "lose X life", "get +X/+X", "gets +X/+X")
             ? Math.Min(8, Math.Max(2, xValue / 2))
             : 0;
@@ -1382,7 +1382,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
 
             lifeGainEvents += EstimateImmediateLifeGain(spell, tokenProduction);
 
-            if (ContainsAny(GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
+            if (ContainsAny(DeckServiceHelpers.GetSnapshot(spell).OracleText ?? "", "venture into the dungeon", "take the initiative"))
             {
                 dungeonProgress++;
             }
@@ -1469,7 +1469,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool SetsUpGoldfishGraveyard(DeckCard spell)
     {
-        string text = GetSnapshot(spell).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(spell).OracleText ?? "";
         return ContainsAny(
             text,
             "put it into your graveyard",
@@ -1498,8 +1498,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static bool IsGoldfishReanimationTarget(DeckCard card)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        string typeLine = GetSnapshot(card).TypeLine ?? "";
-        string text = GetSnapshot(card).OracleText ?? "";
+        string typeLine = DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         bool meaningfulCreature = typeLine.Contains("Creature", StringComparison.OrdinalIgnoreCase)
             && (GoldfishManaValue(card) >= 4
                 || role.PrimaryRole.Equals(DeckRoles.Wincons, StringComparison.OrdinalIgnoreCase)
@@ -1641,7 +1641,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static bool IsEvasionRouteCard(DeckCard card)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return role.Tags.Contains(DeckTags.Evasion, StringComparer.OrdinalIgnoreCase)
             || ContainsAny(text, "trample", "flying", "menace", "can't be blocked", "unblockable");
     }
@@ -1651,7 +1651,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool IsPumpRouteCard(DeckCard card)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return ContainsAny(
             text,
             "creatures you control get",
@@ -1673,7 +1673,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         return IsFinisherRouteCard(card)
             || IsEvasionRouteCard(card)
             || IsPumpRouteCard(card)
-            || (ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature")
+            || (ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Creature")
                 && GoldfishManaValue(card) >= 5);
     }
 
@@ -1724,7 +1724,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool IsPermanent(DeckCard card)
     {
-        string typeLine = GetSnapshot(card).TypeLine ?? "";
+        string typeLine = DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "";
         return ContainsAny(typeLine, "Creature", "Artifact", "Enchantment", "Planeswalker", "Battle", "Land");
     }
 
@@ -1733,7 +1733,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool IsCreatureSpell(DeckCard card)
     {
-        return ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature");
+        return ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Creature");
     }
 
     /// <summary>
@@ -1813,12 +1813,12 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         int permanentPower = 0;
         foreach (DeckCard card in battlefield)
         {
-            if (!ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"))
+            if (!ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Creature"))
             {
                 continue;
             }
 
-            permanentPower += Math.Max(1, (int)Math.Ceiling(GetSnapshot(card).ManaValue ?? 2));
+            permanentPower += Math.Max(1, (int)Math.Ceiling(DeckServiceHelpers.GetSnapshot(card).ManaValue ?? 2));
             if (IsEvasionRouteCard(card))
             {
                 permanentPower += 1;
@@ -1920,7 +1920,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static bool IsCommanderDamageSupport(DeckCard card)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return role.Tags.Contains(DeckTags.Voltron, StringComparer.OrdinalIgnoreCase)
             || role.Tags.Contains(DeckTags.Evasion, StringComparer.OrdinalIgnoreCase)
             || ContainsAny(
@@ -1948,10 +1948,10 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         double highCmcHitDensity = HighCmcCreatureHitDensity(workspace);
         bool topdeckSetup = battlefield.Concat(hand).Any(IsTopdeckSetupCard);
         bool libraryRevealCheat = commander is not null;
-        int activationCost = commander is null ? int.MaxValue : EstimateActivationCost(GetSnapshot(commander).OracleText ?? "");
+        int activationCost = commander is null ? int.MaxValue : EstimateActivationCost(DeckServiceHelpers.GetSnapshot(commander).OracleText ?? "");
         bool activationManaAvailable = commanderOnline && libraryRevealCheat && availableMana >= activationCost;
         bool repeatableActivation = commander is not null
-            && !ContainsAny(GetSnapshot(commander).OracleText ?? "", "sacrifice", "exile this", "activate only once");
+            && !ContainsAny(DeckServiceHelpers.GetSnapshot(commander).OracleText ?? "", "sacrifice", "exile this", "activate only once");
         int pressure = 0;
         if (commanderOnline && libraryRevealCheat)
         {
@@ -2088,7 +2088,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             return false;
         }
 
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return text.Contains(':', StringComparison.Ordinal)
             && ContainsAny(text, "top", "library", "reveal")
             && ContainsAny(text, "put", "battlefield", "cast");
@@ -2099,7 +2099,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool IsTopdeckSetupCard(DeckCard card)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return ContainsAny(text, "scry", "surveil", "look at the top", "rearrange", "put on top", "put that card on top");
     }
 
@@ -2110,15 +2110,15 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     {
         int creatures = 0;
         int highCmcCreatures = 0;
-        foreach (DeckCard card in IncludedCards(workspace).Where(card => !IsCommanderCard(card)))
+        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace).Where(card => !IsCommanderCard(card)))
         {
-            if (!ContainsAny(GetSnapshot(card).TypeLine ?? "", "Creature"))
+            if (!ContainsAny(DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "", "Creature"))
             {
                 continue;
             }
 
             creatures += Math.Max(0, card.Quantity);
-            if ((GetSnapshot(card).ManaValue ?? 0) >= 5)
+            if ((DeckServiceHelpers.GetSnapshot(card).ManaValue ?? 0) >= 5)
             {
                 highCmcCreatures += Math.Max(0, card.Quantity);
             }
@@ -2175,8 +2175,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool IsSorceryFinisherCard(DeckCard card)
     {
-        string typeLine = GetSnapshot(card).TypeLine ?? "";
-        string text = GetSnapshot(card).OracleText ?? "";
+        string typeLine = DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return typeLine.Contains("Sorcery", StringComparison.OrdinalIgnoreCase)
             && ContainsAny(text, "creatures you control", "target creatures", "additional combat", "extra combat", "draw cards equal to")
             && ContainsAny(text, "+x/+x", "+1/+1", "+2/+2", "+3/+3", "trample", "additional combat", "extra combat", "greatest power", "power among creatures");
@@ -2187,7 +2187,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int EstimateProjectedFinisherDamage(DeckCard finisher, int boardPower)
     {
-        string text = GetSnapshot(finisher).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(finisher).OracleText ?? "";
         int damage = boardPower;
         if (ContainsAny(text, "+x/+x", "greatest power", "power among creatures"))
         {
@@ -2224,8 +2224,8 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static int EstimatePumpPressure(DeckCard card)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
-        string typeLine = GetSnapshot(card).TypeLine ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
+        string typeLine = DeckServiceHelpers.GetSnapshot(card).TypeLine ?? "";
         int pressure = 0;
         if (ContainsAny(typeLine, "Equipment", "Aura"))
         {
@@ -2291,7 +2291,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static bool IsLifegainDrainPayoff(DeckCard card)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return role.Tags.Contains(DeckTags.Drain, StringComparer.OrdinalIgnoreCase)
             || (ContainsAny(text, "whenever you gain life", "whenever you gained life")
                 && ContainsAny(text, "each opponent loses", "opponent loses", "loses that much life", "you win the game"));
@@ -2302,7 +2302,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static bool IsArtifactLeavesDrainPayoff(DeckCard card)
     {
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return ContainsAny(
                 text,
                 "whenever an artifact is put into a graveyard",
@@ -2319,7 +2319,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     private static bool IsFoodCombatPayoff(DeckCard card)
     {
         CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-        string text = GetSnapshot(card).OracleText ?? "";
+        string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
         return role.Tags.Contains(DeckTags.CombatPayoff, StringComparer.OrdinalIgnoreCase)
             || role.Tags.Contains(DeckTags.Finishers, StringComparer.OrdinalIgnoreCase)
             || ContainsAny(
@@ -2340,7 +2340,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
         return battlefield.Any(card =>
         {
             CardRoleAssignment role = DeckRoleClassifier.Classify(card);
-            string text = GetSnapshot(card).OracleText ?? "";
+            string text = DeckServiceHelpers.GetSnapshot(card).OracleText ?? "";
             return role.Tags.Contains(DeckTags.Engines, StringComparer.OrdinalIgnoreCase)
                 || (ContainsAny(text, "whenever", "at the beginning")
                     && ContainsAny(text, "draw", "create", "return", "each opponent loses", "opponent loses"));
@@ -2696,7 +2696,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// </summary>
     private static List<string> RouteCards(DeckWorkspace workspace, string route)
     {
-        return IncludedCards(workspace)
+        return DeckServiceHelpers.IncludedCards(workspace)
             .Where(card =>
             {
                 CardRoleAssignment role = DeckRoleClassifier.Classify(card);
@@ -2712,6 +2712,14 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(5)
             .ToList();
+    }
+
+    /// <summary>
+    /// Checks whether a value contains any of the supplied phrases.
+    /// </summary>
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        return DeckAnalysisMetrics.ContainsAny(value, needles);
     }
 
     /// <summary>
