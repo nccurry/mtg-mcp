@@ -39,6 +39,7 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private async Task<JsonDocument> GetJsonAsync(string uri, CancellationToken cancellationToken)
     {
+        bool refreshedAfterUnauthorized = false;
         for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
         {
             await WaitForConfiguredRateLimitAsync(cancellationToken).ConfigureAwait(false);
@@ -54,6 +55,14 @@ public sealed partial class ArchidektGateway
                 return string.IsNullOrWhiteSpace(responseBody)
                     ? JsonDocument.Parse("{}")
                     : JsonDocument.Parse(responseBody);
+            }
+
+            if (!refreshedAfterUnauthorized
+                && IsUnauthorized(response)
+                && await TryRefreshAuthenticationAsync(cancellationToken).ConfigureAwait(false))
+            {
+                refreshedAfterUnauthorized = true;
+                continue;
             }
 
             if (IsRateLimited(response, responseBody) && attempt < MaxRateLimitRetries)
@@ -85,6 +94,7 @@ public sealed partial class ArchidektGateway
             await EnsureAuthenticatedAsync(required: true, cancellationToken).ConfigureAwait(false);
         }
 
+        bool refreshedAfterUnauthorized = false;
         for (int attempt = 0; attempt <= MaxTransientWriteRetries; attempt++)
         {
             using HttpRequestMessage request = new(method, uri)
@@ -105,6 +115,15 @@ public sealed partial class ArchidektGateway
                 return string.IsNullOrWhiteSpace(responseBody)
                     ? JsonDocument.Parse("{}")
                     : JsonDocument.Parse(responseBody);
+            }
+
+            if (authenticate
+                && !refreshedAfterUnauthorized
+                && IsUnauthorized(response)
+                && await TryRefreshAuthenticationAsync(cancellationToken).ConfigureAwait(false))
+            {
+                refreshedAfterUnauthorized = true;
+                continue;
             }
 
             if (IsRateLimited(response, responseBody) && attempt < MaxTransientWriteRetries)
@@ -136,6 +155,7 @@ public sealed partial class ArchidektGateway
         CancellationToken cancellationToken
     )
     {
+        bool refreshedAfterUnauthorized = false;
         for (int attempt = 0; attempt <= MaxRateLimitRetries; attempt++)
         {
             using HttpRequestMessage request = new(method, uri);
@@ -150,6 +170,14 @@ public sealed partial class ArchidektGateway
             if (response.IsSuccessStatusCode)
             {
                 return;
+            }
+
+            if (!refreshedAfterUnauthorized
+                && IsUnauthorized(response)
+                && await TryRefreshAuthenticationAsync(cancellationToken).ConfigureAwait(false))
+            {
+                refreshedAfterUnauthorized = true;
+                continue;
             }
 
             if (IsRateLimited(response, responseBody) && attempt < MaxRateLimitRetries)
@@ -240,6 +268,14 @@ public sealed partial class ArchidektGateway
     {
         return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
             || responseBody.Contains("request was throttled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Determines whether Archidekt rejected the current authentication token.
+    /// </summary>
+    private static bool IsUnauthorized(HttpResponseMessage response)
+    {
+        return response.StatusCode == System.Net.HttpStatusCode.Unauthorized;
     }
 
     /// <summary>

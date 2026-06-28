@@ -1607,6 +1607,183 @@ public sealed class ArchidektGatewayTests
     }
 
     /// <summary>
+    /// Verifies that cached Archidekt JWTs refresh before requests once the token has expired.
+    /// </summary>
+    [Fact]
+    public async Task UsernamePasswordLogin_RefreshesExpiredJwtBeforeNextRequest()
+    {
+        string expiredJwt = CreateJwt(DateTimeOffset.UtcNow.AddMinutes(-5));
+        string freshJwt = CreateJwt(DateTimeOffset.UtcNow.AddHours(1));
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/rest-auth/login/",
+            $$"""{ "key": "{{expiredJwt}}", "user": { "id": 42 } }"""
+        );
+        handler.Get("api/users/42/decks/", """{ "decks": [] }""");
+        handler.Post(
+            "api/rest-auth/login/",
+            $$"""{ "key": "{{freshJwt}}", "user": { "id": 42 } }"""
+        );
+        handler.Get("api/users/42/decks/", """{ "decks": [] }""");
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Username = "user",
+                Password = "pass",
+                EnableUsernamePasswordLogin = true,
+            }
+        );
+
+        await gateway.ListDecksAsync(TestContext.Current.CancellationToken);
+        await gateway.ListDecksAsync(TestContext.Current.CancellationToken);
+
+        handler.Requests.Select(request => request.Path)
+            .Should()
+            .Equal(
+                "api/rest-auth/login/",
+                "api/users/42/decks/",
+                "api/rest-auth/login/",
+                "api/users/42/decks/"
+            );
+        handler.Requests[0].Authorization.Should().BeNull();
+        handler.Requests[1].Authorization.Should().Be($"JWT {expiredJwt}");
+        handler.Requests[2].Authorization.Should().BeNull();
+        handler.Requests[3].Authorization.Should().Be($"JWT {freshJwt}");
+    }
+
+    /// <summary>
+    /// Verifies that Archidekt writes retry once after a stale JWT is rejected.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeck_ReloginsAndRetriesOnceAfterUnauthorized()
+    {
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "key": "old-jwt", "user": { "id": 42 } }"""
+        );
+        handler.Post(
+            "api/decks/v2/",
+            """{ "detail": "token expired" }""",
+            HttpStatusCode.Unauthorized
+        );
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "key": "fresh-jwt", "user": { "id": 42 } }"""
+        );
+        handler.Post(
+            "api/decks/v2/",
+            """
+            {
+              "id": 456,
+              "name": "Migrated",
+              "deckFormat": 3,
+              "categories": [],
+              "cards": []
+            }
+            """
+        );
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Username = "user",
+                Password = "pass",
+                EnableUsernamePasswordLogin = true,
+            }
+        );
+
+        DeckWorkspace workspace = await gateway.CreateDeckAsync(
+            new ArchidektDeckCreateRequest
+            {
+                Name = "Migrated",
+                Format = "commander",
+                Visibility = "private",
+            },
+            TestContext.Current.CancellationToken);
+
+        workspace.ArchidektDeckId.Should().Be("456");
+        handler.Requests.Select(request => request.Path)
+            .Should()
+            .Equal(
+                "api/rest-auth/login/",
+                "api/decks/v2/",
+                "api/rest-auth/login/",
+                "api/decks/v2/"
+            );
+        handler.Requests[0].Authorization.Should().BeNull();
+        handler.Requests[1].Authorization.Should().Be("JWT old-jwt");
+        handler.Requests[2].Authorization.Should().BeNull();
+        handler.Requests[3].Authorization.Should().Be("JWT fresh-jwt");
+    }
+
+    /// <summary>
+    /// Verifies that repeated Archidekt authorization failures do not trigger repeated logins.
+    /// </summary>
+    [Fact]
+    public async Task CreateDeck_DoesNotRetryUnauthorizedMoreThanOnce()
+    {
+        RecordingHandler handler = new();
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "key": "old-jwt", "user": { "id": 42 } }"""
+        );
+        handler.Post(
+            "api/decks/v2/",
+            """{ "detail": "token expired" }""",
+            HttpStatusCode.Unauthorized
+        );
+        handler.Post(
+            "api/rest-auth/login/",
+            """{ "key": "fresh-jwt", "user": { "id": 42 } }"""
+        );
+        handler.Post(
+            "api/decks/v2/",
+            """{ "detail": "token still expired" }""",
+            HttpStatusCode.Unauthorized
+        );
+
+        ArchidektGateway gateway = CreateGateway(
+            handler,
+            new ArchidektOptions
+            {
+                BaseAddress = new Uri("https://archidekt.test/"),
+                Username = "user",
+                Password = "pass",
+                EnableUsernamePasswordLogin = true,
+            }
+        );
+
+        Func<Task> act = () => gateway.CreateDeckAsync(
+            new ArchidektDeckCreateRequest
+            {
+                Name = "Migrated",
+                Format = "commander",
+                Visibility = "private",
+            },
+            TestContext.Current.CancellationToken);
+
+        await act.Should()
+            .ThrowAsync<HttpRequestException>()
+            .WithMessage("*401*token still expired*");
+        handler.Requests.Select(request => request.Path)
+            .Should()
+            .Equal(
+                "api/rest-auth/login/",
+                "api/decks/v2/",
+                "api/rest-auth/login/",
+                "api/decks/v2/"
+            );
+        handler.Requests[1].Authorization.Should().Be("JWT old-jwt");
+        handler.Requests[3].Authorization.Should().Be("JWT fresh-jwt");
+    }
+
+    /// <summary>
     /// Verifies that auth status loads credential file without exposing secrets.
     /// </summary>
     [Fact]
@@ -1961,6 +2138,29 @@ public sealed class ArchidektGatewayTests
     {
         using JsonDocument document = JsonDocument.Parse(request.Body);
         return document.RootElement.GetProperty("cards")[0].GetProperty("cardid").GetInt32();
+    }
+
+    /// <summary>
+    /// Creates a compact JWT-shaped test token with an expiration payload.
+    /// </summary>
+    private static string CreateJwt(DateTimeOffset expiresAt)
+    {
+        string header = EncodeBase64Url("""{ "alg": "none", "typ": "JWT" }""");
+        string payload = EncodeBase64Url(
+            $$"""{ "exp": {{expiresAt.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)}} }"""
+        );
+        return $"{header}.{payload}.signature";
+    }
+
+    /// <summary>
+    /// Encodes JSON as a JWT base64url segment.
+    /// </summary>
+    private static string EncodeBase64Url(string value)
+    {
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
     }
 
     /// <summary>

@@ -10,6 +10,11 @@ namespace MtgMcp.Archidekt;
 public sealed partial class ArchidektGateway
 {
     /// <summary>
+    /// Refreshes decoded JWTs shortly before expiry so requests do not race token lifetime.
+    /// </summary>
+    private static readonly TimeSpan JwtRefreshSkew = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// Returns redacted Archidekt credential availability.
     /// </summary>
     public Task<AuthStatus> GetAuthStatusAsync(CancellationToken cancellationToken)
@@ -78,10 +83,22 @@ public sealed partial class ArchidektGateway
     /// </summary>
     private async Task EnsureAuthenticatedAsync(bool required, CancellationToken cancellationToken)
     {
+        await EnsureAuthenticatedAsync(required, forceRefresh: false, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds or refreshes an Archidekt bearer token when credentials are available or required.
+    /// </summary>
+    private async Task<bool> EnsureAuthenticatedAsync(
+        bool required,
+        bool forceRefresh,
+        CancellationToken cancellationToken)
+    {
         ArchidektCredentials loaded = LoadCredentials();
-        if (httpClient.DefaultRequestHeaders.Authorization is not null)
+        if (!forceRefresh && HasUsableAuthorizationHeader())
         {
-            return;
+            return false;
         }
 
         await authLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -89,27 +106,49 @@ public sealed partial class ArchidektGateway
         {
             // The gateway may receive parallel requests, so only one request should
             // create a token while the rest reuse the cached result.
-            if (!string.IsNullOrWhiteSpace(sessionJwt))
+            if (!forceRefresh && HasUsableAuthorizationHeader())
             {
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                    options.AuthScheme,
-                    sessionJwt
-                );
-                return;
+                return false;
+            }
+
+            bool sessionRequiresRefresh =
+                !string.IsNullOrWhiteSpace(sessionJwt) && SessionJwtRequiresRefresh();
+            if (!forceRefresh && !string.IsNullOrWhiteSpace(sessionJwt) && !sessionRequiresRefresh)
+            {
+                ApplySessionAuthorization(sessionJwt);
+                return false;
             }
 
             string? username = loaded.Username;
             string? password = loaded.Password;
-            if (options.EnableUsernamePasswordLogin
+            bool canLogin = options.EnableUsernamePasswordLogin
                 && !string.IsNullOrWhiteSpace(username)
-                && !string.IsNullOrWhiteSpace(password))
+                && !string.IsNullOrWhiteSpace(password);
+            if (forceRefresh && !canLogin)
             {
+                return false;
+            }
+
+            if (sessionRequiresRefresh && !canLogin)
+            {
+                return false;
+            }
+
+            if (forceRefresh || sessionRequiresRefresh)
+            {
+                ClearSessionAuthorization();
+            }
+
+            if (canLogin)
+            {
+                string usernameOrEmail = username!;
+                string loginPassword = password!;
                 string? jwt = null;
                 try
                 {
                     jwt = await TryLoginAsync(
-                            username,
-                            password,
+                            usernameOrEmail,
+                            loginPassword,
                             cancellationToken
                         )
                         .ConfigureAwait(false);
@@ -121,12 +160,8 @@ public sealed partial class ArchidektGateway
 
                 if (!string.IsNullOrWhiteSpace(jwt))
                 {
-                    sessionJwt = jwt;
-                    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                        options.AuthScheme,
-                        jwt
-                    );
-                    return;
+                    ApplySessionJwt(jwt);
+                    return true;
                 }
             }
 
@@ -141,11 +176,138 @@ public sealed partial class ArchidektGateway
                     "Archidekt credentials are required for this operation."
                 );
             }
+
+            return false;
         }
         finally
         {
             authLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Attempts one re-login after an authenticated request receives an unauthorized response.
+    /// </summary>
+    private async Task<bool> TryRefreshAuthenticationAsync(CancellationToken cancellationToken)
+    {
+        return await EnsureAuthenticatedAsync(
+                required: false,
+                forceRefresh: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies a newly issued Archidekt token to future requests.
+    /// </summary>
+    private void ApplySessionJwt(string jwt)
+    {
+        sessionJwt = jwt;
+        sessionJwtExpiresAt = TryReadJwtExpiration(jwt);
+        ApplySessionAuthorization(jwt);
+    }
+
+    /// <summary>
+    /// Sets the HTTP Authorization header from a cached token.
+    /// </summary>
+    private void ApplySessionAuthorization(string jwt)
+    {
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            options.AuthScheme,
+            jwt
+        );
+    }
+
+    /// <summary>
+    /// Clears cached authentication before a forced re-login.
+    /// </summary>
+    private void ClearSessionAuthorization()
+    {
+        sessionJwt = null;
+        sessionJwtExpiresAt = null;
+        httpClient.DefaultRequestHeaders.Authorization = null;
+    }
+
+    /// <summary>
+    /// Determines whether the current Authorization header can be reused.
+    /// </summary>
+    private bool HasUsableAuthorizationHeader()
+    {
+        AuthenticationHeaderValue? authorization = httpClient.DefaultRequestHeaders.Authorization;
+        if (authorization is null)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionJwt)
+            || !string.Equals(authorization.Parameter, sessionJwt, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return !SessionJwtRequiresRefresh();
+    }
+
+    /// <summary>
+    /// Determines whether the cached Archidekt JWT should be refreshed.
+    /// </summary>
+    private bool SessionJwtRequiresRefresh()
+    {
+        return sessionJwtExpiresAt.HasValue
+            && DateTimeOffset.UtcNow >= sessionJwtExpiresAt.Value - JwtRefreshSkew;
+    }
+
+    /// <summary>
+    /// Reads the expiry timestamp from a compact JWT payload.
+    /// </summary>
+    private static DateTimeOffset? TryReadJwtExpiration(string jwt)
+    {
+        string[] parts = jwt.Split('.');
+        if (parts.Length < 2)
+        {
+            return null;
+        }
+
+        try
+        {
+            byte[] payload = DecodeBase64Url(parts[1]);
+            using JsonDocument document = JsonDocument.Parse(payload);
+            if (document.RootElement.TryGetProperty("exp", out JsonElement exp)
+                && exp.TryGetInt64(out long seconds))
+            {
+                return DateTimeOffset.FromUnixTimeSeconds(seconds);
+            }
+        }
+        catch (Exception exception) when (
+            exception is FormatException
+                or JsonException
+                or ArgumentException
+                or ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Decodes a JWT base64url segment.
+    /// </summary>
+    private static byte[] DecodeBase64Url(string value)
+    {
+        string base64 = value.Replace('-', '+').Replace('_', '/');
+        int padding = base64.Length % 4;
+        if (padding == 1)
+        {
+            throw new FormatException("Invalid base64url length.");
+        }
+
+        if (padding > 0)
+        {
+            base64 = base64.PadRight(base64.Length + 4 - padding, '=');
+        }
+
+        return Convert.FromBase64String(base64);
     }
 
     /// <summary>

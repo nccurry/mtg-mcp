@@ -24,8 +24,7 @@ public sealed partial class ArchidektGateway
                 HttpMethod.Post,
                 "api/decks/v2/",
                 BuildCreateDeckPayload(request, parentFolderId),
-                cancellationToken,
-                authenticate: false
+                cancellationToken
             )
             .ConfigureAwait(false);
 

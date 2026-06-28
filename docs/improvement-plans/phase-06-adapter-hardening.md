@@ -23,8 +23,9 @@ concerns into Core.
   redaction slice, `SecretRedactor.Redact(string)` replaced the whole value if it merely
   contained a keyword like "token"/"secret"; conversely a raw bearer/JWT without those
   keywords was not redacted. Gateway error bodies still route through the redactor.
-- **P21 - Archidekt JWT never refreshes.** Cached on `DefaultRequestHeaders` for process
-  lifetime; expiry causes silent write failures.
+- **P21 - Archidekt JWT never refreshes (addressed by 4.4).** Before the Phase 6 JWT
+  slice, the token was cached on `DefaultRequestHeaders` for process lifetime; expiry
+  could cause write failures until the process restarted.
 - **P22 - duplication + divergent caches.** Re-implemented JSON readers, credentials-file
   parsing, `FirstNonEmpty`, rate-limit body parsing; three caches (shared `ICorpusCache`,
   Archidekt's bespoke disk card-id cache, Scryfall trend/meta in-memory `ProviderCache`
@@ -54,8 +55,9 @@ Non-goals:
   parsing for string inputs, and token-shape redaction for authorization headers, JWTs,
   URL credentials, and long high-entropy strings. The original coarse substring path has
   been removed.
-- Auth flows: Archidekt username/password -> JWT cached for process lifetime, no expiry
-  check; Playgroup API key set per request.
+- Auth flows: Archidekt username/password -> JWT cached with decoded `exp` tracking when
+  the login token is JWT-shaped, proactive refresh before expiry, and one re-login/retry
+  after a 401; Playgroup API key set per request.
 - Caching: `ICorpusCache` (shared, configurable), Archidekt disk card-id cache, and a
   Scryfall `ProviderCache` (in-memory, ignores configured mode/TTLs).
 - Rate limiting: Scryfall proactive-by-default (125ms) + 429 handling; Archidekt optional
@@ -71,6 +73,9 @@ Non-goals:
   and redacts bearer/JWT values, compact JWTs, URL userinfo, and long high-entropy tokens.
   Focused Core tests cover false positives/negatives, and adapter fixture tests cover the
   Archidekt, Moxfield, and Playgroup failed-response consumers.
+- **4.4 Archidekt JWT refresh:** complete. The gateway decodes JWT `exp` when present,
+  refreshes before an owned session token expires, clears stale tokens before login, and
+  retries a failed authenticated request once after a successful re-login on 401.
 
 ## 4. Workstreams
 
@@ -116,6 +121,7 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
 - Keep redaction in Core (shared), but ensure adapters route all error bodies through it.
 
 ### 4.4 Archidekt JWT refresh (early, standalone PR)
+- Status: complete for username/password login tokens and 401-triggered re-auth retry.
 - Add expiry detection (decode JWT `exp` or track issuance + TTL) and re-login on
   expiry/401; serialize refresh with the existing `authLock`; do a single retry of the
   failed request after refresh. Do not log token contents.

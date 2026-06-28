@@ -48,6 +48,11 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     private string? sessionJwt;
 
     /// <summary>
+    /// Caches the decoded JWT expiration when Archidekt returns a compact JWT.
+    /// </summary>
+    private DateTimeOffset? sessionJwtExpiresAt;
+
+    /// <summary>
     /// Caches the logged-in Archidekt user id when the login response includes it.
     /// </summary>
     private string? sessionUserId;
