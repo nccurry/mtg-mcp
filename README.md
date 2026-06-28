@@ -284,7 +284,7 @@ each abbreviated suffix.
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__API_KEY` | Optional TopDeck source API key. |
 | `MTGMCP__INTELLIGENCE__SOURCES__EDHREC__ALLOW_UNOFFICIAL_API` / `EDHTOP16__ALLOW_UNOFFICIAL_API` | Allow bounded unofficial structured JSON endpoints for those sources. |
 | `MTGMCP__INTELLIGENCE__SOURCES__TOPDECK__BASE_ADDRESS` / `TOPDECK__USER_AGENT` / `EDHREC__BASE_ADDRESS` / `EDHREC__USER_AGENT` / `EDHTOP16__BASE_ADDRESS` / `EDHTOP16__USER_AGENT` | Source API URL and User-Agent overrides. |
-| `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `USER_AGENT` / `CREDENTIALS_FILE` / `USERNAME` / `PASSWORD` | Archidekt API and credential settings. The username value may be an Archidekt username or account email. |
+| `MTGMCP__ARCHIDEKT__BASE_ADDRESS` / `USER_AGENT` / `CREDENTIALS_FILE` / `USERNAME` / `PASSWORD` / `CARD_ID_CACHE_FILE` | Archidekt API, credential, and mutation card-id cache settings. The username value may be an Archidekt username or account email. |
 | `MTGMCP__ARCHIDEKT__RATE_LIMIT__MAX_REQUESTS` / `WINDOW_SECONDS` | Optional process-local Archidekt pacing. For example, `30` requests per `60` seconds leaves room for browser activity; `0` max requests disables proactive pacing. |
 | `MTGMCP__MOXFIELD__BASE_ADDRESS` / `USER_AGENT` / `CURL_FALLBACK_ENABLED` / `CURL_PATH` | Moxfield import endpoint settings. Imports use an anonymous, unofficial endpoint; when Moxfield blocks .NET HTTP requests, the adapter can retry through `curl` if available. |
 | `MTGMCP__PLAYGROUP__BASE_ADDRESS` / `USER_AGENT` / `API_KEY` / `CREDENTIALS_FILE` | Playgroup.gg API settings. Credential files may use JSON or `apiKey=value`, `accessToken=value`, or `token=value` lines. |
@@ -650,6 +650,11 @@ Source-backed recommendations query structured APIs on demand and cache source
 facts under the recommendation source cache directory. The cache stores source
 facts, not final recommendations or prompt rationale. Pass `bypassCache=true`
 to supported tools to bypass fresh cache entries for one call.
+
+Archidekt writeback also keeps a separate adapter-local card-id cache so future
+mutations can reuse Archidekt-specific card ids resolved from Scryfall ids,
+printed set/collector numbers, or names. That cache is mutation support state,
+not recommendation source facts; see [`docs/adapters.md`](docs/adapters.md).
 
 The source policy is API-only: official/documented APIs and explicitly allowed
 unofficial structured JSON endpoints may be used, but mtg-mcp does not scrape

@@ -63,7 +63,7 @@ public sealed partial class ArchidektGateway : IArchidektGateway, IDisposable
     private string? credentialsFileError;
 
     /// <summary>
-    /// Caches Archidekt card ids by provider-neutral print keys.
+    /// Caches Archidekt mutation card ids by provider-neutral print keys.
     /// </summary>
     private Dictionary<string, ArchidektCardIdCacheEntry>? cardIdCache;
 

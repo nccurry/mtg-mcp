@@ -2170,6 +2170,7 @@ public sealed class McpSurfaceTests
             ["ARCHIDEKT:USERNAME"] = "archidekt-user",
             ["ARCHIDEKT:PASSWORD"] = "archidekt-password",
             ["ARCHIDEKT:CREDENTIALS_FILE"] = "C:/creds.json",
+            ["ARCHIDEKT:CARD_ID_CACHE_FILE"] = "C:/archidekt-card-ids.json",
             ["ARCHIDEKT:RATE_LIMIT:MAX_REQUESTS"] = "30",
             ["ARCHIDEKT:RATE_LIMIT:WINDOW_SECONDS"] = "60",
             ["MOXFIELD:BASE_ADDRESS"] = "https://moxfield.test/",
@@ -2223,6 +2224,7 @@ public sealed class McpSurfaceTests
         aliases["MtgMcp:Archidekt:Username"].Should().Be("archidekt-user");
         aliases["MtgMcp:Archidekt:Password"].Should().Be("archidekt-password");
         aliases["MtgMcp:Archidekt:CredentialsFile"].Should().Be("C:/creds.json");
+        aliases["MtgMcp:Archidekt:CardIdCacheFile"].Should().Be("C:/archidekt-card-ids.json");
         aliases["MtgMcp:Archidekt:RateLimit:MaxRequests"].Should().Be("30");
         aliases["MtgMcp:Archidekt:RateLimit:WindowSeconds"].Should().Be("60");
         aliases["MtgMcp:Moxfield:BaseAddress"].Should().Be("https://moxfield.test/");

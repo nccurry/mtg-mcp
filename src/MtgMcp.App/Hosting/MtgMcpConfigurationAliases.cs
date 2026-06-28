@@ -44,6 +44,7 @@ public static class MtgMcpConfigurationAliases
         ("ARCHIDEKT:USERNAME", "MtgMcp:Archidekt:Username"),
         ("ARCHIDEKT:PASSWORD", "MtgMcp:Archidekt:Password"),
         ("ARCHIDEKT:CREDENTIALS_FILE", "MtgMcp:Archidekt:CredentialsFile"),
+        ("ARCHIDEKT:CARD_ID_CACHE_FILE", "MtgMcp:Archidekt:CardIdCacheFile"),
         ("ARCHIDEKT:RATE_LIMIT:MAX_REQUESTS", "MtgMcp:Archidekt:RateLimit:MaxRequests"),
         ("ARCHIDEKT:RATE_LIMIT:WINDOW_SECONDS", "MtgMcp:Archidekt:RateLimit:WindowSeconds"),
         ("MOXFIELD:BASE_ADDRESS", "MtgMcp:Moxfield:BaseAddress"),

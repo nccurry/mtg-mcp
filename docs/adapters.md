@@ -32,6 +32,31 @@ Supported override keys:
 When setting these from a shell, prepend `MTGMCP__` and write `:` as `__`, such as
 `MTGMCP__MOXFIELD__USER_AGENT`.
 
+## Archidekt card-id cache
+
+Archidekt writeback needs Archidekt's provider-specific card ids when adding cards to a
+deck. Imported workspaces usually start with provider-neutral card facts such as Scryfall
+ids, printed set/collector numbers, and names, so the Archidekt adapter resolves missing
+Archidekt ids through Archidekt card search before mutation calls.
+
+Those resolved ids are stored in an adapter-local card-id cache. This cache is deliberately
+separate from the shared recommendation source-fact cache:
+
+- It stores mutation support state, not recommendation evidence.
+- Entries are keyed by Scryfall id, printed set/collector number, and card name so future
+  writebacks can avoid repeated Archidekt card search requests.
+- Structured entries include source, timestamp, card name, Scryfall uid, Archidekt id, and
+  validation status; older string-only entries are upgraded when read.
+- If Archidekt rejects a mutation because a cached id is stale, the adapter evicts the
+  suspect ids, re-resolves them once, and retries the mutation batch.
+- Normal tests use temporary cache files and do not mutate real Archidekt decks.
+
+Configuration:
+
+| Setting | Default | Notes |
+|---|---|---|
+| `MtgMcp:Archidekt:CardIdCacheFile` / `ARCHIDEKT:CARD_ID_CACHE_FILE` | user-local `mtg-mcp/archidekt-card-ids.json` | Override for hermetic tests, service accounts, or shared installations that need an explicit writable path. |
+
 ## Moxfield curl fallback
 
 Moxfield imports primarily use the .NET HTTP client against the anonymous deck API. Some

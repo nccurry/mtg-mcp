@@ -48,7 +48,7 @@ public sealed class ArchidektOptions
     public ArchidektRateLimitOptions RateLimit { get; set; } = new();
 
     /// <summary>
-    /// Optional path for the persistent Archidekt card-id resolution cache.
+    /// Gets or sets the optional path for persistent Archidekt mutation card-id state.
     /// </summary>
     public string? CardIdCacheFile { get; set; }
 }
