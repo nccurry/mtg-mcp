@@ -28,7 +28,8 @@ public static class DeckStatistics
             OpeningHandSize = openingHandSize,
             Turn = turn,
             CardsSeen = cardsSeen,
-            Simulations = safeSimulations
+            Simulations = safeSimulations,
+            RngKind = DeterministicSimulationRandom.Kind
         };
 
         foreach (string target in targets)
@@ -80,6 +81,7 @@ public static class DeckStatistics
             OnThePlay = onThePlay,
             IncludeMulligans = includeMulligans,
             Simulations = safeSimulations,
+            RngKind = DeterministicSimulationRandom.Kind,
             Assumptions =
             [
                 "Exact rows use hypergeometric no-mulligan odds.",
@@ -189,7 +191,7 @@ public static class DeckStatistics
             return 0;
         }
 
-        Random random = new(StableSeed(seed, target));
+        DeterministicSimulationRandom random = new(StableSeed(seed, target));
         int hits = 0;
         int sampleSize = Math.Min(cardsSeen, deck.Count);
         for (int simulation = 0; simulation < simulations; simulation++)
@@ -247,7 +249,7 @@ public static class DeckStatistics
             return 0;
         }
 
-        Random random = new(StableSeed(seed, $"land-drop-{turn}-{onThePlay}-{includeMulligans}"));
+        DeterministicSimulationRandom random = new(StableSeed(seed, $"land-drop-{turn}-{onThePlay}-{includeMulligans}"));
         int hits = 0;
         for (int simulation = 0; simulation < simulations; simulation++)
         {
@@ -329,7 +331,7 @@ public static class DeckStatistics
     /// <summary>
     /// Shuffles a boolean deck using a caller-owned deterministic random source.
     /// </summary>
-    private static List<bool> Shuffle(IReadOnlyList<bool> deck, Random random)
+    private static List<bool> Shuffle(IReadOnlyList<bool> deck, DeterministicSimulationRandom random)
     {
         List<bool> shuffled = deck.ToList();
         for (int index = shuffled.Count - 1; index > 0; index--)

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using FluentAssertions;
 
@@ -105,6 +106,13 @@ public sealed partial class DeckIntelligenceTests
             seed: 123,
             mulligan: true,
             TestContext.Current.CancellationToken);
+        GoldfishSimulationResult replay = await service.SimulateGoldfishAsync(
+            workspace.Id,
+            targetTurn: 5,
+            simulations: 25,
+            seed: 123,
+            mulligan: true,
+            TestContext.Current.CancellationToken);
         ProjectedTurnState projected = await service.ProjectBoardStateAsync(
             workspace.Id,
             turn: 3,
@@ -119,11 +127,14 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         goldfish.Simulations.Should().Be(100);
-        goldfish.RngKind.Should().Be("system-random");
-        goldfish.WinEstimate.RngKind.Should().Be("system-random");
+        JsonSerializer.Serialize(replay, WebJsonSerializerOptions)
+            .Should()
+            .Be(JsonSerializer.Serialize(goldfish, WebJsonSerializerOptions));
+        goldfish.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
+        goldfish.WinEstimate.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
         goldfish.Mulligans.Should().Be(100);
         goldfish.TurnSummaries.Should().HaveCount(5);
-        goldfish.TurnSummaries.Should().OnlyContain(summary => summary.RngKind == "system-random");
+        goldfish.TurnSummaries.Should().OnlyContain(summary => summary.RngKind == DeterministicSimulationRandom.Kind);
         goldfish.TurnSummaries.Select(summary => summary.MedianNonlandPermanents)
             .Should()
             .Equal(6, 7, 8, 9, 10);
@@ -163,10 +174,10 @@ public sealed partial class DeckIntelligenceTests
         route.Cards.Should().BeEquivalentTo(["Combo A", "Combo B"]);
 
         projected.Turn.Should().Be(3);
-        projected.RngKind.Should().Be("system-random");
+        projected.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
         projected.MedianNonlandPermanents.Should().Be(8);
         projected.LikelyBoard.Should().Be("0 lands, 0 mana sources, 8 nonland permanents, about 0 pressure, 0 cards in hand.");
-        winTurn.RngKind.Should().Be("system-random");
+        winTurn.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
         winTurn.Routes.Should().ContainSingle(route => route.Kind == "combo" && route.Probability == 1);
     }
 
@@ -293,6 +304,27 @@ public sealed partial class DeckIntelligenceTests
             ]
         }, TestContext.Current.CancellationToken);
         DeckSimulationService service = CreateSimulationService(workspaces, new FakeCardCatalog());
+        DeckCard thoughtcast = GoldfishCard("Thoughtcast", 1, DeckRoles.Draw, "Sorcery", "{4}{U}", 5, "Affinity for artifacts. Draw two cards.", ["U"]);
+        DeckCard bauble = GoldfishCard("Free Bauble", 1, DeckRoles.Synergy, "Artifact", "{0}", 0, "An artifact.", []);
+        DeckCard commandersCall = GoldfishCard(
+            "Commander's Call",
+            1,
+            DeckRoles.Synergy,
+            "Sorcery",
+            "{3}{G}",
+            4,
+            "This spell costs {1} less to cast if you control your commander. Create two Food tokens.",
+            ["G"]);
+
+        EstimateGoldfishTotalManaSpent(thoughtcast, [bauble, bauble, bauble, bauble], availableMana: 5, commanderOnline: false)
+            .Should()
+            .Be(1);
+        EstimateGoldfishTotalManaSpent(commandersCall, [], availableMana: 4, commanderOnline: false)
+            .Should()
+            .Be(4);
+        EstimateGoldfishTotalManaSpent(commandersCall, [], availableMana: 4, commanderOnline: true)
+            .Should()
+            .Be(3);
 
         GoldfishSimulationResult goldfish = await service.SimulateGoldfishAsync(
             workspace.Id,
@@ -302,7 +334,6 @@ public sealed partial class DeckIntelligenceTests
             mulligan: true,
             TestContext.Current.CancellationToken);
 
-        goldfish.RepresentativeLines.Should().Contain(line => line.Contains("Thoughtcast", StringComparison.OrdinalIgnoreCase));
         goldfish.RepresentativeLines.Should().Contain(line => line.Contains("Commander's Call", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -1231,6 +1262,31 @@ public sealed partial class DeckIntelligenceTests
                 ProducedMana = producedMana ?? [],
             },
         };
+    }
+
+    /// <summary>
+    /// Reads the private goldfish cast-cost estimate without expanding the production API.
+    /// </summary>
+    private static int EstimateGoldfishTotalManaSpent(
+        DeckCard card,
+        IReadOnlyList<DeckCard> battlefield,
+        int tokens = 0,
+        int artifactTokens = 0,
+        int foodTokens = 0,
+        int availableMana = 10,
+        bool commanderOnline = false)
+    {
+        MethodInfo method = typeof(DeckSimulationService)
+            .GetMethod("EstimateGoldfishCastCost", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Missing goldfish cast-cost estimator.");
+        object cost = method.Invoke(
+                null,
+                [card, battlefield, tokens, artifactTokens, foodTokens, availableMana, commanderOnline])
+            ?? throw new InvalidOperationException("Goldfish cast-cost estimator returned null.");
+        PropertyInfo property = cost.GetType().GetProperty("TotalManaSpent")
+            ?? throw new InvalidOperationException("Goldfish cast-cost result is missing TotalManaSpent.");
+        return (int)(property.GetValue(cost)
+            ?? throw new InvalidOperationException("Goldfish cast-cost TotalManaSpent returned null."));
     }
 
     /// <summary>

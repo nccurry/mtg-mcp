@@ -4,6 +4,11 @@ Simulation profiles are deterministic Commander play-pattern presets. They tune
 mulligans, spell sequencing, interaction hold-up, scenario target turns, and
 fallback win detection. They do not make `mtg-mcp` a Magic rules engine.
 
+Seeded simulation tools use `mtgmcp-splitmix64-v1` (`DeterministicSimulationRandom`) for
+stable replay across supported .NET runtimes. Treat matching model labels, profile
+resolution, deck/card fingerprints when present, seed, simulation count, and turn horizon
+as the replay contract for comparing stored outputs.
+
 ## Built-Ins
 
 - `neutral`: least-assumption default with conservative fallback wins.

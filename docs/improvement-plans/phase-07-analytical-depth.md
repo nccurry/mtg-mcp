@@ -20,9 +20,9 @@ becoming a Magic rules engine (a stated non-goal).
 - **P12 - bracket estimator is a coarse max-signal floor.**
   `EstimatedBracket = max(signal.SuggestedBracket)` (`Analysis/DeckAnalysisMetrics.cs:529-601`);
   one mass-land-denial card forces bracket 4 with little density sensitivity.
-- **P13 (real fix) - goldfish determinism.** Goldfish family uses `System.Random`
-  (`Simulation/DeckSimulationService.Goldfish.Run.cs:20`) while Stats Lab/race use
-  `DeterministicSimulationRandom`.
+- **P13 (real fix) - goldfish determinism.** Phase 7 now routes goldfish-family shuffles
+  and `DeckStatistics` Monte Carlo through `DeterministicSimulationRandom`; keep
+  deterministic replay metadata, docs, and tests aligned as analytical models evolve.
 - **P14 - offline combo fallback is 3 hardcoded combos**
   (`Analysis/DeckAnalysisService.Combos.cs:351-353`).
 
@@ -48,9 +48,10 @@ Non-goals:
   exist and are reusable.
 - Bracket signals are real (live Game Changers via `is:game-changer`, fast mana, tutors,
   stax, combo, extra-turn, mass-land-denial) but combined by max, not density.
-- Determinism: `DeterministicSimulationRandom` (SplitMix64) is already used by
-  `DeckPerformanceAnalyzer` and the race; the goldfish/board/win-turn/optimistic-compare
-  paths and `DeckStatistics` draw odds use `System.Random`.
+- Determinism: `DeterministicSimulationRandom` (SplitMix64) is used by Stats Lab, the
+  rules-backed race, the goldfish/board/win-turn family, and `DeckStatistics` draw/land
+  odds Monte Carlo. Goldfish and odds outputs now stamp the same RNG label where those
+  result shapes carry RNG metadata.
 - Calibration harness exists: `tests/MtgMcp.Calibration/` (runner, report writer, corpus
   loader, benchmark JSON e.g. `kinnan-benchmark.json`, `niv-mizzet-benchmark.json`,
   `expanded-public-benchmarks.json`) + `tests/MtgMcp.Calibration.Tests/StatsLabCalibrationTests.cs`
@@ -93,11 +94,11 @@ Non-goals:
 - Document the model and its benchmark expectations in `docs/`.
 
 ### 4.3 Determinism unification
-- Switch the goldfish family and `DeckStatistics` Monte Carlo from `System.Random` to
-  `DeterministicSimulationRandom`, and stamp `RngKind` on their results (Phase 0 added the
-  field/labeling; Phase 7 makes the generator actually deterministic-stable).
-- One documented determinism model: same seed -> stable output across .NET versions for
-  every simulation tool. Update `docs/stats-lab-metrics.md` / `docs/simulation-profiles.md`.
+- Done in the first Phase 7 slice: the goldfish family and `DeckStatistics` Monte Carlo
+  use `DeterministicSimulationRandom`, and odds outputs now expose `RngKind`.
+- Keep one documented determinism model: same seed -> stable output across .NET versions
+  for every simulation tool. Keep `docs/stats-lab-metrics.md` /
+  `docs/simulation-profiles.md` current when future analytical models change.
 
 ### 4.4 Local combo dataset
 - Replace the 3 hardcoded combos with a small checked-in dataset under `docs/reference/`

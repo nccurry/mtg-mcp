@@ -240,7 +240,7 @@ public sealed partial class DeckSimulationService
             P25ObservedWinTurn = Percentile(wins, 0.25),
             P75ObservedWinTurn = Percentile(wins, 0.75)
         };
-        estimate.Notes.Add("RNG kind system-random: seed replayability is runtime-scoped and weaker than the Stats Lab deterministic RNG contract.");
+        estimate.Notes.Add("RNG kind mtgmcp-splitmix64-v1: results use the stable deterministic random source shared with Stats Lab.");
 
         for (int turn = 1; turn <= maxTurn; turn++)
         {

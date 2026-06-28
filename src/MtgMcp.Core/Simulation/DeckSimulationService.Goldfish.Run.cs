@@ -17,7 +17,7 @@ public sealed partial class DeckSimulationService
         CommandZonePlan commandZonePlan,
         CommanderSpecificSimulationRules commanderRules)
     {
-        Random random = new(seed);
+        DeterministicSimulationRandom random = new(seed);
         GoldfishOpeningHand opening = DrawGoldfishOpeningHand(
             workspace,
             random,
@@ -312,7 +312,7 @@ public sealed partial class DeckSimulationService
     /// <summary>
     /// Shuffles a list in place.
     /// </summary>
-    private static void Shuffle(List<DeckCard> cards, Random random)
+    private static void Shuffle(List<DeckCard> cards, DeterministicSimulationRandom random)
     {
         for (int index = cards.Count - 1; index > 0; index--)
         {
@@ -326,7 +326,7 @@ public sealed partial class DeckSimulationService
     /// </summary>
     private static GoldfishOpeningHand DrawGoldfishOpeningHand(
         DeckWorkspace workspace,
-        Random random,
+        DeterministicSimulationRandom random,
         bool includeMulligans,
         SimulationProfile profile,
         CommandZonePlan commandZonePlan)

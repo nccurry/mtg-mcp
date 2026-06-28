@@ -18,7 +18,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
     /// <summary>
     /// Labels the random generator used by the heuristic goldfish family.
     /// </summary>
-    private const string GoldfishRngKind = "system-random";
+    private const string GoldfishRngKind = DeterministicSimulationRandom.Kind;
 
     /// <summary>
     /// Runs a heuristic no-interaction goldfish simulation.
@@ -220,7 +220,7 @@ public sealed partial class DeckSimulationService : DeckServiceBase
             .First();
         result.RepresentativeLines = representative.Line.Take(16).ToList();
         result.Notes.Add("Goldfish projection assumes no opponent interaction and uses role/tag heuristics rather than a full Magic rules engine.");
-        result.Notes.Add("RNG kind system-random: results are seed-replayable within this runtime, but not covered by the Stats Lab deterministic RNG contract.");
+        result.Notes.Add("RNG kind mtgmcp-splitmix64-v1: results use the stable deterministic random source shared with Stats Lab.");
         result.Notes.Add(
             "Model label optimistic-goldfish-model: this tool projects board development and fallback win pressure, "
                 + "so commander timing can differ from deck_analyze_performance's strict-sequencing-model scenarios.");

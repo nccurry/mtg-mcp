@@ -30,11 +30,11 @@ as contract changes, not invisible internals.
   card evaluation" but the implementation is ramp-only (`RampContextScorer.cs:26-31`
   returns `Score = 0` + "No ramp operational facts were detected" for non-ramp cards).
   The real fix is Phase 7; Phase 0 only stops the over-claim.
-- **P13 (label only) - goldfish determinism.** `GoldfishSimulationResult`
-  (`Simulation/GoldfishModels.cs:204`) carries `ModelLabel` but no `RngKind` or
-  determinism label, and the goldfish path uses `System.Random`
+- **P13 (label only) - goldfish determinism.** At Phase 0 planning time,
+  `GoldfishSimulationResult` (`Simulation/GoldfishModels.cs:204`) carried `ModelLabel`
+  but no `RngKind` or determinism label, and the goldfish path used `System.Random`
   (`DeckSimulationService.Goldfish.Run.cs:20`), unlike the deterministic
-  `DeckPerformanceAnalysis` which stamps
+  `DeckPerformanceAnalysis` which stamped
   `RngKind = DeterministicSimulationRandom.Kind` (`PerformanceModels.cs:46`).
 - **No surface metrics / no change policy.** There is a strong surface snapshot test
   (`tests/MtgMcp.App.Tests/Tools/McpSurfaceTests.cs`) and boundary tests, but nothing
@@ -106,10 +106,10 @@ Non-goals (deferred):
   resolved rename-timing decision in Phase 1 and Phase 7).
 - Goldfish determinism labeling: add `RngKind` (and a short determinism note) to
   `GoldfishSimulationResult`, `ProjectedTurnState`, and `WinTurnEstimate`, populated with
-  the actual generator kind (`system-random`), and document that the goldfish family's
-  determinism is runtime-scoped, weaker than the Stats Lab/race guarantee. Update the
-  surface snapshot test accordingly. (Adding these fields is an additive, contract-visible
-  output change - see the note at the top of this phase.)
+  the actual generator kind. Phase 0 labeled the then-current generator honestly; Phase 7
+  moves the family to the shared stable deterministic RNG. Update the surface snapshot
+  test accordingly. (Adding these fields is an additive, contract-visible output change -
+  see the note at the top of this phase.)
 
 ## 5. Files to create / change
 

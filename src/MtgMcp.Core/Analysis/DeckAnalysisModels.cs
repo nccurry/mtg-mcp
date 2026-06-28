@@ -229,6 +229,11 @@ public sealed class DeckOddsAnalysis
     public int Simulations { get; set; }
 
     /// <summary>
+    /// Gets or sets the deterministic random source used by Monte Carlo rows.
+    /// </summary>
+    public string RngKind { get; set; } = "";
+
+    /// <summary>
     /// Gets or sets the rows.
     /// </summary>
     public List<DeckOddsRow> Rows { get; set; } = [];
@@ -309,6 +314,11 @@ public sealed class LandDropOddsAnalysis
     /// Gets or sets the number of Monte Carlo simulations used.
     /// </summary>
     public int Simulations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deterministic random source used by Monte Carlo rows.
+    /// </summary>
+    public string RngKind { get; set; } = "";
 
     /// <summary>
     /// Gets or sets the turn-by-turn odds rows.

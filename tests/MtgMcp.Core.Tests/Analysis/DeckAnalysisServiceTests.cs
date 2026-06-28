@@ -1215,7 +1215,8 @@ public sealed partial class DeckIntelligenceTests
             seed: 42);
 
         analysis.Rows.Single().HypergeometricAtLeastOne.Should().BeApproximately(0.777777, 0.0005);
-        analysis.Rows.Single().MonteCarloAtLeastOne.Should().BeApproximately(0.809, 0.001);
+        analysis.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
+        analysis.Rows.Single().MonteCarloAtLeastOne.Should().BeApproximately(0.755, 0.001);
     }
 
     /// <summary>
@@ -1415,6 +1416,7 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         analysis.Rows.Select(row => row.Target).Should().Contain([DeckRoles.Lands, DeckRoles.Ramp, DeckRoles.Draw]);
+        analysis.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
         analysis.Rows.Single(row => row.Target == DeckRoles.Lands).SuccessesInDeck.Should().Be(36);
     }
 
@@ -1446,6 +1448,7 @@ public sealed partial class DeckIntelligenceTests
             TestContext.Current.CancellationToken);
 
         analysis.LandCount.Should().Be(30);
+        analysis.RngKind.Should().Be(DeterministicSimulationRandom.Kind);
         analysis.Rows.Should().HaveCount(3);
         analysis.Rows.Single(row => row.Turn == 3).CardsSeen.Should().Be(9);
         analysis.Rows.Single(row => row.Turn == 3).MonteCarloMissLandDrop.Should().BeGreaterThan(0);

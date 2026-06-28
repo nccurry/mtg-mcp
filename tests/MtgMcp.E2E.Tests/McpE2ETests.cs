@@ -1385,7 +1385,7 @@ public sealed class McpE2ETests
             .Should()
             .Contain("workspace");
         GetString(goldfish, "modelLabel").Should().Be("optimistic-goldfish-model");
-        GetString(goldfish, "rngKind").Should().Be("system-random");
+        GetString(goldfish, "rngKind").Should().Be("mtgmcp-splitmix64-v1");
         GetArray(goldfish, "notes")
             .Select(note => note.GetString())
             .Should()

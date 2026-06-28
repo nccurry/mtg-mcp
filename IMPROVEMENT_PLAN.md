@@ -54,7 +54,7 @@ regressed:
 | P10 | Feature coherence | `deck_evaluate_card` advertised as general evaluation but is ramp-only (`RampContextEvaluation`); non-ramp cards return `Score: 0` | High | 0,7 |
 | P11 | Feature coherence | Undocumented tools (`commander_search_candidates`, `deck_evaluate_card`, `deck_batch_tuning_report`) and resources (`.../state`, `.../assistant-context`) | Medium | 0 |
 | P12 | Feature coherence | `deck_estimate_commander_bracket` is a coarse max-signal floor; low density sensitivity | Medium | 7 |
-| P13 | Feature coherence | Goldfish family uses `System.Random` (no `rngKind`), weaker than the deterministic guarantee documented for Stats Lab/race | Medium | 0,7 |
+| P13 | Feature coherence | Phase 7 unified goldfish-family and draw-odds Monte Carlo RNG on `DeterministicSimulationRandom`; keep replay metadata/docs/tests aligned as analytical models evolve | Medium | 0,7 |
 | P14 | Feature coherence | Offline/no-catalog combo fallback hardcodes 3 combos | Low | 7 |
 | P15 | Domain/code | Union types used once despite `net11.0`/preview bet; outcomes encoded as `bool Success` + `string Status`; string-discriminated `DeckEditOperation` god-DTO | Medium | 4 |
 | P16 | Domain/code | God services (`DeckRecommendationService` ~6k LOC, concrete service-to-service coupling); fat shared `DeckServiceBase`; duplicated JSON repositories | Medium | 5 |
@@ -93,8 +93,8 @@ Solutions (high level):
   - Re-scope `deck_evaluate_card` description (and/or rename to a ramp-specific name)
     so it stops implying general card evaluation; have non-ramp cards return an
     explicit "no general evaluator" status instead of a misleading `Score: 0`.
-  - Stamp the goldfish-family results with their RNG kind and document that their
-    determinism guarantee is weaker than the Stats Lab/race family.
+  - Stamp the goldfish-family results with their RNG kind. Phase 7 later replaces
+    the original `system-random` label with the shared stable deterministic RNG.
 
 Done when: CI reports surface metrics; README/`docs` match the registered surface
 exactly (a test enforces this); no tool description over-claims relative to its
@@ -308,9 +308,9 @@ Solutions (high level):
   `Score: 0` path.
 - Make `deck_estimate_commander_bracket` density-aware (not just max-signal floor),
   while keeping it advisory and explainable; expand calibration coverage.
-- Unify simulation determinism: move the goldfish family to the deterministic RNG used
-  by Stats Lab/race, or formalize and document the distinction with `rngKind` stamped
-  on every result.
+- Unify simulation determinism: the goldfish family and draw/land odds Monte Carlo now
+  use the deterministic RNG used by Stats Lab/race, with `rngKind` stamped on those
+  result shapes where replay metadata is exposed.
 - Replace the 3-combo hardcoded fallback with a small, checked-in local combo dataset
   (still catalog-first), so the offline/no-catalog experience is meaningful.
 - Grow the offline calibration/benchmark suite so analytical changes are regression-safe.

@@ -15,6 +15,8 @@ Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not
   deterministic heuristic behavior. A changed `modelVersion` may intentionally
   change probabilities even when the same seed is used.
 - `rngKind` identifies the deterministic random source used for replay.
+- Related seeded simulation and odds tools use the same `mtgmcp-splitmix64-v1`
+  random source, while their model labels still identify their own heuristic family.
 - Larger sample counts should narrow confidence intervals for the same metric.
 - Mana payment treats each source as exclusive for a payment. A source that can produce multiple colors offers choices, but it can only satisfy one mana symbol before it is spent.
 - Mulligan-enabled performance analysis uses a deterministic London mulligan policy that scores functional mana, early plays, early ramp, card flow, interaction, and commander timing. Commander and Brawl workspaces treat the first mulligan as free.
