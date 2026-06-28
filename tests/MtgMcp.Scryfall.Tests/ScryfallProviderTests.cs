@@ -45,7 +45,10 @@ public sealed class ScryfallProviderTests
                 ["Old Token Maker"] = Card("Old Token Maker", "Enchantment", "Create a creature token.", "1.00", 900, "old", new DateOnly(2025, 1, 1))
             }
         };
-        ScryfallCardTrendProvider provider = new(catalog);
+        ScryfallCardTrendProvider provider = new(
+            catalog,
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(new MtgMcpOptions()));
         CardTrendQuery query = new()
         {
             Format = "commander",
@@ -79,6 +82,45 @@ public sealed class ScryfallProviderTests
     }
 
     /// <summary>
+    /// Verifies that the recent-card provider honors the configured cache implementation.
+    /// </summary>
+    [Fact]
+    public async Task CardTrendProvider_HonorsDisabledSharedCache()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults =
+            [
+                new CardSearchResult
+                {
+                    Name = "Fresh Cache Bypass",
+                    ReleasedAt = new DateOnly(2026, 4, 1),
+                    Set = "abc"
+                }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Fresh Cache Bypass"] = Card("Fresh Cache Bypass", "Artifact", "{T}: Add one mana of any color.", "1.00", 900, "abc", new DateOnly(2026, 4, 1))
+            }
+        };
+        ScryfallCardTrendProvider provider = new(
+            catalog,
+            new NullCorpusCache(),
+            Options.Create(new MtgMcpOptions()));
+        CardTrendQuery query = new()
+        {
+            Format = "commander",
+            Theme = "ramp",
+            Limit = 1
+        };
+
+        await provider.FindNewCardsAsync(query, TestContext.Current.CancellationToken);
+        await provider.FindNewCardsAsync(query, TestContext.Current.CancellationToken);
+
+        catalog.SearchCalls.Should().Be(2);
+    }
+
+    /// <summary>
     /// Verifies that Commander meta provider builds popularity rows and caches cloned reports.
     /// </summary>
     [Fact]
@@ -97,7 +139,10 @@ public sealed class ScryfallProviderTests
                 ["Village Rites"] = Card("Village Rites", "Instant", "As an additional cost, sacrifice a creature. Draw two cards.", "0.10", 2_000, "m21", null)
             }
         };
-        ScryfallCommanderMetaProvider provider = new(catalog);
+        ScryfallCommanderMetaProvider provider = new(
+            catalog,
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
+            Options.Create(new MtgMcpOptions()));
         CommanderMetaQuery query = new()
         {
             Commander = "Teysa Karlov",
@@ -126,6 +171,40 @@ public sealed class ScryfallProviderTests
         catalog.SearchCalls.Should().Be(1);
         catalog.LastSearchQuery.Should().Contain("legal:commander");
         catalog.LastSearchQuery.Should().Contain("-t:basic");
+    }
+
+    /// <summary>
+    /// Verifies that the Commander meta provider honors the configured cache implementation.
+    /// </summary>
+    [Fact]
+    public async Task CommanderMetaProvider_HonorsDisabledSharedCache()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults =
+            [
+                new CardSearchResult { Name = "Village Rites" }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Village Rites"] = Card("Village Rites", "Instant", "As an additional cost, sacrifice a creature. Draw two cards.", "0.10", 2_000, "m21", null)
+            }
+        };
+        ScryfallCommanderMetaProvider provider = new(
+            catalog,
+            new NullCorpusCache(),
+            Options.Create(new MtgMcpOptions()));
+        CommanderMetaQuery query = new()
+        {
+            Theme = "aristocrats",
+            Format = "commander",
+            Limit = 1
+        };
+
+        await provider.GetCommanderMetaAsync(query, TestContext.Current.CancellationToken);
+        await provider.GetCommanderMetaAsync(query, TestContext.Current.CancellationToken);
+
+        catalog.SearchCalls.Should().Be(2);
     }
 
     /// <summary>

@@ -26,9 +26,9 @@ concerns into Core.
 - **P21 - Archidekt JWT never refreshes (addressed by 4.4).** Before the Phase 6 JWT
   slice, the token was cached on `DefaultRequestHeaders` for process lifetime; expiry
   could cause write failures until the process restarted.
-- **P22 - duplication + divergent caches.** Three caches (shared `ICorpusCache`,
-  Archidekt's bespoke disk card-id cache, Scryfall trend/meta in-memory `ProviderCache`
-  that ignores the configured cache policy); process-static mutable rate-limit state.
+- **P22 - duplication + divergent caches.** Scryfall trend/meta now route through the
+  shared `ICorpusCache`, leaving Archidekt's bespoke disk card-id cache to document or
+  fold in and process-static mutable rate-limit state to replace.
 
 ## 2. Goals / non-goals
 
@@ -57,8 +57,9 @@ Non-goals:
 - Auth flows: Archidekt username/password -> JWT cached with decoded `exp` tracking when
   the login token is JWT-shaped, proactive refresh before expiry, and one re-login/retry
   after a 401; Playgroup API key set per request.
-- Caching: `ICorpusCache` (shared, configurable), Archidekt disk card-id cache, and a
-  Scryfall `ProviderCache` (in-memory, ignores configured mode/TTLs).
+- Caching: `ICorpusCache` is shared/configurable and now covers Scryfall search metadata,
+  corpus signals, and Scryfall trend/meta facts. Archidekt still has a separate disk
+  card-id cache.
 - Rate limiting: Scryfall proactive-by-default (125ms) + 429 handling; Archidekt optional
   sliding window (off by default) + 429/throttle body parsing; both use process-static
   state. Retry-After and body-marker delay parsing now share `MtgMcpHttpRetry`.
@@ -78,8 +79,8 @@ Non-goals:
   retries a failed authenticated request once after a successful re-login on 401.
 - **4.5 rate-limit parser dedupe:** complete for Scryfall/Archidekt retry-delay parsing.
   `MtgMcpHttpRetry` centralizes Retry-After header parsing, provider body-marker parsing,
-  and negative-delay clamping. Cache unification and process-local limiter replacement are
-  still open.
+  and negative-delay clamping. Archidekt cache disposition and process-local limiter
+  replacement are still open.
 - **4.5 common text helper dedupe:** complete. `MtgMcpText.FirstNonEmpty` replaces the
   repeated local implementations in Core services and adapter mapping/auth paths.
 - **4.5 JSON reader dedupe:** complete. `MtgMcpJson` centralizes common `JsonElement`
@@ -90,6 +91,9 @@ Non-goals:
   safe file reading, JSON-vs-key-value detection, redacted parse errors, comment skipping,
   and line diagnostics while leaving provider-specific key policy in Archidekt and
   Playgroup.
+- **4.5 Scryfall trend/meta cache unification:** complete. The optional-context providers
+  now use `ICorpusCache` with the configured Scryfall search TTL, preserve clone isolation,
+  and honor cache-off mode via `NullCorpusCache`.
 - **4.6 Moxfield curl fallback documentation:** complete. `docs/adapters.md` documents
   the fallback trigger, external binary dependency, timeout, shell-free argument handling,
   and test isolation.
@@ -146,15 +150,16 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   failed request after refresh. Do not log token contents.
 
 ### 4.5 De-duplicate + unify
-- Status: rate-limit retry-delay parsing, JSON readers, credentials-file parsing, and
-  `FirstNonEmpty` are complete; cache unification and limiter replacement remain open.
+- Status: rate-limit retry-delay parsing, JSON readers, credentials-file parsing,
+  `FirstNonEmpty`, and Scryfall trend/meta cache unification are complete; Archidekt
+  card-id cache disposition and limiter replacement remain open.
 - Extract shared helpers (a small adapter-support library or Core-adjacent utilities, not
   in Core if it must stay package-free): JSON element readers, credentials-file parsing
   (JSON or `key=value`), `FirstNonEmpty`, and rate-limit `Retry-After` / body parsing are
   now shared Core utilities with no adapter package dependencies.
-- Unify caching: route the Scryfall trend/meta `ProviderCache` through `ICorpusCache` so it
-  honors the configured mode/TTLs; document why the Archidekt card-id cache is separate (it
-  is provenance state, not source facts) or fold it in.
+- Unify caching: Scryfall trend/meta now route through `ICorpusCache` and honor the
+  configured mode/TTLs; document why the Archidekt card-id cache is separate (it is
+  provenance state, not source facts) or fold it in.
 - Replace process-static rate-limit state with `System.Threading.RateLimiting` limiters
   registered per host, removing global mutable statics.
 
@@ -175,8 +180,8 @@ radius), then the broader resiliency/error-model/dedup work (4.1, 4.2, 4.5+).
   `System.Threading.RateLimiting`), a shared `AddMtgMcpHttpResilience` extension, shared
   adapter-support helpers. `docs/adapters.md` is complete for the 4.6/4.7 slice.
 - Change: each adapter's `Add*` registration and request paths; `ArchidektGateway.Auth.cs`
-  (refresh); `Core/Options.cs` `SecretRedactor`; Scryfall `ProviderCache` wiring; per-
-  adapter UA usage.
+  (refresh); `Core/Options.cs` `SecretRedactor`; Scryfall optional-context cache wiring;
+  per-adapter UA usage.
 - Tests: per-adapter fixture/MockHttp tests for retry/timeout, error taxonomy mapping,
   redaction false-positive/negative cases, and JWT-expiry re-login.
 

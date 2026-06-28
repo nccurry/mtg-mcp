@@ -1,5 +1,7 @@
-using System.Collections.Concurrent;
+using System.Globalization;
+using Microsoft.Extensions.Options;
 using MtgMcp.Core;
+using static MtgMcp.Scryfall.ScryfallCacheKeyParts;
 
 namespace MtgMcp.Scryfall;
 
@@ -9,9 +11,9 @@ namespace MtgMcp.Scryfall;
 public sealed class ScryfallCardTrendProvider : ICardTrendProvider
 {
     /// <summary>
-    /// Caches recent-card lookups by Scryfall query.
+    /// Stores the maximum entries for the compatibility in-memory cache.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, ProviderCacheEntry<IReadOnlyList<NewCardSuggestion>>> TrendCache = new(StringComparer.OrdinalIgnoreCase);
+    private const int FallbackCacheEntries = 128;
 
     /// <summary>
     /// Looks up card data through Scryfall.
@@ -19,11 +21,37 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
     private readonly ICardCatalog cardCatalog;
 
     /// <summary>
-    /// Creates a Scryfall trend provider.
+    /// Stores shared source facts.
+    /// </summary>
+    private readonly ICorpusCache cache;
+
+    /// <summary>
+    /// Stores mtg-mcp options.
+    /// </summary>
+    private readonly MtgMcpOptions options;
+
+    /// <summary>
+    /// Creates a Scryfall trend provider with an in-process compatibility cache.
     /// </summary>
     public ScryfallCardTrendProvider(ICardCatalog cardCatalog)
+        : this(
+            cardCatalog,
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions { MaxEntries = FallbackCacheEntries }),
+            Options.Create(new MtgMcpOptions()))
+    {
+    }
+
+    /// <summary>
+    /// Creates a Scryfall trend provider with the configured source-fact cache.
+    /// </summary>
+    public ScryfallCardTrendProvider(
+        ICardCatalog cardCatalog,
+        ICorpusCache cache,
+        IOptions<MtgMcpOptions> options)
     {
         this.cardCatalog = cardCatalog;
+        this.cache = cache;
+        this.options = options.Value;
     }
 
     /// <summary>
@@ -34,8 +62,14 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
         CancellationToken cancellationToken)
     {
         string search = BuildTrendSearchQuery(query);
-        string cacheKey = $"{search}|{Math.Clamp(query.Limit, 1, 50)}";
-        if (ProviderCache.TryGet(TrendCache, cacheKey, out IReadOnlyList<NewCardSuggestion>? cached) && cached is not null)
+        int limit = Math.Clamp(query.Limit, 1, 50);
+        CorpusCacheKey cacheKey = CreateTrendKey(search, query, limit);
+        TimeSpan ttl = CorpusCacheFactory.ParseDuration(
+            options.Intelligence.Cache.Ttls.ScryfallSearch,
+            TimeSpan.FromHours(6));
+        List<NewCardSuggestion>? cached = await cache.GetAsync<List<NewCardSuggestion>>(cacheKey, ttl, cancellationToken)
+            .ConfigureAwait(false);
+        if (cached is not null)
         {
             return cached.Select(CloneSuggestion).ToList();
         }
@@ -55,10 +89,33 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
             .Where(suggestion => MatchesReleaseFilters(suggestion, query))
             .Where(suggestion => !query.MaxPrice.HasValue || (suggestion.Price.HasValue && suggestion.Price.Value <= query.MaxPrice.Value))
             .OrderByDescending(suggestion => suggestion.Score)
-            .Take(Math.Clamp(query.Limit, 1, 50))
+            .Take(limit)
             .ToList();
-        ProviderCache.Set(TrendCache, cacheKey, suggestions.Select(CloneSuggestion).ToList());
+        await cache.SetAsync(cacheKey, suggestions.Select(CloneSuggestion).ToList(), cancellationToken)
+            .ConfigureAwait(false);
         return suggestions;
+    }
+
+    /// <summary>
+    /// Creates a shared source-fact cache key for recent-card searches.
+    /// </summary>
+    private static CorpusCacheKey CreateTrendKey(string search, CardTrendQuery query, int limit)
+    {
+        return new CorpusCacheKey
+        {
+            Source = "scryfall-card-trends",
+            Endpoint = "cards/search",
+            Query = string.Join(
+                '|',
+                search,
+                NormalizeFormat(query.Format),
+                CachePart(query.Theme),
+                query.Since?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "",
+                CachePart(query.SetCode),
+                CachePart(query.MaxPrice)),
+            AdapterVersion = "2",
+            Budget = $"limit:{limit}"
+        };
     }
 
     /// <summary>
@@ -220,9 +277,9 @@ public sealed class ScryfallCardTrendProvider : ICardTrendProvider
 public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
 {
     /// <summary>
-    /// Caches Commander meta lookups by search query.
+    /// Stores the maximum entries for the compatibility in-memory cache.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, ProviderCacheEntry<CommanderMetaReport>> MetaCache = new(StringComparer.OrdinalIgnoreCase);
+    private const int FallbackCacheEntries = 128;
 
     /// <summary>
     /// Looks up card data through Scryfall.
@@ -230,11 +287,37 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
     private readonly ICardCatalog cardCatalog;
 
     /// <summary>
-    /// Creates a Scryfall Commander meta provider.
+    /// Stores shared source facts.
+    /// </summary>
+    private readonly ICorpusCache cache;
+
+    /// <summary>
+    /// Stores mtg-mcp options.
+    /// </summary>
+    private readonly MtgMcpOptions options;
+
+    /// <summary>
+    /// Creates a Scryfall Commander meta provider with an in-process compatibility cache.
     /// </summary>
     public ScryfallCommanderMetaProvider(ICardCatalog cardCatalog)
+        : this(
+            cardCatalog,
+            new MemoryCorpusCache(new MtgMcpCorpusCacheOptions { MaxEntries = FallbackCacheEntries }),
+            Options.Create(new MtgMcpOptions()))
+    {
+    }
+
+    /// <summary>
+    /// Creates a Scryfall Commander meta provider with the configured source-fact cache.
+    /// </summary>
+    public ScryfallCommanderMetaProvider(
+        ICardCatalog cardCatalog,
+        ICorpusCache cache,
+        IOptions<MtgMcpOptions> options)
     {
         this.cardCatalog = cardCatalog;
+        this.cache = cache;
+        this.options = options.Value;
     }
 
     /// <summary>
@@ -246,8 +329,13 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
     {
         int limit = Math.Clamp(query.Limit, 1, 100);
         string search = BuildMetaSearchQuery(query);
-        string cacheKey = $"{search}|{query.Commander}|{query.Theme}|{limit}";
-        if (ProviderCache.TryGet(MetaCache, cacheKey, out CommanderMetaReport? cached) && cached is not null)
+        CorpusCacheKey cacheKey = CreateCommanderMetaKey(search, query, limit);
+        TimeSpan ttl = CorpusCacheFactory.ParseDuration(
+            options.Intelligence.Cache.Ttls.ScryfallSearch,
+            TimeSpan.FromHours(6));
+        CommanderMetaReport? cached = await cache.GetAsync<CommanderMetaReport>(cacheKey, ttl, cancellationToken)
+            .ConfigureAwait(false);
+        if (cached is not null)
         {
             return CloneReport(cached);
         }
@@ -293,8 +381,29 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
         }
 
         report.Notes.Add("Scryfall does not expose commander-specific deck inclusion data; inclusionRate and synergyScore are not inferred for this source.");
-        ProviderCache.Set(MetaCache, cacheKey, CloneReport(report));
+        await cache.SetAsync(cacheKey, CloneReport(report), cancellationToken)
+            .ConfigureAwait(false);
         return report;
+    }
+
+    /// <summary>
+    /// Creates a shared source-fact cache key for Commander meta searches.
+    /// </summary>
+    private static CorpusCacheKey CreateCommanderMetaKey(string search, CommanderMetaQuery query, int limit)
+    {
+        return new CorpusCacheKey
+        {
+            Source = "scryfall-commander-meta",
+            Endpoint = "cards/search",
+            Query = string.Join(
+                '|',
+                search,
+                NormalizeFormat(query.Format),
+                CachePart(query.Commander),
+                CachePart(query.Theme)),
+            AdapterVersion = "2",
+            Budget = $"limit:{limit}"
+        };
     }
 
     /// <summary>
@@ -386,65 +495,25 @@ public sealed class ScryfallCommanderMetaProvider : ICommanderMetaProvider
 }
 
 /// <summary>
-/// Stores one cached provider value with an insertion time.
+/// Provides cache fingerprint helpers for Scryfall optional-context providers.
 /// </summary>
-internal sealed record ProviderCacheEntry<T>(T Value, DateTimeOffset StoredAt);
-
-/// <summary>
-/// Provides small freshness-bounded caches for optional context providers.
-/// </summary>
-internal static class ProviderCache
+internal static class ScryfallCacheKeyParts
 {
     /// <summary>
-    /// Stores the maximum entries per provider cache.
+    /// Normalizes an optional text value for a cache key.
     /// </summary>
-    private const int MaxEntries = 128;
-
-    /// <summary>
-    /// Stores how long provider results are reused.
-    /// </summary>
-    private static readonly TimeSpan TimeToLive = TimeSpan.FromHours(6);
-
-    /// <summary>
-    /// Attempts to get a fresh cached value.
-    /// </summary>
-    public static bool TryGet<T>(
-        ConcurrentDictionary<string, ProviderCacheEntry<T>> cache,
-        string key,
-        out T? value)
+    public static string CachePart(string? value)
     {
-        value = default;
-        if (!cache.TryGetValue(key, out ProviderCacheEntry<T>? entry))
-        {
-            return false;
-        }
-
-        if (DateTimeOffset.UtcNow - entry.StoredAt > TimeToLive)
-        {
-            cache.TryRemove(key, out _);
-            return false;
-        }
-
-        value = entry.Value;
-        return true;
+        return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
     }
 
     /// <summary>
-    /// Stores a cached value while pruning old entries opportunistically.
+    /// Normalizes an optional decimal value for a cache key.
     /// </summary>
-    public static void Set<T>(
-        ConcurrentDictionary<string, ProviderCacheEntry<T>> cache,
-        string key,
-        T value)
+    public static string CachePart(decimal? value)
     {
-        if (cache.Count >= MaxEntries)
-        {
-            foreach (string staleKey in cache.Keys.Take(Math.Max(1, cache.Count - MaxEntries + 1)))
-            {
-                cache.TryRemove(staleKey, out _);
-            }
-        }
-
-        cache[key] = new ProviderCacheEntry<T>(value, DateTimeOffset.UtcNow);
+        return value.HasValue
+            ? value.Value.ToString("0.#############################", CultureInfo.InvariantCulture)
+            : "";
     }
 }
