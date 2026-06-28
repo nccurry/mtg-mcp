@@ -250,6 +250,36 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a Commander evidence service with explicit source, analysis, and payoff dependencies.
+    /// </summary>
+    private static DeckCommanderEvidenceService CreateCommanderEvidenceService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckAnalysisService analysis = CreateAnalysisService(
+            repository,
+            cardCatalog,
+            comboCatalog: comboCatalog,
+            currentDateOverride: currentDateOverride);
+        IReadOnlyList<ICorpusSignalProvider> providers = corpusSignalProviders?.ToList() ?? [];
+        CommanderThemeResolver commanderThemes = new(providers);
+        DeckWinconPayoffSearchService payoffSearch = new(cardCatalog);
+        return new DeckCommanderEvidenceService(
+            cardCatalog,
+            analysis,
+            providers,
+            commanderThemes,
+            payoffSearch);
+    }
+
+    /// <summary>
     /// Creates a Commander meta service with explicit storage, catalog, and provider dependencies.
     /// </summary>
     private static DeckCommanderMetaService CreateCommanderMetaService(

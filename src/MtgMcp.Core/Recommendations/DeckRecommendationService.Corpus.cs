@@ -253,7 +253,8 @@ public sealed partial class DeckRecommendationService
             refresh,
             cancellationToken,
             sourceKey).ConfigureAwait(false);
-        IReadOnlyDictionary<string, string?> scryfallUris = await ResolveScryfallUrisAsync(
+        IReadOnlyDictionary<string, string?> scryfallUris = await CorpusEvidenceTableBuilder.ResolveScryfallUrisAsync(
+            CardCatalog,
             report.Signals.Select(signal => signal.CardName),
             cancellationToken).ConfigureAwait(false);
 
@@ -497,47 +498,6 @@ public sealed partial class DeckRecommendationService
         return commandZone.HasPartnerPair && string.IsNullOrWhiteSpace(goal)
             ? null
             : theme;
-    }
-
-    /// <summary>
-    /// Resolves Scryfall pages for source-only card rows without making the source lookup fail on catalog outages.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<string, string?>> ResolveScryfallUrisAsync(
-        IEnumerable<string> cardNames,
-        CancellationToken cancellationToken)
-    {
-        List<string> names = cardNames
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (names.Count == 0)
-        {
-            return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        IReadOnlyDictionary<string, CardInfo> cards;
-        try
-        {
-            cards = await CardCatalog.GetCardsByNamesAsync(names, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (!IsCancellation(exception))
-        {
-            return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        Dictionary<string, string?> scryfallUris = new(StringComparer.OrdinalIgnoreCase);
-        foreach (KeyValuePair<string, CardInfo> item in cards)
-        {
-            if (string.IsNullOrWhiteSpace(item.Value.ScryfallUri))
-            {
-                continue;
-            }
-
-            scryfallUris[item.Key] = item.Value.ScryfallUri;
-            scryfallUris[item.Value.Name] = item.Value.ScryfallUri;
-        }
-
-        return scryfallUris;
     }
 
 }

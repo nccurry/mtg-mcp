@@ -99,6 +99,56 @@ internal static class CorpusEvidenceTableBuilder
     }
 
     /// <summary>
+    /// Resolves Scryfall pages for source-only card rows without failing the source lookup on catalog outages.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, string?>> ResolveScryfallUrisAsync(
+        ICardCatalog cardCatalog,
+        IEnumerable<string> cardNames,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        List<string> names = [];
+        foreach (string cardName in cardNames)
+        {
+            if (string.IsNullOrWhiteSpace(cardName) || !seen.Add(cardName))
+            {
+                continue;
+            }
+
+            names.Add(cardName);
+        }
+
+        if (names.Count == 0)
+        {
+            return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        IReadOnlyDictionary<string, CardInfo> cards;
+        try
+        {
+            cards = await cardCatalog.GetCardsByNamesAsync(names, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (!DeckServiceHelpers.IsCancellation(exception))
+        {
+            return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        Dictionary<string, string?> scryfallUris = new(StringComparer.OrdinalIgnoreCase);
+        foreach (KeyValuePair<string, CardInfo> item in cards)
+        {
+            if (string.IsNullOrWhiteSpace(item.Value.ScryfallUri))
+            {
+                continue;
+            }
+
+            scryfallUris[item.Key] = item.Value.ScryfallUri;
+            scryfallUris[item.Value.Name] = item.Value.ScryfallUri;
+        }
+
+        return scryfallUris;
+    }
+
+    /// <summary>
     /// Groups workspace card locations by card name for evidence labels.
     /// </summary>
     private static Dictionary<string, List<CardWorkspaceLocation>> BuildWorkspaceLocations(DeckWorkspace workspace)

@@ -61,6 +61,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckWinconPayoffSearchService payoffSearch;
 
     /// <summary>
+    /// Builds source-backed Commander aggregate, tag, and win-condition evidence.
+    /// </summary>
+    private readonly DeckCommanderEvidenceService commanderEvidence;
+
+    /// <summary>
     /// Compares decks against Commander metagame context and plans missing popular cards.
     /// </summary>
     private readonly DeckCommanderMetaService commanderMeta;
@@ -113,7 +118,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckWinconPayoffSearchService? payoffSearch = null,
         DeckCommanderMetaService? commanderMeta = null,
         DeckPlaygroupMetaScoringService? playgroupMeta = null,
-        CommanderThemeResolver? commanderThemes = null
+        CommanderThemeResolver? commanderThemes = null,
+        DeckCommanderEvidenceService? commanderEvidence = null
     )
         : base(
             repository,
@@ -143,6 +149,12 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             resolvedSimulationProfiles,
             playgroups);
         this.commanderThemes = commanderThemes ?? new CommanderThemeResolver(this.corpusSignalProviders);
+        this.commanderEvidence = commanderEvidence ?? new DeckCommanderEvidenceService(
+            cardCatalog,
+            analysis,
+            this.corpusSignalProviders,
+            this.commanderThemes,
+            this.payoffSearch);
         this.simulation = simulation;
     }
 }

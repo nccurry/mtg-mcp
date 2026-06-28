@@ -38,7 +38,7 @@ public sealed partial class DeckIntelligenceTests
     public async Task GetCommanderAggregateCardsAsync_ReturnsSourceBackedRowsWithoutMergingSources()
     {
         FakeCorpusSignalProvider provider = new();
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderEvidenceService service = CreateCommanderEvidenceService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -69,7 +69,7 @@ public sealed partial class DeckIntelligenceTests
     [Fact]
     public async Task GetCommanderAggregateCardsAsync_SkipsSourcesWithoutThemeSupport()
     {
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderEvidenceService service = CreateCommanderEvidenceService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders:
@@ -100,7 +100,7 @@ public sealed partial class DeckIntelligenceTests
     public async Task GetCommanderAggregateCardsAsync_ResolvesNoisyThemeTextToKnownCommanderTheme()
     {
         ThemeAwareCommanderCorpusProvider provider = new();
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderEvidenceService service = CreateCommanderEvidenceService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -126,7 +126,7 @@ public sealed partial class DeckIntelligenceTests
     [Fact]
     public async Task GetCommanderAggregateCardsAsync_SuggestsAlternativesForUnsupportedTheme()
     {
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderEvidenceService service = CreateCommanderEvidenceService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders: [new ThemeAwareCommanderCorpusProvider()]);
@@ -152,7 +152,7 @@ public sealed partial class DeckIntelligenceTests
     [Fact]
     public async Task GetCommanderTagsAsync_ReturnsSourceBackedSections()
     {
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderEvidenceService service = CreateCommanderEvidenceService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders: [new FakeCorpusSignalProvider()]);
@@ -223,7 +223,7 @@ public sealed partial class DeckIntelligenceTests
     [Fact]
     public async Task GetCommanderWinConditionEvidenceAsync_RestrictsRequestedSourcesWithoutMerging()
     {
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCommanderEvidenceService service = CreateCommanderEvidenceService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders:

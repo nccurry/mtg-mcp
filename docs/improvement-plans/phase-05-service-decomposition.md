@@ -129,6 +129,11 @@ Status update after completed Phase 5 slices:
 - Win-condition payoff search and route-specific Scryfall query building now live in
   `src/MtgMcp.Core/Recommendations/DeckWinconPayoffSearchService.cs`, with commander
   evidence bundles using the collaborator directly.
+- Commander aggregate cards, source tags, and structured win-condition evidence bundles now
+  live in `src/MtgMcp.Core/Recommendations/DeckCommanderEvidenceService.cs`, with the
+  recommendation facade retaining the current MCP-facing methods.
+- Source-only Scryfall URI resolution is shared by corpus and commander evidence through
+  `src/MtgMcp.Core/Recommendations/CorpusEvidenceTableBuilder.cs`.
 
 ## 4. Workstreams
 
