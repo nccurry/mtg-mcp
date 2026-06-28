@@ -382,7 +382,7 @@ public sealed partial class DeckIntelligenceTests
         InMemoryRepository workspaces = new();
         FakeCorpusSignalProvider provider = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -419,7 +419,7 @@ public sealed partial class DeckIntelligenceTests
         InMemoryRepository workspaces = new();
         FakeCorpusSignalProvider provider = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(PartnerCorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -449,7 +449,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(workspaces, new FakeCardCatalog());
 
         CorpusRecommendationResult result = await service.AnalyzeCommanderTrendsAsync(
             workspace.Id,
@@ -471,7 +471,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new FailingCorpusSignalProvider(), new FakeCorpusSignalProvider()]);
@@ -498,7 +498,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new TimeoutCorpusSignalProvider(), new FakeCorpusSignalProvider()]);
@@ -526,7 +526,7 @@ public sealed partial class DeckIntelligenceTests
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
         FakeCorpusSignalProvider provider = new();
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new FailingCorpusSignalProvider(), provider]);
@@ -561,7 +561,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspaceWithEvidenceLocations(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new FakeCorpusSignalProvider()]);
@@ -605,7 +605,7 @@ public sealed partial class DeckIntelligenceTests
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(VihaanWorkspace(), TestContext.Current.CancellationToken);
         ThemeAwareCommanderCorpusProvider provider = new();
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -633,7 +633,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new FakeCorpusSignalProvider()]);
@@ -663,7 +663,7 @@ public sealed partial class DeckIntelligenceTests
         InMemoryRepository workspaces = new();
         FakeCorpusSignalProvider provider = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -691,7 +691,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new PlanFitCorpusSignalProvider()]);
@@ -720,7 +720,7 @@ public sealed partial class DeckIntelligenceTests
         InMemoryRepository workspaces = new();
         FakeCorpusSignalProvider provider = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [provider]);
@@ -743,7 +743,7 @@ public sealed partial class DeckIntelligenceTests
     [Fact]
     public void ListCorpusSources_OnlyIncludesConfiguredProviders()
     {
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             new InMemoryRepository(),
             new FakeCardCatalog(),
             corpusSignalProviders: [new FakeCorpusSignalProvider()]);
@@ -768,7 +768,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Corpus Budget",
             Cards = [ExpensiveRamp()]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             archidektGateway: null,
@@ -810,7 +810,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new FakeCorpusSignalProvider()]);
@@ -838,7 +838,7 @@ public sealed partial class DeckIntelligenceTests
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(CorpusWorkspace(), TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
             workspaces,
             new FakeCardCatalog(),
             corpusSignalProviders: [new FakeCorpusSignalProvider()]);

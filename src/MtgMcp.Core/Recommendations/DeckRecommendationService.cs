@@ -6,9 +6,9 @@ namespace MtgMcp.Core;
 public sealed partial class DeckRecommendationService : DeckServiceBase
 {
     /// <summary>
-    /// Supplies corpus-backed card evidence, exemplar decks, and discussions.
+    /// Builds source-backed corpus recommendations, evidence searches, and source status reports.
     /// </summary>
-    private readonly IReadOnlyList<ICorpusSignalProvider> corpusSignalProviders;
+    private readonly DeckCorpusRecommendationService corpusRecommendations;
 
     /// <summary>
     /// Provides analysis workflows used by combined recommendation reports.
@@ -131,7 +131,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         DeckPlaygroupMetaScoringService? playgroupMeta = null,
         CommanderThemeResolver? commanderThemes = null,
         DeckCommanderEvidenceService? commanderEvidence = null,
-        DeckCommanderCandidateSearchService? commanderCandidates = null
+        DeckCommanderCandidateSearchService? commanderCandidates = null,
+        DeckCorpusRecommendationService? corpusRecommendations = null
     )
         : base(
             repository,
@@ -139,7 +140,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             planRepository,
             currentDateOverride)
     {
-        this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
+        IReadOnlyList<ICorpusSignalProvider> resolvedCorpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
         this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
         SimulationProfileCatalog resolvedSimulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
@@ -166,11 +167,17 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             this.analysisMetrics,
             resolvedSimulationProfiles,
             playgroups);
-        this.commanderThemes = commanderThemes ?? new CommanderThemeResolver(this.corpusSignalProviders);
+        this.commanderThemes = commanderThemes ?? new CommanderThemeResolver(resolvedCorpusSignalProviders);
+        this.corpusRecommendations = corpusRecommendations ?? new DeckCorpusRecommendationService(
+            repository,
+            cardCatalog,
+            this.replacements,
+            resolvedCorpusSignalProviders,
+            this.commanderThemes);
         this.commanderEvidence = commanderEvidence ?? new DeckCommanderEvidenceService(
             cardCatalog,
             analysis,
-            this.corpusSignalProviders,
+            resolvedCorpusSignalProviders,
             this.commanderThemes,
             this.payoffSearch);
         this.commanderCandidates = commanderCandidates ?? new DeckCommanderCandidateSearchService(

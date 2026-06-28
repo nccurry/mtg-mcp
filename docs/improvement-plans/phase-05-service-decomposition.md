@@ -140,6 +140,10 @@ Status update after completed Phase 5 slices:
 - Unified brainstorming orchestration now lives in
   `src/MtgMcp.Core/Recommendations/DeckBrainstormingService.cs`, composing the focused
   analysis, simulation, Commander meta, recent-card, and goal-package collaborators.
+- Corpus recommendation orchestration now lives in
+  `src/MtgMcp.Core/Recommendations/DeckCorpusRecommendationService.cs`, with the
+  recommendation facade retaining the current MCP-facing corpus methods and corpus tests
+  instantiating the collaborator directly.
 
 ## 4. Workstreams
 

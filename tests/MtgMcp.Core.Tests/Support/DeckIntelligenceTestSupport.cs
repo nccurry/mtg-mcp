@@ -345,6 +345,35 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a corpus recommendation service with explicit replacement and source dependencies.
+    /// </summary>
+    private static DeckCorpusRecommendationService CreateCorpusRecommendationService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        IReadOnlyList<ICorpusSignalProvider> providers = corpusSignalProviders?.ToList() ?? [];
+        DeckReplacementService replacements = CreateReplacementService(
+            repository,
+            cardCatalog,
+            planRepository: planRepository,
+            currentDateOverride: currentDateOverride);
+        CommanderThemeResolver commanderThemes = new(providers);
+        return new DeckCorpusRecommendationService(
+            repository,
+            cardCatalog,
+            replacements,
+            providers,
+            commanderThemes);
+    }
+
+    /// <summary>
     /// Creates a Commander meta service with explicit storage, catalog, and provider dependencies.
     /// </summary>
     private static DeckCommanderMetaService CreateCommanderMetaService(
