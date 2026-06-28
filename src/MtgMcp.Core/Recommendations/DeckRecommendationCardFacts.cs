@@ -32,6 +32,32 @@ internal static class DeckRecommendationCardFacts
     }
 
     /// <summary>
+    /// Reads a cached USD price from a card snapshot.
+    /// </summary>
+    public static decimal? ReadUsdPrice(CardSnapshot? snapshot)
+    {
+        return EvaluateUsdPrice(snapshot).Price;
+    }
+
+    /// <summary>
+    /// Reads a USD price from catalog card details.
+    /// </summary>
+    public static decimal? ReadUsdPrice(CardInfo card)
+    {
+        return EvaluateUsdPrice(card).Price;
+    }
+
+    /// <summary>
+    /// Evaluates whether a cached snapshot has a usable released-printing price.
+    /// </summary>
+    public static CardPriceEvaluation EvaluateUsdPrice(CardSnapshot? snapshot)
+    {
+        return snapshot is null
+            ? MissingPrice("missing-snapshot", "No cached card snapshot was available.")
+            : CardPriceEvaluator.Evaluate(snapshot, DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime));
+    }
+
+    /// <summary>
     /// Checks whether a card is legal in a format.
     /// </summary>
     public static bool IsLegalInFormat(CardInfo card, string format)
@@ -99,7 +125,7 @@ internal static class DeckRecommendationCardFacts
     /// <summary>
     /// Checks whether a card is categorized as the commander.
     /// </summary>
-    private static bool IsCommanderCard(DeckCard card)
+    public static bool IsCommanderCard(DeckCard card)
     {
         return DeckCategoryOrdering.PrimaryCategory(card).Equals(
             DeckRoles.Commander,
@@ -118,5 +144,18 @@ internal static class DeckRecommendationCardFacts
                 colors.Add(color);
             }
         }
+    }
+
+    /// <summary>
+    /// Builds an unknown price evaluation with a deterministic reason.
+    /// </summary>
+    private static CardPriceEvaluation MissingPrice(string printingStatus, string reason)
+    {
+        return new CardPriceEvaluation
+        {
+            PriceKnown = false,
+            PrintingStatus = printingStatus,
+            SelectedPrintingReason = reason
+        };
     }
 }

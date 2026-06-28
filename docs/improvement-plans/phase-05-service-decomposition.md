@@ -81,6 +81,9 @@ Status update after Sub-PRs A/B:
   candidate-card construction) now live in
   `src/MtgMcp.Core/Recommendations/DeckRecommendationCardFacts.cs` instead of being
   private implementation details of the replacements partial.
+- Replacement, upgrade, mana-base, and consistency improvement workflows now live in
+  `src/MtgMcp.Core/Recommendations/DeckReplacementService.cs`, with
+  `DeckRecommendationService` retaining facade delegates for existing callers.
 
 ## 4. Workstreams
 

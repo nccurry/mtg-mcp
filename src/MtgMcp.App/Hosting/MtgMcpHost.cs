@@ -42,6 +42,7 @@ public static class MtgMcpHost
         services.GetRequiredService<DeckAnalysisService>();
         services.GetRequiredService<DeckBatchTuningService>();
         services.GetRequiredService<DeckQueryService>();
+        services.GetRequiredService<DeckReplacementService>();
         services.GetRequiredService<DeckRecommendationService>();
         services.GetRequiredService<DeckPlanService>();
         services.GetRequiredService<DeckSimulationService>();
@@ -104,6 +105,7 @@ public static class MtgMcpHost
         builder.Services.AddTransient<DeckAnalysisService>();
         builder.Services.AddTransient<DeckBatchTuningService>();
         builder.Services.AddTransient<DeckQueryService>();
+        builder.Services.AddTransient<DeckReplacementService>();
         builder.Services.AddTransient<DeckRecommendationService>();
         builder.Services.AddTransient<DeckPlanService>();
         builder.Services.AddTransient<DeckSimulationService>();

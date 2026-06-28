@@ -122,6 +122,26 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Creates a replacement service with explicit storage, catalog, and metric dependencies.
+    /// </summary>
+    private static DeckReplacementService CreateReplacementService(
+        IDeckWorkspaceRepository repository,
+        ICardCatalog cardCatalog,
+        IArchidektGateway? archidektGateway = null,
+        IDeckPlanRepository? planRepository = null,
+        ICommanderMetaProvider? commanderMetaProvider = null,
+        ICardTrendProvider? cardTrendProvider = null,
+        IComboCatalog? comboCatalog = null,
+        DateOnly? currentDateOverride = null,
+        IEnumerable<ICorpusSignalProvider>? corpusSignalProviders = null)
+    {
+        DeckAnalysisMetrics analysisMetrics = new(
+            cardCatalog,
+            () => currentDateOverride ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime));
+        return new DeckReplacementService(repository, cardCatalog, analysisMetrics, planRepository);
+    }
+
+    /// <summary>
     /// Creates a recommendation service with explicit analysis and simulation collaborators.
     /// </summary>
     private static DeckRecommendationService CreateRecommendationService(

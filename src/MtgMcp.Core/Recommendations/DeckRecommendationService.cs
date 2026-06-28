@@ -41,6 +41,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckQueryService queries;
 
     /// <summary>
+    /// Builds replacement, upgrade, and consistency improvement plans.
+    /// </summary>
+    private readonly DeckReplacementService replacements;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -78,7 +83,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         PlaygroupService? playgroups = null,
         DeckAnalysisMetrics? analysisMetrics = null,
         DeckBatchTuningService? batchTuning = null,
-        DeckQueryService? queries = null
+        DeckQueryService? queries = null,
+        DeckReplacementService? replacements = null
     )
         : base(
             repository,
@@ -91,9 +97,10 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.cardTrendProvider = cardTrendProvider;
         this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
+        this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
         this.batchTuning = batchTuning ?? new DeckBatchTuningService(repository, analysis, simulation);
         this.queries = queries ?? new DeckQueryService(repository, cardCatalog, planRepository);
-        this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
+        this.replacements = replacements ?? new DeckReplacementService(repository, cardCatalog, this.analysisMetrics, planRepository);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();
         this.playgroups = playgroups;

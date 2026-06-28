@@ -823,7 +823,7 @@ public sealed partial class DeckIntelligenceTests
     /// Verifies that find budget replacements creates persisted plan without mutating deck.
     /// </summary>
     [Fact]
-    public async Task FindBudgetReplacements_CreatesPersistedPlanWithoutMutatingDeck()
+    public async Task ReplacementService_CreatesPersistedPlanWithoutMutatingDeck()
     {
         InMemoryRepository workspaces = new();
         InMemoryPlanRepository plans = new();
@@ -832,7 +832,7 @@ public sealed partial class DeckIntelligenceTests
             Name = "Budget",
             Cards = [ExpensiveRamp()]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
+        DeckReplacementService service = CreateReplacementService(workspaces, new FakeCardCatalog(), archidektGateway: null, plans);
 
         RecommendationPlanResult result = await service.FindBudgetReplacementsAsync(
             workspace.Id,
