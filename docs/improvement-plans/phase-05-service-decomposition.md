@@ -149,6 +149,10 @@ Status update after completed Phase 5 slices:
   summary builders, and private state types. The public
   `DeckSimulationService.Goldfish.cs` entrypoint file now stays small while preserving
   existing behavior.
+- `DeckReplacementService` now uses focused partials for public planning entrypoints,
+  replacement search/scoring, plan persistence, add-candidate selection, contextual
+  feature scoring, and shared helpers. A reconstruction check proved the split preserves
+  the pre-split implementation order and behavior.
 
 ## 4. Workstreams
 
