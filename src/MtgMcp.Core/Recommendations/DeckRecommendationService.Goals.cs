@@ -18,7 +18,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckGoalSpec spec = DeckGoalSpecCatalog.Build(goal, workspace.Format, maxPrice, strategy);
-        DeckQueryRecommendationResult ranking = await RankCardsForDeckQueriesAsync(
+        DeckQueryRecommendationResult ranking = await queries
+            .RankCardsForDeckQueriesAsync(
             workspace,
             goal,
             spec.Searches,
@@ -28,15 +29,18 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
             spec.RequiredTags,
             spec.ExcludedRoles,
             spec.ExcludedTags,
-            cancellationToken).ConfigureAwait(false);
-        DeckEditPlan plan = await SaveQueryPlanAsync(
+            cancellationToken)
+            .ConfigureAwait(false);
+        DeckEditPlan plan = await queries
+            .SaveQueryPlanAsync(
             workspace,
             ranking,
             spec.Category,
             spec.Rationale,
             "Goal package plan",
             "goal-package",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken)
+            .ConfigureAwait(false);
 
         return new GoalPackagePlanResult
         {

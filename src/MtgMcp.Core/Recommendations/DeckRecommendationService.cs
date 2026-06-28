@@ -36,6 +36,11 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     private readonly DeckBatchTuningService batchTuning;
 
     /// <summary>
+    /// Runs deck-aware catalog query workflows for direct query and goal-package recommendations.
+    /// </summary>
+    private readonly DeckQueryService queries;
+
+    /// <summary>
     /// Builds reusable analysis metrics used by recommendation scoring heuristics.
     /// </summary>
     private readonly DeckAnalysisMetrics analysisMetrics;
@@ -72,7 +77,8 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         SimulationProfileCatalog? simulationProfiles = null,
         PlaygroupService? playgroups = null,
         DeckAnalysisMetrics? analysisMetrics = null,
-        DeckBatchTuningService? batchTuning = null
+        DeckBatchTuningService? batchTuning = null,
+        DeckQueryService? queries = null
     )
         : base(
             repository,
@@ -86,6 +92,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
         this.corpusSignalProviders = corpusSignalProviders?.ToList() ?? [];
         this.analysis = analysis;
         this.batchTuning = batchTuning ?? new DeckBatchTuningService(repository, analysis, simulation);
+        this.queries = queries ?? new DeckQueryService(repository, cardCatalog, planRepository);
         this.analysisMetrics = analysisMetrics ?? new DeckAnalysisMetrics(cardCatalog, CurrentDate);
         this.simulation = simulation;
         this.simulationProfiles = simulationProfiles ?? SimulationProfileCatalog.CreateDefault();

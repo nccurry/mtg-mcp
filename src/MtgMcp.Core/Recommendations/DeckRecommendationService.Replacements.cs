@@ -996,17 +996,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static DeckCard CreateCandidateCard(CardInfo candidate)
     {
-        DeckCard card = new()
-        {
-            Name = candidate.Name,
-            Quantity = 1,
-            PrimaryCategory = DeckDefaults.Mainboard,
-            Categories = [DeckDefaults.Mainboard],
-            ScryfallId = candidate.Id,
-            ScryfallOracleId = candidate.OracleId
-        };
-        DeckServiceHelpers.ApplyCardSnapshot(card, candidate);
-        return card;
+        return DeckRecommendationCardFacts.CreateCandidateCard(candidate);
     }
 
     /// <summary>
@@ -1165,9 +1155,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static bool IsLegalInFormat(CardInfo card, string format)
     {
-        string legalityKey = NormalizeFormat(format);
-        return !card.Legalities.TryGetValue(legalityKey, out string? legality)
-            || legality.Equals("legal", StringComparison.OrdinalIgnoreCase);
+        return DeckRecommendationCardFacts.IsLegalInFormat(card, format);
     }
 
     /// <summary>
@@ -1175,13 +1163,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static string NormalizeFormat(string? format)
     {
-        string normalized = format?.Trim().ToLowerInvariant() ?? "";
-        return normalized switch
-        {
-            "" => "commander",
-            "edh" => "commander",
-            _ => normalized
-        };
+        return DeckRecommendationCardFacts.NormalizeFormat(format);
     }
 
     /// <summary>
@@ -1189,31 +1171,7 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static (bool IsKnown, HashSet<string> Colors) GetDeckColorIdentity(DeckWorkspace workspace)
     {
-        HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
-        bool foundCommander = false;
-
-        foreach (DeckCard card in workspace.Cards)
-        {
-            if (!IsCommanderCard(card))
-            {
-                continue;
-            }
-
-            foundCommander = true;
-            AddColors(colors, DeckServiceHelpers.GetSnapshot(card).ColorIdentity);
-        }
-
-        if (foundCommander)
-        {
-            return (true, colors);
-        }
-
-        foreach (DeckCard card in DeckServiceHelpers.IncludedCards(workspace))
-        {
-            AddColors(colors, DeckServiceHelpers.GetSnapshot(card).ColorIdentity);
-        }
-
-        return (colors.Count > 0, colors);
+        return DeckRecommendationCardFacts.GetDeckColorIdentity(workspace);
     }
 
     /// <summary>
@@ -1221,21 +1179,6 @@ public sealed partial class DeckRecommendationService : DeckServiceBase
     /// </summary>
     private static bool IsInDeckColorIdentity(CardInfo candidate, bool colorIdentityKnown, HashSet<string> deckColorIdentity)
     {
-        return !colorIdentityKnown
-            || candidate.ColorIdentity.All(color => deckColorIdentity.Contains(color));
-    }
-
-    /// <summary>
-    /// Adds colors to a color set.
-    /// </summary>
-    private static void AddColors(HashSet<string> colors, IEnumerable<string> colorIdentity)
-    {
-        foreach (string color in colorIdentity)
-        {
-            if (!string.IsNullOrWhiteSpace(color))
-            {
-                colors.Add(color);
-            }
-        }
+        return DeckRecommendationCardFacts.IsInDeckColorIdentity(candidate, colorIdentityKnown, deckColorIdentity);
     }
 }

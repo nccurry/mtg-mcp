@@ -200,7 +200,7 @@ public sealed partial class DeckIntelligenceTests
     /// Verifies that query-first data lookups keep accepted and rejected cards explainable.
     /// </summary>
     [Fact]
-    public async Task QueryCardsForDeck_FiltersAndExplainsDrawDiscardCandidates()
+    public async Task QueryService_FiltersAndExplainsDrawDiscardCandidates()
     {
         InMemoryRepository workspaces = new();
         DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
@@ -220,7 +220,7 @@ public sealed partial class DeckIntelligenceTests
                 new DeckCard { Name = "Swamp", Quantity = 38, PrimaryCategory = DeckRoles.Lands, Categories = [DeckRoles.Lands] }
             ]
         }, TestContext.Current.CancellationToken);
-        DeckRecommendationService service = CreateRecommendationService(workspaces, new FakeCardCatalog());
+        DeckQueryService service = CreateQueryService(workspaces, new FakeCardCatalog());
 
         DeckQueryDataResult result = await service.QueryCardsForDeckAsync(
             workspace.Id,

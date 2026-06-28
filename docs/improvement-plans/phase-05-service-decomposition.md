@@ -74,6 +74,13 @@ Status update after Sub-PRs A/B:
   `src/MtgMcp.Core/Recommendations/DeckBatchTuningService.cs`. The existing
   `DeckRecommendationService` methods remain as facade delegates for current MCP tool
   wiring.
+- Query workflows now live in `src/MtgMcp.Core/Recommendations/DeckQueryService.cs`, with
+  `DeckRecommendationService` keeping a facade method for current MCP tool wiring and
+  goal-package recommendations calling the collaborator directly.
+- Shared recommendation card facts (format normalization, legality, color identity, and
+  candidate-card construction) now live in
+  `src/MtgMcp.Core/Recommendations/DeckRecommendationCardFacts.cs` instead of being
+  private implementation details of the replacements partial.
 
 ## 4. Workstreams
 
