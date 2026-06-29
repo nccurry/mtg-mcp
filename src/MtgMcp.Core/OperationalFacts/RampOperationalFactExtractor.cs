@@ -96,7 +96,7 @@ public static partial class RampOperationalFactExtractor
             && ContainsAny(text, "onto the battlefield", "put that card onto the battlefield", "put them onto the battlefield");
         bool entersTapped = ContainsAny(text, "onto the battlefield tapped", "battlefield tapped", "enters the battlefield tapped");
         bool createsTreasure = ContainsAny(text, "treasure token") && ContainsAny(text, "create", "creates");
-        bool costReducer = ContainsAny(text, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast");
+        bool costReducer = ContainsCostReductionText(text) && !ContainsSelfDiscountText(text);
         List<string> producedMana = ReadProducedMana(snapshot, text);
 
         if (searchesLandToBattlefield && (activationMana > 0 || requiresTap || sacrificesSelf))
@@ -623,6 +623,28 @@ public static partial class RampOperationalFactExtractor
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks whether text reduces future spell costs instead of only discounting this spell.
+    /// </summary>
+    private static bool ContainsCostReductionText(string oracleText)
+    {
+        return ContainsAny(oracleText, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast");
+    }
+
+    /// <summary>
+    /// Checks whether cost-reduction text only describes the current spell's own casting cost.
+    /// </summary>
+    private static bool ContainsSelfDiscountText(string oracleText)
+    {
+        return ContainsAny(
+            oracleText,
+            "this spell costs",
+            "affinity for",
+            "convoke",
+            "improvise",
+            "delve");
     }
 
     /// <summary>

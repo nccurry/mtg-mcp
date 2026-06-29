@@ -121,6 +121,14 @@ public sealed partial class DeckIntelligenceTests
             {
                 results = [new CardSearchResult { Name = "Lightning Greaves" }];
             }
+            else if (query.Contains("treasure token", StringComparison.OrdinalIgnoreCase))
+            {
+                results =
+                [
+                    new CardSearchResult { Name = "An Offer You Can't Refuse" },
+                    new CardSearchResult { Name = "Arcane Signet" }
+                ];
+            }
             else if (query.Contains("add", StringComparison.OrdinalIgnoreCase))
             {
                 results = [new CardSearchResult { Name = "Arcane Signet" }];

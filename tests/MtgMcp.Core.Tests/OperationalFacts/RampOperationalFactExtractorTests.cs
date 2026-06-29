@@ -108,6 +108,30 @@ public sealed class RampOperationalFactExtractorTests
     }
 
     /// <summary>
+    /// Verifies self-discount draw spells are evaluated as draw, not ramp.
+    /// </summary>
+    [Fact]
+    public void Extract_AndEvaluate_SelfDiscountDrawIsDraw()
+    {
+        DeckCard card = Card(
+            "Thought Monitor",
+            "Artifact Creature - Construct",
+            "{6}{U}",
+            7,
+            "Affinity for artifacts. This spell costs {1} less to cast for each artifact you control. When Thought Monitor enters the battlefield, draw two cards.",
+            ["U"]);
+
+        CardOperationalFacts facts = RampOperationalFactExtractor.Extract(card);
+        RampContextEvaluation evaluation = RampContextScorer.Evaluate(CreateRampContextDeck(), card, facts);
+
+        facts.Role.Should().Be(DeckRoles.Draw);
+        facts.Ramp.Should().BeNull();
+        facts.Draw.Should().NotBeNull();
+        evaluation.EvaluatedRole.Should().Be(CardEvaluationRoles.Draw);
+        evaluation.RampKind.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies interaction facts are extracted for common answer text.
     /// </summary>
     [Fact]

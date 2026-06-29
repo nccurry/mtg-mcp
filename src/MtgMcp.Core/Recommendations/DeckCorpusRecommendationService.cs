@@ -228,14 +228,15 @@ public sealed class DeckCorpusRecommendationService
         RecommendationAnalysisBudget budget = RecommendationAnalysisBudget.FromDepth(analysisDepth);
         CorpusRecommendationResult result = await BuildCorpusRecommendationsAsync(
             workspaceId,
-            goal: cardName,
+            goal: null,
             recommendationKind: "explain-card",
             budget,
             maxPrice: null,
             includeExistingCards: true,
             lesserKnownOnly: false,
             refresh: refresh,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            allowDominantTheme: false).ConfigureAwait(false);
         result.Recommendations = result.Recommendations
             .Where(recommendation => recommendation.CardName.Equals(cardName, StringComparison.OrdinalIgnoreCase))
             .Take(1)
@@ -354,11 +355,12 @@ public sealed class DeckCorpusRecommendationService
         bool includeExistingCards,
         bool lesserKnownOnly,
         bool refresh,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowDominantTheme = true)
     {
         DeckWorkspace workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken).ConfigureAwait(false);
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
-        CorpusSignalReport report = await CollectCorpusSignalsAsync(workspace, goal, maxPrice, budget, refresh, cancellationToken).ConfigureAwait(false);
+        CorpusSignalReport report = await CollectCorpusSignalsAsync(workspace, goal, maxPrice, budget, refresh, cancellationToken, allowDominantTheme: allowDominantTheme).ConfigureAwait(false);
         HashSet<string> existing = workspace.Cards.Select(card => card.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, List<CardCorpusSignal>> signalsByName = CorpusRecommendationBuilder.GroupSignalsByCard(report.Signals);
         List<string> candidateNames = signalsByName.Keys
@@ -391,7 +393,7 @@ public sealed class DeckCorpusRecommendationService
         {
             WorkspaceId = workspace.Id,
             Commander = DeckServiceHelpers.FindCommanderName(workspace, intent),
-            Theme = FindCorpusTheme(workspace, intent, DeckServiceHelpers.FindCommandZoneContext(workspace), goal),
+            Theme = FindCorpusTheme(workspace, intent, DeckServiceHelpers.FindCommandZoneContext(workspace), goal, allowDominantTheme),
             AnalysisDepth = budget.AnalysisDepth,
             Budget = budget,
             Recommendations = recommendations
@@ -428,11 +430,12 @@ public sealed class DeckCorpusRecommendationService
         RecommendationAnalysisBudget budget,
         bool refresh,
         CancellationToken cancellationToken,
-        string? sourceKey = null)
+        string? sourceKey = null,
+        bool allowDominantTheme = true)
     {
         DeckIntent? intent = DeckIntentText.Extract(workspace.Description, workspace.Id).Intent;
         CommandZoneContext commandZone = DeckServiceHelpers.FindCommandZoneContext(workspace);
-        string? theme = FindCorpusTheme(workspace, intent, commandZone, goal);
+        string? theme = FindCorpusTheme(workspace, intent, commandZone, goal, allowDominantTheme);
         CorpusSignalQuery query = new()
         {
             WorkspaceId = workspace.Id,
@@ -534,9 +537,10 @@ public sealed class DeckCorpusRecommendationService
         DeckWorkspace workspace,
         DeckIntent? intent,
         CommandZoneContext commandZone,
-        string? goal)
+        string? goal,
+        bool allowDominantTheme = true)
     {
-        string? theme = intent?.Archetype ?? DeckServiceHelpers.DominantTheme(workspace);
+        string? theme = intent?.Archetype ?? (allowDominantTheme ? DeckServiceHelpers.DominantTheme(workspace) : null);
         return commandZone.HasPartnerPair && string.IsNullOrWhiteSpace(goal)
             ? null
             : theme;

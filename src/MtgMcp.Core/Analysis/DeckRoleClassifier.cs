@@ -73,10 +73,10 @@ public static partial class DeckRoleClassifier
         }
 
         if (ContainsAny(categoryText, DeckRoles.Ramp)
-            || (snapshot.ProducedMana.Count > 0 && !hasNonPrimaryLandFace)
+            || ProducedManaSupportsRamp(snapshot, oracleText, hasNonPrimaryLandFace)
             || ContainsRampText(oracleText, hasNonPrimaryLandFace))
         {
-            AddTag(tags, DeckTags.ManaFixing, snapshot.ProducedMana.Count > 1 || ContainsAny(oracleText, "mana of any color", "any color"));
+            AddTag(tags, DeckTags.ManaFixing, ContainsManaFixingText(snapshot, oracleText, hasNonPrimaryLandFace));
             return Assignment(DeckRoles.Ramp, tags, 0.85, functionalRoles);
         }
 
@@ -199,7 +199,10 @@ public static partial class DeckRoleClassifier
         AddTag(tags, DeckTags.Engines, ContainsAny(text, "whenever", "at the beginning") && ContainsAny(text, "draw", "create", "return", "lose 1 life"));
         AddTag(tags, DeckTags.ComboEnabler, ContainsAny(text, "untap", "copy", "activate only once", "as though it had flash") && ContainsAny(text, "add", "permanent", "ability", "spell"));
 
-        if (snapshot.ProducedMana.Count > 1 || ContainsAny(text, "mana of any color", "any color"))
+        string oracleText = Text(snapshot.OracleText, card.Metadata, "oracleText");
+        string typeLine = Text(snapshot.TypeLine, card.Metadata, "typeLine");
+        bool hasNonPrimaryLandFace = HasNonPrimaryLandFace(typeLine);
+        if (ContainsManaFixingText(snapshot, oracleText, hasNonPrimaryLandFace))
         {
             AddTag(tags, DeckTags.ManaFixing, true);
         }
@@ -416,7 +419,7 @@ public static partial class DeckRoleClassifier
     {
         List<string> roles = [];
         if (ContainsAny(categoryText, DeckRoles.Ramp)
-            || (snapshot.ProducedMana.Count > 0 && !hasNonPrimaryLandFace)
+            || ProducedManaSupportsRamp(snapshot, oracleText, hasNonPrimaryLandFace)
             || ContainsRampText(oracleText, hasNonPrimaryLandFace))
         {
             AddFunctionalRole(roles, DeckRoles.Ramp);
@@ -483,12 +486,54 @@ public static partial class DeckRoleClassifier
             return true;
         }
 
-        if (ContainsAny(oracleText, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast"))
+        if (ContainsCostReductionText(oracleText) && !ContainsSelfDiscountText(oracleText))
         {
             return true;
         }
 
-        return !hasNonPrimaryLandFace && ContainsAny(oracleText, "add {", "add one mana", "add two mana");
+        string nonReminderText = RemoveParentheticalText(oracleText);
+        return !hasNonPrimaryLandFace && ContainsAny(nonReminderText, "add {", "add one mana", "add two mana");
+    }
+
+    /// <summary>
+    /// Checks whether Scryfall produced-mana metadata belongs to the card's own ramp plan.
+    /// </summary>
+    private static bool ProducedManaSupportsRamp(CardSnapshot snapshot, string oracleText, bool hasNonPrimaryLandFace)
+    {
+        return snapshot.ProducedMana.Count > 0
+            && !hasNonPrimaryLandFace
+            && !CreatesTreasureForAnotherPlayer(oracleText);
+    }
+
+    /// <summary>
+    /// Checks whether text or produced-mana metadata indicates usable color fixing for the caster.
+    /// </summary>
+    private static bool ContainsManaFixingText(CardSnapshot snapshot, string oracleText, bool hasNonPrimaryLandFace)
+    {
+        return (ProducedManaSupportsRamp(snapshot, oracleText, hasNonPrimaryLandFace) && snapshot.ProducedMana.Count > 1)
+            || ContainsAny(RemoveParentheticalText(oracleText), "mana of any color", "any color");
+    }
+
+    /// <summary>
+    /// Checks whether text reduces future spell costs instead of only discounting this spell.
+    /// </summary>
+    private static bool ContainsCostReductionText(string oracleText)
+    {
+        return ContainsAny(oracleText, "cost {1} less", "costs {1} less", "cost one less", "costs one less", "cost less to cast");
+    }
+
+    /// <summary>
+    /// Checks whether cost-reduction text only describes the current spell's own casting cost.
+    /// </summary>
+    private static bool ContainsSelfDiscountText(string oracleText)
+    {
+        return ContainsAny(
+            oracleText,
+            "this spell costs",
+            "affinity for",
+            "convoke",
+            "improvise",
+            "delve");
     }
 
     /// <summary>
@@ -542,6 +587,14 @@ public static partial class DeckRoleClassifier
             "target opponent creates",
             "an opponent creates",
             "opponent creates");
+    }
+
+    /// <summary>
+    /// Removes reminder text so token ability reminders do not look like the card's own rules text.
+    /// </summary>
+    private static string RemoveParentheticalText(string text)
+    {
+        return ParentheticalTextRegex().Replace(text, " ");
     }
 
     /// <summary>
@@ -838,6 +891,12 @@ public static partial class DeckRoleClassifier
         @"deals\s+(?:x|\d+|that much)\s+damage\s+to\s+(?:each|all)\s+creatures?",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex BoardDamageRegex();
+
+    /// <summary>
+    /// Matches parenthetical reminder text embedded in oracle text.
+    /// </summary>
+    [GeneratedRegex(@"\([^)]*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex ParentheticalTextRegex();
 
     /// <summary>
     /// Splits locally stored annotation values using the same separators as facet snapshots.

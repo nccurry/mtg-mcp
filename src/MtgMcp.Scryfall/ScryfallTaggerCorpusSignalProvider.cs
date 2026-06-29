@@ -12,7 +12,7 @@ public sealed class ScryfallTaggerCorpusSignalProvider : ICorpusSignalProvider
     /// <summary>
     /// Stores the cache version for the curated Tagger catalog.
     /// </summary>
-    private const string CacheAdapterVersion = "scryfall-tagger-v2";
+    private const string CacheAdapterVersion = "scryfall-tagger-v3";
 
     /// <summary>
     /// Looks up cards through Scryfall search.
@@ -117,42 +117,47 @@ public sealed class ScryfallTaggerCorpusSignalProvider : ICorpusSignalProvider
         foreach (ScryfallTaggerRule rule in selectedRules)
         {
             string searchQuery = BuildSearchQuery(query, rule);
-            IReadOnlyList<CardSearchResult> searchResults = await cardCatalog
-                .SearchCardsAsync(searchQuery, perRuleLimit, cancellationToken)
-                .ConfigureAwait(false);
-            IReadOnlyDictionary<string, CardInfo> cards = await cardCatalog
-                .GetCardsByNamesAsync(searchResults.Select(card => card.Name).ToList(), cancellationToken)
-                .ConfigureAwait(false);
+            IReadOnlyList<CardSearchResult> searchResults;
+            try
+            {
+                searchResults = await cardCatalog
+                    .SearchCardsAsync(searchQuery, perRuleLimit, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (report.Signals.Count > 0)
+            {
+                report.Notes.Add("Scryfall Tagger source budget expired after partial tag-search results; returning partial evidence.");
+                break;
+            }
 
             foreach (string cardName in searchResults.Select(result => result.Name).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                cards.TryGetValue(cardName, out CardInfo? card);
                 double roleScore = ScoreRuleFit(rule, query);
                 report.Signals.Add(new CardCorpusSignal
                 {
                     CardName = cardName,
-                    OracleId = card?.OracleId,
                     Source = status.Name,
                     SignalType = CorpusSignalTypes.Tag,
                     Score = Math.Clamp(0.55 + (roleScore * 0.35), 0, 1),
                     SynergyScore = roleScore,
-                    Price = ReadUsdPrice(card),
-                    ReleasedAt = card?.ReleasedAt,
-                    EdhrecRank = card?.EdhrecRank,
-                    Uri = card?.ScryfallUri ?? BuildScryfallSearchUri(searchQuery),
-                    ScryfallUri = card?.ScryfallUri,
+                    Uri = BuildScryfallSearchUri(searchQuery),
                     Rationale = BuildRationale(cardName, rule)
                 });
             }
         }
 
+        await HydrateSignalsAsync(report, cancellationToken).ConfigureAwait(false);
         if (report.Signals.Count == 0)
         {
             report.Notes.Add("No cards matched the selected Scryfall Tagger oracle-tag queries.");
         }
 
         report.Notes.Add("Scryfall Tagger evidence is deterministic tag-search evidence, not an inferred card classification.");
-        await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            await cache.SetAsync(cacheKey, report, cancellationToken).ConfigureAwait(false);
+        }
+
         return report;
     }
 
@@ -185,7 +190,7 @@ public sealed class ScryfallTaggerCorpusSignalProvider : ICorpusSignalProvider
         int maxRules = budget.AnalysisDepth.Equals(AnalysisDepths.Minimal, StringComparison.OrdinalIgnoreCase)
             ? 3
             : budget.AnalysisDepth.Equals(AnalysisDepths.Best, StringComparison.OrdinalIgnoreCase)
-                ? 16
+                ? 12
                 : 10;
         return selected
             .OrderByDescending(rule => rule.Priority)
@@ -242,6 +247,50 @@ public sealed class ScryfallTaggerCorpusSignalProvider : ICorpusSignalProvider
     private static string BuildRationale(string cardName, ScryfallTaggerRule rule)
     {
         return $"{cardName} matched Scryfall Tagger oracle tag '{rule.Slug}' for {rule.Description}.";
+    }
+
+    /// <summary>
+    /// Enriches tag-search hits with card metadata in one bounded batch.
+    /// </summary>
+    private async Task HydrateSignalsAsync(CorpusSignalReport report, CancellationToken cancellationToken)
+    {
+        if (report.Signals.Count == 0 || cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        List<string> names = report.Signals
+            .Select(signal => signal.CardName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        IReadOnlyDictionary<string, CardInfo> cards;
+        try
+        {
+            cards = await cardCatalog.GetCardsByNamesAsync(names, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            report.Notes.Add("Scryfall Tagger source budget expired before card metadata hydration; tag-search evidence is still returned.");
+            return;
+        }
+
+        foreach (CardCorpusSignal signal in report.Signals)
+        {
+            if (!cards.TryGetValue(signal.CardName, out CardInfo? card))
+            {
+                continue;
+            }
+
+            signal.OracleId = card.OracleId;
+            signal.Price = ReadUsdPrice(card);
+            signal.ReleasedAt = card.ReleasedAt;
+            signal.EdhrecRank = card.EdhrecRank;
+            signal.ScryfallUri = card.ScryfallUri;
+            if (!string.IsNullOrWhiteSpace(card.ScryfallUri))
+            {
+                signal.Uri = card.ScryfallUri;
+            }
+        }
     }
 
     /// <summary>

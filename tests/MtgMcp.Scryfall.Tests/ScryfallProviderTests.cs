@@ -413,6 +413,66 @@ public sealed class ScryfallProviderTests
     }
 
     /// <summary>
+    /// Verifies that Tagger searches return partial evidence when a later tag query is canceled.
+    /// </summary>
+    [Fact]
+    public async Task TaggerCorpusProvider_ReturnsPartialEvidenceWhenLaterSearchCancels()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            CancelSearchAfter = 1,
+            SearchResults =
+            [
+                new CardSearchResult { Name = "Theme Fit" }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Theme Fit"] = Card("Theme Fit", "Artifact", "{T}: Add one mana of any color.", "0.75", 1_200, "abc", null)
+            }
+        };
+        ScryfallTaggerCorpusSignalProvider provider = new(catalog, new NullCorpusCache(), Options.Create(new MtgMcpOptions()));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            new CorpusSignalQuery { Format = "commander", Goal = "lifegain discard tokens" },
+            RecommendationAnalysisBudget.FromDepth("balanced"),
+            TestContext.Current.CancellationToken);
+
+        report.Signals.Should().ContainSingle(signal => signal.CardName == "Theme Fit");
+        report.Notes.Should().Contain(note => note.Contains("partial tag-search results", StringComparison.OrdinalIgnoreCase));
+        catalog.GetCardsByNamesCalls.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Verifies that Tagger card metadata hydration is batched after selected tag searches.
+    /// </summary>
+    [Fact]
+    public async Task TaggerCorpusProvider_BatchesHydrationAcrossSelectedRules()
+    {
+        FakeCardCatalog catalog = new()
+        {
+            SearchResults =
+            [
+                new CardSearchResult { Name = "Theme Fit" }
+            ],
+            CardsByName = new Dictionary<string, CardInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Theme Fit"] = Card("Theme Fit", "Enchantment", "Whenever you cast a spell, draw a card.", "0.75", 1_200, "abc", null)
+            }
+        };
+        ScryfallTaggerCorpusSignalProvider provider = new(catalog, new NullCorpusCache(), Options.Create(new MtgMcpOptions()));
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            new CorpusSignalQuery { Format = "commander", Goal = "lifegain discard mill spellslinger counters synergy" },
+            RecommendationAnalysisBudget.FromDepth("balanced"),
+            TestContext.Current.CancellationToken);
+
+        catalog.SearchCalls.Should().BeGreaterThan(1);
+        catalog.GetCardsByNamesCalls.Should().Be(1);
+        report.Signals.Should().NotBeEmpty();
+        report.Signals.Should().OnlyContain(signal => signal.ScryfallUri != null);
+    }
+
+    /// <summary>
     /// Creates a card info fixture.
     /// </summary>
     private static CardInfo Card(
@@ -475,9 +535,19 @@ public sealed class ScryfallProviderTests
         public List<string> SearchQueries { get; } = [];
 
         /// <summary>
+        /// Gets or sets the search call after which fake cancellation starts.
+        /// </summary>
+        public int CancelSearchAfter { get; set; } = int.MaxValue;
+
+        /// <summary>
         /// Gets the last search limit.
         /// </summary>
         public int LastSearchLimit { get; private set; }
+
+        /// <summary>
+        /// Gets card-name hydration call count.
+        /// </summary>
+        public int GetCardsByNamesCalls { get; private set; }
 
         /// <summary>
         /// Searches fake cards.
@@ -491,6 +561,11 @@ public sealed class ScryfallProviderTests
             LastSearchQuery = query;
             SearchQueries.Add(query);
             LastSearchLimit = limit;
+            if (SearchCalls > CancelSearchAfter)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
             return Task.FromResult<IReadOnlyList<CardSearchResult>>(SearchResults.Take(limit).ToList());
         }
 
@@ -521,6 +596,7 @@ public sealed class ScryfallProviderTests
             IReadOnlyList<string> names,
             CancellationToken cancellationToken)
         {
+            GetCardsByNamesCalls++;
             IReadOnlyDictionary<string, CardInfo> cards = names
                 .Where(CardsByName.ContainsKey)
                 .Distinct(StringComparer.OrdinalIgnoreCase)

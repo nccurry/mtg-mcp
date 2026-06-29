@@ -334,7 +334,12 @@ public sealed partial class DeckIntelligenceTests
             mulligan: true,
             TestContext.Current.CancellationToken);
 
-        goldfish.RepresentativeLines.Should().Contain(line => line.Contains("Commander's Call", StringComparison.OrdinalIgnoreCase));
+        goldfish.RepresentativeLines.Should().Contain(line =>
+            line.Contains("Thoughtcast", StringComparison.OrdinalIgnoreCase)
+            && line.Contains("(Draw)", StringComparison.OrdinalIgnoreCase));
+        goldfish.RepresentativeLines.Should().NotContain(line =>
+            line.Contains("Thoughtcast", StringComparison.OrdinalIgnoreCase)
+            && line.Contains("(Ramp)", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

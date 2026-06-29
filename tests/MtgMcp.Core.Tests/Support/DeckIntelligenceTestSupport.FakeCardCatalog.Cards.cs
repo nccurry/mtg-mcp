@@ -32,6 +32,21 @@ public sealed partial class DeckIntelligenceTests
                     Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
                     Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "1.00" }
                 },
+                "An Offer You Can't Refuse" => new CardInfo
+                {
+                    Id = "an-offer-you-cant-refuse",
+                    OracleId = "oracle-an-offer-you-cant-refuse",
+                    Name = "An Offer You Can't Refuse",
+                    ManaCost = "{U}",
+                    ManaValue = 1,
+                    TypeLine = "Instant",
+                    OracleText = "Counter target noncreature spell. Its controller creates two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+                    ColorIdentity = ["U"],
+                    ProducedMana = ["W", "U", "B", "R", "G"],
+                    EdhrecRank = 35,
+                    Legalities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["commander"] = "legal" },
+                    Prices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["usd"] = "2.00" }
+                },
                 "Phyrexian Arena" => new CardInfo
                 {
                     Id = "phyrexian-arena",

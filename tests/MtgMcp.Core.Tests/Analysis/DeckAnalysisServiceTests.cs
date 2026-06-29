@@ -362,19 +362,40 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that affinity-style self discounts do not turn draw spells into ramp.
+    /// </summary>
+    [Fact]
+    public void RoleClassifier_DoesNotTreatSelfDiscountDrawAsRamp()
+    {
+        CardRoleAssignment thoughtcast = DeckRoleClassifier.Classify(Card(
+            "Thoughtcast",
+            "Sorcery",
+            "Affinity for artifacts. This spell costs {1} less to cast for each artifact you control. Draw two cards."));
+
+        thoughtcast.PrimaryRole.Should().Be(DeckRoles.Draw);
+        thoughtcast.FunctionalRoles.Should().Contain(DeckRoles.Draw);
+        thoughtcast.FunctionalRoles.Should().NotContain(DeckRoles.Ramp);
+    }
+
+    /// <summary>
     /// Verifies that Treasure side effects do not override counterspell interaction roles.
     /// </summary>
     [Fact]
     public void RoleClassifier_DistinguishesCasterAndOpponentTreasures()
     {
-        CardRoleAssignment offer = DeckRoleClassifier.Classify(Card(
+        DeckCard offerCard = Card(
             "An Offer You Can't Refuse",
             "Instant",
-            "Counter target noncreature spell. Its controller creates two Treasure tokens."));
-        CardRoleAssignment swindle = DeckRoleClassifier.Classify(Card(
+            "Counter target noncreature spell. Its controller creates two Treasure tokens.");
+        offerCard.Snapshot.ProducedMana = ["W", "U", "B", "R", "G"];
+        DeckCard swindleCard = Card(
             "Spell Swindle",
             "Instant",
-            "Counter target spell. Create X Treasure tokens, where X is that spell's mana value."));
+            "Counter target spell. Create X Treasure tokens, where X is that spell's mana value.");
+        swindleCard.Snapshot.ProducedMana = ["W", "U", "B", "R", "G"];
+
+        CardRoleAssignment offer = DeckRoleClassifier.Classify(offerCard);
+        CardRoleAssignment swindle = DeckRoleClassifier.Classify(swindleCard);
         CardRoleAssignment bigScore = DeckRoleClassifier.Classify(Card(
             "Big Score",
             "Instant",
@@ -382,8 +403,10 @@ public sealed partial class DeckIntelligenceTests
 
         offer.PrimaryRole.Should().Be(DeckRoles.Interaction);
         offer.FunctionalRoles.Should().NotContain(DeckRoles.Ramp);
+        offer.Tags.Should().NotContain(DeckTags.ManaFixing);
         swindle.PrimaryRole.Should().Be(DeckRoles.Interaction);
         swindle.FunctionalRoles.Should().Contain(DeckRoles.Ramp);
+        swindle.Tags.Should().Contain(DeckTags.ManaFixing);
         bigScore.PrimaryRole.Should().Be(DeckRoles.Ramp);
         bigScore.FunctionalRoles.Should().Contain([DeckRoles.Ramp, DeckRoles.Draw]);
     }
@@ -478,6 +501,42 @@ public sealed partial class DeckIntelligenceTests
             .Contain(evidence => evidence.Contains("oracle text", StringComparison.OrdinalIgnoreCase));
         explanation.Notes.Should().Contain(note =>
             note.Contains("diverge", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies that role-count oracle evidence does not match role names inside larger words.
+    /// </summary>
+    [Fact]
+    public async Task ExplainRoleCounts_DoesNotMatchRampInsideTrample()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Trample Text",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Vanilla Crusher",
+                        Quantity = 1,
+                        Snapshot = new CardSnapshot
+                        {
+                            TypeLine = "Creature",
+                            OracleText = "Trample."
+                        }
+                    }
+                ]
+            },
+            TestContext.Current.CancellationToken);
+        DeckAnalysisService service = CreateAnalysisService(workspaces, new FakeCardCatalog());
+
+        DeckRoleCountExplanation explanation = await service.ExplainRoleCountsAsync(
+            workspace.Id,
+            DeckRoles.Ramp,
+            TestContext.Current.CancellationToken);
+
+        explanation.Cards.Should().BeEmpty();
     }
 
     /// <summary>

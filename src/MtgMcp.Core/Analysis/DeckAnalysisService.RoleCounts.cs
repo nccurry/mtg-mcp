@@ -225,7 +225,7 @@ public sealed partial class DeckAnalysisService
     private static void AddOracleEvidence(List<string> evidence, string? oracleText, string target)
     {
         if (string.IsNullOrWhiteSpace(oracleText)
-            || !oracleText.Contains(target, StringComparison.OrdinalIgnoreCase))
+            || !ContainsWholeTextToken(oracleText, target))
         {
             return;
         }
@@ -293,6 +293,39 @@ public sealed partial class DeckAnalysisService
         {
             evidence.Add("oracle text supports Wincons through lethal, pump, drain, or alternate-win text.");
         }
+    }
+
+    /// <summary>
+    /// Checks whether a target appears as its own word or phrase in rules text.
+    /// </summary>
+    private static bool ContainsWholeTextToken(string text, string target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return false;
+        }
+
+        int start = 0;
+        while (start < text.Length)
+        {
+            int index = text.IndexOf(target, start, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            int end = index + target.Length;
+            bool startsClean = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
+            bool endsClean = end >= text.Length || !char.IsLetterOrDigit(text[end]);
+            if (startsClean && endsClean)
+            {
+                return true;
+            }
+
+            start = end;
+        }
+
+        return false;
     }
 
     /// <summary>

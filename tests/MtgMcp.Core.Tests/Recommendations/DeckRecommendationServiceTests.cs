@@ -335,6 +335,52 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies opponent-created Treasure reminders do not satisfy required ramp filters.
+    /// </summary>
+    [Fact]
+    public async Task QueryCardsForDeck_RejectsOpponentTreasureAsRequiredRamp()
+    {
+        InMemoryRepository workspaces = new();
+        DeckWorkspace workspace = await workspaces.SaveAsync(new DeckWorkspace
+        {
+            Name = "Temur Artifacts",
+            Format = "commander",
+            Cards =
+            [
+                new DeckCard
+                {
+                    Name = "Rashmi and Ragavan",
+                    Quantity = 1,
+                    PrimaryCategory = DeckRoles.Commander,
+                    Categories = [DeckRoles.Commander],
+                    Snapshot = new CardSnapshot { TypeLine = "Legendary Creature", ColorIdentity = ["G", "R", "U"] }
+                }
+            ]
+        }, TestContext.Current.CancellationToken);
+        DeckQueryService service = CreateQueryService(workspaces, new FakeCardCatalog());
+
+        DeckQueryDataResult result = await service.QueryCardsForDeckAsync(
+            workspace.Id,
+            "Artifact ramp",
+            "Treasure token add",
+            count: 4,
+            maxPrice: null,
+            requiredRoles: [DeckRoles.Ramp],
+            requiredTags: null,
+            excludedRoles: null,
+            excludedTags: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Cards.Should().Contain(card => card.CardName == "Arcane Signet");
+        result.Cards.Should().NotContain(card => card.CardName == "An Offer You Can't Refuse");
+        result.Rejected.Should().Contain(rejected =>
+            rejected.CardName == "An Offer You Can't Refuse"
+            && rejected.Role == DeckRoles.Interaction
+            && !rejected.Tags.Contains(DeckTags.ManaFixing)
+            && rejected.Reasons.Contains("Does not match required role(s): Ramp."));
+    }
+
+    /// <summary>
     /// Verifies that Scryfall query failures return structured errors instead of invocation failures.
     /// </summary>
     [Fact]

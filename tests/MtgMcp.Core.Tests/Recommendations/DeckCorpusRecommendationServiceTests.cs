@@ -833,6 +833,55 @@ public sealed partial class DeckIntelligenceTests
     }
 
     /// <summary>
+    /// Verifies that single-card source explanations do not use the card name as a source search goal.
+    /// </summary>
+    [Fact]
+    public async Task ExplainCardCorpusSignal_UsesDeckContextRatherThanCardNameGoal()
+    {
+        InMemoryRepository workspaces = new();
+        FakeCorpusSignalProvider provider = new(primaryCard: "Illness in the Ranks");
+        DeckWorkspace workspace = await workspaces.SaveAsync(
+            new DeckWorkspace
+            {
+                Name = "Signal Context",
+                Format = "commander",
+                Cards =
+                [
+                    new DeckCard
+                    {
+                        Name = "Arcane Signet",
+                        PrimaryCategory = DeckRoles.Ramp,
+                        Categories = [DeckRoles.Ramp],
+                        Snapshot = new CardSnapshot
+                        {
+                            TypeLine = "Artifact",
+                            OracleText = "{T}: Add one mana of any color.",
+                            ProducedMana = ["W", "U", "B", "R", "G"]
+                        }
+                    }
+                ]
+            },
+            TestContext.Current.CancellationToken);
+        DeckCorpusRecommendationService service = CreateCorpusRecommendationService(
+            workspaces,
+            new FakeCardCatalog(),
+            corpusSignalProviders: [provider]);
+
+        CorpusRecommendationResult result = await service.ExplainCardCorpusSignalAsync(
+            workspace.Id,
+            "Illness in the Ranks",
+            analysisDepth: "minimal",
+            refresh: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Recommendations.Should().ContainSingle(recommendation => recommendation.CardName == "Illness in the Ranks");
+        result.Theme.Should().BeNull();
+        provider.LastQuery.Should().NotBeNull();
+        provider.LastQuery!.Goal.Should().BeNull();
+        provider.LastQuery.Theme.Should().BeNull();
+    }
+
+    /// <summary>
     /// Verifies that explain card falls back to local metadata when providers have no direct evidence.
     /// </summary>
     [Fact]
