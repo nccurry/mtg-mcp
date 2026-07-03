@@ -8,7 +8,8 @@ The rewrite has entered foundation implementation. The legacy audit is
 approved/completed, the foundation child is approved/in progress, and the
 remaining eight children stay planning-only with
 `Implementation authorized: No`. Production edits are limited to the active
-foundation child and its current authorized phase.
+foundation child and its current authorized phase. Foundation Phases 0 and 1
+are complete; Phase 2A product-code deletion has not started.
 
 ## Authority And Routing
 

@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: Phase 0 complete; Phase 1 worktree creation authorized
+- Current phase: Phase 1 complete; Phase 2A not started
 
 ## Summary
 
@@ -64,8 +64,9 @@ evidence-aware, and normal validation is offline.
 | 2026-07-03 | Audit dependency and guardrail review | Passed for draft |
 | 2026-07-03 | Packet structure and traceability | Passed after final docs review |
 | 2026-07-03 | Phase 0 implementation entry gate | Passed | Audit disposition approved/completed; foundation decisions accepted; `read-only`/`local`/`remote` with `local` default recorded; owner authorization received. |
+| 2026-07-03 | Phase 1 isolated branch/worktree | Passed | `ncurry/evidence-first-mcp-rewrite` was created at `C:/Users/Nick Curry/Programming/github.com/nccurry/mtg-mcp-evidence-first-rewrite` from `main` commit `c2aeec8`; HEAD and merge base match, the new worktree is clean, and the primary/other worktrees were untouched. |
 
 ## Completion Notes
 
-Phase 0 is complete. Phase 1 creates and verifies the named branch/worktree;
-production deletion remains prohibited until Phase 2A is explicitly started.
+Phases 0 and 1 are complete. Production deletion remains prohibited until
+Phase 2A is explicitly requested and started in the rewrite worktree.

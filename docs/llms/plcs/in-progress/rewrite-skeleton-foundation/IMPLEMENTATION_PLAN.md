@@ -14,7 +14,7 @@
 | Phase | Goal | Requirements | Exit criteria | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Confirm implementation entry gate. | FND-014 | Audit disposition is approved, this child is authorized/in progress, and the accepted mode guardrail is recorded. | Completed |
-| 1 | Create isolated rewrite branch/worktree. | FND-001, FND-002 | Ancestry and worktree safety checks pass. | Authorized; not started |
+| 1 | Create isolated rewrite branch/worktree. | FND-001, FND-002 | Ancestry and worktree safety checks pass. | Completed |
 | 2A | Remove only audit-approved product projects/code. | FND-003, FND-014 | Project removal and lifecycle documentation diff match the audit allowlist. | Not started |
 | 2B | Restore a minimal compiling Core/App solution. | FND-003, FND-004 | Focused build and architecture tests pass. | Not started |
 | 2C | Reconcile repository tasks and tests with the new project set. | FND-011 | Coverage conveniences, integration lists, surface filters, lint, tests, coverage, package, and smoke reference no removed project. | Not started |
