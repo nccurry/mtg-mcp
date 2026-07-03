@@ -6,6 +6,12 @@ still being shaped.
 Agents may update packets in this folder, but should not treat a planned PLC as
 permission to start implementation unless the user asks for implementation.
 
+## Evidence-First Rewrite Program
+
+| Packet | Status | Summary |
+| --- | --- | --- |
+| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | Planned | Govern the one-at-a-time authoring and independent review of the clean-rewrite child PLCs. |
+
 ## Product Foundation Follow-ups
 
 | Packet | Status | Summary |

@@ -1,0 +1,430 @@
+# Evidence-First MCP Rewrite Program Software Architecture And Design Document
+
+## Document Control
+
+- Lifecycle status: Planned
+- PLC packet: [README.md](README.md)
+- Owner: mtg-mcp
+- Reviewers: repository owner and designated child PLC reviewers
+- Last updated: 2026-07-03
+- Related SRD: [SRD.md](SRD.md)
+- Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+
+## Revision History
+
+| Date | Author | Summary of change |
+| --- | --- | --- |
+| 2026-07-03 | Codex | Initial umbrella program design. |
+
+## Executive Summary
+
+The chosen design is a planning-only umbrella packet plus ten sibling child
+packets created sequentially in the PLC lifecycle folders. The umbrella owns
+guardrails, registry state, authoring order, approval protocol, and amendments.
+Each child owns one topic's detailed requirements, architecture, interfaces,
+fixtures, and implementation phases.
+
+The central constraint is that planning must remain reviewable across agent
+sessions. Consequently, the durable Markdown registry and approval records are
+the source of truth; conversation history is not. A monolithic rewrite PLC and
+up-front generation of all child packets are both rejected.
+
+## Goals, Non-Goals, And Design Drivers
+
+Goals:
+
+- Isolate each rewrite topic into a decision-complete, independently reviewed
+  packet.
+- Preserve consistent product, architecture, evidence, safety, and testing
+  boundaries across children.
+- Make the next permitted planning action discoverable from repository state.
+- Separate planning completion from implementation and release completion.
+
+Non-goals:
+
+- Designing child tools, schemas, tables, adapters, or algorithms here.
+- Starting rewrite code, creating the rewrite worktree, or moving a child to
+  `in-progress`.
+- Resolving the lifecycle of existing planned PLCs before the audit child.
+- Drafting popularity or experimental PLCs in the required-child sequence.
+
+Design drivers are focused review, durable handoff, least authority, explicit
+dependencies, and evidence-backed removal decisions.
+
+## Context And Scope
+
+The umbrella sits above ordinary PLC packets but uses the same lifecycle and
+five-file shape. It coordinates authors and reviewers; it is not a runtime
+component. Child packets are siblings under `docs/llms/plcs/<lifecycle>/`, not
+nested inside the umbrella, so each can move through implementation lifecycle
+independently.
+
+Current source, tests, project files, task definitions, scoped instructions,
+and human-facing docs remain authoritative. Existing PLCs are inputs to the
+future audit and do not become dependencies merely because their topics overlap.
+
+## Constraints
+
+- Follow the repository PLC template and lifecycle guidance.
+- Create no more than one new child packet per agent session.
+- Follow the exact queue even when a later child has fewer technical
+  dependencies.
+- Keep the umbrella at `planned` until child 1 drafting begins.
+- Do not equate child planning approval with implementation authorization.
+- Use documentation-only validation for this umbrella.
+- Re-verify temporal provider facts in their owning child session.
+
+## Alternatives Considered
+
+| Option | Summary | Strengths | Weaknesses | Decision |
+| --- | --- | --- | --- | --- |
+| Monolithic rewrite PLC | Put every capability and cutover decision in one packet. | One index and one review. | Oversized sessions, coupled review, hidden assumptions, and high drift risk. | Rejected |
+| Generate all children immediately | Create ten packets from the current research in one change. | Fast initial decomposition. | Violates focused review and propagates unreviewed assumptions. | Rejected |
+| Ordinary plans without an umbrella | Create plans ad hoc as work begins. | Minimal process. | No shared guardrails, queue, approval protocol, or program completion state. | Rejected |
+| Umbrella plus sequential sibling PLCs | Keep shared decisions central and author one independently reviewed child at a time. | Durable boundaries, focused review, and explicit dependencies. | More review checkpoints and documentation updates. | Chosen |
+
+## Chosen Design
+
+### Planning And Implementation Boundary
+
+The umbrella authorizes only child PLC authoring and review. A production change
+requires all of the following:
+
+1. The applicable child is approved.
+2. The user explicitly requests that child's implementation.
+3. The child moves to `in-progress/` before the first production edit.
+4. The child implementation plan names the active phase.
+
+The umbrella's `in-progress` state means child planning is underway; it never
+means rewrite code is authorized.
+
+### Child Packet Decomposition
+
+Each required topic is a sibling packet with its own README, SRD, SADD,
+implementation plan, and fixture matrix. The fixed authoring order is:
+
+1. `legacy-surface-audit-and-disposition`
+2. `rewrite-skeleton-foundation`
+3. `local-deck-store`
+4. `manual-deck-interchange`
+5. `scryfall-evidence-snapshots`
+6. `archidekt-deck-sync`
+7. `playgroup-public-api`
+8. `exact-deck-statistics`
+9. `scryfall-tagger-cache`
+10. `rewrite-stabilization-cutover`
+
+The first child is a docs-only audit. It creates the deletion and reuse
+allowlists consumed by the foundation child. The final child can be drafted
+after children 1 through 9 are approved, but its implementation remains gated
+on their implementations and validation.
+
+### Minimum Child Charters
+
+These charters preserve the agreed topic boundary without pre-writing each
+child's detailed requirements or design.
+
+#### 1. Legacy Surface Audit And Disposition
+
+- Inventory every tool, resource, prompt, adapter, persistence path, background
+  workflow, fixture family, and live-test claim.
+- Classify each item as `rebuild`, `remove`, `experimental`, `unsupported`,
+  `misleading`, or `fixture-only` using code and test evidence.
+- Investigate the empty live-test suite, incomplete per-card Tagger acquisition,
+  Playgroup limitations, heuristic decision tools, unofficial provider
+  contracts, and documented analysis defects.
+- Produce authoritative deletion and reuse allowlists without changing code.
+
+#### 2. Rewrite Skeleton And Repository Foundation
+
+- Define the sibling worktree and branch procedure while preserving Git history.
+- Define removal according to the approved audit and retention of task,
+  analyzer, coverage, package, and release wiring.
+- Define the minimal server-information and capability surface, versioned data
+  directory, operation modes, evidence states, module boundaries, and
+  `0.9.0-preview.N` versioning.
+
+#### 3. Local Deck Domain And SQLite Store
+
+- Define revisioned decks, entries, zones, printings, categories, provider
+  bindings, optimistic concurrency, and transactional migrations.
+- Define exact `deck_*` CRUD and category mutation schemas.
+- Define lossless native JSON backup, generic format support, Commander
+  fixtures, canonical ordering, restoration, and failure behavior.
+
+#### 4. Manual Deck Interchange
+
+- Define import parsing and structured export artifact bundles.
+- Define Archidekt-compatible manual artifacts and Moxfield deck text plus
+  separate Bulk Edit or tag artifacts when required.
+- Report unpreserved metadata explicitly and require golden plus manual UI
+  verification.
+- Exclude Moxfield network automation.
+
+#### 5. Scryfall Evidence Snapshots
+
+- Define immutable named snapshots for official search, named and ID lookup,
+  collection, prints, rulings, sets, catalogs, autocomplete, and bulk metadata.
+- Exclude random-card operations and require complete pagination plus immutable
+  refresh lineage.
+- Define lossless supported Scryfall objects, unknown-field preservation,
+  normalized projections, `scryfall_*` tools, persistence, provenance, and
+  partial-fetch behavior.
+
+#### 6. Archidekt Essentials And Synchronization
+
+- Define authentication status, remote list/get/create/delete, and exact card,
+  printing, zone, and category translation.
+- Define pull preview/apply, diff, push preview/apply, remote fingerprints,
+  stale-write refusal, and `remote` mode enforcement.
+- Define sanitized fixtures and opt-in throwaway-deck live tests.
+- Exclude folders, history, collaboration, social, and account administration.
+
+#### 7. Playgroup Official API
+
+- Pin and implement planning against the documented public OpenAPI contract.
+- Define one typed `playgroup_*` tool per documented operation and preserve
+  provider-shaped outputs.
+- Gate event-batch and live-session writes behind `remote` mode.
+- Report absent deck updates as unsupported, detect contract drift, and prohibit
+  reverse engineering of private endpoints.
+
+#### 8. Exact Deck Statistics
+
+- Define exact univariate and multivariate hypergeometric calculations,
+  cards-seen tables, explicit play/draw assumptions, and exact composition
+  summaries.
+- Define land, flood, screw, color-source, mana, combo, tutor-equivalent,
+  mulligan, and inverse-copy calculations from caller-supplied groups and
+  policies.
+- Return exact numerator/denominator values plus documented rounded decimals.
+- Require exhaustive enumeration and property-based verification without a
+  provider dependency.
+
+#### 9. Scryfall Tagger Cache
+
+- Define cached direct and inherited assignments, tag type, provenance, and
+  explicit cache misses by Oracle ID.
+- Separate cache-only reads from explicit HTML/CSRF/unsupported GraphQL refresh.
+- Define deterministic printing fallback, sequential requests no faster than
+  one per second, deduplication, a 100-card hard cap, and immediate stop on 403
+  or 429.
+- Prohibit background or bulk crawling and category inference by the MCP.
+
+#### 10. Stabilization And `0.9.0` Cutover
+
+- Define cross-module architecture, MCP-schema, offline, packaging,
+  documentation, coverage, and opt-in live-provider gates.
+- Prove the stable surface contains no legacy advisor, intent, recommendation,
+  simulation, or unofficial Moxfield automation.
+- Define merge, release, rollback, legacy-version retention, PLC transitions,
+  and superseded-document cleanup without executing the cutover.
+
+### Child Packet Contract
+
+Every child must contain:
+
+- A narrow objective and explicit non-goals.
+- Dependencies on approved umbrella and child decisions.
+- Current-state evidence and reuse/removal disposition.
+- Exact tools, resources, prompts, schemas, annotations, and operation-mode
+  behavior when applicable.
+- Data ownership, persistence, dependency, privacy, and security decisions.
+- Deterministic behavior and explicit unknown, unavailable, and unsupported
+  states.
+- Unit, integration, MCP-schema, fixture, and live-test requirements.
+- Migration, rollout, rollback, and acceptance criteria.
+- A requirement-to-design-to-test traceability table.
+- Guardrail conformance and an approval record in its README.
+
+Provider-owning children also document authentication, permission sensitivity,
+user agent, pacing, rate limits, retries, cache behavior, error sanitization,
+fixture provenance, and live-test mutation safety.
+
+### Review And Approval State
+
+Each child README must include this durable record:
+
+```markdown
+## Planning Approval
+
+- Status: Draft | Changes requested | Approved
+- Reviewed by: Not reviewed
+- Review date: Not reviewed
+- Reviewed revision: Not reviewed
+- Implementation authorized: No
+```
+
+Approval means the packet is decision-complete. `Implementation authorized`
+remains `No` until a later explicit request and lifecycle transition.
+
+### Guardrail Amendments
+
+When a child conflicts with a guardrail:
+
+1. Mark that child and later registry entries blocked.
+2. Record the proposed change and affected children in the umbrella README,
+   SRD, and SADD.
+3. Review and accept or reject the amendment.
+4. Update already approved affected children if the change is accepted.
+5. Resume authoring only when the registry has no unresolved conflict.
+
+Topic detail that does not alter a guardrail stays within the child and does
+not require an umbrella amendment.
+
+## Data Design
+
+The program persists only Markdown documents and Git history. The umbrella
+README registry is the program status view. Child READMEs own their approvals.
+The implementation plan owns authoring sequence and phase evidence. FIXTURES
+owns reusable review checklists and scenarios.
+
+No generated status file, database, or custom planning tool is introduced.
+Lifecycle movement uses ordinary directory moves under `planned/`,
+`in-progress/`, and `completed/`.
+
+## Building Blocks
+
+| Building block | Responsibility | Owned data/lifetime | Public surface | Dependencies | Validation |
+| --- | --- | --- | --- | --- | --- |
+| Umbrella README | Program summary, guardrails, registries, and status. | Program lifetime | Markdown index | SRD, SADD, implementation plan | Registry and link inspection |
+| Umbrella SRD | Testable authoring and governance requirements. | Program lifetime | Requirement IDs | Repository PLC guidance | Traceability review |
+| Umbrella SADD | Decomposition, state, amendment, and approval design. | Program lifetime | Planning protocol | SRD | Design review |
+| Umbrella implementation plan | One-child-per-session queue and exit criteria. | Until all children approved | Authoring phases | Registry and approvals | Phase-status inspection |
+| Umbrella fixtures | Review artifacts and acceptance scenarios. | Program lifetime | Checklists | SRD requirements | Acceptance-matrix review |
+| Child PLC | One topic's decision-complete implementation plan. | Independent lifecycle | Standard five-file packet | Approved prerequisites | Child-specific review |
+
+## Runtime And Data Flow
+
+The planning workflow is:
+
+1. Review and approve the umbrella packet.
+2. In a new agent session, move the umbrella to `in-progress/` and draft child 1.
+3. Validate only that child and update the umbrella registry.
+4. Review the child; record approval or requested changes.
+5. If approved, begin the next child in a later agent session.
+6. If a guardrail conflict appears, stop and process an umbrella amendment.
+7. Repeat through child 10.
+8. Move the umbrella to `completed/` after all ten approvals are recorded.
+
+Child implementation may happen in separately authorized sessions. It does not
+advance the authoring queue unless its findings require an approved amendment.
+
+## MCP Surface, Schemas, And Diagnostics
+
+This umbrella changes no MCP surface. Child packets must inventory their exact
+tool, resource, and prompt effects and prove operation-mode annotations and
+visibility. The stable target permits no advisor prompts, but removal remains
+an audited and child-owned implementation action.
+
+## Adapter And Provider Contracts
+
+The umbrella records only provider planning boundaries. Provider contracts are
+re-verified and designed in their owning child:
+
+- Scryfall uses official read operations and explicit immutable snapshots.
+- Archidekt is an isolated observed contract with conservative mutation tests.
+- Playgroup is bounded by its documented public API.
+- Moxfield is manual interchange only.
+- Tagger acquisition is unsupported, paced, capped, and distinct from cached
+  deterministic reads.
+
+Previously gathered observations are evidence leads, not substitutes for
+child-session verification.
+
+## Error Handling And Failure Modes
+
+| Failure | Program response |
+| --- | --- |
+| A child is not decision-complete. | Record changes requested; do not draft the next child. |
+| A child conflicts with a guardrail. | Block the queue and process an umbrella amendment. |
+| Two children are drafted in one session. | Reject or split the change before review. |
+| A child starts implementation while planned. | Stop production edits and restore the lifecycle/authorization boundary. |
+| Existing PLC disposition is unclear. | Leave it unchanged and resolve it in the audit child. |
+| An external provider fact may be stale. | Re-verify it in the provider child; do not promote it to a guardrail. |
+
+## Cross-Cutting Concepts
+
+- Determinism applies both to future product behavior and to repeatable planning
+  acceptance checks.
+- Approval state and implementation authority are separate fields.
+- Unknowns are recorded explicitly rather than resolved through optimistic
+  assumptions.
+- Secrets, provider payloads, and user data do not belong in the umbrella.
+- Child scope remains narrow even when a provider offers adjacent features.
+- Current code and tests outrank completed or stale planning documents.
+
+## Project Boundaries
+
+The umbrella changes documentation only. Children must preserve the agreed
+future boundary: dependency-light `MtgMcp.Core`; isolated deck persistence,
+statistics, and provider adapters; and MCP composition in `MtgMcp.App`.
+Architecture tests belong in the foundation and affected capability children,
+not this packet.
+
+## Readability And Documentation
+
+Use stable child slugs and requirement IDs. Keep shared policy here and link to
+it rather than copying volatile prose into every child. Child packets may quote
+the guardrails needed for review but may not silently reinterpret them.
+Remove template placeholders before requesting child approval.
+
+## Quality Attribute Design
+
+| Requirement | Design response | Validation |
+| --- | --- | --- |
+| PROG-001 through PROG-003 | Fixed registry and sequential authoring workflow. | Registry, approval record, and creation-diff inspection. |
+| PROG-004, PROG-010, PROG-011 | Separate planning approval, implementation authorization, and lifecycle states. | Path and README inspection. |
+| PROG-005, PROG-006 | Central guardrails and blocking amendment flow. | Child conformance and amendment review. |
+| PROG-007, PROG-009, PROG-014 | Standard child contract and acceptance checklist. | Packet and traceability inspection. |
+| PROG-008, PROG-016 | Audit-first sequence and no premature PLC disposition. | Git diff and registry review. |
+| PROG-012, PROG-013 | Required and post-cutover registries. | README comparison with implementation plan. |
+| PROG-015 | Provider-specific review requirements. | Provider checklist in FIXTURES. |
+
+## Implementation Phases
+
+The implementation phases are planning-document phases. They create no runtime
+behavior. The exact sequence and exit criteria are in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
+## Test Architecture
+
+Validation is documentation-focused:
+
+- Structural checks confirm the five required files and lifecycle paths.
+- Consistency checks compare child order, dependencies, slugs, and statuses.
+- Review scenarios exercise approval, amendment, and blocked-state behavior.
+- Relative-link inspection prevents dead navigation.
+- `git diff --check` catches whitespace defects.
+- Git diff review confirms no production files or multiple child directories
+  entered a child-authoring change.
+
+No .NET build or runtime provider test is justified for the umbrella packet.
+
+## Framework And External Notes
+
+Provider links in the SRD are planning references. The relevant child must
+inspect current official documentation and terms because these contracts can
+change. A permissive robots policy is not API endorsement, popularity is not
+quality evidence, and deterministic processing does not make stale or inferred
+data factual.
+
+## Decisions, Risks, And Deferred Work
+
+| Item | Type | Impact | Resolution |
+| --- | --- | --- | --- |
+| Sequential sibling child packets | Decision | More sessions but smaller review units. | Preserve the fixed queue. |
+| Existing PLC overlap | Risk | Reviewers may see competing plans. | Audit and classify; do not move packets preemptively. |
+| Provider drift | Risk | Child assumptions may age before drafting. | Re-verify in each provider child. |
+| Post-cutover evidence sources | Deferred | Not required for `0.9.0` cutover planning. | Draft independent PLCs after cutover. |
+| Judgment and simulation features | Deferred | Could violate the evidence-server boundary. | Require individual experimental feasibility PLCs. |
+
+## Glossary
+
+- **Umbrella PLC:** This planning-only packet governing child creation and review.
+- **Child PLC:** One independently reviewed packet for a single rewrite topic.
+- **Planning approval:** Confirmation that a child is decision-complete.
+- **Implementation authorization:** A separate explicit request to begin code changes.
+- **Guardrail:** A cross-child product, architecture, safety, or quality decision.
+- **Required child:** One of the ten packets needed to complete this planning program.
+- **Post-cutover topic:** Registered work that is not part of the required queue.
