@@ -22,7 +22,7 @@ composition from the same commit and packaged artifacts proposed for release.
 | `MtgMcp.App` | MCP host, capability resource, operation modes, composition, and server metadata. |
 | `MtgMcp.Decks` | Local deck domain, SQLite store, and manual interchange. |
 | `MtgMcp.Scryfall` | Official Scryfall transport and immutable snapshot store. |
-| `MtgMcp.Archidekt` | Archidekt transport, authentication, mapping, and synchronization. |
+| `MtgMcp.Archidekt` | Archidekt transport, authentication, mapping, deck synchronization, folder organization, and named snapshots. |
 | `MtgMcp.Playgroup` | Pinned official Playgroup public API adapter. |
 | `MtgMcp.Statistics` | Exact provider-independent probability calculations. |
 | `MtgMcp.Tagger` | Tagger cache and explicitly invoked bounded acquisition. |
@@ -32,7 +32,7 @@ adapters do not reference one another; App is the composition root; and Decks,
 Statistics, and provider adapters exchange Core contracts rather than transport
 payloads.
 
-### Current approved-surface baseline
+### Current derived planning-surface baseline
 
 | Family | Tool count | Source child |
 | --- | ---: | --- |
@@ -40,15 +40,15 @@ payloads.
 | `deck_*` local deck operations | 19 | Local deck store |
 | `deck_*` manual interchange | 5 | Manual interchange |
 | `scryfall_*` | 7 | Scryfall snapshots |
-| `archidekt_*` | 10 | Archidekt synchronization |
+| `archidekt_*` | 23 | Archidekt decks, folders, snapshots, and synchronization |
 | `playgroup_*` | 16 | Playgroup public API |
 | `stats_*` | 8 | Exact statistics |
 | `tagger_*` | 6 | Tagger cache |
-| **Total** | **71** | |
+| **Total** | **84** | |
 
 The only resource is `mtg://server/capabilities`; there are no prompts. As of
-the current child drafts, canonical per-mode discovery snapshots contain 44,
-66, and 71 tools for `read-only`, `local`, and `remote`, respectively. These are
+the current child drafts, canonical per-mode discovery snapshots contain 49,
+71, and 84 tools for `read-only`, `local`, and `remote`, respectively. These are
 derived planning totals, not backward-compatibility requirements. An approved
 child may add, remove, rename, or reshape tools to improve the design; the
 manifest, crosswalk, totals, and snapshots are then regenerated together.
@@ -56,7 +56,7 @@ Schema canonicalization sorts objects only where order is semantically
 irrelevant and never weakens exact name, description, annotation, input, or
 output-schema comparisons.
 
-`read-only` is a mutation-authority mode: its 44 tools may include explicit
+`read-only` is a mutation-authority mode: its 49 tools may include explicit
 Scryfall, Archidekt, or Playgroup network reads/previews, but every local and
 remote write spy must remain zero. “Offline” describes normal validation, not a
 runtime mode. Manual interchange is owned by `MtgMcp.Decks`; no separate
@@ -73,7 +73,7 @@ tool or count.
 
 | Proof | Allowed release treatment |
 | --- | --- |
-| Archidekt create/push/pull/delete | Must pass with verified cleanup; no waiver. |
+| Archidekt deck/folder/snapshot lifecycle and restore | Must pass against disposable state with verified cleanup; no waiver. |
 | Tagger one-card acquisition | Must pass; policy objection, 403/429, or unsupported contract blocks release. |
 | Scryfall official read | Must normally pass; repository owner may approve a temporary operational skip with current official contract evidence, offline fixtures, reason, date, and expiry. |
 | Playgroup official reads | Must normally pass; repository owner may approve a credential/availability skip with pinned-contract and offline-fixture evidence. |
@@ -137,7 +137,8 @@ manual export; the rollback never down-migrates them.
 Cutover stops for any incomplete dependency; schema or provider-contract drift;
 failed required offline test; per-assembly coverage below 90 percent; unresolved
 priority-1/priority-2 defect; credential exposure; unsafe live-test setup;
-Archidekt deletion that is unavailable, unverifiable, or leaves remote state;
+Archidekt deck/folder/snapshot cleanup that is unavailable, unverifiable, or
+leaves remote state;
 Tagger policy/contract objection or blocking response; package smoke failure;
 or unsuccessful rollback rehearsal.
 

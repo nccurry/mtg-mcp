@@ -17,9 +17,9 @@ capability. Its job is to prove that the nine stable child implementations agree
 on architecture and MCP contracts, remove the prohibited legacy surface, and can
 be released without changing or deleting legacy user data.
 
-Cutover is blocked by an incomplete child, a missing verified Archidekt delete
-workflow, unresolved high-severity defects, schema drift, inadequate coverage,
-or a failed required offline gate.
+Cutover is blocked by an incomplete child, missing verified Archidekt
+deck/folder/snapshot cleanup, unresolved high-severity defects, schema drift,
+inadequate coverage, or a failed required offline gate.
 
 ## Dependencies
 
@@ -28,7 +28,7 @@ or a failed required offline gate.
 - [Local Deck Domain And SQLite Store](../local-deck-store/README.md)
 - [Manual Deck Interchange](../manual-deck-interchange/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
-- [Archidekt Essentials And Synchronization](../archidekt-deck-sync/README.md)
+- [Archidekt Decks, Folders, Snapshots, And Synchronization](../archidekt-deck-sync/README.md)
 - [Playgroup Official API](../playgroup-public-api/README.md)
 - [Exact Deck Statistics](../exact-deck-statistics/README.md)
 - [Scryfall Tagger Cache](../scryfall-tagger-cache/README.md)
@@ -38,7 +38,7 @@ or a failed required offline gate.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The current 71-tool count is a drift-detection baseline, not a compatibility target or design constraint. |
+| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The current 84-tool count is a drift-detection baseline, not a compatibility target or design constraint. |
 | Require ordinary Git history-preserving integration. | Proposed | The rewrite is a clean product break, not a repository-history rewrite. |
 | Require preview releases and cross-platform smoke proof before `0.9.0`. | Proposed | Packaging and host failures must be found before the stable cutover. |
 | Keep legacy releases and legacy data directories available for rollback. | Proposed | Rollback must not translate or destroy user data. |

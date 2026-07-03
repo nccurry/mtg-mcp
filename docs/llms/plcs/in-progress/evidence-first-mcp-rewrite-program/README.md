@@ -44,6 +44,7 @@ the detailed contracts, fixtures, risks, and acceptance criteria in its topic.
 | ID | Date | Status | Change | Authority |
 | --- | --- | --- | --- | --- |
 | AMEND-001 | 2026-07-03 | Accepted | Permit all ten children to be drafted sequentially in one planning run. Remove the prerequisite that one child be approved before the next is drafted. Preserve separate packets, per-child validation, independent review, and the prohibition on production implementation. | Explicit repository-owner request |
+| AMEND-002 | 2026-07-03 | Accepted | Expand child 6 and stable cutover scope to include Archidekt folder organization and named snapshot lifecycle/guarded restore. Reconcile the audit disposition, child requirements, live cleanup, deferred registry, and derived surface baseline. | Explicit repository-owner request |
 
 ## Program Guardrails
 
@@ -93,7 +94,7 @@ explicitly activated.
 | 3 | [`local-deck-store`](../../planned/local-deck-store/README.md) | Define the local deck domain, SQLite persistence, and `deck_*` mutations. | Foundation boundaries | Child 2 draft validated | Drafted; validation passed |
 | 4 | [`manual-deck-interchange`](../../planned/manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Child 3 draft validated | Drafted; validation passed |
 | 5 | [`scryfall-evidence-snapshots`](../../planned/scryfall-evidence-snapshots/README.md) | Define immutable, rich, official Scryfall query snapshots. | Foundation and local card identity | Child 4 draft validated | Drafted; validation passed |
-| 6 | [`archidekt-deck-sync`](../../planned/archidekt-deck-sync/README.md) | Define essential Archidekt operations and explicit pull/diff/push. | Deck, interchange, and Scryfall contracts | Child 5 draft validated | Drafted; validation passed |
+| 6 | [`archidekt-deck-sync`](../../planned/archidekt-deck-sync/README.md) | Define Archidekt deck sync, folder organization, and named snapshot lifecycle/restore. | Deck, interchange, and Scryfall contracts | Child 5 draft validated | Drafted; scope amended; re-review required |
 | 7 | [`playgroup-public-api`](../../planned/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation boundaries | Child 6 draft validated | Drafted; validation passed |
 | 8 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck model | Child 7 draft validated | Drafted; validation passed |
 | 9 | [`scryfall-tagger-cache`](../../planned/scryfall-tagger-cache/README.md) | Define exact cached Tagger assignments and conservative acquisition. | Local deck and Scryfall contracts | Child 8 draft validated | Drafted; validation passed |
@@ -166,11 +167,12 @@ that changes a program guardrail must be raised as an umbrella amendment.
 | 2026-07-03 | External reference inspection | Passed with access notes | Playgroup and rules references resolved; Moxfield returned its JavaScript shell; Scryfall rejected automated document retrieval, so its canonical links remain recorded for child-session verification. |
 | 2026-07-03 | `git diff --check` | Passed | No whitespace errors. |
 | 2026-07-03 | Required child drafting | Passed | All ten standard five-file packets exist in registry order, remain Draft, and set implementation authorization to No. |
-| 2026-07-03 | Cross-packet traceability and surface reconciliation | Passed | All child Must IDs map to design/test evidence; local links resolve; the current derived baseline is 71 capability-prefixed tools, one resource, and zero prompts. Counts validate packet consistency and do not constrain approved redesign. |
+| 2026-07-03 | Cross-packet traceability and surface reconciliation | Superseded by approved scope change | The original 71-tool baseline was internally consistent before folder and snapshot support entered the Archidekt child. |
 | 2026-07-03 | Two independent PLC review sets | Findings addressed | Valid comments were incorporated packet by packet; nine legacy packets are visibly retired/reference-only; temporary review files were removed as requested. |
 | 2026-07-03 | Provider follow-up research and owner decisions | Updated | Archidekt create/delete cleanup was proven live and its available-API risk accepted; Playgroup writes are owner-approved fixture-only for the pinned no-cleanup contract; Tagger is technically viable under bounded public acquisition, with owner implementation acceptance still pending; manual interchange syntax evidence was refreshed. |
 | 2026-07-03 | Follow-up child review | Passed with edit | Confirmed the ten-child split and corrected the foundation packet to consistently state zero tools, one resource, and zero prompts. |
 | 2026-07-03 | Durable guidance consistency audit | Passed | Agent instructions, README and `llms.txt`, product/design guidance, architecture/provider docs, compatibility/versioning rules, PLC workflow docs, and review playbooks now distinguish the current server from the planned clean-break target and route rewrite work through an approved active child. |
+| 2026-07-03 | Archidekt folder/snapshot scope amendment | Validated for amended draft; re-review required | Folder tree/detail/create/update/move/empty-delete and named snapshot lifecycle/guarded restore are now stable child-6 scope. All 28 child requirements trace to fixtures; the 23-tool Archidekt matrix reconciles the program baseline to 84 tools: 49/71/84 by mode, one resource, and zero prompts. |
 
 ## Completion Notes
 

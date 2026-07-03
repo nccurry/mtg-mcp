@@ -47,7 +47,7 @@ Every child phase follows the same protocol:
 | 3 | Plan the local deck domain and store. | PROG-002 through PROG-015 | `local-deck-store` | Deck model, persistence, tools, and validation are decision-complete. | Completed |
 | 4 | Plan manual deck interchange. | PROG-002 through PROG-015 | `manual-deck-interchange` | Native and provider artifact contracts are decision-complete. | Completed |
 | 5 | Plan Scryfall evidence snapshots. | PROG-002 through PROG-015 | `scryfall-evidence-snapshots` | Snapshot API, storage, fidelity, and provider safety are decision-complete. | Completed |
-| 6 | Plan Archidekt synchronization. | PROG-002 through PROG-015 | `archidekt-deck-sync` | Essential operations and conflict-safe sync are decision-complete. | Completed |
+| 6 | Plan Archidekt decks, folders, snapshots, and synchronization. | PROG-002 through PROG-015 | `archidekt-deck-sync` | Deck sync, folder organization, named snapshots, restore guards, provider safety, and cleanup are decision-complete. | Completed; AMEND-002 re-review pending |
 | 7 | Plan the Playgroup public API. | PROG-002 through PROG-015 | `playgroup-public-api` | Pinned official surface and write safety are decision-complete. | Completed |
 | 8 | Plan exact deck statistics. | PROG-002 through PROG-014 | `exact-deck-statistics` | Exact functions, assumptions, and proofs are decision-complete. | Completed |
 | 9 | Plan the Scryfall Tagger cache. | PROG-002 through PROG-015 | `scryfall-tagger-cache` | Cache and conservative acquisition contracts are decision-complete. | Completed |

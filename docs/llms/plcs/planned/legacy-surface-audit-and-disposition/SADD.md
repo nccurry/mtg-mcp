@@ -57,7 +57,7 @@ refresh remains explicit.
 | Project/provider | Current responsibility | Disposition |
 | --- | --- | --- |
 | `MtgMcp.Scryfall` | Live cards, search, prints, rulings, prices, Tagger `otag:` signals, trends, cache. | Rebuild official facts as immutable snapshots; replace Tagger signals with per-card cache. |
-| `MtgMcp.Archidekt` | Observed private deck/folder/checkpoint and writeback contract. | Rebuild essential deck lifecycle and explicit sync only. |
+| `MtgMcp.Archidekt` | Observed private deck/folder/checkpoint and writeback contract. | Rebuild deck lifecycle, explicit sync, folder organization, and named snapshot lifecycle/restore from independently verified contracts. |
 | `MtgMcp.Playgroup` | Selected official reads plus Core-derived observation lists and rankings. | Rebuild the complete documented public API; remove local ranking as provider fact. |
 | `MtgMcp.Moxfield` | Unofficial automated deck retrieval. | Remove runtime adapter; retain manual interchange only. |
 | `MtgMcp.Decklists` | EDHREC, EDHTop16, and TopDeck evidence sources. | Rebuild only in the post-cutover popularity PLC after permission review. |

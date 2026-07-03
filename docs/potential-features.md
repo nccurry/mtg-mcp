@@ -50,10 +50,11 @@ must expose its components and never imply functional equivalence.
 
 ## Conditional Provider Expansions
 
-- Broader Archidekt capabilities such as folders, snapshots/history, packages,
-  deck tags, and collaboration may receive separate PLCs if they support the
-  evidence/workflow mission. Social and account-administration automation need
-  a stronger product justification.
+- Broader Archidekt capabilities such as automatic activity/recent-change
+  history, packages, deck tags, and collaboration may receive separate PLCs if
+  they support the evidence/workflow mission. Folder organization and named
+  snapshot lifecycle/restore are already stable child-6 scope. Social and
+  account-administration automation need a stronger product justification.
 - New official Playgroup operations, including a future deck-update or cleanup
   API, can be added through a reviewed contract update without preserving an
   obsolete tool count.

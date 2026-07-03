@@ -16,6 +16,7 @@
 | --- | --- | --- |
 | 2026-07-03 | Codex | Initial umbrella program design. |
 | 2026-07-03 | Codex | Applied AMEND-001 for sequential drafting in one planning run. |
+| 2026-07-03 | Codex | Applied AMEND-002 for Archidekt folder and named-snapshot scope. |
 
 ## Executive Summary
 
@@ -172,14 +173,18 @@ child's detailed requirements or design.
   normalized projections, `scryfall_*` tools, persistence, provenance, and
   partial-fetch behavior.
 
-#### 6. Archidekt Essentials And Synchronization
+#### 6. Archidekt Decks, Folders, Snapshots, And Synchronization
 
 - Define authentication status, remote list/get/create/delete, and exact card,
   printing, zone, and category translation.
 - Define pull preview/apply, diff, push preview/apply, remote fingerprints,
   stale-write refusal, and `remote` mode enforcement.
-- Define sanitized fixtures and opt-in throwaway-deck live tests.
-- Exclude folders, history, collaboration, social, and account administration.
+- Define folder tree/detail/create/update/move/empty-delete and named snapshot
+  list/get/create/update/delete/restore preview/apply.
+- Define sanitized fixtures and opt-in throwaway folder/snapshot/deck live tests
+  with verified cleanup.
+- Exclude automatic activity logs/recent-change history, packages, deck tags,
+  collaboration, social, and account administration.
 
 #### 7. Playgroup Official API
 

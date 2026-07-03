@@ -132,6 +132,7 @@ the deletion and reuse allowlists.
 | 2026-07-03 | Background workflow search | Passed | No hosted background service or timer registration found. |
 | 2026-07-03 | `task surface:report` | Blocked by environment | Concurrent compiler process locked `MtgMcp.Core.dll`; static inventory and checked-in surface tests supplied the counts. |
 | 2026-07-03 | Existing PLC overlap review | Passed for draft | Planned, completed, ordinary-plan, and partial rewrite packets have disposition rows and blocker status. |
+| 2026-07-03 | AMEND-002 Archidekt disposition | Updated; re-review required | Folder and checkpoint wrappers changed from `remove` to outcome-level `rebuild`; current production abstractions remain unapproved for reuse. |
 
 ## Completion Notes
 

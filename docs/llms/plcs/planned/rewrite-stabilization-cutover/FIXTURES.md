@@ -8,15 +8,15 @@
 | Local deck store | 4 | 19 | 19 |
 | Manual deck interchange | 4 | 5 | 5 |
 | Scryfall snapshots | 4 | 7 | 7 |
-| Archidekt synchronization | 6 | 7 | 10 |
+| Archidekt decks, folders, and snapshots | 11 | 12 | 23 |
 | Playgroup public API | 14 | 14 | 16 |
 | Exact statistics | 8 | 8 | 8 |
 | Tagger cache | 4 | 6 | 6 |
-| **Total tools** | **44** | **66** | **71** |
+| **Total tools** | **49** | **71** | **84** |
 
 Every mode exposes exactly one resource, `mtg://server/capabilities`, and zero
 prompts. Its capability document identifies the active mode and only the tools
-visible in that mode. The 44/66/71 counts are derived from the current child
+visible in that mode. The 49/71/84 counts are derived from the current child
 drafts. They detect inconsistencies in those drafts; they are not legacy-
 compatibility targets and may change with an approved better surface.
 
@@ -35,8 +35,8 @@ same change.
 | CUT-FIX-005 | CUT-006 | Per-assembly coverage | Every production assembly is at least 90 percent. |
 | CUT-FIX-006 | CUT-007, CUT-008 | Full final-commit offline run | Lint, tests, coverage, security, architecture, package, and smoke pass. |
 | CUT-FIX-007 | CUT-009 | Scryfall read and one-card Tagger live proof | Bounds honored, no remote mutation, redacted report. |
-| CUT-FIX-008 | CUT-010 | Archidekt private throwaway workflow | Create/push/read/pull/delete passes and no residual deck remains. |
-| CUT-FIX-009 | CUT-010 | Archidekt delete unavailable or cleanup fails | Cutover stops; result cannot be waived as success. |
+| CUT-FIX-008 | CUT-010 | Archidekt private throwaway workflow | Deck sync, folder organization, snapshot lifecycle/restore, and final folder/snapshot/deck cleanup pass with no residual object. |
+| CUT-FIX-009 | CUT-010 | Archidekt folder, snapshot, or deck cleanup is unavailable or fails | Cutover stops; result cannot be waived as success. |
 | CUT-FIX-010 | CUT-011 | Playgroup safe live reads plus pinned-contract write fixtures | Read status and fixture-only write limitation are explicit; no write is labeled live-tested. |
 | CUT-FIX-011 | CUT-012 | Legacy root beside fresh `0.9.0` root | New host ignores and does not alter legacy files. |
 | CUT-FIX-012 | CUT-013 | User and provider documentation | Links, examples, limitations, modes, and rollback review pass. |
@@ -80,7 +80,8 @@ path allowlist reviewed in the release bundle.
 - A required offline command, package smoke, or coverage gate fails.
 - A secret or credential path appears in output or evidence.
 - A provider contract drifted without child review.
-- Archidekt delete is unavailable, unverifiable, or leaves a remote deck.
+- Archidekt folder, snapshot, or deck cleanup is unavailable, unverifiable, or
+  leaves remote state.
 - A priority-1/priority-2 defect or security finding remains open.
 - Rollback cannot restore the prior packaged server with its unchanged data.
 

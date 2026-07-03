@@ -37,7 +37,7 @@ another.
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
 | Public surface | Legacy workspace-oriented tools, resources, and prompts | Capability-prefixed `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `stats_*`, and `tagger_*`; one capability resource; zero prompts |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current derived planning baseline: 71 tools, one resource, zero prompts; counts follow approved design and are not compatibility targets |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current derived planning baseline: 84 tools, one resource, zero prompts; counts follow approved design and are not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Statistics, and Tagger |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, `scryfall.db`, and `tagger.db` stores |
@@ -60,7 +60,8 @@ The required planning sequence covers:
 3. revisioned local deck domain and SQLite store;
 4. offline manual deck interchange;
 5. immutable official Scryfall evidence snapshots;
-6. explicit Archidekt deck lifecycle and conflict-safe synchronization;
+6. explicit Archidekt deck lifecycle, conflict-safe synchronization, folder
+   organization, and named snapshot lifecycle/restore;
 7. the documented Playgroup public API;
 8. exact provider-independent deck statistics;
 9. exact cached Scryfall Tagger evidence with bounded explicit acquisition; and

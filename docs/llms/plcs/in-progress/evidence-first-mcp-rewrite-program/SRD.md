@@ -16,6 +16,7 @@
 | --- | --- | --- |
 | 2026-07-03 | Codex | Initial umbrella program draft. |
 | 2026-07-03 | Codex | Applied AMEND-001 and recorded sequential drafting of all ten children without implementation. |
+| 2026-07-03 | Codex | Applied AMEND-002 to include Archidekt folder and named-snapshot workflows in child 6 and cutover. |
 
 ## Executive Summary
 

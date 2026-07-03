@@ -51,8 +51,8 @@ outcome is outside the `0.9.0` cutover but remains a registered future topic.
 | `playgroup_get_auth_status`, `playgroup_get`, `playgroup_get_deck`, `playgroup_list_observed_decks`, `playgroup_list_observed_users`, `playgroup_list_user_decks` | Rebuild | Complete documented Playgroup public API. |
 | `playgroup_rank_decks` | Misleading/rebuild | Preserve official raw fields; remove estimated-power blending. |
 | `archidekt_copy_workspace`, `archidekt_create_deck`, `archidekt_list_decks` | Rebuild | Essential Archidekt deck lifecycle and sync. |
-| `archidekt_create_folder`, `archidekt_list_folders`, `archidekt_move_decks` | Remove | Explicitly outside essential cutover scope. |
-| `archidekt_checkpoint_create`, `archidekt_checkpoint_delete`, `archidekt_checkpoint_get`, `archidekt_checkpoint_list`, `archidekt_checkpoint_rename` | Remove | Snapshots/history are outside essential cutover scope. |
+| `archidekt_create_folder`, `archidekt_list_folders`, `archidekt_move_decks` | Rebuild | Preserve folder-management outcomes behind the reviewed folder tree/detail, guarded mutation, and cleanup contracts; do not reuse the legacy wrappers. |
+| `archidekt_checkpoint_create`, `archidekt_checkpoint_delete`, `archidekt_checkpoint_get`, `archidekt_checkpoint_list`, `archidekt_checkpoint_rename` | Rebuild | Preserve named-snapshot lifecycle evidence and add guarded restore preview/apply under the Archidekt child; do not carry the legacy checkpoint abstraction forward. |
 
 ## Complete Resource Disposition
 

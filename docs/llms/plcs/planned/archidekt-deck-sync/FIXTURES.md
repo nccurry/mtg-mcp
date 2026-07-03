@@ -1,4 +1,4 @@
-# Archidekt Essentials And Synchronization Fixtures And Acceptance Matrix
+# Archidekt Decks, Folders, Snapshots, And Synchronization Fixtures And Acceptance Matrix
 
 ## Fixture Inventory
 
@@ -22,14 +22,35 @@
 | ARCH-FIX-016 | Predicted primitive plan requires 151 requests | `request_limit_exceeded` before the first mutation. |
 | ARCH-FIX-017 | Bulk fixture passes but live equivalence proof is absent | Bulk path remains disabled; primitive plan is used or cap refusal returned. |
 | ARCH-FIX-018 | Bulk and primitive plans over same throwaway content | Final fingerprint and failure classification match before bulk can be enabled. |
+| ARCH-FIX-019 | Recursive folder tree plus one folder detail | Exact IDs, visibility, parents, paths, children, deck summaries, checksum, and unknown fields are preserved. |
+| ARCH-FIX-020 | Folder create/update with an exact parent and fresh tree fingerprint | Verified folder state is returned; no name-based destination inference occurs. |
+| ARCH-FIX-021 | Move typed deck/folder items to another folder or root | Inputs are deduplicated; source assignments and destination verify exactly. |
+| ARCH-FIX-022 | Folder move would place a folder under itself or a descendant | `folder_cycle`; zero provider writes. |
+| ARCH-FIX-023 | Delete a stale or non-empty folder | Conflict with exact contents/tree evidence; zero provider writes or deck-delete items. |
+| ARCH-FIX-024 | Delete a confirmed empty folder | One folder-only delete item is submitted and fresh tree absence is verified. |
+| ARCH-FIX-025 | Snapshot list row and full snapshot get | Metadata-only list stays distinct from complete canonical saved deck state; unknown fields round trip. |
+| ARCH-FIX-026 | Snapshot create then metadata update | Exact deck/snapshot IDs and verified name/description/timestamps are returned. |
+| ARCH-FIX-027 | Snapshot restore preview | Exact snapshot-to-current-remote diff plus source checksum, restorable-content, remote, and preview fingerprints is returned with zero writes. |
+| ARCH-FIX-028 | Snapshot or remote deck changes after restore preview | Restore apply refuses with zero writes. |
+| ARCH-FIX-029 | Snapshot restore fails after two primitive operations | Applied/unknown/not-attempted statuses are explicit; baseline and local deck remain unchanged. |
+| ARCH-FIX-030 | Successful snapshot restore with regenerated provider relation IDs | Final restorable-content fingerprint equals the immutable snapshot content fingerprint; provider-ID deltas are explicit; local deck and sync baseline remain unchanged. |
+| ARCH-FIX-031 | Snapshot delete with stale identity or missing confirmation | Structured conflict; zero writes. |
+| ARCH-FIX-032 | Disposable folder/snapshot/deck cleanup cannot be verified | Live acceptance and cutover fail; no residual object is treated as success. |
 
 ## MCP Surface Matrix
 
 | Tool | `read-only` | `local` | `remote` |
 | --- | --- | --- | --- |
 | `archidekt_auth_status`, `archidekt_deck_list`, `archidekt_deck_get`, `archidekt_sync_diff`, `archidekt_pull_preview`, `archidekt_push_preview` | Visible | Visible | Visible |
+| `archidekt_folder_list`, `archidekt_folder_get` | Visible | Visible | Visible |
+| `archidekt_snapshot_list`, `archidekt_snapshot_get`, `archidekt_snapshot_restore_preview` | Visible | Visible | Visible |
 | `archidekt_pull_apply` | Hidden | Visible | Visible |
 | `archidekt_deck_create`, `archidekt_deck_delete`, `archidekt_push_apply` | Hidden | Hidden | Visible |
+| `archidekt_folder_create`, `archidekt_folder_update`, `archidekt_folder_move_items`, `archidekt_folder_delete` | Hidden | Hidden | Visible |
+| `archidekt_snapshot_create`, `archidekt_snapshot_update`, `archidekt_snapshot_delete`, `archidekt_snapshot_restore_apply` | Hidden | Hidden | Visible |
+
+The Archidekt family therefore contributes 11 tools in `read-only`, 12 in
+`local`, and 23 in `remote`.
 
 ## Provider Safety Matrix
 
@@ -48,6 +69,8 @@
 | 2026-07-03 | Authenticated private empty-deck create | `POST /api/decks/v2/` returned `201`; read-back returned `200` with matching name/private state. | Current create contract is viable. |
 | 2026-07-03 | Disposable-deck cleanup | `DELETE /api/decks/{id}/` returned `204`; deleted-ID read returned `400`; authenticated listing contained zero probe decks. | Cleanup is viable; absence verification must not require `404`. |
 | 2026-07-03 | Provider pacing research | Current Archidekt staff guidance says throttling begins around 40 requests/minute. | Client ceiling is 30 starts/minute with two-second spacing. |
+| 2026-07-03 | Public folder frontend contract | Current frontend uses folder tree/detail, create, typed mass update, and item-delete operations. | Rebuild guarded folder outcomes; never expose generic item deletion directly. |
+| 2026-07-03 | Public snapshot frontend contract | Current frontend uses snapshot list/get/create/update/delete and restores by fetching saved state before deck overwrite. | Rebuild full snapshot evidence and guarded restore preview/apply. |
 
 The live probe used the configured credential file but retained no credential,
 token, path, deck URL, or remote ID. This planning evidence does not replace the
@@ -71,13 +94,26 @@ adapter-level live acceptance test.
 | ARCH-017 | Live-test discovery, opt-in, unique-name, and cleanup guards. |
 | ARCH-018 | ARCH-FIX-017, ARCH-FIX-018, and bulk-disablement architecture tests. |
 | ARCH-019 | ARCH-FIX-013 through ARCH-FIX-015 and combined fake-HTTP/temporary-DB tests. |
+| ARCH-020 | ARCH-FIX-019 plus folder tree/detail canonicalization and unknown-field tests. |
+| ARCH-021 | ARCH-FIX-020 plus exact-parent, stale-tree, ambiguity, and verification tests. |
+| ARCH-022 | ARCH-FIX-021, ARCH-FIX-022, and partial/ambiguous mass-update tests. |
+| ARCH-023 | ARCH-FIX-023, ARCH-FIX-024, and a request spy proving no deck or recursive delete item is submitted. |
+| ARCH-024 | ARCH-FIX-025 plus metadata/full-state distinction and lossless snapshot mapping tests. |
+| ARCH-025 | ARCH-FIX-026, ARCH-FIX-031, and verified snapshot absence tests. |
+| ARCH-026 | ARCH-FIX-027 through ARCH-FIX-030 and shared primitive-planner equivalence tests. |
+| ARCH-027 | Dated route manifest, sanitized contract fixtures, and fail-closed drift tests. |
+| ARCH-028 | ARCH-FIX-032 plus live folder/snapshot/deck lifecycle and residual-state guards. |
 
 ## Live Acceptance
 
 The `Category=Live` test requires an explicit opt-in flag and the configured
-credential file or equivalent host secret. It uses a unique private dummy-deck
-name, records only redacted checksums, verifies create/push/get/pull, and deletes
-in `finally`. Cleanup verification includes a fresh authenticated deck listing
-because the observed deleted-ID read returns `400`. If deletion cannot be
-verified, the test fails acceptance and records redacted cleanup evidence. A
-live run that leaves a remote deck does not satisfy the gate.
+credential file or equivalent host secret. It uses unique private dummy folder
+and deck names, records only redacted checksums, verifies
+create/push/get/pull, folder create/update/get/move, and snapshot
+create/update/get/restore/delete. In `finally`, it moves the deck to root,
+deletes the now-empty folder, and deletes the deck. Cleanup verification uses
+fresh authenticated folder, snapshot, and deck reads; the deck check includes
+a fresh listing because the observed deleted-ID read returns `400`. If any
+absence cannot be verified, the test fails and records redacted cleanup
+evidence. A live run that leaves a remote folder, snapshot, or deck does not
+satisfy the gate.

@@ -13,7 +13,8 @@ Commander Spellbook adapter, generic decklist provider, or recommendation
 source framework.
 
 - Archidekt uses the currently available web API for explicit user-owned deck
-  operations, conservative pacing, preview/apply guards, and verified cleanup.
+  synchronization, folder organization, and named snapshot lifecycle/restore,
+  with conservative pacing, preview/apply guards, and verified cleanup.
 - Playgroup follows the pinned official OpenAPI contract; missing operations are
   reported unsupported rather than reverse engineered.
 - Tagger cache reads are offline. Unsupported HTML/CSRF/GraphQL acquisition is
