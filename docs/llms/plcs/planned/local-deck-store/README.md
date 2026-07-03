@@ -19,7 +19,7 @@ classification, recommendation, or provider behavior.
 
 ## Dependencies
 
-- [Rewrite Skeleton And Repository Foundation](../rewrite-skeleton-foundation/README.md)
+- [Rewrite Skeleton And Repository Foundation](../../in-progress/rewrite-skeleton-foundation/README.md)
 - Parent [rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decision Snapshot

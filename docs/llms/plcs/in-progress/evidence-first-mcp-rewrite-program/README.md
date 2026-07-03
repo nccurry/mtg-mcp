@@ -89,8 +89,8 @@ explicitly activated.
 
 | Order | Child slug | Purpose | Technical dependencies | Authoring gate | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 | [`legacy-surface-audit-and-disposition`](../../planned/legacy-surface-audit-and-disposition/README.md) | Inventory and classify the current product surface and reusable evidence. | Umbrella guardrails | Umbrella amendment accepted | Drafted; validation passed |
-| 2 | [`rewrite-skeleton-foundation`](../../planned/rewrite-skeleton-foundation/README.md) | Define the clean skeleton, repository wiring, modes, evidence, and module boundaries. | Audit disposition | Child 1 draft validated | Drafted; validation passed |
+| 1 | [`legacy-surface-audit-and-disposition`](../../completed/legacy-surface-audit-and-disposition/README.md) | Inventory and classify the current product surface and reusable evidence. | Umbrella guardrails | Repository-owner approval recorded | Approved; completed |
+| 2 | [`rewrite-skeleton-foundation`](../rewrite-skeleton-foundation/README.md) | Define the clean skeleton, repository wiring, modes, evidence, and module boundaries. | Approved audit disposition | Repository-owner implementation authorization recorded | Approved; in progress; Phase 0 complete |
 | 3 | [`local-deck-store`](../../planned/local-deck-store/README.md) | Define the local deck domain, SQLite persistence, and `deck_*` mutations. | Foundation boundaries | Child 2 draft validated | Drafted; validation passed |
 | 4 | [`manual-deck-interchange`](../../planned/manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Child 3 draft validated | Drafted; validation passed |
 | 5 | [`scryfall-evidence-snapshots`](../../planned/scryfall-evidence-snapshots/README.md) | Define immutable, rich, official Scryfall query snapshots. | Foundation and local card identity | Child 4 draft validated | Drafted; validation passed |
@@ -121,11 +121,10 @@ or authorized drafts. Their durable idea notes and promotion rules live in
 
 ## Project And Surface Impact
 
-This umbrella packet changes documentation only. It creates no project,
-package, tool, resource, prompt, operation-mode, configuration, persistence,
-provider, or runtime behavior. Existing planned PLCs remain unchanged and
-continue to be reference material until the audit child records their explicit
-disposition.
+The umbrella itself changes documentation only. The approved audit now governs
+foundation deletion/reuse decisions, and the separately authorized foundation
+child may change the rewrite branch only within its active phase. Other planned
+children remain reference material and implementation-ineligible.
 
 ## Current Open Questions
 
@@ -173,6 +172,7 @@ that changes a program guardrail must be raised as an umbrella amendment.
 | 2026-07-03 | Follow-up child review | Passed with edit | Confirmed the ten-child split and corrected the foundation packet to consistently state zero tools, one resource, and zero prompts. |
 | 2026-07-03 | Durable guidance consistency audit | Passed | Agent instructions, README and `llms.txt`, product/design guidance, architecture/provider docs, compatibility/versioning rules, PLC workflow docs, and review playbooks now distinguish the current server from the planned clean-break target and route rewrite work through an approved active child. |
 | 2026-07-03 | Archidekt folder/snapshot scope amendment | Validated for amended draft; re-review required | Folder tree/detail/create/update/move/empty-delete and named snapshot lifecycle/guarded restore are now stable child-6 scope. All 28 child requirements trace to fixtures; the 23-tool Archidekt matrix reconciles the program baseline to 84 tools: 49/71/84 by mode, one resource, and zero prompts. |
+| 2026-07-03 | Audit approval and foundation Phase 0 activation | Passed | Repository owner approved the audit disposition and foundation PLC, authorized foundation implementation, moved the audit to `completed/`, moved the foundation to `in-progress/`, and retained all later children as unauthorized drafts. |
 
 ## Completion Notes
 

@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Rewrite disposition: absorbed/reference-only — do not implement this packet.**
 > Its durable evidence-vocabulary ideas are owned by
-> [rewrite foundation](../rewrite-skeleton-foundation/README.md),
+> [rewrite foundation](../../in-progress/rewrite-skeleton-foundation/README.md),
 > [Scryfall snapshots](../scryfall-evidence-snapshots/README.md),
 > [exact statistics](../exact-deck-statistics/README.md), and
 > [Tagger cache](../scryfall-tagger-cache/README.md). Legacy legality,

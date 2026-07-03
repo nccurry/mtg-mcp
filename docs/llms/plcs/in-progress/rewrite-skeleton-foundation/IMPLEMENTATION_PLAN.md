@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-03
@@ -11,16 +11,16 @@
 
 ## Phase Summary
 
-| Phase | Goal | Requirements | Exit criteria |
-| --- | --- | --- | --- |
-| 0 | Confirm implementation entry gate. | FND-014 | Audit disposition is approved, this child is authorized/in progress, and the accepted mode guardrail is recorded. |
-| 1 | Create isolated rewrite branch/worktree. | FND-001, FND-002 | Ancestry and worktree safety checks pass. |
-| 2A | Remove only audit-approved product projects/code. | FND-003, FND-014 | Project removal and lifecycle documentation diff match the audit allowlist. |
-| 2B | Restore a minimal compiling Core/App solution. | FND-003, FND-004 | Focused build and architecture tests pass. |
-| 2C | Reconcile repository tasks and tests with the new project set. | FND-011 | Coverage conveniences, integration lists, surface filters, lint, tests, coverage, package, and smoke reference no removed project. |
-| 3 | Add common result/evidence contracts and modes. | FND-006 through FND-010, FND-012 | Core/App focused tests pass. |
-| 4 | Expose minimal MCP surface. | FND-005 | Surface snapshot and process E2E pass. |
-| 5 | Package preview and close validation. | FND-011, FND-013 | Full offline gates and preview smoke pass. |
+| Phase | Goal | Requirements | Exit criteria | Status |
+| --- | --- | --- | --- | --- |
+| 0 | Confirm implementation entry gate. | FND-014 | Audit disposition is approved, this child is authorized/in progress, and the accepted mode guardrail is recorded. | Completed |
+| 1 | Create isolated rewrite branch/worktree. | FND-001, FND-002 | Ancestry and worktree safety checks pass. | Authorized; not started |
+| 2A | Remove only audit-approved product projects/code. | FND-003, FND-014 | Project removal and lifecycle documentation diff match the audit allowlist. | Not started |
+| 2B | Restore a minimal compiling Core/App solution. | FND-003, FND-004 | Focused build and architecture tests pass. | Not started |
+| 2C | Reconcile repository tasks and tests with the new project set. | FND-011 | Coverage conveniences, integration lists, surface filters, lint, tests, coverage, package, and smoke reference no removed project. | Not started |
+| 3 | Add common result/evidence contracts and modes. | FND-006 through FND-010, FND-012 | Core/App focused tests pass. | Not started |
+| 4 | Expose minimal MCP surface. | FND-005 | Surface snapshot and process E2E pass. | Not started |
+| 5 | Package preview and close validation. | FND-011, FND-013 | Full offline gates and preview smoke pass. | Not started |
 
 ## Implementation Rules
 

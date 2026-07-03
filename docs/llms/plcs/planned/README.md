@@ -11,18 +11,19 @@ implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 
-These ten Draft packets are independently reviewable. Their existence does not
-authorize implementation; the governing program remains
+Eight rewrite children remain planned and independently reviewable. The
+[legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
+approved/completed, and the
+[foundation child](../in-progress/rewrite-skeleton-foundation/README.md) is
+approved/in progress. The governing program remains
 [in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [legacy-surface-audit-and-disposition](legacy-surface-audit-and-disposition/README.md) | Draft | Audit and classify the legacy product surface and reusable evidence. |
-| [rewrite-skeleton-foundation](rewrite-skeleton-foundation/README.md) | Draft | Define the clean repository skeleton, modes, evidence contracts, and minimal host. |
 | [local-deck-store](local-deck-store/README.md) | Draft | Define the format-neutral deck domain, revisioned SQLite store, and local tools. |
 | [manual-deck-interchange](manual-deck-interchange/README.md) | Draft | Define lossless native and explicit provider-compatible manual artifacts. |
 | [scryfall-evidence-snapshots](scryfall-evidence-snapshots/README.md) | Draft | Define immutable snapshots of official Scryfall reads and rich source objects. |
-| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft | Define essential Archidekt reads, mutations, conflict-safe synchronization, and cleanup. |
+| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
 | [playgroup-public-api](playgroup-public-api/README.md) | Draft | Define typed coverage of the pinned official Playgroup public API. |
 | [exact-deck-statistics](exact-deck-statistics/README.md) | Draft | Define exact provider-independent deck probability and composition calculations. |
 | [scryfall-tagger-cache](scryfall-tagger-cache/README.md) | Draft | Define deterministic cached Tagger evidence and bounded explicit acquisition. |

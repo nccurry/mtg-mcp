@@ -4,10 +4,11 @@ This document is the bridge between the currently shipped pre-rewrite server
 and the planned clean-break `0.9.0` server. It prevents current implementation
 documentation from being mistaken for the rewrite target.
 
-The rewrite is still planning-only. All ten child PLC packets exist, but each
-remains in `planned/` with `Implementation authorized: No`. Do not change
-production code until the repository owner approves and activates the specific
-child being implemented.
+The rewrite has entered foundation implementation. The legacy audit is
+approved/completed, the foundation child is approved/in progress, and the
+remaining eight children stay planning-only with
+`Implementation authorized: No`. Production edits are limited to the active
+foundation child and its current authorized phase.
 
 ## Authority And Routing
 
@@ -47,7 +48,7 @@ another.
 | Simulation and recommendations | Implemented legacy features | Not in stable `0.9.0`; separately reviewed post-cutover possibilities only |
 
 The exact current baseline and deletion/reuse allowlists live in the
-[legacy audit](llms/plcs/planned/legacy-surface-audit-and-disposition/README.md).
+[legacy audit](llms/plcs/completed/legacy-surface-audit-and-disposition/README.md).
 The target surface count is an internal reconciliation check, not a requirement
 to preserve or invent tools.
 

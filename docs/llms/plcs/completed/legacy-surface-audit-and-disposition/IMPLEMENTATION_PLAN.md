@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-03
@@ -19,12 +19,12 @@ name every deletion it performs.
 
 | Phase | Goal | Exit criteria | Status |
 | --- | --- | --- | --- |
-| 1 | Capture registered surface and project inventory. | Counts and names reconcile with source registration. | Drafted |
-| 2 | Trace persistence, adapters, workflows, and tests. | State owners and dynamic entry points are recorded. | Drafted |
-| 3 | Classify future disposition and trust gaps. | Every group has one disposition and evidence. | Drafted |
-| 4 | Classify overlapping PLCs and ordinary plans. | Every listed packet has an owner, disposition, action, and blocker result. | Drafted |
-| 5 | Review deletion/reuse allowlists and PLC dispositions. | Repository owner approves or requests changes. | Planned |
-| 6 | Hand off to foundation planning. | Approved packet is linked as a prerequisite. | Planned |
+| 1 | Capture registered surface and project inventory. | Counts and names reconcile with source registration. | Completed |
+| 2 | Trace persistence, adapters, workflows, and tests. | State owners and dynamic entry points are recorded. | Completed |
+| 3 | Classify future disposition and trust gaps. | Every group has one disposition and evidence. | Completed |
+| 4 | Classify overlapping PLCs and ordinary plans. | Every listed packet has an owner, disposition, action, and blocker result. | Completed |
+| 5 | Review deletion/reuse allowlists and PLC dispositions. | Repository owner approves or requests changes. | Completed |
+| 6 | Hand off to foundation planning. | Approved packet is linked as a prerequisite. | Completed |
 
 ## Review Procedure
 
@@ -46,8 +46,8 @@ umbrella registry. It does not require runtime or data rollback.
 
 ## Completion Criteria
 
-- [ ] All AUD requirements pass.
-- [ ] Exact surface counts and names reconcile.
-- [ ] Deletion, reuse, and PLC disposition allowlists are approved.
-- [ ] Foundation PLC links this packet.
-- [ ] No production file changed.
+- [x] All AUD requirements pass.
+- [x] Exact surface counts and names reconcile.
+- [x] Deletion, reuse, and PLC disposition allowlists are approved.
+- [x] Foundation PLC links this packet.
+- [x] No production file changed.

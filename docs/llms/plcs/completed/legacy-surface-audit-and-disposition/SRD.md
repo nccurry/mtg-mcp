@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner and rewrite-foundation author
@@ -87,9 +87,9 @@ deletion, new schemas, implementation estimates, and compatibility migration.
 
 ## Definition Of Done
 
-- [ ] Every public surface is classified.
-- [ ] Projects, persistence, providers, and workflow execution are inventoried.
-- [ ] Trust gaps and known defects are concrete.
-- [ ] Existing PLC and ordinary-plan dispositions are reviewed.
-- [ ] Deletion and reuse allowlists are reviewed.
-- [ ] No production implementation is included.
+- [x] Every public surface is classified.
+- [x] Projects, persistence, providers, and workflow execution are inventoried.
+- [x] Trust gaps and known defects are concrete.
+- [x] Existing PLC and ordinary-plan dispositions are reviewed.
+- [x] Deletion and reuse allowlists are reviewed.
+- [x] No production implementation is included.

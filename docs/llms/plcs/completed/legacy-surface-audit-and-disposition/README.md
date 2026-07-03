@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/legacy-surface-audit-and-disposition/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/legacy-surface-audit-and-disposition/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: draft review
+- Current phase: disposition approved and handed off to foundation
 
 ## Summary
 
@@ -38,13 +38,13 @@ contracts and remove the decision-bearing surface from the stable product.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Rebuild outcomes, not existing service abstractions. | Proposed | The current layering contains useful evidence and tests but also embeds decisions the rewrite rejects. |
-| Remove all stable MCP prompts. | Proposed | Prompt-owned judgment belongs to the calling LLM. |
-| Rebuild local deck, Scryfall, Archidekt, Playgroup, exact-statistics, and Tagger capabilities. | Proposed | These capabilities match the evidence-first target. |
-| Defer popularity sources until after cutover. | Proposed | Permission and population semantics require a separate PLC. |
-| Treat goldfish, weakness, and replacement selection as experimental. | Proposed | They require explicit models and must not masquerade as facts. |
-| Preserve only approved fixtures, schemas, exact test vectors, and repository wiring. | Proposed | Reusing current production abstractions would import accidental coupling. |
-| Do not move or supersede existing PLCs until their audit dispositions are approved. | Proposed | Planning lifecycle changes must be explicit inputs to the foundation child. |
+| Rebuild outcomes, not existing service abstractions. | Accepted | The current layering contains useful evidence and tests but also embeds decisions the rewrite rejects. |
+| Remove all stable MCP prompts. | Accepted | Prompt-owned judgment belongs to the calling LLM. |
+| Rebuild local deck, Scryfall, Archidekt, Playgroup, exact-statistics, and Tagger capabilities. | Accepted | These capabilities match the evidence-first target. |
+| Defer popularity sources until after cutover. | Accepted | Permission and population semantics require a separate PLC. |
+| Treat goldfish, weakness, and replacement selection as experimental. | Accepted | They require explicit models and must not masquerade as facts. |
+| Preserve only approved fixtures, schemas, exact test vectors, and repository wiring. | Accepted | Reusing current production abstractions would import accidental coupling. |
+| Do not move or supersede existing PLCs until their audit dispositions are approved. | Accepted | Planning lifecycle changes must be explicit inputs to the foundation child. |
 
 ## Highest-Impact Findings
 
@@ -110,11 +110,11 @@ decision; and changes documentation only.
 
 ## Planning Approval
 
-- Status: Draft
-- Reviewed by: Not reviewed
-- Review date: Not reviewed
-- Reviewed revision: Not reviewed
-- Implementation authorized: No
+- Status: Approved and completed
+- Reviewed by: Two independent PLC reviewers; accepted by Nick Curry, repository owner
+- Review date: 2026-07-03
+- Reviewed revision: `9b6bfbd`
+- Implementation authorized: No (docs-only audit; approval authorizes the foundation handoff, not production edits)
 
 ## Current Open Questions
 
@@ -133,8 +133,10 @@ the deletion and reuse allowlists.
 | 2026-07-03 | `task surface:report` | Blocked by environment | Concurrent compiler process locked `MtgMcp.Core.dll`; static inventory and checked-in surface tests supplied the counts. |
 | 2026-07-03 | Existing PLC overlap review | Passed for draft | Planned, completed, ordinary-plan, and partial rewrite packets have disposition rows and blocker status. |
 | 2026-07-03 | AMEND-002 Archidekt disposition | Updated; re-review required | Folder and checkpoint wrappers changed from `remove` to outcome-level `rebuild`; current production abstractions remain unapproved for reuse. |
+| 2026-07-03 | Repository-owner disposition approval | Approved | The deletion, reuse, and overlapping-PLC dispositions, including AMEND-002, are authoritative inputs to the foundation implementation. |
 
 ## Completion Notes
 
-Approval makes this packet the disposition input for
-`rewrite-skeleton-foundation`; it still does not authorize deletion.
+This packet is the approved disposition input for
+`rewrite-skeleton-foundation`; audit completion alone does not authorize
+deletion outside the separately authorized foundation child.
