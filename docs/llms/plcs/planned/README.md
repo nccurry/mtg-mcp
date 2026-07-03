@@ -5,6 +5,9 @@ still being shaped.
 
 Agents may update packets in this folder, but should not treat a planned PLC as
 permission to start implementation unless the user asks for implementation.
+Ideas intentionally deferred beyond the rewrite live in the
+[potential-features registry](../../../potential-features.md), not as implied
+implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 

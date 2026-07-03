@@ -38,7 +38,7 @@ or a failed required offline gate.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Freeze the stable MCP surface at 71 tools, one resource, and zero prompts. | Proposed | Release validation needs an exact public contract, not a lower bound. |
+| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The current 71-tool count is a drift-detection baseline, not a compatibility target or design constraint. |
 | Require ordinary Git history-preserving integration. | Proposed | The rewrite is a clean product break, not a repository-history rewrite. |
 | Require preview releases and cross-platform smoke proof before `0.9.0`. | Proposed | Packaging and host failures must be found before the stable cutover. |
 | Keep legacy releases and legacy data directories available for rollback. | Proposed | Rollback must not translate or destroy user data. |

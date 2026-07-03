@@ -39,6 +39,7 @@ reverse-engineered.
 | Add no deck-update tool while the official API lacks one. | Proposed | Private endpoint reverse engineering is outside scope. |
 | Gate event batch and live session creation behind `remote`. | Proposed | They mutate external state. |
 | Never retry write requests automatically. | Proposed | Ambiguous provider acceptance could duplicate events/sessions. |
+| Treat official contract drift as routine adapter maintenance. | Accepted | The goal is the best current API coverage, not compatibility with an obsolete schema. |
 
 ## Pinned Contract
 
@@ -52,6 +53,24 @@ reverse-engineered.
 The pinned OpenAPI document publishes no request-rate guidance. The 250 ms
 serialized interval is a conservative client-owned default and must become
 stricter if official guidance is later published.
+
+## Live-Write Test Decision
+
+The current official contract has two writes:
+
+- batch-import events into an existing game; and
+- create a live session.
+
+It publishes no delete, undo, close-session, or event-removal operation. A live
+write probe would therefore require changing a real game or leaving a session
+whose cleanup cannot be verified through the same public API. For the pinned
+contract, write behavior is fixture/contract tested only. This limitation is
+accepted by Nick Curry, repository owner, on 2026-07-03 against the pinned
+SHA-256 above. Safe authenticated reads may still receive opt-in live proof.
+
+This is a test-safety decision, not a reason to omit the two documented remote
+tools. If Playgroup later documents cleanup, ordinary reviewed adapter updates
+may add disposable live-write tests.
 
 ## Guardrail Conformance
 

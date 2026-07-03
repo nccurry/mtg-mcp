@@ -32,7 +32,7 @@ adapters do not reference one another; App is the composition root; and Decks,
 Statistics, and provider adapters exchange Core contracts rather than transport
 payloads.
 
-### Frozen MCP surface
+### Current approved-surface baseline
 
 | Family | Tool count | Source child |
 | --- | ---: | --- |
@@ -46,11 +46,15 @@ payloads.
 | `tagger_*` | 6 | Tagger cache |
 | **Total** | **71** | |
 
-The only resource is `mtg://server/capabilities`; there are no prompts.
-Canonical per-mode discovery snapshots contain 44, 66, and 71 tools for
-`read-only`, `local`, and `remote`, respectively. Schema canonicalization sorts
-objects only where order is semantically irrelevant and never weakens exact
-name, description, annotation, input, or output-schema comparisons.
+The only resource is `mtg://server/capabilities`; there are no prompts. As of
+the current child drafts, canonical per-mode discovery snapshots contain 44,
+66, and 71 tools for `read-only`, `local`, and `remote`, respectively. These are
+derived planning totals, not backward-compatibility requirements. An approved
+child may add, remove, rename, or reshape tools to improve the design; the
+manifest, crosswalk, totals, and snapshots are then regenerated together.
+Schema canonicalization sorts objects only where order is semantically
+irrelevant and never weakens exact name, description, annotation, input, or
+output-schema comparisons.
 
 `read-only` is a mutation-authority mode: its 44 tools may include explicit
 Scryfall, Archidekt, or Playgroup network reads/previews, but every local and
@@ -59,9 +63,11 @@ runtime mode. Manual interchange is owned by `MtgMcp.Decks`; no separate
 interchange assembly is expected.
 
 The family table in this packet is the maintained surface-count crosswalk. Any
-child surface edit updates the owning child matrix, this table, all three totals,
-and canonical discovery snapshots in the same reviewed change. Until all four
-agree, the change is contract drift and cannot merge.
+child surface edit updates the owning child matrix, this table, all three
+derived totals, and canonical discovery snapshots in the same reviewed change.
+Until they agree, the change is documentation/schema drift and cannot merge.
+Agreement validates internal consistency; it never requires preserving an old
+tool or count.
 
 ### Provider proof and waiver classifications
 
@@ -71,7 +77,7 @@ agree, the change is contract drift and cannot merge.
 | Tagger one-card acquisition | Must pass; policy objection, 403/429, or unsupported contract blocks release. |
 | Scryfall official read | Must normally pass; repository owner may approve a temporary operational skip with current official contract evidence, offline fixtures, reason, date, and expiry. |
 | Playgroup official reads | Must normally pass; repository owner may approve a credential/availability skip with pinned-contract and offline-fixture evidence. |
-| Playgroup writes without safe cleanup | May remain fixture-only only under the child-7 repository-owner waiver record. |
+| Playgroup writes without safe cleanup | Fixture-only under the child-7 repository-owner decision for the pinned 2026-07-03 contract; never labeled live-tested. |
 
 An approved skip is never recorded as passed. Waivers cannot excuse contract
 drift, unsafe setup, credential leakage, residual state, or a required

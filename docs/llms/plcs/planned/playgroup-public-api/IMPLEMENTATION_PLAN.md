@@ -16,8 +16,8 @@
 | 1 | Pin spec and add drift/operation inventory. | PLAY-001, PLAY-002, PLAY-013 | Contract tests pass. |
 | 2 | Add transport models, auth, and safe GET client. | PLAY-003 through PLAY-007, PLAY-010, PLAY-011, PLAY-014 | Adapter fixtures pass. |
 | 3 | Add all thirteen read tools. | PLAY-002 through PLAY-007 | Surface and E2E tests pass. |
-| 4 | Add two remote-gated write tools. | PLAY-008, PLAY-009, PLAY-015 | Write safety and fixture tests pass. |
-| 5 | Add optional live proof and full validation. | All | Live discovery and offline gates pass. |
+| 4 | Add two remote-gated write tools with fixture-only contract proof. | PLAY-008, PLAY-009, PLAY-015 | Write safety/contract fixtures pass; no live write path exists for the pinned contract. |
+| 5 | Add optional safe live-read proof and full validation. | All | Live-read discovery, no-write guards, and offline gates pass. |
 
 ## Rules
 
@@ -26,7 +26,8 @@
   operation/schema/auth diff, followed by reviewed fixture/model/tool updates;
   never accept it through silent code generation.
 - Do not add derived ranking, cross-provider hydration, or private endpoints.
-- Do not run live writes without explicit disposable inputs.
+- Do not run live writes against the pinned contract; it has no documented
+  cleanup. Reconsider only if a future official contract adds safe disposal.
 
 ## Rollback
 

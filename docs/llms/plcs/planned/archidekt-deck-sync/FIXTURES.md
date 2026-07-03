@@ -18,7 +18,7 @@
 | ARCH-FIX-012 | Delete contract missing/drifted | Structured unsupported, no emulation, and child/cutover gate failed. |
 | ARCH-FIX-013 | Existing binding has no baseline | `baseline_missing` conflict; no remote or local write. |
 | ARCH-FIX-014 | Baseline checksum is corrupt/stale | Unavailable/conflict with evidence; no guessed direction or write. |
-| ARCH-FIX-015 | Previously bound remote deck returns 404 | `remote_deleted`; local deck and binding remain unchanged. |
+| ARCH-FIX-015 | Previously bound remote deck returns the reviewed missing/deleted response and is absent from a fresh authenticated listing | `remote_deleted`; local deck and binding remain unchanged. An unrelated `400` is not sufficient. |
 | ARCH-FIX-016 | Predicted primitive plan requires 151 requests | `request_limit_exceeded` before the first mutation. |
 | ARCH-FIX-017 | Bulk fixture passes but live equivalence proof is absent | Bulk path remains disabled; primitive plan is used or cap refusal returned. |
 | ARCH-FIX-018 | Bulk and primitive plans over same throwaway content | Final fingerprint and failure classification match before bulk can be enabled. |
@@ -33,11 +33,25 @@
 
 ## Provider Safety Matrix
 
-- One request at a time and at least one second between starts.
+- One request at a time, at least two seconds between starts, and at most 30
+  starts in any rolling 60 seconds per configured account.
 - Maximum 150 requests per tool call.
 - One login retry after 401.
-- No retry after 403/429 or ambiguous mutation failure.
+- No retry after 403, 429, or ambiguous mutation failure; a valid
+  `Retry-After` sets the earliest permitted future request time.
 - Secrets and credential paths absent from all recorded fixtures.
+
+## Planning Contract Evidence
+
+| Observed UTC | Operation | Result | Retained conclusion |
+| --- | --- | --- | --- |
+| 2026-07-03 | Authenticated private empty-deck create | `POST /api/decks/v2/` returned `201`; read-back returned `200` with matching name/private state. | Current create contract is viable. |
+| 2026-07-03 | Disposable-deck cleanup | `DELETE /api/decks/{id}/` returned `204`; deleted-ID read returned `400`; authenticated listing contained zero probe decks. | Cleanup is viable; absence verification must not require `404`. |
+| 2026-07-03 | Provider pacing research | Current Archidekt staff guidance says throttling begins around 40 requests/minute. | Client ceiling is 30 starts/minute with two-second spacing. |
+
+The live probe used the configured credential file but retained no credential,
+token, path, deck URL, or remote ID. This planning evidence does not replace the
+adapter-level live acceptance test.
 
 ## Requirement Traceability
 
@@ -60,8 +74,10 @@
 
 ## Live Acceptance
 
-The `Category=Live` test requires an explicit opt-in flag and credentials. It
-uses a unique private deck name, records only redacted IDs/checksums, verifies
-create/push/get/pull, and deletes in `finally`. If deletion cannot be verified,
-the test fails acceptance and records redacted cleanup evidence. A live run that
-leaves a remote deck does not satisfy the gate.
+The `Category=Live` test requires an explicit opt-in flag and the configured
+credential file or equivalent host secret. It uses a unique private dummy-deck
+name, records only redacted checksums, verifies create/push/get/pull, and deletes
+in `finally`. Cleanup verification includes a fresh authenticated deck listing
+because the observed deleted-ID read returns `400`. If deletion cannot be
+verified, the test fails acceptance and records redacted cleanup evidence. A
+live run that leaves a remote deck does not satisfy the gate.

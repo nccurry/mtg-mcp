@@ -45,6 +45,16 @@ result, notes, and revalidation reason. They do not use automated APIs or retain
 user deck data. The acceptance is repeated during implementation and before
 stable cutover.
 
+## Syntax Research Evidence
+
+| Provider | Evidence observed 2026-07-03 | Planning conclusion | Acceptance state |
+| --- | --- | --- | --- |
+| Archidekt | Staff examples show exact lookup as `1 Name (SET) collector`, a single backtick category, and Ctrl+Shift+C full-syntax copy. Sources: [exact printing](https://archidekt.com/forum/thread/15546991), [category syntax](https://archidekt.com/forum/thread/137035), and [full syntax copy](https://archidekt.com/forum/thread/5487112). | Canonical formatter grammar is `quantity Name (SET) collector` plus at most one primary category; secondary categories stay companion-only. | Research corroborated; disposable-deck UI acceptance still required. |
+| Moxfield | The [official feedback site](https://moxfield.nolt.io/1091) confirms Bulk Edit tag workflows; a current [community UI report](https://www.reddit.com/r/Moxfield/comments/1npidgj/tags_and_bulk_edit/) shows `#Deck Tag` and `#!Global Tag`. An older [Moxfield primer](https://gist.github.com/Jerakin/24be913c6106546136c45d1d028f9af9) and current importer documentation agree on set/collector plus `*F*`/`*E*` tokens but disagree on token order. Moxfield publishes no official grammar and its [terms](https://moxfield.com/help/terms) prohibit automated probing. | Retain the components as candidate grammar only; manually pin current line/section/token order in a disposable deck and perform no network automation. | Not manually accepted. |
+
+Research evidence does not claim that an artifact was imported successfully and
+does not satisfy XCHG-017 by itself.
+
 ## Requirement Traceability
 
 | Requirements | Fixtures/checks |

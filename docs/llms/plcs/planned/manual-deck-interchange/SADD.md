@@ -45,8 +45,8 @@ contains an absolute local path.
 | --- | --- | --- |
 | `mtg-mcp-json-v1` | `deck.mtg-mcp.json` | Lossless document tagged `mtg-mcp.deck/v1`; stable IDs and bindings included, secrets/provider payloads excluded. |
 | `generic-text-v1` | `deck.txt` | Section headings plus quantity/name/printing; manifest reports losses. |
-| `archidekt-text-v1` | `deck.archidekt.txt` | `1x Name (SET) collector` and verified backtick primary category; secondary assignments in CSV/native companions. |
-| `moxfield-bulk-edit-v1` | `deck.moxfield.txt` | Board sections, printing hints, and appended `#Local Tag`; native companion preserves every local field. |
+| `archidekt-text-v1` | `deck.archidekt.txt` | `1 Name (SET) collector` and one backtick primary category; secondary assignments in CSV/native companions. |
+| `moxfield-bulk-edit-v1` | `deck.moxfield.txt` | Manually verified board sections, set/collector and `*F*`/`*E*` tokens, and appended `#Local Tag`; native companion preserves every local field. |
 
 The exact bundles are:
 
@@ -58,9 +58,11 @@ The exact bundles are:
 | Moxfield | `deck.moxfield.txt`, `category-assignments.csv`, `deck.mtg-mcp.json`, `preservation.json`, `README.txt` |
 
 Moxfield global tags use `#!Tag Name` only when `tagScope=global` is explicitly
-requested. Archidekt secondary categories remain `companion-only` until current
-UI acceptance proves a supported multi-category import syntax. `README.txt`
-contains target-specific manual instructions and limitation warnings.
+requested. Both Moxfield tag forms remain a candidate contract until dated
+manual disposable-deck acceptance succeeds. Archidekt secondary categories
+remain `companion-only` until current UI acceptance proves a supported
+multi-category import syntax. `README.txt` contains target-specific manual
+instructions and limitation warnings.
 
 Preview output is capped at 200 diagnostics, 512 Unicode characters per
 diagnostic, and includes `omittedDiagnosticCount`. Export is capped at 16
@@ -96,4 +98,6 @@ records the date and observed result, and performs no automated provider call.
 Each manual record also stores provider, UI flow/path, artifact checksums,
 notes, and a revalidation reason such as initial verification, observed drift,
 or pre-cutover refresh. The checks run during implementation and again before
-stable cutover so old UI evidence is never silently treated as current.
+stable cutover so old UI evidence is never silently treated as current. The
+2026-07-03 web research is a grammar-design input only and does not count as
+manual acceptance.

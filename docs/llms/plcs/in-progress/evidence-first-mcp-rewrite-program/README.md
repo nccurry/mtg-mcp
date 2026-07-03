@@ -108,7 +108,8 @@ that those upstream drafts were approved.
 ## Post-Cutover Registry
 
 These topics are registered but are not required children, cutover dependencies,
-or authorized drafts:
+or authorized drafts. Their durable idea notes and promotion rules live in
+[Potential Features](../../../../potential-features.md).
 
 | Future slug | Boundary |
 | --- | --- |
@@ -165,8 +166,9 @@ that changes a program guardrail must be raised as an umbrella amendment.
 | 2026-07-03 | External reference inspection | Passed with access notes | Playgroup and rules references resolved; Moxfield returned its JavaScript shell; Scryfall rejected automated document retrieval, so its canonical links remain recorded for child-session verification. |
 | 2026-07-03 | `git diff --check` | Passed | No whitespace errors. |
 | 2026-07-03 | Required child drafting | Passed | All ten standard five-file packets exist in registry order, remain Draft, and set implementation authorization to No. |
-| 2026-07-03 | Cross-packet traceability and surface reconciliation | Passed | All child Must IDs map to design/test evidence; local links resolve; the frozen target is 71 capability-prefixed tools, one resource, and zero prompts. |
-| 2026-07-03 | Two independent PLC review sets | Findings addressed | Valid comments were incorporated packet by packet; nine legacy packets are visibly retired/reference-only; Archidekt and Tagger owner-risk acceptances remain unsigned; temporary review files were removed as requested. |
+| 2026-07-03 | Cross-packet traceability and surface reconciliation | Passed | All child Must IDs map to design/test evidence; local links resolve; the current derived baseline is 71 capability-prefixed tools, one resource, and zero prompts. Counts validate packet consistency and do not constrain approved redesign. |
+| 2026-07-03 | Two independent PLC review sets | Findings addressed | Valid comments were incorporated packet by packet; nine legacy packets are visibly retired/reference-only; temporary review files were removed as requested. |
+| 2026-07-03 | Provider follow-up research and owner decisions | Updated | Archidekt create/delete cleanup was proven live and its available-API risk accepted; Playgroup writes are owner-approved fixture-only for the pinned no-cleanup contract; Tagger is technically viable under bounded public acquisition, with owner implementation acceptance still pending; manual interchange syntax evidence was refreshed. |
 | 2026-07-03 | Follow-up child review | Passed with edit | Confirmed the ten-child split and corrected the foundation packet to consistently state zero tools, one resource, and zero prompts. |
 
 ## Completion Notes

@@ -49,4 +49,6 @@ output can still be heuristic.
   power score.
 
 See [design goals](design-goals.md), [heuristic models](heuristic-models.md), and
-the planned [MCP trust evidence PLC](llms/plcs/planned/mcp-trust-evidence/README.md).
+the [potential-features registry](potential-features.md). Historical rationale
+also remains in the planned
+[MCP trust evidence PLC](llms/plcs/planned/mcp-trust-evidence/README.md).

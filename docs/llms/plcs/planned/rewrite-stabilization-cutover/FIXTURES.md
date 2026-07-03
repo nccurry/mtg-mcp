@@ -1,6 +1,6 @@
 # Rewrite Stabilization And 0.9.0 Cutover Fixtures And Acceptance Matrix
 
-## Frozen MCP Surface
+## Current Planned MCP Surface Baseline
 
 | Family | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
@@ -16,10 +16,13 @@
 
 Every mode exposes exactly one resource, `mtg://server/capabilities`, and zero
 prompts. Its capability document identifies the active mode and only the tools
-visible in that mode.
+visible in that mode. The 44/66/71 counts are derived from the current child
+drafts. They detect inconsistencies in those drafts; they are not legacy-
+compatibility targets and may change with an approved better surface.
 
 This table is the surface-count crosswalk. A tool change in any child must
-update its row, totals, and canonical per-mode snapshots in the same change.
+regenerate its row and totals and update canonical per-mode snapshots in the
+same change.
 
 ## Acceptance Fixtures
 
@@ -27,14 +30,14 @@ update its row, totals, and canonical per-mode snapshots in the same change.
 | --- | --- | --- | --- |
 | CUT-FIX-001 | CUT-001 | One child is Draft or In progress | Cutover cannot start. |
 | CUT-FIX-002 | CUT-002 | Solution/project graph | Exactly eight production projects with approved dependency direction. |
-| CUT-FIX-003 | CUT-003, CUT-004 | Canonical MCP discovery in all modes | Exact counts and schemas match approved snapshots. |
+| CUT-FIX-003 | CUT-003, CUT-004 | Canonical MCP discovery in all modes | Exact names, schemas, visibility, and derived counts match the approved manifest/snapshots. |
 | CUT-FIX-004 | CUT-005 | Forbidden surface/project scan | No stable match outside explicitly historical docs or fixtures. |
 | CUT-FIX-005 | CUT-006 | Per-assembly coverage | Every production assembly is at least 90 percent. |
 | CUT-FIX-006 | CUT-007, CUT-008 | Full final-commit offline run | Lint, tests, coverage, security, architecture, package, and smoke pass. |
 | CUT-FIX-007 | CUT-009 | Scryfall read and one-card Tagger live proof | Bounds honored, no remote mutation, redacted report. |
 | CUT-FIX-008 | CUT-010 | Archidekt private throwaway workflow | Create/push/read/pull/delete passes and no residual deck remains. |
 | CUT-FIX-009 | CUT-010 | Archidekt delete unavailable or cleanup fails | Cutover stops; result cannot be waived as success. |
-| CUT-FIX-010 | CUT-011 | Playgroup reads and safely supported writes | Per-operation exercised/skipped/failed status is explicit. |
+| CUT-FIX-010 | CUT-011 | Playgroup safe live reads plus pinned-contract write fixtures | Read status and fixture-only write limitation are explicit; no write is labeled live-tested. |
 | CUT-FIX-011 | CUT-012 | Legacy root beside fresh `0.9.0` root | New host ignores and does not alter legacy files. |
 | CUT-FIX-012 | CUT-013 | User and provider documentation | Links, examples, limitations, modes, and rollback review pass. |
 | CUT-FIX-013 | CUT-014 | Open priority-2 defect or contract drift | Stable approval is blocked. |
@@ -43,8 +46,8 @@ update its row, totals, and canonical per-mode snapshots in the same change.
 | CUT-FIX-016 | CUT-017 | Prior package/data rollback rehearsal | Prior host starts and passes smoke without transforming new stores. |
 | CUT-FIX-017 | CUT-018 | PLC registry after release | Ten children and umbrella have accurate lifecycle/approval evidence. |
 | CUT-FIX-018 | CUT-019 | `read-only` provider read with local/remote write spies | Read may complete; every write spy remains zero. |
-| CUT-FIX-019 | CUT-020 | Child adds/removes one tool without updating cutover | Contract test fails until child matrix, crosswalk, totals, and snapshots agree. |
-| CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Only allowed owner waiver fields permit a skip; forbidden cases remain release blockers; no skip is labeled passed. |
+| CUT-FIX-019 | CUT-020 | Child adds/removes one tool without updating cutover | Contract test fails until child matrix, regenerated crosswalk/totals, and snapshots agree; no old count is required. |
+| CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Temporary read-proof waivers use all required fields; Archidekt/Tagger blockers remain unwaivable; Playgroup writes retain their explicit fixture-only classification; no skip is labeled passed. |
 
 ## Forbidden Stable Surface
 
@@ -71,7 +74,8 @@ path allowlist reviewed in the release bundle.
 ## Release Stop Cases
 
 - A requirement or child acceptance record is missing.
-- An exact schema, package, project, or mode count differs.
+- An exact schema, package, project, or derived mode count differs from the
+  approved manifest/snapshot.
 - A forbidden surface or production assembly remains.
 - A required offline command, package smoke, or coverage gate fails.
 - A secret or credential path appears in output or evidence.

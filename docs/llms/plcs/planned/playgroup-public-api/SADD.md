@@ -82,19 +82,19 @@ automatically update live sessions.
 The checked-in spec drives an operation inventory test. Sanitized fixtures cover
 every response schema, pagination, nullability, extension fields, and errors.
 Fake HTTP/clock tests cover headers, pacing, retries, write request counts, and
-mode guards. Optional live reads use the configured account. Live writes require
-both `Category=Live` and an explicit write flag plus disposable game/session
-inputs; no write runs in normal CI.
-
-If the documented API still has no cleanup operation and no disposable resource
-can be supplied safely, the repository owner may approve a fixture-only live-
-write waiver. The record must identify the pinned contract revision, absence of
-safe cleanup, fixture coverage, reviewer/date, and limitation; it cannot label
-the write live-tested. `MTGMCP_PLAYGROUP_LIVE_WRITE_TESTS=1` is intentionally a
-test-run opt-in, not a double-underscore host configuration binding.
+mode guards. Optional live reads use the configured account. The pinned
+contract has no delete/undo operation for imported events and no close/delete
+operation for a created live session. The repository owner therefore accepted
+fixture-only coverage for both writes on 2026-07-03 against SHA-256
+`2996db9134045e255987dda80ec1110dc28d2a84f2705622833d2ab339cb7ad4`.
+The live suite has no write opt-in for this contract and cannot mutate a game or
+create a session. Fixtures cover successful, rejected, unauthorized, and
+ambiguous outcomes; release evidence labels these operations "not live-tested."
 
 Refreshing the pinned contract requires fetching the same official URL,
 recording observation date/version/bytes/SHA-256, generating an operation and
-schema diff, reviewing auth/rate/error changes, updating only affected fixtures
-and handwritten models, and re-running the exact sixteen-tool inventory. No
-spec change is silently accepted or applied through code generation.
+schema diff, reviewing auth/rate/error changes, updating only affected fixtures,
+handwritten models, and tools, and re-running the resulting operation-to-tool
+inventory. No spec change is silently accepted or applied through code
+generation, and no obsolete operation is retained only to preserve the prior
+count.

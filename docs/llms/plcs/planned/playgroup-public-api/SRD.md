@@ -33,9 +33,9 @@ out of scope.
 | PLAY-010 | Must | GET requests may retry transient transport/5xx at most twice with cancellation; 401/403 stop; 429 follows one bounded Retry-After only when present. | Fake HTTP tests pass. |
 | PLAY-011 | Must | The client shall serialize requests and wait at least 250 ms between starts. This is a conservative client default because the pinned OpenAPI publishes no rate guidance; official stricter guidance shall supersede it. | Fake-clock concurrency tests and contract-note review pass. |
 | PLAY-012 | Must | Missing deck update capability shall be reported as unsupported in capability output; no private endpoint shall be called. | Capability and network-spy tests pass. |
-| PLAY-013 | Must | OpenAPI drift shall fail a contract check and require reviewed fixture/model updates. | Altered-spec test fails with operation/schema diff. |
+| PLAY-013 | Must | OpenAPI drift shall fail a contract check and require reviewed fixture/model/tool updates to the best current design; it shall not preserve obsolete operations solely for compatibility. | Altered-spec test fails with operation/schema diff until the reviewed current contract is adopted. |
 | PLAY-014 | Must | Provider errors shall retain safe status/reason detail while redacting keys, users' private data, and local secret paths. | Sanitized error fixtures pass. |
-| PLAY-015 | Must | Ordinary tests shall be offline; live writes require an explicit second opt-in and operator-supplied disposable resources. When the official API provides no safe cleanup, only the repository owner may approve fixture-only write coverage, with dated contract evidence and no claim that a live write passed. | Test discovery, guard, and waiver-record tests pass. |
+| PLAY-015 | Must | Ordinary tests shall be offline. Safe authenticated reads may have opt-in live tests. Against the pinned 2026-07-03 contract, both writes shall remain fixture-only because the official API exposes no documented cleanup operation; evidence shall cite the owner decision and shall never label a write live-tested. | Test discovery, no-write live guards, contract fixtures, and owner-decision record pass. |
 
 ## Quality Attributes
 

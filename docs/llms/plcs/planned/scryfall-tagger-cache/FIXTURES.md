@@ -5,9 +5,9 @@
 | ID | Scenario | Expected result |
 | --- | --- | --- |
 | TAG-FIX-001 | HTML shell with CSRF and session cookie | GraphQL request uses same session and token. |
-| TAG-FIX-002 | Rich direct oracle/illustration/printing tags | Types, ordering, and raw fields persist. |
+| TAG-FIX-002 | Rich direct Oracle and illustration tags with distinct subject IDs | Types, subject scopes, ordering, and raw fields persist; illustration tags are not Oracle-wide. |
 | TAG-FIX-003 | Direct tag with ancestors | Relations remain distinct. |
-| TAG-FIX-004 | Accepted and rejected assignments | Default excludes rejected; opt-in returns both with state. |
+| TAG-FIX-004 | Public response includes a non-good-standing assignment | Returned status persists and opt-in may expose it; output does not claim hidden moderator-state completeness. |
 | TAG-FIX-005 | Preferred printing unknown, older known | Deterministic fallback stops at first known response. |
 | TAG-FIX-006 | Five candidates unknown | Completed `not_present`, not empty success or network failure. |
 | TAG-FIX-007 | Missing Scryfall printing snapshot | Unsupported dependency and zero HTTP. |
@@ -19,6 +19,8 @@
 | TAG-FIX-013 | 121st request would start before two minutes | Invocation stops at 120 requests; remaining Oracle IDs are not attempted. |
 | TAG-FIX-014 | Two-minute deadline occurs before request cap | No next request starts; completed snapshots persist and run reports budget exhausted. |
 | TAG-FIX-015 | Restart after process circuit opens | Circuit resets, refusal metadata remains, and zero request occurs until a new explicit refresh. |
+| TAG-FIX-016 | Captured acquisition request | Honest `mtg-mcp` user-agent/contact and `Accept` are present; browser/disallowed-crawler impersonation, `moderatorView=true`, and GraphQL mutations are absent. |
+| TAG-FIX-017 | Mixed cached/uncached deck refresh with default and forced modes | Default issues requests only for uncached IDs and reports cached skips; explicit force includes cached IDs within the same hard bounds. |
 
 ## MCP Surface Matrix
 
@@ -31,9 +33,11 @@
 
 | Source | Observed | Required interpretation |
 | --- | --- | --- |
-| `https://tagger.scryfall.com/robots.txt` | 2026-07-03: `User-agent: *`, `Allow: /` | Crawl directive only; not API endorsement. |
-| `https://scryfall.com/docs/terms` | Reverify at implementation | Automated access must not impose undue burden. |
-| Observed Tagger HTML/GraphQL | Reverify at implementation | Unsupported contract; drift fails closed. |
+| `https://tagger.scryfall.com/robots.txt` | 2026-07-03, SHA-256 `f10a4db8c617ce7487a2977c13c48591b04e12de5f8eac912c734db06ec2057f`: general `Allow: /`; `Content-Signal: search=yes,ai-train=no,use=reference`; named AI crawlers including GPTBot/ClaudeBot disallowed. | General crawl allowance and reference-use signal are not API endorsement; do not train, impersonate a disallowed crawler, or infer permission for bulk access. |
+| `https://scryfall.com/docs/terms` | 2026-07-03, HTTP `200`, SHA-256 `1c9a4ae40e580d6972be2f1ec8ba8a01736974a31294183701058bb1d22ce64f` for the observed HTML. | Automated access must not place undue burden on Scryfall. |
+| Tagger HTML shell | 2026-07-03: `200`, session cookie name `_scryfall_tagger_session`, `csrf-token` metadata, first-party Vite asset. | Bootstrap once per explicit invocation; token/cookie stay in memory and are never retained as fixture values. |
+| Observed Tagger `FetchCard` GraphQL | 2026-07-03: same-origin `/graphql`, `X-CSRF-Token`, same cookie session, `moderatorView=false`; one known-card read returned `200`. | Technically viable but unsupported; pin sanitized shape and fail closed on drift. |
+| Known-card subject-scope probe | Lightning Bolt `m10`/`146`: 17 direct public taggings (6 Oracle, 11 illustration), 18 ancestor associations, two distinct subject IDs, no GraphQL error. | Preserve Oracle and illustration scope separately; the count is research evidence, not a permanent fixture expectation. |
 
 ## Requirement Traceability
 
@@ -56,9 +60,12 @@
 | TAG-019 | TAG-FIX-013 and TAG-FIX-014 fake-clock/request-count tests. |
 | TAG-020 | Central package pin, license/security review record, and Core dependency prohibition. |
 | TAG-021 | Owner provider-risk acceptance and dated policy/contract recheck. |
+| TAG-022 | TAG-FIX-016 captured-request identity/header and prohibited-operation checks. |
+| TAG-023 | TAG-FIX-017 default-skip/explicit-force request-count tests. |
 
 ## Live Tests
 
 One optional `Category=Live` test may refresh one well-known Oracle ID with one
-preferred printing. It obeys the same pacer and circuit breaker, performs no
-mutation on Tagger, records no cookies/tokens, and is never part of normal CI.
+preferred printing. It uses the honest product user-agent, public
+`moderatorView=false`, the same pacer and circuit breaker, performs no mutation
+on Tagger, records no cookies/tokens, and is never part of normal CI.

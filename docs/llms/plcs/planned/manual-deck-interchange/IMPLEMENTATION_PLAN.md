@@ -23,6 +23,8 @@
 
 - Do not add or call provider HTTP clients.
 - Keep provider syntax in small formatter modules with dated acceptance notes.
+- Treat the 2026-07-03 syntax research as candidate evidence; enable each
+  provider formatter only after its manual disposable-deck record passes.
 - Any UI drift changes the preservation state to unsupported until reverified.
 - Never weaken native losslessness to match a provider text format.
 

@@ -26,9 +26,9 @@ identity guessing are out of scope.
 | XCHG-004 | Must | Import shall never query a provider or invent a Scryfall identity. | Architecture and fake-network tests prove no HTTP path. |
 | XCHG-005 | Must | Export shall return an ordered bundle of named artifacts, media types, content, checksums, and a preservation report. | Bundle schema snapshots and checksum tests pass. |
 | XCHG-006 | Must | Generic text shall preserve quantity, name, zone headings, and supported printing hints while reporting all omitted fields. | Golden text and loss-report fixtures pass. |
-| XCHG-007 | Must | Archidekt text shall use verified quantity/name/printing syntax and backtick primary-category syntax where supported. | Manual UI acceptance imports quantities, printings, zones/primary categories. |
+| XCHG-007 | Must | Archidekt text shall use canonical `quantity Name (SET) collector` syntax followed by at most one backtick primary category; secondary categories remain companion-only unless current manual acceptance proves a richer grammar. | Manual UI acceptance imports quantities, printings, zones/primary categories without claiming secondary-category preservation. |
 | XCHG-008 | Must | Archidekt bundles shall include canonical category-assignment CSV and native JSON for secondary or unsupported metadata. | Every local category appears in at least one lossless companion artifact. |
-| XCHG-009 | Must | Moxfield Bulk Edit text shall append local tags using `#Tag Name` syntax and preserve multiple tags deterministically. | Golden syntax plus manual UI acceptance confirms current behavior. |
+| XCHG-009 | Must | After a dated manual UI acceptance confirms the current line, board-section, finish-marker, and tag grammar, Moxfield Bulk Edit text shall preserve exact supported printings/finishes and append local tags using `#Tag Name`, including multiple tags deterministically. Until then, the provider format shall remain unavailable/experimental rather than claiming compatibility. | Golden syntax plus manual disposable-deck acceptance confirms current behavior and exact token order. |
 | XCHG-010 | Must | Global Moxfield tag syntax shall not be emitted unless the caller explicitly selects global tags. | Default artifact contains no `#!` tag. |
 | XCHG-011 | Must | Provider artifacts shall never claim lossless or successful import without a verified target round trip. | Preservation report uses `preserved`, `companion-only`, and `unsupported` states. |
 | XCHG-012 | Must | Inputs shall be limited to 5 MiB and 10,000 parsed entries with cancellation. | Boundary and cancellation tests pass. |
@@ -36,7 +36,7 @@ identity guessing are out of scope.
 | XCHG-014 | Must | Reads/previews shall be visible in all modes; local creation shall require `local` or `remote`. | Surface tests pass. |
 | XCHG-015 | Must | `deck_import_create` shall expose `allowPartial`, default it to `false`, and reject a partial preview unless the caller explicitly sets it to `true` with the matching preview fingerprint. | Default/refusal/explicit-opt-in fixtures pass with no partial deck on refusal. |
 | XCHG-016 | Must | A preview shall return at most 200 diagnostics of at most 512 Unicode characters plus an omitted count; an export shall contain at most 16 artifacts and 20 MiB total UTF-8 content. | Exact-boundary and overflow tests return deterministic bounded results. |
-| XCHG-017 | Must | Manual provider acceptance records shall include provider, observed UTC, UI flow/path, artifact checksums, result, notes, and revalidation reason; provider artifacts shall be reverified during implementation and before stable cutover. | Fixture metadata schema and dated Archidekt/Moxfield records pass review. |
+| XCHG-017 | Must | Manual provider acceptance records shall include provider, observed UTC, UI flow/path, artifact checksums, result, notes, and revalidation reason; provider artifacts shall be reverified during implementation and before stable cutover. Research-only web evidence shall be labeled separately and shall not satisfy UI acceptance. | Fixture metadata schema and dated Archidekt/Moxfield records pass review. |
 
 ## Quality Attributes
 

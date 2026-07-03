@@ -53,18 +53,15 @@ provider operation count remains fifteen.
 | PLAY-012 | Capability unsupported response and private-endpoint network spy. |
 | PLAY-013 | Contract drift cases and reviewed-fixture checksum gate. |
 | PLAY-014 | Sanitized provider error fixtures. |
-| PLAY-015 | Offline discovery plus separate live read/write opt-in guards. |
+| PLAY-015 | Offline discovery, safe live-read opt-in, hard no-live-write guard, and dated owner fixture-only decision. |
 
 ## Live Tests
 
-Read tests require only `Category=Live` and a configured key. Write tests also
-require `MTGMCP_PLAYGROUP_LIVE_WRITE_TESTS=1` and operator-supplied disposable
-IDs/payloads. Because the pinned API has no delete operation for these writes,
-live-write cleanup and acceptability must be established by the operator before
-execution; otherwise write tests remain fixture-only. The single-underscore
-variable is a test-run safety switch, not an `MTGMCP__` configuration key.
-
-A fixture-only write waiver requires repository-owner name, date, reviewed
-OpenAPI checksum, evidence that no safe cleanup exists, applicable request/
-response/error fixtures, and an explicit “not live-tested” limitation. A
-reviewer or implementation agent cannot approve the waiver implicitly.
+Read tests require `Category=Live` and a configured key. No live-write test or
+write opt-in exists for the pinned contract. Its two POST operations expose no
+documented cleanup route, so both remain fixture-only under the repository-owner
+decision recorded on 2026-07-03 for OpenAPI SHA-256
+`2996db9134045e255987dda80ec1110dc28d2a84f2705622833d2ab339cb7ad4`.
+The evidence explicitly says "not live-tested" and does not treat that state as
+a pass. A later official cleanup operation may replace this decision through a
+reviewed contract update.
