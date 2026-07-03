@@ -1,5 +1,11 @@
 # Land Entry Classification Implementation Plan
 
+> [!CAUTION]
+> Historical legacy-repair plan only. Stable exact statistics deliberately
+> excludes oracle-text classification. Do not execute these phases unless a
+> separately approved experimental PLC explicitly adopts the parser-derived
+> model and its limitations.
+
 ## Document Control
 
 - Lifecycle status: Planned

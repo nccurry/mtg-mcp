@@ -1,5 +1,16 @@
 # Land Entry Classification PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: reference-only — do not implement this classifier in
+> stable `0.9.0`.** [Exact statistics](../exact-deck-statistics/README.md) uses
+> caller-supplied source capability masks and usable-turn constraints and never
+> parses oracle text. Preserve the phrase matrix only as documentation/example
+> input for callers or a future
+> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> PLC. Any future classifier output is `parser_derived`, never source fact.
+> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
+> authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +18,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: implementation retired; fixture/reference evidence only
 
 ## Summary
 
@@ -52,7 +63,7 @@ None.
 
 ## Implementation Checklist
 
-- [ ] Packet moved to docs/llms/plcs/in-progress/land-entry-classification/.
+- [x] Independent lifecycle move retired; packet remains reference-only pending foundation reconciliation.
 - [ ] Current phase named.
 - [ ] Design updated if pattern precedence changes.
 - [ ] Validation evidence recorded.
@@ -68,4 +79,5 @@ None.
 
 ## Completion Notes
 
-Implementation evidence will be recorded before completion.
+Do not move this packet to `in-progress`. No classifier code transfers to the
+stable rewrite; only its examples may inform explicitly supplied inputs.

@@ -1,5 +1,10 @@
 # Card Snapshot Integrity Implementation Plan
 
+> [!CAUTION]
+> Historical legacy-repair plan only. Do not execute these workspace JSON,
+> Moxfield, or refresh-orchestration phases. The rewrite children linked from
+> README.md own the retained trust requirements.
+
 ## Document Control
 
 - Lifecycle status: Planned

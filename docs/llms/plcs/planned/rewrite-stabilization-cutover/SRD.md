@@ -1,0 +1,60 @@
+# Rewrite Stabilization And 0.9.0 Cutover Software Requirements Document
+
+## Document Control
+
+- Lifecycle status: Planned
+- PLC packet: [README.md](README.md)
+- Owner: mtg-mcp
+- Last updated: 2026-07-03
+- Related SADD: [SADD.md](SADD.md)
+- Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+
+## Scope
+
+In scope are cross-module acceptance, exact MCP-schema verification, offline and
+opt-in live proof, packaging, versioning, documentation, merge/release gates,
+rollback, and PLC lifecycle closure. No new product behavior is in scope.
+
+## Requirements
+
+| ID | Priority | Requirement | Acceptance criteria |
+| --- | --- | --- | --- |
+| CUT-001 | Must | All nine prerequisite child PLCs shall be approved, implemented, accepted, and moved to `completed/` before cutover implementation begins. | Dependency ledger contains reviewed revisions and completion evidence. |
+| CUT-002 | Must | The production solution shall contain only `MtgMcp.Core`, `MtgMcp.App`, `MtgMcp.Decks`, `MtgMcp.Scryfall`, `MtgMcp.Archidekt`, `MtgMcp.Playgroup`, `MtgMcp.Statistics`, and `MtgMcp.Tagger`; manual interchange remains part of `MtgMcp.Decks`, not a ninth assembly. | Solution/project reference architecture test passes. |
+| CUT-003 | Must | The stable MCP surface shall expose exactly 71 tools, one capability resource, and zero prompts. | Approved schema snapshot matches byte-for-byte after canonicalization. |
+| CUT-004 | Must | Surface visibility shall be exactly 44 tools in `read-only`, 66 in `local`, and 71 in `remote`. | Per-mode discovery fixtures pass. |
+| CUT-005 | Must | Stable releases shall contain no legacy advisor, intent, plan, recommendation, blended-score, simulation, Moxfield-network, CommanderSpellbook, or decklist-provider surface or assembly. | Forbidden-name and project scans return no matches outside explicit historical docs/fixtures. |
+| CUT-006 | Must | Every production assembly shall maintain at least 90 percent line coverage without unjustified exclusions. | Per-assembly coverage report passes the existing gate. |
+| CUT-007 | Must | The final release candidate shall pass repository lint, offline tests, coverage, package, and packaged-server smoke commands. | Final evidence bundle records successful supported task commands. |
+| CUT-008 | Must | Operation-mode enforcement, secret redaction, cancellation, provider pacing, structured failures, and dependency-direction tests shall pass together. | Cross-module security and architecture suite passes. |
+| CUT-009 | Must | Opt-in Scryfall live reads and a one-card Tagger acquisition proof shall respect their child safety limits and leave no remote state. A Tagger policy/contract objection or blocking response is not waivable and blocks release; only a temporary official Scryfall read-proof skip may be owner-approved under the waiver record. | Dated redacted live reports pass, or the narrowly allowed Scryfall skip is recorded without being labeled passed. |
+| CUT-010 | Must | The Archidekt live workflow shall create a private throwaway deck, push, read, pull, and verify deletion in `finally`; inability to verify deletion or any residual deck shall block cutover. | Live evidence proves cleanup and records no credential, URL, or stable remote identifier. |
+| CUT-011 | Must | Playgroup live proof shall cover safe documented reads when credentials are available; write proof shall run only where a disposable resource and verified cleanup exist. Repository-owner-approved read or fixture-only write skips shall follow the waiver record and shall not be labeled passed. | Live report distinguishes exercised, owner-approved skip, unsupported, and failed operations. |
+| CUT-012 | Must | `decks.db`, `scryfall.db`, and `tagger.db` shall remain independent and versioned; release installation shall not discover, alter, import, or delete legacy stores automatically. | Fresh/legacy-side-by-side smoke fixtures pass. |
+| CUT-013 | Must | User documentation shall describe the clean break, modes, tools, provider limits, data directories, backup/restore, unsupported states, and rollback. | Documentation review and link checks pass. |
+| CUT-014 | Must | No unresolved priority-1 or priority-2 defect, child acceptance exception, provider-contract drift, or security finding may remain at stable release approval. | Release ledger has no open blocking item. |
+| CUT-015 | Must | The rewrite branch shall integrate the latest `main` through ordinary history-preserving Git operations and rerun all final gates after conflict resolution. | Merge-base and final validation evidence are recorded. |
+| CUT-016 | Must | Preview artifacts shall use `0.9.0-preview.N`; only an accepted release candidate may produce stable `0.9.0`. | Package metadata and server version tests pass. |
+| CUT-017 | Must | Rollback shall reinstall the prior stable release and select its prior data/configuration without transforming `0.9.0` stores. | Rollback rehearsal passes from packaged artifacts. |
+| CUT-018 | Must | Lifecycle shall remain staged: umbrella planning completes after all ten plans are approved; children 1–9 complete after their own implementations before cutover starts; child 10 moves to `in-progress` for cutover and completes after release/rollback evidence. Cutover may add evidence links to already completed packets but shall not retroactively move them. | PLC registry, approval records, folder states, and evidence links match each milestone. |
+| CUT-019 | Must | `read-only` shall be validated as a zero-local-write/zero-remote-write mode that may perform explicit provider reads; offline shall remain a test-suite classification rather than a runtime mode. | Mode E2E proves provider reads can occur and all write spies remain zero. |
+| CUT-020 | Must | Any approved child tool-surface change shall update that child's matrix, the cutover family crosswalk, frozen per-mode totals, and canonical schema snapshots in the same reviewed change. | Intentional drift fixture fails until every dependent count/snapshot is updated. |
+
+## Quality Attributes
+
+| Attribute | Measure |
+| --- | --- |
+| Reproducibility | A clean checkout produces identical canonical MCP schemas and offline results. |
+| Safety | No normal test uses a provider; live tests are opt-in, bounded, redacted, and cleanup-aware. |
+| Recoverability | Prior stable package and data remain usable after rollback rehearsal. |
+| Traceability | Every release gate links to a child requirement and dated evidence artifact. |
+| Transparency | Skipped, unsupported, waived, and failed checks are distinct; none count as passed. |
+
+## Definition Of Done
+
+- [ ] All requirements map to passing evidence in `FIXTURES.md`.
+- [ ] Exact per-mode MCP schema snapshots are approved.
+- [ ] Offline, package, smoke, security, and coverage gates pass from the final commit.
+- [ ] Required provider live proofs pass without leaked secrets or residual state.
+- [ ] Rollback rehearsal succeeds.
+- [ ] Stable release authorization and PLC lifecycle closure are recorded.

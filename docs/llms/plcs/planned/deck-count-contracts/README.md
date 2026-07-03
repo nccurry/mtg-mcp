@@ -1,5 +1,15 @@
 # Deck Count Contracts PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: superseded/reference-only — do not implement the
+> legacy additive `cardCounts` compatibility surface.** The rewrite removes the
+> root ambiguity by making zones independent from categories in
+> [local deck storage](../local-deck-store/README.md); exact composition lives in
+> [deck statistics](../exact-deck-statistics/README.md). Count invariants remain
+> fixture rationale, but primary-category bucketing and preservation of legacy
+> `maybeboardCards`/`roleCounts` do not transfer. Reviewed against the rewrite
+> on 2026-07-03; lifecycle movement is deferred to authorized foundation work.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +17,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: implementation retired; reference invariants only
 
 ## Summary
 
@@ -52,7 +62,7 @@ None.
 
 ## Implementation Checklist
 
-- [ ] Packet moved to docs/llms/plcs/in-progress/deck-count-contracts/.
+- [x] Independent lifecycle move retired; packet remains reference-only pending foundation reconciliation.
 - [ ] Current phase is named before code changes start.
 - [ ] SRD/SADD updated if implementation changes the contract.
 - [ ] Validation evidence recorded.
@@ -68,4 +78,5 @@ None.
 
 ## Completion Notes
 
-Implementation evidence will be added before completion.
+Do not move this packet to `in-progress`. The linked rewrite children own the
+replacement model; reactivation would require explicit repository-owner review.

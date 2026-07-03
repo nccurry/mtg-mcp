@@ -1,5 +1,11 @@
 # Stats Lab Interaction Readiness Implementation Plan
 
+> [!CAUTION]
+> Historical post-cutover reference only. Do not execute these Stats Lab,
+> compatibility, scoring, or calibration phases. A future experimental
+> feasibility PLC may adopt only a reviewed subset of the checkpoint/failure
+> fixtures after defining its own dependencies.
+
 ## Document Control
 
 - Lifecycle status: Planned

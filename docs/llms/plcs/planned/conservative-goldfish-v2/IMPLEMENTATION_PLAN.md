@@ -1,5 +1,11 @@
 # Conservative Goldfish V2 Implementation Plan
 
+> [!CAUTION]
+> Historical implementation design only. Do not execute this dependency chain
+> or atomic public cutover. A future experimental program must first complete a
+> feasibility approval, then authorize private kernel work, public exposure, and
+> downstream deletion as separate gates.
+
 ## Document Control
 
 - Lifecycle status: Planned

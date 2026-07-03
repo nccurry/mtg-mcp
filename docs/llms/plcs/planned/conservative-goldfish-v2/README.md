@@ -1,5 +1,16 @@
 # Conservative Goldfish V2 PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: superseded/post-cutover experimental design seed — do
+> not implement before `0.9.0` or before feasibility approval.** Stable cutover
+> removes every goldfish/simulation surface. A future
+> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> PLC must first decide whether a bounded simulation can be truthful and useful,
+> then explicitly absorb this packet with `configurable-decision-models`,
+> `simulation-profile-evidence`, and `stats-lab-interaction-readiness`. Reviewed
+> against the rewrite on 2026-07-03; lifecycle movement is deferred to
+> authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +18,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: post-cutover design seed; implementation retired pending feasibility
 
 ## Summary
 
@@ -54,7 +65,7 @@ None.
 
 ## Implementation Checklist
 
-- [ ] Prerequisite PLCs are completed and this packet moved to in-progress.
+- [x] Legacy prerequisite chain and independent lifecycle move retired; future feasibility owns any reactivation.
 - [ ] Baseline fixture and benchmark evidence are frozen before kernel edits.
 - [ ] SRD/SADD updated when implementation changes a contract.
 - [ ] No public v2 shape ships before the atomic cutover phase.
@@ -70,4 +81,9 @@ None.
 
 ## Completion Notes
 
-Implementation, benchmark, and read-only smoke evidence will be recorded before completion.
+Do not move this packet to `in-progress`. The conservative rule that unsupported
+abilities contribute zero modeled effect and remain visible is non-negotiable
+for any future simulation. A revived program must separately approve feasibility,
+private kernel validation, experimental public surface, and deletion of replaced
+paths. It uses the rewrite evidence descriptor rather than depending on the
+legacy trust enum; the old `0.9` compatibility exception is moot.

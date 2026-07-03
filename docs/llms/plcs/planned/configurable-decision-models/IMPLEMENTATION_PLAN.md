@@ -1,5 +1,11 @@
 # Configurable Decision Models Implementation Plan
 
+> [!CAUTION]
+> Historical post-cutover reference only. Do not execute these phases on legacy
+> `main` or the stable rewrite. A future experimental feasibility PLC must first
+> select one concrete model, re-establish any required profile base, and adopt a
+> reviewed subset of this design.
+
 ## Preconditions
 
 - Move this packet to `in-progress`.

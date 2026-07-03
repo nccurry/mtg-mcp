@@ -1,5 +1,15 @@
 # Configurable Decision Models PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: post-cutover experimental/reference-only — do not
+> implement this packet before `0.9.0`.** The stable rewrite removes simulation
+> profiles and MCP-owned decision automation. A future independently reviewed
+> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> PLC must decide feasibility first and explicitly absorb or reject this packet,
+> `simulation-profile-evidence`, `stats-lab-interaction-readiness`, and
+> `conservative-goldfish-v2`. Reviewed against the rewrite on 2026-07-03;
+> lifecycle movement is deferred to authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,13 +17,18 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: post-cutover reference; implementation retired
 
 ## Summary
 
 This packet plans a deterministic, configuration-driven policy layer for
 goldfish and other bounded decision models. It extends simulation profiles; it
 does not add a general-purpose rules engine or arbitrary executable rules.
+
+The simulation-profile base named below is not present in the stable rewrite.
+Any future experimental implementation must first define a narrow experimental
+profile/simulation contract around one concrete model and fixture suite; this
+packet does not authorize recreating a general policy substrate.
 
 ## Packet Contents
 
@@ -62,5 +77,6 @@ engine is planned as a Core dependency.
 
 ## Completion Notes
 
-Move this packet to `in-progress` only when the first configurable choice and
-its compatibility contract are approved for implementation.
+Do not move this packet to `in-progress`. Preserve it as design input until the
+future feasibility PLC explicitly absorbs or supersedes it. Pre-cutover
+implementation requires an umbrella amendment and repository-owner exception.

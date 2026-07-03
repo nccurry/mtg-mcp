@@ -1,5 +1,10 @@
 # Simulation Profile Evidence Implementation Plan
 
+> [!CAUTION]
+> Historical post-cutover reference only. Do not execute these legacy profile
+> phases. A future feasibility PLC must first establish that simulation belongs
+> in an experimental surface and explicitly adopt the relevant fixtures.
+
 ## Document Control
 
 - Lifecycle status: Planned

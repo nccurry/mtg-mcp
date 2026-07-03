@@ -1,5 +1,15 @@
 # Card Snapshot Integrity PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: superseded/reference-only — do not implement this
+> legacy workspace-JSON migration.** The durable known-empty-versus-unknown
+> principle is owned by [local deck identity](../local-deck-store/README.md) and
+> [Scryfall snapshots](../scryfall-evidence-snapshots/README.md), including
+> explicit root/face handling for multi-face cards. Moxfield mapping, legacy
+> workspace migration, and `deck_refresh_card_metadata` mechanisms are removed.
+> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
+> authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +17,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: implementation retired; reference evidence only
 
 ## Summary
 
@@ -52,7 +62,7 @@ None.
 
 ## Implementation Checklist
 
-- [ ] Packet moved to docs/llms/plcs/in-progress/card-snapshot-integrity/.
+- [x] Independent lifecycle move retired; packet remains reference-only pending foundation reconciliation.
 - [ ] Current phase is named before code changes start.
 - [ ] SRD/SADD updated when implementation changes the plan.
 - [ ] Validation evidence recorded as phases complete.
@@ -68,4 +78,5 @@ None.
 
 ## Completion Notes
 
-Implementation evidence and residual risks will be recorded before lifecycle completion.
+Do not move this packet to `in-progress`. Preserve its fixtures/reasoning as
+reference evidence; implementation proceeds through the linked rewrite children.

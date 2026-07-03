@@ -1,5 +1,10 @@
 # Deck Count Contracts Implementation Plan
 
+> [!CAUTION]
+> Historical compatibility plan only. Do not add this legacy public field to
+> the clean rewrite. Preserve the count fixtures as reference for zone-based
+> local storage and caller-supplied exact summaries.
+
 ## Document Control
 
 - Lifecycle status: Planned

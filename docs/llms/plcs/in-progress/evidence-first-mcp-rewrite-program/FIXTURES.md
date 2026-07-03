@@ -19,12 +19,12 @@ than runtime payload fixtures.
 | Requirement | Fixture or scenario | Expected result | Validation |
 | --- | --- | --- | --- |
 | PROG-001 | FIX-PROGRAM-REGISTRY | README and implementation plan contain the same ten slugs in the same order. | Document comparison |
-| PROG-002 | SCN-001 | A child-authoring change creates at most one child directory. | Git diff inspection |
-| PROG-003 | SCN-002 | A later child is blocked until the preceding approval record is complete. | Registry and README inspection |
+| PROG-002 | SCN-001 | Each child is complete and validated before the next draft begins. | Registry and packet inspection |
+| PROG-003 | SCN-002 | Every drafted child remains independently reviewable and implementation-blocked until approval. | Registry and README inspection |
 | PROG-004 | SCN-003 | Umbrella approval cannot satisfy child implementation authorization. | Lifecycle and approval inspection |
 | PROG-005, PROG-006 | FIX-GUARDRAILS, SCN-005 | Children conform or the queue stops for an amendment. | Child review |
 | PROG-007, PROG-009, PROG-014 | FIX-CHILD-CHECKLIST | Child packet is complete, narrow, and traceable. | Checklist review |
-| PROG-008, PROG-016 | SCN-006 | Audit is approved before deletion planning, and existing PLCs remain unchanged meanwhile. | Registry and Git diff inspection |
+| PROG-008, PROG-016 | SCN-006 | Audit is approved before destructive implementation, and existing PLCs remain unchanged meanwhile. | Registry and Git diff inspection |
 | PROG-010, PROG-011 | SCN-004 | Folder and status transitions match actual planning progress. | Path and README inspection |
 | PROG-012, PROG-013 | FIX-PROGRAM-REGISTRY | Required and future topics remain distinct and current. | Registry inspection |
 | PROG-015 | FIX-PROVIDER-CHECKLIST | Applicable provider concerns have explicit decisions and tests. | Provider child review |
@@ -53,7 +53,7 @@ A required child cannot be approved until all applicable checks pass:
 - [ ] Migration, rollout, rollback, and cleanup are explicit.
 - [ ] Planning approval record is complete.
 - [ ] Relative links resolve and `git diff --check` passes.
-- [ ] No production implementation or second child packet is included.
+- [ ] No production implementation is included or authorized by the child.
 
 ## Provider Child Checklist
 
@@ -76,8 +76,8 @@ Tagger, and future popularity-source packets:
 
 | ID | Scenario | Expected result |
 | --- | --- | --- |
-| SCN-001 | An agent proposes two new child directories in one session. | Review blocks the change until it contains only one new child. |
-| SCN-002 | The next child is requested while the current child is Draft or Changes requested. | The next child is not drafted; review work continues on the current child. |
+| SCN-001 | An agent begins a later child while the current packet is incomplete or unvalidated. | Later drafting stops until the current five-file packet passes its documentation checks. |
+| SCN-002 | All children are drafted but have not been reviewed. | They remain separate `planned` packets with implementation authorization set to `No`. |
 | SCN-003 | An implementer cites only the approved umbrella. | Production edits do not begin; the applicable child approval and explicit authorization are required. |
 | SCN-004 | Child 1 drafting begins while the umbrella remains under `planned/`. | The umbrella moves to `in-progress/` in the same change and records the active child. |
 | SCN-005 | A child requires a different operation mode or product boundary. | The queue is blocked pending an umbrella amendment and affected-child review. |
@@ -106,5 +106,5 @@ payload baselines.
 - Resolve every relative Markdown link.
 - Compare child slugs and order across README and IMPLEMENTATION_PLAN.
 - Run `git diff --check`.
-- Inspect the diff to confirm that only documentation changed and no child PLC
-  was created with this umbrella.
+- Inspect the diff to confirm that only umbrella/index documentation and the ten
+  required child packets changed; no production implementation is present.

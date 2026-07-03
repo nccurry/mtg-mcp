@@ -1,5 +1,15 @@
 # Stats Lab Interaction Readiness PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: superseded/post-cutover experimental — do not implement
+> before `0.9.0`.** Stable statistics are exact and exclude sequencing; this
+> packet extends a removed heuristic simulator and depends on superseded card-
+> snapshot and land-classifier mechanisms. Preserve only the disjoint failure
+> taxonomy and access-versus-sequencing distinction for a future
+> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> PLC. Reviewed against the rewrite on 2026-07-03; lifecycle movement is
+> deferred to authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +17,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: post-cutover reference; implementation retired
 
 ## Summary
 
@@ -52,7 +62,7 @@ None.
 
 ## Implementation Checklist
 
-- [ ] Packet moved to docs/llms/plcs/in-progress/stats-lab-interaction-readiness/.
+- [x] Independent lifecycle move retired; packet remains post-cutover reference pending foundation reconciliation.
 - [ ] Current phase named.
 - [ ] SRD/SADD updated for metric policy changes.
 - [ ] Validation/calibration evidence recorded.
@@ -68,4 +78,8 @@ None.
 
 ## Completion Notes
 
-Implementation and calibration evidence will be recorded before completion.
+Do not move this packet to `in-progress`. A future feasibility packet must
+re-establish any needed experimental snapshot/source model and sequencing
+kernel. Recommendation-score propagation remains excluded unless a separate
+experimental decision-model PLC explicitly approves it; legacy `0.9` key
+compatibility does not constrain the clean rewrite.

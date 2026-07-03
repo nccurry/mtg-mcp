@@ -1,5 +1,10 @@
 # Provider Evidence Workflows Implementation Plan
 
+> [!CAUTION]
+> Historical reference only. Do not execute this broad legacy plan. Provider
+> implementation is decomposed across the rewrite children linked from
+> README.md; popularity/tournament sources require a future post-cutover PLC.
+
 ## Preconditions
 
 - Move this packet to `in-progress`.

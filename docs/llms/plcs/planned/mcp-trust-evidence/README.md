@@ -1,5 +1,16 @@
 # MCP Trust Evidence PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: absorbed/reference-only — do not implement this packet.**
+> Its durable evidence-vocabulary ideas are owned by
+> [rewrite foundation](../rewrite-skeleton-foundation/README.md),
+> [Scryfall snapshots](../scryfall-evidence-snapshots/README.md),
+> [exact statistics](../exact-deck-statistics/README.md), and
+> [Tagger cache](../scryfall-tagger-cache/README.md). Legacy legality,
+> recommendation, bracket, role, and scoring work is not part of the stable
+> rewrite. Reviewed against the rewrite on 2026-07-03; lifecycle movement is
+> deferred to authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +18,7 @@
 - Owner: mtg-mcp
 - Created: 2026-06-28
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: implementation retired; reference evidence only
 
 ## Summary
 
@@ -26,6 +37,22 @@ Goldfish-specific summary and detail behavior is now owned by
 continues to own the shared REQ-005 evidence vocabulary; its general additive
 compatibility policy does not override compatibility decisions made by the six
 Jasmine analysis repair packets.
+
+## Rewrite Evidence Vocabulary Mapping
+
+| Legacy REQ-005 wire value | Rewrite owner/case |
+| --- | --- |
+| `source_fact` | Foundation `EvidenceDescriptor.SourceFact` |
+| `source_evidence` | Foundation `EvidenceDescriptor.SourceEvidence` |
+| `derived_math` | Foundation `EvidenceDescriptor.ExactDerivation` |
+| `parser_derived` | Foundation `EvidenceDescriptor.ParserClassification` |
+| `heuristic_inference` | Foundation `EvidenceDescriptor.HeuristicEstimate`, visibly non-factual |
+| `model_score` | No stable equivalent; removed with blended/advisor scores |
+| `unsupported` | Moved from evidence tier to `OperationResult.Unsupported` |
+| No legacy equivalent | Foundation adds `EvidenceDescriptor.SampledEstimate` for explicitly experimental sampled work |
+
+This mapping preserves the reasoning, not the legacy enum or wire schema. No
+implementation should reconcile the rewrite back to the older vocabulary.
 
 ## Packet Contents
 
@@ -85,7 +112,12 @@ or live-test requirements are intended by the first implementation slice.
 
 ## Implementation Checklist
 
-- [ ] Packet moved to `docs/llms/plcs/in-progress/mcp-trust-evidence/`.
+- [x] Independent legacy implementation retired by the rewrite disposition.
+- Reactivation requires an explicit umbrella amendment and repository-owner
+  authorization before any lifecycle move or implementation.
+
+- [x] Independent lifecycle move retired; packet remains reference-only pending
+      authorized foundation reconciliation.
 - [ ] Current phase is named before code changes start.
 - [ ] SRD/SADD updated when implementation changes the plan.
 - [ ] Validation evidence recorded as phases complete.
@@ -103,6 +135,6 @@ or live-test requirements are intended by the first implementation slice.
 
 ## Completion Notes
 
-This PLC remains planned. Move it to `in-progress` only when implementation
-starts, and move it to `completed` after validation is recorded or the packet is
-explicitly superseded or abandoned.
+This PLC remains in the planned folder only as reference evidence. Do not move
+it to `in-progress`; authorized foundation reconciliation may later move or
+archive it without implementing the retired phases.

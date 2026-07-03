@@ -1,5 +1,11 @@
 # MCP Trust Evidence Implementation Plan
 
+> [!CAUTION]
+> Historical plan only. The evidence model has been absorbed into the
+> evidence-first rewrite children linked from README.md. Do not execute these
+> phases on legacy `main` without explicit repository-owner reactivation and an
+> umbrella amendment.
+
 Use this document to define the order of work: which requirements are solved
 first, second, third, and what evidence proves each phase is complete.
 

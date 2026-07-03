@@ -6,30 +6,43 @@ still being shaped.
 Agents may update packets in this folder, but should not treat a planned PLC as
 permission to start implementation unless the user asks for implementation.
 
-## Evidence-First Rewrite Program
+## Evidence-First Rewrite Children
+
+These ten Draft packets are independently reviewable. Their existence does not
+authorize implementation; the governing program remains
+[in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | Planned | Govern the one-at-a-time authoring and independent review of the clean-rewrite child PLCs. |
+| [legacy-surface-audit-and-disposition](legacy-surface-audit-and-disposition/README.md) | Draft | Audit and classify the legacy product surface and reusable evidence. |
+| [rewrite-skeleton-foundation](rewrite-skeleton-foundation/README.md) | Draft | Define the clean repository skeleton, modes, evidence contracts, and minimal host. |
+| [local-deck-store](local-deck-store/README.md) | Draft | Define the format-neutral deck domain, revisioned SQLite store, and local tools. |
+| [manual-deck-interchange](manual-deck-interchange/README.md) | Draft | Define lossless native and explicit provider-compatible manual artifacts. |
+| [scryfall-evidence-snapshots](scryfall-evidence-snapshots/README.md) | Draft | Define immutable snapshots of official Scryfall reads and rich source objects. |
+| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft | Define essential Archidekt reads, mutations, conflict-safe synchronization, and cleanup. |
+| [playgroup-public-api](playgroup-public-api/README.md) | Draft | Define typed coverage of the pinned official Playgroup public API. |
+| [exact-deck-statistics](exact-deck-statistics/README.md) | Draft | Define exact provider-independent deck probability and composition calculations. |
+| [scryfall-tagger-cache](scryfall-tagger-cache/README.md) | Draft | Define deterministic cached Tagger evidence and bounded explicit acquisition. |
+| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
 
 ## Product Foundation Follow-ups
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [mcp-trust-evidence](mcp-trust-evidence/README.md) | Planned | Make source, derived, heuristic, and unknown evidence explicit. |
-| [configurable-decision-models](configurable-decision-models/README.md) | Planned | Add bounded, versioned, replayable policy configuration without a general rules engine. |
-| [provider-evidence-workflows](provider-evidence-workflows/README.md) | Planned | Standardize provider provenance and safety while preserving distinct source populations. |
+| [mcp-trust-evidence](mcp-trust-evidence/README.md) | Absorbed/reference-only | Evidence vocabulary rationale is owned by rewrite foundation/provider/statistics children; do not implement independently. |
+| [configurable-decision-models](configurable-decision-models/README.md) | Post-cutover reference | Seed for a future experimental feasibility PLC; not stable `0.9.0` scope. |
+| [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by Scryfall, Archidekt, Playgroup, and Tagger children. |
 
 ## Jasmine Analysis Repair Packets
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [card-snapshot-integrity](card-snapshot-integrity/README.md) | Planned | Persist trustworthy root/face coverage and make provider hydration failure-safe. |
-| [deck-count-contracts](deck-count-contracts/README.md) | Planned | Add one canonical count partition without breaking legacy count/role fields. |
-| [land-entry-classification](land-entry-classification/README.md) | Planned | Correct shared conditional tapped-land classification. |
-| [simulation-profile-evidence](simulation-profile-evidence/README.md) | Planned | Correct primary-category evidence, tag deduplication, routes, and ties. |
-| [stats-lab-interaction-readiness](stats-lab-interaction-readiness/README.md) | Planned | Add pre-spend interaction access metrics while preserving 0.9 keys. |
-| [conservative-goldfish-v2](conservative-goldfish-v2/README.md) | Planned | Replace optimistic goldfish paths atomically with one conservative kernel. |
+| [card-snapshot-integrity](card-snapshot-integrity/README.md) | Superseded/reference-only | Known-empty/unknown and root/face principles are absorbed by local deck and Scryfall children. |
+| [deck-count-contracts](deck-count-contracts/README.md) | Superseded/reference-only | Zone-based storage and exact summaries remove the category-count root cause. |
+| [land-entry-classification](land-entry-classification/README.md) | Reference-only | Exact statistics uses caller-supplied source masks and does not parse oracle text. |
+| [simulation-profile-evidence](simulation-profile-evidence/README.md) | Post-cutover reference | Fixture input for future simulation feasibility; not stable scope. |
+| [stats-lab-interaction-readiness](stats-lab-interaction-readiness/README.md) | Post-cutover reference | Heuristic sequencing taxonomy is deferred to future simulation feasibility. |
+| [conservative-goldfish-v2](conservative-goldfish-v2/README.md) | Post-cutover design seed | Conservative kernel design may follow, but cannot precede, feasibility approval. |
 
 See the [Jasmine analysis repair roadmap](../../plans/jasmine-analysis-repair-roadmap.md)
 for finding ownership, dependencies, compatibility, and shared fixture policy.

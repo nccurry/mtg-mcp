@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner and designated child PLC reviewers
@@ -15,6 +15,7 @@
 | Date | Author | Summary of change |
 | --- | --- | --- |
 | 2026-07-03 | Codex | Initial umbrella program design. |
+| 2026-07-03 | Codex | Applied AMEND-001 for sequential drafting in one planning run. |
 
 ## Executive Summary
 
@@ -24,10 +25,10 @@ guardrails, registry state, authoring order, approval protocol, and amendments.
 Each child owns one topic's detailed requirements, architecture, interfaces,
 fixtures, and implementation phases.
 
-The central constraint is that planning must remain reviewable across agent
-sessions. Consequently, the durable Markdown registry and approval records are
-the source of truth; conversation history is not. A monolithic rewrite PLC and
-up-front generation of all child packets are both rejected.
+The central constraint is that planning must remain independently reviewable.
+Consequently, the durable Markdown registry and approval records are the source
+of truth; conversation history is not. A monolithic rewrite PLC and overlapping
+or parallel child drafting are both rejected.
 
 ## Goals, Non-Goals, And Design Drivers
 
@@ -66,9 +67,8 @@ future audit and do not become dependencies merely because their topics overlap.
 ## Constraints
 
 - Follow the repository PLC template and lifecycle guidance.
-- Create no more than one new child packet per agent session.
-- Follow the exact queue even when a later child has fewer technical
-  dependencies.
+- Complete and validate one child packet before drafting the next.
+- Follow the exact queue even when a later child has fewer technical dependencies.
 - Keep the umbrella at `planned` until child 1 drafting begins.
 - Do not equate child planning approval with implementation authorization.
 - Use documentation-only validation for this umbrella.
@@ -79,9 +79,9 @@ future audit and do not become dependencies merely because their topics overlap.
 | Option | Summary | Strengths | Weaknesses | Decision |
 | --- | --- | --- | --- | --- |
 | Monolithic rewrite PLC | Put every capability and cutover decision in one packet. | One index and one review. | Oversized sessions, coupled review, hidden assumptions, and high drift risk. | Rejected |
-| Generate all children immediately | Create ten packets from the current research in one change. | Fast initial decomposition. | Violates focused review and propagates unreviewed assumptions. | Rejected |
+| Generate children in parallel | Create ten packets from the current research concurrently. | Fast initial decomposition. | Encourages conflicting contracts and incomplete cross-topic handoff. | Rejected |
 | Ordinary plans without an umbrella | Create plans ad hoc as work begins. | Minimal process. | No shared guardrails, queue, approval protocol, or program completion state. | Rejected |
-| Umbrella plus sequential sibling PLCs | Keep shared decisions central and author one independently reviewed child at a time. | Durable boundaries, focused review, and explicit dependencies. | More review checkpoints and documentation updates. | Chosen |
+| Umbrella plus sequential sibling PLCs | Keep shared decisions central and finish one independently reviewable child before drafting the next. | Durable boundaries, focused validation, and explicit dependencies. | More documentation and later per-child reviews. | Chosen |
 
 ## Chosen Design
 
@@ -114,10 +114,11 @@ implementation plan, and fixture matrix. The fixed authoring order is:
 9. `scryfall-tagger-cache`
 10. `rewrite-stabilization-cutover`
 
-The first child is a docs-only audit. It creates the deletion and reuse
-allowlists consumed by the foundation child. The final child can be drafted
-after children 1 through 9 are approved, but its implementation remains gated
-on their implementations and validation.
+The first child is a docs-only audit. It creates the proposed deletion and reuse
+allowlists consumed by the foundation draft. Under AMEND-001, later packets may
+be drafted after their predecessors are complete and validated. Approval still
+gates implementation, and the final child implementation remains gated on all
+prerequisite implementations and validation.
 
 ### Minimum Child Charters
 
@@ -290,7 +291,7 @@ Lifecycle movement uses ordinary directory moves under `planned/`,
 | Umbrella README | Program summary, guardrails, registries, and status. | Program lifetime | Markdown index | SRD, SADD, implementation plan | Registry and link inspection |
 | Umbrella SRD | Testable authoring and governance requirements. | Program lifetime | Requirement IDs | Repository PLC guidance | Traceability review |
 | Umbrella SADD | Decomposition, state, amendment, and approval design. | Program lifetime | Planning protocol | SRD | Design review |
-| Umbrella implementation plan | One-child-per-session queue and exit criteria. | Until all children approved | Authoring phases | Registry and approvals | Phase-status inspection |
+| Umbrella implementation plan | Sequential packet queue and exit criteria. | Until all children approved | Authoring phases | Registry and approvals | Phase-status inspection |
 | Umbrella fixtures | Review artifacts and acceptance scenarios. | Program lifetime | Checklists | SRD requirements | Acceptance-matrix review |
 | Child PLC | One topic's decision-complete implementation plan. | Independent lifecycle | Standard five-file packet | Approved prerequisites | Child-specific review |
 
@@ -299,12 +300,12 @@ Lifecycle movement uses ordinary directory moves under `planned/`,
 The planning workflow is:
 
 1. Review and approve the umbrella packet.
-2. In a new agent session, move the umbrella to `in-progress/` and draft child 1.
-3. Validate only that child and update the umbrella registry.
-4. Review the child; record approval or requested changes.
-5. If approved, begin the next child in a later agent session.
-6. If a guardrail conflict appears, stop and process an umbrella amendment.
-7. Repeat through child 10.
+2. Move the umbrella to `in-progress/` and draft child 1.
+3. Validate that child's five-file packet and update the umbrella registry.
+4. Draft the next child only after the preceding draft is complete and validated.
+5. If a guardrail conflict appears, stop and process an umbrella amendment.
+6. Repeat through child 10, leaving every child in `planned` and unimplemented.
+7. Review each child independently and record approval or requested changes.
 8. Move the umbrella to `completed/` after all ten approvals are recorded.
 
 Child implementation may happen in separately authorized sessions. It does not
@@ -336,9 +337,9 @@ child-session verification.
 
 | Failure | Program response |
 | --- | --- |
-| A child is not decision-complete. | Record changes requested; do not draft the next child. |
+| A child draft is incomplete or unvalidated. | Complete its packet checks before drafting the next child. |
 | A child conflicts with a guardrail. | Block the queue and process an umbrella amendment. |
-| Two children are drafted in one session. | Reject or split the change before review. |
+| Two child drafts overlap or are developed in parallel. | Stop later drafting until the earlier packet is complete and validated. |
 | A child starts implementation while planned. | Stop production edits and restore the lifecycle/authorization boundary. |
 | Existing PLC disposition is unclear. | Leave it unchanged and resolve it in the audit child. |
 | An external provider fact may be stale. | Re-verify it in the provider child; do not promote it to a guardrail. |

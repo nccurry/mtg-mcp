@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner and designated child PLC reviewers
@@ -15,6 +15,7 @@
 | Date | Author | Summary of change |
 | --- | --- | --- |
 | 2026-07-03 | Codex | Initial umbrella program draft. |
+| 2026-07-03 | Codex | Applied AMEND-001 and recorded sequential drafting of all ten children without implementation. |
 
 ## Executive Summary
 
@@ -53,8 +54,8 @@ It does not define detailed child APIs and does not authorize production code.
 
 | Outcome | Success signal | Notes |
 | --- | --- | --- |
-| Focused planning | A review change introduces no more than one new child packet. | The umbrella packet itself is not a child. |
-| Independent review | Every child README records approval before the next child is drafted. | Approval is planning approval, not code authorization. |
+| Focused planning | Each child packet covers exactly one queue topic and is completed before the next draft. | One planning run may contain multiple sequentially completed packets. |
+| Independent review | Every child has its own approval record and can be reviewed without approving another child. | Approval is planning approval, not code authorization. |
 | Stable direction | Every child repeats or links the inherited guardrails and declares no conflict. | Conflicts require an umbrella amendment. |
 | Traceable decomposition | Ten required topics have distinct packets, dependencies, and acceptance criteria. | Post-cutover topics remain registered only. |
 | Safe implementation boundary | No production edit cites the umbrella alone as authorization. | The applicable child must be approved and explicitly activated. |
@@ -73,8 +74,8 @@ surfaces remain unchanged until later, explicitly authorized implementation.
   instructions remain the implementation source of truth.
 - The audit child is the source of truth for legacy deletion and reuse; this
   umbrella records suspected areas but does not pre-approve deletions.
-- One agent session may update this umbrella while drafting a child, but may
-  create no more than one new child packet.
+- One planning run may draft multiple children only in registry order and only
+  after the preceding packet is complete and structurally validated.
 - A child must use the standard five-file PLC shape and remain in `planned/`
   until separately authorized implementation begins.
 - Existing planned PLCs are not automatically completed, superseded, or
@@ -85,7 +86,7 @@ surfaces remain unchanged until later, explicitly authorized implementation.
 
 | ID | Actor and trigger | Expected outcome |
 | --- | --- | --- |
-| CASE-001 | An agent is asked to start the rewrite planning program. | The agent drafts only `legacy-surface-audit-and-disposition` and updates the umbrella registry. |
+| CASE-001 | An agent is asked to draft the rewrite planning queue. | The agent completes and validates children sequentially and updates the umbrella registry without implementing them. |
 | CASE-002 | A reviewer finishes reviewing a child. | The child records approved or changes-requested state with reviewer, date, and reviewed revision. |
 | CASE-003 | A child discovers a conflict with a shared guardrail. | Planning pauses until an umbrella amendment is reviewed. |
 | CASE-004 | An implementer is asked to build a child capability. | The implementer verifies that child approval and implementation authorization exist; the umbrella alone is insufficient. |
@@ -101,8 +102,8 @@ surfaces remain unchanged until later, explicitly authorized implementation.
   publishing, and runtime verification.
 - Compatibility target: current PLC lifecycle conventions and Markdown
   documentation tooling.
-- Explicit non-goal: producing all child packets in this change or in one
-  future agent session.
+- Explicit non-goal: treating the existence of all child drafts as review,
+  implementation authorization, or rewrite completion.
 
 ## Stakeholders And Affected Systems
 
@@ -116,13 +117,13 @@ services, generated artifacts, local databases, or production assemblies.
 | ID | Priority | Type | Requirement | Rationale | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
 | PROG-001 | Must | Functional | The program shall define exactly ten required child PLCs in the approved order. | Each stable topic needs isolated ownership. | README and implementation plan list the same ten slugs and order. |
-| PROG-002 | Must | Process | An agent session shall draft no more than one new child PLC. | Keeps each session and review focused. | A child-authoring change contains at most one newly created child directory. |
-| PROG-003 | Must | Process | A child shall be reviewed and approved before the next child is drafted. | Prevents unstable decisions from cascading. | The preceding child README has a completed approval record before the next directory is created. |
+| PROG-002 | Must | Process | Required child PLCs shall be drafted sequentially, with one packet completed and validated before drafting the next. | Prevents parallel drafts from diverging on shared contracts. | Creation history and validation evidence show registry order and no overlapping incomplete drafts. |
+| PROG-003 | Must | Process | Every child shall remain independently reviewable and shall require approval before implementation. | Drafting completeness is not implementation authority. | Each child has its own approval record and remains `planned` until separately activated. |
 | PROG-004 | Must | Safety | The umbrella shall not authorize production implementation. | Planning approval and mutation authority are different. | Every program document states this boundary; implementation requires the applicable child to be activated. |
 | PROG-005 | Must | Architecture | Every child shall inherit the program guardrails or identify an approved umbrella amendment. | Cross-cutting contracts must remain consistent. | Each child README contains a guardrail-conformance section with no unresolved conflict. |
 | PROG-006 | Must | Governance | A guardrail change shall be reviewed as an umbrella amendment before dependent child authoring continues. | Prevents silent cross-topic scope changes. | Registry is marked blocked and no later child is drafted until the amendment is accepted. |
 | PROG-007 | Must | Documentation | Every child shall use the standard five-file PLC packet shape. | Keeps review and implementation handoff predictable. | README, SRD, SADD, IMPLEMENTATION_PLAN, and FIXTURES exist and contain no template placeholders. |
-| PROG-008 | Must | Audit | The legacy audit child shall be approved before any destructive rewrite plan or implementation. | Deletion and reuse need evidence. | Child 1 contains inventories and allowlists and is approved before child 2 is drafted. |
+| PROG-008 | Must | Audit | The legacy audit child shall be approved before destructive rewrite implementation begins. | Deletion and reuse need reviewed evidence. | Child 1 contains inventories and allowlists and is approved before foundation implementation is authorized. |
 | PROG-009 | Must | Review | Every child shall contain the review-gate content defined by this program. | A narrow packet still needs complete decisions and validation. | The acceptance checklist in FIXTURES passes for the child. |
 | PROG-010 | Must | Lifecycle | Child packets shall remain `planned` until their own implementation is explicitly authorized. | Umbrella progress must not imply code authorization. | Lifecycle paths and README states agree. |
 | PROG-011 | Must | Lifecycle | The umbrella shall move to `in-progress` when child 1 is first drafted and to `completed` only after all ten children are approved. | Program state must describe planning progress accurately. | Folder, README status, registry, and validation evidence agree at each transition. |
@@ -150,7 +151,7 @@ The required child approval record is defined in
 
 | Attribute | Scenario | Measure |
 | --- | --- | --- |
-| Focus | A child is drafted. | The change creates exactly one child directory. |
+| Focus | A child is drafted. | Its five-file packet is complete and validated before the next child begins. |
 | Traceability | A reviewer inspects a Must requirement. | It maps to design and validation in that child. |
 | Consistency | A shared decision is used by multiple children. | Its authoritative wording remains in the umbrella and children link or conform to it. |
 | Safety | A provider child is reviewed. | Provider safety fields are complete before approval. |
@@ -162,14 +163,14 @@ The required child approval record is defined in
 | Phase | Goal | Included requirements | Exit criteria |
 | --- | --- | --- | --- |
 | Umbrella review | Approve program rules. | PROG-001 through PROG-016 | Packet review and docs validation pass. |
-| Child authoring | Draft and approve one child per session in registry order. | PROG-001 through PROG-015 | Current child approval is recorded before the next begins. |
+| Child authoring | Draft one complete packet at a time in registry order. | PROG-001 through PROG-015 | Each draft is structurally validated before the next begins; approvals remain independent. |
 | Program closure | Close planning decomposition. | PROG-011 through PROG-014 | All ten children are approved and umbrella completion evidence is recorded. |
 
 ## Traceability
 
 | Requirement | Design section | Validation method | Evidence target |
 | --- | --- | --- | --- |
-| PROG-001, PROG-002, PROG-003 | SADD: Child packet decomposition; runtime flow | Document inspection and Git diff review | FIX-PROGRAM-REGISTRY, SCN-001, SCN-002 |
+| PROG-001, PROG-002, PROG-003 | SADD: Child packet decomposition; planning flow | Document inspection and registry review | FIX-PROGRAM-REGISTRY, SCN-001, SCN-002 |
 | PROG-004, PROG-010, PROG-011 | SADD: Planning boundary; lifecycle | Path and status inspection | SCN-003, SCN-004 |
 | PROG-005, PROG-006 | SADD: Guardrail amendments | Child conformance and amendment review | FIX-GUARDRAILS, SCN-005 |
 | PROG-007, PROG-009, PROG-014 | SADD: Child packet contract | Packet checklist and traceability review | FIX-CHILD-CHECKLIST |
@@ -184,7 +185,7 @@ The required child approval record is defined in
 | Child authoring may expose a guardrail conflict. | Risk | Later packets could inherit a faulty constraint. | Child author and repository owner | Pause the queue and review an umbrella amendment. |
 | Existing PLCs may overlap rewrite topics. | Risk | Competing plans could confuse implementation. | Audit child owner | Classify each existing packet without moving it prematurely. |
 | Provider contracts may change before their child is drafted. | Assumption | Previously gathered research may be stale. | Provider child owner | Re-verify official and permission-sensitive contracts during that child session. |
-| Git history may not map perfectly to agent sessions. | Risk | One-child-per-session compliance could be unclear. | Program owner | Record the authoring session date and scope in each child revision history and inspect the creation diff. |
+| A long planning run may blur packet boundaries. | Risk | Reviewers could mistake one change for one approval unit. | Program owner | Preserve separate directories, approval records, requirements, and validation for every child. |
 
 ## Validation
 

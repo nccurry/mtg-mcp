@@ -1,5 +1,16 @@
 # Simulation Profile Evidence PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: superseded/post-cutover experimental — do not implement
+> before `0.9.0`.** Automatic simulation-profile selection and its legacy base
+> are absent from the stable rewrite. A future
+> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> PLC must absorb this packet with `configurable-decision-models`,
+> `stats-lab-interaction-readiness`, and `conservative-goldfish-v2`. Retain only
+> the per-family deduplication, stable tie, and no-invented-routes fixtures.
+> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
+> authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +18,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: post-cutover reference; implementation retired
 
 ## Summary
 
@@ -52,7 +63,7 @@ None.
 
 ## Implementation Checklist
 
-- [ ] Packet moved to docs/llms/plcs/in-progress/simulation-profile-evidence/.
+- [x] Independent lifecycle move retired; packet remains post-cutover reference pending foundation reconciliation.
 - [ ] Current phase named.
 - [ ] SRD/SADD updated for any selection-policy change.
 - [ ] Validation evidence recorded.
@@ -68,4 +79,7 @@ None.
 
 ## Completion Notes
 
-Implementation evidence will be added before completion.
+Do not move this packet to `in-progress`. If simulation feasibility is later
+approved, use the rewrite's shared evidence descriptor rather than introducing
+a profile-only `evidenceKind`, and require removal of built-in speculative route
+claims before exposing any experimental profile output.

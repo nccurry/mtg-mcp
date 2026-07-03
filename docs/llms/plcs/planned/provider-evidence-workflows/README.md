@@ -1,5 +1,17 @@
 # Provider Evidence Workflows PLC Packet
 
+> [!WARNING]
+> **Rewrite disposition: absorbed/reference-only — do not implement this packet
+> as a cross-provider layer.** Current owners are
+> [Scryfall snapshots](../scryfall-evidence-snapshots/README.md),
+> [Archidekt sync](../archidekt-deck-sync/README.md),
+> [Playgroup public API](../playgroup-public-api/README.md), and
+> [Tagger cache](../scryfall-tagger-cache/README.md). Popularity/tournament
+> sources remain in the program's
+> [post-cutover registry](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry).
+> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
+> authorized foundation implementation.
+
 ## Lifecycle
 
 - Status: Planned
@@ -7,7 +19,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: planning
+- Current phase: implementation retired; principles absorbed by provider children
 
 ## Summary
 
@@ -31,6 +43,21 @@ meaning and ownership of each distinct dataset.
 | Treat Playgroup observations separately from local-meta scoring. | Proposed | Observations are evidence; scoring is a heuristic model. |
 | Keep Archidekt mutation apply-only and checkpoint-aware. | Accepted | Remote deck changes require explicit authority and recovery. |
 | Prohibit scraping and undocumented claims. | Accepted | Provider workflows must use supported access and attributable fields. |
+
+## Rewrite Reconciliation
+
+| Legacy principle | Rewrite disposition |
+| --- | --- |
+| Adapter-owned wire contracts and non-blended source populations | Retained by every provider child. |
+| `plan`/`apply` operation modes | Superseded by `read-only`/`local`/`remote`; mode is mutation authority, not offline state. |
+| Archidekt apply/checkpoints | Superseded by explicit preview/apply, three-way baseline, fingerprints, and no checkpoint surface. |
+| PEW-010 blanket prohibition on scraping/undocumented access | Retained generally, with one narrow proposed Tagger exception: bounded explicit HTML/CSRF/GraphQL acquisition only if the Tagger packet's repository-owner risk record is accepted. |
+| EDHREC, TopDeck, EDHTop16, and other popularity/tournament providers | Deferred to `popularity-evidence-sources`; not stable `0.9.0` scope. |
+| Playgroup local-meta scoring | Removed; the official adapter returns provider-shaped observations only. |
+
+The Tagger exception does not weaken attribution, pacing, permission review,
+drift failure, or unsupported labeling. If its risk record is not accepted, the
+exception does not exist and cache-only Tagger reads remain separate.
 
 ## Project And Surface Impact
 
@@ -62,5 +89,5 @@ diagnostics, and source documentation. It must align with
 
 ## Completion Notes
 
-Move this packet to `in-progress` only after one provider-specific slice and
-its supported API contract are selected.
+Do not move this packet to `in-progress`. Provider work proceeds only through
+the owning rewrite child or a separately reviewed post-cutover PLC.
