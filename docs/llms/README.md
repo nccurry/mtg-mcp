@@ -13,6 +13,7 @@ configuration, `Taskfile.yml`, and [AGENTS.md](../../AGENTS.md).
 - [repo-operations.md](repo-operations.md): Task-based command policy.
 - [plans](plans/): durable ordinary implementation plans.
 - [plcs](plcs/): Plan-Led Change packets for larger work.
+- [templates](templates/): reusable ordinary-plan and multi-file PLC templates.
 
 ## Local Scratch
 

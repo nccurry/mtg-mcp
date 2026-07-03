@@ -123,6 +123,9 @@ public static class MtgMcpCli
         output.WriteLine("  auth archidekt  Write an Archidekt credentials file.");
         output.WriteLine("  auth playgroup  Write a Playgroup.gg credentials file.");
         output.WriteLine();
+        output.WriteLine("Safety:");
+        output.WriteLine("  The default operation mode is plan. Set MTGMCP__OPERATION_MODE=apply to enable mutation tools.");
+        output.WriteLine();
         output.WriteLine("Run 'mtg-mcp auth --help' for credential helper usage.");
     }
 

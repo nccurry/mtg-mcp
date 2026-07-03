@@ -570,18 +570,28 @@ public sealed class CommanderSpellbookComboCatalog : IComboCatalog
                 string? color = item.ValueKind == JsonValueKind.String
                     ? item.GetString()
                     : ReadString(item, "name");
-                if (!string.IsNullOrWhiteSpace(color))
-                {
-                    string normalized = color.Trim().ToUpperInvariant();
-                    if ("WUBRG".Contains(normalized, StringComparison.Ordinal) && !colors.Contains(normalized))
-                    {
-                        colors.Add(normalized);
-                    }
-                }
+                AddColorIdentity(colors, color);
             }
         }
 
         return colors;
+    }
+
+    /// <summary>
+    /// Adds one normalized Magic color symbol when it is valid and not already present.
+    /// </summary>
+    private static void AddColorIdentity(List<string> colors, string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return;
+        }
+
+        string normalized = color.Trim().ToUpperInvariant();
+        if ("WUBRG".Contains(normalized, StringComparison.Ordinal) && !colors.Contains(normalized))
+        {
+            colors.Add(normalized);
+        }
     }
 
     /// <summary>

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 
 namespace MtgMcp.Core.Tests;

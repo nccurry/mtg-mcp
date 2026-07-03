@@ -2,7 +2,6 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using MtgMcp.Archidekt;
-using MtgMcp.App;
 using MtgMcp.Core;
 using MtgMcp.Playgroup;
 
@@ -584,6 +583,7 @@ public sealed class CliTests
         output.ToString().Should().Contain("mtg-mcp [--smoke|--version]");
         output.ToString().Should().Contain("auth archidekt");
         output.ToString().Should().Contain("auth playgroup");
+        output.ToString().Should().Contain("default operation mode is plan");
         output.ToString().Should().NotContain("auth reddit");
         error.ToString().Should().BeEmpty();
     }
@@ -625,6 +625,7 @@ public sealed class CliTests
         output.ToString().Should().Contain("serverAssemblyPath:");
         output.ToString().Should().Contain("gitCommit:");
         output.ToString().Should().Contain("operationMode:");
+        output.ToString().Should().Contain("operationMode: plan");
         output.ToString().Should().Contain("mcpLoggingLevel:");
         error.ToString().Should().BeEmpty();
     }

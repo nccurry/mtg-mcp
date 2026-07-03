@@ -7,6 +7,10 @@
         <ModulePath>.*MtgMcp\.Core\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Scryfall\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Archidekt\.dll$</ModulePath>
+        <ModulePath>.*MtgMcp\.Moxfield\.dll$</ModulePath>
+        <ModulePath>.*MtgMcp\.Playgroup\.dll$</ModulePath>
+        <ModulePath>.*MtgMcp\.CommanderSpellbook\.dll$</ModulePath>
+        <ModulePath>.*MtgMcp\.Decklists\.dll$</ModulePath>
       </Include>
       <Exclude>
         <ModulePath>.*\.Tests\.dll$</ModulePath>

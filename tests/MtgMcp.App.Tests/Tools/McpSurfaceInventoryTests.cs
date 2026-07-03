@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Text;
 using FluentAssertions;
-using MtgMcp.App;
 using MtgMcp.Core;
 
 namespace MtgMcp.App.Tests;

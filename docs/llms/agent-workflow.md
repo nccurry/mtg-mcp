@@ -15,6 +15,7 @@
   project boundaries, changes public MCP shape, changes adapter contracts,
   affects persistence formats, or needs phased delivery.
 - Keep ignored `/plans/` for local scratch only.
+- Start durable plans and PLC packets from `docs/llms/templates/`.
 
 ## Editing
 

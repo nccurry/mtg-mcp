@@ -1,7 +1,5 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using MtgMcp.Core;
-using static MtgMcp.Core.MtgMcpJson;
 
 namespace MtgMcp.Archidekt;
 

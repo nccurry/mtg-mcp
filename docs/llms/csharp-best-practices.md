@@ -9,11 +9,16 @@
 - Use modern C# features when they make code clearer, not just newer.
 - Prefer dependency-light Core logic. MCP host, persistence, network, provider,
   and file-system details belong at the edge.
+- Use unions for closed alternatives with case-specific payloads and handle them
+  exhaustively. Keep enums for simple categories and records for independent
+  state.
 
 ## Design
 
 - Prefer plain records, enums, small services, and existing helpers before
   adding abstractions.
+- Prefer guard clauses and shallow control flow. Extract a helper when it names
+  a real rule or responsibility, not merely to reduce line count.
 - Keep public contracts small, intention-revealing, and evidence-oriented.
 - Do not leak adapter-specific HTTP payloads, auth details, or host types into
   `MtgMcp.Core`.
@@ -28,6 +33,16 @@
   original context.
 - Avoid fire-and-forget work unless ownership, logging, and cancellation are
   explicit.
+
+## Comments
+
+- Add a useful XML summary to every named type and member, including private
+  members and tests.
+- Comment local functions and lambdas only when their intent or invariant is not
+  obvious.
+- Avoid summaries that merely restate a member name or type. Add parameter and
+  return tags only when they provide information the signature does not.
+- Use `<inheritdoc/>` for inherited contracts instead of copying text.
 
 ## Errors And Secrets
 
@@ -45,3 +60,5 @@
   timing in normal tests.
 - Use focused unit tests for Core logic and fixture-backed adapter tests when
   provider translation behavior matters.
+- Maintain at least 90 percent line coverage for every production assembly, but
+  treat coverage as evidence rather than a substitute for meaningful assertions.

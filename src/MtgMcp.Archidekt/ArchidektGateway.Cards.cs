@@ -146,36 +146,21 @@ public sealed partial class ArchidektGateway
         }
         catch (HttpRequestException exception)
         {
-            if (refreshOnFailure)
+            HttpRequestException? finalException = await RetryMutationBatchAfterRefreshAsync(
+                    deckId,
+                    batch,
+                    refreshOnFailure,
+                    exception,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (finalException is null)
             {
-                List<DeckCard> refreshedCards = GetUpsertedCards(batch);
-                if (refreshedCards.Count > 0)
-                {
-                    await ReReadDestinationStateAsync(deckId, refreshedCards, cancellationToken)
-                        .ConfigureAwait(false);
-                    await RefreshArchidektCardIdsAsync(refreshedCards, cancellationToken)
-                        .ConfigureAwait(false);
-
-                    try
-                    {
-                        using JsonDocument retryDocument = await SendMutationBatchAsync(
-                                deckId,
-                                batch,
-                                cancellationToken)
-                            .ConfigureAwait(false);
-                        ApplyDeckRelationIds(retryDocument.RootElement, refreshedCards);
-                        return;
-                    }
-                    catch (HttpRequestException retryException)
-                    {
-                        exception = retryException;
-                    }
-                }
+                return;
             }
 
             if (batch.Count <= 1)
             {
-                throw CreateCardMutationException(batch, exception);
+                throw CreateCardMutationException(batch, finalException);
             }
 
             List<DeckCard> upsertedCards = GetUpsertedCards(batch);
@@ -207,6 +192,43 @@ public sealed partial class ArchidektGateway
                     $"Archidekt rejected {failures.Count} card mutation rows after batch bisection.",
                     new AggregateException(failures));
             }
+        }
+    }
+
+    /// <summary>
+    /// Refreshes stale card identifiers and retries one failed mutation batch once.
+    /// </summary>
+    private async Task<HttpRequestException?> RetryMutationBatchAfterRefreshAsync(
+        string deckId,
+        IReadOnlyList<(DeckCard? UpsertedCard, Dictionary<string, object?> Payload)> batch,
+        bool refreshOnFailure,
+        HttpRequestException originalException,
+        CancellationToken cancellationToken)
+    {
+        if (!refreshOnFailure)
+        {
+            return originalException;
+        }
+
+        List<DeckCard> refreshedCards = GetUpsertedCards(batch);
+        if (refreshedCards.Count == 0)
+        {
+            return originalException;
+        }
+
+        await ReReadDestinationStateAsync(deckId, refreshedCards, cancellationToken).ConfigureAwait(false);
+        await RefreshArchidektCardIdsAsync(refreshedCards, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            using JsonDocument retryDocument = await SendMutationBatchAsync(deckId, batch, cancellationToken)
+                .ConfigureAwait(false);
+            ApplyDeckRelationIds(retryDocument.RootElement, refreshedCards);
+            return null;
+        }
+        catch (HttpRequestException retryException)
+        {
+            return retryException;
         }
     }
 
@@ -757,17 +779,14 @@ public sealed partial class ArchidektGateway
         {
             Dictionary<string, ArchidektCardIdCacheEntry> cache = await LoadCardIdCacheAsync(cancellationToken)
                 .ConfigureAwait(false);
+            ArchidektCardIdCacheEntry? found = null;
             foreach (string key in GetArchidektCardIdCacheKeys(card))
             {
                 if (cache.TryGetValue(key, out ArchidektCardIdCacheEntry? entry)
                     && !string.IsNullOrWhiteSpace(entry.ArchidektId))
                 {
-                    if (cardIdCacheNeedsSave)
-                    {
-                        await SaveCardIdCacheAsync(cache, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    return entry;
+                    found = entry;
+                    break;
                 }
             }
 
@@ -776,7 +795,7 @@ public sealed partial class ArchidektGateway
                 await SaveCardIdCacheAsync(cache, cancellationToken).ConfigureAwait(false);
             }
 
-            return null;
+            return found;
         }
         finally
         {

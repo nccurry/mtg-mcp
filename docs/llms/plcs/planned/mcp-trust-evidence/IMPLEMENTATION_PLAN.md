@@ -8,7 +8,7 @@ first, second, third, and what evidence proves each phase is complete.
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-06-28
+- Last updated: 2026-07-03
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -29,7 +29,7 @@ tool descriptions, annotations, or docs change.
 | Phase | Goal | Requirements | Code areas | Validation | Exit criteria | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Phase 1 | Consolidate tri-state legality. | REQ-001, REQ-002, REQ-012 | Core recommendation/query legality paths | Unit tests, call-site inspection, `task test` | Missing legality no longer silently means legal. | Planned |
-| Phase 2 | Preserve summary caveats. | REQ-003, REQ-008 | App simulation presenters | Presenter tests, surface inspection | Default comparison summary carries existing model label and assumption caveat. | Planned |
+| Phase 2 | Reserved after goldfish supersession. | REQ-003 | No trust-PLC code area | Reciprocal packet inspection | conservative-goldfish-v2 phase 4 owns summary, detail, and replacement schema. | Superseded |
 | Phase 3 | Correct Commander bracket 1-5 behavior. | REQ-004 | Core bracket metrics, calibration validators/corpus, docs | Unit/calibration tests | Bracket 5 can be emitted by explicit criteria without Phase 4 evidence fields. | Planned |
 | Phase 4 | Add minimal evidence tier vocabulary. | REQ-005 | Core evidence models, existing evidence carriers, App surface tests | Serialization tests, surface tests | Canonical tier strings exist and serialize. | Planned |
 | Phase 5 | Add lazy role/odds provenance. | REQ-006, REQ-007, REQ-008 | Existing role-count explanation rows, classifier/odds, App odds output | Unit tests, detail-level tests | Evidence rows are opt-in, structured, and detail-gated. | Planned |
@@ -66,20 +66,17 @@ tool descriptions, annotations, or docs change.
 
 ### Phase 2: Summary Caveat Preservation
 
-- Problems solved: default comparison summary simulation output can omit the
-  no-opponent/no-full-rules-engine assumption note even though model labels are
-  already present.
-- Included requirements: REQ-003, REQ-008.
-- Out of scope for this phase: per-card evidence rows, score component tables,
-  and classifier provenance.
-- Expected edits: App simulation presenters, especially goldfish summary
-  formatting.
-- Validation: default `deck_compare_goldfish` summary test verifies the existing
-  model label remains and assumption/caveat text is present; surface tests
-  updated if descriptions change.
-- Exit criteria: summary remains compact but no longer strips the key caveat.
-- Rollback or fallback: revert presenter output changes without touching Core.
-- Cleanup: remove any duplicated caveat text helpers introduced during edits.
+- Problems solved: ownership conflict between the old additive caveat proposal
+  and the atomic conservative goldfish replacement.
+- Included requirements: REQ-003, marked superseded.
+- Out of scope for this phase: all goldfish presenter and schema implementation.
+- Expected edits: none in this PLC; use
+  [conservative-goldfish-v2 phase 4](../conservative-goldfish-v2/IMPLEMENTATION_PLAN.md#phase-4-atomic-mcpdownstream-cutover-and-old-code-removal).
+- Validation: inspect reciprocal links and CGF-FIX-027 through CGF-FIX-033.
+- Exit criteria: no trust-PLC branch independently edits a goldfish presenter.
+- Rollback or fallback: if the goldfish packet is abandoned, reopen REQ-003
+  through an explicit PLC revision rather than silently restoring this phase.
+- Cleanup: none.
 
 ### Phase 3: Commander Bracket 1-5 Correction
 
@@ -116,7 +113,9 @@ tool descriptions, annotations, or docs change.
 - Validation: serialization tests for all tier strings; surface tests where
   tiers appear.
 - Exit criteria: tier vocabulary exists and is used by existing
-  evidence-bearing models or outputs touched by earlier phases.
+  evidence-bearing models or outputs touched by earlier phases. The Core type
+  is then available to conservative-goldfish-v2 phase 2; if goldfish must land
+  it first, both packets are updated in the same change.
 - Rollback or fallback: remove new tier fields from touched models.
 - Cleanup: replace local string constants with the shared vocabulary.
 

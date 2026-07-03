@@ -9,6 +9,10 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `tests/`.
 - Use fake HTTP, fixtures, temporary files, and in-memory repositories before live services.
 - Mark live network or real-provider tests with `Category=Live` so `task test` stays safe.
 - Avoid asserting implementation choreography when a behavior assertion is available.
+- Add useful XML summaries to test types, test methods, fixtures, and private
+  helpers without restating their names.
+- Treat 90 percent per-production-assembly line coverage as a floor, not a
+  substitute for failure, boundary, and edge-case coverage.
 
 ## Validation
 

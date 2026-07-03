@@ -3,7 +3,6 @@ using System.Text;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using MtgMcp.Core;
-using MtgMcp.Moxfield;
 
 namespace MtgMcp.Moxfield.Tests;
 
@@ -199,9 +198,154 @@ public sealed class MoxfieldGatewayTests
     }
 
     /// <summary>
+    /// Verifies alternate board, tag, snapshot, and finish shapes without provider network access.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_MapsLegacyBoardsAndAlternateFieldShapes()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "v3/decks/all/legacy",
+            """
+            {
+              "name": "Legacy Shapes",
+              "format": " Modern ",
+              "tags": [
+                { "id": "tag-one", "name": " First Tag " },
+                { "id": "", "name": "Ignored" }
+              ],
+              "authorTags": {
+                "Partner Card": [" Author Tag ", 5],
+                "Ignored": { "name": "not-an-array" }
+              },
+              "partners": [
+                {
+                  "quantity": 0,
+                  "printing": "etched",
+                  "cardTags": [
+                    { "id": "tag-one" },
+                    { "name": "Object Tag" },
+                    false
+                  ],
+                  "customTags": { "Direct Tag": true, "Skipped Tag": false },
+                  "card": {
+                    "id": "partner-id",
+                    "cardName": "Partner Card",
+                    "scryfallId": "partner-scryfall",
+                    "oracleId": "partner-oracle",
+                    "manaCost": "{1}{U}",
+                    "typeLine": "Legendary Creature",
+                    "manaValue": 2,
+                    "oracleText": "Partner",
+                    "loyalty": "3",
+                    "defense": "4",
+                    "color_identity": "U, W",
+                    "colorIdentity": ["B", null],
+                    "set_code": "tst",
+                    "collector_number": "7",
+                    "edhrecRank": 123,
+                    "scryfallUri": "https://scryfall.test/card",
+                    "prices": { "usd_foil": "2.50", "eur": "1.00" }
+                  }
+                }
+              ],
+              "companions": {
+                "cards": [
+                  { "quantity": 1, "finish": "normal", "card": { "name": "Companion Card" } }
+                ]
+              },
+              "signatureSpells": {
+                "spell": { "quantity": 1, "finish": "glossy", "card": { "name": "Signature Card" } }
+              },
+              "tokens": [
+                { "quantity": 1, "card": { "type_line": "Token" } }
+              ],
+              "schemes": 7
+            }
+            """);
+
+        DeckWorkspace workspace = await CreateGateway(handler).ImportDeckAsync(
+            "legacy",
+            TestContext.Current.CancellationToken);
+
+        workspace.Format.Should().Be("modern");
+        workspace.Warnings.Should().ContainSingle("*without a name*");
+        workspace.Categories.Should().Contain(category => category.Name == "Companion" && !category.IncludedInDeck);
+        workspace.Categories.Should().Contain(category => category.Name == "Signature Spells" && !category.IncludedInDeck);
+        DeckCard partner = workspace.Cards.Single(card => card.Name == "Partner Card");
+        partner.Quantity.Should().Be(1);
+        partner.PrimaryCategory.Should().Be(DeckRoles.Commander);
+        partner.Categories.Should().Contain(["First Tag", "Object Tag", "Direct Tag", "Author Tag"]);
+        partner.Modifier.Should().Be("Etched");
+        partner.ScryfallId.Should().Be("partner-scryfall");
+        partner.ScryfallOracleId.Should().Be("partner-oracle");
+        partner.Snapshot.ColorIdentity.Should().BeEquivalentTo(["U", "W", "B"]);
+        partner.Snapshot.Loyalty.Should().Be("3");
+        partner.Snapshot.Defense.Should().Be("4");
+        partner.Snapshot.Prices.Should().ContainKey("usd_foil").WhoseValue.Should().Be("2.50");
+        workspace.Cards.Single(card => card.Name == "Companion Card").Companion.Should().BeTrue();
+        workspace.Cards.Single(card => card.Name == "Signature Card").Modifier.Should().Be("glossy");
+    }
+
+    /// <summary>
+    /// Verifies invalid deck references fail before any HTTP request is sent.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_RejectsInvalidDeckReference()
+    {
+        RecordingHandler handler = new();
+        MoxfieldGateway gateway = CreateGateway(handler);
+
+        Func<Task> act = () => gateway.ImportDeckAsync("not a deck id", TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("deckIdOrUrl");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies common anonymous API statuses include their provider-specific guidance.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.TooManyRequests, "rate-limited")]
+    [InlineData(HttpStatusCode.NotFound, "private, deleted, or mistyped")]
+    [InlineData(HttpStatusCode.BadGateway, "502")]
+    public async Task ImportDeck_ReportsSanitizedHttpFailures(HttpStatusCode statusCode, string expected)
+    {
+        RecordingHandler handler = new();
+        handler.Get("v3/decks/all/failure", "provider detail", statusCode);
+
+        Func<Task> act = () => CreateGateway(handler).ImportDeckAsync(
+            "failure",
+            TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<HttpRequestException>().WithMessage($"*{expected}*");
+    }
+
+    /// <summary>
+    /// Verifies an unavailable curl fallback fails closed and preserves the sanitized HTTP error.
+    /// </summary>
+    [Fact]
+    public async Task ImportDeck_CurlFallbackUnavailable_PreservesHttpFailure()
+    {
+        RecordingHandler handler = new();
+        handler.Get("v3/decks/all/blocked", "blocked", HttpStatusCode.Forbidden);
+        MoxfieldGateway gateway = CreateGateway(
+            handler,
+            enableCurlFallback: true,
+            curlPath: "missing-mtg-mcp-curl-executable");
+
+        Func<Task> act = () => gateway.ImportDeckAsync("blocked", TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<HttpRequestException>().WithMessage("*403*Moxfield may have blocked*");
+    }
+
+    /// <summary>
     /// Creates a gateway with default test options.
     /// </summary>
-    private static MoxfieldGateway CreateGateway(RecordingHandler handler)
+    private static MoxfieldGateway CreateGateway(
+        RecordingHandler handler,
+        bool enableCurlFallback = false,
+        string? curlPath = null)
     {
         HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://moxfield.test/") };
         return new MoxfieldGateway(
@@ -210,7 +354,8 @@ public sealed class MoxfieldGatewayTests
             {
                 BaseAddress = new Uri("https://moxfield.test/"),
                 UserAgent = "mtg-mcp-test",
-                EnableCurlFallback = false,
+                EnableCurlFallback = enableCurlFallback,
+                CurlPath = curlPath ?? "curl",
             }));
     }
 

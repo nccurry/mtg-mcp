@@ -5,28 +5,164 @@ charset = utf-8
 end_of_line = lf
 insert_final_newline = true
 indent_style = space
-indent_size = 4
 trim_trailing_whitespace = true
-
-[*.{yml,yaml,json,md}]
-indent_size = 2
+max_line_length = 120
 
 [*.cs]
-csharp_style_namespace_declarations = file_scoped:suggestion
+indent_size = 4
+
+# Analyzer recommendations remain visible by default. Rules promoted below are
+# repository invariants and therefore fail the warnings-as-errors build.
+dotnet_analyzer_diagnostic.severity = suggestion
+
+# Keep imports and declarations predictable without changing the repository's
+# established unprefixed field naming convention.
+dotnet_separate_import_directive_groups = false
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = true
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+
+# Prefer explicit type names except where the constructed type is already clear.
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = false:warning
+csharp_style_var_elsewhere = false:warning
+dotnet_style_predefined_type_for_locals_parameters_members = true:warning
+dotnet_style_predefined_type_for_member_access = true:warning
+
+# Use concise modern expressions where they remain direct and scan-friendly.
+dotnet_style_object_initializer = true:warning
+dotnet_style_collection_initializer = true:warning
+dotnet_style_coalesce_expression = true:warning
+dotnet_style_null_propagation = true:warning
+dotnet_style_prefer_auto_properties = true:warning
+dotnet_style_prefer_compound_assignment = true:warning
+dotnet_style_prefer_inferred_anonymous_type_member_names = false:suggestion
+dotnet_style_prefer_inferred_tuple_names = false:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
+dotnet_style_readonly_field = true:warning
+csharp_style_deconstructed_variable_declaration = true:warning
+csharp_style_inlined_variable_declaration = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_prefer_null_check_over_type_check = true:warning
+csharp_style_prefer_pattern_matching = true:warning
+csharp_style_prefer_switch_expression = false:warning
+csharp_style_prefer_tuple_swap = true:warning
+csharp_style_throw_expression = true:warning
 csharp_style_prefer_method_group_conversion = true:suggestion
-dotnet_style_qualification_for_event = false:suggestion
-dotnet_style_qualification_for_field = false:suggestion
-dotnet_style_qualification_for_method = false:suggestion
-dotnet_style_qualification_for_property = false:suggestion
-dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
-dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
-dotnet_style_predefined_type_for_member_access = true:suggestion
+
+dotnet_style_qualification_for_event = false:warning
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_qualification_for_property = false:warning
+
+# Mainstream .NET formatting keeps braces and phases easy to scan.
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_switch_labels = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_else = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_open_brace = all
+csharp_new_line_between_query_expression_clauses = true
+csharp_space_after_cast = false
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_after_comma = true
+csharp_space_after_dot = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_around_declaration_statements = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_before_comma = false
+csharp_space_before_dot = false
+csharp_space_before_open_square_brackets = false
+csharp_space_before_semicolon_in_for_statement = false
+csharp_space_between_empty_square_brackets = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_space_between_square_brackets = false
+
+# StyleCop runs only its documentation family. Built-in formatting and code-style
+# rules own the other categories and avoid known modern-C# analyzer failures.
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.SpacingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.ReadabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.OrderingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.NamingRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.MaintainabilityRules.severity = none
+dotnet_analyzer_diagnostic.category-StyleCop.CSharp.LayoutRules.severity = none
+dotnet_diagnostic.SA1201.severity = none
+dotnet_diagnostic.SA1500.severity = none
+dotnet_diagnostic.SA1502.severity = none
+dotnet_diagnostic.SA1508.severity = none
+
+# Every named member requires useful XML documentation. The compiler covers the
+# public surface; SA1600 extends coverage to internal and private members.
+dotnet_diagnostic.SA1600.severity = error
+dotnet_diagnostic.CS1591.severity = error
+dotnet_diagnostic.SA1611.severity = none
+dotnet_diagnostic.SA1615.severity = none
+dotnet_diagnostic.SA1618.severity = none
+dotnet_diagnostic.SA1623.severity = none
+dotnet_diagnostic.SA1633.severity = none
+dotnet_diagnostic.SA1642.severity = none
+
+# Keep unused private code and deeply nested control flow as hard failures.
+dotnet_diagnostic.IDE0051.severity = error
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0044.severity = warning
+dotnet_diagnostic.IDE0060.severity = suggestion
+dotnet_diagnostic.S134.severity = error
+dotnet_diagnostic.S3776.severity = suggestion
+
+# Sonar's serialization and variable-shadow analyzers crash against the pinned
+# .NET 11 preview compiler model; focused tests cover the affected behavior.
+dotnet_diagnostic.S3925.severity = none
+dotnet_diagnostic.S1117.severity = none
+
+# These analyzer preferences conflict with deliberate repository conventions.
 dotnet_diagnostic.CA1031.severity = none
 dotnet_diagnostic.CA1707.severity = none
-dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1859.severity = none
-dotnet_diagnostic.IDE0005.severity = none
+dotnet_diagnostic.S3267.severity = none
+dotnet_diagnostic.S1751.severity = none
+dotnet_diagnostic.S6966.severity = none
+dotnet_diagnostic.S127.severity = none
+dotnet_diagnostic.MA0048.severity = none
+dotnet_diagnostic.MA0051.severity = none
+dotnet_diagnostic.RCS1194.severity = none
+dotnet_diagnostic.S3871.severity = none
+dotnet_diagnostic.S1118.severity = none
+dotnet_diagnostic.MA0004.severity = suggestion
+
+# Comparer and operator preferences are reviewed where identity semantics matter;
+# broad enforcement is noisy in assertions, URI handling, and protocol fixtures.
+dotnet_diagnostic.MA0002.severity = none
+dotnet_diagnostic.MA0006.severity = none
+
+# These Sonar rules misread collection expressions passed to params/assertion
+# overloads. The compiler and focused tests provide the relevant type safety.
+dotnet_diagnostic.S3220.severity = none
+dotnet_diagnostic.S3878.severity = none
+
+# Avoid low-value mechanical rewrites that obscure domain-focused changes.
 dotnet_diagnostic.IDE0017.severity = none
 dotnet_diagnostic.IDE0018.severity = none
 dotnet_diagnostic.IDE0028.severity = none
@@ -34,10 +170,8 @@ dotnet_diagnostic.IDE0031.severity = none
 dotnet_diagnostic.IDE0045.severity = none
 dotnet_diagnostic.IDE0046.severity = none
 dotnet_diagnostic.IDE0047.severity = none
-dotnet_diagnostic.IDE0051.severity = suggestion
 dotnet_diagnostic.IDE0052.severity = suggestion
 dotnet_diagnostic.IDE0059.severity = none
-dotnet_diagnostic.IDE0060.severity = none
 dotnet_diagnostic.IDE0075.severity = none
 dotnet_diagnostic.IDE0078.severity = none
 dotnet_diagnostic.IDE0100.severity = none
@@ -46,3 +180,9 @@ dotnet_diagnostic.IDE0161.severity = suggestion
 dotnet_diagnostic.IDE0290.severity = none
 dotnet_diagnostic.IDE0305.severity = none
 dotnet_diagnostic.IDE0330.severity = none
+
+[*.{csproj,props,targets,slnx,xml,json,yml,yaml,md}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

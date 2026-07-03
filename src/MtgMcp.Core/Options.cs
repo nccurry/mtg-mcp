@@ -14,9 +14,9 @@ public sealed class MtgMcpOptions
     public string DataDir { get; set; } = DefaultDataDir();
 
     /// <summary>
-    /// Gets or sets the operation mode.
+    /// Selects the server safety mode; plan is the least-privilege default.
     /// </summary>
-    public string OperationMode { get; set; } = "apply";
+    public string OperationMode { get; set; } = "plan";
 
     /// <summary>
     /// Gets or sets comma-separated MCP toolsets to advertise; blank keeps the compatibility profile.

@@ -21,6 +21,12 @@ Spellbook combos, and API-backed deckbuilding evidence.
 It is not affiliated with Hasbro, Wizards of the Coast, Magic: The Gathering,
 Scryfall, Moxfield, Archidekt, Playgroup.gg, or Commander Spellbook.
 
+## Project Direction
+
+- [North Star](docs/north-star.md): grounded evidence for LLM-assisted deckbuilding.
+- [Design Goals](docs/design-goals.md): architecture, testing, safety, and MCP principles.
+- [Heuristic Models](docs/heuristic-models.md): configurable estimates without building a Magic rules engine.
+
 ## Install
 
 ### NuGet .NET Tool
@@ -123,12 +129,16 @@ JSON MCP client example:
 }
 ```
 
-Set `MTGMCP__OPERATION_MODE` explicitly:
+The server defaults to `plan`. Set `MTGMCP__OPERATION_MODE` explicitly when a
+different safety boundary is required:
 
 - `read-only`: lookup and analysis only.
 - `plan`: lookup, analysis, metadata refresh, local collection writes, and saved edit plans.
 - `apply`: deck edits, checkpoints, and Archidekt writeback. Writeback still
   requires opening the Archidekt workspace with writeback enabled.
+
+Before this default changed, an unset mode enabled `apply`. Existing deployments
+that intentionally mutate decks must now set `MTGMCP__OPERATION_MODE=apply`.
 
 ## Features
 
@@ -274,7 +284,7 @@ each abbreviated suffix.
 
 | Setting | Use |
 | --- | --- |
-| `MTGMCP__OPERATION_MODE` | `read-only`, `plan`, or `apply`. Set explicitly; the app default is `apply`. |
+| `MTGMCP__OPERATION_MODE` | `read-only`, `plan`, or `apply`. The app default is `plan`; set `apply` explicitly to advertise mutation tools. |
 | `MTGMCP__TOOLSETS` | Optional comma-separated advertised toolsets. Blank keeps the compatibility profile and advertises all tools allowed by the operation mode; see [`docs/toolsets.md`](docs/toolsets.md). |
 | `MTGMCP__DATA_DIR` | Local decks, plans, workspaces, card collections, and source-fact cache. |
 | `MTGMCP__INTELLIGENCE__ANALYSIS_DEPTH` | Recommendation source depth: `minimal`, `balanced`, or `best`. |

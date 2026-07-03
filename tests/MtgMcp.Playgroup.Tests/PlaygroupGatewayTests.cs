@@ -1,5 +1,5 @@
+using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
@@ -46,6 +46,64 @@ public sealed class PlaygroupGatewayTests
         user.Username.Should().Be("chase");
         handler.Requests.Should().ContainSingle();
         handler.Requests[0].Authorization.Should().Be("Bearer test-api-key");
+    }
+
+    /// <summary>
+    /// Verifies playgroup summaries include source counts, timestamps, and embedded leagues.
+    /// </summary>
+    [Fact]
+    public async Task GetUserPlaygroup_MapsSummaryAndLeagues()
+    {
+        RecordingHandler handler = new();
+        handler.Get(
+            "users/10/playgroups/20",
+            """
+            {
+              "id": 20,
+              "name": "Friday Night",
+              "game_count": 12,
+              "member_count": 5,
+              "created_at": "2026-05-01T00:00:00Z",
+              "leagues": [
+                { "id": 30, "name": "Summer", "active": true },
+                { "id": 31, "name": "Archive", "active": false }
+              ]
+            }
+            """);
+
+        PlaygroupSummary summary = await CreateGateway(handler).GetUserPlaygroupAsync(
+            10,
+            20,
+            TestContext.Current.CancellationToken);
+
+        summary.Name.Should().Be("Friday Night");
+        summary.GameCount.Should().Be(12);
+        summary.MemberCount.Should().Be(5);
+        summary.CreatedAt.Should().Be(DateTimeOffset.Parse("2026-05-01T00:00:00Z", CultureInfo.InvariantCulture));
+        summary.Leagues.Should().HaveCount(2);
+        summary.Leagues[0].Active.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies public deck reads do not require credentials and map absent optional fields safely.
+    /// </summary>
+    [Fact]
+    public async Task GetDeck_WithoutCredentials_MapsEmptyResponse()
+    {
+        RecordingHandler handler = new();
+        handler.Get("decks/0", "");
+        PlaygroupGateway gateway = CreateGateway(handler, new PlaygroupOptions
+        {
+            BaseAddress = new Uri("https://playgroup.test/api/public/v1/")
+        });
+
+        PlaygroupDeck deck = await gateway.GetDeckAsync(0, TestContext.Current.CancellationToken);
+
+        deck.Id.Should().Be(0);
+        deck.Name.Should().BeEmpty();
+        deck.Commander.Should().BeNull();
+        deck.Partner.Should().BeNull();
+        handler.Requests.Should().ContainSingle().Which.Authorization.Should().BeNull();
     }
 
     /// <summary>
@@ -168,6 +226,36 @@ public sealed class PlaygroupGatewayTests
     }
 
     /// <summary>
+    /// Verifies league-scoped and global Elo requests produce distinct bounded query shapes.
+    /// </summary>
+    [Fact]
+    public async Task DeckEloHistory_BuildsLeagueAndGlobalQueries()
+    {
+        RecordingHandler handler = new();
+        handler.Get("decks/101/elo_history?league_id=77", "{ \"deck_id\": 101, \"history\": [] }");
+        handler.Get("decks/101/elo_history", "{ \"deck_id\": 101 }");
+        PlaygroupGateway gateway = CreateGateway(handler);
+
+        PlaygroupEloHistory league = await gateway.GetDeckEloHistoryAsync(
+            101,
+            null,
+            77,
+            TestContext.Current.CancellationToken);
+        PlaygroupEloHistory global = await gateway.GetDeckEloHistoryAsync(
+            101,
+            null,
+            null,
+            TestContext.Current.CancellationToken);
+
+        league.DeckId.Should().Be(101);
+        league.History.Should().BeEmpty();
+        global.History.Should().BeEmpty();
+        handler.Requests.Select(request => request.Path).Should().Equal(
+            "decks/101/elo_history?league_id=77",
+            "decks/101/elo_history");
+    }
+
+    /// <summary>
     /// Verifies that user deck listing maps accessible deck responses.
     /// </summary>
     [Fact]
@@ -249,6 +337,42 @@ public sealed class PlaygroupGatewayTests
             {
                 File.Delete(credentialsFile);
             }
+        }
+    }
+
+    /// <summary>
+    /// Verifies access-token aliases in JSON credential files become bearer credentials.
+    /// </summary>
+    [Fact]
+    public async Task AuthStatus_LoadsAccessTokenAliasFromJsonFile()
+    {
+        string credentialsFile = Path.Combine(
+            Path.GetTempPath(),
+            "mtg-mcp-tests",
+            $"{Guid.NewGuid():N}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(credentialsFile)!);
+        await File.WriteAllTextAsync(
+            credentialsFile,
+            "{ \"access_token\": \"file-access-token\", \"ignored\": \"value\" }",
+            TestContext.Current.CancellationToken);
+
+        try
+        {
+            RecordingHandler handler = new();
+            PlaygroupGateway gateway = CreateGateway(handler, new PlaygroupOptions
+            {
+                BaseAddress = new Uri("https://playgroup.test/api/public/v1/"),
+                CredentialsFile = credentialsFile
+            });
+
+            PlaygroupAuthStatus status = await gateway.GetAuthStatusAsync(TestContext.Current.CancellationToken);
+
+            status.HasApiKey.Should().BeTrue();
+            status.Mode.Should().Be("api-key");
+        }
+        finally
+        {
+            File.Delete(credentialsFile);
         }
     }
 

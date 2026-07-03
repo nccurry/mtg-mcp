@@ -107,43 +107,66 @@ public sealed class SimulationProfileCatalog
                 continue;
             }
 
-            try
+            if (!File.Exists(path))
             {
-                if (!File.Exists(path))
-                {
-                    warnings.Add($"Simulation profile file '{path}' was not found.");
-                    continue;
-                }
-
-                string json = File.ReadAllText(path);
-                if (json.TrimStart().StartsWith('['))
-                {
-                    List<SimulationProfile>? many = JsonSerializer.Deserialize<List<SimulationProfile>>(json, JsonOptions);
-                    if (many is not null)
-                    {
-                        loaded.AddRange(many.Where(profile => !string.IsNullOrWhiteSpace(profile.Id)));
-                    }
-
-                    continue;
-                }
-
-                SimulationProfile? single = JsonSerializer.Deserialize<SimulationProfile>(json, JsonOptions);
-                if (single is not null && !string.IsNullOrWhiteSpace(single.Id))
-                {
-                    loaded.Add(single);
-                    continue;
-                }
-
-                warnings.Add($"Simulation profile file '{path}' did not contain a profile or profile array.");
+                warnings.Add($"Simulation profile file '{path}' was not found.");
+                continue;
             }
-            catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
-            {
-                warnings.Add($"Simulation profile file '{path}' could not be read: {exception.Message}");
-            }
+
+            ReadProfileFile(path, loaded, warnings);
         }
 
         warnings.AddRange(ValidateProfiles(loaded));
         return (loaded, warnings);
+    }
+
+    /// <summary>
+    /// Reads one existing profile file and converts expected I/O or JSON failures into warnings.
+    /// </summary>
+    private static void ReadProfileFile(
+        string path,
+        List<SimulationProfile> loaded,
+        List<string> warnings)
+    {
+        try
+        {
+            string json = File.ReadAllText(path);
+            AddProfilesFromJson(path, json, loaded, warnings);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
+        {
+            warnings.Add($"Simulation profile file '{path}' could not be read: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Adds a single profile or profile array from one JSON document.
+    /// </summary>
+    private static void AddProfilesFromJson(
+        string path,
+        string json,
+        List<SimulationProfile> loaded,
+        List<string> warnings)
+    {
+        if (json.TrimStart().StartsWith('['))
+        {
+            List<SimulationProfile>? many = JsonSerializer.Deserialize<List<SimulationProfile>>(json, JsonOptions);
+            if (many is not null)
+            {
+                loaded.AddRange(many.Where(profile => !string.IsNullOrWhiteSpace(profile.Id)));
+            }
+
+            return;
+        }
+
+        SimulationProfile? single = JsonSerializer.Deserialize<SimulationProfile>(json, JsonOptions);
+        if (single is not null && !string.IsNullOrWhiteSpace(single.Id))
+        {
+            loaded.Add(single);
+            return;
+        }
+
+        warnings.Add($"Simulation profile file '{path}' did not contain a profile or profile array.");
     }
 
     /// <summary>
@@ -283,19 +306,32 @@ public sealed class SimulationProfileCatalog
                 }
             }
 
-            foreach (SimulationRouteDefinition route in profile.WinRoutes)
-            {
-                foreach (string requirement in route.Requirements)
-                {
-                    if (!SimulationRouteEvaluator.IsSupportedRequirement(requirement))
-                    {
-                        warnings.Add($"Simulation profile '{id}' route '{route.Name}' has unsupported requirement '{requirement}'.");
-                    }
-                }
-            }
+            ValidateRouteRequirements(profile, id, warnings);
         }
 
         return warnings;
+    }
+
+    /// <summary>
+    /// Adds warnings for unsupported requirements in one profile's configured routes.
+    /// </summary>
+    private static void ValidateRouteRequirements(
+        SimulationProfile profile,
+        string profileId,
+        List<string> warnings)
+    {
+        foreach (SimulationRouteDefinition route in profile.WinRoutes)
+        {
+            foreach (string requirement in route.Requirements)
+            {
+                if (!SimulationRouteEvaluator.IsSupportedRequirement(requirement))
+                {
+                    warnings.Add(
+                        $"Simulation profile '{profileId}' route '{route.Name}' "
+                            + $"has unsupported requirement '{requirement}'.");
+                }
+            }
+        }
     }
 
     /// <summary>

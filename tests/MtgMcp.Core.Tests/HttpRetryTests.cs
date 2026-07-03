@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using FluentAssertions;
-using MtgMcp.Core;
 
 namespace MtgMcp.Core.Tests;
 

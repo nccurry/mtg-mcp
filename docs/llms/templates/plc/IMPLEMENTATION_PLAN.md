@@ -2,10 +2,12 @@
 
 Use this document to define the order of work: which requirements are solved
 first, second, third, and what evidence proves each phase is complete.
+Every phase should leave the repository green and useful. Delete prompts that
+do not apply instead of retaining placeholder text.
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Planned | In progress | Completed
 - PLC packet: <link to packet README>
 - Owner: mtg-mcp
 - Last updated: <YYYY-MM-DD>
@@ -35,6 +37,7 @@ downstream client impact.
 - Included requirements: <REQ IDs>
 - Out of scope for this phase: <Explicit deferrals>
 - Expected edits: <Projects, files, systems>
+- Tests added: <Behavior, failure, integration, or surface tests>
 - Validation: <Commands, tests, inspections>
 - Exit criteria: <Objective completion criteria>
 - Rollback or fallback: <How to unwind if the phase fails>

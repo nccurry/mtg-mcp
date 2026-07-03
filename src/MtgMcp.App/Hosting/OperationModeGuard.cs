@@ -114,7 +114,7 @@ public sealed class OperationModeGuard
         string value = mode?.Trim().ToLowerInvariant() ?? "";
         return value switch
         {
-            "" => Apply,
+            "" => Plan,
             "act" or "apply" or "write" or "writeable" or "writable" => Apply,
             "plan" or "planning" or "dry-run" or "dryrun" => Plan,
             "ask" or "read" or "readonly" or "read-only" or "read_only" => ReadOnly,

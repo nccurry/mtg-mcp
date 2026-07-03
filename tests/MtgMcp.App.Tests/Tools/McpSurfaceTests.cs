@@ -1,7 +1,7 @@
+using System.ComponentModel;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
-using MtgMcp.App;
 using MtgMcp.Core;
 
 namespace MtgMcp.App.Tests;
@@ -824,6 +823,28 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies thin card wrappers select catalog operations from explicit caller inputs.
+    /// </summary>
+    [Fact]
+    public async Task CardReadWrappers_DelegateWithoutAddingGeneratedFacts()
+    {
+        EmptyCardCatalog catalog = new();
+        CardTools tools = new(catalog);
+
+        IReadOnlyList<CardSearchResult> search = await tools.SearchCardsAsync("o:draw");
+        IReadOnlyList<CardSearchResult> legalSearch = await tools.SearchCardsAsync("o:draw", "commander");
+        CardInfo? card = await tools.GetCardAsync("Missing");
+        IReadOnlyList<RulingInfo> rulings = await tools.GetRulingsAsync("Missing");
+        IReadOnlyList<CardInfo> prints = await tools.GetPrintsAsync("Missing");
+
+        search.Should().BeEmpty();
+        legalSearch.Should().BeEmpty();
+        card.Should().BeNull();
+        rulings.Should().BeEmpty();
+        prints.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// Verifies that image lookup returns a link-only result with fallback status.
     /// </summary>
     [Fact]
@@ -841,6 +862,10 @@ public sealed class McpSurfaceTests
             "Lightning Bolt",
             kind: "png",
             cancellationToken: TestContext.Current.CancellationToken);
+        CardImageLookupResult exact = await tools.GetCardImageAsync(
+            "Lightning Bolt",
+            kind: "art_crop",
+            cancellationToken: TestContext.Current.CancellationToken);
         CardImageLookupResult noImage = await tools.GetCardImageAsync(
             "Text Only",
             cancellationToken: TestContext.Current.CancellationToken);
@@ -854,6 +879,7 @@ public sealed class McpSurfaceTests
         fallback.Uri.Should().Be("https://cards.scryfall.io/normal/front/bolt.jpg");
         fallback.AvailableKinds.Should().Equal("art_crop", "normal");
         fallback.ScryfallUri.Should().Be("https://scryfall.com/card/test/1/lightning-bolt");
+        exact.ResolvedKind.Should().Be("art_crop");
         noImage.Status.Should().Be("no-image");
         noImage.AvailableKinds.Should().BeEmpty();
         missing.Status.Should().Be("not-found");
@@ -865,6 +891,10 @@ public sealed class McpSurfaceTests
     [Fact]
     public void OperationModeGuard_NormalizesClientModeNames()
     {
+        new MtgMcpOptions().OperationMode.Should().Be(OperationModeGuard.Plan);
+        OperationModeGuard.Normalize(null).Should().Be(OperationModeGuard.Plan);
+        OperationModeGuard.Normalize("").Should().Be(OperationModeGuard.Plan);
+        OperationModeGuard.Normalize("   ").Should().Be(OperationModeGuard.Plan);
         new OperationModeGuard(Options.Create(new MtgMcpOptions { OperationMode = "ask" }))
             .EffectiveMode.Should()
             .Be(OperationModeGuard.ReadOnly);
@@ -1030,6 +1060,28 @@ public sealed class McpSurfaceTests
     }
 
     /// <summary>
+    /// Verifies cursor paging clamps limits and rejects malformed or forged offsets.
+    /// </summary>
+    [Fact]
+    public void ToolPagination_ClampsLimitsAndValidatesCursors()
+    {
+        PagedToolResult<int> minimum = ToolPagination.Page([1, 2], limit: 0, cursor: null);
+        PagedToolResult<int> maximum = ToolPagination.Page([1], limit: int.MaxValue, cursor: null);
+        PagedToolResult<int> pastEnd = ToolPagination.Page([1], limit: 10, cursor: "MTA=");
+
+        minimum.Items.Should().Equal([1]);
+        minimum.Limit.Should().Be(1);
+        maximum.Limit.Should().Be(ToolPagination.MaxLimit);
+        pastEnd.Items.Should().BeEmpty();
+        pastEnd.NextCursor.Should().BeNull();
+
+        Action malformed = () => ToolPagination.Page([1], limit: 1, cursor: "not-base64!");
+        Action negative = () => ToolPagination.Page([1], limit: 1, cursor: "LTE=");
+        malformed.Should().Throw<ArgumentException>().WithParameterName("cursor");
+        negative.Should().Throw<ArgumentException>().WithParameterName("cursor");
+    }
+
+    /// <summary>
     /// Verifies that the method-level tool registry covers every attributed tool.
     /// </summary>
     [Fact]
@@ -1053,6 +1105,7 @@ public sealed class McpSurfaceTests
     [Fact]
     public void ToolRegistry_FiltersToolsByOperationMode()
     {
+        IReadOnlyList<ToolRegistryEntry> defaults = ToolRegistry.SelectEntries(new MtgMcpOptions());
         IReadOnlyList<ToolRegistryEntry> readOnly = ToolRegistry.SelectEntries(
             new MtgMcpOptions { OperationMode = OperationModeGuard.ReadOnly });
         IReadOnlyList<ToolRegistryEntry> plan = ToolRegistry.SelectEntries(
@@ -1063,6 +1116,9 @@ public sealed class McpSurfaceTests
         readOnly.Should().OnlyContain(entry => entry.Capability == ToolCapability.Read);
         plan.Should().OnlyContain(entry =>
             entry.Capability == ToolCapability.Read || entry.Capability == ToolCapability.Plan);
+        defaults.Should().Equal(plan);
+        defaults.Should().Contain(entry => entry.Name == "deck_plan_create");
+        defaults.Should().NotContain(entry => entry.Capability == ToolCapability.Mutate);
         apply.Should().HaveSameCount(ToolRegistry.Entries);
         readOnly.Count.Should().BeLessThan(plan.Count);
         plan.Count.Should().BeLessThan(apply.Count);
@@ -1379,6 +1435,11 @@ public sealed class McpSurfaceTests
             workspace.Id,
             scope: "all",
             cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
+        JsonElement normal = JsonSerializer.SerializeToElement(await tools.RefreshDeckCardSnapshotsAsync(
+            workspace.Id,
+            scope: "all",
+            detailLevel: "normal",
+            cancellationToken: TestContext.Current.CancellationToken), WebJsonOptions);
         object full = await tools.RefreshDeckCardSnapshotsAsync(
             workspace.Id,
             scope: "all",
@@ -1392,6 +1453,8 @@ public sealed class McpSurfaceTests
         summary.TryGetProperty("missingCards", out _).Should().BeFalse();
         summary.TryGetProperty("failedCards", out _).Should().BeFalse();
         summary.GetProperty("snapshotQualityBefore").GetProperty("cardCount").GetInt32().Should().Be(100);
+        normal.GetProperty("missingCardSamples").GetArrayLength().Should().Be(20);
+        normal.GetProperty("failedCardSamples").GetArrayLength().Should().Be(0);
         full.Should().BeOfType<DeckNormalizationResult>()
             .Which.Workspace.Cards.Should().HaveCount(100);
     }

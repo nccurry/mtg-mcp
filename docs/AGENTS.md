@@ -13,8 +13,17 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `docs/`.
 
 - Put durable ordinary implementation plans under `docs/llms/plans/`.
 - Put larger Plan-Led Change packets under `docs/llms/plcs/`.
+- Start reusable plans and PLCs from `docs/llms/templates/`; keep templates out
+  of lifecycle folders.
 - Keep PLC packets in `planned/`, `in-progress/`, or `completed/` according to their lifecycle.
 - Treat completed PLCs as historical context; current code and tests still win.
+
+## Product Direction
+
+- Keep `north-star.md`, `design-goals.md`, and `heuristic-models.md` concise,
+  mutually consistent, and linked from architecture docs.
+- Describe source observations and heuristic outputs with their limitations;
+  do not call popularity, community tags, or simulation results universal facts.
 
 ## Generated And Reference Data
 

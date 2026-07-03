@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Microsoft.Extensions.Options;
-using MtgMcp.CommanderSpellbook;
 using MtgMcp.Core;
 using RichardSzalay.MockHttp;
 
@@ -153,6 +152,114 @@ public sealed class CommanderSpellbookComboCatalogTests
     }
 
     /// <summary>
+    /// Verifies the corpus provider reports disabled and enabled source capabilities accurately.
+    /// </summary>
+    [Fact]
+    public void CorpusProvider_GetStatus_ReflectsConfiguredEnablement()
+    {
+        FakeComboCatalog catalog = new(new DeckComboReport());
+        MtgMcpOptions disabledOptions = new();
+        disabledOptions.Intelligence.Sources["CommanderSpellbook"] = new MtgMcpCorpusSourceOptions
+        {
+            Enabled = false
+        };
+        CommanderSpellbookCorpusSignalProvider disabled = new(catalog, Options.Create(disabledOptions));
+        MtgMcpOptions enabledOptions = EnabledCorpusOptions();
+        CommanderSpellbookCorpusSignalProvider enabled = new(catalog, Options.Create(enabledOptions));
+
+        disabled.GetStatus().Status.Should().Be(CorpusSourceStatusKind.Disabled);
+        disabled.GetStatus().Enabled.Should().BeFalse();
+        enabled.GetStatus().Status.Should().Be(CorpusSourceStatusKind.Available);
+        enabled.GetStatus().Enabled.Should().BeTrue();
+        enabled.GetStatus().StableApi.Should().BeTrue();
+        enabled.GetStatus().AttributionRequired.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies the corpus provider converts near misses into attributed missing-card signals.
+    /// </summary>
+    [Fact]
+    public async Task CorpusProvider_GetSignals_MapsNearMissesAndNotes()
+    {
+        DeckComboReport comboReport = new()
+        {
+            NearMisses =
+            [
+                new DeckCombo
+                {
+                    Name = "Basalt loop",
+                    WinRoute = "Infinite colorless mana",
+                    Confidence = 0.85,
+                    MissingCards = ["Rings of Brighthearth", "Forsaken Monument"]
+                },
+                new DeckCombo { Name = "Complete", MissingCards = [] }
+            ],
+            Notes = ["fixture note"]
+        };
+        FakeComboCatalog catalog = new(comboReport);
+        CommanderSpellbookCorpusSignalProvider provider = new(
+            catalog,
+            Options.Create(EnabledCorpusOptions()));
+        CorpusSignalQuery query = new()
+        {
+            ExistingCards = ["Basalt Monolith"],
+            Commander = "Karn, Legacy Reforged",
+            Format = "commander",
+            Refresh = true
+        };
+
+        CorpusSignalReport report = await provider.GetSignalsAsync(
+            query,
+            new RecommendationAnalysisBudget { IncludeComboDetails = true },
+            TestContext.Current.CancellationToken);
+
+        report.Signals.Should().HaveCount(2);
+        report.Signals.Should().OnlyContain(signal => signal.Source == "Commander Spellbook");
+        report.Signals.Should().Contain(signal => signal.CardName == "Rings of Brighthearth"
+            && signal.Score == 0.85
+            && signal.Rationale.Contains("Basalt loop", StringComparison.Ordinal));
+        report.Notes.Should().Contain("fixture note");
+        catalog.LastQuery.Should().NotBeNull();
+        catalog.LastQuery!.CardNames.Should().Equal("Basalt Monolith");
+        catalog.LastQuery.Refresh.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies disabled budgets and empty card pools do not call the remote combo catalog.
+    /// </summary>
+    [Fact]
+    public async Task CorpusProvider_GetSignals_ShortCircuitsUnavailableInputs()
+    {
+        FakeComboCatalog catalog = new(new DeckComboReport());
+        CommanderSpellbookCorpusSignalProvider provider = new(
+            catalog,
+            Options.Create(EnabledCorpusOptions()));
+
+        CorpusSignalReport noDetails = await provider.GetSignalsAsync(
+            new CorpusSignalQuery { ExistingCards = ["Sol Ring"] },
+            new RecommendationAnalysisBudget { IncludeComboDetails = false },
+            TestContext.Current.CancellationToken);
+        CorpusSignalReport noCards = await provider.GetSignalsAsync(
+            new CorpusSignalQuery(),
+            new RecommendationAnalysisBudget { IncludeComboDetails = true },
+            TestContext.Current.CancellationToken);
+
+        noDetails.Signals.Should().BeEmpty();
+        noCards.Signals.Should().BeEmpty();
+        catalog.CallCount.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Creates options with the Commander Spellbook evidence source enabled.
+    /// </summary>
+    private static MtgMcpOptions EnabledCorpusOptions()
+    {
+        MtgMcpOptions options = new();
+        options.Intelligence.Sources["CommanderSpellbook"] = new MtgMcpCorpusSourceOptions { Enabled = true };
+        return options;
+    }
+
+    /// <summary>
     /// Creates a catalog with a mocked HTTP client.
     /// </summary>
     private static CommanderSpellbookComboCatalog CreateCatalog(MockHttpMessageHandler mockHttp)
@@ -164,6 +271,62 @@ public sealed class CommanderSpellbookComboCatalogTests
             Options.Create(new CommanderSpellbookOptions { BaseAddress = new Uri("https://spellbook.test/") }),
             new MemoryCorpusCache(new MtgMcpCorpusCacheOptions()),
             Options.Create(new MtgMcpOptions()));
+    }
+
+    /// <summary>
+    /// Supplies deterministic combo reports to corpus-provider tests.
+    /// </summary>
+    private sealed class FakeComboCatalog : IComboCatalog
+    {
+        /// <summary>
+        /// Stores the report returned from deck-level combo queries.
+        /// </summary>
+        private readonly DeckComboReport report;
+
+        /// <summary>
+        /// Creates a fake around one immutable test report reference.
+        /// </summary>
+        public FakeComboCatalog(DeckComboReport report)
+        {
+            this.report = report;
+        }
+
+        /// <summary>
+        /// Counts deck-level combo calls made by the provider.
+        /// </summary>
+        public int CallCount { get; private set; }
+
+        /// <summary>
+        /// Captures the most recent normalized combo query.
+        /// </summary>
+        public ComboCatalogQuery? LastQuery { get; private set; }
+
+        /// <inheritdoc/>
+        public Task<DeckComboReport> FindCombosAsync(
+            ComboCatalogQuery query,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+            LastQuery = query;
+            return Task.FromResult(report);
+        }
+
+        /// <inheritdoc/>
+        public Task<IReadOnlyList<ComboEvidence>> SearchCombosByCardAsync(
+            ComboCardSearchQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <inheritdoc/>
+        public Task<ComboEvidence?> GetComboDetailsAsync(
+            ComboDetailsQuery query,
+            CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     /// <summary>

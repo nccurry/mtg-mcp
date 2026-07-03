@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FluentAssertions;
-using MtgMcp.Calibration;
 
 namespace MtgMcp.Calibration.Tests;
 

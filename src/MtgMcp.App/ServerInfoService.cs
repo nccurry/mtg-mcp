@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Options;
 using MtgMcp.Core;

@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
-using MtgMcp.Archidekt;
 using MtgMcp.Core;
 
 namespace MtgMcp.Archidekt.Tests;

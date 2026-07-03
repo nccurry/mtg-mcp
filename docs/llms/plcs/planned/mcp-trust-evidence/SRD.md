@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: mtg-mcp maintainers and implementing agents
-- Last updated: 2026-06-28
+- Last updated: 2026-07-03
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -34,6 +34,9 @@ MCP surfaces, and adapter projects own third-party HTTP contracts.
 - [SADD.md](SADD.md)
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - [FIXTURES.md](FIXTURES.md)
+- [Conservative Goldfish V2 SRD](../conservative-goldfish-v2/SRD.md)
+- [Conservative Goldfish V2 fixtures](../conservative-goldfish-v2/FIXTURES.md)
+- [Jasmine analysis repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
 - `src/MtgMcp.Core/Analysis/EvidenceModels.cs`
 - `src/MtgMcp.Core/Analysis/DeckRoleClassifier.cs`
 - `src/MtgMcp.Core/Analysis/DeckAnalysisService.RoleCounts.cs`
@@ -69,8 +72,11 @@ some outputs currently hide the distinction between source-backed data,
 mathematical derivation, parser-derived classification, and heuristic scoring.
 
 This PLC plans compatibility-safe changes that preserve normal offline tests,
-avoid full rules-engine scope, and keep public MCP shape changes additive unless
-a label is actively misleading.
+avoid full rules-engine scope, and keep its public MCP shape changes additive
+unless a label is actively misleading. Packet-specific compatibility decisions
+in the Jasmine analysis repair roadmap are excluded from that claim. In
+particular, conservative-goldfish-v2 owns its documented atomic correctness
+cutover.
 
 ## Scope And Non-Scope
 
@@ -82,7 +88,9 @@ a label is actively misleading.
   framework, Comprehensive Rules ingestion, EDHREC integration, MTGJSON or
   other price-provider integration, and discussion/forum evidence.
 - Compatibility target: existing MCP clients, JSON output compatibility,
-  normal offline tests, Core/App/adapter project boundaries, and existing docs.
+  normal offline tests, Core/App/adapter project boundaries, and existing docs,
+  excluding packet-specific contracts explicitly delegated by the Jasmine
+  analysis repair roadmap.
 - Explicit non-goals: live network dependency in normal tests, Archidekt
   mutations, new provider dependencies for Phase 1, or eager provenance on all
   classifier calls.
@@ -101,12 +109,12 @@ calibration, and development workflows driven by `Taskfile.yml`.
 | --- | --- | --- | --- | --- | --- |
 | REQ-001 | Must | Functional | The software shall represent card legality as `legal`, `not_legal`, or `unknown` through one shared Core helper that also normalizes format aliases. | Missing legality currently has inconsistent meanings across recommendation/query paths, and duplicate helpers do not normalize formats consistently. | Duplicate legality checks are removed or routed through the shared helper; tests cover all three states and format aliases such as `commander`/`edh`. |
 | REQ-002 | Must | Functional | The software shall never silently treat `unknown` legality as `legal`, and each recommendation/query path shall follow the Phase 1 policy matrix. | Missing metadata must not become hidden permission to recommend illegal cards. | Reason-returning paths show unknown legality; silent filters exclude only `not_legal` and keep unknown cards with explicit warning, refresh note, or named confidence/score penalty. |
-| REQ-003 | Must | Functional | Summary comparison output shall preserve the no-opponent/no-full-rules-engine assumption or caveat alongside the existing model label. | Summary is the default detail; comparison summaries already expose model labels but can omit the key assumption note. | Default `deck_compare_goldfish` summary test verifies the model label remains and an assumption/caveat string is present. |
+| REQ-003 | Superseded | Ownership | Goldfish summary caveats, model labels, and replacement schemas are owned by conservative-goldfish-v2 CGF-REQ-012 and CGF-REQ-017. | One packet must own the atomic goldfish contract. | No implementation occurs under this requirement; CGF-FIX-027 through CGF-FIX-033 provide the replacement evidence. |
 | REQ-004 | Must | Functional | Commander bracket estimates shall support a 1-5 output range with explicit bracket-5/cEDH criteria and updated calibration validators. | A clamp change alone cannot produce correct bracket 5 behavior because signal caps and calibration guards also enforce 1-4. | Bracket tool output, signal criteria, both calibration validators, calibration corpus data, and docs accept 1-5 and include bracket-5 fixtures. |
-| REQ-005 | Must | Interface | Evidence tiers shall use the closed Core-owned wire values `source_fact`, `source_evidence`, `derived_math`, `parser_derived`, `heuristic_inference`, `model_score`, and `unsupported`. | A shared vocabulary prevents every surface from inventing trust terms. | Evidence tier serialization tests cover every canonical value; tests document that `Deterministic=true` can coexist with `heuristic_inference`; existing `SourceKind` strings are reconciled or deliberately left distinct. |
+| REQ-005 | Must | Interface | Evidence tiers shall use the closed Core-owned wire values `source_fact`, `source_evidence`, `derived_math`, `parser_derived`, `heuristic_inference`, `model_score`, and `unsupported`; this PLC owns the vocabulary consumed by conservative-goldfish-v2. | A shared vocabulary prevents every surface from inventing trust terms. | Evidence tier serialization tests cover every canonical value; tests document that `Deterministic=true` can coexist with `heuristic_inference`; existing `SourceKind` strings are reconciled or deliberately left distinct; CGF-FIX-022 consumes the same Core type. |
 | REQ-006 | Must | Functional | Role, tag, category, and counting provenance shall be represented per assignment or evidence row, and implementation shall not add one top-level source field to `CardRoleAssignment`. | One card classification can combine user, workspace, Tagger, parser, and heuristic sources. | Existing `DeckRoleCountExplanation`/`MatchingEvidence` behavior is evolved into structured tiered rows or adjacent rows; tests show mixed evidence for one card without misleading top-level provenance. |
 | REQ-007 | Must | Performance | Existing cheap role classification shall remain available for hot paths. | Eager evidence construction risks performance regression and token bloat. | Hot-path callers can still use the cheap predicate/classifier; evidence is opt-in. |
-| REQ-008 | Must | Interface | Evidence detail shall be gated by MCP detail level. | Summary output must stay compact while normal/full can expose audit detail. | Surface tests verify summary labels/caveats and normal/full evidence rows where applicable. |
+| REQ-008 | Must | Interface | Evidence detail shall be gated by MCP detail level for non-goldfish surfaces; conservative-goldfish-v2 owns goldfish summary/normal/full gating. | Summary output must stay compact while normal/full can expose audit detail without splitting goldfish ownership. | Trust surface tests verify non-goldfish labels and evidence rows; CGF-FIX-033 verifies the delegated goldfish matrix. |
 | REQ-009 | Should | Functional | Recommendation and score outputs should label blended scores as model-derived and separate them from source facts. | A single score can otherwise look like direct evidence. | Recommendation tests verify score kind, evidence tier, and confidence meaning fields. |
 | REQ-010 | Should | Provider | Tagger evidence labels should distinguish source-backed Scryfall Tagger signals, cached source-backed signals, user/local annotations, and embedded taxonomy matches. | The Scryfall provider already uses `otag:` searches; the remaining risk is Core labeling that makes local annotations look source-backed. | Offline tests prove only source-returned or source-cached cards get Tagger-backed labels; local annotation and embedded taxonomy rows get distinct source labels. |
 | REQ-011 | Should | Configuration | Bracket/scoring profiles should reuse the existing simulation profile resolver pattern before any broader role-rule profile work. | Smaller profile scope avoids a premature configuration framework and avoids duplicating `SimulationProfileCatalog` behavior. | Resolver tests cover host default, explicit deck intent, built-in fallback, missing explicit profile behavior, and whether this is an extension of or a small sibling to the simulation profile resolver. |
@@ -118,7 +126,7 @@ calibration, and development workflows driven by `Taskfile.yml`.
 - [x] Every requirement states one behavior or constraint.
 - [x] Requirements avoid vague phrases unless paired with measurable criteria.
 - [x] Implementation details appear only when they are true constraints.
-- [x] TBD/TBR items include owner, reason, and resolution plan.
+- [x] Unresolved planning items include owner, reason, and resolution plan.
 
 ## Interfaces, Data, States, And Modes
 
@@ -169,7 +177,7 @@ resource, or prompt descriptions change, App surface tests must be updated.
 | Phase | Goal | Included requirements | Exit criteria |
 | --- | --- | --- | --- |
 | Phase 1 | Consolidate tri-state legality. | REQ-001, REQ-002, REQ-012 | Shared helper used by recommendation/query paths; tests cover legal, not legal, and unknown. |
-| Phase 2 | Preserve summary caveats. | REQ-003, REQ-008 | Default summary keeps the existing model label and adds assumption caveat text without large evidence rows. |
+| Phase 2 | Reserved: goldfish summary work superseded. | REQ-003 | No code lands here; conservative-goldfish-v2 phase 4 owns the atomic replacement. |
 | Phase 3 | Correct Commander bracket 1-5 behavior. | REQ-004 | Bracket 5 criteria, duplicated calibration guards, corpus data, and docs pass without adding Phase 4 evidence fields. |
 | Phase 4 | Add minimal evidence tier vocabulary. | REQ-005 | Canonical string serialization is tested. |
 | Phase 5 | Add lazy role/odds provenance. | REQ-006, REQ-007, REQ-008 | Existing role-count explanation rows are structured/tiered, and detail-gated odds success sets pass tests. |
@@ -183,12 +191,12 @@ resource, or prompt descriptions change, App surface tests must be updated.
 | --- | --- | --- | --- |
 | REQ-001 | Shared legality result | Unit tests | Core legality helper tests |
 | REQ-002 | Legality call-site policy | Unit/integration tests | Query/recommendation/replacement tests |
-| REQ-003 | Presenter detail policy | App tests | Default summary output test |
+| REQ-003 | Conservative goldfish public result schemas | Delegated surface/E2E tests | CGF-FIX-027 through CGF-FIX-033 |
 | REQ-004 | Bracket model correction | Unit/calibration tests | Bracket 1-5 fixture cases |
-| REQ-005 | Evidence tier vocabulary | Unit/surface tests | Serialization and MCP surface tests |
+| REQ-005 | Evidence tier vocabulary | Unit/surface tests plus goldfish consumption | FIX-004 and CGF-FIX-022 |
 | REQ-006 | Per-assignment provenance | Unit tests | Mixed-source role explanation test |
 | REQ-007 | Lazy classifier design | Perf inspection/tests | Existing hot-path behavior remains cheap |
-| REQ-008 | Detail-level gating | Surface tests | Summary versus normal/full matrix |
+| REQ-008 | Detail-level gating | Surface tests | Non-goldfish matrix here; CGF-FIX-033 for goldfish |
 | REQ-009 | Score transparency | Unit/surface tests | Recommendation score metadata tests |
 | REQ-010 | Tagger attribution | Fixture-backed adapter tests | Fake Scryfall `otag:`/`is:` responses |
 | REQ-011 | Profile resolver | Unit tests | Explicit, host default, fallback, missing id cases |

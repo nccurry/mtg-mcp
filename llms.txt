@@ -1,68 +1,40 @@
-# mtg-mcp LLM Orientation
+# mtg-mcp
 
-`mtg-mcp` is a C# MCP server for Magic: The Gathering deckbuilding workflows,
-card facts, workspace edits, source-backed recommendations, combo evidence, and
-deterministic deck-performance analysis.
+> A C# MCP server that gives LLMs grounded Magic: The Gathering card, deck,
+> source, and statistical evidence plus safe deck-planning workflows.
 
-This file is a compact orientation map for LLMs and coding agents. It does not
-override `AGENTS.md`, current code, tests, project files, or human docs.
+Current code, tests, project files, checked-in configuration, and `AGENTS.md`
+are authoritative. This file is a compact orientation index, not a second
+instruction file.
 
-## Source Of Truth Order
+## Start Here
 
-1. Current code, tests, project files, `Taskfile.yml`, `Directory.Build.props`,
-   `Directory.Packages.props`, `global.json`, `.editorconfig`, and checked-in
-   configuration.
-2. Root `AGENTS.md` and scoped `AGENTS.md` files.
-3. Human docs under `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `docs/`.
-4. Supplemental agent docs under `.codex/` and `docs/llms/`.
+- [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
+- [README](README.md): Installation, configuration, workflows, and public MCP surface.
+- [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
+- [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
+- [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
 
-## Project Structure
+## Architecture
 
-- `mtg-mcp.slnx`: solution file.
-- `src/MtgMcp.Core`: dependency-light domain models, analysis, simulation,
-  planning, recommendations, storage, and workspace logic.
-- `src/MtgMcp.App`: MCP host, tools, resources, prompts, CLI, operation modes,
-  and server metadata.
-- `src/MtgMcp.Scryfall`: Scryfall HTTP adapter and card-data providers.
-- `src/MtgMcp.Archidekt`: Archidekt HTTP adapter, auth, cache, checkpoints, and
-  mutation support.
-- `src/MtgMcp.Moxfield`: Moxfield import adapter.
-- `src/MtgMcp.Playgroup`: Playgroup.gg adapter.
-- `src/MtgMcp.CommanderSpellbook`: Commander Spellbook combo catalog and
-  source signal provider.
-- `src/MtgMcp.Decklists`: EDHREC, EDHTop16, and TopDeck source providers.
-- `tests/`: unit, fixture-backed adapter, architecture, calibration,
-  benchmark, and mocked MCP end-to-end tests.
+- [Architecture](docs/architecture.md): Current deck-analysis, simulation, source, and MCP design.
+- [Adapters](docs/adapters.md): Provider contracts, auth, caches, pacing, and safety boundaries.
+- [Heuristic models](docs/heuristic-models.md): Configurable estimation and non-rules-engine boundaries.
+- [Toolsets](docs/toolsets.md): Public tool groups and workflow coverage.
+- [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
 
-## Repository Operations
+## Agent Planning
 
-Use `task --list` to discover supported operations. Common commands:
+- [Agent workflow](docs/llms/agent-workflow.md): How to inspect, plan, edit, validate, and hand off changes.
+- [C# practices](docs/llms/csharp-best-practices.md): Repository-specific C# and .NET conventions.
+- [Plans](docs/llms/plans/README.md): Durable ordinary implementation plans.
+- [Plan-Led Changes](docs/llms/plcs/README.md): Requirements-backed PLC lifecycle and packet rules.
+- [Templates](docs/llms/templates/README.md): Reusable ordinary-plan and multi-file PLC templates.
 
-- `task setup`
-- `task restore`
-- `task build`
-- `task lint`
-- `task test`
-- `task test:unit`
-- `task test:integration`
-- `task test:e2e`
-- `task coverage`
-- `task smoke:mcp`
-- `task ci`
+## Optional
 
-Normal tests must not require network access or mutate real Archidekt decks.
-Use `task test:live` only for explicit live-provider validation.
-
-## Planning Docs
-
-- `.codex/validation.md`: validation command chooser and handoff notes.
-- `.codex/code-review.md`: review checklist for correctness, boundaries, MCP
-  surface, tests, dependencies, and secrets.
-- `.codex/review-prevention.md`: recurring failure classes to check before
-  handoff.
-- `docs/llms/README.md`: agent documentation conventions.
-- `docs/llms/plans/README.md`: durable ordinary implementation plans.
-- `docs/llms/plcs/README.md`: PLC lifecycle and packet rules for larger work.
-- `docs/llms/plcs/planned/`: PLC packets being drafted or queued.
-- `docs/llms/plcs/in-progress/`: PLC packets actively guiding implementation.
-- `docs/llms/plcs/completed/`: PLC packets retained as historical context.
+- [Simulation profiles](docs/simulation-profiles.md): Deterministic play-pattern presets and deck intent.
+- [Stats Lab metrics](docs/stats-lab-metrics.md): Statistical metric and replay contracts.
+- [Observability](docs/observability.md): MCP logs, metrics, and diagnostics.
+- [Compatibility](docs/compatibility.md): Exercised MCP clients and protocol coverage.
+- [Codex playbooks](.codex/README.md): Supplemental review and validation references.

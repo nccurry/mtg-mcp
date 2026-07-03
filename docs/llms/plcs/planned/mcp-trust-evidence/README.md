@@ -6,7 +6,7 @@
 - Folder: `docs/llms/plcs/planned/mcp-trust-evidence/`
 - Owner: mtg-mcp
 - Created: 2026-06-28
-- Last updated: 2026-06-28
+- Last updated: 2026-07-03
 - Current phase: planning
 
 ## Summary
@@ -20,6 +20,12 @@ The packet keeps correctness fixes separate from broader provenance work:
 tri-state legality, summary caveats, and Commander bracket 1-5 behavior can be
 reviewed independently before adding evidence tiers, role provenance, Tagger
 evidence, or profile externalization.
+
+Goldfish-specific summary and detail behavior is now owned by
+[conservative-goldfish-v2](../conservative-goldfish-v2/README.md). This packet
+continues to own the shared REQ-005 evidence vocabulary; its general additive
+compatibility policy does not override compatibility decisions made by the six
+Jasmine analysis repair packets.
 
 ## Packet Contents
 
@@ -36,6 +42,7 @@ evidence, or profile externalization.
 | Use the closed evidence tier wire values from the SRD. | Proposed | Fixture and surface tests need exact strings before implementation starts. | [SRD.md](SRD.md#interfaces-data-states-and-modes) |
 | Keep role classification cheap and evolve existing explanation rows. | Proposed | `DeckRoleClassifier` is a hot path, and `DeckRoleCountExplanation` already carries role/count evidence that should not be duplicated. | [SADD.md](SADD.md#chosen-design) |
 | Gate evidence detail by MCP detail level. | Proposed | Summary output needs labels and caveats, while normal/full can carry larger success sets and per-card provenance. | [SADD.md](SADD.md#mcp-surface-schemas-and-diagnostics) |
+| Delegate goldfish summary and detail contracts. | Accepted | The replacement goldfish model needs one atomic schema owner; REQ-003 is superseded there and the goldfish portion of REQ-008 is delegated. | [Conservative Goldfish V2](../conservative-goldfish-v2/SRD.md#requirements) |
 | Treat Phase 3 as range/calibration work, not evidence-tier work. | Proposed | Canonical evidence tier fields arrive in Phase 4; Phase 3 should use existing notes/labels only. | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-3-commander-bracket-1-5-correction) |
 | Separate live/cached Tagger signals from local annotations. | Proposed | The Scryfall Tagger corpus provider already uses `otag:` queries; the remaining risk is Core labeling that conflates provider signals, user-set annotations, and embedded taxonomy. | [SADD.md](SADD.md#adapter-and-provider-contracts) |
 | Defer broad profile externalization. | Proposed | Bracket/scoring profiles are the first likely useful slice; role-rule externalization can wait until tuning demand is proven. | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-8-small-profile-externalization) |
@@ -92,6 +99,7 @@ or live-test requirements are intended by the first implementation slice.
 | --- | --- | --- | --- |
 | 2026-06-28 | PLC packet drafted from templates | Pending review | Docs-only packet; no product code implementation. |
 | 2026-06-28 | PLC packet hardened after review | Passed | Added legality policy matrix, exact evidence tier strings, Phase 3/4 dependency decision, existing-surface reuse guidance, and concrete starter cases. |
+| 2026-07-03 | Goldfish ownership reconciliation | Passed | REQ-003 superseded; REQ-005 retained; goldfish REQ-008 detail gating delegated. |
 
 ## Completion Notes
 

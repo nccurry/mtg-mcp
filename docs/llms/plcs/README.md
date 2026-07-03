@@ -36,9 +36,8 @@ docs/llms/plcs/planned/<feature-slug>/
   FIXTURES.md
 ```
 
-Use `PLC-README-template.md`, `SRD-template.md`, `SADD-template.md`,
-`IMPLEMENTATION_PLAN-template.md`, and `FIXTURES-template.md` as starting
-points. Delete sections that truly do not apply, but do not remove lifecycle
+Copy the packet from [`../templates/plc/`](../templates/plc/) as the starting
+point. Delete sections that truly do not apply, but do not remove lifecycle
 status, scope, traceability, validation, or completion notes.
 
 ## Planning Readiness
@@ -92,3 +91,6 @@ practices:
   runtime/data flow, quality attributes, rationale, and traceability.
 - Durable design docs should put audience, scope/non-scope, key decisions,
   alternatives, tradeoffs, and validation evidence up front.
+
+Reusable templates live outside lifecycle folders so planned and active
+packets contain only real change documents.

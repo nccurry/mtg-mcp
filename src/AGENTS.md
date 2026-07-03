@@ -8,6 +8,8 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `src/`.
 - Keep MCP server registration, tools, resources, prompts, operation modes, and server metadata in `MtgMcp.App`.
 - Keep third-party HTTP request and response contracts in their adapter projects.
 - Keep source/provider-specific cache, auth, pacing, and user-agent behavior inside the owning adapter unless Core already has a shared primitive.
+- Use `docs/adapters.md` as the shared provider-operation map instead of
+  repeating adapter rules in project-local instruction files.
 - Update architecture or surface tests when project references, public MCP shape, operation modes, or allowed adapter boundaries intentionally change.
 
 ## Implementation
@@ -18,9 +20,12 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `src/`.
 - Pass `CancellationToken` through async library paths and use `ConfigureAwait(false)` outside host-specific code.
 - Keep provider errors sanitized. Never include Archidekt credentials, bearer tokens, cookies, or local secret paths in exceptions, logs, tool output, or tests.
 - Use loops for multi-step behavior and keep LINQ simple.
+- Keep methods shallow and use guard clauses when they make failure paths
+  explicit.
 
-## Public Contracts
+## Documentation And Contracts
 
-- Add XML summary comments for new public C# declarations.
+- Add useful XML summaries for every named declaration, including private
+  members. Use inline comments only for non-obvious rules and invariants.
 - Preserve deterministic sort keys, source metadata, assumptions, warnings, and confidence fields in evidence-oriented outputs.
 - Make new persistence or config formats explicit in docs and tests.

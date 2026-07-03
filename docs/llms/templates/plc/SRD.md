@@ -1,14 +1,24 @@
 # <Feature Name> Software Requirements Document
 
+The SRD defines what the change must do and how success is verified. Keep
+requirements atomic, implementation-neutral, and traceable. Delete optional
+sections that do not apply and state why when their absence could be ambiguous.
+
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Planned | In progress | Completed
 - PLC packet: <link to packet README>
 - Owner: mtg-mcp
 - Reviewers: <names or roles>
 - Last updated: <YYYY-MM-DD>
 - Related SADD: <link>
 - Related implementation plan: <link>
+
+## Revision History
+
+| Date | Author | Summary of change |
+| --- | --- | --- |
+| <YYYY-MM-DD> | <Author> | Initial draft |
 
 ## Executive Summary
 
@@ -40,6 +50,18 @@ testing, MCP inspection, or provider fixture validation.
 
 Describe the system from the user's or maintainer's point of view, the repo and
 project boundaries, and the main workflows the software must support.
+
+## Assumptions, Dependencies, And Constraints
+
+- Assumptions: <facts taken as true for this packet>
+- Dependencies: <systems, teams, data, or prior phases this work needs>
+- Constraints: <platform, compatibility, security, performance, or design limits>
+
+## Use Cases
+
+| ID | Actor and trigger | Expected outcome |
+| --- | --- | --- |
+| CASE-001 | <Actor and initiating event> | <Observable outcome> |
 
 ## Scope And Non-Scope
 

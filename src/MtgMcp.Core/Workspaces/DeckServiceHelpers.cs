@@ -346,31 +346,7 @@ internal static class DeckServiceHelpers
     {
         if (string.IsNullOrWhiteSpace(targets))
         {
-            if (intent?.Targets.Count > 0)
-            {
-                List<string> parsedTargets = [];
-                foreach (string target in intent.Targets.Keys)
-                {
-                    bool knownTarget = DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase)
-                        || DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase);
-                    if (knownTarget && !parsedTargets.Contains(target, StringComparer.OrdinalIgnoreCase))
-                    {
-                        parsedTargets.Add(target);
-                    }
-                }
-
-                return parsedTargets;
-            }
-
-            return
-            [
-                DeckRoles.Lands,
-                DeckRoles.Ramp,
-                DeckRoles.Draw,
-                DeckRoles.Interaction,
-                DeckRoles.BoardWipes,
-                DeckTags.Discard
-            ];
+            return ParseIntentTargetsOrDefaults(intent);
         }
 
         List<string> requestedTargets = [];
@@ -384,6 +360,38 @@ internal static class DeckServiceHelpers
         }
 
         return requestedTargets;
+    }
+
+    /// <summary>
+    /// Reads known targets from deck intent or returns the standard draw-odds target set.
+    /// </summary>
+    private static List<string> ParseIntentTargetsOrDefaults(DeckIntent? intent)
+    {
+        if (intent?.Targets.Count is not > 0)
+        {
+            return
+            [
+                DeckRoles.Lands,
+                DeckRoles.Ramp,
+                DeckRoles.Draw,
+                DeckRoles.Interaction,
+                DeckRoles.BoardWipes,
+                DeckTags.Discard
+            ];
+        }
+
+        List<string> parsedTargets = [];
+        foreach (string target in intent.Targets.Keys)
+        {
+            bool knownTarget = DeckRoles.Primary.Contains(target, StringComparer.OrdinalIgnoreCase)
+                || DeckTags.Secondary.Contains(target, StringComparer.OrdinalIgnoreCase);
+            if (knownTarget && !parsedTargets.Contains(target, StringComparer.OrdinalIgnoreCase))
+            {
+                parsedTargets.Add(target);
+            }
+        }
+
+        return parsedTargets;
     }
 
     /// <summary>

@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: mtg-mcp maintainers and implementing agents
-- Last updated: 2026-06-28
+- Last updated: 2026-07-03
 - Related SRD: [SRD.md](SRD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -19,7 +19,10 @@ classification and scoring remain available, while existing user-visible
 explanation rows evolve into structured tiered rows at normal/full detail.
 
 The main constraint is MCP compatibility: existing clients should keep working
-while new fields make trust boundaries clearer. The most important rejected
+while new fields make trust boundaries clearer. That compatibility claim
+applies only to surfaces owned by this packet; the goldfish correctness cutover
+and other Jasmine repair packet decisions are delegated to their owning PLCs.
+The most important rejected
 alternative is a broad evidence rewrite that attaches one provenance object to
 every classification or score whether or not the caller displays it.
 
@@ -54,6 +57,11 @@ Scryfall and Archidekt.
 This design covers planned changes to Core models/services, App presenter
 output, surface tests, docs, fixture-backed provider tests, and calibration
 cases. It does not cover mutating tools or workspace persistence migrations.
+
+Goldfish ability diagnostics consume the evidence type created by this packet,
+but their compiler, schemas, and detail gates are designed and phased in the
+[Conservative Goldfish V2 SADD](../conservative-goldfish-v2/SADD.md) and
+[implementation plan](../conservative-goldfish-v2/IMPLEMENTATION_PLAN.md).
 
 ## Alternatives Considered
 
@@ -221,12 +229,12 @@ volatile implementation details.
 | --- | --- | --- |
 | REQ-001 | One Core tri-state helper. | Core unit tests and call-site inspection. |
 | REQ-002 | Path-specific unknown legality policy. | Query/recommendation/replacement tests. |
-| REQ-003 | Summary presenter keeps labels and caveats. | Default summary App test. |
+| REQ-003 | Superseded by conservative-goldfish-v2 public schema and caveat design. | CGF-FIX-027 through CGF-FIX-033. |
 | REQ-004 | Bracket-5 criteria, signal caps, duplicated calibration guards, corpus data, and docs update together. | Bracket fixtures and calibration runner tests. |
-| REQ-005 | Core evidence tier vocabulary. | Serialization and surface tests. |
+| REQ-005 | Core evidence tier vocabulary shared with compiled goldfish abilities. | FIX-004 and CGF-FIX-022. |
 | REQ-006 | Existing role-count explanation rows become structured/tiered; no top-level assignment source is added. | Mixed-source role explanation tests. |
 | REQ-007 | Cheap classifier remains; explanation is opt-in. | Hot-path tests/inspection. |
-| REQ-008 | Detail-level matrix enforced by presenters. | Summary versus normal/full tests. |
+| REQ-008 | Detail-level matrix enforced by presenters; goldfish is delegated to its PLC. | Trust surface matrix and CGF-FIX-033. |
 | REQ-009 | Score metadata names score kind and confidence meaning. | Recommendation output tests. |
 | REQ-010 | Provider/cached Tagger evidence stays distinct from local annotations and embedded taxonomy. | Fake Scryfall fixture tests and Core labeling tests. |
 | REQ-011 | Bracket/scoring resolver reuses the simulation profile pattern. | Resolver unit tests. |
@@ -237,7 +245,7 @@ volatile implementation details.
 | Phase | Code areas | Requirements | Exit criteria |
 | --- | --- | --- | --- |
 | Phase 1 | Core recommendations/query services | REQ-001, REQ-002, REQ-012 | Shared legality helper and call-site tests pass. |
-| Phase 2 | App simulation presenters | REQ-003, REQ-008 | Default summary preserves model label/caveat. |
+| Phase 2 | No implementation; goldfish summary ownership delegated | REQ-003 | conservative-goldfish-v2 phase 4 supplies replacement evidence. |
 | Phase 3 | Core bracket metrics, signal criteria, calibration guards/corpus, App bracket output, docs | REQ-004 | Bracket 1-5 tests and docs pass without canonical evidence-tier fields. |
 | Phase 4 | Core evidence models, App surface tests | REQ-005 | Evidence tier serialization and descriptions pass. |
 | Phase 5 | Existing Core role explanation rows, classifier/odds, App odds output | REQ-006, REQ-007, REQ-008 | Tiered role-count explanation and success-set tests pass. |

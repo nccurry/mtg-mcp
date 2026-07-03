@@ -1,5 +1,5 @@
-using System.Xml.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using FluentAssertions;
 
 namespace MtgMcp.Architecture.Tests;

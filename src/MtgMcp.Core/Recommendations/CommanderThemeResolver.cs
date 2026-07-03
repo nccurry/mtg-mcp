@@ -160,23 +160,7 @@ public sealed class CommanderThemeResolver
             {
                 CorpusSignalReport report = await provider.GetSignalsAsync(query, budget, cancellationToken)
                     .ConfigureAwait(false);
-                foreach (CardCorpusSignal signal in report.Signals)
-                {
-                    string tag = string.IsNullOrWhiteSpace(signal.Section) ? signal.SignalType : signal.Section;
-                    if (string.IsNullOrWhiteSpace(tag))
-                    {
-                        continue;
-                    }
-
-                    string slug = SlugifySimple(tag);
-                    if (string.IsNullOrWhiteSpace(slug)
-                        || candidates.ContainsKey(slug))
-                    {
-                        continue;
-                    }
-
-                    candidates.Add(slug, new CommanderThemeCandidate(tag, slug, signal.DeckCount ?? 0));
-                }
+                AddCommanderThemeCandidates(candidates, report.Signals);
             }
             catch (Exception exception) when (!DeckServiceHelpers.IsCancellation(exception))
             {
@@ -187,6 +171,31 @@ public sealed class CommanderThemeResolver
         List<CommanderThemeCandidate> sortedCandidates = candidates.Values.ToList();
         sortedCandidates.Sort(CompareCandidates);
         return sortedCandidates;
+    }
+
+    /// <summary>
+    /// Adds distinct, nonblank commander themes from one attributed source report.
+    /// </summary>
+    private static void AddCommanderThemeCandidates(
+        Dictionary<string, CommanderThemeCandidate> candidates,
+        IEnumerable<CardCorpusSignal> signals)
+    {
+        foreach (CardCorpusSignal signal in signals)
+        {
+            string tag = string.IsNullOrWhiteSpace(signal.Section) ? signal.SignalType : signal.Section;
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                continue;
+            }
+
+            string slug = SlugifySimple(tag);
+            if (string.IsNullOrWhiteSpace(slug) || candidates.ContainsKey(slug))
+            {
+                continue;
+            }
+
+            candidates.Add(slug, new CommanderThemeCandidate(tag, slug, signal.DeckCount ?? 0));
+        }
     }
 
     /// <summary>

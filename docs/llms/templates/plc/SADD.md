@@ -1,14 +1,24 @@
 # <Feature Name> Software Architecture And Design Document
 
+The SADD explains how the requirements are realized and why the selected design
+wins over its alternatives. Keep the simple path first. Delete optional
+sections that do not apply instead of padding the packet.
+
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Planned | In progress | Completed
 - PLC packet: <link to packet README>
 - Owner: mtg-mcp
 - Reviewers: <names or roles>
 - Last updated: <YYYY-MM-DD>
 - Related SRD: <link>
 - Related implementation plan: <link>
+
+## Revision History
+
+| Date | Author | Summary of change |
+| --- | --- | --- |
+| <YYYY-MM-DD> | <Author> | Initial draft |
 
 ## Executive Summary
 
@@ -27,6 +37,11 @@ Describe upstream MCP clients, downstream providers, file formats, generated
 artifacts, runtime hosts, test hosts, external interfaces, and repo boundaries.
 State what this design intentionally does not cover.
 
+## Constraints
+
+List language, package, dependency, compatibility, security, performance, and
+organizational constraints that the design must respect.
+
 ## Alternatives Considered
 
 | Option | Summary | Strengths | Weaknesses | Decision |
@@ -38,6 +53,11 @@ State what this design intentionally does not cover.
 Explain the selected design and why it best satisfies the SRD. Include the
 simple path first, then extension points only where known requirements need
 them.
+
+## Data Design
+
+Describe state representations, persistence or cache formats, serialization,
+versioning, migrations, retention, and ownership when the change affects data.
 
 ## Building Blocks
 
@@ -64,6 +84,11 @@ converge on. Record operation-mode visibility for read, plan, and apply modes.
 For provider work, document request/response ownership, auth, user-agent,
 pacing, retries, caching, rate limits, error sanitization, fixture strategy,
 permission sensitivity, and live-test boundaries.
+
+## Error Handling And Failure Modes
+
+Describe expected failures, how they are classified and sanitized, what callers
+observe, retry or recovery behavior, and which failures remain fatal.
 
 ## Cross-Cutting Concepts
 
@@ -123,6 +148,9 @@ compatibility gaps, and explicit later-phase work.
 | Item | Type | Impact | Resolution |
 | --- | --- | --- | --- |
 | <Item> | <Decision/Risk/Deferred> | <Impact> | <Resolution or owner> |
+
+For architecture decisions, record context, selected option, and consequences
+so a later packet can revisit the decision without reconstructing it.
 
 ## Glossary
 

@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text;
 using FluentAssertions;
-using MtgMcp.Core;
 
 namespace MtgMcp.Core.Tests;
 

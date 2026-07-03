@@ -16,3 +16,6 @@ Plans should include:
 - Risks, assumptions, and deferred work.
 
 Use ignored `/plans/` for local scratch.
+
+Start a durable ordinary plan from
+[`../templates/IMPLEMENTATION_PLAN.md`](../templates/IMPLEMENTATION_PLAN.md).

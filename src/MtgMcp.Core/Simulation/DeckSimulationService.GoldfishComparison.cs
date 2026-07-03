@@ -106,61 +106,69 @@ public sealed partial class DeckSimulationService
                 .ConfigureAwait(false);
         }
 
-        if (archidektInputs.Count > 0)
+        IArchidektGateway? gateway = null;
+        for (int index = 0; index < archidektInputs.Count; index++)
         {
-            IArchidektGateway? gateway = null;
-            for (int index = 0; index < archidektInputs.Count; index++)
+            cancellationToken.ThrowIfCancellationRequested();
+            string input = archidektInputs[index];
+            string label = $"reference-{index + 1}";
+            if (!IsArchidektReference(input))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                string input = archidektInputs[index];
-                string label = $"reference-{index + 1}";
-                if (!IsArchidektReference(input))
-                {
-                    result.Failures.Add(BuildImportFailure(
-                        label,
-                        input,
-                        DetectReferenceSource(input),
-                        "Only Archidekt deck ids and URLs can be imported by this tool today."));
-                    continue;
-                }
+                result.Failures.Add(BuildImportFailure(
+                    label,
+                    input,
+                    DetectReferenceSource(input),
+                    "Only Archidekt deck ids and URLs can be imported by this tool today."));
+                continue;
+            }
 
+            if (gateway is null)
+            {
+                gateway = TryResolveArchidektGateway(result, label, input);
                 if (gateway is null)
                 {
-                    try
-                    {
-                        gateway = DeckServiceHelpers.RequireArchidektGateway(archidektGateway);
-                    }
-                    catch (Exception exception) when (exception is not OperationCanceledException)
-                    {
-                        result.Failures.Add(BuildImportFailure(
-                            label,
-                            input,
-                            "archidekt",
-                            exception.Message));
-                        continue;
-                    }
+                    continue;
                 }
-
-                await AddArchidektComparisonAsync(
-                        result,
-                        baselineGoldfish,
-                        gateway,
-                        label,
-                        input,
-                        simulationProfile,
-                        targetTurn,
-                        simulations,
-                        seed,
-                        mulligan,
-                        cancellationToken)
-                    .ConfigureAwait(false);
             }
+
+            await AddArchidektComparisonAsync(
+                    result,
+                    baselineGoldfish,
+                    gateway,
+                    label,
+                    input,
+                    simulationProfile,
+                    targetTurn,
+                    simulations,
+                    seed,
+                    mulligan,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         result.Warnings = result.Failures
             .Select(failure => $"{failure.Label}: {failure.Reason}")
             .ToList();
         return result;
+    }
+
+    /// <summary>
+    /// Resolves the optional Archidekt adapter and records a bounded import failure when unavailable.
+    /// </summary>
+    private IArchidektGateway? TryResolveArchidektGateway(
+        DeckGoldfishComparisonResult result,
+        string label,
+        string input)
+    {
+        try
+        {
+            return DeckServiceHelpers.RequireArchidektGateway(archidektGateway);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            result.Failures.Add(BuildImportFailure(label, input, "archidekt", exception.Message));
+            return null;
+        }
     }
 
     /// <summary>

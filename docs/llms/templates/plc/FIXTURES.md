@@ -3,6 +3,7 @@
 Use this document when implementation needs stable examples, provider payloads,
 MCP surface inventories, calibration cases, or manual acceptance scenarios.
 Delete it from a PLC packet when there are no durable fixtures.
+Delete fixture categories that do not apply instead of adding empty tables.
 
 ## Fixture Inventory
 

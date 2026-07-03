@@ -215,27 +215,7 @@ public sealed partial class DeckWorkspaceService
                 }
                 else
                 {
-                    if (HasSubsetOfCopiedCards(source.Cards, destination.Cards))
-                    {
-                        copiedCards = FilterAlreadyCopiedCards(copiedCards, destination.Cards);
-                        result.CanResume = true;
-                        result.ResumeDeckIdOrUrl = destination.ArchidektDeckId;
-                        result.NextAction =
-                            $"Resume with archidekt_copy_workspace destinationDeckIdOrUrl={destination.ArchidektDeckId}, "
-                            + "createNew=false, allowNonEmptyDestination=true.";
-                        result.Warnings.Add(
-                            "Found a partially copied Archidekt deck created from this source workspace; "
-                                + "resuming by writing only missing card rows.");
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException(
-                            "Found an existing Archidekt deck created from this source workspace, "
-                                + "but its cards do not match the source. Use destinationDeckIdOrUrl="
-                                + $"{destination.ArchidektDeckId} with replaceExistingDestination=true "
-                                + "to replace it intentionally."
-                        );
-                    }
+                    copiedCards = PreparePartialMigrationResume(source, destination, result, copiedCards);
                 }
             }
         }
@@ -358,6 +338,35 @@ public sealed partial class DeckWorkspaceService
                 .ConfigureAwait(false);
             return result;
         }
+    }
+
+    /// <summary>
+    /// Validates a non-empty prior migration destination and prepares its missing card rows.
+    /// </summary>
+    private static List<DeckCard> PreparePartialMigrationResume(
+        DeckWorkspace source,
+        DeckWorkspace destination,
+        ArchidektCopyResult result,
+        List<DeckCard> copiedCards)
+    {
+        if (!HasSubsetOfCopiedCards(source.Cards, destination.Cards))
+        {
+            throw new InvalidOperationException(
+                "Found an existing Archidekt deck created from this source workspace, "
+                    + "but its cards do not match the source. Use destinationDeckIdOrUrl="
+                    + $"{destination.ArchidektDeckId} with replaceExistingDestination=true "
+                    + "to replace it intentionally.");
+        }
+
+        result.CanResume = true;
+        result.ResumeDeckIdOrUrl = destination.ArchidektDeckId;
+        result.NextAction =
+            $"Resume with archidekt_copy_workspace destinationDeckIdOrUrl={destination.ArchidektDeckId}, "
+            + "createNew=false, allowNonEmptyDestination=true.";
+        result.Warnings.Add(
+            "Found a partially copied Archidekt deck created from this source workspace; "
+                + "resuming by writing only missing card rows.");
+        return FilterAlreadyCopiedCards(copiedCards, destination.Cards);
     }
 
     /// <summary>

@@ -52,13 +52,7 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
             string primaryCategory = DeckCategoryOrdering.PrimaryCategory(card);
             if (primaryCategory.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
             {
-                foreach (string category in DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories))
-                {
-                    if (!category.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
-                    {
-                        DeckServiceHelpers.AddCount(summary.MaybeboardCategoryCounts, category, card.Quantity);
-                    }
-                }
+                AddMaybeboardCategoryCounts(summary, card, primaryCategory);
 
                 continue;
             }
@@ -94,6 +88,23 @@ public sealed partial class DeckAnalysisService : DeckServiceBase
 
         DeckServiceHelpers.AddSummaryNotes(summary, intent);
         return summary;
+    }
+
+    /// <summary>
+    /// Adds non-maybeboard category labels for one excluded maybeboard card.
+    /// </summary>
+    private static void AddMaybeboardCategoryCounts(
+        DeckPlanSummary summary,
+        DeckCard card,
+        string primaryCategory)
+    {
+        foreach (string category in DeckCategoryOrdering.OrderedDistinct(primaryCategory, card.Categories))
+        {
+            if (!category.Equals(DeckDefaults.Maybeboard, StringComparison.OrdinalIgnoreCase))
+            {
+                DeckServiceHelpers.AddCount(summary.MaybeboardCategoryCounts, category, card.Quantity);
+            }
+        }
     }
 
     /// <summary>

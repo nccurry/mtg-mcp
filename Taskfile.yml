@@ -348,27 +348,57 @@ tasks:
         --filter "Category!=Live"
 
   coverage:gates:
-    desc: Enforce 85 percent line coverage gates using the Codecov report
+    desc: Enforce 90 percent line coverage for every production assembly
     cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85'
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90'
 
   coverage:core:
-    desc: Enforce 85 percent line coverage for core deck services using the Codecov report
+    desc: Enforce 90 percent line coverage for core deck services using the Codecov report
     deps: [coverage:report]
     cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Core'
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Core'
 
   coverage:scryfall:
-    desc: Enforce 85 percent line coverage for the Scryfall client using the Codecov report
+    desc: Enforce 90 percent line coverage for the Scryfall client using the Codecov report
     deps: [coverage:report]
     cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Scryfall'
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Scryfall'
 
   coverage:archidekt:
-    desc: Enforce 85 percent line coverage for the Archidekt client using the Codecov report
+    desc: Enforce 90 percent line coverage for the Archidekt client using the Codecov report
     deps: [coverage:report]
     cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 85 -PackageName MtgMcp.Archidekt'
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Archidekt'
+
+  coverage:app:
+    desc: Enforce 90 percent line coverage for the MCP host using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.App'
+
+  coverage:moxfield:
+    desc: Enforce 90 percent line coverage for the Moxfield adapter using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Moxfield'
+
+  coverage:playgroup:
+    desc: Enforce 90 percent line coverage for the Playgroup adapter using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Playgroup'
+
+  coverage:commander-spellbook:
+    desc: Enforce 90 percent line coverage for the Commander Spellbook adapter using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.CommanderSpellbook'
+
+  coverage:decklists:
+    desc: Enforce 90 percent line coverage for decklist evidence adapters using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Decklists'
 
   format:
     desc: Format source
@@ -376,11 +406,23 @@ tasks:
     cmds:
       - '{{.DOTNET}} format {{.SOLUTION}}'
 
-  lint:
-    desc: Build with analyzers
+  format:check:
+    desc: Verify source formatting without changing files
     deps: [setup:dotnet]
     cmds:
+      - '{{.DOTNET}} format {{.SOLUTION}} --verify-no-changes'
+
+  lint:
+    desc: Verify formatting and build with strict analyzers
+    deps: [format:check]
+    cmds:
       - '{{.DOTNET}} build {{.SOLUTION}} --configuration {{.CONFIGURATION}} -warnaserror -m:{{.MSBUILD_MAXCPUCOUNT}}'
+
+  validate:
+    desc: Run lint and all non-live tests
+    cmds:
+      - task: lint
+      - task: test
 
   surface:report:
     desc: Print report-only MCP surface inventory metrics

@@ -6,6 +6,11 @@
 
 The server should remain an MCP-native insight tool: an external LLM chooses workflows and explains results, while `mtg-mcp` provides grounded card data, deterministic analysis, and safe planning tools.
 
+The durable product direction and evidence boundaries are defined in
+[North Star](north-star.md), [Design Goals](design-goals.md), and
+[Heuristic And Simulation Models](heuristic-models.md). This document describes
+the current implementation of those principles.
+
 ## Current State
 
 Current deck intelligence is deterministic and heuristic. It provides useful structure, but it is not a full Magic rules engine and it is not a trained deck performance model.

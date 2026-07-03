@@ -120,24 +120,7 @@ public sealed class DeckAnalysisMetrics
 
             if (!price.PriceKnown || !price.Price.HasValue)
             {
-                if ((includedInDeck || isMaybeboard) && includedInPrice)
-                {
-                    analysis.MissingPriceCards.Add(card.Name);
-                    if (!string.IsNullOrWhiteSpace(price.SelectedPrintingReason))
-                    {
-                        analysis.PriceRiskNotes.Add($"{card.Name}: {price.SelectedPrintingReason}");
-                    }
-
-                    if (IsBasicLandCard(card))
-                    {
-                        analysis.BasicMissingPriceCards.Add(card.Name);
-                    }
-                    else
-                    {
-                        analysis.NonBasicMissingPriceCards.Add(card.Name);
-                        analysis.UnresolvedMissingPriceCards.Add(card.Name);
-                    }
-                }
+                TrackMissingPrice(analysis, card, price, includedInDeck || isMaybeboard, includedInPrice);
 
                 continue;
             }
@@ -176,6 +159,37 @@ public sealed class DeckAnalysisMetrics
         analysis.TopCostDrivers = drivers;
         AddBudgetStatus(analysis, maxBudget);
         return analysis;
+    }
+
+    /// <summary>
+    /// Records one relevant card whose source snapshot does not provide a usable price.
+    /// </summary>
+    private static void TrackMissingPrice(
+        DeckCostAnalysis analysis,
+        DeckCard card,
+        CardPriceEvaluation price,
+        bool relevantToDeck,
+        bool includedInPrice)
+    {
+        if (!relevantToDeck || !includedInPrice)
+        {
+            return;
+        }
+
+        analysis.MissingPriceCards.Add(card.Name);
+        if (!string.IsNullOrWhiteSpace(price.SelectedPrintingReason))
+        {
+            analysis.PriceRiskNotes.Add($"{card.Name}: {price.SelectedPrintingReason}");
+        }
+
+        if (IsBasicLandCard(card))
+        {
+            analysis.BasicMissingPriceCards.Add(card.Name);
+            return;
+        }
+
+        analysis.NonBasicMissingPriceCards.Add(card.Name);
+        analysis.UnresolvedMissingPriceCards.Add(card.Name);
     }
 
     /// <summary>

@@ -1,6 +1,6 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Globalization;
 
 namespace MtgMcp.Calibration;
 

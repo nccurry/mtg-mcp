@@ -1,8 +1,12 @@
 # <Feature Name> PLC Packet
 
+This is the short index for one packet under
+`docs/llms/plcs/<lifecycle>/<feature-slug>/`. Keep detail in the linked
+documents. Delete optional prompts that do not apply instead of adding filler.
+
 ## Lifecycle
 
-- Status: Planned
+- Status: Planned | In progress | Completed
 - Folder: `docs/llms/plcs/planned/<feature-slug>/`
 - Owner: mtg-mcp
 - Created: <YYYY-MM-DD>

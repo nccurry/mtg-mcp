@@ -32,7 +32,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
     public static async Task<McpProcessSession> StartAsync(
         Uri scryfallBaseAddress,
         Uri archidektBaseAddress,
-        string operationMode,
+        string? operationMode,
         CancellationToken cancellationToken,
         Uri? commanderSpellbookBaseAddress = null)
     {
@@ -64,7 +64,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
         Uri archidektBaseAddress,
         Uri? commanderSpellbookBaseAddress,
         string dataDirectory,
-        string operationMode)
+        string? operationMode)
     {
         string? installedCommand = Environment.GetEnvironmentVariable("MTGMCP_E2E_COMMAND");
         string[] commandArguments = [];
@@ -82,23 +82,28 @@ internal sealed class McpProcessSession : IAsyncDisposable
             commandArguments = ["run", "--project", appProjectPath, "--configuration", configuration, "--no-build"];
         }
 
+        Dictionary<string, string?> environmentVariables = new()
+        {
+            ["MTGMCP__DATA_DIR"] = dataDirectory,
+            ["MTGMCP__SCRYFALL__BASE_ADDRESS"] = scryfallBaseAddress.ToString(),
+            ["MTGMCP__SCRYFALL__USER_AGENT"] = "mtg-mcp-e2e/1.0",
+            ["MTGMCP__ARCHIDEKT__BASE_ADDRESS"] = archidektBaseAddress.ToString(),
+            ["MTGMCP__ARCHIDEKT__USERNAME"] = "test-user",
+            ["MTGMCP__ARCHIDEKT__PASSWORD"] = "test-password",
+            ["MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS"] = (commanderSpellbookBaseAddress ?? new Uri("http://127.0.0.1:9/")).ToString()
+        };
+        if (operationMode is not null)
+        {
+            environmentVariables["MTGMCP__OPERATION_MODE"] = operationMode;
+        }
+
         return new StdioClientTransportOptions
         {
             Name = "mtg-mcp-e2e",
             Command = command,
             Arguments = commandArguments,
             WorkingDirectory = repoRoot,
-            EnvironmentVariables = new Dictionary<string, string?>
-            {
-                ["MTGMCP__DATA_DIR"] = dataDirectory,
-                ["MTGMCP__OPERATION_MODE"] = operationMode,
-                ["MTGMCP__SCRYFALL__BASE_ADDRESS"] = scryfallBaseAddress.ToString(),
-                ["MTGMCP__SCRYFALL__USER_AGENT"] = "mtg-mcp-e2e/1.0",
-                ["MTGMCP__ARCHIDEKT__BASE_ADDRESS"] = archidektBaseAddress.ToString(),
-                ["MTGMCP__ARCHIDEKT__USERNAME"] = "test-user",
-                ["MTGMCP__ARCHIDEKT__PASSWORD"] = "test-password",
-                ["MTGMCP__COMMANDERSPELLBOOK__BASE_ADDRESS"] = (commanderSpellbookBaseAddress ?? new Uri("http://127.0.0.1:9/")).ToString()
-            }
+            EnvironmentVariables = environmentVariables
         };
     }
 

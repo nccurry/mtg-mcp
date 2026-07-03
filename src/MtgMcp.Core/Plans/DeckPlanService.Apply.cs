@@ -143,30 +143,21 @@ public sealed partial class DeckPlanService
             {
                 DeckEditOperation operation = plan.Operations[index];
                 attemptedOperations = index + 1;
-                try
-                {
-                    DeckChangeResult? result = await ApplyOperationAsync(
-                            plan.WorkspaceId,
-                            operation,
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                    appliedOperations++;
-                    if (result is not null)
-                    {
-                        messages.Add(result.Message);
-                    }
-                }
-                catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
-                {
-                    return new DeckEditPlanApplyFailure(
+                DeckEditPlanApplyFailure? failure = await TryApplyOperationAsync(
+                        plan.WorkspaceId,
+                        workspace,
+                        operation,
+                        index,
                         appliedOperations,
-                        attemptedOperations,
-                        new DeckEditPlanFailedOperation(index, operation),
-                        exception,
-                        ApplyStateUnknown: IsRemoteTimeout(workspace, exception),
-                        messages
-                    );
+                        messages,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (failure is not null)
+                {
+                    return failure;
                 }
+
+                appliedOperations++;
             }
         }
         catch (DeckEditPlanOperationException exception)
@@ -205,6 +196,41 @@ public sealed partial class DeckPlanService
         }
 
         return new DeckEditPlanApplySuccess(appliedOperations, attemptedOperations, messages);
+    }
+
+    /// <summary>
+    /// Applies one operation and converts expected failures into a typed partial-apply result.
+    /// </summary>
+    private async Task<DeckEditPlanApplyFailure?> TryApplyOperationAsync(
+        string workspaceId,
+        DeckWorkspace workspace,
+        DeckEditOperation operation,
+        int operationIndex,
+        int appliedOperations,
+        List<string> messages,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            DeckChangeResult? result = await ApplyOperationAsync(workspaceId, operation, cancellationToken)
+                .ConfigureAwait(false);
+            if (result is not null)
+            {
+                messages.Add(result.Message);
+            }
+
+            return null;
+        }
+        catch (Exception exception) when (IsReportableApplyException(exception, cancellationToken))
+        {
+            return new DeckEditPlanApplyFailure(
+                appliedOperations,
+                operationIndex + 1,
+                new DeckEditPlanFailedOperation(operationIndex, operation),
+                exception,
+                ApplyStateUnknown: IsRemoteTimeout(workspace, exception),
+                messages);
+        }
     }
 
     /// <summary>

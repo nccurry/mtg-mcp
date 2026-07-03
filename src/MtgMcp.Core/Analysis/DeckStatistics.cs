@@ -259,21 +259,7 @@ public static class DeckStatistics
             int nextIndex = handSize;
             if (includeMulligans && ShouldMulliganByLandCount(hand))
             {
-                shuffled = Shuffle(deck, random);
-                handSize = Math.Min(openingHandSize, shuffled.Count);
-                hand = shuffled.Take(handSize).ToList();
-                nextIndex = handSize;
-                if (hand.Count > 0)
-                {
-                    bool bottomLand = CountLands(hand) >= 4;
-                    int bottomIndex = bottomLand ? hand.FindIndex(card => card) : hand.FindIndex(card => !card);
-                    if (bottomIndex < 0)
-                    {
-                        bottomIndex = hand.Count - 1;
-                    }
-
-                    hand.RemoveAt(bottomIndex);
-                }
+                (shuffled, hand, nextIndex) = DrawMulliganHand(deck, random, openingHandSize);
             }
 
             int draws = CardsDrawnByTurn(turn, onThePlay);
@@ -290,6 +276,28 @@ public static class DeckStatistics
         }
 
         return hits / (double)simulations;
+    }
+
+    /// <summary>
+    /// Draws a replacement opening hand and bottoms one card using the land-count policy.
+    /// </summary>
+    private static (List<bool> Shuffled, List<bool> Hand, int NextIndex) DrawMulliganHand(
+        IReadOnlyList<bool> deck,
+        DeterministicSimulationRandom random,
+        int openingHandSize)
+    {
+        List<bool> shuffled = Shuffle(deck, random);
+        int handSize = Math.Min(openingHandSize, shuffled.Count);
+        List<bool> hand = shuffled.Take(handSize).ToList();
+        if (hand.Count == 0)
+        {
+            return (shuffled, hand, handSize);
+        }
+
+        bool bottomLand = CountLands(hand) >= 4;
+        int bottomIndex = bottomLand ? hand.FindIndex(card => card) : hand.FindIndex(card => !card);
+        hand.RemoveAt(bottomIndex < 0 ? hand.Count - 1 : bottomIndex);
+        return (shuffled, hand, handSize);
     }
 
     /// <summary>

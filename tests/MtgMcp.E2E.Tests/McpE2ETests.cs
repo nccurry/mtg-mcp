@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -1805,6 +1805,46 @@ public sealed class McpE2ETests
 
         names.Should().Contain("workspace_list");
         names.Should().NotContain("workspace_start");
+        archidekt.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Verifies that an unset operation mode starts in plan mode and hides mutation tools.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task DefaultOperationMode_UsesPlanAndHidesMutationTools()
+    {
+        await using FakeHttpServer scryfall = new();
+        await using FakeHttpServer archidekt = new();
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            scryfall.BaseAddress,
+            archidekt.BaseAddress,
+            operationMode: null,
+            TestContext.Current.CancellationToken);
+
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+        string[] names = tools.Select(tool => tool.Name).ToArray();
+        JsonElement serverInfo = await CallJsonAsync(
+            session.Client,
+            "server_get_info",
+            new Dictionary<string, object?>());
+        string effectiveConfiguration = await ReadResourceTextAsync(
+            session.Client,
+            "mtg://config/effective");
+        string serverInfoResource = await ReadResourceTextAsync(
+            session.Client,
+            "mtg://server/info");
+
+        names.Should().Contain("deck_plan_create");
+        names.Should().NotContain("deck_plan_apply");
+        names.Should().NotContain("workspace_start");
+        GetString(serverInfo, "operationMode").Should().Be("plan");
+        using JsonDocument effectiveDocument = JsonDocument.Parse(effectiveConfiguration);
+        effectiveDocument.RootElement.GetProperty("MtgMcp:OperationMode").GetString().Should().Be("plan");
+        using JsonDocument serverInfoDocument = JsonDocument.Parse(serverInfoResource);
+        GetString(serverInfoDocument.RootElement, "operationMode").Should().Be("plan");
         archidekt.Requests.Should().BeEmpty();
     }
 

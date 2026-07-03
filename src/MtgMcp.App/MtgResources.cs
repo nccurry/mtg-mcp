@@ -401,6 +401,8 @@ public sealed class MtgResources
             }
         }
 
+        values["MtgMcp:OperationMode"] = operationMode.EffectiveMode;
+
         return JsonSerializer.Serialize(SecretRedactor.Redact(values), JsonOptions);
     }
 

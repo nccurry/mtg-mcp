@@ -5,7 +5,7 @@ param(
     [string] $Action,
 
     [string] $ReportPath = "artifacts/coverage/codecov.cobertura.xml",
-    [double] $Threshold = 85,
+    [double] $Threshold = 90,
     [string[]] $PackageName = @()
 )
 
@@ -29,7 +29,16 @@ function Invoke-VerifyGates {
     }
 
     [xml] $coverage = Get-Content -LiteralPath $fullReportPath
-    $gates = @("MtgMcp.Core", "MtgMcp.Scryfall", "MtgMcp.Archidekt")
+    $gates = @(
+        "MtgMcp.App",
+        "MtgMcp.Core",
+        "MtgMcp.Scryfall",
+        "MtgMcp.Archidekt",
+        "MtgMcp.Moxfield",
+        "MtgMcp.Playgroup",
+        "MtgMcp.CommanderSpellbook",
+        "MtgMcp.Decklists"
+    )
 
     if ($PackageName.Count -gt 0) {
         $requested = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -51,15 +60,20 @@ function Invoke-VerifyGates {
 
     foreach ($gate in $gates) {
         $package = @($packages | Where-Object { Test-PackageMatchesGate -PackageNode $_ -Gate $gate }) | Select-Object -First 1
+        $metrics = Get-ClassCoverageMetrics -Classes $classes -Gate $gate
         if ($null -ne $package) {
             $rate = [double]::Parse($package.GetAttribute("line-rate"), $culture) * 100.0
+            $branchRate = [double]::Parse($package.GetAttribute("branch-rate"), $culture) * 100.0
         }
         else {
-            $rate = Get-ClassCoverageRate -Classes $classes -Gate $gate
+            $rate = $metrics.LineRate
+            $branchRate = $metrics.BranchRate
         }
 
         $rateText = $rate.ToString("0.00", $culture)
-        Write-Host "${gate}: $rateText% line coverage"
+        $branchText = $branchRate.ToString("0.00", $culture)
+        $methodText = $metrics.MethodRate.ToString("0.00", $culture)
+        Write-Host "${gate}: line $rateText%; branch $branchText%; method $methodText%"
 
         if ($rate + 0.000001 -lt $Threshold) {
             Write-Error "$gate line coverage is below $Threshold%."
@@ -72,7 +86,7 @@ function Invoke-VerifyGates {
     }
 }
 
-function Get-ClassCoverageRate {
+function Get-ClassCoverageMetrics {
     param(
         [object[]] $Classes,
         [Parameter(Mandatory = $true)] [string] $Gate
@@ -85,11 +99,31 @@ function Get-ClassCoverageRate {
 
     $coveredLines = 0
     $coverableLines = 0
+    $coveredBranches = 0
+    $coverableBranches = 0
+    $coveredMethods = 0
+    $coverableMethods = 0
     foreach ($class in $matchedClasses) {
         foreach ($line in @($class.SelectNodes("*[local-name()='lines']/*[local-name()='line']"))) {
             $coverableLines++
             if ([int]::Parse($line.GetAttribute("hits"), [System.Globalization.CultureInfo]::InvariantCulture) -gt 0) {
                 $coveredLines++
+            }
+
+            $conditionCoverage = $line.GetAttribute("condition-coverage")
+            if ($conditionCoverage -match '\((\d+)/(\d+)\)') {
+                $coveredBranches += [int]::Parse($Matches[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                $coverableBranches += [int]::Parse($Matches[2], [System.Globalization.CultureInfo]::InvariantCulture)
+            }
+        }
+
+        foreach ($method in @($class.SelectNodes("*[local-name()='methods']/*[local-name()='method']"))) {
+            $coverableMethods++
+            $methodLines = @($method.SelectNodes("*[local-name()='lines']/*[local-name()='line']"))
+            if ($methodLines | Where-Object {
+                    [int]::Parse($_.GetAttribute("hits"), [System.Globalization.CultureInfo]::InvariantCulture) -gt 0
+                } | Select-Object -First 1) {
+                $coveredMethods++
             }
         }
     }
@@ -98,7 +132,11 @@ function Get-ClassCoverageRate {
         throw "Coverage package has no coverable lines in report: $Gate"
     }
 
-    return ($coveredLines / $coverableLines) * 100.0
+    return [pscustomobject]@{
+        LineRate = ($coveredLines / $coverableLines) * 100.0
+        BranchRate = if ($coverableBranches -eq 0) { 100.0 } else { ($coveredBranches / $coverableBranches) * 100.0 }
+        MethodRate = if ($coverableMethods -eq 0) { 100.0 } else { ($coveredMethods / $coverableMethods) * 100.0 }
+    }
 }
 
 function Test-PackageMatchesGate {

@@ -2,7 +2,6 @@ using System.Net;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using MtgMcp.Core;
-using MtgMcp.Scryfall;
 using RichardSzalay.MockHttp;
 
 namespace MtgMcp.Scryfall.Tests;

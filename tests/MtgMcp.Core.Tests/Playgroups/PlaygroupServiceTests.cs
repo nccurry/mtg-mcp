@@ -1,6 +1,5 @@
 using System.Globalization;
 using FluentAssertions;
-using MtgMcp.Core;
 
 namespace MtgMcp.Core.Tests.Playgroups;
 

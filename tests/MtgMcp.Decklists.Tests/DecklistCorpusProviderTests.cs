@@ -4,7 +4,6 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using MtgMcp.Core;
-using MtgMcp.Decklists;
 using RichardSzalay.MockHttp;
 
 namespace MtgMcp.Decklists.Tests;

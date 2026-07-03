@@ -832,11 +832,7 @@ public static partial class DeckIntentText
             {
                 if (quoted && index + 1 < text.Length && text[index + 1] == '"')
                 {
-                    current.Add('"');
-                    if (preserveQuotes)
-                    {
-                        current.Add('"');
-                    }
+                    AppendEscapedQuote(current, preserveQuotes);
 
                     index++;
                     continue;
@@ -863,6 +859,18 @@ public static partial class DeckIntentText
 
         AddDelimitedToken(tokens, current);
         return tokens;
+    }
+
+    /// <summary>
+    /// Appends an escaped quote and preserves its marker when nested parsing needs it.
+    /// </summary>
+    private static void AppendEscapedQuote(List<char> current, bool preserveQuotes)
+    {
+        current.Add('"');
+        if (preserveQuotes)
+        {
+            current.Add('"');
+        }
     }
 
     /// <summary>
@@ -981,14 +989,7 @@ public static partial class DeckIntentText
         {
             if (part.StartsWith("requires ", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (string requirement in SplitDelimitedTokens(part["requires ".Length..], ','))
-                {
-                    route.Requirements.Add(requirement);
-                    if (!SimulationRouteEvaluator.IsSupportedRequirement(requirement))
-                    {
-                        warnings.Add($"Win route '{route.Name}' has unsupported requirement '{requirement}'.");
-                    }
-                }
+                AddWinRouteRequirements(route, part["requires ".Length..], warnings);
 
                 continue;
             }
@@ -1014,6 +1015,24 @@ public static partial class DeckIntentText
         }
 
         return route;
+    }
+
+    /// <summary>
+    /// Adds and validates the requirements declared by one deck-local win route.
+    /// </summary>
+    private static void AddWinRouteRequirements(
+        DeckIntentWinRoute route,
+        string requirements,
+        List<string> warnings)
+    {
+        foreach (string requirement in SplitDelimitedTokens(requirements, ','))
+        {
+            route.Requirements.Add(requirement);
+            if (!SimulationRouteEvaluator.IsSupportedRequirement(requirement))
+            {
+                warnings.Add($"Win route '{route.Name}' has unsupported requirement '{requirement}'.");
+            }
+        }
     }
 
     /// <summary>
