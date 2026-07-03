@@ -1,7 +1,7 @@
 # Evidence-First Rewrite Guide
 
 This document is the bridge between the currently shipped pre-rewrite server
-and the planned clean-break `0.9.0` server. It prevents current implementation
+and the in-progress clean-break `0.9.0` server. It prevents current implementation
 documentation from being mistaken for the rewrite target.
 
 The rewrite has entered foundation implementation. The legacy audit is
@@ -9,15 +9,15 @@ approved/completed, the foundation child is approved/in progress, and the
 remaining eight children stay planning-only with
 `Implementation authorized: No`. Production edits are limited to the active
 foundation child and its current authorized phase. Foundation Phases 0 and 1
-are complete; Phase 2A product-code deletion has not started.
+and Phase 2 are complete; Phase 3 has not started on the isolated rewrite
+branch.
 
 ## Authority And Routing
 
 Use these sources in order for the kind of question being answered:
 
 1. For what the current checkout actually does, use code, tests, project files,
-   configuration, `Taskfile.yml`, and the current-release sections of
-   [README.md](../README.md).
+   configuration, `Taskfile.yml`, and [README.md](../README.md).
 2. For repository-wide coding rules, use [AGENTS.md](../AGENTS.md) and the
    closest scoped `AGENTS.md`.
 3. For the rewrite's shared product and architecture constraints, use the
@@ -34,7 +34,7 @@ another.
 
 ## Current Server Versus Rewrite Target
 
-| Concern | Current pre-rewrite server | Clean-break `0.9.0` target |
+| Concern | Released legacy server | Clean-break `0.9.0` target |
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |

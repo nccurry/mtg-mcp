@@ -1,27 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MtgMcp.App/MtgMcp.App.csproj" />
-    <Project Path="src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj" />
-    <Project Path="src/MtgMcp.CommanderSpellbook/MtgMcp.CommanderSpellbook.csproj" />
     <Project Path="src/MtgMcp.Core/MtgMcp.Core.csproj" />
-    <Project Path="src/MtgMcp.Decklists/MtgMcp.Decklists.csproj" />
-    <Project Path="src/MtgMcp.Moxfield/MtgMcp.Moxfield.csproj" />
-    <Project Path="src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj" />
-    <Project Path="src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj" />
     <Project Path="tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj" />
-    <Project Path="tests/MtgMcp.Calibration/MtgMcp.Calibration.csproj" />
-    <Project Path="tests/MtgMcp.Calibration.Tests/MtgMcp.Calibration.Tests.csproj" />
-    <Project Path="tests/MtgMcp.CommanderSpellbook.Tests/MtgMcp.CommanderSpellbook.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Decklists.Tests/MtgMcp.Decklists.Tests.csproj" />
     <Project Path="tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Moxfield.Tests/MtgMcp.Moxfield.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj" />
   </Folder>
 </Solution>

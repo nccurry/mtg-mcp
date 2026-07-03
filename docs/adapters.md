@@ -24,10 +24,10 @@ source framework.
   access.
 
 See the [rewrite guide](rewrite-guide.md) and the individual provider PLCs for
-the reviewed contract. The sections below describe the current legacy adapter
-implementation only.
+the reviewed contract. The sections below describe removed legacy adapters as
+historical reference only; those projects are not present on this branch.
 
-## Current Legacy Adapter Operations
+## Historical Legacy Adapter Operations
 
 ### User-Agent defaults
 

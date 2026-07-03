@@ -11,12 +11,10 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - In the rewrite, model only dependency-light provider-neutral evidence,
   identifiers, failures, and shared contracts assigned by the active child.
   Deck persistence belongs in Decks and exact mathematics in Statistics.
-- Legacy planning, intent, recommendation, scoring, and simulation types may be
-  maintained while the current server exists, but do not expand or transplant
-  them into stable `0.9.0`.
-- For current maintenance, keep I/O behind small existing contracts. For the
-  rewrite, introduce only the contracts assigned by the active child so
-  behavior stays testable without treating legacy interfaces as mandatory.
+- Do not restore legacy planning, intent, recommendation, scoring, or
+  simulation types. Introduce only contracts assigned by the active child.
+- Keep future I/O behind small approved contracts so behavior stays testable
+  without treating removed legacy interfaces as mandatory.
 
 ## Domain Design
 

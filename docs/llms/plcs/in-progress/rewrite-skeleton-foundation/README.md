@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: Phase 1 complete; Phase 2A not started
+- Current phase: Phase 2 complete; Phase 3 not started
 
 ## Summary
 
@@ -65,8 +65,21 @@ evidence-aware, and normal validation is offline.
 | 2026-07-03 | Packet structure and traceability | Passed after final docs review |
 | 2026-07-03 | Phase 0 implementation entry gate | Passed | Audit disposition approved/completed; foundation decisions accepted; `read-only`/`local`/`remote` with `local` default recorded; owner authorization received. |
 | 2026-07-03 | Phase 1 isolated branch/worktree | Passed | `ncurry/evidence-first-mcp-rewrite` was created at `C:/Users/Nick Curry/Programming/github.com/nccurry/mtg-mcp-evidence-first-rewrite` from `main` commit `c2aeec8`; HEAD and merge base match, the new worktree is clean, and the primary/other worktrees were untouched. |
+| 2026-07-03 | Phase 2A audit-approved removal | Passed | Removed the legacy production implementation and product tests only on the rewrite branch. Retained Git history, repository guidance/infrastructure, and the audit's existing annotate-only legacy PLC dispositions; no legacy lifecycle move or unapproved source abstraction was introduced. |
+| 2026-07-03 | Phase 2B minimal solution | Passed | The solution contains only `MtgMcp.Core` and `MtgMcp.App` production projects. Architecture tests prove Core has no package/project references, App references only Core and has no runtime package, and legacy MCP registrations are absent. |
+| 2026-07-03 | Phase 2C repository reconciliation | Passed | `task lint`, `task test` (10 tests), `task surface:report`, `task coverage`, `task pack`, `task smoke:mcp`, and `task release:tool-smoke VERSION=0.9.0-preview.1` passed. App/Core line coverage is 100%; package inspection contains only App/Core assemblies and required tool assets. |
+| 2026-07-03 | Phase 2 post-implementation audits | Passed after fixes | Abstraction, code quality, dead code, dependency, test coverage, test quality, visual readability, and docs-sync audits were run. Findings fixed stale guidance/task references, incomplete wiring assertions, an unbounded process test, an unsupported-argument case, and outdated package pins. Final dependency scans report no vulnerable, deprecated, or outdated packages. |
+
+## Phase 2 Reconciliation
+
+| Phase | Exit criterion | Result |
+| --- | --- | --- |
+| 2A | Project removal and lifecycle documentation match the approved audit allowlist. | Passed; removed legacy product/runtime/test implementations, preserved history and infrastructure, and left annotate-only PLC dispositions intact. |
+| 2B | Minimal Core/App build and architecture tests pass. | Passed; exactly two production projects remain and the enforced dependency graph is App to Core only. |
+| 2C | Coverage conveniences, integration lists, surface filters, lint, tests, coverage, package, release, and smoke name no removed project. | Passed; static wiring tests and Task-based validation cover every listed path. |
 
 ## Completion Notes
 
-Phases 0 and 1 are complete. Production deletion remains prohibited until
-Phase 2A is explicitly requested and started in the rewrite worktree.
+Phases 0 through 2 are complete. The branch is a compiling, packaged process
+skeleton with no MCP surface. Phase 3 contracts and modes remain unimplemented
+until explicitly requested under this approved packet.

@@ -7,9 +7,9 @@
 `deck_estimate_commander_bracket` is an advisory pregame-discussion aid, not an
 official bracket ruling.
 
-The estimator uses live Scryfall `is:game-changer` names when the tool performs a live
-lookup. Offline calibration supplies an explicit Game Changer set in
-`tests/MtgMcp.Calibration/Corpus/bracket-benchmarks.json`.
+The removed estimator used live Scryfall `is:game-changer` names and an offline
+calibration corpus. Its source and fixtures remain available in Git history and
+the released legacy version; they are not present on this rewrite branch.
 
 ## Signals
 
@@ -29,7 +29,6 @@ evidence but no longer forces bracket 4 by itself.
 
 ## Calibration
 
-Bracket ranges are checked by `bracket-range` expectations in the calibration corpus. The
-current bracket fixtures cover precon-style, upgraded casual, high-power, and cEDH-density
-synthetic decks. Run `task calibrate:stats-lab -- --validate-only` for a fast corpus check,
-or `task calibrate:stats-lab` for the full offline report.
+The historical calibration corpus covered precon-style, upgraded casual,
+high-power, and cEDH-density synthetic decks. Stable `0.9.0` will not restore
+this advisor or its calibration task.

@@ -2,8 +2,4 @@
     <PropertyGroup>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
-
-    <ItemGroup>
-        <EmbeddedResource Include="../../docs/reference/local-combos.json" LogicalName="MtgMcp.Core.LocalCombos.json" />
-    </ItemGroup>
 </Project>

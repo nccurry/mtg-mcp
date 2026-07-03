@@ -1,3 +1,3 @@
-using MtgMcp.App;
+using MtgMcp.App.Cli;
 
-return await MtgMcpCli.RunAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
+return FoundationCli.Run(args, Console.Out, Console.Error);

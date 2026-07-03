@@ -7,14 +7,16 @@ Current code, tests, project files, checked-in configuration, and `AGENTS.md`
 are authoritative. This file is a compact orientation index, not a second
 instruction file.
 
-The repository currently contains a shipped legacy server and a planning-only
-clean-break rewrite. Read [Rewrite guide](docs/rewrite-guide.md) before treating
-current architecture or public-surface docs as future design requirements.
+This branch contains the minimal Phase 2 foundation of the clean-break rewrite.
+The shipped legacy server remains available through Git history and its release,
+but its production code is no longer present here. Read
+[Rewrite guide](docs/rewrite-guide.md) before treating historical architecture
+or public-surface docs as future design requirements.
 
 ## Start Here
 
 - [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
-- [README](README.md): Installation, configuration, workflows, and public MCP surface.
+- [README](README.md): Current foundation status, product direction, and development commands.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): Current-versus-target routing, rewrite guardrails, and implementation entry gate.
@@ -25,7 +27,7 @@ current architecture or public-surface docs as future design requirements.
 ## Architecture
 
 - [Architecture](docs/architecture.md): Rewrite target summary plus explicitly labeled legacy implementation reference.
-- [Adapters](docs/adapters.md): Rewrite adapter boundary plus current legacy adapter operations.
+- [Adapters](docs/adapters.md): Rewrite adapter boundary plus historical legacy operations.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
 - [Toolsets](docs/toolsets.md): Current legacy tool groups; not the rewrite surface.
 - [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
@@ -38,10 +40,10 @@ current architecture or public-surface docs as future design requirements.
 - [Plan-Led Changes](docs/llms/plcs/README.md): Requirements-backed PLC lifecycle and packet rules.
 - [Templates](docs/llms/templates/README.md): Reusable ordinary-plan and multi-file PLC templates.
 
-## Current Legacy Reference
+## Historical Legacy Reference
 
-- [Simulation profiles](docs/simulation-profiles.md): Current legacy simulation and intent behavior.
-- [Stats Lab metrics](docs/stats-lab-metrics.md): Current legacy sampled-analysis contracts.
-- [Observability](docs/observability.md): MCP logs, metrics, and diagnostics.
-- [Compatibility](docs/compatibility.md): Exercised MCP clients and protocol coverage.
+- [Simulation profiles](docs/simulation-profiles.md): Removed legacy simulation and intent behavior.
+- [Stats Lab metrics](docs/stats-lab-metrics.md): Removed legacy sampled-analysis contracts.
+- [Observability](docs/observability.md): Legacy MCP logs, metrics, and diagnostics.
+- [Compatibility](docs/compatibility.md): Legacy MCP client and protocol coverage.
 - [Codex playbooks](.codex/README.md): Supplemental review and validation references.

@@ -1,6 +1,6 @@
 # Stats Lab Metric Contracts
 
-> Legacy reference: these are sampled heuristic contracts for the current
+> Legacy reference: these are sampled heuristic contracts for the removed
 > server. Stable `0.9.0` implements exact statistics from caller-supplied groups
 > in `MtgMcp.Statistics`; it does not retain Stats Lab simulation. See the
 > [exact-statistics PLC](llms/plcs/planned/exact-deck-statistics/README.md).

@@ -1,6 +1,6 @@
 # MCP Toolsets
 
-> Current-release reference: this file documents the legacy pre-rewrite
+> Historical reference: this file documents the removed legacy pre-rewrite
 > toolset filter. The clean-break `0.9.0` surface is capability-prefixed and
 > governed by the child PLC manifests; it does not preserve legacy toolsets or
 > counts for compatibility. See [rewrite-guide.md](rewrite-guide.md).
@@ -24,7 +24,7 @@ A practical starter profile for local deck work is
 Add `archidekt`, `playgroup`, `intent`, `facets`, or `collection` when those
 workflows are needed.
 
-## Current Legacy Toolsets
+## Historical Legacy Toolsets
 
 | Toolset | Scope |
 |---|---|

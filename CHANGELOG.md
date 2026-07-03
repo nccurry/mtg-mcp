@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Removed the audited legacy product implementation from the isolated rewrite
+  branch while retaining ordinary Git history and released artifacts.
+- Reduced the production solution to dependency-light `MtgMcp.Core` and a
+  minimal `MtgMcp.App` process skeleton with no MCP or provider surface.
+- Rebuilt focused unit, architecture, and process tests and reconciled task,
+  CI, coverage, package, release, and smoke wiring with the foundation project
+  set.
+
 ## 0.8.0 - 2026-06-28
 
 - Audited package boundaries, release metadata, docs, and local build coverage

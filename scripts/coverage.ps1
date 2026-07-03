@@ -31,13 +31,7 @@ function Invoke-VerifyGates {
     [xml] $coverage = Get-Content -LiteralPath $fullReportPath
     $gates = @(
         "MtgMcp.App",
-        "MtgMcp.Core",
-        "MtgMcp.Scryfall",
-        "MtgMcp.Archidekt",
-        "MtgMcp.Moxfield",
-        "MtgMcp.Playgroup",
-        "MtgMcp.CommanderSpellbook",
-        "MtgMcp.Decklists"
+        "MtgMcp.Core"
     )
 
     if ($PackageName.Count -gt 0) {
@@ -94,7 +88,18 @@ function Get-ClassCoverageMetrics {
 
     $matchedClasses = @($Classes | Where-Object { Test-ClassMatchesGate -ClassNode $_ -Gate $Gate })
     if ($matchedClasses.Count -eq 0) {
-        throw "Coverage package not found in report: $Gate. Report contains $($Classes.Count) class nodes."
+        $sourceRoot = Resolve-RepoPath "src/$Gate"
+        $sourceFiles = @(Get-ChildItem -LiteralPath $sourceRoot -Filter "*.cs" -File -Recurse |
+            Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' })
+        if ($sourceFiles.Count -eq 0) {
+            return [pscustomobject]@{
+                LineRate = 100.0
+                BranchRate = 100.0
+                MethodRate = 100.0
+            }
+        }
+
+        throw "Coverage package not found in report for $Gate, which has $($sourceFiles.Count) source files."
     }
 
     $coveredLines = 0

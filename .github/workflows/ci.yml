@@ -56,7 +56,7 @@ jobs:
       - name: Build with analyzers
         run: task lint
 
-      - name: Report MCP surface inventory
+      - name: Verify legacy MCP surface removal
         run: task surface:report
 
       - name: Analyze with CodeQL
@@ -74,15 +74,6 @@ jobs:
       - name: Enforce coverage gates
         run: task coverage:gates
 
-      - name: Report performance ratchet
-        run: task perf:report
-
-      - name: Upload performance report
-        uses: actions/upload-artifact@v7
-        with:
-          name: performance-report
-          path: artifacts/performance-report.txt
-
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v6
         with:
@@ -92,20 +83,20 @@ jobs:
           flags: all-src
           fail_ci_if_error: true
 
-      - name: Smoke MCP host
+      - name: Smoke foundation process
         run: task smoke:mcp
 
       - name: Clean release artifacts
         run: task release:clean
 
       - name: Pack NuGet tool
-        run: task pack VERSION=0.0.0-ci
+        run: task pack VERSION=0.9.0-preview.0
 
       - name: Build release archives
-        run: task release:archives VERSION=0.0.0-ci
+        run: task release:archives VERSION=0.9.0-preview.0
 
       - name: Generate release checksums
         run: task release:checksums
 
       - name: Smoke local tool package
-        run: task release:tool-smoke VERSION=0.0.0-ci
+        run: task release:tool-smoke VERSION=0.9.0-preview.0

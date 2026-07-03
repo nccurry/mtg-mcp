@@ -1,12 +1,12 @@
 # Observability
 
-This document describes the current host. The rewrite retains the stdout/stderr
-and secret-redaction invariants, while exact metric names and dimensions remain
-subject to the foundation/App implementation and are not compatibility targets.
+> Historical reference: this document describes the removed legacy host. The
+> rewrite retains only its stdout/stderr and secret-redaction invariants; exact
+> metric names and dimensions require approval in the owning App phase.
 
-`mtg-mcp` uses stdio for MCP traffic, so runtime diagnostics must never write
-protocol-adjacent text to stdout. The app configures console logging to stderr,
-and host-boundary MCP diagnostics follow that rule.
+The legacy host used stdio for MCP traffic, so runtime diagnostics never wrote
+protocol-adjacent text to stdout. The rewrite must preserve that boundary when
+Foundation Phase 4 introduces stdio hosting.
 
 ## Tool Call Telemetry
 

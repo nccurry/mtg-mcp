@@ -19,16 +19,17 @@ On Windows, use `.\bootstrap.ps1`.
 Docs-only changes follow the validation guidance in `AGENTS.md` and do not need
 a .NET build.
 
-Keep adapters isolated from core domain logic. Normal tests must use fixtures or mock HTTP handlers and must not mutate real Archidekt decks.
+Keep future adapters isolated from Core domain logic. Normal tests must remain
+offline and must not mutate provider state.
 
-Public MCP surface changes must update `README.md`, `CHANGELOG.md`, and the
-surface tests. Follow `docs/versioning.md` for deprecations and result-shape
-changes.
+Public MCP surface changes must update `README.md`, `CHANGELOG.md`, and surface
+tests. During the clean-break rewrite, the approved active PLC defines the
+surface and compatibility boundary; otherwise follow `docs/versioning.md`.
 
 ## Evidence-First Rewrite
 
 Read [`docs/rewrite-guide.md`](docs/rewrite-guide.md) before rewrite work. The
-current server and its docs remain source truth for maintenance, but legacy
+legacy implementation remains reference evidence in Git history, but its
 workspace, plan, recommendation, intent, scoring, prompt, simulation, and
 provider abstractions are not the rewrite foundation.
 

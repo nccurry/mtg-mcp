@@ -6,8 +6,6 @@ dotenv:
 vars:
   SOLUTION: mtg-mcp.slnx
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
-  BENCH_PROJECT: tests/MtgMcp.Benchmarks/MtgMcp.Benchmarks.csproj
-  CALIBRATION_PROJECT: tests/MtgMcp.Calibration/MtgMcp.Calibration.csproj
   CONFIGURATION: Release
   # The pinned .NET preview SDK intermittently fails solution restore/build with parallel MSBuild.
   MSBUILD_MAXCPUCOUNT: 1
@@ -15,7 +13,7 @@ vars:
   POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}{{.TASKFILE_DIR}}/.tools/bin/pwsh -NoProfile{{end}}'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
-  VERSION: 0.0.0-dev
+  VERSION: 0.9.0-preview.1
   PACKAGE_ID: Nccurry.MtgMcp
   ARTIFACTS_DIR: artifacts
   PACKAGE_DIR: '{{.ARTIFACTS_DIR}}/packages'
@@ -193,41 +191,25 @@ tasks:
       - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build --filter "Category!=Live"'
 
   test:unit:
-    desc: Run unit tests
+    desc: Run foundation unit tests
     deps: [restore]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
 
   test:integration:
-    desc: Run fixture-based adapter tests
+    desc: Run foundation architecture integration tests
     deps: [restore]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-      - >
-        {{.DOTNET}} test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-      - >
-        {{.DOTNET}} test tests/MtgMcp.Moxfield.Tests/MtgMcp.Moxfield.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-      - >
-        {{.DOTNET}} test tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
-      - >
-        {{.DOTNET}} test tests/MtgMcp.CommanderSpellbook.Tests/MtgMcp.CommanderSpellbook.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
 
   test:e2e:
-    desc: Run mocked MCP end-to-end tests
+    desc: Run foundation process end-to-end tests
     deps: [build]
     cmds:
       - >
@@ -237,94 +219,10 @@ tasks:
         --filter "Category=E2E"
 
   test:live:
-    desc: Run opt-in live tests against a throwaway Archidekt deck
+    desc: Reserved opt-in live-provider test entry point; foundation has no live tests
     deps: [restore]
     cmds:
       - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"'
-
-  bench:
-    desc: Run all benchmarks; pass BenchmarkDotNet args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --inProcess
-        --filter "*"
-        {{.CLI_ARGS}}
-
-  bench:dry:
-    desc: Smoke-test benchmarks with BenchmarkDotNet's dry job; pass args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --inProcess
-        --job Dry
-        --filter "*"
-        {{.CLI_ARGS}}
-
-  bench:analysis:
-    desc: Run deck analysis and role-classification benchmarks; pass args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --inProcess
-        --filter "*DeckAnalysisBenchmarks*" "*DeckRoleClassifierBenchmarks*"
-        {{.CLI_ARGS}}
-
-  bench:performance:
-    desc: Run Stats Lab performance simulation benchmarks; pass args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --inProcess
-        --filter "*DeckPerformanceAnalyzerBenchmarks*"
-        {{.CLI_ARGS}}
-
-  bench:mana:
-    desc: Run mana payment and source-reading benchmarks; pass args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --inProcess
-        --filter "*PerformanceManaBenchmarks*"
-        {{.CLI_ARGS}}
-
-  bench:facets:
-    desc: Run facet predicate benchmarks; pass args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.BENCH_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --inProcess
-        --filter "*FacetPredicateBenchmarks*"
-        {{.CLI_ARGS}}
-
-  calibrate:stats-lab:
-    desc: Generate the offline Stats Lab calibration report; pass args after --
-    deps: [restore]
-    cmds:
-      - >
-        {{.DOTNET}} run --project {{.CALIBRATION_PROJECT}}
-        --configuration {{.CONFIGURATION}}
-        --
-        --output {{.ARTIFACTS_DIR}}/stats-lab-calibration
-        {{.CLI_ARGS}}
 
   coverage:
     desc: Run coverage gates and generate the Codecov report
@@ -353,52 +251,16 @@ tasks:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90'
 
   coverage:core:
-    desc: Enforce 90 percent line coverage for core deck services using the Codecov report
+    desc: Enforce 90 percent line coverage for Core using the Codecov report
     deps: [coverage:report]
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Core'
 
-  coverage:scryfall:
-    desc: Enforce 90 percent line coverage for the Scryfall client using the Codecov report
-    deps: [coverage:report]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Scryfall'
-
-  coverage:archidekt:
-    desc: Enforce 90 percent line coverage for the Archidekt client using the Codecov report
-    deps: [coverage:report]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Archidekt'
-
   coverage:app:
-    desc: Enforce 90 percent line coverage for the MCP host using the Codecov report
+    desc: Enforce 90 percent line coverage for the application using the Codecov report
     deps: [coverage:report]
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.App'
-
-  coverage:moxfield:
-    desc: Enforce 90 percent line coverage for the Moxfield adapter using the Codecov report
-    deps: [coverage:report]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Moxfield'
-
-  coverage:playgroup:
-    desc: Enforce 90 percent line coverage for the Playgroup adapter using the Codecov report
-    deps: [coverage:report]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Playgroup'
-
-  coverage:commander-spellbook:
-    desc: Enforce 90 percent line coverage for the Commander Spellbook adapter using the Codecov report
-    deps: [coverage:report]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.CommanderSpellbook'
-
-  coverage:decklists:
-    desc: Enforce 90 percent line coverage for decklist evidence adapters using the Codecov report
-    deps: [coverage:report]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Decklists'
 
   format:
     desc: Format source
@@ -425,28 +287,15 @@ tasks:
       - task: test
 
   surface:report:
-    desc: Print report-only MCP surface inventory metrics
+    desc: Verify that no legacy MCP surface remains in the foundation source
     deps: [build]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
+        {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~McpSurfaceInventoryTests.SurfaceMetrics_ReportCurrentInventory"
+        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsNoLegacyMcpRegistrations"
         --logger "console;verbosity=detailed"
-      - '{{.POWERSHELL}} -Command "Get-Content artifacts/surface-report.txt"'
-
-  perf:report:
-    desc: Print report-only hot-path performance ratchet metrics
-    deps: [build]
-    cmds:
-      - >
-        {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
-        --configuration {{.CONFIGURATION}}
-        --no-build
-        --filter "FullyQualifiedName~PerformanceRatchetReportTests.HotPathTimings_ReportCurrentRatchet"
-        --logger "console;verbosity=detailed"
-      - '{{.POWERSHELL}} -Command "Get-Content artifacts/performance-report.txt"'
 
   ci:
     desc: Run the CI validation suite
@@ -455,11 +304,10 @@ tasks:
       - task: surface:report
       - task: coverage:report
       - task: coverage:gates
-      - task: perf:report
       - task: smoke:mcp
 
   smoke:mcp:
-    desc: Build the MCP host and verify service registration
+    desc: Build the foundation executable and verify process readiness
     deps: [build]
     cmds:
       - '{{.DOTNET}} run --project {{.APP_PROJECT}} --configuration {{.CONFIGURATION}} --no-build -- --smoke'
@@ -496,7 +344,7 @@ tasks:
         {{if eq .LOCAL_CLEANUP_DRY_RUN "true"}}-DryRun{{end}}
 
   pack:
-    desc: Pack the MCP host as a NuGet dotnet tool
+    desc: Pack the foundation application as a NuGet dotnet tool
     deps: [restore]
     cmds:
       - >

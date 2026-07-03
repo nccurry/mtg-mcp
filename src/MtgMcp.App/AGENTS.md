@@ -12,9 +12,9 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - Preserve evidence source, assumptions, warnings, confidence, freshness, and
   replay metadata when presenting Core results.
 - Treat annotations as accurate risk hints, not authorization. Enforce write
-  capability with `OperationModeGuard`. Current maintenance follows the active
-  code's `read-only`/`plan`/`apply` modes; rewrite work uses
-  `read-only`/`local`/`remote` and distinguishes local from remote mutation.
+  capability with `OperationModeGuard` after Foundation Phase 3 introduces it.
+  Rewrite modes are `read-only`, `local`, and `remote`, with local and remote
+  mutation kept distinct.
 
 ## Host Boundary
 

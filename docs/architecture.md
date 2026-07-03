@@ -37,13 +37,16 @@ Exact implementation details belong to the independently approved child PLCs.
 
 ## Legacy Implementation Reference
 
-The remaining capability sections document the current pre-rewrite server.
-They are useful for factual inventory, fixtures, and deletion/reuse decisions,
-but they are not target architecture and must not be copied by default.
+The remaining capability sections document the removed pre-rewrite server.
+They are retained as historical evidence for fixtures and design lessons, but
+they do not describe code present on this branch and must not be copied by
+default.
 
-### Current capability inventory
+### Historical capability inventory
 
-Current deck intelligence is deterministic and heuristic. It provides useful structure, but it is not a full Magic rules engine and it is not a trained deck performance model.
+The removed deck-intelligence layer was deterministic and heuristic. It
+provided useful structure, but it was not a full Magic rules engine or a
+trained deck-performance model.
 
 Existing capabilities include:
 
