@@ -11,6 +11,9 @@ Use this checklist before handing off broad or risky changes.
   and operation-mode visibility.
 - Architecture and surface tests are updated when boundaries or public MCP shape
   intentionally change.
+- Rewrite changes have an approved active child, use
+  `read-only`/`local`/`remote`, preserve capability prefixes, and do not copy
+  legacy decision services or compatibility aliases.
 
 ## Abstractions And Dead Code
 

@@ -11,8 +11,9 @@ delivery.
 ## Lifecycle Folders
 
 - `planned/`: PLC packets being drafted, reviewed, or queued. Agents may update
-  requirements and design here, but should not treat the packet as permission to
-  start implementation unless the user asks for implementation.
+  requirements and design here, but the packet is never implementation
+  authority by itself. For the rewrite, explicit owner authorization,
+  independent approval, and `Implementation authorized: Yes` are all required.
 - `in-progress/`: PLC packets actively guiding code changes. Move a packet here
   before the first implementation edit, then keep phase status, scope changes,
   decisions, and validation evidence current.
@@ -78,6 +79,11 @@ Agents implementing an in-progress PLC should:
 - Add validation evidence before marking a phase complete.
 - Move the packet to `completed/` only after validation is done or the closure
   reason is recorded.
+
+The evidence-first rewrite additionally follows
+[`docs/rewrite-guide.md`](../../rewrite-guide.md): legacy code is reference
+evidence, the umbrella owns cross-child guardrails, and only the active approved
+child may direct implementation.
 
 ## Template Basis
 

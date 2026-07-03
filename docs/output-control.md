@@ -1,5 +1,10 @@
 # MCP Output Control
 
+> Current-release reference: these legacy presenter aliases are not a rewrite
+> compatibility requirement. Each approved child PLC owns its bounded output
+> and schema; stable `0.9.0` does not carry `compact` or workspace compatibility
+> aliases merely to preserve the old surface.
+
 Tools that expose `detailLevel` use one shared vocabulary:
 
 | Value | Use |
@@ -8,6 +13,8 @@ Tools that expose `detailLevel` use one shared vocabulary:
 | `normal` | Bounded response with supporting evidence or compact rows. |
 | `full` | Raw or full-fidelity model payload. |
 
-During the 0.10.0 deprecation window, legacy `compact` inputs on older tools are
-accepted as `summary`, and `includeWorkspace=true` is accepted as a compatibility
-shortcut for `detailLevel=full`. New calls should use `detailLevel`.
+The current `0.8.x` server accepts legacy `compact` inputs as `summary`, and
+`includeWorkspace=true` as a compatibility shortcut for `detailLevel=full`.
+An older plan called this a `0.10.0` deprecation window; the clean-break `0.9.0`
+program supersedes that forward-looking version claim. Current maintenance may
+keep the aliases until cutover, but rewrite code does not reproduce them.

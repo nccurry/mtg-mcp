@@ -9,6 +9,10 @@
 - Use modern C# features when they make code clearer, not just newer.
 - Prefer dependency-light Core logic. MCP host, persistence, network, provider,
   and file-system details belong at the edge.
+- For the evidence-first rewrite, use the active child's project boundary:
+  local deck persistence belongs in Decks and exact mathematics in Statistics;
+  do not move legacy planning, recommendation, intent, or simulation models
+  into Core.
 - Use unions for closed alternatives with case-specific payloads and handle them
   exhaustively. Keep enums for simple categories and records for independent
   state.
@@ -49,8 +53,8 @@
 - Throw for programmer errors and invalid state.
 - Return typed outcomes for expected user or domain failures.
 - Preserve useful exception context when wrapping errors.
-- Never expose Archidekt credentials, tokens, cookies, or local secret paths in
-  errors, logs, config output, tests, or docs.
+- Never expose provider credentials, tokens, cookies, CSRF values, or local
+  secret paths in errors, logs, config output, tests, or docs.
 
 ## Tests
 

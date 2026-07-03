@@ -1,5 +1,9 @@
 # Observability
 
+This document describes the current host. The rewrite retains the stdout/stderr
+and secret-redaction invariants, while exact metric names and dimensions remain
+subject to the foundation/App implementation and are not compatibility targets.
+
 `mtg-mcp` uses stdio for MCP traffic, so runtime diagnostics must never write
 protocol-adjacent text to stdout. The app configures console logging to stderr,
 and host-boundary MCP diagnostics follow that rule.

@@ -25,7 +25,7 @@ surface.
 
 | Surface | Mode | Expected visibility | Notes |
 | --- | --- | --- | --- |
-| <tool/resource/prompt> | <read-only/plan/apply> | <visible/hidden> | <Notes> |
+| <tool/resource/prompt> | <active modes, such as read-only/local/remote> | <visible/hidden> | <Notes> |
 
 ## Provider Fixtures
 

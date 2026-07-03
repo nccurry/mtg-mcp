@@ -14,6 +14,11 @@ specific, actionable, and tied to files and lines when reporting a review.
 - Do performance, simulation, and recommendation results preserve assumptions,
   confidence, warnings, deterministic inputs, and source metadata?
 
+For an evidence-first rewrite change, also verify that the child is authorized,
+the implementation matches its approved manifest, and no legacy advisor,
+intent, recommendation, weak-card, blended-score, prompt, or strategic-
+simulation surface was retained without an umbrella amendment.
+
 ## Boundaries
 
 - Does `MtgMcp.Core` remain free of adapter and host references?
@@ -22,6 +27,9 @@ specific, actionable, and tied to files and lines when reporting a review.
   the owning adapter unless a shared Core primitive already exists?
 - Are new dependencies justified against existing helpers and placed at the
   correct boundary?
+- For rewrite code, do Decks, Statistics, provider adapters, and App own the
+  responsibilities assigned by the active child instead of accumulating in
+  Core?
 
 ## Abstraction Quality
 

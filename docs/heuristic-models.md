@@ -1,8 +1,14 @@
 # Heuristic And Simulation Models
 
-`mtg-mcp` uses heuristics when card facts and exact mathematics cannot answer a
-deckbuilding question alone. Those models must remain configurable, repeatable,
-and visibly different from facts.
+Stable `0.9.0` does not expose heuristic recommendations, intent inference,
+blended quality scores, or strategic simulation. This document constrains
+possible post-cutover experiments and explains how to review remaining legacy
+models; it is not authorization to retain or rebuild them.
+
+When card facts and exact mathematics cannot answer a deckbuilding question,
+the stable MCP returns the available evidence and explicit unknowns. The client
+LLM makes the judgment. Any future heuristic model requires its own approved
+PLC and must remain configurable, repeatable, and visibly different from facts.
 
 ## Model Contract
 
@@ -25,10 +31,12 @@ untrusted code.
 
 ## Rules-Engine Lessons Without A Rules Engine
 
-Useful rules-engine practices include named/versioned workflows, schema
-validation, explicit facts, priority, deterministic conflict resolution,
-explainable results, and cached fact evaluation. `mtg-mcp` should apply those
-ideas through small typed C# policies and existing simulation profiles.
+If experimental work is approved, useful rules-engine practices include
+named/versioned workflows, schema validation, explicit facts, priority,
+deterministic conflict resolution, explainable results, and cached fact
+evaluation. Apply those ideas through the smallest typed policies justified by
+that future PLC; do not adopt the legacy simulation-profile architecture by
+default.
 
 It should not implement stack handling, priority exchange, layers, replacement
 effects, comprehensive card scripting, or general forward chaining. Unsupported
@@ -44,6 +52,7 @@ Magic behavior is reported conservatively instead of guessed.
 - Calibration compares directional or bounded expectations rather than treating
   one synthetic fixture as ground truth.
 
-See [simulation profiles](simulation-profiles.md),
-[Stats Lab metrics](stats-lab-metrics.md), and the
-[north star](north-star.md).
+The current [simulation profiles](simulation-profiles.md) and
+[Stats Lab metrics](stats-lab-metrics.md) are legacy reference evidence. See the
+[north star](north-star.md), [rewrite guide](rewrite-guide.md), and
+[potential-features registry](potential-features.md).

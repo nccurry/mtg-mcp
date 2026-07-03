@@ -1,5 +1,10 @@
 # Local Card Collection
 
+> Current-release reference: this name-and-quantity collection belongs to the
+> legacy server and is classified for removal from stable `0.9.0`. The rewrite
+> local domain is the revisioned format-neutral deck store; a future collection
+> capability would require its own PLC. See [rewrite-guide.md](rewrite-guide.md).
+
 `mtg-mcp` can keep a workstation-local card collection under
 `MTGMCP__DATA_DIR/collection`. The first version tracks card name and quantity
 only, so it is useful for deck ownership checks without requiring a vendor

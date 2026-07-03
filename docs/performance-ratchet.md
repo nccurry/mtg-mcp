@@ -1,5 +1,10 @@
 # Performance Ratchet
 
+The Task/benchmark infrastructure is reusable, but rows describing legacy role
+classification or Stats Lab behavior do not require those product features to
+survive the clean-break rewrite. Rewrite children add measurements only for
+their approved production paths.
+
 `task perf:report` emits a report-only hot-path timing artifact at
 `artifacts/performance-report.txt`.
 

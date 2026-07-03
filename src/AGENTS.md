@@ -4,6 +4,11 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `src/`.
 
 ## Project Boundaries
 
+- For ordinary maintenance of the current server, existing projects and
+  contracts remain source truth. For an authorized rewrite child, follow
+  [`docs/rewrite-guide.md`](../docs/rewrite-guide.md) and the approved child PLC
+  instead of extending legacy workspace, plan, recommendation, intent, or
+  simulation abstractions.
 - Keep `MtgMcp.Core` dependency-light and free of adapter or host references.
 - Keep MCP server registration, tools, resources, prompts, operation modes, and server metadata in `MtgMcp.App`.
 - Keep third-party HTTP request and response contracts in their adapter projects.
@@ -14,7 +19,9 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `src/`.
 
 ## Implementation
 
-- Prefer existing Core models, option types, request pacing, retry, JSON, and text helpers before adding new ones.
+- Prefer existing Core models and helpers for current-server maintenance. In the
+  rewrite, reuse only items allowed by the audit/active child; existing code is
+  reference evidence rather than the default foundation.
 - Guard mutating MCP tools with `OperationModeGuard`.
 - Keep tool annotations, descriptions, and resource URIs accurate when public MCP behavior changes.
 - Pass `CancellationToken` through async library paths and use `ConfigureAwait(false)` outside host-specific code.

@@ -4,7 +4,31 @@ mtg-mcp adapters talk to public or user-configured services with provider-local
 contracts. Core owns shared domain models and safe helper defaults; adapter projects own
 third-party HTTP request and response shapes.
 
-## User-Agent defaults
+## Clean-Break `0.9.0` Target
+
+The stable rewrite has isolated adapters for official Scryfall evidence,
+explicit Archidekt operations, the documented Playgroup public API, and a
+separate Tagger cache/acquisition boundary. It has no Moxfield network adapter,
+Commander Spellbook adapter, generic decklist provider, or recommendation
+source framework.
+
+- Archidekt uses the currently available web API for explicit user-owned deck
+  operations, conservative pacing, preview/apply guards, and verified cleanup.
+- Playgroup follows the pinned official OpenAPI contract; missing operations are
+  reported unsupported rather than reverse engineered.
+- Tagger cache reads are offline. Unsupported HTML/CSRF/GraphQL acquisition is
+  separately invoked, bounded, and disabled unless its owner-risk record is
+  accepted.
+- Moxfield is manual interchange only because its terms prohibit automated
+  access.
+
+See the [rewrite guide](rewrite-guide.md) and the individual provider PLCs for
+the reviewed contract. The sections below describe the current legacy adapter
+implementation only.
+
+## Current Legacy Adapter Operations
+
+### User-Agent defaults
 
 Adapters use a shared default User-Agent:
 
@@ -32,7 +56,7 @@ Supported override keys:
 When setting these from a shell, prepend `MTGMCP__` and write `:` as `__`, such as
 `MTGMCP__MOXFIELD__USER_AGENT`.
 
-## Archidekt card-id cache
+### Archidekt card-id cache
 
 Archidekt writeback needs Archidekt's provider-specific card ids when adding cards to a
 deck. Imported workspaces usually start with provider-neutral card facts such as Scryfall
@@ -57,7 +81,7 @@ Configuration:
 |---|---|---|
 | `MtgMcp:Archidekt:CardIdCacheFile` / `ARCHIDEKT:CARD_ID_CACHE_FILE` | user-local `mtg-mcp/archidekt-card-ids.json` | Override for hermetic tests, service accounts, or shared installations that need an explicit writable path. |
 
-## Moxfield curl fallback
+### Moxfield curl fallback
 
 Moxfield imports primarily use the .NET HTTP client against the anonymous deck API. Some
 Moxfield edge paths can reject that HTTP fingerprint with `403 Forbidden`; when that

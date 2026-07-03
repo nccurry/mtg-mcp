@@ -2,6 +2,12 @@
 
 This folder stores source snapshots and bounded local fixtures used for deterministic offline behavior.
 
+Reference data does not authorize a production capability. The rewrite audit
+and active child PLC decide whether each fixture is retained, transformed, or
+used only as historical test evidence. In particular, local combo patterns and
+Commander Spellbook preference do not imply a stable `0.9.0` combo adapter or
+recommendation surface.
+
 ## Scryfall Tagger
 
 `scryfall-tagger-tags-2026-05-23.json` is a snapshot of the full mixed Scryfall Tagger tag directory retrieved from `https://tagger.scryfall.com/` on 2026-05-23.

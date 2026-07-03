@@ -8,10 +8,40 @@ The server should remain an MCP-native insight tool: an external LLM chooses wor
 
 The durable product direction and evidence boundaries are defined in
 [North Star](north-star.md), [Design Goals](design-goals.md), and
-[Heuristic And Simulation Models](heuristic-models.md). This document describes
-the current implementation of those principles.
+[Heuristic And Simulation Models](heuristic-models.md).
 
-## Current State
+## Clean-Break `0.9.0` Target
+
+The rewrite is an evidence/workflow server, not a deck advisor. It uses:
+
+- `MtgMcp.Core` for dependency-light provider-neutral evidence, identifiers,
+  failures, and shared contracts;
+- `MtgMcp.Decks` for the revisioned local deck domain, SQLite storage, and
+  manual interchange;
+- `MtgMcp.Statistics` for exact provider-independent calculations;
+- isolated Scryfall, Archidekt, Playgroup, and Tagger adapters;
+- `MtgMcp.App` for MCP hosting, composition, modes, schemas, and the capability
+  resource; and
+- separate `decks.db`, `scryfall.db`, and `tagger.db` stores.
+
+Its modes are `read-only`, `local` (default), and `remote`. Stable tools use
+capability prefixes and expose evidence or explicit operations; there are no
+prompts, recommendation services, intent models, weak-card judgments,
+replacement decisions, blended scores, or strategic simulations. The current
+tool-count baseline is derived from child packets and is not a compatibility
+constraint.
+
+See the [rewrite guide](rewrite-guide.md) and
+[umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).
+Exact implementation details belong to the independently approved child PLCs.
+
+## Legacy Implementation Reference
+
+The remaining capability sections document the current pre-rewrite server.
+They are useful for factual inventory, fixtures, and deletion/reuse decisions,
+but they are not target architecture and must not be copied by default.
+
+### Current capability inventory
 
 Current deck intelligence is deterministic and heuristic. It provides useful structure, but it is not a full Magic rules engine and it is not a trained deck performance model.
 
@@ -36,7 +66,7 @@ Existing capabilities include:
 
 These tools answer questions like "how much ramp do I have?", "what are my odds of seeing draw by turn 3?", or "which deck is faster under a no-interaction goldfish race?" They do not currently answer full rules questions like "what is my real win rate against this opponent deck under legal game actions?"
 
-## Design Goals
+## Legacy Design Goals
 
 - Keep the default install lightweight and .NET-only.
 - Keep `MtgMcp.Core` independent from adapter and host projects.
@@ -45,7 +75,7 @@ These tools answer questions like "how much ramp do I have?", "what are my odds 
 - Avoid presenting abstract simulation as full Magic rules enforcement.
 - Keep normal tests offline, deterministic, and free of real Archidekt mutations.
 
-## Recommendation Source Boundaries
+## Legacy Recommendation Source Boundaries
 
 Recommendation sources are runtime data providers, not roadmap entries. Normal
 source listings should include implemented providers only, and each provider
@@ -69,7 +99,7 @@ Deck import/writeback support, such as Archidekt and Moxfield workspaces, is a
 separate integration surface from source-scale deck search or recommendation
 evidence.
 
-## Stats Lab Design
+## Legacy Stats Lab Design
 
 The first performance layer should live in Core as pure C# analysis over `DeckWorkspace`, card snapshots, deck intent, roles, tags, and deck edit plans.
 
@@ -97,7 +127,7 @@ Profile and route syntax is documented in `docs/simulation-profiles.md`.
 
 This layer is an abstract scenario simulator, not a rules engine. It should make that explicit in every high-level result.
 
-## MCP Tool Shape
+## Legacy MCP Tool Shape
 
 The public MCP surface is evidence-first and workflow-oriented. Tools return
 structured rows, counts, labels, source metadata, assumptions, warnings, and
@@ -150,7 +180,7 @@ retrieval time, confidence, determinism, and notes where available.
 
 No external matchup simulation tools are currently exposed.
 
-## Conservative Goldfish Race
+## Legacy Conservative Goldfish Race
 
 `deck_compare_goldfish` keeps the existing `optimistic-goldfish-model` as its
 default model. Callers can opt into `rules-backed-goldfish-race-v1` for an
@@ -174,7 +204,7 @@ targeted interaction, layers, replacement effects, prevention effects, and
 opponent disruption. Results should be described as no-interaction race
 evidence, not matchup win rates.
 
-## Deferred Full-Game Simulation
+## Post-Cutover Full-Game Simulation Research
 
 Full rules simulation is deferred until there is a proven end-to-end adapter that can accept decklists, run games, and return stable machine-readable results. It should not be required for baseline deck tuning.
 

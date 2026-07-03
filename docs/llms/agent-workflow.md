@@ -7,6 +7,10 @@
 3. Prefer existing project boundaries, models, helpers, and naming.
 4. Make the smallest coherent change that satisfies the request.
 
+For the clean-break rewrite, read [`../rewrite-guide.md`](../rewrite-guide.md)
+before step 1. Prefer existing abstractions only for current-server maintenance;
+the approved audit and active child PLC decide what the rewrite may reuse.
+
 ## Planning
 
 - Use no durable plan for tiny single-area fixes unless the user asks for one.
@@ -16,6 +20,9 @@
   affects persistence formats, or needs phased delivery.
 - Keep ignored `/plans/` for local scratch only.
 - Start durable plans and PLC packets from `docs/llms/templates/`.
+- A drafted child is not implementation authority. Rewrite production edits
+  require recorded independent approval, explicit owner authorization,
+  `Implementation authorized: Yes`, and an `in-progress/` packet.
 
 ## Editing
 

@@ -27,6 +27,18 @@ those surfaces or documented for extension authors.
 - Unreleased branch-only APIs may be replaced directly instead of carrying
   compatibility shims.
 
+### Approved `0.9.0` clean-break exception
+
+The evidence-first `0.9.0` program intentionally replaces the legacy product
+surface without deprecation aliases or automatic data/config/tool migration.
+Its approved umbrella and child PLCs supersede the ordinary deprecation steps
+below for that rewrite only. Current-server maintenance continues to follow the
+ordinary policy until cutover.
+
+The rewrite still requires exact schema review, preview releases, user-facing
+clean-break documentation, rollback to the prior package/data, and
+history-preserving Git integration. See [rewrite-guide.md](rewrite-guide.md).
+
 ## Deprecating Tools or Parameters
 
 When a shipped tool, resource, prompt, parameter, or result field is being

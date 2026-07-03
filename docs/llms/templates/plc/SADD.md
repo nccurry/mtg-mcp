@@ -77,7 +77,8 @@ clarify the flow.
 
 Sketch the public MCP tools, resources, prompts, annotations, detail levels,
 options, records, schemas, and diagnostics that implementation branches must
-converge on. Record operation-mode visibility for read, plan, and apply modes.
+converge on. Record exact visibility for the operation modes active in the
+governing program; do not copy legacy mode names by default.
 
 ## Adapter And Provider Contracts
 

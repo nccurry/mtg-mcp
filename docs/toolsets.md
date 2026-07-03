@@ -1,5 +1,10 @@
 # MCP Toolsets
 
+> Current-release reference: this file documents the legacy pre-rewrite
+> toolset filter. The clean-break `0.9.0` surface is capability-prefixed and
+> governed by the child PLC manifests; it does not preserve legacy toolsets or
+> counts for compatibility. See [rewrite-guide.md](rewrite-guide.md).
+
 `MtgMcp.Toolsets` controls which MCP tools the server advertises. Blank is the
 compatibility profile: it advertises every tool allowed by the current operation
 mode. Set a comma-separated list to narrow the advertised surface:
@@ -19,7 +24,7 @@ A practical starter profile for local deck work is
 Add `archidekt`, `playgroup`, `intent`, `facets`, or `collection` when those
 workflows are needed.
 
-## Current Toolsets
+## Current Legacy Toolsets
 
 | Toolset | Scope |
 |---|---|
@@ -55,5 +60,6 @@ workflows are needed.
 | Use Archidekt writeback and remote checkpoints | `workspace`, `archidekt` |
 | Use Playgroup.gg ranking context | `playgroup` |
 
-Phase 1 consolidation work should update this file before removing or merging
-tools so every README workflow remains mapped to a supported toolset.
+Current-server maintenance should update this file when legacy toolsets change.
+Rewrite work updates the active child surface matrix and cutover crosswalk
+instead of extending this taxonomy.

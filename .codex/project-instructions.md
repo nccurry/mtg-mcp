@@ -1,5 +1,11 @@
 # Project Instructions
 
+- Read `docs/rewrite-guide.md` before evidence-first rewrite work. Do not edit
+  production code for a rewrite child until its README records approval and
+  `Implementation authorized: Yes`.
+- Stable `0.9.0` is an evidence/workflow server with
+  `read-only`/`local`/`remote` modes and no advisor, intent, recommendation,
+  weak-card, blended-score, or strategic-simulation surface.
 - Use `Taskfile.yml` for common development workflows.
 - Keep dependency-light domain logic in `MtgMcp.Core`.
 - Keep MCP host, tool, resource, prompt, operation-mode, and server-info logic

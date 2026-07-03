@@ -21,11 +21,27 @@ Spellbook combos, and API-backed deckbuilding evidence.
 It is not affiliated with Hasbro, Wizards of the Coast, Magic: The Gathering,
 Scryfall, Moxfield, Archidekt, Playgroup.gg, or Commander Spellbook.
 
+## Current Release And Planned Rewrite
+
+This README documents the currently shipped pre-rewrite server. Its
+`read-only`/`plan`/`apply` modes, workspace tools, prompts, recommendation
+sources, simulations, Moxfield adapter, and configuration remain accurate for
+that implementation; they are not the target architecture for `0.9.0`.
+
+The planned `0.9.0` release is an intentional clean break. It will use
+`read-only`/`local`/`remote`, capability-prefixed tools, separate SQLite stores,
+one capability resource, and no prompts or MCP-owned deckbuilding decisions.
+No automatic legacy tool, config, or data migration is planned. See the
+[rewrite guide](docs/rewrite-guide.md) and governing
+[umbrella PLC](docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).
+The child packets are still planning-only and do not authorize implementation.
+
 ## Project Direction
 
 - [North Star](docs/north-star.md): grounded evidence for LLM-assisted deckbuilding.
 - [Design Goals](docs/design-goals.md): architecture, testing, safety, and MCP principles.
-- [Heuristic Models](docs/heuristic-models.md): configurable estimates without building a Magic rules engine.
+- [Heuristic Models](docs/heuristic-models.md): constraints for legacy review and separately approved future experiments.
+- [Rewrite Guide](docs/rewrite-guide.md): current-versus-target boundaries and the implementation entry gate.
 
 ## Install
 
@@ -140,7 +156,7 @@ different safety boundary is required:
 Before this default changed, an unset mode enabled `apply`. Existing deployments
 that intentionally mutate decks must now set `MTGMCP__OPERATION_MODE=apply`.
 
-## Features
+## Current Release Features
 
 | Area | What the MCP exposes |
 | --- | --- |
@@ -675,9 +691,12 @@ mutations can reuse Archidekt-specific card ids resolved from Scryfall ids,
 printed set/collector numbers, or names. That cache is mutation support state,
 not recommendation source facts; see [`docs/adapters.md`](docs/adapters.md).
 
-The source policy is API-only: official/documented APIs and explicitly allowed
-unofficial structured JSON endpoints may be used, but mtg-mcp does not scrape
-HTML, parse page markup, or use browser automation for source data.
+The current legacy source policy is API-only: official/documented APIs and
+explicitly allowed unofficial structured JSON endpoints may be used, but the
+current source framework does not scrape HTML, parse page markup, or use browser
+automation. The rewrite's narrowly bounded, separately invoked Tagger
+acquisition exception is documented in its child PLC and does not revive a
+general scraping/source framework.
 
 ## Development
 

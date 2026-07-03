@@ -28,3 +28,14 @@ Before `1.0.0`, the compatibility bar is:
 
 Additional client rows should name the client, transport, package or binary
 version, and the exact MCP operations covered.
+
+## `0.9.0` Rewrite Boundary
+
+The evidence-first rewrite is an explicitly approved clean break. It does not
+carry legacy tools, prompts, resources, mode names, configuration, or data
+formats through compatibility aliases or automatic migration. During the
+rewrite, compatibility testing proves MCP protocol behavior and the approved
+new manifest; it does not require the 118-tool legacy surface to remain.
+
+The ordinary pre-1.0 policy above still governs maintenance releases of the
+current server. See [rewrite-guide.md](rewrite-guide.md) for routing.

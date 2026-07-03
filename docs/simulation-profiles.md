@@ -1,5 +1,10 @@
 # Simulation Profiles and Deck Intent
 
+> Legacy reference: stable `0.9.0` removes deck intent and simulation profiles.
+> Do not reuse this policy/model architecture in the rewrite. Any future
+> simulation work starts with the independently reviewed feasibility entry in
+> [potential-features.md](potential-features.md).
+
 Simulation profiles are deterministic Commander play-pattern presets. They tune
 mulligans, spell sequencing, interaction hold-up, scenario target turns, and
 fallback win detection. They do not make `mtg-mcp` a Magic rules engine.

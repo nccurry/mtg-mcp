@@ -44,6 +44,9 @@ task ci
   calibration task when performance evidence is part of the risk.
 - Release, package, installer, or config changes: use the relevant Task command
   and record skipped checks with reasons.
+- Rewrite child changes: run the active child's traceability/acceptance checks
+  in addition to affected tests; surface changes reconcile the child matrix and
+  cutover manifest without preserving legacy counts.
 
 ## Live Providers
 

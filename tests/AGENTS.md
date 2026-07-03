@@ -21,3 +21,7 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `tests/`.
 - Run `task lint` or `task test` when public APIs, shared helpers, or MCP shape changes.
 - Update architecture tests when project boundaries or adapter references intentionally change.
 - Update MCP surface tests when tool, resource, prompt, annotation, or operation-mode visibility changes.
+- For rewrite work, derive expected surface/mode behavior from the active child
+  manifest rather than legacy counts or compatibility aliases. Keep provider
+  facts, exact derivations, parser classifications, sampled estimates,
+  heuristics, and unavailable states visibly distinct in assertions.

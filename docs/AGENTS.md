@@ -20,6 +20,12 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `docs/`.
 
 ## Product Direction
 
+- Read [`rewrite-guide.md`](rewrite-guide.md) before editing durable product,
+  architecture, provider, or agent guidance for the `0.9.0` rewrite.
+- Label current-release behavior and rewrite-target behavior explicitly. Do not
+  rewrite current user instructions as if unimplemented target behavior exists.
+- Conversely, do not present legacy recommendation, intent, simulation,
+  Moxfield-network, or `plan`/`apply` behavior as target architecture.
 - Keep `north-star.md`, `design-goals.md`, and `heuristic-models.md` concise,
   mutually consistent, and linked from architecture docs.
 - Describe source observations and heuristic outputs with their limitations;

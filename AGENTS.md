@@ -6,7 +6,10 @@
   this repository.
 - Current code, tests, project files, `Taskfile.yml`, `Directory.Build.props`,
   `Directory.Packages.props`, `global.json`, `.editorconfig`, and human-facing
-  docs win over stale planning notes.
+  docs describe the current checkout and win over stale planning notes.
+- For an explicitly authorized rewrite child, the approved umbrella guardrails
+  and that child's approved PLC define the target behavior. Current legacy code
+  remains evidence, not an abstraction source to copy by default.
 - `llms.txt` is a compact orientation map, not a second rulebook.
 - `docs/llms/` contains supplemental workflow guidance, durable plans, and PLC
   packets. `.codex/` contains optional review and validation playbooks.
@@ -26,6 +29,25 @@
 - Treat `docs/north-star.md`, `docs/design-goals.md`, and
   `docs/heuristic-models.md` as the durable product direction.
 
+## Evidence-First Rewrite
+
+- Read `docs/rewrite-guide.md` before planning, reviewing, or implementing the
+  clean-break `0.9.0` work.
+- The umbrella PLC owns cross-child guardrails. Each child remains independently
+  reviewable and must say `Implementation authorized: Yes` before production
+  edits begin for that child.
+- Stable `0.9.0` returns evidence, provider data, explicit workflow operations,
+  and exact mathematics. The client LLM makes deckbuilding decisions.
+- Do not carry advisor prompts, intent inference, recommendations, weak-card
+  judgments, blended quality scores, or strategic simulation into the stable
+  rewrite.
+- Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
+  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `stats_*`, and
+  `tagger_*` prefixes.
+- The rewrite is a clean break: do not add automatic legacy data/config/schema
+  migration or compatibility aliases unless an approved umbrella amendment
+  explicitly changes that guardrail.
+
 ## Architecture
 
 - Keep dependency-light domain logic in `MtgMcp.Core`; it must not reference
@@ -39,6 +61,9 @@
 - Prefer the least code and abstraction needed. Add an abstraction only when it
   removes real duplication, clarifies ownership, or matches an established
   pattern.
+- During the rewrite, follow the approved child module boundary: Decks owns
+  local persistence/interchange, Statistics owns exact calculations, provider
+  projects own transport/cache concerns, and App owns MCP hosting/composition.
 
 ## C# Style
 

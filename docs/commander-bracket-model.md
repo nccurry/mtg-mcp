@@ -1,5 +1,9 @@
 # Commander Bracket Model
 
+> Legacy reference: this advisory estimator is a removal target for stable
+> `0.9.0`. Provider bracket fields may be returned as facts, but the rewrite
+> does not infer or recommend a bracket.
+
 `deck_estimate_commander_bracket` is an advisory pregame-discussion aid, not an
 official bracket ruling.
 
