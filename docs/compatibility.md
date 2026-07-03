@@ -5,10 +5,11 @@ It does not carry the released legacy surface forward.
 
 ## Foundation Status
 
-Foundation Phase 2 has no MCP transport or public MCP surface. The only
-executable contract is `mtg-mcp --smoke`, covered through a real process test.
-Client, protocol, initialization, tools, resources, and prompts are therefore
-not yet claimable on this branch.
+Foundation Phase 3 has no MCP transport or public MCP surface. The executable
+contract is `mtg-mcp --smoke` plus `--mode` and `--data-dir` configuration,
+covered through real process tests for valid and invalid startup. Client,
+protocol, initialization, tools, resources, and prompts are therefore not yet
+claimable on this branch.
 
 Foundation Phase 4 will add the first compatibility row after mocked process
 E2E tests prove standard initialization and the single capability resource.

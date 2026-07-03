@@ -8,3 +8,8 @@ legacy server redacts known secret fields from config resources and logs, but
 callers should still treat MCP transcripts as sensitive when provider
 credentials are configured. Rewrite fixtures and live-test evidence must retain
 only sanitized contract facts and cleanup outcomes.
+
+The rewrite foundation projects path-free public configuration status and uses
+an explicit sensitive-value redactor for diagnostic boundaries. Invalid mode,
+path, JSON, and command-line errors return fixed messages rather than rejected
+values or local paths.

@@ -6,6 +6,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj" />
     <Project Path="tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj" />
+    <Project Path="tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj" />
     <Project Path="tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj" />
   </Folder>
 </Solution>

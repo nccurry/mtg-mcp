@@ -18,7 +18,7 @@
 | 2A | Remove only audit-approved product projects/code. | FND-003, FND-014 | Project removal and lifecycle documentation diff match the audit allowlist. | Completed |
 | 2B | Restore a minimal compiling Core/App solution. | FND-003, FND-004 | Focused build and architecture tests pass. | Completed |
 | 2C | Reconcile repository tasks and tests with the new project set. | FND-011 | Coverage conveniences, integration lists, surface filters, lint, tests, coverage, package, and smoke reference no removed project. | Completed |
-| 3 | Add common result/evidence contracts and modes. | FND-006 through FND-010, FND-012 | Core/App focused tests pass. | Not started |
+| 3 | Add common result/evidence contracts and modes. | FND-006 through FND-010, FND-012 | Core/App focused tests pass. | Completed |
 | 4 | Expose minimal MCP surface. | FND-005 | Surface snapshot and process E2E pass. | Not started |
 | 5 | Package preview and close validation. | FND-011, FND-013 | Full offline gates and preview smoke pass. | Not started |
 

@@ -22,8 +22,7 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `src/`.
 
 - Reuse only items allowed by the audit and active child. Removed legacy code is
   reference evidence in Git history rather than the default foundation.
-- Guard mutating MCP tools with `OperationModeGuard` once the active foundation
-  phase introduces it.
+- Guard mutating MCP tools with the established `OperationModeGuard`.
 - Keep tool annotations, descriptions, and resource URIs accurate when public MCP behavior changes.
 - Pass `CancellationToken` through async library paths and use `ConfigureAwait(false)` outside host-specific code.
 - Keep provider errors sanitized. Never include Archidekt credentials, bearer tokens, cookies, or local secret paths in exceptions, logs, tool output, or tests.

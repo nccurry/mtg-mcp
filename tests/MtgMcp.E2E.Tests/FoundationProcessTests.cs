@@ -8,11 +8,49 @@ namespace MtgMcp.E2E.Tests;
 public sealed class FoundationProcessTests
 {
     /// <summary>
-    /// Verifies that the built application can perform its temporary smoke probe.
+    /// Verifies that the built application accepts valid configuration and performs its smoke probe.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
-    public async Task SmokeProbe_StartsTheBuiltApplication()
+    public async Task SmokeProbe_WithValidConfiguration_StartsTheBuiltApplication()
+    {
+        (int exitCode, string output, string error) = await RunApplicationAsync(
+            "--smoke",
+            "--mode",
+            "read-only",
+            "--data-dir",
+            Path.GetTempPath()).ConfigureAwait(false);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output);
+        Assert.Equal(string.Empty, error);
+    }
+
+    /// <summary>
+    /// Verifies that invalid startup configuration fails without echoing the rejected value.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task SmokeProbe_WithUnknownMode_ReturnsSanitizedFailure()
+    {
+        const string rejectedValue = "private-invalid-mode";
+
+        (int exitCode, string output, string error) = await RunApplicationAsync(
+            "--smoke",
+            "--mode",
+            rejectedValue).ConfigureAwait(false);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal(string.Empty, output);
+        Assert.Equal($"Operation mode must be read-only, local, or remote.{Environment.NewLine}", error);
+        Assert.DoesNotContain(rejectedValue, error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Runs the built application with isolated configuration sources and captures its result.
+    /// </summary>
+    private static async Task<(int ExitCode, string Output, string Error)> RunApplicationAsync(
+        params string[] arguments)
     {
         string repositoryRoot = FindRepositoryRoot();
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Release";
@@ -24,31 +62,62 @@ public sealed class FoundationProcessTests
             configuration,
             "net11.0",
             "MtgMcp.App.dll");
-
-        Assert.True(File.Exists(appPath), $"Expected the built application at '{appPath}'.");
-
-        ProcessStartInfo startInfo = new()
+        if (!File.Exists(appPath))
         {
-            FileName = ResolveDotnetHost(repositoryRoot),
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-        };
-        startInfo.ArgumentList.Add(appPath);
-        startInfo.ArgumentList.Add("--smoke");
+            throw new FileNotFoundException("The built foundation application was not found.", appPath);
+        }
 
-        using Process process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("The foundation process did not start.");
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        Task<string> errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
-        await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-        string output = await outputTask.ConfigureAwait(false);
-        string error = await errorTask.ConfigureAwait(false);
+        DirectoryInfo workingDirectory = Directory.CreateTempSubdirectory("mtg-mcp-e2e-");
+        try
+        {
+            ProcessStartInfo startInfo = new()
+            {
+                FileName = ResolveDotnetHost(repositoryRoot),
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                WorkingDirectory = workingDirectory.FullName,
+            };
+            startInfo.Environment.Remove("MTGMCP__MODE");
+            startInfo.Environment.Remove("MTGMCP__DATA_DIR");
+            startInfo.ArgumentList.Add(appPath);
+            foreach (string argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
 
-        Assert.Equal(0, process.ExitCode);
-        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output);
-        Assert.Equal(string.Empty, error);
+            using Process process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("The foundation process did not start.");
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync().ConfigureAwait(false);
+                }
+
+                throw;
+            }
+
+            string output = await outputTask.ConfigureAwait(false);
+            string error = await errorTask.ConfigureAwait(false);
+            return (process.ExitCode, output, error);
+        }
+        finally
+        {
+            workingDirectory.Refresh();
+            if (workingDirectory.Exists)
+            {
+                workingDirectory.Delete(recursive: true);
+            }
+        }
     }
 
     /// <summary>

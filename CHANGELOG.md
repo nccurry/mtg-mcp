@@ -9,6 +9,11 @@
 - Rebuilt focused unit, architecture, and process tests and reconciled task,
   CI, coverage, package, release, and smoke wiring with the foundation project
   set.
+- Added closed operation-result and evidence-descriptor unions with stable,
+  case-specific JSON contracts.
+- Added `read-only`, `local`, and `remote` mode enforcement; JSON, environment,
+  and command-line configuration; a non-creating `mtg-mcp/v0.9` data root; and
+  sanitized legacy-data and startup boundaries.
 
 ## 0.8.0 - 2026-06-28
 

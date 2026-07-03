@@ -47,10 +47,10 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies that App depends only on the approved Core project during foundation construction.
+    /// Verifies that App depends only on Core and the approved foundation configuration packages.
     /// </summary>
     [Fact]
-    public void AppProject_ReferencesOnlyCoreAndNoRuntimePackages()
+    public void AppProject_ReferencesOnlyApprovedFoundationDependencies()
     {
         XDocument project = LoadProject("src/MtgMcp.App/MtgMcp.App.csproj");
         string[] references = project
@@ -58,9 +58,21 @@ public sealed class FoundationArchitectureTests
             .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
             .OfType<string>()
             .ToArray();
+        string[] packages = project
+            .Descendants("PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
         Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
-        Assert.Empty(project.Descendants("PackageReference"));
+        Assert.Equal(
+            [
+                "Microsoft.Extensions.Configuration.CommandLine",
+                "Microsoft.Extensions.Configuration.EnvironmentVariables",
+                "Microsoft.Extensions.Configuration.Json",
+            ],
+            packages);
     }
 
     /// <summary>
@@ -113,6 +125,7 @@ public sealed class FoundationArchitectureTests
             "MtgMcp.App.Tests",
             "MtgMcp.Architecture.Tests",
             "MtgMcp.Core",
+            "MtgMcp.Core.Tests",
             "MtgMcp.E2E.Tests",
         ];
 

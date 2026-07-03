@@ -198,6 +198,10 @@ tasks:
         {{.DOTNET}} test tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
+      - >
+        {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
 
   test:integration:
     desc: Run foundation architecture integration tests

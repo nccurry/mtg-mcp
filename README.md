@@ -8,16 +8,18 @@ for deckbuilding decisions.
 
 ## Rewrite Status
 
-This branch contains the Phase 2 repository foundation for the clean-break
+This branch contains the Phase 3 repository foundation for the clean-break
 `0.9.0` rewrite. It is intentionally not a usable MCP server yet.
 
-- Production code consists only of dependency-light `MtgMcp.Core` and the
-  `MtgMcp.App` process skeleton.
-- No MCP tools, resources, prompts, provider calls, persistence, configuration,
+- `MtgMcp.Core` provides closed result and evidence unions with stable JSON
+  discriminators.
+- `MtgMcp.App` provides operation-mode enforcement, standard configuration,
+  versioned data-root resolution, legacy-data detection, and sensitive-value
+  redaction.
+- No MCP tools, resources, prompts, provider calls, persistence,
   recommendations, or simulations are registered.
-- `mtg-mcp --smoke` verifies that the foundation executable can start. Other
-  arguments fail until the minimal MCP host is implemented in Foundation
-  Phase 4.
+- `mtg-mcp --smoke` verifies configuration and process startup. The minimal MCP
+  host remains Foundation Phase 4 work.
 - The legacy `0.8.0` implementation remains available in Git history and its
   released package; it is not copied into this rewrite.
 
@@ -25,6 +27,22 @@ The active requirements and phase boundaries are in the
 [Rewrite Skeleton and Repository Foundation PLC](docs/llms/plcs/in-progress/rewrite-skeleton-foundation/README.md).
 The [rewrite guide](docs/rewrite-guide.md) explains how this branch relates to
 the broader `0.9.0` program.
+
+## Foundation Configuration
+
+The process accepts `--mode` and `--data-dir` alongside `--smoke`. Equivalent
+environment variables are `MTGMCP__MODE` and `MTGMCP__DATA_DIR`. An optional
+`mtg-mcp.json` in the working directory uses `MODE` and `DATA_DIR` keys.
+Command-line values override environment values, which override JSON.
+
+Modes are `read-only`, `local` (the default), and `remote`. Read-only mode still
+permits explicit provider reads; it forbids local and remote mutation. Local
+mode adds local writes, and remote mode adds explicit remote writes.
+
+When `DATA_DIR` is omitted, the resolved path is the platform application-data
+directory followed by `mtg-mcp/v0.9`. Foundation startup does not create that
+directory or any database. Legacy entries are detected only to report the
+clean-break boundary; they are never parsed, migrated, or modified.
 
 ## Product Direction
 
