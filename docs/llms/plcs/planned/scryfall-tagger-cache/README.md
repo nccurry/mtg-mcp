@@ -24,7 +24,7 @@ does not map them to deck categories; the calling LLM may use ordinary
 
 ## Dependencies
 
-- [Local Deck Store](../local-deck-store/README.md)
+- [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 

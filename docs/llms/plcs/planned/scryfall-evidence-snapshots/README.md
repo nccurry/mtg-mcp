@@ -20,7 +20,7 @@ projection with snapshot provenance.
 ## Dependencies
 
 - [Rewrite Foundation](../../completed/rewrite-skeleton-foundation/README.md)
-- [Local Deck Store](../local-deck-store/README.md)
+- [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

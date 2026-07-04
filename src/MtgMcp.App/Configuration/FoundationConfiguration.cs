@@ -15,9 +15,12 @@ internal sealed record FoundationConfiguration(
     /// </summary>
     internal FoundationConfigurationStatus ToPublicStatus()
     {
+        DataRootState effectiveDataRootState = Directory.Exists(DataRoot)
+            ? Configuration.DataRootState.DirectoryPresent
+            : DataRootState;
         return new FoundationConfigurationStatus(
             DataRootConfigured,
-            DataRootState switch
+            effectiveDataRootState switch
             {
                 Configuration.DataRootState.NotCreated => "not-created",
                 Configuration.DataRootState.DirectoryPresent => "directory-present",

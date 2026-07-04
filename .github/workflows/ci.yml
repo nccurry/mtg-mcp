@@ -56,7 +56,7 @@ jobs:
       - name: Build with analyzers
         run: task lint
 
-      - name: Verify exact foundation MCP surface
+      - name: Verify exact local-deck MCP surface
         run: task surface:report
 
       - name: Analyze with CodeQL
@@ -83,10 +83,10 @@ jobs:
           flags: all-src
           fail_ci_if_error: true
 
-      - name: Probe foundation process readiness
+      - name: Probe process readiness
         run: task smoke:process
 
-      - name: Exercise foundation MCP session
+      - name: Exercise MCP and local deck workflows
         run: task smoke:mcp
 
       - name: Clean release artifacts

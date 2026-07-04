@@ -25,7 +25,7 @@ inadequate coverage, or a failed required offline gate.
 
 - [Legacy Surface Audit And Disposition](../../completed/legacy-surface-audit-and-disposition/README.md)
 - [Rewrite Skeleton And Repository Foundation](../../completed/rewrite-skeleton-foundation/README.md)
-- [Local Deck Domain And SQLite Store](../local-deck-store/README.md)
+- [Local Deck Domain And SQLite Store](../../completed/local-deck-store/README.md)
 - [Manual Deck Interchange](../manual-deck-interchange/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
 - [Archidekt Decks, Folders, Snapshots, And Synchronization](../archidekt-deck-sync/README.md)

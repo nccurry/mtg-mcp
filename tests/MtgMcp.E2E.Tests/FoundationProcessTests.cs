@@ -22,7 +22,7 @@ public sealed class FoundationProcessTests
             Path.GetTempPath()).ConfigureAwait(false);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output);
+        Assert.Equal($"mtg-mcp process ready{Environment.NewLine}", output);
         Assert.Equal(string.Empty, error);
     }
 

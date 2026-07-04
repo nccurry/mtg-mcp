@@ -4,11 +4,11 @@ This document is the bridge between the currently shipped pre-rewrite server
 and the in-progress clean-break `0.9.0` server. It prevents current implementation
 documentation from being mistaken for the rewrite target.
 
-The rewrite foundation implementation is complete. The legacy audit and
-foundation child are approved/completed, and the remaining eight children stay
-planning-only with `Implementation authorized: No`. No later child is active;
-production capability work requires its own recorded approval and lifecycle
-transition.
+The rewrite foundation and local deck-store implementations are complete. The
+legacy audit, foundation, and local-deck children are approved/completed. The
+remaining seven required children stay planning-only with
+`Implementation authorized: No`; production capability work requires its own
+recorded approval and lifecycle transition.
 
 ## Authority And Routing
 
@@ -36,7 +36,7 @@ another.
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | Capability-prefixed `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `stats_*`, and `tagger_*`; one capability resource; zero prompts |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 19 `deck_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
 | Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current derived planning baseline: 84 tools, one resource, zero prompts; counts follow approved design and are not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Statistics, and Tagger |

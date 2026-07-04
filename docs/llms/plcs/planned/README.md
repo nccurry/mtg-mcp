@@ -11,16 +11,17 @@ implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 
-Eight rewrite children remain planned and independently reviewable. The
+Seven rewrite children remain planned and independently reviewable. The
 [legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
 approved/completed, and the
 [foundation child](../completed/rewrite-skeleton-foundation/README.md) is
+approved/completed, and the
+[local deck child](../completed/local-deck-store/README.md) is
 approved/completed. The governing program remains
 [in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [local-deck-store](local-deck-store/README.md) | Draft | Define the format-neutral deck domain, revisioned SQLite store, and local tools. |
 | [manual-deck-interchange](manual-deck-interchange/README.md) | Draft | Define lossless native and explicit provider-compatible manual artifacts. |
 | [scryfall-evidence-snapshots](scryfall-evidence-snapshots/README.md) | Draft | Define immutable snapshots of official Scryfall reads and rich source objects. |
 | [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |

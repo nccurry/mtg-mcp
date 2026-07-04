@@ -72,7 +72,7 @@ internal static class FoundationCli
 
         if (smokeArgumentCount == 1)
         {
-            output.WriteLine("mtg-mcp foundation process ready");
+            output.WriteLine("mtg-mcp process ready");
             return 0;
         }
 

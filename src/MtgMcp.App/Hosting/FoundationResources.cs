@@ -26,11 +26,17 @@ internal sealed class FoundationResources
     private readonly FoundationConfiguration configuration;
 
     /// <summary>
+    /// Stores the exact mode-specific tool count advertised by this process.
+    /// </summary>
+    private readonly int toolCount;
+
+    /// <summary>
     /// Creates the resource around one validated process configuration.
     /// </summary>
-    internal FoundationResources(FoundationConfiguration configuration)
+    internal FoundationResources(FoundationConfiguration configuration, int toolCount)
     {
         this.configuration = configuration;
+        this.toolCount = toolCount;
     }
 
     /// <summary>
@@ -52,9 +58,12 @@ internal sealed class FoundationResources
                 FoundationServerIdentity.PackageVersion,
                 server.NegotiatedProtocolVersion ?? "unavailable"),
             OperationModeParser.Format(configuration.Mode),
-            new FoundationSurfaceStatus(0, 1, 0),
-            [new FoundationModuleStatus("foundation", "available")],
-            new FoundationDataSchemas("v0.9"),
+            new FoundationSurfaceStatus(toolCount, 1, 0),
+            [
+                new FoundationModuleStatus("decks", "available"),
+                new FoundationModuleStatus("foundation", "available"),
+            ],
+            new FoundationDataSchemas("v0.9", "v1"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);
     }

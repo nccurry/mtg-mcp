@@ -20,7 +20,7 @@ fingerprint. The adapter never writes through ordinary local edits.
 
 ## Dependencies
 
-- [Local Deck Store](../local-deck-store/README.md)
+- [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Manual Deck Interchange](../manual-deck-interchange/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)

@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-03
@@ -47,7 +47,7 @@ transactional service. Granular tools are ergonomic schemas, not independent
 write paths.
 
 `deck_validate` evaluates only local structural invariants: valid references,
-positive quantities, known zones, category-primary consistency, and explicitly
+positive quantities, nonblank zones, category-primary consistency, and explicitly
 documented Commander fixture structure. It does not call providers, determine
 format legality, infer roles, classify cards, or assess deck quality.
 
@@ -62,9 +62,9 @@ then category order.
 
 Backups live under `v0.9/backups/decks/` with opaque UUID filenames and a small
 manifest containing schema version, fingerprint, timestamp, and deck count.
-Restore requires `expectedDatabaseFingerprint`, closes pooled connections,
-verifies integrity in a temporary location, atomically swaps files, and retains
-the displaced DB as a rollback backup.
+Restore requires `expectedDatabaseFingerprint`, uses unpooled connections,
+verifies integrity in a temporary location, atomically replaces the database,
+and retains the displaced DB as a rollback backup.
 
 The fingerprint is SHA-256 over the bytes of a consistent SQLite Online Backup
 snapshot after checkpointing the source connection, prefixed by the schema
@@ -88,11 +88,11 @@ schema before swapping files.
 
 ## Failure Modes
 
-- Constraint/input failure returns invalid input with path/reason.
+- Constraint/input failure returns invalid input with a bounded reason and no path.
 - Stale revision returns conflict with current revision and no deck payload
   unless the caller separately reads it.
 - Locked database returns bounded unavailable status after busy timeout.
-- Corruption fails closed and recommends a backup ID without exposing paths.
+- Corruption fails closed without exposing local paths.
 - Missing deck/entry/category is not found, distinct from empty collections.
 
 ## Test Architecture

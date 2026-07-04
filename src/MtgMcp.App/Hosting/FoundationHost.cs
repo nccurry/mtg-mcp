@@ -3,11 +3,13 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Decks;
+using MtgMcp.Decks;
 
 namespace MtgMcp.App.Hosting;
 
 /// <summary>
-/// Composes and runs the minimal resources-only stdio MCP server.
+/// Composes and runs the explicitly registered stdio MCP server surface.
 /// </summary>
 internal static class FoundationHost
 {
@@ -20,9 +22,17 @@ internal static class FoundationHost
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
+        using SqliteDeckStore deckStore = new(
+            configuration.DataRoot,
+            FoundationServerIdentity.PackageVersion);
+        DeckReadTools readTools = new(deckStore);
+        bool writesVisible = OperationModeGuard.Allows(
+            configuration.Mode,
+            OperationRequirement.LocalWrite);
+        int toolCount = writesVisible ? 19 : 4;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
-        builder.Services
+        IMcpServerBuilder mcpBuilder = builder.Services
             .AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -35,7 +45,12 @@ internal static class FoundationHost
             .WithStdioServerTransport()
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitImplicitLoggingCapability()))
-            .WithResources(new FoundationResources(configuration));
+            .WithResources(new FoundationResources(configuration, toolCount))
+            .WithTools(readTools);
+        if (writesVisible)
+        {
+            mcpBuilder.WithTools(new DeckWriteTools(deckStore, configuration.Mode));
+        }
 
         using IHost host = builder.Build();
         await host.RunAsync(cancellationToken).ConfigureAwait(false);

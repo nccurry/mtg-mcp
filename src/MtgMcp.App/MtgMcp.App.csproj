@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <ItemGroup>
         <ProjectReference Include="..\MtgMcp.Core\MtgMcp.Core.csproj" />
+        <ProjectReference Include="..\MtgMcp.Decks\MtgMcp.Decks.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -21,7 +22,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Authors>Nick Curry</Authors>
         <Company>Nick Curry</Company>
-        <Description>The evidence-first foundation preview of a C#/.NET MCP server for Magic: The Gathering.</Description>
+        <Description>An evidence-first C#/.NET MCP server with revisioned local Magic: The Gathering deck workflows.</Description>
         <PackageTags>mcp;model-context-protocol;magic-the-gathering;mtg</PackageTags>
         <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/nccurry/mtg-mcp</PackageProjectUrl>

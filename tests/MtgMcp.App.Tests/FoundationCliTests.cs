@@ -27,7 +27,7 @@ public sealed class FoundationCliTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output.ToString());
+        Assert.Equal($"mtg-mcp process ready{Environment.NewLine}", output.ToString());
         Assert.Equal(string.Empty, error.ToString());
     }
 
@@ -52,7 +52,7 @@ public sealed class FoundationCliTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output.ToString());
+        Assert.Equal($"mtg-mcp process ready{Environment.NewLine}", output.ToString());
         Assert.Equal(string.Empty, error.ToString());
     }
 

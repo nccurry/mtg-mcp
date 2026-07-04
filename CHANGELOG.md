@@ -19,6 +19,13 @@
 - Split the one-shot process probe from official-client MCP smoke coverage,
   added installed-package MCP validation, and made the App project version the
   default for package and release automation.
+- Added immutable format-neutral deck contracts, revisioned SQLite persistence,
+  stable pagination, transactional entry/category mutations, and
+  provider-neutral synchronization bindings.
+- Added guarded opaque deck backup creation, inventory, restore, rollback, and
+  deletion with integrity, schema, and database-fingerprint checks.
+- Added the exact nineteen-tool local `deck_*` surface, read-only mode filtering,
+  official-client schema/annotation tests, and representative MCP workflows.
 
 ## 0.8.0 - 2026-06-28
 

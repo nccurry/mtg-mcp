@@ -20,7 +20,7 @@ can apply from metadata that requires manual follow-up.
 
 ## Dependencies
 
-- [Local Deck Store](../local-deck-store/README.md)
+- [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

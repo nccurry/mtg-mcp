@@ -191,7 +191,7 @@ tasks:
       - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build --filter "Category!=Live"'
 
   test:unit:
-    desc: Run foundation unit tests
+    desc: Run application and Core unit tests
     deps: [restore]
     cmds:
       - >
@@ -204,11 +204,15 @@ tasks:
         --filter "Category!=Live"
 
   test:integration:
-    desc: Run foundation architecture integration tests
+    desc: Run architecture and local deck integration tests
     deps: [restore]
     cmds:
       - >
         {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
+      - >
+        {{.DOTNET}} test tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
 
@@ -266,6 +270,12 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.App'
 
+  coverage:decks:
+    desc: Enforce 90 percent line coverage for local deck persistence using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Decks'
+
   format:
     desc: Format source
     deps: [setup:dotnet]
@@ -291,14 +301,14 @@ tasks:
       - task: test
 
   surface:report:
-    desc: Verify the exact resources-only foundation MCP surface
+    desc: Verify the exact local-deck MCP surface
     deps: [build]
     cmds:
       - >
         {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedCapabilityResource"
+        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedDeckToolsAndCapabilityResource"
         --logger "console;verbosity=detailed"
 
   ci:
@@ -312,20 +322,20 @@ tasks:
       - task: smoke:mcp
 
   smoke:process:
-    desc: Build the foundation executable and verify process readiness
+    desc: Build the executable and verify process readiness
     deps: [build]
     cmds:
       - '{{.DOTNET}} run --project {{.APP_PROJECT}} --configuration {{.CONFIGURATION}} --no-build -- --smoke'
 
   smoke:mcp:
-    desc: Initialize the foundation with the official MCP client and read its capability resource
+    desc: Verify MCP initialization, surface, resources, and local deck workflows
     deps: [build]
     cmds:
       - >
         {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationMcpTests"
+        --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests"
 
   install:
     desc: Install the current branch on this workstation
@@ -359,7 +369,7 @@ tasks:
         {{if eq .LOCAL_CLEANUP_DRY_RUN "true"}}-DryRun{{end}}
 
   pack:
-    desc: Pack the foundation application as a NuGet dotnet tool
+    desc: Pack the application as a NuGet dotnet tool
     deps: [restore]
     cmds:
       - >

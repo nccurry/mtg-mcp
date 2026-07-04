@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Rewrite disposition: superseded/reference-only — do not implement this
 > legacy workspace-JSON migration.** The durable known-empty-versus-unknown
-> principle is owned by [local deck identity](../local-deck-store/README.md) and
+> principle is owned by [local deck identity](../../completed/local-deck-store/README.md) and
 > [Scryfall snapshots](../scryfall-evidence-snapshots/README.md), including
 > explicit root/face handling for multi-face cards. Moxfield mapping, legacy
 > workspace migration, and `deck_refresh_card_metadata` mechanisms are removed.

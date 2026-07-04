@@ -42,4 +42,5 @@ internal sealed record FoundationModuleStatus(
 /// Reports the application-data schema family without exposing a filesystem path.
 /// </summary>
 internal sealed record FoundationDataSchemas(
-    [property: JsonPropertyName("applicationData")] string ApplicationData);
+    [property: JsonPropertyName("applicationData")] string ApplicationData,
+    [property: JsonPropertyName("decks")] string Decks);

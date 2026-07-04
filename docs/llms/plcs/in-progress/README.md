@@ -13,5 +13,5 @@ evidence up to date as code lands.
 
 ## Active Rewrite Children
 
-No rewrite child is currently active. The foundation is completed; the local
-deck child remains planned and requires independent implementation approval.
+No capability child is active. The next child requires separate review and
+explicit implementation authorization.

@@ -5,7 +5,7 @@ using System.Xml.Linq;
 namespace MtgMcp.Architecture.Tests;
 
 /// <summary>
-/// Protects the minimal project and dependency boundaries required by the rewrite foundation.
+/// Protects the project, dependency, and public-surface boundaries of the evidence-first rewrite.
 /// </summary>
 public sealed class FoundationArchitectureTests
 {
@@ -15,10 +15,10 @@ public sealed class FoundationArchitectureTests
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
     /// <summary>
-    /// Verifies that only the two approved production projects remain.
+    /// Verifies that only the three currently approved production projects exist.
     /// </summary>
     [Fact]
-    public void ProductionProjects_ContainOnlyCoreAndApp()
+    public void ProductionProjects_ContainOnlyCoreDecksAndApp()
     {
         string sourceRoot = Path.Combine(RepositoryRoot, "src");
         string[] projects = Directory
@@ -31,6 +31,7 @@ public sealed class FoundationArchitectureTests
             [
                 "src/MtgMcp.App/MtgMcp.App.csproj",
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
+                "src/MtgMcp.Decks/MtgMcp.Decks.csproj",
             ],
             projects);
     }
@@ -48,7 +49,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies that App depends only on Core and the approved foundation hosting packages.
+    /// Verifies that App depends only on Core, Decks, and the approved hosting packages.
     /// </summary>
     [Fact]
     public void AppProject_ReferencesOnlyApprovedFoundationDependencies()
@@ -66,7 +67,9 @@ public sealed class FoundationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
+        Assert.Equal(
+            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj"],
+            references);
         Assert.Equal(
             [
                 "Microsoft.Extensions.Configuration.CommandLine",
@@ -76,6 +79,29 @@ public sealed class FoundationArchitectureTests
                 "ModelContextProtocol",
             ],
             packages);
+    }
+
+    /// <summary>
+    /// Verifies Decks depends only on Core and the approved SQLite packages.
+    /// </summary>
+    [Fact]
+    public void DecksProject_ReferencesOnlyCoreAndSqlite()
+    {
+        XDocument project = LoadProject("src/MtgMcp.Decks/MtgMcp.Decks.csproj");
+        string[] references = project
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
+            .OfType<string>()
+            .ToArray();
+        string[] packages = project
+            .Descendants("PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
+        Assert.Equal(["Microsoft.Data.Sqlite", "SQLitePCLRaw.bundle_e_sqlite3"], packages);
     }
 
     /// <summary>
@@ -132,10 +158,10 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, zero-tool, zero-prompt foundation surface.
+    /// Verifies the exact one-resource, nineteen-tool, zero-prompt local deck surface.
     /// </summary>
     [Fact]
-    public void SourceSurface_ContainsOnlyApprovedCapabilityResource()
+    public void SourceSurface_ContainsOnlyApprovedDeckToolsAndCapabilityResource()
     {
         string sourceRoot = Path.Combine(RepositoryRoot, "src");
         string[] sourceFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
@@ -144,19 +170,46 @@ public sealed class FoundationArchitectureTests
         string source = string.Join(Environment.NewLine, sourceFiles.Select(File.ReadAllText));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
+        Assert.Equal(19, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
+        Assert.Equal(2, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
+        string[] toolNames = Regex.Matches(source, "McpServerTool\\(\\s*Name = \\\"([^\\\"]+)\\\"")
+            .Select(match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            [
+                "deck_apply_changes",
+                "deck_backup_create",
+                "deck_backup_delete",
+                "deck_backup_list",
+                "deck_backup_restore",
+                "deck_category_assign",
+                "deck_category_create",
+                "deck_category_delete",
+                "deck_category_unassign",
+                "deck_category_update",
+                "deck_create",
+                "deck_delete",
+                "deck_entry_add",
+                "deck_entry_remove",
+                "deck_entry_update",
+                "deck_get",
+                "deck_list",
+                "deck_update",
+                "deck_validate",
+            ],
+            toolNames);
 
         string[] forbiddenMarkers =
         [
-            "McpServerTool",
             "McpServerPrompt",
             "WithToolsFromAssembly",
             "WithPromptsFromAssembly",
             "WithResourcesFromAssembly",
-            "WithTools(",
             "WithPrompts(",
         ];
         foreach (string marker in forbiddenMarkers)
@@ -166,7 +219,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies that repository automation names only projects present in the foundation solution.
+    /// Verifies that repository automation names only projects present in the current solution.
     /// </summary>
     [Fact]
     public void RepositoryWiring_UsesOnlyFoundationProjects()
@@ -186,6 +239,8 @@ public sealed class FoundationArchitectureTests
             "MtgMcp.Architecture.Tests",
             "MtgMcp.Core",
             "MtgMcp.Core.Tests",
+            "MtgMcp.Decks",
+            "MtgMcp.Decks.Tests",
             "MtgMcp.E2E.Tests",
         ];
 

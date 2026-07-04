@@ -31,7 +31,8 @@ function Invoke-VerifyGates {
     [xml] $coverage = Get-Content -LiteralPath $fullReportPath
     $gates = @(
         "MtgMcp.App",
-        "MtgMcp.Core"
+        "MtgMcp.Core",
+        "MtgMcp.Decks"
     )
 
     if ($PackageName.Count -gt 0) {
