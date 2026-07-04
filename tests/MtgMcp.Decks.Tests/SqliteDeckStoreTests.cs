@@ -183,6 +183,171 @@ public sealed class SqliteDeckStoreTests
     }
 
     /// <summary>
+    /// Verifies every schema-v1 column independently of the repository reader and proves cascades.
+    /// </summary>
+    [Fact]
+    public async Task PersistenceSchema_FullyPopulatedGraph_MatchesRawRowsAndCascades()
+    {
+        const string applicationVersion = "0.9.0-preview.1";
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, applicationVersion);
+        Guid deckId = Guid.CreateVersion7();
+        Guid entryId = Guid.CreateVersion7();
+        Guid oracleId = Guid.CreateVersion7();
+        Guid printingId = Guid.CreateVersion7();
+        Guid categoryId = Guid.CreateVersion7();
+        Guid bindingId = Guid.CreateVersion7();
+        DateTimeOffset pulledAt = new(2026, 1, 2, 3, 4, 5, TimeSpan.FromHours(-6));
+        DateTimeOffset pushedAt = new(2026, 2, 3, 4, 5, 6, TimeSpan.FromHours(2));
+        DeckDocument created = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest(
+                " Raw Audit Deck ",
+                " Every persisted field ",
+                "Commander",
+                [
+                    new DeckEntryDraft(
+                        3,
+                        "Audit Card",
+                        oracleId,
+                        printingId,
+                        "TST",
+                        "007",
+                        "JA",
+                        "ETCHED",
+                        "SIDEBOARD",
+                        9,
+                        entryId),
+                ],
+                [new DeckCategoryDraft(" Utility ", " #abcdef ", 4, categoryId)],
+                [new DeckCategoryAssignment(entryId, categoryId, true)],
+                [
+                    new DeckProviderBinding(
+                        bindingId,
+                        " Archidekt ",
+                        " remote-42 ",
+                        " https://example.invalid/decks/42 ",
+                        " v7 ",
+                        " sha256:abc ",
+                        pulledAt,
+                        pushedAt),
+                ],
+                deckId),
+            TestContext.Current.CancellationToken));
+        const string canonicalBaseline = "{\"schemaVersion\":1,\"name\":\"Raw Audit Deck\"}";
+        DeckDocument persisted = RequireSuccess(await store.ApplyChangesAsync(
+            deckId,
+            created.Revision,
+            [
+                new UpsertDeckProviderBindingChange(
+                    Assert.Single(created.ProviderBindings),
+                    canonicalBaseline),
+            ],
+            TestContext.Current.CancellationToken));
+        string databasePath = System.IO.Path.Combine(temporary.Path, "decks.db");
+        await using SqliteConnection connection = new($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+
+        await AssertSingleRowAsync(connection, """
+            SELECT version, applied_at_utc, application_version, checksum
+            FROM schema_migrations;
+            """, reader =>
+        {
+            Assert.Equal(1L, reader.GetInt64(0));
+            Assert.Equal(DeckDatabase.FormatUtc(created.CreatedAtUtc), reader.GetString(1));
+            Assert.Equal(applicationVersion, reader.GetString(2));
+            Assert.Matches("^[0-9a-f]{64}$", reader.GetString(3));
+        });
+        await AssertSingleRowAsync(connection, """
+            SELECT deck_id, name, description, format, revision, created_at_utc, updated_at_utc
+            FROM decks;
+            """, reader =>
+        {
+            Assert.Equal(deckId.ToString("D"), reader.GetString(0));
+            Assert.Equal("Raw Audit Deck", reader.GetString(1));
+            Assert.Equal("Every persisted field", reader.GetString(2));
+            Assert.Equal("commander", reader.GetString(3));
+            Assert.Equal(2L, reader.GetInt64(4));
+            Assert.Equal(DeckDatabase.FormatUtc(created.CreatedAtUtc), reader.GetString(5));
+            Assert.Equal(DeckDatabase.FormatUtc(persisted.UpdatedAtUtc), reader.GetString(6));
+        });
+        await AssertSingleRowAsync(connection, """
+            SELECT entry_id, deck_id, quantity, card_name, oracle_id, printing_id,
+                   set_code, collector_number, language, finish, zone, sort_order
+            FROM deck_entries;
+            """, reader =>
+        {
+            Assert.Equal(entryId.ToString("D"), reader.GetString(0));
+            Assert.Equal(deckId.ToString("D"), reader.GetString(1));
+            Assert.Equal(3L, reader.GetInt64(2));
+            Assert.Equal("Audit Card", reader.GetString(3));
+            Assert.Equal(oracleId.ToString("D"), reader.GetString(4));
+            Assert.Equal(printingId.ToString("D"), reader.GetString(5));
+            Assert.Equal("tst", reader.GetString(6));
+            Assert.Equal("007", reader.GetString(7));
+            Assert.Equal("ja", reader.GetString(8));
+            Assert.Equal("etched", reader.GetString(9));
+            Assert.Equal("sideboard", reader.GetString(10));
+            Assert.Equal(9L, reader.GetInt64(11));
+        });
+        await AssertSingleRowAsync(connection, """
+            SELECT category_id, deck_id, name, color, sort_order
+            FROM deck_categories;
+            """, reader =>
+        {
+            Assert.Equal(categoryId.ToString("D"), reader.GetString(0));
+            Assert.Equal(deckId.ToString("D"), reader.GetString(1));
+            Assert.Equal("Utility", reader.GetString(2));
+            Assert.Equal("#abcdef", reader.GetString(3));
+            Assert.Equal(4L, reader.GetInt64(4));
+        });
+        await AssertSingleRowAsync(connection, """
+            SELECT entry_id, category_id, is_primary
+            FROM deck_entry_categories;
+            """, reader =>
+        {
+            Assert.Equal(entryId.ToString("D"), reader.GetString(0));
+            Assert.Equal(categoryId.ToString("D"), reader.GetString(1));
+            Assert.Equal(1L, reader.GetInt64(2));
+        });
+        await AssertSingleRowAsync(connection, """
+            SELECT binding_id, deck_id, provider, remote_id, remote_uri, remote_version,
+                   baseline_fingerprint, last_pulled_at_utc, last_pushed_at_utc
+            FROM provider_bindings;
+            """, reader =>
+        {
+            Assert.Equal(bindingId.ToString("D"), reader.GetString(0));
+            Assert.Equal(deckId.ToString("D"), reader.GetString(1));
+            Assert.Equal("archidekt", reader.GetString(2));
+            Assert.Equal("remote-42", reader.GetString(3));
+            Assert.Equal("https://example.invalid/decks/42", reader.GetString(4));
+            Assert.Equal("v7", reader.GetString(5));
+            Assert.Equal("sha256:abc", reader.GetString(6));
+            Assert.Equal(DeckDatabase.FormatUtc(pulledAt), reader.GetString(7));
+            Assert.Equal(DeckDatabase.FormatUtc(pushedAt), reader.GetString(8));
+        });
+        await AssertSingleRowAsync(connection, """
+            SELECT binding_id, canonical_snapshot
+            FROM sync_baselines;
+            """, reader =>
+        {
+            Assert.Equal(bindingId.ToString("D"), reader.GetString(0));
+            Assert.Equal(canonicalBaseline, reader.GetString(1));
+        });
+
+        _ = RequireSuccess(await store.DeleteAsync(
+            deckId,
+            persisted.Revision,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM decks;"));
+        Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM deck_entries;"));
+        Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM deck_categories;"));
+        Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM deck_entry_categories;"));
+        Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM provider_bindings;"));
+        Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM sync_baselines;"));
+        Assert.Equal(1L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM schema_migrations;"));
+    }
+
+    /// <summary>
     /// Verifies category edits never change entry zones or delete card rows.
     /// </summary>
     [Fact]
@@ -634,6 +799,23 @@ public sealed class SqliteDeckStoreTests
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = sql;
         return (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken) ?? 0L);
+    }
+
+    /// <summary>
+    /// Executes a raw query and proves it returns exactly one row.
+    /// </summary>
+    private static async Task AssertSingleRowAsync(
+        SqliteConnection connection,
+        string sql,
+        Action<SqliteDataReader> assertRow)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(
+            TestContext.Current.CancellationToken);
+        Assert.True(await reader.ReadAsync(TestContext.Current.CancellationToken));
+        assertRow(reader);
+        Assert.False(await reader.ReadAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>

@@ -70,7 +70,7 @@ or compatibility behavior entered the child.
 
 | Date | Check | Result |
 | --- | --- | --- |
-| 2026-07-04 | Unit, integration, architecture, and official-client E2E tests | Passed; 94 offline tests across the solution, including an all-tools disposable Commander lifecycle. |
+| 2026-07-04 | Unit, integration, architecture, and official-client E2E tests | Passed; 95 offline tests, including an all-tools disposable Commander lifecycle and an independent raw-table audit of every schema-v1 column and cascade. |
 | 2026-07-04 | Per-assembly line coverage | Passed; App 95.74%, Core 100.00%, Decks 93.53%. |
 | 2026-07-03 | MCP surface and mode matrix | Passed; 4/19/19 tools in read-only/local/remote, one resource, zero prompts. |
 | 2026-07-03 | Abstraction, code quality, dead code, dependency, test, visual, and docs audits | Passed after fixes; no unresolved finding remains. |
