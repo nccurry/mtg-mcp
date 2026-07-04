@@ -94,16 +94,24 @@ recorded; their output does not claim a successful provider import.
 
 ## Product Direction
 
-The stable rewrite will provide explicit, capability-prefixed operations for
-local decks, Scryfall, Archidekt, Playgroup, exact deck statistics, and a local
-Scryfall Tagger cache. Provider facts, exact derivations, parser
-classifications, heuristics, and sampled estimates remain visibly distinct.
+The proposed stable target will provide explicit, capability-prefixed
+operations for local decks, a unified Scryfall corpus and evidence store,
+Archidekt, Playgroup, and exact deck statistics. Official card facts and
+community tag evidence share `scryfall.db` but retain distinct schemas and
+evidence classes. Provider facts, exact derivations, parser classifications,
+heuristics, and sampled estimates remain visibly distinct.
 
 The capability-toolset layer keeps ordinary discovery small:
 `decks`, `scryfall`, and `stats` form the default profile, while Archidekt,
-Playgroup, and Tagger require explicit enablement. Toolsets control relevance;
+and Playgroup require explicit enablement. Toolsets control relevance;
 operation modes remain the authority boundary. Only implemented descriptors
 appear in capability metadata or can be selected.
+
+This unified Scryfall direction is recorded as proposed AMEND-004 and is not
+authorized for implementation yet. Its replacement
+[Scryfall corpus](docs/llms/plcs/planned/scryfall-corpus-and-evidence/README.md)
+and [deterministic categorization](docs/llms/plcs/planned/deterministic-deck-categorization/README.md)
+packets are ready for owner review.
 
 Stable releases will not contain advisor prompts, intent inference, weak-card
 judgments, replacement recommendations, blended quality scores, or strategic

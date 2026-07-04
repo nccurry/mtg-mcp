@@ -30,6 +30,9 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `docs/`.
   mutually consistent, and linked from architecture docs.
 - Describe source observations and heuristic outputs with their limitations;
   do not call popularity, community tags, or simulation results universal facts.
+- For Scryfall planning, route future authority through proposed AMEND-004 and
+  the `scryfall-corpus-and-evidence` child. Do not revive separate Tagger-site
+  scraping, storage, adapter, prefix, or toolset guidance.
 
 ## Generated And Reference Data
 

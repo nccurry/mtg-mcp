@@ -42,8 +42,10 @@
   judgments, blended quality scores, or strategic simulation into the stable
   rewrite.
 - Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
-  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `stats_*`, and
-  `tagger_*` prefixes.
+  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, and `stats_*`
+  prefixes. Proposed AMEND-004 removes the separate Tagger prefix, adapter,
+  toolset, and database; do not implement the superseded design while the
+  amendment awaits owner review.
 - Assign every stable tool to exactly one capability toolset. Toolset selection
   controls which relevant tools an LLM sees; operation mode remains the sole
   authority boundary. Registration is fixed for an MCP session, the default
@@ -69,6 +71,10 @@
 - During the rewrite, follow the approved child module boundary: Decks owns
   local persistence/interchange, Statistics owns exact calculations, provider
   projects own transport/cache concerns, and App owns MCP hosting/composition.
+- Under proposed AMEND-004, Scryfall owns official card, ruling, and community
+  tag acquisition in one `scryfall.db`, while their schemas and evidence classes
+  remain distinct. Corpus downloads are explicit; no background download or
+  unsupported Tagger-site acquisition is allowed.
 - Do not solve surface growth with a generic router, intent inference, dynamic
   per-request tool switching, or compatibility aliases. Prefer coherent,
   capability-owned tools and merge catalog or discovery tools when one stable

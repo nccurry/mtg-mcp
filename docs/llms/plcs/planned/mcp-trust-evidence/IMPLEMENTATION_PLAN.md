@@ -14,7 +14,7 @@ first, second, third, and what evidence proves each phase is complete.
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -166,7 +166,7 @@ tool descriptions, annotations, or docs change.
   evidence even though the Scryfall Tagger provider already uses concrete
   `otag:` searches.
 - Included requirements: REQ-010, REQ-012.
-- Out of scope for this phase: direct Tagger GraphQL dependency, EDHREC,
+- Out of scope for this phase: provider transport changes, EDHREC,
   Comprehensive Rules, price providers, and discussion evidence.
 - Expected edits: Scryfall Tagger fixture coverage only if needed; Core/facet
   evidence labeling for provider query results, cached provider results, local

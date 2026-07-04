@@ -30,6 +30,9 @@ Provider payloads map into `RemoteDeckSnapshot`: provider/remote ID, URI,
 metadata, ordered entries with provider relation/card IDs, exact printing
 identity where known, normalized zones/categories, retrieval time, source
 payload checksum, and canonical fingerprint. Missing fields remain unknown.
+When exact local identity needs resolution, App composes the active unified
+Scryfall corpus with the adapter result; Archidekt never calls or references the
+Scryfall adapter directly, and an unresolved identity remains explicit.
 
 Folder payloads map into provider-owned `RemoteFolderRecord` values containing
 exact ID, name, visibility when present, parent ID, path, direct child-folder

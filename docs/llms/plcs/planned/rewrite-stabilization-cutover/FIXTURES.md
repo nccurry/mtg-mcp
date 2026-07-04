@@ -7,18 +7,18 @@
 | Server metadata tools | 0 | 0 | 0 |
 | Local deck store | 4 | 19 | 19 |
 | Manual deck interchange | 3 | 4 | 4 |
-| Scryfall snapshots | 4 | 7 | 7 |
+| Deterministic deck categorization | 2 | 3 | 3 |
+| Scryfall corpus and evidence | 14 | 18 | 18 |
 | Archidekt decks, folders, and snapshots | 11 | 12 | 23 |
 | Playgroup public API | 14 | 14 | 16 |
 | Exact statistics | 8 | 8 | 8 |
-| Tagger cache | 4 | 6 | 6 |
-| **`all` profile total tools** | **48** | **70** | **83** |
-| **Default profile (`decks,scryfall,stats`)** | **19** | **38** | **38** |
+| **`all` profile total tools** | **56** | **78** | **91** |
+| **Default profile (`decks,scryfall,stats`)** | **31** | **52** | **52** |
 
 Every mode exposes exactly one resource, `mtg://server/capabilities`, and zero
 prompts. Its capability document identifies the active mode and only the tools
-visible in that mode and selected toolsets. The 48/70/83 `all` counts and
-19/38/38 default counts are derived from the current child drafts. They detect
+visible in that mode and selected toolsets. The 56/78/91 `all` counts and
+31/52/52 default counts are derived from the proposed AMEND-004 child drafts. They detect
 inconsistencies in those drafts; they are not legacy-
 compatibility targets and may change with an approved better surface.
 
@@ -31,12 +31,12 @@ same change.
 | ID | Requirement | Scenario | Expected result |
 | --- | --- | --- | --- |
 | CUT-FIX-001 | CUT-001 | One child is Draft or In progress | Cutover cannot start. |
-| CUT-FIX-002 | CUT-002 | Solution/project graph | Exactly eight production projects with approved dependency direction. |
+| CUT-FIX-002 | CUT-002 | Solution/project graph | Exactly seven production projects with approved dependency direction. |
 | CUT-FIX-003 | CUT-003, CUT-004 | Canonical MCP discovery in all modes | Exact names, schemas, visibility, and derived counts match the approved manifest/snapshots. |
 | CUT-FIX-004 | CUT-005 | Forbidden surface/project scan | No stable match outside explicitly historical docs or fixtures. |
 | CUT-FIX-005 | CUT-006 | Per-assembly coverage | Every production assembly is at least 90 percent. |
 | CUT-FIX-006 | CUT-007, CUT-008 | Full final-commit offline run | Lint, tests, coverage, security, architecture, package, and smoke pass. |
-| CUT-FIX-007 | CUT-009 | Scryfall read and one-card Tagger live proof | Bounds honored, no remote mutation, redacted report. |
+| CUT-FIX-007 | CUT-009 | Scryfall bulk metadata, bounded API read, explicit manual full-corpus install/reuse, and packaged rollback | Official contract, bounds, generation activation, second-process reuse, fixture-backed rollback, no remote mutation, and redacted report pass. |
 | CUT-FIX-008 | CUT-010 | Archidekt private throwaway workflow | Deck sync, folder organization, snapshot lifecycle/restore, and final folder/snapshot/deck cleanup pass with no residual object. |
 | CUT-FIX-009 | CUT-010 | Archidekt folder, snapshot, or deck cleanup is unavailable or fails | Cutover stops; result cannot be waived as success. |
 | CUT-FIX-010 | CUT-011 | Playgroup safe live reads plus pinned-contract write fixtures | Read status and fixture-only write limitation are explicit; no write is labeled live-tested. |
@@ -49,10 +49,10 @@ same change.
 | CUT-FIX-017 | CUT-018 | PLC registry after release | Eleven children and umbrella have accurate lifecycle/approval evidence. |
 | CUT-FIX-018 | CUT-019 | `read-only` provider read with local/remote write spies | Read may complete; every write spy remains zero. |
 | CUT-FIX-019 | CUT-020 | Child adds/removes one tool without updating cutover | Contract test fails until child matrix, regenerated crosswalk/totals, and snapshots agree; no old count is required. |
-| CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Temporary read-proof waivers use all required fields; Archidekt/Tagger blockers remain unwaivable; Playgroup writes retain their explicit fixture-only classification; no skip is labeled passed. |
+| CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Temporary read-proof waivers use all required fields; the Scryfall full-corpus and Archidekt cleanup gates remain unwaivable; Playgroup writes retain their explicit fixture-only classification; no skip is labeled passed. |
 | CUT-FIX-021 | CUT-021 | Default/all/none/explicit profiles in all modes | Exact toolset membership and capability counts match; `none` exposes zero tools; toolsets never widen mode authority. |
-| CUT-FIX-022 | CUT-021 | Default-profile deckbuilding workflow | Local deck evidence, immutable Scryfall facts, and exact statistics compose end to end without a recommendation, router, or optional provider surface. |
-| CUT-FIX-023 | CUT-021 | Each optional provider workflow | Explicitly enabled Archidekt, Playgroup, and Tagger workflows preserve provenance, unknown states, and mode guards. |
+| CUT-FIX-022 | CUT-021 | Default-profile deckbuilding workflow | Local deck evidence, corpus-backed Scryfall facts/tags, deterministic caller rules, and exact statistics compose end to end without a recommendation, router, or optional provider surface. |
+| CUT-FIX-023 | CUT-021 | Each optional provider workflow | Explicitly enabled Archidekt and Playgroup workflows preserve provenance, unknown states, and mode guards. |
 
 ## Forbidden Stable Surface
 

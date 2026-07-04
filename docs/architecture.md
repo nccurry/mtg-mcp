@@ -19,10 +19,10 @@ The rewrite is an evidence/workflow server, not a deck advisor. It uses:
 - `MtgMcp.Decks` for the revisioned local deck domain, SQLite storage, and
   manual interchange;
 - `MtgMcp.Statistics` for exact provider-independent calculations;
-- isolated Scryfall, Archidekt, Playgroup, and Tagger adapters;
+- isolated Scryfall, Archidekt, and Playgroup adapters;
 - `MtgMcp.App` for MCP hosting, composition, modes, schemas, and the capability
   resource; and
-- separate `decks.db`, `scryfall.db`, and `tagger.db` stores.
+- separate versioned `decks.db` and unified `scryfall.db` stores.
 
 Its modes are `read-only`, `local` (default), and `remote`. Stable tools use
 capability prefixes and expose evidence or explicit operations; there are no
@@ -32,15 +32,20 @@ tool-count baseline is derived from child packets and is not a compatibility
 constraint.
 
 Every stable tool also belongs to exactly one startup-selectable capability
-toolset: `decks`, `scryfall`, `stats`, `archidekt`, `playgroup`, or `tagger`.
+toolset: `decks`, `scryfall`, `stats`, `archidekt`, or `playgroup`.
 The model-visible surface is the intersection of the enabled toolsets and the
 selected operation mode. Toolsets reduce irrelevant context but grant no
 authority. Registration remains fixed for a session, so the server does not
 advertise dynamic list changes. The default toolsets are `decks`, `scryfall`,
-and `stats`; provider-specific toolsets are opt-in. The implemented App
+and `stats`; Archidekt and Playgroup toolsets are opt-in. The implemented App
 registry currently contains only `decks`, rejects unimplemented names, and
 projects exact selection and counts through capability schema version 2. The
 independently reviewed `mcp-capability-toolsets` child PLC owns this contract.
+
+The unified Scryfall boundary is proposed by AMEND-004 and remains unauthorized
+until owner review. It uses official bulk All Cards, Rulings, Oracle Tags, and
+Art Tags in one store while keeping source facts and community evidence
+separate. It does not use the Tagger website or run background downloads.
 
 See the [rewrite guide](rewrite-guide.md) and
 [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).

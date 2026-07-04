@@ -24,6 +24,8 @@ or public-surface docs as future design requirements.
 - [Capability toolsets](docs/llms/plcs/completed/mcp-capability-toolsets/README.md): Implemented startup-selected surface governance and static profiles.
 - [Local deck store](docs/llms/plcs/completed/local-deck-store/README.md): Implemented deck contracts, SQLite lifecycle, tools, and acceptance evidence.
 - [Manual deck interchange](docs/llms/plcs/in-progress/manual-deck-interchange/README.md): Native JSON, generic text, and experimental provider artifact workflows.
+- [Scryfall corpus and evidence](docs/llms/plcs/planned/scryfall-corpus-and-evidence/README.md): Proposed unified official corpus, authoritative API, cache, replay, and tag-evidence boundary; implementation is not authorized.
+- [Deterministic deck categorization](docs/llms/plcs/planned/deterministic-deck-categorization/README.md): Proposed caller-configured tag-rule evaluation; implementation is not authorized.
 - [Potential features](docs/potential-features.md): Deferred ideas that are not stable rewrite scope.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
 

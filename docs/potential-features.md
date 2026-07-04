@@ -45,7 +45,7 @@ not label a card "weak" or choose cuts.
 Research price and similarity evidence that lets an LLM compare cards without
 the MCP recommending replacements. Candidate evidence includes current price
 with market/date/currency, oracle characteristics, color/format legality, mana
-value, types, exact Tagger overlap, and other attributable features. Similarity
+value, types, exact community-tag overlap, and other attributable features. Similarity
 must expose its components and never imply functional equivalence.
 
 ## Conditional Provider Expansions
@@ -61,10 +61,19 @@ must expose its components and never imply functional equivalence.
 - Playgroup response snapshots may be considered if reproducible historical
   analysis becomes more valuable than live-only provider evidence.
 
+## Local Scryfall Query Engine
+
+A future PLC may investigate executing part of Scryfall's query language over
+the local corpus. It is not a `0.9.0` cutover dependency. Any proposal must
+publish query-coverage limits, differential-test supported semantics against
+Scryfall, and fall back to the provider whenever complete local equivalence
+cannot be proven. The unified corpus does not itself authorize local execution
+of arbitrary searches.
+
 ## Explicitly Not Queued
 
 - Automated Moxfield network access while its terms prohibit automated access.
-- Bulk or background crawling of Scryfall Tagger.
+- Tagger-site scraping or background Scryfall corpus downloads.
 - A comprehensive Magic rules engine.
 - Advisor prompts, intent inference, opaque power scores, weak-card judgments,
   or MCP-selected replacements.

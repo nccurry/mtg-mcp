@@ -15,12 +15,15 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
   capability with `OperationModeGuard`. Rewrite modes are `read-only`, `local`,
   and `remote`, with local and remote mutation kept distinct.
 - Assign each stable tool to exactly one of `decks`, `scryfall`, `stats`,
-  `archidekt`, `playgroup`, or `tagger`. Build one deterministic registration
+  `archidekt`, or `playgroup`. Build one deterministic registration
   set at startup by intersecting enabled toolsets with operation-mode
   visibility; never use toolsets as authorization.
 - Keep the default profile limited to `decks`, `scryfall`, and `stats`.
-  Provider-specific `archidekt`, `playgroup`, and `tagger` surfaces are opt-in.
+  Provider-specific `archidekt` and `playgroup` surfaces are opt-in.
   Do not advertise dynamic list changes while registration is session-static.
+- Proposed AMEND-004 removes the separate Tagger descriptor and routes official
+  community-tag evidence through `scryfall`; do not add a placeholder or alias
+  while the amendment and replacement child await approval.
 
 ## Host Boundary
 

@@ -4,11 +4,13 @@
 > **Rewrite disposition: superseded/reference-only — do not implement this
 > legacy workspace-JSON migration.** The durable known-empty-versus-unknown
 > principle is owned by [local deck identity](../../completed/local-deck-store/README.md) and
-> [Scryfall snapshots](../scryfall-evidence-snapshots/README.md), including
+> [Scryfall corpus and evidence](../scryfall-corpus-and-evidence/README.md), including
 > explicit root/face handling for multi-face cards. Moxfield mapping, legacy
 > workspace migration, and `deck_refresh_card_metadata` mechanisms are removed.
 > Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
 > authorized foundation implementation.
+> All hydration/provider mechanisms below are historical and non-normative;
+> later identity resolution must use the replacement corpus boundary.
 
 ## Lifecycle
 
@@ -16,7 +18,7 @@
 - Folder: docs/llms/plcs/planned/card-snapshot-integrity/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Current phase: implementation retired; reference evidence only
 
 ## Summary

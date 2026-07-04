@@ -9,7 +9,7 @@ evidence up to date as code lands.
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress | Govern eleven separate, independently reviewable rewrite PLCs and their shared guardrails. |
+| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress; proposed AMEND-004 review | Govern eleven independently reviewable rewrite PLCs, including the proposed unified Scryfall corpus and deterministic categorization direction. |
 
 ## Active Rewrite Children
 

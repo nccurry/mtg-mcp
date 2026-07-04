@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-04
-- Current phase: draft review
+- Current phase: AMEND-004 consistency review
 
 ## Summary
 

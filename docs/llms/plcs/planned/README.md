@@ -24,12 +24,12 @@ approved/completed. The governing program remains
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [scryfall-evidence-snapshots](scryfall-evidence-snapshots/README.md) | Draft | Define immutable snapshots of official Scryfall reads and rich source objects. |
-| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
-| [playgroup-public-api](playgroup-public-api/README.md) | Draft | Define typed coverage of the pinned official Playgroup public API. |
-| [exact-deck-statistics](exact-deck-statistics/README.md) | Draft | Define exact provider-independent deck probability and composition calculations. |
-| [scryfall-tagger-cache](scryfall-tagger-cache/README.md) | Draft | Define deterministic cached Tagger evidence and bounded explicit acquisition. |
-| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
+| [scryfall-corpus-and-evidence](scryfall-corpus-and-evidence/README.md) | Draft; AMEND-004 review required | Define the official bulk corpus, authoritative query cache, immutable replay, and card/ruling/tag evidence. |
+| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft; AMEND-004 dependency review | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
+| [playgroup-public-api](playgroup-public-api/README.md) | Draft; AMEND-004 consistency review | Define typed coverage of the pinned official Playgroup public API. |
+| [exact-deck-statistics](exact-deck-statistics/README.md) | Draft; AMEND-004 consistency review | Define exact provider-independent deck probability and composition calculations. |
+| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; AMEND-004 review required | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |
+| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; AMEND-004 re-review | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
 
 ## Product Foundation Follow-ups
 
@@ -37,7 +37,7 @@ approved/completed. The governing program remains
 | --- | --- | --- |
 | [mcp-trust-evidence](mcp-trust-evidence/README.md) | Absorbed/reference-only | Evidence vocabulary rationale is owned by rewrite foundation/provider/statistics children; do not implement independently. |
 | [configurable-decision-models](configurable-decision-models/README.md) | Post-cutover reference | Seed for a future experimental feasibility PLC; not stable `0.9.0` scope. |
-| [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by Scryfall, Archidekt, Playgroup, and Tagger children. |
+| [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by the unified Scryfall, Archidekt, and Playgroup children. |
 
 ## Jasmine Analysis Repair Packets
 

@@ -89,7 +89,7 @@ and unsupported states for the client LLM.
 | --- | --- |
 | One universal text format | Rejected; hides provider-specific loss. |
 | Write files directly | Rejected; MCP need not receive arbitrary filesystem authority. |
-| Resolve unknown cards during import | Rejected; acquisition belongs to Scryfall snapshots. |
+| Resolve unknown cards during import | Rejected; later resolution belongs to the explicit Scryfall corpus/evidence workflow. |
 | Automatically merge imports | Rejected; requires hidden conflict decisions. |
 | Claim tags preserved because companion exists | Rejected; report target-applied and companion-only separately. |
 

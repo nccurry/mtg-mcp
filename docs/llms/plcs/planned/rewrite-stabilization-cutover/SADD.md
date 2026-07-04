@@ -20,12 +20,11 @@ composition from the same commit and packaged artifacts proposed for release.
 | --- | --- |
 | `MtgMcp.Core` | Provider-neutral evidence, failures, identifiers, and shared contracts. |
 | `MtgMcp.App` | MCP host, capability resource, operation modes, composition, and server metadata. |
-| `MtgMcp.Decks` | Local deck domain, SQLite store, and manual interchange. |
-| `MtgMcp.Scryfall` | Official Scryfall transport and immutable snapshot store. |
+| `MtgMcp.Decks` | Local deck domain, SQLite store, manual interchange, and caller-configured deterministic categorization. |
+| `MtgMcp.Scryfall` | Official Scryfall transport, unified corpus, tag evidence, exact-request cache, and immutable request snapshots. |
 | `MtgMcp.Archidekt` | Archidekt transport, authentication, mapping, deck synchronization, folder organization, and named snapshots. |
 | `MtgMcp.Playgroup` | Pinned official Playgroup public API adapter. |
 | `MtgMcp.Statistics` | Exact provider-independent probability calculations. |
-| `MtgMcp.Tagger` | Tagger cache and explicitly invoked bounded acquisition. |
 
 Dependency tests enforce that Core references no adapter or host; provider
 adapters do not reference one another; App is the composition root; and Decks,
@@ -39,16 +38,16 @@ payloads.
 | Server metadata tools | 0 | Foundation uses initialization and the capability resource. |
 | `deck_*` local deck operations | 19 | Local deck store |
 | `deck_*` manual interchange | 4 | Manual interchange |
-| `scryfall_*` | 7 | Scryfall snapshots |
+| `deck_*` deterministic categorization | 3 | Deterministic deck categorization |
+| `scryfall_*` | 18 | Scryfall corpus and evidence |
 | `archidekt_*` | 23 | Archidekt decks, folders, snapshots, and synchronization |
 | `playgroup_*` | 16 | Playgroup public API |
 | `stats_*` | 8 | Exact statistics |
-| `tagger_*` | 6 | Tagger cache |
-| **Total** | **83** | |
+| **Total** | **91** | |
 
 The only resource is `mtg://server/capabilities`; there are no prompts. As of
-the current child drafts, canonical `all` discovery snapshots contain 48, 70,
-and 83 tools for `read-only`, `local`, and `remote`, respectively. These are
+the proposed AMEND-004 child drafts, canonical `all` discovery snapshots contain
+56, 78, and 91 tools for `read-only`, `local`, and `remote`, respectively. These are
 derived planning totals, not backward-compatibility requirements. An approved
 child may add, remove, rename, or reshape tools to improve the design; the
 manifest, crosswalk, totals, and snapshots are then regenerated together.
@@ -56,7 +55,7 @@ Schema canonicalization sorts objects only where order is semantically
 irrelevant and never weakens exact name, description, annotation, input, or
 output-schema comparisons.
 
-`read-only` is a mutation-authority mode: its 48 `all`-profile tools may include explicit
+`read-only` is a mutation-authority mode: its 56 `all`-profile tools may include explicit
 Scryfall, Archidekt, or Playgroup network reads/previews, but every local and
 remote write spy must remain zero. “Offline” describes normal validation, not a
 runtime mode. Manual interchange is owned by `MtgMcp.Decks`; no separate
@@ -74,8 +73,8 @@ tool or count.
 | Proof | Allowed release treatment |
 | --- | --- |
 | Archidekt deck/folder/snapshot lifecycle and restore | Must pass against disposable state with verified cleanup; no waiver. |
-| Tagger one-card acquisition | Must pass; policy objection, 403/429, or unsupported contract blocks release. |
-| Scryfall official read | Must normally pass; repository owner may approve a temporary operational skip with current official contract evidence, offline fixtures, reason, date, and expiry. |
+| Scryfall official metadata and bounded read | Must normally pass; repository owner may approve a temporary operational skip with current official contract evidence, offline fixtures, reason, date, and expiry. |
+| Scryfall full-corpus lifecycle | Must pass as explicit manual acceptance against official All Cards, Rulings, Oracle Tags, and Art Tags bulk files before stable release; it does not run in ordinary CI. |
 | Playgroup official reads | Must normally pass; repository owner may approve a credential/availability skip with pinned-contract and offline-fixture evidence. |
 | Playgroup writes without safe cleanup | Fixture-only under the child-7 repository-owner decision for the pinned 2026-07-03 contract; never labeled live-tested. |
 
@@ -116,7 +115,7 @@ check remains visibly different from a pass.
 ### Data and rollback
 
 `0.9.0` selects a new versioned application-data root containing separate
-`decks.db`, `scryfall.db`, and `tagger.db`. It does not search legacy roots.
+`decks.db` and the unified `scryfall.db`. It does not search legacy roots.
 Rollback reinstalls the prior stable package and points it at its unchanged
 legacy configuration/data. New stores remain untouched for diagnosis or later
 manual export; the rollback never down-migrates them.
@@ -124,7 +123,7 @@ manual export; the rollback never down-migrates them.
 ## Toolset And North-Star Design
 
 Cutover derives a canonical mapping from every stable tool to exactly one of
-the six approved toolsets. It snapshots `default`, `all`, `none`, and
+the five approved toolsets. It snapshots `default`, `all`, `none`, and
 representative explicit profiles in each operation mode and proves the visible
 surface is the intersection of selected relevance and existing authority. The
 default profile contains `decks`, `scryfall`, and `stats`; provider toolsets are
@@ -152,7 +151,7 @@ failed required offline test; per-assembly coverage below 90 percent; unresolved
 priority-1/priority-2 defect; credential exposure; unsafe live-test setup;
 Archidekt deck/folder/snapshot cleanup that is unavailable, unverifiable, or
 leaves remote state;
-Tagger policy/contract objection or blocking response; package smoke failure;
+Scryfall bulk or API contract drift; package smoke failure;
 or unsuccessful rollback rehearsal.
 
 ## Test Architecture

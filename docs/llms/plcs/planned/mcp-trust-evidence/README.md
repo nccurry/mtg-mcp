@@ -4,12 +4,16 @@
 > **Rewrite disposition: absorbed/reference-only — do not implement this packet.**
 > Its durable evidence-vocabulary ideas are owned by
 > [rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md),
-> [Scryfall snapshots](../scryfall-evidence-snapshots/README.md),
+> [Scryfall corpus and evidence](../scryfall-corpus-and-evidence/README.md),
 > [exact statistics](../exact-deck-statistics/README.md), and
-> [Tagger cache](../scryfall-tagger-cache/README.md). Legacy legality,
+> and [deterministic deck categorization](../deterministic-deck-categorization/README.md).
+> Legacy legality,
 > recommendation, bracket, role, and scoring work is not part of the stable
 > rewrite. Reviewed against the rewrite on 2026-07-03; lifecycle movement is
 > deferred to authorized foundation implementation.
+> The remaining packet body is historical evidence only. Its provider routes,
+> transport assumptions, phases, and fixtures are non-normative; official
+> Scryfall bulk/API acquisition is owned solely by the replacement child.
 
 ## Lifecycle
 
@@ -17,7 +21,7 @@
 - Folder: `docs/llms/plcs/planned/mcp-trust-evidence/`
 - Owner: mtg-mcp
 - Created: 2026-06-28
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Current phase: implementation retired; reference evidence only
 
 ## Summary

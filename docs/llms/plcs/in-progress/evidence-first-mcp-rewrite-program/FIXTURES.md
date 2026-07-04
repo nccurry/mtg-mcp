@@ -32,6 +32,7 @@ than runtime payload fixtures.
 | PROG-015 | FIX-PROVIDER-CHECKLIST | Applicable provider concerns have explicit decisions and tests. | Provider child review |
 | PROG-017, PROG-018, PROG-019, PROG-021 | FIX-TOOLSET-GUARDRAILS, SCN-009, SCN-010 | Every tool has one toolset; default/all/none and all modes reconcile with capability output; registration remains static. | Manifest, architecture, and official-client review |
 | PROG-020 | FIX-NORTH-STAR-CHECKLIST, SCN-011 | Remaining child proves one useful composed LLM workflow and explicit evidence/decision boundaries. | Child review and fixture traceability |
+| PROG-022, PROG-023, PROG-024 | FIX-GUARDRAILS, FIX-PROGRAM-REGISTRY, SCN-012 | Unified Scryfall evidence, explicit bulk acquisition, removed Tagger capability, and deferred local query evaluation agree across every active packet. | Cross-packet terminology, surface, and provider-boundary review |
 
 ## Child Packet Acceptance Checklist
 
@@ -69,7 +70,7 @@ A required child cannot be approved until all applicable checks pass:
 ## Provider Child Checklist
 
 Apply this checklist to Scryfall, Archidekt, Playgroup, Moxfield interchange,
-Tagger, and future popularity-source packets:
+and future popularity-source packets:
 
 - [ ] Contract owner and official, observed, or unsupported status are stated.
 - [ ] Authentication and secret lifetime are stated without exposing values.
@@ -98,12 +99,16 @@ Tagger, and future popularity-source packets:
 | SCN-009 | Default selection starts after decks, Scryfall, and statistics are implemented. | Only those default-enabled toolsets intersected with the active mode are visible; provider integrations stay hidden. |
 | SCN-010 | `all`, `none`, an explicit list, and an unknown name are started in each mode. | Stable implemented toolsets, zero tools, the exact requested subset, and sanitized startup failure are observed respectively; no `listChanged` capability appears. |
 | SCN-011 | A child lists provider endpoints but does not state a player question, evidence class, or composed workflow. | Review rejects the child as north-star incomplete even when endpoint/schema traceability is otherwise complete. |
+| SCN-012 | A planned document proposes a separate community-tag database, adapter, tool prefix/toolset, unsupported website traffic, automatic bulk download, or local execution of an uncached arbitrary Scryfall query. | Review rejects the document as conflicting with proposed AMEND-004; implementation remains blocked until the amendment and reconciled children are approved. |
 
 ## MCP Surface Checks
 
-| Surface | Mode | Expected visibility | Notes |
-| --- | --- | --- | --- |
-| Existing MCP surfaces | Existing behavior | Unchanged by umbrella docs | The dedicated toolset child owns runtime changes. |
+| Profile | `read-only` | `local` | `remote` | Notes |
+| --- | ---: | ---: | ---: | --- |
+| Current implemented runtime | 7 | 23 | 23 | Deck-only runtime; unchanged by this documentation amendment. |
+| Proposed `default` | 31 | 52 | 52 | `decks,scryfall,stats` after affected children are approved and implemented. |
+| Proposed `all` | 56 | 78 | 91 | All five target toolsets; derived from child matrices. |
+| `none` | 0 | 0 | 0 | Existing static-selection behavior remains. |
 
 ## Provider Fixtures
 
@@ -122,3 +127,5 @@ payload baselines.
 - Run `git diff --check`.
 - Inspect the diff to confirm that umbrella/index documentation and the eleven
   required child packets agree; production changes require their active child.
+- Search every non-completed packet and durable design document for obsolete
+  Tagger storage/adapter/toolset/scraping claims and superseded surface totals.

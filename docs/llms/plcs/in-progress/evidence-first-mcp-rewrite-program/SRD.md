@@ -15,9 +15,10 @@
 | Date | Author | Summary of change |
 | --- | --- | --- |
 | 2026-07-03 | Codex | Initial umbrella program draft. |
-| 2026-07-03 | Codex | Applied AMEND-001 and recorded sequential drafting of all ten children without implementation. |
-| 2026-07-03 | Codex | Applied AMEND-002 to include Archidekt folder and named-snapshot workflows in child 6 and cutover. |
+| 2026-07-03 | Codex | Applied AMEND-001 and recorded sequential drafting of all then-required ten children without implementation. |
+| 2026-07-03 | Codex | Applied AMEND-002 to include Archidekt folder and named-snapshot workflows in the then-numbered child 6 and cutover. |
 | 2026-07-04 | Codex | Applied AMEND-003 for capability toolsets, north-star acceptance, and an eleven-child queue. |
+| 2026-07-04 | Codex | Reconciled proposed AMEND-004 for unified official Scryfall bulk/tag evidence, deterministic deck categorization, and deferred local query evaluation. |
 
 ## Executive Summary
 
@@ -50,7 +51,9 @@ It does not define detailed child APIs and does not authorize production code.
 - [Playgroup.gg public API](https://playgroup.gg/api-docs/index.html)
 - [Moxfield terms](https://moxfield.com/help/terms)
 - [Scryfall terms](https://scryfall.com/docs/terms)
-- [Scryfall Tagger robots policy](https://tagger.scryfall.com/robots.txt)
+- [Scryfall Bulk Data](https://scryfall.com/docs/api/bulk-data)
+- [Scryfall Tags](https://scryfall.com/docs/api/tags)
+- [Scryfall API usage guidance](https://scryfall.com/docs/faqs/i-m-having-trouble-accessing-the-scryfall-api-or-i-m-blocked-17)
 - [Magic Comprehensive Rules](https://media.wizards.com/2026/downloads/MagicCompRules%2020260619.pdf)
 
 ## User And Maintainer Outcomes
@@ -142,6 +145,9 @@ services, generated artifacts, local databases, or production assemblies.
 | PROG-019 | Must | Diagnostics | The capability resource shall distinguish implemented, available, enabled, default-enabled, and disabled toolsets without advertising unimplemented placeholders. | Clients need truthful surface discovery. | Capability-resource fixtures reconcile exactly with `tools/list`. |
 | PROG-020 | Must | Review | Every remaining capability child shall include a north-star acceptance section naming player questions enabled, evidence class, determinism boundary, explicit unknowns, MCP decision boundary, representative composed workflow, toolset assignment, and tool-versus-resource rationale. | Endpoint coverage alone does not prove deckbuilding usefulness or simplicity. | Child review checklist rejects any packet missing one of these decisions or objective workflow evidence. |
 | PROG-021 | Must | Stability | Toolset selection shall be resolved at startup and remain static for the session; stable `0.9.0` shall not depend on dynamic tool-list mutation or `listChanged`. | Static registration is easier to test and works consistently across clients. | Reconfiguration requires restart; initialization advertises no tool-list-change capability. |
+| PROG-022 | Must | Architecture | Official Scryfall card/ruling facts and community tag evidence shall use one `scryfall.db`, one adapter, and the `scryfall` toolset while retaining separate evidence schemas; no separate tag store, adapter, or toolset remains planned. | The official bulk contract now owns both datasets and their identity joins. | Remaining child/cutover packets and durable guidance contain no active obsolete tag persistence, adapter, prefix, or unsupported acquisition design. |
+| PROG-023 | Must | Safety | Multi-gigabyte Scryfall bulk synchronization shall be explicit, cross-process coordinated, and never triggered by startup/background/read paths; new uncached arbitrary search syntax remains provider-authoritative. | Provider load, bandwidth, disk mutation, and query correctness require visible boundaries. | Scryfall requirements and fixtures include download spies, leases/pacing, 24-hour freshness, cache-only behavior, and provider-query proof. |
+| PROG-024 | Must | Deferral | Local Scryfall query evaluation shall remain a registered non-cutover future PLC with differential parity and explicit coverage/fallback gates. | The corpus should enable future work without pretending at syntax parity now. | No required child implements a local evaluator; the post-cutover registry and potential-features note contain the acceptance boundary. |
 
 ## Interfaces, Data, States, And Modes
 
@@ -173,8 +179,8 @@ The required child approval record is defined in
 
 | Phase | Goal | Included requirements | Exit criteria |
 | --- | --- | --- | --- |
-| Umbrella review | Approve program rules. | PROG-001 through PROG-021 | Packet review and docs validation pass. |
-| Child authoring | Draft one complete packet at a time in registry order. | PROG-001 through PROG-021 | Each draft is structurally validated before the next begins; approvals remain independent. |
+| Umbrella review | Approve program rules. | PROG-001 through PROG-024 | Packet review and docs validation pass. |
+| Child authoring | Draft one complete packet at a time in registry order. | PROG-001 through PROG-024 | Each draft is structurally validated before the next begins; approvals remain independent. |
 | Program closure | Close planning decomposition. | PROG-011 through PROG-014 | All eleven children are approved and umbrella completion evidence is recorded. |
 
 ## Traceability
@@ -186,6 +192,7 @@ The required child approval record is defined in
 | PROG-005, PROG-006 | SADD: Guardrail amendments | Child conformance and amendment review | FIX-GUARDRAILS, SCN-005 |
 | PROG-007, PROG-009, PROG-014 | SADD: Child packet contract | Packet checklist and traceability review | FIX-CHILD-CHECKLIST |
 | PROG-008, PROG-016 | SADD: Audit-first design | Registry and Git diff review | SCN-006 |
+| PROG-022 through PROG-024 | SADD: Scryfall corpus charter; capability governance; deferred registry | Cross-packet terminology, surface, provider-boundary, and registry review | FIX-GUARDRAILS, FIX-PROGRAM-REGISTRY, SCN-012 |
 | PROG-012, PROG-013 | SADD: Registries | Registry inspection | FIX-PROGRAM-REGISTRY |
 | PROG-015 | SADD: Provider child requirements | Provider review checklist | FIX-PROVIDER-CHECKLIST |
 | PROG-017 through PROG-019, PROG-021 | SADD: Capability toolset governance | Toolset/mode/resource contract review | FIX-TOOLSET-GUARDRAILS, SCN-007 through SCN-010 |

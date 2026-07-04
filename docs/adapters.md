@@ -6,9 +6,9 @@ third-party HTTP request and response shapes.
 
 ## Clean-Break `0.9.0` Target
 
-The stable rewrite has isolated adapters for official Scryfall evidence,
-explicit Archidekt operations, the documented Playgroup public API, and a
-separate Tagger cache/acquisition boundary. It has no Moxfield network adapter,
+The proposed stable rewrite has isolated adapters for official Scryfall
+evidence, explicit Archidekt operations, and the documented Playgroup public
+API. It has no separate Tagger adapter, Moxfield network adapter,
 Commander Spellbook adapter, generic decklist provider, or recommendation
 source framework.
 
@@ -17,9 +17,9 @@ source framework.
   with conservative pacing, preview/apply guards, and verified cleanup.
 - Playgroup follows the pinned official OpenAPI contract; missing operations are
   reported unsupported rather than reverse engineered.
-- Tagger cache reads are offline. Unsupported HTML/CSRF/GraphQL acquisition is
-  separately invoked, bounded, and disabled unless its owner-risk record is
-  accepted.
+- Scryfall explicitly synchronizes official All Cards, Rulings, Oracle Tags,
+  and Art Tags bulk files into one corpus. Arbitrary uncached searches remain
+  provider-authoritative; no Tagger-site acquisition is planned.
 - Moxfield is manual interchange only because its terms prohibit automated
   access.
 

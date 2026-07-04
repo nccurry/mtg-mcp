@@ -33,7 +33,7 @@ not need to reason over every integration merely because the server supports it.
 
 1. **Source facts**: oracle text, legality, prices, workspace contents, and
    directly observed provider fields.
-2. **Source evidence**: Scryfall Tagger classifications and attributable
+2. **Source evidence**: Scryfall community-tag classifications and attributable
    Archidekt or Playgroup observations. Popularity, tournament, and combo
    sources require separately approved future PLCs.
 3. **Derived mathematics**: counts, exact probabilities, and reproducible

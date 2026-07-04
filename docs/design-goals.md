@@ -4,8 +4,8 @@
 
 - Return provider attribution, retrieval time, cache status, assumptions,
   warnings, confidence, and determinism when they affect interpretation.
-- Keep incompatible source contexts separate. Official Scryfall facts, Tagger
-  community classifications, Archidekt state, and Playgroup observations answer
+- Keep incompatible source contexts separate. Official Scryfall facts,
+  Scryfall community-tag evidence, Archidekt state, and Playgroup observations answer
   different questions. Future popularity/tournament sources must also retain
   their populations and denominators.
 - Prefer inspectable counts, rows, exact derivations, and explicit unavailable
@@ -53,7 +53,7 @@
 - Keep registration static for the MCP session. Select toolsets at startup and
   advertise the resulting exact surface without dynamic list-change claims.
 - Make `decks`, `scryfall`, and `stats` the smallest coherent default. Require
-  explicit enablement for `archidekt`, `playgroup`, and `tagger`.
+  explicit enablement for `archidekt` and `playgroup`.
 - Support `default`, `all`, `none`, and explicit toolset lists so clients and
   tests can request a predictable surface.
 - Add a tool only when its distinct input/output contract advances a complete

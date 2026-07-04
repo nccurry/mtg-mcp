@@ -18,6 +18,7 @@
 | 2026-07-03 | Codex | Applied AMEND-001 for sequential drafting in one planning run. |
 | 2026-07-03 | Codex | Applied AMEND-002 for Archidekt folder and named-snapshot scope. |
 | 2026-07-04 | Codex | Applied AMEND-003 for static capability toolsets and north-star acceptance. |
+| 2026-07-04 | Codex | Reconciled proposed AMEND-004 for one official Scryfall corpus, no separate Tagger capability, deterministic deck categorization, and deferred local query evaluation. |
 
 ## Executive Summary
 
@@ -110,11 +111,11 @@ implementation plan, and fixture matrix. The fixed authoring order is:
 3. `local-deck-store`
 4. `manual-deck-interchange`
 5. `mcp-capability-toolsets`
-6. `scryfall-evidence-snapshots`
+6. `scryfall-corpus-and-evidence`
 7. `archidekt-deck-sync`
 8. `playgroup-public-api`
 9. `exact-deck-statistics`
-10. `scryfall-tagger-cache`
+10. `deterministic-deck-categorization`
 11. `rewrite-stabilization-cutover`
 
 The first child is a docs-only audit. It creates the proposed deletion and reuse
@@ -134,7 +135,7 @@ child's detailed requirements or design.
   workflow, fixture family, and live-test claim.
 - Classify each item as `rebuild`, `remove`, `experimental`, `unsupported`,
   `misleading`, or `fixture-only` using code and test evidence.
-- Investigate the empty live-test suite, incomplete per-card Tagger acquisition,
+- Investigate the empty live-test suite, incomplete legacy tag acquisition,
   Playgroup limitations, heuristic decision tools, unofficial provider
   contracts, and documented analysis defects.
 - Produce authoritative deletion and reuse allowlists without changing code.
@@ -167,8 +168,10 @@ child's detailed requirements or design.
 
 #### 5. MCP Capability Toolsets
 
-- Define startup-selected `decks`, `scryfall`, `stats`, `archidekt`,
-  `playgroup`, and `tagger` toolsets in App without adding Core dependencies.
+- Define startup-selected `decks`, `scryfall`, `stats`, `archidekt`, and
+  `playgroup` toolsets in App without adding Core dependencies. The completed
+  packet's historical Tagger placeholder is superseded by proposed AMEND-004
+  before any such toolset was implemented.
 - Keep toolsets orthogonal to `read-only`, `local`, and `remote` authority.
 - Define deterministic `default`, `all`, and `none` selections, configuration
   precedence, sanitized failures, capability reporting, and exact discovery
@@ -176,15 +179,19 @@ child's detailed requirements or design.
 - Assign current deck and interchange tools to `decks` and establish the
   registration contract inherited by every later child.
 
-#### 6. Scryfall Evidence Snapshots
+#### 6. Scryfall Corpus And Evidence
 
-- Define immutable named snapshots for official search, named and ID lookup,
-  collection, prints, rulings, sets, catalogs, autocomplete, and bulk metadata.
-- Exclude random-card operations and require complete pagination plus immutable
-  refresh lineage.
-- Define lossless supported Scryfall objects, unknown-field preservation,
-  normalized projections, `scryfall_*` tools, persistence, provenance, and
-  partial-fetch behavior.
+- Define explicit streaming synchronization of official All Cards, Rulings,
+  Oracle Tags, and Art Tags into one shared `scryfall.db` with current/previous
+  generations and guarded rollback.
+- Define local-first identity, printing, ruling, and tag evidence; exact-request
+  24-hour caching; immutable replay; cross-process leases/pacing; and explicit
+  `default`, `cache-only`, and `refresh` policies.
+- Keep new arbitrary Scryfall syntax provider-authoritative, exclude random and
+  background bulk operations, and preserve card facts separately from joined
+  community tag evidence.
+- Define the exact eighteen-tool `scryfall` surface and a migration-friendly
+  lossless corpus without implementing local query evaluation.
 
 #### 7. Archidekt Decks, Folders, Snapshots, And Synchronization
 
@@ -220,15 +227,16 @@ child's detailed requirements or design.
 - Require exhaustive enumeration and property-based verification without a
   provider dependency.
 
-#### 10. Scryfall Tagger Cache
+#### 10. Deterministic Deck Categorization
 
-- Define cached direct and inherited assignments, tag type, provenance, and
-  explicit cache misses by Oracle ID.
-- Separate cache-only reads from explicit HTML/CSRF/unsupported GraphQL refresh.
-- Define deterministic printing fallback, sequential requests no faster than
-  one per second, deduplication, a 100-card hard cap, and immediate stop on 403
-  or 429.
-- Prohibit background or bulk crawling and category inference by the MCP.
+- Define caller-authored rules mapping existing category IDs to exact Oracle or
+  art tag selectors, hierarchy behavior, weights, exclusions, assignment mode,
+  and optional primary priority.
+- Define read-only validation/preview and one fingerprint-guarded local apply.
+- Bind every preview to canonical rules, deck revision, and Scryfall corpus
+  generation; preserve unknown evidence and unrelated categories.
+- Add exactly three `deck_*` tools to `decks` without provider acquisition,
+  hidden default meanings, recommendation, or adapter dependency cycles.
 
 #### 11. Stabilization And `0.9.0` Cutover
 
@@ -269,9 +277,10 @@ fixture provenance, and live-test mutation safety.
 
 Toolsets are static App composition metadata, not Core domain concepts and not
 authorization. Every implemented tool belongs to one of `decks`, `scryfall`,
-`stats`, `archidekt`, `playgroup`, or `tagger`. `decks`, `scryfall`, and
-`stats` are default-enabled when implemented; the provider-integration and
-unsupported-acquisition toolsets require explicit selection.
+`stats`, `archidekt`, or `playgroup`. `decks`, `scryfall`, and `stats` are
+default-enabled when implemented; Archidekt and Playgroup remain explicit.
+Official community tag evidence belongs to `scryfall`; deterministic local
+category-rule operations belong to `decks`.
 
 At startup, App resolves `default`, `all`, `none`, or an explicit canonical
 toolset list. Visible tools are the intersection of implemented toolsets,
@@ -390,12 +399,13 @@ permits no advisor prompts and no dynamic tool-list dependency.
 The umbrella records only provider planning boundaries. Provider contracts are
 re-verified and designed in their owning child:
 
-- Scryfall uses official read operations and explicit immutable snapshots.
+- Scryfall uses official API reads plus explicit official bulk cards, rulings,
+  Oracle tags, and art tags in one shared corpus with immutable request replay.
 - Archidekt is an isolated observed contract with conservative mutation tests.
 - Playgroup is bounded by its documented public API.
 - Moxfield is manual interchange only.
-- Tagger acquisition is unsupported, paced, capped, and distinct from cached
-  deterministic reads.
+- Scryfall community-tag evidence is acquired only through official bulk data
+  and is separately labeled from card facts; no unsupported website transport exists.
 
 Previously gathered observations are evidence leads, not substitutes for
 child-session verification.
@@ -425,8 +435,11 @@ child-session verification.
 ## Project Boundaries
 
 The umbrella changes documentation only. Children must preserve the agreed
-future boundary: dependency-light `MtgMcp.Core`; isolated deck persistence,
-statistics, and provider adapters; and MCP composition in `MtgMcp.App`.
+future boundary: `MtgMcp.Core`, `MtgMcp.App`, `MtgMcp.Decks`,
+`MtgMcp.Scryfall`, `MtgMcp.Archidekt`, `MtgMcp.Playgroup`, and
+`MtgMcp.Statistics`. Core stays dependency-light; deck persistence, statistics,
+and provider adapters stay isolated; and App owns MCP composition. Durable
+runtime data is split only between `decks.db` and unified `scryfall.db`.
 Architecture tests belong in the foundation and affected capability children,
 not this packet.
 
@@ -450,6 +463,7 @@ Remove template placeholders before requesting child approval.
 | PROG-015 | Provider-specific review requirements. | Provider checklist in FIXTURES. |
 | PROG-017 through PROG-019, PROG-021 | Static toolset registry, startup selection, mode intersection, and capability projection. | Default/all/none discovery matrices and capability reconciliation. |
 | PROG-020 | North-star acceptance gate in every remaining child. | Child workflow/evidence checklist and representative E2E fixture. |
+| PROG-022 through PROG-024 | Unified official Scryfall corpus, removed Tagger capability, explicit bulk boundary, authoritative queries, and deferred local evaluator. | Cross-packet terminology, surface/count, provider-contract, and deferred-registry review. |
 
 ## Implementation Phases
 

@@ -38,13 +38,13 @@ another.
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
 | Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 23 `deck_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current derived `all` planning baseline: 83 tools, one resource, zero prompts; counts follow approved design and are not compatibility targets |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current runtime is 7/23/23 tools by mode; proposed AMEND-004 derives 56/78/91 for `all` and 31/52/52 for `default`, with one resource and zero prompts; counts are not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
-| Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Statistics, and Tagger |
-| Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, `scryfall.db`, and `tagger.db` stores |
+| Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, and Statistics |
+| Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db` and unified `scryfall.db` stores |
 | Compatibility | Existing pre-1.0 deprecation policy | Intentional clean break with no automatic legacy data, config, or tool-schema migration |
 | Moxfield | Automated unofficial import adapter | Manual interchange artifacts only; no network automation |
-| Tagger | Curated tag directory/`otag:`-style evidence, not a complete per-card cache | Cache-only reads plus separately invoked, bounded unsupported acquisition if the owner accepts the provider-risk record |
+| Community tags | Curated `otag`/`atag` evidence remains distinct from card facts | Official Scryfall bulk tags join the unified corpus; no separate Tagger adapter, database, toolset, or website acquisition |
 | Simulation and recommendations | Implemented legacy features | Not in stable `0.9.0`; separately reviewed post-cutover possibilities only |
 
 The exact current baseline and deletion/reuse allowlists live in the
@@ -61,12 +61,14 @@ The required planning sequence covers:
 3. revisioned local deck domain and SQLite store;
 4. offline manual deck interchange;
 5. startup-selected capability toolsets with a small default surface;
-6. immutable official Scryfall evidence snapshots;
+6. a unified official Scryfall corpus, authoritative query cache, tag evidence,
+   and immutable request snapshots;
 7. explicit Archidekt deck lifecycle, conflict-safe synchronization, folder
    organization, and named snapshot lifecycle/restore;
 8. the documented Playgroup public API;
 9. exact provider-independent deck statistics;
-10. exact cached Scryfall Tagger evidence with bounded explicit acquisition; and
+10. deterministic caller-configured deck categorization over corpus tag
+    evidence; and
 11. stabilization and `0.9.0` cutover.
 
 Every stable tool belongs to one toolset. The default profile contains
@@ -74,6 +76,14 @@ Every stable tool belongs to one toolset. The default profile contains
 Toolsets control relevance, modes control authority, and registration remains
 static for an MCP session. Each remaining PLC must pass its north-star workflow
 check in addition to endpoint and schema acceptance.
+
+Items 6 and 10 reflect proposed umbrella amendment AMEND-004. Their replacement
+child packets remain planned with `Implementation authorized: No`; do not begin
+production work until owner approval is recorded.
+
+Completed PLCs remain accurate evidence for the revision they implemented, but
+they do not override a later reviewed umbrella amendment for unfinished work.
+Current code and tests continue to define the implemented runtime.
 
 Provider facts, exact derivations, sampled estimates, parser classifications,
 heuristics, and unknown states must remain visibly different. Stable `0.9.0`

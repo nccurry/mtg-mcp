@@ -48,14 +48,14 @@ Every child phase follows the same protocol:
 | 2 | Plan the clean skeleton and repository foundation. | PROG-002 through PROG-015 | `rewrite-skeleton-foundation` | Foundation contracts are decision-complete and validated. | Completed |
 | 3 | Plan the local deck domain and store. | PROG-002 through PROG-015 | `local-deck-store` | Deck model, persistence, tools, and validation are decision-complete. | Completed |
 | 4 | Plan manual deck interchange. | PROG-002 through PROG-015 | `manual-deck-interchange` | Native and provider artifact contracts are decision-complete. | Completed |
-| 5 | Plan MCP capability toolsets. | PROG-002 through PROG-021 | `mcp-capability-toolsets` | Startup selection, default/all/none profiles, mode intersection, and surface governance are decision-complete. | Completed; implementation accepted |
-| 6 | Reconcile Scryfall evidence snapshots. | PROG-002 through PROG-021 | `scryfall-evidence-snapshots` | Snapshot API, storage, fidelity, provider safety, `scryfall` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
-| 7 | Reconcile Archidekt decks, folders, snapshots, and synchronization. | PROG-002 through PROG-021 | `archidekt-deck-sync` | Provider workflows, cleanup, `archidekt` assignment, and north-star acceptance are decision-complete. | Reconciled; AMEND-002/003 re-review pending |
-| 8 | Reconcile the Playgroup public API. | PROG-002 through PROG-021 | `playgroup-public-api` | Pinned official surface, write safety, `playgroup` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
-| 9 | Reconcile exact deck statistics. | PROG-002 through PROG-021 | `exact-deck-statistics` | Exact functions, assumptions, `stats` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
-| 10 | Reconcile the Scryfall Tagger cache. | PROG-002 through PROG-021 | `scryfall-tagger-cache` | Cache/acquisition boundaries, `tagger` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
-| 11 | Reconcile stabilization and cutover. | PROG-002 through PROG-021 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Reconciled; re-review pending |
-| 12 | Close the planning program. | PROG-011 through PROG-021 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
+| 5 | Plan MCP capability toolsets. | PROG-002 through PROG-024 | `mcp-capability-toolsets` | Startup selection, default/all/none profiles, mode intersection, and surface governance are decision-complete. | Completed; implementation accepted |
+| 6 | Reconcile the Scryfall corpus and evidence store. | PROG-002 through PROG-024 | `scryfall-corpus-and-evidence` | Bulk corpus, authoritative query cache, immutable replay, tags, `scryfall` assignment, and north-star acceptance are decision-complete. | Rewritten; AMEND-004 review pending |
+| 7 | Reconcile Archidekt decks, folders, snapshots, and synchronization. | PROG-002 through PROG-024 | `archidekt-deck-sync` | Provider workflows, cleanup, `archidekt` assignment, and north-star acceptance are decision-complete. | Reconciled; AMEND-002/003/004 re-review pending |
+| 8 | Reconcile the Playgroup public API. | PROG-002 through PROG-024 | `playgroup-public-api` | Pinned official surface, write safety, `playgroup` assignment, and north-star acceptance are decision-complete. | Reconciled; AMEND-004 consistency review pending |
+| 9 | Reconcile exact deck statistics. | PROG-002 through PROG-024 | `exact-deck-statistics` | Exact functions, assumptions, `stats` assignment, and north-star acceptance are decision-complete. | Reconciled; AMEND-004 consistency review pending |
+| 10 | Reconcile deterministic deck categorization. | PROG-002 through PROG-024 | `deterministic-deck-categorization` | Caller rules, evidence-preserving preview, guarded apply, `decks` assignment, and north-star acceptance are decision-complete. | Rewritten; AMEND-004 review pending |
+| 11 | Reconcile stabilization and cutover. | PROG-002 through PROG-024 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Reconciled; AMEND-004 re-review pending |
+| 12 | Close the planning program. | PROG-011 through PROG-024 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
 
 ## Phase Details
 
@@ -97,8 +97,9 @@ Every child phase follows the same protocol:
 
 Phase 5 is the cross-cutting exception created by AMEND-003. It defines the App
 registration contract before any provider child implementation begins. Later
-children inherit the toolset registry and may add one descriptor and one
-registration group; they do not redesign selection semantics.
+children inherit the toolset registry and may add one descriptor or extend an
+existing owning manifest; they do not redesign selection semantics. Proposed
+AMEND-004 removes the never-implemented Tagger descriptor before stable cutover.
 
 ### Phase 11: Stabilization And Cutover Planning
 
