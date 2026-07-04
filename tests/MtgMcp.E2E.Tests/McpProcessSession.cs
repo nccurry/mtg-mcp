@@ -42,13 +42,25 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string? mode,
         CancellationToken cancellationToken)
     {
+        return await StartAsync(mode, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Starts the built or installed server with an explicit static toolset selection.
+    /// </summary>
+    internal static async Task<McpProcessSession> StartAsync(
+        string? mode,
+        string? toolsets,
+        CancellationToken cancellationToken)
+    {
         string repositoryRoot = FindRepositoryRoot();
         DirectoryInfo workingDirectory = Directory.CreateTempSubdirectory("mtg-mcp-e2e-");
         string dataRoot = Path.Combine(workingDirectory.FullName, "private-data");
         StdioClientTransportOptions options = CreateTransportOptions(
             repositoryRoot,
             dataRoot,
-            mode);
+            mode,
+            toolsets);
 
         try
         {
@@ -85,7 +97,8 @@ internal sealed class McpProcessSession : IAsyncDisposable
     private static StdioClientTransportOptions CreateTransportOptions(
         string repositoryRoot,
         string dataRoot,
-        string? mode)
+        string? mode,
+        string? toolsets)
     {
         string? installedCommand = Environment.GetEnvironmentVariable("MTGMCP_E2E_COMMAND");
         string command;
@@ -111,6 +124,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
             {
                 ["MTGMCP__DATA_DIR"] = dataRoot,
                 ["MTGMCP__MODE"] = mode,
+                ["MTGMCP__TOOLSETS"] = toolsets,
             },
             ShutdownTimeout = TimeSpan.FromMilliseconds(500),
         };

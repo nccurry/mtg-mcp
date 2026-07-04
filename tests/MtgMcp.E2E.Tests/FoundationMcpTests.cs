@@ -120,11 +120,12 @@ public sealed class FoundationMcpTests
             "server",
             "operationMode",
             "surface",
-            "modules",
+            "toolsets",
             "dataSchemas",
             "configuration");
         AssertPropertyOrder(root.GetProperty("server"), "name", "packageVersion", "protocolVersion");
         AssertPropertyOrder(root.GetProperty("surface"), "toolCount", "resourceCount", "promptCount");
+        AssertPropertyOrder(root.GetProperty("toolsets"), "selection", "authorityBoundary", "items");
         AssertPropertyOrder(root.GetProperty("dataSchemas"), "applicationData", "decks", "deckInterchange");
         AssertPropertyOrder(
             root.GetProperty("configuration"),
@@ -132,7 +133,7 @@ public sealed class FoundationMcpTests
             "dataRootState",
             "legacyDataState",
             "migrationBoundary");
-        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(2, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
@@ -140,7 +141,7 @@ public sealed class FoundationMcpTests
             root.GetProperty("server").GetProperty("protocolVersion").GetString());
         Assert.Equal(expectedMode, root.GetProperty("operationMode").GetString());
         AssertSurface(root.GetProperty("surface"), expectedToolCount);
-        AssertModules(root.GetProperty("modules"));
+        AssertToolsets(root.GetProperty("toolsets"), "default", true, expectedToolCount);
         Assert.Equal(
             "v0.9",
             root.GetProperty("dataSchemas").GetProperty("applicationData").GetString());
@@ -150,6 +151,67 @@ public sealed class FoundationMcpTests
             root.GetProperty("dataSchemas").GetProperty("deckInterchange").GetString());
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.False(Directory.Exists(session.DataRoot));
+    }
+
+    /// <summary>
+    /// Verifies default, all, none, and explicit profiles remain static in every operation mode.
+    /// </summary>
+    [Theory]
+    [Trait("Category", "E2E")]
+    [InlineData("read-only", "default", "default", 7)]
+    [InlineData("local", "default", "default", 23)]
+    [InlineData("remote", "default", "default", 23)]
+    [InlineData("read-only", "all", "all", 7)]
+    [InlineData("local", "all", "all", 23)]
+    [InlineData("remote", "all", "all", 23)]
+    [InlineData("read-only", "decks", "explicit", 7)]
+    [InlineData("local", "decks", "explicit", 23)]
+    [InlineData("remote", "decks", "explicit", 23)]
+    [InlineData("read-only", "none", "none", 0)]
+    [InlineData("local", "none", "none", 0)]
+    [InlineData("remote", "none", "none", 0)]
+    public async Task ToolsetProfiles_EachMode_ExposeExactStaticSurface(
+        string mode,
+        string configuredToolsets,
+        string expectedSelection,
+        int expectedToolCount)
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            mode,
+            configuredToolsets,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        if (expectedToolCount == 0)
+        {
+            Assert.Null(session.Client.ServerCapabilities.Tools);
+        }
+        else
+        {
+            Assert.NotNull(session.Client.ServerCapabilities.Tools);
+            Assert.False(session.Client.ServerCapabilities.Tools.ListChanged ?? false);
+            IList<McpClientTool> first = await session.Client.ListToolsAsync(
+                cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+            IList<McpClientTool> second = await session.Client.ListToolsAsync(
+                cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+            string[] expectedNames = expectedToolCount == 7 ? ReadToolNames : AllToolNames;
+            Assert.Equal(expectedNames, first.Select(value => value.Name));
+            Assert.Equal(
+                first.Select(value => value.Name),
+                second.Select(value => value.Name));
+        }
+
+        string firstCapability = await ReadCapabilityTextAsync(session).ConfigureAwait(false);
+        string secondCapability = await ReadCapabilityTextAsync(session).ConfigureAwait(false);
+        Assert.Equal(firstCapability, secondCapability);
+        using JsonDocument document = JsonDocument.Parse(firstCapability);
+        JsonElement root = document.RootElement;
+        AssertSurface(root.GetProperty("surface"), expectedToolCount);
+        AssertToolsets(
+            root.GetProperty("toolsets"),
+            expectedSelection,
+            expectedToolCount > 0,
+            expectedToolCount);
         Assert.False(Directory.Exists(session.DataRoot));
     }
 
@@ -256,13 +318,50 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies only the implemented decks and foundation modules are advertised.
+    /// Verifies only the implemented decks toolset is advertised with exact relevance metadata.
     /// </summary>
-    private static void AssertModules(JsonElement modules)
+    private static void AssertToolsets(
+        JsonElement toolsets,
+        string expectedSelection,
+        bool expectedEnabled,
+        int expectedVisibleToolCount)
     {
-        JsonElement[] values = modules.EnumerateArray().ToArray();
-        Assert.Equal(["decks", "foundation"], values.Select(value => value.GetProperty("name").GetString()));
-        Assert.All(values, value => Assert.Equal("available", value.GetProperty("status").GetString()));
+        Assert.Equal(expectedSelection, toolsets.GetProperty("selection").GetString());
+        Assert.Equal(
+            "Toolsets control relevance; operation mode controls authority.",
+            toolsets.GetProperty("authorityBoundary").GetString());
+        JsonElement descriptor = Assert.Single(toolsets.GetProperty("items").EnumerateArray());
+        AssertPropertyOrder(
+            descriptor,
+            "name",
+            "status",
+            "stability",
+            "enabled",
+            "defaultEnabled",
+            "visibleToolCount",
+            "description");
+        Assert.Equal("decks", descriptor.GetProperty("name").GetString());
+        Assert.Equal("available", descriptor.GetProperty("status").GetString());
+        Assert.Equal("stable", descriptor.GetProperty("stability").GetString());
+        Assert.Equal(expectedEnabled, descriptor.GetProperty("enabled").GetBoolean());
+        Assert.True(descriptor.GetProperty("defaultEnabled").GetBoolean());
+        Assert.Equal(expectedVisibleToolCount, descriptor.GetProperty("visibleToolCount").GetInt32());
+        Assert.Contains(
+            "operation mode separately controls local writes",
+            descriptor.GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Reads the exact capability JSON from one initialized session.
+    /// </summary>
+    private static async Task<string> ReadCapabilityTextAsync(McpProcessSession session)
+    {
+        ReadResourceResult result = await session.Client.ReadResourceAsync(
+            CapabilityUri,
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        TextResourceContents content = Assert.IsType<TextResourceContents>(Assert.Single(result.Contents));
+        return content.Text;
     }
 
     /// <summary>

@@ -74,8 +74,8 @@ without a partial bundle.
 
 ### Toolset and north-star design
 
-All four tools are declared for the default-enabled `decks` toolset. The
-separate capability-toolset child implements startup selection and tests that
+All four tools are assigned to the default-enabled `decks` toolset. The
+completed capability-toolset child implements startup selection and tests that
 it may hide the family but cannot authorize `deck_import_create`, which retains
 its local-write guard. One catalog tool returns direction flags for
 each stable format because separate import/export discovery returned the same
@@ -118,5 +118,5 @@ manual acceptance.
 
 Current official-client tests assert the single catalog schema, exact four-tool
 surface, mode visibility, direct write guard, and full dummy Commander workflow
-required by XCHG-018. Profile filtering is a dependent acceptance check in
-`mcp-capability-toolsets`, not current runtime evidence.
+required by XCHG-018. The completed `mcp-capability-toolsets` child verifies
+profile filtering against both the source build and installed package.

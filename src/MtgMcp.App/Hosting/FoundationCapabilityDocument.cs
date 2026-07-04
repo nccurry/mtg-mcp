@@ -11,7 +11,7 @@ internal sealed record FoundationCapabilityDocument(
     [property: JsonPropertyName("server")] FoundationServerStatus Server,
     [property: JsonPropertyName("operationMode")] string OperationMode,
     [property: JsonPropertyName("surface")] FoundationSurfaceStatus Surface,
-    [property: JsonPropertyName("modules")] IReadOnlyList<FoundationModuleStatus> Modules,
+    [property: JsonPropertyName("toolsets")] FoundationToolsetsStatus Toolsets,
     [property: JsonPropertyName("dataSchemas")] FoundationDataSchemas DataSchemas,
     [property: JsonPropertyName("configuration")] FoundationConfigurationStatus Configuration);
 
@@ -32,11 +32,24 @@ internal sealed record FoundationSurfaceStatus(
     [property: JsonPropertyName("promptCount")] int PromptCount);
 
 /// <summary>
-/// Reports one currently available production module without advertising placeholders.
+/// Reports the configured selection and implemented toolsets without advertising placeholders.
 /// </summary>
-internal sealed record FoundationModuleStatus(
+internal sealed record FoundationToolsetsStatus(
+    [property: JsonPropertyName("selection")] string Selection,
+    [property: JsonPropertyName("authorityBoundary")] string AuthorityBoundary,
+    [property: JsonPropertyName("items")] IReadOnlyList<FoundationToolsetStatus> Items);
+
+/// <summary>
+/// Reports one implemented toolset's relevance, availability, and visible surface.
+/// </summary>
+internal sealed record FoundationToolsetStatus(
     [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("status")] string Status);
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("stability")] string Stability,
+    [property: JsonPropertyName("enabled")] bool Enabled,
+    [property: JsonPropertyName("defaultEnabled")] bool DefaultEnabled,
+    [property: JsonPropertyName("visibleToolCount")] int VisibleToolCount,
+    [property: JsonPropertyName("description")] string Description);
 
 /// <summary>
 /// Reports the application-data schema family without exposing a filesystem path.

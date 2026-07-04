@@ -21,7 +21,7 @@ public sealed class FoundationHostingTests
     }
 
     /// <summary>
-    /// Verifies only the SDK's implicit logging advertisement is removed from initialization.
+    /// Verifies unsupported implicit logging and dynamic-tool advertisements are removed.
     /// </summary>
     [Fact]
     public void ProtocolPolicy_RemovesOnlyImplicitInitializationLogging()
@@ -33,14 +33,22 @@ public sealed class FoundationHostingTests
             {
                 ["logging"] = new JsonObject(),
                 ["resources"] = new JsonObject(),
+                ["tools"] = new JsonObject
+                {
+                    ["listChanged"] = true,
+                    ["stableField"] = true,
+                },
             },
         };
 
-        FoundationProtocolPolicy.RemoveImplicitLoggingCapability(result);
+        FoundationProtocolPolicy.RemoveUnsupportedImplicitCapabilities(result);
 
         JsonObject capabilities = Assert.IsType<JsonObject>(result["capabilities"]);
         Assert.Null(capabilities["logging"]);
         Assert.NotNull(capabilities["resources"]);
+        JsonObject tools = Assert.IsType<JsonObject>(capabilities["tools"]);
+        Assert.Null(tools["listChanged"]);
+        Assert.True(tools["stableField"]?.GetValue<bool>());
     }
 
     /// <summary>
@@ -57,10 +65,51 @@ public sealed class FoundationHostingTests
             },
         };
 
-        FoundationProtocolPolicy.RemoveImplicitLoggingCapability(null);
-        FoundationProtocolPolicy.RemoveImplicitLoggingCapability(new JsonArray());
-        FoundationProtocolPolicy.RemoveImplicitLoggingCapability(result);
+        FoundationProtocolPolicy.RemoveUnsupportedImplicitCapabilities(null);
+        FoundationProtocolPolicy.RemoveUnsupportedImplicitCapabilities(new JsonArray());
+        FoundationProtocolPolicy.RemoveUnsupportedImplicitCapabilities(result);
 
         Assert.NotNull(result["capabilities"]?["logging"]);
+    }
+
+    /// <summary>
+    /// Verifies tool discovery is canonicalized without changing tool payloads or cursors.
+    /// </summary>
+    [Fact]
+    public void ProtocolPolicy_CanonicalizesToolListByExactName()
+    {
+        JsonObject first = new() { ["name"] = "z_tool", ["description"] = "last" };
+        JsonObject second = new() { ["name"] = "a_tool", ["description"] = "first" };
+        JsonObject result = new()
+        {
+            ["tools"] = new JsonArray(first, second),
+            ["nextCursor"] = "cursor",
+        };
+
+        FoundationProtocolPolicy.CanonicalizeToolList(result);
+
+        JsonArray tools = Assert.IsType<JsonArray>(result["tools"]);
+        Assert.Equal(["a_tool", "z_tool"], tools.Select(tool => tool?["name"]?.GetValue<string>()));
+        Assert.Equal("first", tools[0]?["description"]?.GetValue<string>());
+        Assert.Equal("cursor", result["nextCursor"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Verifies malformed or non-list tool shapes remain unchanged.
+    /// </summary>
+    [Fact]
+    public void ProtocolPolicy_IgnoresMalformedToolLists()
+    {
+        JsonObject malformed = new()
+        {
+            ["tools"] = new JsonArray(new JsonObject { ["description"] = "missing name" }),
+        };
+        string expected = malformed.ToJsonString();
+
+        FoundationProtocolPolicy.CanonicalizeToolList(null);
+        FoundationProtocolPolicy.CanonicalizeToolList(new JsonArray());
+        FoundationProtocolPolicy.CanonicalizeToolList(malformed);
+
+        Assert.Equal(expected, malformed.ToJsonString());
     }
 }

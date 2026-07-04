@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.Core.Results;
 
@@ -30,6 +31,8 @@ public sealed class FoundationConfigurationTests
             FoundationConfigurationLoader.Resolve(configuration, temporary.Path, string.Empty));
 
         Assert.Equal(OperationMode.Local, resolved.Mode);
+        Assert.Equal(CapabilityToolsetSelectionKind.Default, resolved.Toolsets.Kind);
+        Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Decks));
         Assert.Equal(expectedPath, resolved.DataRoot);
         Assert.Equal(DataRootState.NotCreated, resolved.DataRootState);
         Assert.False(resolved.DataRootConfigured);
@@ -99,10 +102,12 @@ public sealed class FoundationConfigurationTests
             {
                 ["MODE"] = "remote",
                 ["DATA_DIR"] = jsonDataRoot,
+                ["TOOLSETS"] = "none",
             }));
         FoundationConfiguration jsonResolved;
         using (new EnvironmentVariableScope("MTGMCP__MODE", null))
         using (new EnvironmentVariableScope("MTGMCP__DATA_DIR", null))
+        using (new EnvironmentVariableScope("MTGMCP__TOOLSETS", null))
         {
             jsonResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load([], configurationFile, temporary.Path, string.Empty));
@@ -112,22 +117,26 @@ public sealed class FoundationConfigurationTests
         FoundationConfiguration commandLineResolved;
         using (new EnvironmentVariableScope("MTGMCP__MODE", "read-only"))
         using (new EnvironmentVariableScope("MTGMCP__DATA_DIR", environmentDataRoot))
+        using (new EnvironmentVariableScope("MTGMCP__TOOLSETS", "all"))
         {
             environmentResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load([], configurationFile, temporary.Path, string.Empty));
             commandLineResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load(
-                    ["--mode=local", $"--data-dir={commandLineDataRoot}"],
+                    ["--mode=local", $"--data-dir={commandLineDataRoot}", "--toolsets=decks"],
                     configurationFile,
                     temporary.Path,
                     string.Empty));
         }
 
         Assert.Equal(OperationMode.Remote, jsonResolved.Mode);
+        Assert.Equal(CapabilityToolsetSelectionKind.None, jsonResolved.Toolsets.Kind);
         Assert.Equal(jsonDataRoot, jsonResolved.DataRoot);
         Assert.Equal(OperationMode.ReadOnly, environmentResolved.Mode);
+        Assert.Equal(CapabilityToolsetSelectionKind.All, environmentResolved.Toolsets.Kind);
         Assert.Equal(environmentDataRoot, environmentResolved.DataRoot);
         Assert.Equal(OperationMode.Local, commandLineResolved.Mode);
+        Assert.Equal(CapabilityToolsetSelectionKind.Explicit, commandLineResolved.Toolsets.Kind);
         Assert.Equal(commandLineDataRoot, commandLineResolved.DataRoot);
     }
 
@@ -156,6 +165,32 @@ public sealed class FoundationConfigurationTests
         Assert.Equal(
             "invalid-data-root",
             Assert.IsType<OperationInvalidInput>(invalid.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies an unimplemented or non-lowercase toolset fails before any filesystem work.
+    /// </summary>
+    [Theory]
+    [InlineData("scryfall")]
+    [InlineData("DECKS")]
+    [InlineData("default,decks")]
+    public void Resolve_InvalidToolsets_ReturnsSanitizedInvalidInput(string configuredValue)
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["TOOLSETS"] = configuredValue,
+            })
+            .Build();
+
+        OperationResult<FoundationConfiguration> result = FoundationConfigurationLoader.Resolve(
+            configuration,
+            "unused",
+            string.Empty);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal("invalid-capability-toolsets", invalid.ReasonCode);
+        Assert.DoesNotContain(configuredValue, invalid.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -200,6 +235,7 @@ public sealed class FoundationConfigurationTests
     public void Load_MalformedJson_ReturnsSanitizedInvalidConfiguration()
     {
         using TemporaryDirectory temporary = new();
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
         string configurationFile = Path.Combine(temporary.Path, "private-config.json");
         File.WriteAllText(configurationFile, "{ invalid json");
 
@@ -222,6 +258,7 @@ public sealed class FoundationConfigurationTests
     public void Load_InvalidCommandLine_ReturnsSanitizedInvalidInput()
     {
         using TemporaryDirectory temporary = new();
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
         string configurationFile = Path.Combine(temporary.Path, "missing-config.json");
         IReadOnlyList<string>[] invalidArguments =
         [
@@ -229,6 +266,8 @@ public sealed class FoundationConfigurationTests
             ["--mode"],
             ["--mode", "local", "--mode", "remote"],
             ["--mode=local", "--mode", "remote"],
+            ["--toolsets"],
+            ["--toolsets", "decks", "--toolsets=none"],
         ];
 
         foreach (IReadOnlyList<string> arguments in invalidArguments)
@@ -291,6 +330,7 @@ public sealed class FoundationConfigurationTests
         File.WriteAllBytes(legacyFile, expectedBytes);
         using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
         using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
         string configurationFile = Path.Combine(temporary.Path, "missing-config.json");
 
         FoundationConfiguration resolved = RequireSuccess(
@@ -335,6 +375,8 @@ public sealed class FoundationConfigurationTests
     {
         FoundationConfiguration configuration = new(
             OperationMode.Local,
+            Assert.IsType<OperationSuccess<CapabilityToolsetSelection>>(
+                CapabilityToolsetRegistry.Resolve(null).Value).Data,
             "private-path",
             DataRootState.NotCreated,
             false,

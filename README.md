@@ -19,8 +19,8 @@ deterministic local `deck_*` workflows.
   local structural validation, guarded backup/restore, and network-free manual
   import/export transformations.
 - `MtgMcp.App` provides the stdio MCP host, operation-mode enforcement,
-  standard configuration, versioned data-root resolution, legacy-data
-  detection, and sensitive-value redaction.
+  static capability-toolset selection, standard configuration, versioned
+  data-root resolution, legacy-data detection, and sensitive-value redaction.
 - Standard initialization and `mtg://server/capabilities` are implemented.
   The surface is seven read tools in `read-only`, twenty-three tools in `local`
   and `remote`, one resource, and zero prompts.
@@ -40,14 +40,24 @@ the broader `0.9.0` program.
 
 ## Foundation Configuration
 
-The process accepts `--mode` and `--data-dir` alongside `--smoke`. Equivalent
-environment variables are `MTGMCP__MODE` and `MTGMCP__DATA_DIR`. An optional
-`mtg-mcp.json` in the working directory uses `MODE` and `DATA_DIR` keys.
+The process accepts `--mode`, `--toolsets`, and `--data-dir` alongside
+`--smoke`. Equivalent environment variables are `MTGMCP__MODE`,
+`MTGMCP__TOOLSETS`, and `MTGMCP__DATA_DIR`. An optional `mtg-mcp.json` in the
+working directory uses `MODE`, `TOOLSETS`, and `DATA_DIR` keys.
 Command-line values override environment values, which override JSON.
 
 Modes are `read-only`, `local` (the default), and `remote`. Read-only mode still
 permits explicit provider reads; it forbids local and remote mutation. Local
 mode adds local writes, and remote mode adds explicit remote writes.
+
+Toolsets control relevance, not authority. Omitted `TOOLSETS` or `default`
+enables implemented default toolsets, `all` enables every implemented stable
+toolset, `none` exposes zero tools, and a comma-separated exact lowercase list
+selects an explicit subset. Only `decks` is implemented today, so `default`,
+`all`, and `decks` expose the deck surface while `none` leaves only MCP
+initialization and `mtg://server/capabilities`. Unimplemented names fail startup
+instead of creating placeholder tools. Selection is fixed for the session and
+the server does not advertise dynamic tool-list changes.
 
 When `DATA_DIR` is omitted, the resolved path is the platform application-data
 directory followed by `mtg-mcp/v0.9`. Startup and deck reads do not create that
@@ -89,11 +99,11 @@ local decks, Scryfall, Archidekt, Playgroup, exact deck statistics, and a local
 Scryfall Tagger cache. Provider facts, exact derivations, parser
 classifications, heuristics, and sampled estimates remain visibly distinct.
 
-The planned capability-toolset layer will keep ordinary discovery small:
+The capability-toolset layer keeps ordinary discovery small:
 `decks`, `scryfall`, and `stats` form the default profile, while Archidekt,
 Playgroup, and Tagger require explicit enablement. Toolsets control relevance;
-operation modes remain the authority boundary. Toolset filtering is not yet
-implemented on this branch.
+operation modes remain the authority boundary. Only implemented descriptors
+appear in capability metadata or can be selected.
 
 Stable releases will not contain advisor prompts, intent inference, weak-card
 judgments, replacement recommendations, blended quality scores, or strategic

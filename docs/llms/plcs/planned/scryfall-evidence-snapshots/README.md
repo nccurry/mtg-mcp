@@ -21,7 +21,7 @@ projection with snapshot provenance.
 
 - [Rewrite Foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Local Deck Store](../../completed/local-deck-store/README.md)
-- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
+- [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

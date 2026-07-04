@@ -21,7 +21,7 @@ can apply from metadata that requires manual follow-up.
 ## Dependencies
 
 - [Local Deck Store](../../completed/local-deck-store/README.md)
-- [MCP Capability Toolsets](../../planned/mcp-capability-toolsets/README.md)
+- [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions
@@ -75,8 +75,8 @@ that a provider consumed companion metadata.
 
 ## Toolset And North-Star Acceptance
 
-- Planned toolset assignment: `decks`, enabled by default after the separately
-  reviewed capability-toolset child is implemented.
+- Toolset assignment: `decks`, enabled by default through the completed,
+  separately reviewed capability-toolset child.
 - Surface rule: one `deck_interchange_formats` catalog reports both supported
   directions; import preview/create and export bundle remain separate because
   their inputs, authority, and outputs differ.
@@ -120,9 +120,10 @@ in progress until XCHG-017 is completed or the owner explicitly waives it.
 - All four tools are registered with the planned mode visibility. The complete
   current deck surface is 7 tools in `read-only` and 23 in `local`/`remote`,
   with one resource and zero prompts.
-- The duplicate format catalogs are consolidated now. Startup toolset selection
-  and profile filtering are not yet implemented; they remain owned by
-  `mcp-capability-toolsets` and are not claimed as passing evidence here.
+- The duplicate format catalogs are consolidated. Startup toolset selection
+  and profile filtering are implemented by the completed
+  `mcp-capability-toolsets` child; its default/all/none installed-package
+  workflow supplies the dependent XCHG-018 profile evidence.
 - The official-client dummy Commander workflow exercises format discovery,
   every export and preview dialect, generic creation, exact native recreation,
   category evidence, checksums, and cleanup against both the source build and

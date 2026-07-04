@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner
@@ -76,8 +76,10 @@ context; it is not an authorization boundary.
 Schema version 2 removes the overlapping `modules` collection and adds one
 `toolsets` object. `items` contains implemented descriptors only, in registry
 order. Disabled descriptors remain visible as metadata with `enabled=false`;
-unimplemented planned capabilities do not appear. `visibleToolCount` is the
-actual selected-and-mode-filtered count for that descriptor.
+unimplemented planned capabilities do not appear. Rows identify availability,
+stability, default membership, exact visible count, and a description that
+separates relevance from authority. Experimental descriptors are selectable
+only by exact name and never enter `default` or `all`.
 
 ### Tool Versus Resource Decision
 

@@ -28,7 +28,7 @@ reverse-engineered.
 ## Dependencies
 
 - [Rewrite Foundation](../../completed/rewrite-skeleton-foundation/README.md)
-- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
+- [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

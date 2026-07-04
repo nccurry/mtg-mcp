@@ -17,7 +17,9 @@ The current public surface is exactly:
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
 - seven read tools in `read-only`, twenty-three deck tools in `local` and `remote`,
-  and zero prompts; and
+  and zero prompts;
+- static `default`, `all`, `none`, and explicit implemented-toolset selection,
+  with capability schema version 2; and
 - no logging, subscription, or list-changed capability advertisement.
 
 `task smoke:process` is only a one-shot startup/configuration probe.

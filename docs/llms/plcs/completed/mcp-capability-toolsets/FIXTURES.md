@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | TSET-FIX-001 | Toolsets omitted | `default`; implemented default-enabled descriptors selected. |
 | TSET-FIX-002 | `default`, `all`, or `none` | Exact reserved profile; no explicit-name mixture. |
-| TSET-FIX-003 | `decks,scryfall` and reversed order | Same canonical explicit selection and discovery. |
+| TSET-FIX-003 | Synthetic implemented descriptors selected as `decks,scryfall` and reversed order | Same canonical explicit selection; the runtime registry still rejects unimplemented names. |
 | TSET-FIX-004 | Blank segment, duplicate, case variant, or unknown name | Sanitized startup failure before stdout. |
 | TSET-FIX-005 | JSON, environment, and CLI all set | CLI wins, then environment, then JSON. |
 | TSET-FIX-006 | Duplicate `--toolsets` key or incomplete CLI pair | Sanitized startup failure. |
@@ -56,3 +56,12 @@ surface change regenerates this table and the cutover manifest.
 4. Restart with `none`; confirm zero tools and the same capability resource.
 5. Restart with `all`; confirm every implemented stable tool returns.
 6. Confirm no tool chooses cards, infers intent, or makes a deckbuilding judgment.
+
+## Validation Evidence
+
+The 2026-07-04 source and installed-package runs completed this matrix. The
+official client observed canonical tool discovery and byte-stable capability
+resources for every current profile/mode pair. The disposable Commander
+workflow imported, inspected, updated, exported, deleted, and re-listed a
+local deck; `none` and `all` then returned their exact expected surfaces
+without extra data-root creation.

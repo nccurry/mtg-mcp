@@ -17,6 +17,7 @@ public sealed class FoundationCliTests
     {
         using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
         using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
         using StringWriter output = new(CultureInfo.InvariantCulture);
         using StringWriter error = new(CultureInfo.InvariantCulture);
 
@@ -37,13 +38,16 @@ public sealed class FoundationCliTests
     [Theory]
     [InlineData("--mode", "READ-ONLY")]
     [InlineData("--mode=READ-ONLY")]
-    public async Task RunAsync_WithValidConfiguration_ReportsReadiness(params string[] modeArguments)
+    [InlineData("--toolsets", "decks")]
+    [InlineData("--toolsets=decks")]
+    public async Task RunAsync_WithValidConfiguration_ReportsReadiness(params string[] configurationArguments)
     {
         using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
         using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
         using StringWriter output = new(CultureInfo.InvariantCulture);
         using StringWriter error = new(CultureInfo.InvariantCulture);
-        List<string> arguments = ["--smoke", .. modeArguments];
+        List<string> arguments = ["--smoke", .. configurationArguments];
 
         int exitCode = await FoundationCli.RunAsync(
             arguments,
@@ -64,6 +68,7 @@ public sealed class FoundationCliTests
     [InlineData("--smoke", "--unknown")]
     [InlineData("--mode", "--smoke", "local")]
     [InlineData("--smoke", "--mode", "local", "--mode", "remote")]
+    [InlineData("--smoke", "--toolsets", "decks", "--toolsets", "none")]
     public async Task RunAsync_WithAmbiguousArguments_ReturnsStableFailure(params string[] arguments)
     {
         using StringWriter output = new(CultureInfo.InvariantCulture);
@@ -91,6 +96,7 @@ public sealed class FoundationCliTests
     {
         using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
         using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
         using StringWriter output = new(CultureInfo.InvariantCulture);
         using StringWriter error = new(CultureInfo.InvariantCulture);
 
@@ -106,6 +112,31 @@ public sealed class FoundationCliTests
             $"Operation mode must be read-only, local, or remote.{Environment.NewLine}",
             error.ToString());
         Assert.DoesNotContain("private-invalid-value", error.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies an invalid toolset selection fails without echoing its rejected value.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithInvalidToolsets_ReturnsSanitizedFailure()
+    {
+        using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
+        using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
+        using EnvironmentVariableScope toolsets = new("MTGMCP__TOOLSETS", null);
+        using StringWriter output = new(CultureInfo.InvariantCulture);
+        using StringWriter error = new(CultureInfo.InvariantCulture);
+        const string rejectedValue = "private-provider";
+
+        int exitCode = await FoundationCli.RunAsync(
+            ["--smoke", "--toolsets", rejectedValue],
+            output,
+            error,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal(string.Empty, output.ToString());
+        Assert.Contains("implemented lowercase capabilities", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(rejectedValue, error.ToString(), StringComparison.Ordinal);
     }
 
     /// <summary>

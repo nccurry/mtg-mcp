@@ -178,7 +178,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, twenty-three-tool, zero-prompt local deck and interchange surface.
+    /// Verifies the exact one-resource, twenty-three-tool, zero-prompt toolset-owned deck surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedDeckToolsAndCapabilityResource()
@@ -188,6 +188,10 @@ public sealed class FoundationArchitectureTests
             .Where(IsAuthoredSource)
             .ToArray();
         string source = string.Join(Environment.NewLine, sourceFiles.Select(File.ReadAllText));
+        string hostSource = File.ReadAllText(
+            Path.Combine(sourceRoot, "MtgMcp.App", "Hosting", "FoundationHost.cs"));
+        string deckManifestSource = File.ReadAllText(
+            Path.Combine(sourceRoot, "MtgMcp.App", "Decks", "DeckToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
         Assert.Equal(23, Regex.Count(source, @"\[McpServerTool\("));
@@ -227,6 +231,17 @@ public sealed class FoundationArchitectureTests
                 "deck_validate",
             ],
             toolNames);
+        string[] assignedToolNames = Regex.Matches(deckManifestSource, "\\\"(deck_[^\\\"]+)\\\"")
+            .Select(match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(toolNames, assignedToolNames);
+        Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
+        Assert.Equal(4, Regex.Count(deckManifestSource, @"\.WithTools\("));
+        Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
+        Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);
 
         string[] forbiddenMarkers =
         [
@@ -240,6 +255,26 @@ public sealed class FoundationArchitectureTests
         {
             Assert.DoesNotContain(marker, source, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// Verifies capability toolsets remain an App composition concern with no Core or Decks dependency.
+    /// </summary>
+    [Fact]
+    public void CapabilityToolsets_RemainInsideApplicationComposition()
+    {
+        string coreAndDecksSource = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(Path.Combine(RepositoryRoot, "src", "MtgMcp.Core"), "*.cs", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(
+                    Path.Combine(RepositoryRoot, "src", "MtgMcp.Decks"),
+                    "*.cs",
+                    SearchOption.AllDirectories))
+                .Where(IsAuthoredSource)
+                .Select(File.ReadAllText));
+
+        Assert.DoesNotContain("CapabilityToolset", coreAndDecksSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModelContextProtocol", coreAndDecksSource, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -299,6 +334,14 @@ public sealed class FoundationArchitectureTests
             StringComparison.Ordinal);
         Assert.Contains(
             "DeckInterchangeMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ToolsetNorthStarMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ToolsetNorthStarMcpTests",
             File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
             StringComparison.Ordinal);
     }

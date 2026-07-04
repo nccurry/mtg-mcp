@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 
 namespace MtgMcp.App.Hosting;
@@ -26,17 +27,11 @@ internal sealed class FoundationResources
     private readonly FoundationConfiguration configuration;
 
     /// <summary>
-    /// Stores the exact mode-specific tool count advertised by this process.
-    /// </summary>
-    private readonly int toolCount;
-
-    /// <summary>
     /// Creates the resource around one validated process configuration.
     /// </summary>
-    internal FoundationResources(FoundationConfiguration configuration, int toolCount)
+    internal FoundationResources(FoundationConfiguration configuration)
     {
         this.configuration = configuration;
-        this.toolCount = toolCount;
     }
 
     /// <summary>
@@ -46,23 +41,40 @@ internal sealed class FoundationResources
         UriTemplate = CapabilityUri,
         Name = "Server Capabilities",
         MimeType = "application/json")]
-    [Description("Effective mtg-mcp mode, surface, module, schema, and clean-break status.")]
+    [Description("Effective mtg-mcp mode, surface, toolset selection, schema, and clean-break status.")]
     internal string GetCapabilities(McpServer server)
     {
         ArgumentNullException.ThrowIfNull(server);
 
+        int toolCount = CapabilityToolsetRegistry.CountVisibleTools(
+            configuration.Toolsets,
+            configuration.Mode);
+        List<FoundationToolsetStatus> toolsets = [];
+        foreach (CapabilityToolsetDescriptor descriptor in CapabilityToolsetRegistry.Implemented)
+        {
+            bool enabled = configuration.Toolsets.Includes(descriptor.Toolset);
+            toolsets.Add(new FoundationToolsetStatus(
+                descriptor.Name,
+                CapabilityToolsetPolicy.Format(descriptor.Availability),
+                CapabilityToolsetPolicy.Format(descriptor.Stability),
+                enabled,
+                descriptor.DefaultEnabled,
+                enabled ? descriptor.GetVisibleToolCount(configuration.Mode) : 0,
+                descriptor.Description));
+        }
+
         FoundationCapabilityDocument document = new(
-            1,
+            2,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
                 server.NegotiatedProtocolVersion ?? "unavailable"),
             OperationModeParser.Format(configuration.Mode),
             new FoundationSurfaceStatus(toolCount, 1, 0),
-            [
-                new FoundationModuleStatus("decks", "available"),
-                new FoundationModuleStatus("foundation", "available"),
-            ],
+            new FoundationToolsetsStatus(
+                configuration.Toolsets.Label,
+                "Toolsets control relevance; operation mode controls authority.",
+                toolsets),
             new FoundationDataSchemas("v0.9", "v1", "mtg-mcp.deck/v1"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);

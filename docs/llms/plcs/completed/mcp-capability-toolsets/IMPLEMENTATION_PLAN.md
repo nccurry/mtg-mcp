@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-04
@@ -19,10 +19,10 @@ under an explicit selection.
 
 | Phase | Goal | Requirements | Code areas | Validation | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Add parsing and canonical selection. | TSET-001, TSET-002, TSET-006, TSET-007, TSET-011 | App configuration/CLI | Focused unit tests | Planned |
-| 2 | Add explicit descriptor registry and deck assignment. | TSET-003 through TSET-005, TSET-010, TSET-013 | App hosting/deck composition | App and architecture tests | Planned |
-| 3 | Project capability schema version 2. | TSET-008, TSET-009, TSET-012 | Capability resource/contracts | Resource snapshots | Planned |
-| 4 | Complete profile/mode and installed-package validation. | All | E2E, tasks, docs | Full repository and package gates | Planned |
+| 1 | Add parsing and canonical selection. | TSET-001, TSET-002, TSET-006, TSET-007, TSET-011 | App configuration/CLI | Focused unit tests | Completed |
+| 2 | Add explicit descriptor registry and deck assignment. | TSET-003 through TSET-005, TSET-010, TSET-013 | App hosting/deck composition | App and architecture tests | Completed |
+| 3 | Project capability schema version 2. | TSET-008, TSET-009, TSET-012 | Capability resource/contracts | Resource snapshots | Completed |
+| 4 | Complete profile/mode and installed-package validation. | All | E2E, tasks, docs | Full repository and package gates | Completed |
 
 ## Phase Details
 
@@ -56,8 +56,8 @@ under an explicit selection.
 
 ## Completion Criteria
 
-- [ ] Every Must requirement appears in a phase.
-- [ ] Existing deck workflows remain behaviorally unchanged when `decks` is enabled.
-- [ ] All current tools have exactly one assignment.
-- [ ] Default/all/none discovery and capability output reconcile in all modes.
-- [ ] No later provider child is implemented before this packet is approved and complete.
+- [x] Every Must requirement appears in a phase.
+- [x] Existing deck workflows remain behaviorally unchanged when `decks` is enabled.
+- [x] All current tools have exactly one assignment.
+- [x] Default/all/none discovery and capability output reconcile in all modes.
+- [x] No later provider child was implemented before this packet was approved and complete.

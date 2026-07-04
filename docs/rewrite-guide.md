@@ -7,10 +7,9 @@ documentation from being mistaken for the rewrite target.
 The rewrite foundation and local deck-store implementations are complete. The
 manual deck-interchange code is implemented with provider UI acceptance still
 open and provider formats therefore experimental. The capability-toolset child
-and remaining six capability/cutover children
-required children stay planning-only with `Implementation authorized: No`;
-production capability work requires its own recorded approval and lifecycle
-transition.
+is implemented and complete. The remaining six capability/cutover children stay
+planning-only with `Implementation authorized: No`; production capability work
+requires its own recorded approval and lifecycle transition.
 
 ## Authority And Routing
 

@@ -14,3 +14,4 @@ checked-in configuration remain authoritative.
 | [legacy-surface-audit-and-disposition](legacy-surface-audit-and-disposition/README.md) | Approved the authoritative legacy deletion/rebuild/fixture dispositions and handed them to the rewrite foundation. |
 | [rewrite-skeleton-foundation](rewrite-skeleton-foundation/README.md) | Replaced the legacy branch implementation with the validated Core/App foundation, exact resources-only MCP host, clean-break configuration, and preview package workflow. |
 | [local-deck-store](local-deck-store/README.md) | Added immutable deck contracts, revisioned SQLite persistence, guarded backups, and the exact local `deck_*` MCP surface. |
+| [mcp-capability-toolsets](mcp-capability-toolsets/README.md) | Added deterministic startup-selected toolsets, static default/all/none profiles, exact mode intersection, and schema-version-2 capability metadata. |

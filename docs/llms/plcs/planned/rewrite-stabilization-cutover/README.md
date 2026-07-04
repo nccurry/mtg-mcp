@@ -27,7 +27,7 @@ inadequate coverage, or a failed required offline gate.
 - [Rewrite Skeleton And Repository Foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Local Deck Domain And SQLite Store](../../completed/local-deck-store/README.md)
 - [Manual Deck Interchange](../../in-progress/manual-deck-interchange/README.md)
-- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
+- [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
 - [Archidekt Decks, Folders, Snapshots, And Synchronization](../archidekt-deck-sync/README.md)
 - [Playgroup Official API](../playgroup-public-api/README.md)

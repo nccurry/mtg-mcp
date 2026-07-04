@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
+using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.Decks;
@@ -22,16 +23,10 @@ internal static class FoundationHost
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        using SqliteDeckStore deckStore = new(
-            configuration.DataRoot,
-            FoundationServerIdentity.PackageVersion);
-        DeckReadTools readTools = new(deckStore);
-        DeckInterchangeService interchangeService = new(deckStore);
-        DeckInterchangeReadTools interchangeReadTools = new(interchangeService);
-        bool writesVisible = OperationModeGuard.Allows(
-            configuration.Mode,
-            OperationRequirement.LocalWrite);
-        int toolCount = writesVisible ? 23 : 7;
+        bool decksEnabled = configuration.Toolsets.Includes(CapabilityToolset.Decks);
+        using SqliteDeckStore? deckStore = decksEnabled
+            ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
+            : null;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
         IMcpServerBuilder mcpBuilder = builder.Services
@@ -46,14 +41,11 @@ internal static class FoundationHost
             })
             .WithStdioServerTransport()
             .WithMessageFilters(filters =>
-                filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitImplicitLoggingCapability()))
-            .WithResources(new FoundationResources(configuration, toolCount))
-            .WithTools(readTools)
-            .WithTools(interchangeReadTools);
-        if (writesVisible)
+                filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitUnsupportedImplicitCapabilities()))
+            .WithResources(new FoundationResources(configuration));
+        if (deckStore is not null)
         {
-            mcpBuilder.WithTools(new DeckWriteTools(deckStore, configuration.Mode));
-            mcpBuilder.WithTools(new DeckInterchangeWriteTools(interchangeService, configuration.Mode));
+            DeckToolsetManifest.Register(mcpBuilder, deckStore, configuration.Mode);
         }
 
         using IHost host = builder.Build();

@@ -17,7 +17,7 @@
 | 2 | Add generic text preview/export. | XCHG-002 through XCHG-006, XCHG-012, XCHG-013, XCHG-015, XCHG-016 | Parser/formatter, partial-opt-in, and boundary tests pass. | Completed |
 | 3 | Add Archidekt artifact bundle. | XCHG-007, XCHG-008, XCHG-011, XCHG-017 | Exact bundle golden and dated manual acceptance pass. | Code complete; manual acceptance open |
 | 4 | Add Moxfield Bulk Edit bundle. | XCHG-009 through XCHG-011, XCHG-017 | Exact bundle golden and dated manual acceptance pass. | Code complete; manual acceptance open |
-| 5 | Add the four MCP wrappers, one interchange catalog, and current north-star validation. | XCHG-003, XCHG-014 through XCHG-018 | Current mode surface, dummy-deck workflow, bounds, manual-record, and full offline gates pass; the dependent toolset child owns profile filtering. | Automated validation complete; XCHG-017 and dependent toolset proof open |
+| 5 | Add the four MCP wrappers, one interchange catalog, and current north-star validation. | XCHG-003, XCHG-014 through XCHG-018 | Current mode surface, dummy-deck workflow, bounds, manual-record, and full offline gates pass; the dependent toolset child owns profile filtering. | Automated validation and dependent toolset proof complete; XCHG-017 open |
 
 ## Rules
 

@@ -18,6 +18,7 @@ public sealed class FoundationProcessTests
             "--smoke",
             "--mode",
             "read-only",
+            "--toolsets=decks",
             "--data-dir",
             Path.GetTempPath()).ConfigureAwait(false);
 
@@ -62,6 +63,25 @@ public sealed class FoundationProcessTests
         Assert.Equal(2, exitCode);
         Assert.Equal(string.Empty, output);
         Assert.Equal($"Operation mode must be read-only, local, or remote.{Environment.NewLine}", error);
+        Assert.DoesNotContain(rejectedValue, error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies an invalid toolset fails before transport without echoing the configured name.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task McpHost_WithInvalidToolsets_EmitsOnlySanitizedDiagnostic()
+    {
+        const string rejectedValue = "private-provider";
+
+        (int exitCode, string output, string error) = await RunApplicationAsync(
+            "--toolsets",
+            rejectedValue).ConfigureAwait(false);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal(string.Empty, output);
+        Assert.Contains("implemented lowercase capabilities", error, StringComparison.Ordinal);
         Assert.DoesNotContain(rejectedValue, error, StringComparison.Ordinal);
     }
 
@@ -114,6 +134,7 @@ public sealed class FoundationProcessTests
             };
             startInfo.Environment.Remove("MTGMCP__MODE");
             startInfo.Environment.Remove("MTGMCP__DATA_DIR");
+            startInfo.Environment.Remove("MTGMCP__TOOLSETS");
             startInfo.ArgumentList.Add(appPath);
             foreach (string argument in arguments)
             {

@@ -23,7 +23,7 @@ fingerprint. The adapter never writes through ordinary local edits.
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Manual Deck Interchange](../../in-progress/manual-deck-interchange/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
-- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
+- [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

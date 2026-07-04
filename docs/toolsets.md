@@ -1,12 +1,33 @@
 # MCP Toolsets
 
-> Historical reference: this file documents the removed legacy pre-rewrite
-> toolset filter. The clean-break `0.9.0` does not preserve these names or
-> counts. Its replacement uses static startup-selected `decks`, `scryfall`,
-> `stats`, `archidekt`, `playgroup`, and `tagger` toolsets, with
-> `decks,scryfall,stats` as the default profile. See the
-> [capability-toolset PLC](llms/plcs/planned/mcp-capability-toolsets/README.md)
-> and [rewrite guide](rewrite-guide.md).
+## Clean-Break `0.9.0` Toolsets
+
+The current host selects a static model-visible surface at startup. Omitted
+configuration or `default` enables implemented default toolsets, `all` enables
+every implemented stable toolset, `none` exposes no tools, and an exact
+comma-separated lowercase list selects an explicit subset.
+
+```bash
+MTGMCP__TOOLSETS=decks
+mtg-mcp --toolsets=none
+```
+
+The stable names are `decks`, `scryfall`, `stats`, `archidekt`, `playgroup`,
+and `tagger`. Only `decks` is implemented today; unimplemented names fail
+startup and do not appear as capability placeholders. The eventual default is
+`decks,scryfall,stats`, while provider-specific toolsets are opt-in.
+
+Toolsets control relevance. The independently configured `read-only`, `local`,
+and `remote` modes control authority, and invocation-time write guards remain
+mandatory. Selection is fixed for a session and the server advertises no
+dynamic tool-list change. See the
+[capability-toolset PLC](llms/plcs/completed/mcp-capability-toolsets/README.md)
+and [rewrite guide](rewrite-guide.md).
+
+## Historical Legacy Filter
+
+The remainder of this file documents the removed pre-rewrite filter. The
+clean-break design does not preserve these names or counts.
 
 `MtgMcp.Toolsets` controls which MCP tools the server advertises. Blank is the
 compatibility profile: it advertises every tool allowed by the current operation

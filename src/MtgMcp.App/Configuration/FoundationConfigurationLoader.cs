@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using MtgMcp.App.Capabilities;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Configuration;
@@ -26,6 +27,7 @@ internal static class FoundationConfigurationLoader
         {
             ["--data-dir"] = "DATA_DIR",
             ["--mode"] = "MODE",
+            ["--toolsets"] = "TOOLSETS",
         };
 
     /// <summary>
@@ -97,6 +99,13 @@ internal static class FoundationConfigurationLoader
             return ForwardFailure(modeResult);
         }
 
+        OperationResult<CapabilityToolsetSelection> toolsetsResult =
+            CapabilityToolsetRegistry.Resolve(configuration["TOOLSETS"]);
+        if (toolsetsResult is not OperationSuccess<CapabilityToolsetSelection> toolsets)
+        {
+            return ForwardFailure(toolsetsResult);
+        }
+
         string? configuredDataRoot = configuration["DATA_DIR"];
         OperationResult<DataRootResolution> dataRootResult = DataRootResolver.Resolve(
             configuredDataRoot,
@@ -114,6 +123,7 @@ internal static class FoundationConfigurationLoader
         return new OperationSuccess<FoundationConfiguration>(
             new FoundationConfiguration(
                 mode.Data,
+                toolsets.Data,
                 dataRoot.Data.Path,
                 dataRoot.Data.State,
                 !string.IsNullOrWhiteSpace(configuredDataRoot),

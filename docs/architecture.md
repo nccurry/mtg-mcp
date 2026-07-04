@@ -37,9 +37,10 @@ The model-visible surface is the intersection of the enabled toolsets and the
 selected operation mode. Toolsets reduce irrelevant context but grant no
 authority. Registration remains fixed for a session, so the server does not
 advertise dynamic list changes. The default toolsets are `decks`, `scryfall`,
-and `stats`; provider-specific toolsets are opt-in. Exact configuration and
-capability-resource behavior belongs to the independently reviewed
-`mcp-capability-toolsets` child PLC.
+and `stats`; provider-specific toolsets are opt-in. The implemented App
+registry currently contains only `decks`, rejects unimplemented names, and
+projects exact selection and counts through capability schema version 2. The
+independently reviewed `mcp-capability-toolsets` child PLC owns this contract.
 
 See the [rewrite guide](rewrite-guide.md) and
 [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).

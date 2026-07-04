@@ -26,7 +26,7 @@ does not map them to deck categories; the calling LLM may use ordinary
 
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
-- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
+- [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

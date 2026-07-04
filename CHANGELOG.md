@@ -30,6 +30,9 @@
   generic text, fingerprint-guarded import creation, and checksummed artifact
   bundles; Archidekt and Moxfield candidate formats remain opt-in experimental
   pending current manual UI acceptance.
+- Added static startup-selected capability toolsets with `default`, `all`,
+  `none`, and explicit profiles, exact mode intersection, schema-v2 capability
+  metadata, and no dynamic tool-list advertisement.
 
 ## 0.8.0 - 2026-06-28
 

@@ -1,3 +1,5 @@
+using MtgMcp.App.Capabilities;
+
 namespace MtgMcp.App.Configuration;
 
 /// <summary>
@@ -5,6 +7,7 @@ namespace MtgMcp.App.Configuration;
 /// </summary>
 internal sealed record FoundationConfiguration(
     OperationMode Mode,
+    CapabilityToolsetSelection Toolsets,
     string DataRoot,
     DataRootState DataRootState,
     bool DataRootConfigured,

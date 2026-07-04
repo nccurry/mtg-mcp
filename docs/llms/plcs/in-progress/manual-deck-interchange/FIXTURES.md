@@ -74,7 +74,7 @@ does not satisfy XCHG-017 by itself.
 | XCHG-015 | XCHG-FIX-006, XCHG-FIX-009, and XCHG-FIX-010. |
 | XCHG-016 | XCHG-FIX-011 and XCHG-FIX-012. |
 | XCHG-017 | Dated manual-acceptance metadata schema and pre-cutover revalidation record. |
-| XCHG-018 | One catalog schema, exact current mode surface, direct write guard, complete dummy Commander workflow, and the dependent toolset child's future `decks` profile matrix. |
+| XCHG-018 | One catalog schema, exact current mode surface, direct write guard, complete dummy Commander workflow, and the completed dependent toolset child's `decks` profile matrix. |
 
 ## North-Star Workflow Fixture
 
