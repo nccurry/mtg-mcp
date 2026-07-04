@@ -12,12 +12,12 @@ MTGMCP__TOOLSETS=decks
 mtg-mcp --toolsets=none
 ```
 
-Only `decks` is implemented today; unimplemented names fail startup and do not
-appear as capability placeholders. Proposed AMEND-004 defines the stable target
-names as `decks`, `scryfall`, `stats`, `archidekt`, and `playgroup`. Its eventual
-default is `decks,scryfall,stats`, while Archidekt and Playgroup are opt-in.
-The existing preview's unimplemented Tagger descriptor is superseded planning
-state and must be removed before stable cutover, not preserved as an alias.
+`decks` and `scryfall` are implemented today; unimplemented names fail startup
+and do not appear as capability placeholders. Accepted AMEND-004 defines the
+stable target names as `decks`, `scryfall`, `stats`, `archidekt`, and
+`playgroup`. The current default is `decks,scryfall`; exact statistics will join
+it after its own child is implemented. Archidekt and Playgroup remain opt-in.
+There is no Tagger descriptor, prefix, database, or compatibility alias.
 
 Toolsets control relevance. The independently configured `read-only`, `local`,
 and `remote` modes control authority, and invocation-time write guards remain

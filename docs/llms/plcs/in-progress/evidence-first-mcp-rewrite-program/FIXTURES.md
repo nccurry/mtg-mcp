@@ -99,15 +99,15 @@ and future popularity-source packets:
 | SCN-009 | Default selection starts after decks, Scryfall, and statistics are implemented. | Only those default-enabled toolsets intersected with the active mode are visible; provider integrations stay hidden. |
 | SCN-010 | `all`, `none`, an explicit list, and an unknown name are started in each mode. | Stable implemented toolsets, zero tools, the exact requested subset, and sanitized startup failure are observed respectively; no `listChanged` capability appears. |
 | SCN-011 | A child lists provider endpoints but does not state a player question, evidence class, or composed workflow. | Review rejects the child as north-star incomplete even when endpoint/schema traceability is otherwise complete. |
-| SCN-012 | A planned document proposes a separate community-tag database, adapter, tool prefix/toolset, unsupported website traffic, automatic bulk download, or local execution of an uncached arbitrary Scryfall query. | Review rejects the document as conflicting with proposed AMEND-004; implementation remains blocked until the amendment and reconciled children are approved. |
+| SCN-012 | A planned document proposes a separate community-tag database, adapter, tool prefix/toolset, unsupported website traffic, automatic bulk download, or local execution of an uncached arbitrary Scryfall query. | Review rejects the document as conflicting with accepted AMEND-004; implementation remains blocked until the affected child is amended and approved. |
 
 ## MCP Surface Checks
 
 | Profile | `read-only` | `local` | `remote` | Notes |
 | --- | ---: | ---: | ---: | --- |
-| Current implemented runtime | 7 | 23 | 23 | Deck-only runtime; unchanged by this documentation amendment. |
-| Proposed `default` | 31 | 52 | 52 | `decks,scryfall,stats` after affected children are approved and implemented. |
-| Proposed `all` | 56 | 78 | 91 | All five target toolsets; derived from child matrices. |
+| Current implemented runtime | 21 | 41 | 41 | Implemented `decks` and `scryfall` toolsets. |
+| Planned `default` | 31 | 52 | 52 | `decks,scryfall,stats` after the remaining affected child is approved and implemented. |
+| Planned `all` | 56 | 78 | 91 | All five target toolsets; derived from child matrices. |
 | `none` | 0 | 0 | 0 | Existing static-selection behavior remains. |
 
 ## Provider Fixtures

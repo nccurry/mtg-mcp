@@ -18,10 +18,10 @@ public sealed class CapabilityToolsetTests
         CapabilityToolset[] toolsets = Enum.GetValues<CapabilityToolset>();
 
         Assert.Equal(
-            ["decks", "scryfall", "stats", "archidekt", "playgroup", "tagger"],
+            ["decks", "scryfall", "stats", "archidekt", "playgroup"],
             toolsets.Select(CapabilityToolsetPolicy.Format));
         Assert.Equal(
-            [true, true, true, false, false, false],
+            [true, true, true, false, false],
             toolsets.Select(CapabilityToolsetPolicy.IsDefaultEnabled));
         Assert.Equal("available", CapabilityToolsetPolicy.Format(CapabilityToolsetAvailability.Available));
         Assert.Equal("unavailable", CapabilityToolsetPolicy.Format(CapabilityToolsetAvailability.Unavailable));
@@ -137,22 +137,32 @@ public sealed class CapabilityToolsetTests
     /// Verifies reserved and explicit selections resolve against only implemented descriptors.
     /// </summary>
     [Theory]
-    [InlineData(null, "default", true)]
-    [InlineData("default", "default", true)]
-    [InlineData("all", "all", true)]
-    [InlineData("none", "none", false)]
-    [InlineData("decks", "explicit", true)]
+    [InlineData(null, "default", true, true)]
+    [InlineData("default", "default", true, true)]
+    [InlineData("all", "all", true, true)]
+    [InlineData("none", "none", false, false)]
+    [InlineData("decks", "explicit", true, false)]
+    [InlineData("scryfall", "explicit", false, true)]
     public void Parser_ResolvesCurrentProfiles(
         string? value,
         string expectedSelection,
-        bool decksEnabled)
+        bool decksEnabled,
+        bool scryfallEnabled)
     {
         CapabilityToolsetSelection selection = RequireSuccess(
             CapabilityToolsetSelectionParser.Parse(value, CapabilityToolsetRegistry.Implemented));
 
         Assert.Equal(expectedSelection, selection.Label);
         Assert.Equal(decksEnabled, selection.Includes(CapabilityToolset.Decks));
-        Assert.Equal(decksEnabled ? [CapabilityToolset.Decks] : [], selection.EnabledToolsets);
+        Assert.Equal(scryfallEnabled, selection.Includes(CapabilityToolset.Scryfall));
+        CapabilityToolset[] expected = (decksEnabled, scryfallEnabled) switch
+        {
+            (true, true) => [CapabilityToolset.Decks, CapabilityToolset.Scryfall],
+            (true, false) => [CapabilityToolset.Decks],
+            (false, true) => [CapabilityToolset.Scryfall],
+            _ => [],
+        };
+        Assert.Equal(expected, selection.EnabledToolsets);
     }
 
     /// <summary>
@@ -162,7 +172,8 @@ public sealed class CapabilityToolsetTests
     [InlineData("")]
     [InlineData(" ")]
     [InlineData("DECKS")]
-    [InlineData("scryfall")]
+    [InlineData("stats")]
+    [InlineData("tagger")]
     [InlineData("decks,decks")]
     [InlineData("decks,")]
     [InlineData(",decks")]
@@ -251,39 +262,44 @@ public sealed class CapabilityToolsetTests
     public void Parser_ReservedProfilesExcludeExperimentalDescriptors()
     {
         CapabilityToolsetDescriptor decks = CreateDescriptor("decks", CapabilityToolset.Decks);
-        CapabilityToolsetDescriptor taggerExperiment = CreateDescriptor(
-            "tagger",
-            CapabilityToolset.Tagger,
+        CapabilityToolsetDescriptor playgroupExperiment = CreateDescriptor(
+            "playgroup",
+            CapabilityToolset.Playgroup,
             CapabilityToolsetStability.Experimental);
-        CapabilityToolsetDescriptor[] descriptors = [decks, taggerExperiment];
+        CapabilityToolsetDescriptor[] descriptors = [decks, playgroupExperiment];
 
         CapabilityToolsetSelection defaultSelection = RequireSuccess(
             CapabilityToolsetSelectionParser.Parse("default", descriptors));
         CapabilityToolsetSelection allSelection = RequireSuccess(
             CapabilityToolsetSelectionParser.Parse("all", descriptors));
         CapabilityToolsetSelection explicitSelection = RequireSuccess(
-            CapabilityToolsetSelectionParser.Parse("tagger", descriptors));
+            CapabilityToolsetSelectionParser.Parse("playgroup", descriptors));
 
         Assert.Equal([CapabilityToolset.Decks], defaultSelection.EnabledToolsets);
         Assert.Equal([CapabilityToolset.Decks], allSelection.EnabledToolsets);
-        Assert.Equal([CapabilityToolset.Tagger], explicitSelection.EnabledToolsets);
+        Assert.Equal([CapabilityToolset.Playgroup], explicitSelection.EnabledToolsets);
     }
 
     /// <summary>
-    /// Verifies the implemented registry is one decks descriptor with the exact current counts.
+    /// Verifies the implemented registry owns the exact deck and Scryfall surfaces.
     /// </summary>
     [Fact]
-    public void Registry_AssignsCurrentSurfaceOnlyToDecks()
+    public void Registry_AssignsCurrentSurfaceToDecksAndScryfall()
     {
-        CapabilityToolsetDescriptor descriptor = Assert.Single(CapabilityToolsetRegistry.Implemented);
+        Assert.Equal(2, CapabilityToolsetRegistry.Implemented.Length);
+        CapabilityToolsetDescriptor decks = CapabilityToolsetRegistry.Implemented[0];
+        CapabilityToolsetDescriptor scryfall = CapabilityToolsetRegistry.Implemented[1];
         CapabilityToolsetSelection defaultSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve(null));
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
-        Assert.Equal(CapabilityToolset.Decks, descriptor.Toolset);
-        Assert.Equal(23, descriptor.AllToolNames.Length);
-        Assert.Equal(7, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
-        Assert.Equal(23, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
-        Assert.Equal(23, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
+        Assert.Equal(CapabilityToolset.Decks, decks.Toolset);
+        Assert.Equal(23, decks.AllToolNames.Length);
+        Assert.Equal(CapabilityToolset.Scryfall, scryfall.Toolset);
+        Assert.Equal(18, scryfall.AllToolNames.Length);
+        Assert.Equal(14, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(21, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
+        Assert.Equal(41, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
+        Assert.Equal(41, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
         Assert.Equal(0, CapabilityToolsetRegistry.CountVisibleTools(noneSelection, OperationMode.Local));
     }
 

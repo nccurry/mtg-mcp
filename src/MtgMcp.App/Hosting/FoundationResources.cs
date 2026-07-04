@@ -64,7 +64,7 @@ internal sealed class FoundationResources
         }
 
         FoundationCapabilityDocument document = new(
-            2,
+            3,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
@@ -75,7 +75,7 @@ internal sealed class FoundationResources
                 configuration.Toolsets.Label,
                 "Toolsets control relevance; operation mode controls authority.",
                 toolsets),
-            new FoundationDataSchemas("v0.9", "v1", "mtg-mcp.deck/v1"),
+            new FoundationDataSchemas("v0.9", "v1", "mtg-mcp.deck/v1", "v1"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);
     }

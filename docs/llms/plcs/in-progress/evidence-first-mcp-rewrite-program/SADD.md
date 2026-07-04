@@ -19,6 +19,7 @@
 | 2026-07-03 | Codex | Applied AMEND-002 for Archidekt folder and named-snapshot scope. |
 | 2026-07-04 | Codex | Applied AMEND-003 for static capability toolsets and north-star acceptance. |
 | 2026-07-04 | Codex | Reconciled proposed AMEND-004 for one official Scryfall corpus, no separate Tagger capability, deterministic deck categorization, and deferred local query evaluation. |
+| 2026-07-04 | Repository owner and Codex | Accepted AMEND-004 and activated the independently approved Scryfall corpus/evidence child. |
 
 ## Executive Summary
 
@@ -170,7 +171,7 @@ child's detailed requirements or design.
 
 - Define startup-selected `decks`, `scryfall`, `stats`, `archidekt`, and
   `playgroup` toolsets in App without adding Core dependencies. The completed
-  packet's historical Tagger placeholder is superseded by proposed AMEND-004
+  packet's historical Tagger placeholder is superseded by accepted AMEND-004
   before any such toolset was implemented.
 - Keep toolsets orthogonal to `read-only`, `local`, and `remote` authority.
 - Define deterministic `default`, `all`, and `none` selections, configuration

@@ -15,3 +15,4 @@ checked-in configuration remain authoritative.
 | [rewrite-skeleton-foundation](rewrite-skeleton-foundation/README.md) | Replaced the legacy branch implementation with the validated Core/App foundation, exact resources-only MCP host, clean-break configuration, and preview package workflow. |
 | [local-deck-store](local-deck-store/README.md) | Added immutable deck contracts, revisioned SQLite persistence, guarded backups, and the exact local `deck_*` MCP surface. |
 | [mcp-capability-toolsets](mcp-capability-toolsets/README.md) | Added deterministic startup-selected toolsets, static default/all/none profiles, exact mode intersection, and schema-version-2 capability metadata. |
+| [scryfall-corpus-and-evidence](scryfall-corpus-and-evidence/README.md) | Added the unified official corpus, authoritative API evidence, immutable request replay, community-tag joins, and exact `scryfall_*` surface. |

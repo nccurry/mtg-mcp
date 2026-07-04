@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-04
@@ -31,14 +31,14 @@ out of scope.
 | SCRY-007 | Must | Provider operations shall accept `default`, `cache-only`, or `refresh`; stale fallback after provider failure shall never be silent. In `read-only`, eligible stored evidence may be read, but a miss or `refresh` that would require acquisition shall return an explicit local-write-required state with zero HTTP and SQLite writes. | Policy/mode tests prove network and write behavior and expose any stale candidate snapshot ID. |
 | SCRY-008 | Must | Exact canonical request fingerprints may be reused, but every uncached arbitrary Scryfall query shall execute against Scryfall. | Query-spy fixtures prove no local query approximation or membership merge. |
 | SCRY-009 | Must | Card ID, exact name, set/collector, prints, and ruling operations shall consult eligible local evidence before the provider. | Active-corpus fixtures complete with zero HTTP. |
-| SCRY-010 | Must | Collection lookup shall partition eligible local hits from misses and send only misses within the pinned provider limit. | Mixed-hit, duplicate, ordering, error, and 75/76 boundary fixtures pass. |
+| SCRY-010 | Must | Collection lookup shall accept 1 through 150 ordered exact identifiers, partition eligible local hits, globally deduplicate misses, send sequential provider batches of at most 75, and return checksum-bound pages without reacquisition. | Mixed-hit, duplicate, 75/76/100/115/150/151 boundary, cursor replay, second-batch failure, and mode fixtures pass. |
 | SCRY-011 | Must | Every completed provider request in `local` or `remote` shall follow provider pagination to completion and create an immutable content-addressed snapshot with the exact request, every raw page, result order, retrieval metadata, checksum, and lineage. No completed snapshot is published when a later page fails, and `read-only` never starts an acquisition it cannot persist. | Multi-page, later-page failure, refresh-lineage, and read-only zero-write fixtures pass while predecessor bytes remain unchanged. |
 | SCRY-012 | Must | Snapshot reads shall use opaque checksum-bound ordinal cursors, default page size 25, maximum 100, and maximum 25 raw source objects per page. | Cursor tamper, boundary, canonical order, and replay tests pass. |
 | SCRY-013 | Must | Raw provider fields and unknown extensions shall survive storage while normalized root/face projections preserve absent versus known-empty groups. | Single-face, split, transform, modal, and extension-field round trips pass. |
 | SCRY-014 | Must | Oracle tags shall join by Oracle ID and art tags by illustration ID while remaining community evidence separate from card facts. | Join fixtures expose distinct source descriptors and never embed tags as oracle truth. |
 | SCRY-015 | Must | Direct tag assignments and deterministically traversed ancestor matches shall remain distinguishable with tag type, weight, annotation, hierarchy path, and corpus generation. | Cycle, dangling-reference, direct-only, and inherited fixtures pass. |
 | SCRY-016 | Must | Separate write-authorized processes sharing one data root shall coordinate leases, duplicate request ownership, and provider start pacing through SQLite. Read-only processes shall not acquire or mutate those leases. | Multi-process fake-clock tests prove one owner, crash expiry, bounded waiting, global pacing, and read-only zero writes. |
-| SCRY-017 | Must | Official API request starts shall be coordinated across processes at no faster than one per 125 milliseconds, use honest User-Agent/Accept headers, stop immediately on 403/429, and retry transient transport/5xx failures at most twice. | Captured HTTP, fake-clock, and request-count fixtures pass. |
+| SCRY-017 | Must | Official API request starts shall be coordinated across processes at no faster than one per 500 milliseconds, use honest User-Agent/Accept headers, stop immediately on 403/429, and retry transient transport/5xx failures at most twice. The conservative global interval applies Scryfall's documented two-requests-per-second search and collection ceiling to every currently supported API request. | Captured HTTP, fake-clock, request-count, multi-page search, and multi-batch collection fixtures pass. |
 | SCRY-018 | Must | Corpus status shall be network-free and report installed datasets, active/previous versions, integrity, bytes, retrieval/check times, age, and refresh eligibility without paths or secrets. | Schema snapshots and redaction tests pass. |
 | SCRY-019 | Must | Corpus rollback/delete and snapshot delete shall use optimistic identity checks and explicit loss acknowledgement. | Stale-generation and missing-acknowledgement fixtures perform no mutation. |
 | SCRY-020 | Must | Failed sync, query, cancellation, size limit, or checksum validation shall retain bounded diagnostics and never mark partial evidence complete. | Failure and recovery tests pass without dangling staging rows. |
@@ -47,7 +47,7 @@ out of scope.
 | SCRY-023 | Must | Price/rank fields shall retain provider, currency/context, retrieval time, and stale status and never be named quality or recommendation scores. | Output schema and 24-hour price fixtures pass. |
 | SCRY-024 | Must | Lossless raw objects and normalized identity/index fields shall permit later additive query-engine migrations without a speculative evaluator abstraction in this child. | Architecture review and migration fixture prove extension without transport/Core leakage. |
 | SCRY-025 | Must | Normal tests shall remain deterministic and offline with at least 90 percent line coverage per production assembly. | Full repository quality gates pass. |
-| SCRY-026 | Must | Before child acceptance, an opt-in manual workflow shall install the current real four-dataset corpus, validate activation and second-process reuse, and clean up only with explicit consent; ordinary CI shall never perform the download. | Dated redacted acceptance evidence records provider versions, aggregate counts/hashes, reuse, and cleanup without local paths or raw payloads. |
+| SCRY-026 | Must | Before child acceptance, an opt-in manual workflow shall install the current real four-dataset corpus, validate activation and second-process reuse, retain it by default, and clean up only with explicit consent; ordinary CI shall never perform the download. | Dated redacted acceptance evidence records provider versions, aggregate counts/hashes, reuse, and the retention or cleanup outcome without local paths or raw payloads. |
 
 ## Quality Attributes
 
@@ -72,9 +72,9 @@ out of scope.
 
 ## Definition Of Done
 
-- [ ] The fixed bulk profile installs and reuses across separate MCP processes.
-- [ ] All eighteen tools and exact mode surfaces pass official-client tests.
-- [ ] New arbitrary raw searches remain provider-authoritative.
-- [ ] Card facts and community tags share storage without semantic conflation.
-- [ ] Snapshot replay, current/previous rollback, and failure recovery pass.
-- [ ] Full offline, coverage, package, and installed-tool gates pass.
+- [x] The fixed bulk profile installs and reuses across separate MCP processes.
+- [x] All eighteen tools and exact mode surfaces pass official-client tests.
+- [x] New arbitrary raw searches remain provider-authoritative.
+- [x] Card facts and community tags share storage without semantic conflation.
+- [x] Snapshot replay, current/previous rollback, and failure recovery pass.
+- [x] Full offline, coverage, package, and installed-tool gates pass.

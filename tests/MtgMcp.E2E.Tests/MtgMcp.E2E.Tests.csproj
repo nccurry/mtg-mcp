@@ -20,5 +20,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\MtgMcp.App\MtgMcp.App.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\..\src\MtgMcp.Scryfall\MtgMcp.Scryfall.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="..\MtgMcp.Scryfall.Tests\ScryfallTestFixture.cs" Link="Fixtures\ScryfallTestFixture.cs" />
     </ItemGroup>
 </Project>

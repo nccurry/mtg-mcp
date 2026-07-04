@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-04
-- Current phase: proposed AMEND-004 reconciliation and review
+- Current phase: child 6 implementation acceptance
 
 ## Summary
 
@@ -46,13 +46,13 @@ the detailed contracts, fixtures, risks, and acceptance criteria in its topic.
 | AMEND-001 | 2026-07-03 | Accepted | Permit all then-required ten children to be drafted sequentially in one planning run. Remove the prerequisite that one child be approved before the next is drafted. Preserve separate packets, per-child validation, independent review, and the prohibition on production implementation. | Explicit repository-owner request |
 | AMEND-002 | 2026-07-03 | Accepted | Expand the then-numbered child 6 (Archidekt) and stable cutover scope to include folder organization and named snapshot lifecycle/guarded restore. Reconcile the audit disposition, child requirements, live cleanup, deferred registry, and derived surface baseline. | Explicit repository-owner request |
 | AMEND-003 | 2026-07-04 | Accepted | Add capability toolsets as a cross-cutting guardrail, create a dedicated toolset child before provider implementations, require north-star acceptance checks in every remaining child, and distinguish default-profile discovery from the complete stable surface. | Explicit repository-owner request |
-| AMEND-004 | 2026-07-04 | Proposed; review required | Unify official Scryfall cards, rulings, Oracle tags, and art tags in `scryfall.db`; remove the planned Tagger adapter/store/toolset; expand child 6 to corpus/evidence; replace child 10 with deterministic caller-defined deck categorization; register local Scryfall query evaluation as deferred work. | Repository-owner direction; packet review pending |
+| AMEND-004 | 2026-07-04 | Accepted | Unify official Scryfall cards, rulings, Oracle tags, and art tags in `scryfall.db`; remove the planned Tagger adapter/store/toolset; expand child 6 to corpus/evidence; replace child 10 with deterministic caller-defined deck categorization; register local Scryfall query evaluation as deferred work. | Explicit repository-owner implementation direction |
 
 ## Program Guardrails
 
 Every child PLC shall inherit these decisions. The remaining planned children
-are reconciled to proposed AMEND-004, but no affected implementation may begin
-until that amendment is reviewed and accepted:
+are reconciled to accepted AMEND-004, but each still requires its own review and
+implementation authorization:
 
 - The MCP returns evidence, provider data, explicit workflow operations, and
   exact mathematics. The client LLM makes deckbuilding decisions.
@@ -119,12 +119,12 @@ explicitly activated.
 | 3 | [`local-deck-store`](../../completed/local-deck-store/README.md) | Define the local deck domain, SQLite persistence, and `deck_*` mutations. | Foundation boundaries | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 4 | [`manual-deck-interchange`](../manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Repository-owner implementation authorization recorded | Automated implementation complete; manual provider acceptance open |
 | 5 | [`mcp-capability-toolsets`](../../completed/mcp-capability-toolsets/README.md) | Define startup-selected capability groups, default/all/none profiles, mode intersection, and surface governance. | Foundation, local decks, and interchange registration | Repository-owner implementation authorization recorded | Approved; implementation completed |
-| 6 | [`scryfall-corpus-and-evidence`](../../planned/scryfall-corpus-and-evidence/README.md) | Define the shared official bulk corpus, authoritative query cache, immutable replay, and card/ruling/tag evidence. | Toolset foundation and local card identity | AMEND-004 and child review | Rewritten; AMEND-004 review required |
+| 6 | [`scryfall-corpus-and-evidence`](../../completed/scryfall-corpus-and-evidence/README.md) | Define the shared official bulk corpus, authoritative query cache, immutable replay, and card/ruling/tag evidence. | Toolset foundation and local card identity | Repository-owner authorization recorded | Approved; implementation and retained full-corpus acceptance completed |
 | 7 | [`archidekt-deck-sync`](../../planned/archidekt-deck-sync/README.md) | Define Archidekt deck sync, folder organization, and named snapshot lifecycle/restore. | Deck, interchange, toolset, and Scryfall contracts | Child 6 draft validated | Drafted; AMEND-002/003/004 re-review required |
 | 8 | [`playgroup-public-api`](../../planned/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation and toolset boundaries | Child 7 draft validated | Drafted; AMEND-003/004 consistency review required |
 | 9 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck and toolset contracts | Child 8 draft validated | Drafted; AMEND-003/004 consistency review required |
-| 10 | [`deterministic-deck-categorization`](../../planned/deterministic-deck-categorization/README.md) | Define caller-authored tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, and toolset contracts | AMEND-004 and child 6 review | Rewritten; AMEND-004 review required |
-| 11 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 10 | Child 10 draft validated | Drafted; AMEND-004 re-review required |
+| 10 | [`deterministic-deck-categorization`](../../planned/deterministic-deck-categorization/README.md) | Define caller-authored tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, and toolset contracts | Accepted AMEND-004 and child 6 acceptance | Rewritten; independent child review required |
+| 11 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 10 | Child 10 draft validated | Drafted; dependent child reviews required |
 
 Although some technical dependencies are narrower, drafting remains sequential
 so each packet is complete and validated before work begins on the next.
@@ -155,8 +155,8 @@ activated.
 
 ## Current Open Questions
 
-AMEND-004 and its rewritten children require repository-owner review. Until
-accepted, Scryfall/categorization implementation remains unauthorized. Other
+AMEND-004 and the Scryfall child are approved for implementation. Deterministic
+categorization remains separately review-gated and unauthorized. Other
 topic-specific questions belong in their owning child packet.
 
 ## Planning Readiness Checklist
@@ -215,6 +215,8 @@ topic-specific questions belong in their owning child packet.
 | 2026-07-04 | Capability-toolset implementation and closure | Passed | Static default/all/none/explicit selection, exact deck ownership, mode intersection, schema-version-2 capability metadata, source and installed-package Commander workflows, all audits, 160 offline tests, and per-assembly coverage gates passed; the child moved to `completed/`. |
 | 2026-07-04 | Official Scryfall bulk/tag research | Supersedes unsupported Tagger acquisition plan | The official metadata endpoint exposed `all_cards`, `rulings`, `oracle_tags`, and `art_tags` with gzip JSONL downloads. Observed tag objects included hierarchy/alias metadata and weighted, optionally annotated Oracle/illustration assignments. Proposed AMEND-004 replaces scraping and separate Tagger persistence with one supported corpus. |
 | 2026-07-04 | AMEND-004 dependent reconciliation | Drafted for review | Child 6 and child 10 were replaced, all incomplete dependents and durable guidance were reconciled, and proposed current/default/all baselines became 7/23/23, 31/52/52, and 56/78/91 respectively. No implementation was authorized. |
+| 2026-07-04 | AMEND-004 and Scryfall child approval | Accepted and activated | The repository owner approved the unified official corpus direction and child packet. The eighteen-tool implementation and automated gates are complete; the explicit retained-directory full-corpus acceptance remains open. |
+| 2026-07-04 | Scryfall automated implementation, audits, and bounded live acceptance | Passed with explicit manual gate | All 18 tools, 197 offline tests, exact mode/toolset surfaces, per-assembly coverage, package/install smokes, official metadata/card access, and the official-client 60-card Red/White Weenies workflow pass. Implemented mode totals are 21/41/41. Only the separately consented multi-gigabyte full-corpus acceptance remains open. |
 
 ## Completion Notes
 

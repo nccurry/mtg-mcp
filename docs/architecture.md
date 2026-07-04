@@ -19,7 +19,8 @@ The rewrite is an evidence/workflow server, not a deck advisor. It uses:
 - `MtgMcp.Decks` for the revisioned local deck domain, SQLite storage, and
   manual interchange;
 - `MtgMcp.Statistics` for exact provider-independent calculations;
-- isolated Scryfall, Archidekt, and Playgroup adapters;
+- the implemented isolated `MtgMcp.Scryfall` adapter plus planned Archidekt
+  and Playgroup adapters;
 - `MtgMcp.App` for MCP hosting, composition, modes, schemas, and the capability
   resource; and
 - separate versioned `decks.db` and unified `scryfall.db` stores.
@@ -38,14 +39,16 @@ selected operation mode. Toolsets reduce irrelevant context but grant no
 authority. Registration remains fixed for a session, so the server does not
 advertise dynamic list changes. The default toolsets are `decks`, `scryfall`,
 and `stats`; Archidekt and Playgroup toolsets are opt-in. The implemented App
-registry currently contains only `decks`, rejects unimplemented names, and
-projects exact selection and counts through capability schema version 2. The
+registry currently contains `decks` and `scryfall`, rejects unimplemented names,
+and projects exact selection and counts through capability schema version 3. The
 independently reviewed `mcp-capability-toolsets` child PLC owns this contract.
 
-The unified Scryfall boundary is proposed by AMEND-004 and remains unauthorized
-until owner review. It uses official bulk All Cards, Rulings, Oracle Tags, and
-Art Tags in one store while keeping source facts and community evidence
-separate. It does not use the Tagger website or run background downloads.
+Accepted AMEND-004 governs the implemented unified Scryfall boundary. It uses
+official bulk All Cards, Rulings, Oracle Tags, and Art Tags in one store while
+keeping source facts and community evidence separate. Corpus acquisition is
+explicit, arbitrary queries remain provider-authoritative, and immutable exact
+request snapshots are shared across processes. It does not use the Tagger
+website or run background downloads.
 
 See the [rewrite guide](rewrite-guide.md) and
 [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).

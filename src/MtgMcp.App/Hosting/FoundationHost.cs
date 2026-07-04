@@ -5,7 +5,9 @@ using ModelContextProtocol.Protocol;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Scryfall;
 using MtgMcp.Decks;
+using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Hosting;
 
@@ -27,6 +29,14 @@ internal static class FoundationHost
         using SqliteDeckStore? deckStore = decksEnabled
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
+        bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
+        using ScryfallService? scryfallService = scryfallEnabled
+            ? new ScryfallService(
+                configuration.DataRoot,
+                OperationModeGuard.Allows(configuration.Mode, OperationRequirement.LocalWrite),
+                FoundationServerIdentity.PackageVersion,
+                freshnessTtl: configuration.ScryfallFreshnessTtl)
+            : null;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
         IMcpServerBuilder mcpBuilder = builder.Services
@@ -46,6 +56,11 @@ internal static class FoundationHost
         if (deckStore is not null)
         {
             DeckToolsetManifest.Register(mcpBuilder, deckStore, configuration.Mode);
+        }
+
+        if (scryfallService is not null)
+        {
+            ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode);
         }
 
         using IHost host = builder.Build();

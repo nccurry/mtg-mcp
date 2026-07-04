@@ -33,6 +33,8 @@ public sealed class FoundationConfigurationTests
         Assert.Equal(OperationMode.Local, resolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.Default, resolved.Toolsets.Kind);
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Decks));
+        Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Scryfall));
+        Assert.Equal(TimeSpan.FromHours(24), resolved.ScryfallFreshnessTtl);
         Assert.Equal(expectedPath, resolved.DataRoot);
         Assert.Equal(DataRootState.NotCreated, resolved.DataRootState);
         Assert.False(resolved.DataRootConfigured);
@@ -123,7 +125,7 @@ public sealed class FoundationConfigurationTests
                 FoundationConfigurationLoader.Load([], configurationFile, temporary.Path, string.Empty));
             commandLineResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load(
-                    ["--mode=local", $"--data-dir={commandLineDataRoot}", "--toolsets=decks"],
+                    ["--mode=local", $"--data-dir={commandLineDataRoot}", "--toolsets=decks", "--scryfall-ttl-hours=6.5"],
                     configurationFile,
                     temporary.Path,
                     string.Empty));
@@ -138,6 +140,7 @@ public sealed class FoundationConfigurationTests
         Assert.Equal(OperationMode.Local, commandLineResolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.Explicit, commandLineResolved.Toolsets.Kind);
         Assert.Equal(commandLineDataRoot, commandLineResolved.DataRoot);
+        Assert.Equal(TimeSpan.FromHours(6.5), commandLineResolved.ScryfallFreshnessTtl);
     }
 
     /// <summary>
@@ -171,7 +174,7 @@ public sealed class FoundationConfigurationTests
     /// Verifies an unimplemented or non-lowercase toolset fails before any filesystem work.
     /// </summary>
     [Theory]
-    [InlineData("scryfall")]
+    [InlineData("tagger")]
     [InlineData("DECKS")]
     [InlineData("default,decks")]
     public void Resolve_InvalidToolsets_ReturnsSanitizedInvalidInput(string configuredValue)
@@ -191,6 +194,32 @@ public sealed class FoundationConfigurationTests
         OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
         Assert.Equal("invalid-capability-toolsets", invalid.ReasonCode);
         Assert.DoesNotContain(configuredValue, invalid.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies malformed, nonpositive, and excessive Scryfall TTL values fail before filesystem work.
+    /// </summary>
+    [Theory]
+    [InlineData("invalid")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("8761")]
+    public void Resolve_InvalidScryfallTtl_ReturnsStructuredInvalidInput(string configuredValue)
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["SCRYFALL_TTL_HOURS"] = configuredValue,
+            })
+            .Build();
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(
+            FoundationConfigurationLoader.Resolve(configuration, "unused", string.Empty).Value);
+
+        Assert.Equal("invalid-scryfall-ttl", invalid.ReasonCode);
+        Assert.Equal(
+            "Scryfall freshness hours must be a positive number no greater than 8760.",
+            invalid.Message);
     }
 
     /// <summary>
@@ -377,6 +406,7 @@ public sealed class FoundationConfigurationTests
             OperationMode.Local,
             Assert.IsType<OperationSuccess<CapabilityToolsetSelection>>(
                 CapabilityToolsetRegistry.Resolve(null).Value).Data,
+            TimeSpan.FromHours(24),
             "private-path",
             DataRootState.NotCreated,
             false,

@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-04
-- Current phase: AMEND-004 re-review
+- Current phase: dependent child reviews
 
 ## Summary
 
@@ -28,7 +28,7 @@ inadequate coverage, or a failed required offline gate.
 - [Local Deck Domain And SQLite Store](../../completed/local-deck-store/README.md)
 - [Manual Deck Interchange](../../in-progress/manual-deck-interchange/README.md)
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
-- [Scryfall Corpus And Evidence](../scryfall-corpus-and-evidence/README.md)
+- [Scryfall Corpus And Evidence](../../completed/scryfall-corpus-and-evidence/README.md)
 - [Archidekt Decks, Folders, Snapshots, And Synchronization](../archidekt-deck-sync/README.md)
 - [Playgroup Official API](../playgroup-public-api/README.md)
 - [Exact Deck Statistics](../exact-deck-statistics/README.md)
@@ -39,7 +39,7 @@ inadequate coverage, or a failed required offline gate.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The proposed AMEND-004 baseline has 91 tools in the remote `all` profile; it is a consistency check, not a compatibility target or design constraint. |
+| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The accepted AMEND-004 baseline has 91 tools in the remote `all` profile; it is a consistency check, not a compatibility target or design constraint. |
 | Require ordinary Git history-preserving integration. | Proposed | The rewrite is a clean product break, not a repository-history rewrite. |
 | Require preview releases and cross-platform smoke proof before `0.9.0`. | Proposed | Packaging and host failures must be found before the stable cutover. |
 | Keep legacy releases and legacy data directories available for rollback. | Proposed | Rollback must not translate or destroy user data. |
@@ -92,12 +92,12 @@ surface removal, and no-migration policy without authorizing implementation.
   exact statistics; explicitly enabled provider toolsets add their bounded
   workflows without widening operation-mode authority.
 
-This packet incorporates proposed umbrella amendment AMEND-004 for planning
+This packet incorporates accepted umbrella amendment AMEND-004 for planning
 consistency. Neither AMEND-004 nor this child is approved for implementation.
 
 ## Planning Approval
 
-- Status: Draft; AMEND-004 re-review required
+- Status: Draft; dependent child reviews required
 - Reviewed by: Not reviewed
 - Review date: Not reviewed
 - Reviewed revision: Not reviewed

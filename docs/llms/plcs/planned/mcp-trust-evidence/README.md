@@ -4,7 +4,7 @@
 > **Rewrite disposition: absorbed/reference-only — do not implement this packet.**
 > Its durable evidence-vocabulary ideas are owned by
 > [rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md),
-> [Scryfall corpus and evidence](../scryfall-corpus-and-evidence/README.md),
+> [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md),
 > [exact statistics](../exact-deck-statistics/README.md), and
 > and [deterministic deck categorization](../deterministic-deck-categorization/README.md).
 > Legacy legality,

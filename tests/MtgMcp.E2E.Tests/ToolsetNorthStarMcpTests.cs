@@ -23,7 +23,7 @@ public sealed class ToolsetNorthStarMcpTests
         {
             JsonElement capability = await ReadCapabilityAsync(defaultSession).ConfigureAwait(false);
             Assert.Equal("default", capability.GetProperty("toolsets").GetProperty("selection").GetString());
-            Assert.Equal(23, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
+            Assert.Equal(41, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
 
             const string deckText = "[commander]\n1 Mock Commander\n[main]\n2 Island";
             JsonElement preview = await CallSuccessAsync(
@@ -133,10 +133,10 @@ public sealed class ToolsetNorthStarMcpTests
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             JsonElement capability = await ReadCapabilityAsync(allSession).ConfigureAwait(false);
 
-            Assert.Equal(23, tools.Count);
+            Assert.Equal(41, tools.Count);
             Assert.Equal(tools.Select(tool => tool.Name).Order(StringComparer.Ordinal), tools.Select(tool => tool.Name));
             Assert.Equal("all", capability.GetProperty("toolsets").GetProperty("selection").GetString());
-            Assert.Equal(23, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
+            Assert.Equal(41, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
             Assert.False(Directory.Exists(allSession.DataRoot));
         }
     }

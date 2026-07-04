@@ -19,6 +19,7 @@
 | 2026-07-03 | Codex | Applied AMEND-002 to include Archidekt folder and named-snapshot workflows in the then-numbered child 6 and cutover. |
 | 2026-07-04 | Codex | Applied AMEND-003 for capability toolsets, north-star acceptance, and an eleven-child queue. |
 | 2026-07-04 | Codex | Reconciled proposed AMEND-004 for unified official Scryfall bulk/tag evidence, deterministic deck categorization, and deferred local query evaluation. |
+| 2026-07-04 | Repository owner and Codex | Accepted AMEND-004 and authorized the Scryfall corpus/evidence child; implementation retains the manual full-corpus gate. |
 
 ## Executive Summary
 

@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-04
@@ -29,7 +29,7 @@ closed rather than forwarding headers.
 | `card_objects`, `card_faces`, normalized indexes | Lossless Scryfall card JSON plus identity, printing, language, rules, legality, price, and lookup fields. |
 | `rulings` | Ordered raw/normalized rulings joined by Oracle identity. |
 | `tags`, `tag_relations`, `tag_assignments` | Oracle/art metadata, hierarchy, aliases, weights, annotations, and direct assignments. |
-| `request_snapshots`, `snapshot_pages`, `snapshot_members` | Immutable canonical requests, raw pages, ordered objects, checksums, cursors, and lineage. |
+| `request_snapshots`, `snapshot_payloads`, `snapshot_pages`, `snapshot_members` | Immutable canonical requests, content-addressed raw pages and ordered objects, checksums, cursors, and lineage. |
 | `acquisition_leases`, `provider_pacing` | Cross-process ownership, crash expiry, duplicate suppression, and next legal request start. |
 | `schema_migrations` | Transactional schema version and checksum history. |
 
@@ -39,9 +39,10 @@ break snapshot replay.
 
 ### Explicit bulk synchronization
 
-1. Acquire the database-backed corpus lease and inspect local status.
-2. Respect the 24-hour metadata-check TTL unless an explicit force-check was
-   requested.
+1. Acquire the database-backed corpus lease and remove staging generations
+   abandoned before the prior lease expired.
+2. Inspect local status and respect the 24-hour metadata-check TTL unless an
+   explicit force-check was requested.
 3. Fetch official metadata for the fixed four-dataset profile.
 4. If provider versions match the active generation, record the check and
    return a no-op result.
@@ -61,7 +62,7 @@ disk, or one failed dataset leaves the prior active generation untouched.
 ### Request and freshness flow
 
 The canonical request fingerprint includes operation kind, losslessly encoded
-inputs, provider options, and adapter schema version. It does not rewrite or
+inputs, provider options, and adapter schema version `1`. It does not rewrite or
 approximate an arbitrary search expression. `default` reuses eligible exact
 request/card evidence until 24 hours. `cache-only` performs no HTTP and may
 return stale evidence with an explicit state. In `local`/`remote`, `default`
@@ -71,23 +72,42 @@ HTTP because the completed foundation forbids cache, snapshot, lease, and
 pacing-table writes in that mode.
 
 Identity-oriented operations consult the active corpus first. Collections
-deduplicate identifiers, preserve caller order/errors, and send only
-ineligible misses to the official collection endpoint. New arbitrary search
+accept at most 150 identifier rows, preserve every caller position, globally
+deduplicate ineligible misses, and send those misses to the official collection
+endpoint in deterministic batches of at most 75. All batch pages publish as
+one logical snapshot only after every provider request succeeds. New arbitrary search
 syntax never evaluates against local card tables. Exact prior search requests
 may reuse their snapshot.
 
+Collection output is independently paged at 25 rows by default, at most 100
+compact rows, or at most 25 rows with raw source objects. Its cursor binds the
+complete ordered input hash, exact retained corpus generation, provider
+snapshot identity/checksum when present, ordered result checksum, miss
+semantics, and offset. Continuation reads only those identities and performs no
+HTTP or writes; pruned or explicitly deleted evidence returns
+`collection-cursor-evidence-unavailable`. Freshness policy applies only before
+the first page is bound.
+
 All API request starts in write-authorized modes share a database-backed minimum
-125-millisecond interval across processes. If provider refresh fails, the
+500-millisecond interval across processes. This deliberately applies the
+documented search and collection ceiling to every currently supported API
+request instead of maintaining a fragile route-specific policy. If provider refresh fails, the
 operation returns the provider failure and may name a stale snapshot as
 available evidence; it never substitutes it silently.
 
 ### Tags and evidence composition
 
-Oracle assignments join through `oracle_id`; art assignments join through
-`illustration_id`. Direct rows remain direct. Inherited results are computed by
+Oracle assignments join through `oracle_id`; art assignments join through root
+or face `illustration_id`. Direct rows remain direct. Inherited results are computed by
 deterministic hierarchy traversal and include the path that produced the
 match. Card responses may include joined tags, but card and tag sections carry
 separate source descriptors and coverage states.
+
+Bulk card source descriptors use local retrieval time, while price and rank
+freshness use the All Cards dataset's provider update time. Card lists that do
+not join the complete direct tag set report `not-included`; a cards-by-tag
+result reports `selected-tag-only` rather than pretending the selected
+assignment is complete.
 
 No deck category rule or role inference belongs in this assembly. The later
 categorization child receives already labeled tag evidence through composition.
@@ -102,12 +122,12 @@ also guarded local writes.
 
 | Tool | Required input contract | Result-specific fields |
 | --- | --- | --- |
-| `scryfall_search` | Raw query; provider `unique`, `order`, `direction`, extras/multilingual/variation flags; freshness policy; output page size/detail. | Snapshot ID when persisted, total count, ordered first page, next cursor, provider warnings. |
-| `scryfall_card_get` | Exactly one lookup union case: Scryfall/provider ID, exact/fuzzy name, or set plus collector number; freshness policy; detail. | One lossless card object and normalized projection, joined tag coverage, snapshot metadata when acquired. |
-| `scryfall_card_collection` | Ordered identifiers using the same ID/name/printing cases, maximum 75; freshness policy; detail. | Ordered found/not-found/error rows, local/provider origin per row, snapshot lineage for provider misses. |
-| `scryfall_card_prints` | Stable card or Oracle identity; freshness policy; output page size/detail. | Complete ordered printing membership captured in one snapshot, then locally paginated. |
-| `scryfall_card_rulings` | Stable card or Oracle identity; freshness policy; output page size/detail. | Complete ordered ruling membership captured in one snapshot, then locally paginated. |
-| `scryfall_sets` | Optional exact set code or ID; freshness policy; output page size/detail. | One set or complete provider set list with snapshot/cursor metadata. |
+| `scryfall_search` | Raw query; provider `unique`, `order`, `direction`, extras/multilingual/variation flags; freshness policy; page size; `includeRaw`. | Snapshot ID when persisted, total count, ordered first page, next cursor, provider warnings. |
+| `scryfall_card_get` | Exactly one lookup union case: Scryfall/provider ID, exact/fuzzy name, or set plus collector number; freshness policy; `includeRaw`. | One lossless card object and normalized projection, joined tag coverage, snapshot metadata when acquired. |
+| `scryfall_card_collection` | One through 150 ordered exact ID/name/printing cases; first-page freshness policy; opaque cursor; page size; `includeRaw`. | Bounded ordered found/not-found/not-cached rows with absolute input indexes, local/provider origin, corpus generation, provider snapshot lineage, and next cursor. |
+| `scryfall_card_prints` | Stable card or Oracle identity; freshness policy; page size; `includeRaw`. | Complete ordered printing membership captured in one snapshot, then locally paginated. |
+| `scryfall_card_rulings` | Stable card or Oracle identity; freshness policy; page size; `includeRaw`. | Complete ordered ruling membership captured in one snapshot, then locally paginated. |
+| `scryfall_sets` | Optional exact set code or ID; freshness policy; page size; `includeRaw`. | One set or complete provider set list with snapshot/cursor metadata. |
 | `scryfall_catalog` | Exact documented catalog name; freshness policy; output page size. | Ordered catalog values and snapshot/cursor metadata. |
 | `scryfall_autocomplete` | Query text and explicit include-extras flag; freshness policy; output page size. | Ordered suggestions and snapshot/cursor metadata. |
 | `scryfall_bulk_metadata` | Freshness policy. | The fixed four-dataset metadata profile, eligibility, and snapshot metadata. |
@@ -116,22 +136,30 @@ also guarded local writes.
 | `scryfall_corpus_rollback` | Expected active/previous generation IDs and explicit activation-change acknowledgement. | New active/previous IDs and verification summary. |
 | `scryfall_corpus_delete` | Expected active generation ID and explicit data-loss acknowledgement. | Deleted generation IDs and final corpus state. |
 | `scryfall_snapshot_list` | Optional operation/date filters; opaque cursor; page size. | Ordered snapshot summaries and next cursor. |
-| `scryfall_snapshot_get` | Snapshot ID; opaque cursor; page size; detail/raw-source selection. | Immutable request/result page, checksum, lineage, and next cursor. |
+| `scryfall_snapshot_get` | Snapshot ID; opaque cursor; page size; `includeRaw`. | Immutable request/result member ordinals and checksums, optional raw objects, lineage, and next cursor. |
 | `scryfall_snapshot_delete` | Snapshot ID, expected checksum, and explicit data-loss acknowledgement. | Deleted snapshot identity and verification state. |
-| `scryfall_tag_search` | Query text; optional `oracle`/`art` type; opaque cursor; page size. | Exact tag metadata matches from the active generation and next cursor. |
-| `scryfall_cards_by_tag` | Tag ID or exact slug plus type; descendant policy; minimum weight; opaque cursor; page size/detail. | Direct/inherited assignments, hierarchy paths, card identities, generation, and next cursor. |
+| `scryfall_tag_search` | Query text; optional `oracle`/`art` type; opaque cursor; page size; `includeRaw`. | Exact tag metadata matches from the active generation and next cursor. |
+| `scryfall_cards_by_tag` | Tag ID or exact slug plus type; descendant policy; minimum weight; opaque cursor; page size; `includeRaw`. | Direct/inherited assignments, hierarchy paths, card identities, generation, and next cursor. |
 
 All request shapes reject unknown enum values, mutually exclusive lookup cases,
 blank required text, invalid cursors, and out-of-range page sizes. Every result
 uses the shared closed operation-result envelope and preserves explicit
-not-cached, unavailable, partial, unsupported, invalid, and conflict states.
+not-cached, unavailable, unsupported, invalid, and conflict states. Partial
+provider acquisition is never published as a successful result.
 
 Provider operations return snapshot identity, source, retrieval time,
 freshness, completeness, warnings, normalized evidence, and the first bounded
 page only after all provider pages have been captured successfully.
+Collection continuation is a distinct evidence-bound replay: it never treats a
+cursor as a request to refresh and rejects a changed ordered input list before
+acquisition.
 `scryfall_snapshot_get` replays later pages using an opaque cursor bound
 to snapshot ID, checksum, and last ordinal. Default page size is 25, maximum
-100, and raw source inclusion reduces the maximum to 25.
+100, and raw source inclusion reduces the maximum to 25. Compact snapshot
+members retain their stable ordinal and content checksum while omitting the
+source object. Card-shaped tools
+return compact normalized evidence by default. `includeRaw=true` adds each
+lossless provider object and therefore uses the 25-item maximum.
 
 ### Future local query boundary
 

@@ -18,7 +18,7 @@
 Every mode exposes exactly one resource, `mtg://server/capabilities`, and zero
 prompts. Its capability document identifies the active mode and only the tools
 visible in that mode and selected toolsets. The 56/78/91 `all` counts and
-31/52/52 default counts are derived from the proposed AMEND-004 child drafts. They detect
+31/52/52 default counts are derived from the accepted AMEND-004 child packets. They detect
 inconsistencies in those drafts; they are not legacy-
 compatibility targets and may change with an approved better surface.
 

@@ -40,10 +40,19 @@ activation.
 - New raw query syntax always contacts Scryfall unless its exact fingerprint is
   eligible.
 - Direct IDs/names/printing identities resolve from active corpus first.
-- Collection lookup preserves caller order and sends only misses.
+- Collection lookup accepts 150 caller rows, preserves absolute order and
+  duplicates, and sends globally deduplicated misses in batches of at most 75.
+- Collection pages bind the ordered request, exact corpus generation, provider
+  snapshot, result checksum, miss semantics, and offset; continuation performs
+  no acquisition.
+- Boundary fixtures cover 75, 76, 100, 115, 150, and rejected 151-row inputs.
+- A blocked second provider batch publishes no partial collection snapshot.
 - 403/429 stops immediately; transient retry count never exceeds two.
-- API request starts across two processes remain at least 125 milliseconds apart.
+- API request starts across two processes remain at least 500 milliseconds apart;
+  multi-page search, collection batches, and retries use the same shared timeline.
 - Two processes requesting the same miss produce one provider acquisition.
+- Two concurrent refresh callers receive the same replacement snapshot rather
+  than the eligible pre-refresh snapshot.
 - Process death expires its lease; global request starts remain correctly paced.
 
 ## Snapshot And Tag Cases
@@ -54,8 +63,12 @@ activation.
 | Failure on later page | No completed readable snapshot is published. |
 | Refresh changes response | New linked snapshot; old checksum/bytes unchanged. |
 | Cursor replay | Stable 25-item default pages; tampered/wrong-snapshot cursor rejected. |
+| Collection cursor after corpus activation | The retained generation replays unchanged; pruning returns explicit unavailable. |
+| Collection cursor after snapshot deletion | Explicit unavailable; no provider reacquisition. |
 | Raw source requested | At most 25 objects returned; unknown fields preserved. |
 | Card with direct Oracle/art tags | Separate community evidence sections join by correct IDs. |
+| Card with face-only illustration ID | Art evidence joins through the face without inventing a root illustration. |
+| Tag alias lookup | Alias-only text resolves the owning tag deterministically. |
 | Ancestor expansion requested | Direct and inherited matches remain distinct with hierarchy paths. |
 | Missing tag dataset | Card facts remain available; tag group is explicitly not cached. |
 
@@ -90,7 +103,13 @@ a card.
 ## Live Acceptance
 
 Optional `Category=Live` tests fetch current bulk metadata and one bounded
-read-only provider response. Before this child is accepted, a separately
-invoked manual workflow must install the real four-dataset corpus, verify
-activation, local reuse from a second MCP process, rollback, and guarded cleanup
-only with explicit consent. Normal CI never downloads bulk payloads.
+provider response. A second bounded live workflow creates a disposable
+60-card Red/White Weenies deck, validates local structure, resolves its twelve
+unique names through one official collection request, checks color and price
+evidence, and confirms both SQLite stores and immutable replay. Before this
+child is accepted, a separately invoked manual workflow must install the real
+four-dataset corpus, verify activation and local reuse from a second process,
+exercise reversible rollback when a previous real generation exists, and
+retain the database unless cleanup is explicitly requested. Normal CI never
+downloads bulk payloads. The dated redacted result is recorded in
+[Full Scryfall Corpus Acceptance](FULL_CORPUS_ACCEPTANCE.md).

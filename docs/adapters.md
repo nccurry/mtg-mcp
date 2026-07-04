@@ -1,16 +1,16 @@
 # Adapter Operations
 
 mtg-mcp adapters talk to public or user-configured services with provider-local
-contracts. Core owns shared domain models and safe helper defaults; adapter projects own
-third-party HTTP request and response shapes.
+contracts. Core owns shared domain models and safe helper defaults; adapter
+projects own third-party HTTP request and response shapes.
 
 ## Clean-Break `0.9.0` Target
 
-The proposed stable rewrite has isolated adapters for official Scryfall
-evidence, explicit Archidekt operations, and the documented Playgroup public
-API. It has no separate Tagger adapter, Moxfield network adapter,
-Commander Spellbook adapter, generic decklist provider, or recommendation
-source framework.
+The stable rewrite uses an implemented isolated adapter for official Scryfall
+evidence and plans separate adapters for explicit Archidekt operations and the
+documented Playgroup public API. It has no separate Tagger adapter, Moxfield
+network adapter, Commander Spellbook adapter, generic decklist provider, or
+recommendation source framework.
 
 - Archidekt uses the currently available web API for explicit user-owned deck
   synchronization, folder organization, and named snapshot lifecycle/restore,
@@ -19,13 +19,22 @@ source framework.
   reported unsupported rather than reverse engineered.
 - Scryfall explicitly synchronizes official All Cards, Rulings, Oracle Tags,
   and Art Tags bulk files into one corpus. Arbitrary uncached searches remain
-  provider-authoritative; no Tagger-site acquisition is planned.
+  provider-authoritative; no Tagger-site acquisition is planned. API request
+  starts share a SQLite-backed 500-millisecond minimum interval, blocking
+  responses stop immediately, and transient transport/5xx failures retry at
+  most twice.
 - Moxfield is manual interchange only because its terms prohibit automated
   access.
 
 See the [rewrite guide](rewrite-guide.md) and the individual provider PLCs for
 the reviewed contract. The sections below describe removed legacy adapters as
 historical reference only; those projects are not present on this branch.
+
+Current Scryfall configuration uses `SCRYFALL_TTL_HOURS` in `mtg-mcp.json`,
+`MTGMCP__SCRYFALL_TTL_HOURS` in the environment, or
+`--scryfall-ttl-hours`; it defaults to 24 hours. The product/version User-Agent
+and documented JSON Accept header are fixed by the adapter rather than exposed
+as arbitrary runtime header input.
 
 ## Historical Legacy Adapter Operations
 

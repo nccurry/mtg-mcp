@@ -15,7 +15,8 @@
   and command-line configuration; a non-creating `mtg-mcp/v0.9` data root; and
   sanitized legacy-data and startup boundaries.
 - Added official MCP initialization and the deterministic
-  `mtg://server/capabilities` resource with zero tools and prompts.
+  `mtg://server/capabilities` resource with zero prompts and exact static
+  capability-tool counts.
 - Split the one-shot process probe from official-client MCP smoke coverage,
   added installed-package MCP validation, and made the App project version the
   default for package and release automation.
@@ -31,8 +32,26 @@
   bundles; Archidekt and Moxfield candidate formats remain opt-in experimental
   pending current manual UI acceptance.
 - Added static startup-selected capability toolsets with `default`, `all`,
-  `none`, and explicit profiles, exact mode intersection, schema-v2 capability
+  `none`, and explicit profiles, exact mode intersection, schema-v3 capability
   metadata, and no dynamic tool-list advertisement.
+- Added `MtgMcp.Scryfall` with eighteen typed tools for official API evidence,
+  exact-request snapshot replay, explicit four-dataset corpus lifecycle, and
+  separately labeled Oracle/art community tags in one `scryfall.db`.
+- Added configurable 24-hour evidence reuse, current-plus-previous corpus
+  generations, cross-process SQLite leases and conservative 500-millisecond
+  pacing, fail-fast blocking responses, bounded retry, and offline/live
+  acceptance suites.
+- Added content-addressed immutable snapshot payloads, schema-checksum
+  validation, abandoned-staging recovery, alias and face-art tag joins,
+  face-aware exact-name matching, and provider-timestamped price/rank freshness.
+- Added compact normalized provider output by default, opt-in lossless raw
+  objects, and compact snapshot members with stable ordinals and checksums.
+- Expanded collection resolution to 150 ordered identities with local-first
+  deduplication, atomic 75-identifier provider batching, and evidence-bound
+  cursor pages that never reacquire during continuation.
+- Added a bounded official-client Red/White Weenies workflow that proves local
+  deck creation, structural validation, batch card resolution, evidence
+  persistence, and immutable replay without bulk corpus acquisition.
 
 ## 0.8.0 - 2026-06-28
 

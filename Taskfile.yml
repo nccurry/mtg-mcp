@@ -215,6 +215,10 @@ tasks:
         {{.DOTNET}} test tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
+      - >
+        {{.DOTNET}} test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
 
   test:e2e:
     desc: Run foundation process end-to-end tests
@@ -227,7 +231,7 @@ tasks:
         --filter "Category=E2E"
 
   test:live:
-    desc: Reserved opt-in live-provider test entry point; foundation has no live tests
+    desc: Run bounded live-provider tests; full corpus still requires explicit environment opt-in
     deps: [restore]
     cmds:
       - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"'
@@ -276,6 +280,12 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Decks'
 
+  coverage:scryfall:
+    desc: Enforce 90 percent line coverage for the Scryfall adapter using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Scryfall'
+
   format:
     desc: Format source
     deps: [setup:dotnet]
@@ -301,14 +311,14 @@ tasks:
       - task: test
 
   surface:report:
-    desc: Verify the exact local-deck MCP surface
+    desc: Verify the exact implemented MCP surface
     deps: [build]
     cmds:
       - >
         {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedDeckToolsAndCapabilityResource"
+        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
         --logger "console;verbosity=detailed"
 
   ci:
@@ -328,14 +338,14 @@ tasks:
       - '{{.DOTNET}} run --project {{.APP_PROJECT}} --configuration {{.CONFIGURATION}} --no-build -- --smoke'
 
   smoke:mcp:
-    desc: Verify MCP initialization, surface, resources, and local deck workflows
+    desc: Verify MCP initialization, resources, deck workflows, and Scryfall evidence
     deps: [build]
     cmds:
       - >
         {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests"
+        --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests"
 
   install:
     desc: Install the current branch on this workstation

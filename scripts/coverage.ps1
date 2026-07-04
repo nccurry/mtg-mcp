@@ -32,7 +32,8 @@ function Invoke-VerifyGates {
     $gates = @(
         "MtgMcp.App",
         "MtgMcp.Core",
-        "MtgMcp.Decks"
+        "MtgMcp.Decks",
+        "MtgMcp.Scryfall"
     )
 
     if ($PackageName.Count -gt 0) {

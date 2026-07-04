@@ -6,6 +6,7 @@
         <ModulePath>.*MtgMcp\.App\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Core\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Decks\.dll$</ModulePath>
+        <ModulePath>.*MtgMcp\.Scryfall\.dll$</ModulePath>
       </Include>
       <Exclude>
         <ModulePath>.*\.Tests\.dll$</ModulePath>

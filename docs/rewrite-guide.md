@@ -7,9 +7,10 @@ documentation from being mistaken for the rewrite target.
 The rewrite foundation and local deck-store implementations are complete. The
 manual deck-interchange code is implemented with provider UI acceptance still
 open and provider formats therefore experimental. The capability-toolset child
-is implemented and complete. The remaining six capability/cutover children stay
-planning-only with `Implementation authorized: No`; production capability work
-requires its own recorded approval and lifecycle transition.
+is implemented and complete. The Scryfall child is implemented with its manual
+full-corpus acceptance gate still open. The remaining five capability/cutover
+children stay planning-only with `Implementation authorized: No`; production
+capability work requires its own recorded approval and lifecycle transition.
 
 ## Authority And Routing
 
@@ -37,8 +38,8 @@ another.
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 23 `deck_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current runtime is 7/23/23 tools by mode; proposed AMEND-004 derives 56/78/91 for `all` and 31/52/52 for `default`, with one resource and zero prompts; counts are not compatibility targets |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 23 `deck_*` and 18 `scryfall_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current runtime is 21/41/41 tools by mode; accepted AMEND-004 derives 56/78/91 for final `all` and 31/52/52 for final `default`, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, and Statistics |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db` and unified `scryfall.db` stores |
@@ -77,9 +78,9 @@ Toolsets control relevance, modes control authority, and registration remains
 static for an MCP session. Each remaining PLC must pass its north-star workflow
 check in addition to endpoint and schema acceptance.
 
-Items 6 and 10 reflect proposed umbrella amendment AMEND-004. Their replacement
-child packets remain planned with `Implementation authorized: No`; do not begin
-production work until owner approval is recorded.
+Items 6 and 10 reflect accepted umbrella amendment AMEND-004. Item 6 is
+implemented under its active child packet; item 10 remains planned with
+`Implementation authorized: No`.
 
 Completed PLCs remain accurate evidence for the revision they implemented, but
 they do not override a later reviewed umbrella amendment for unfinished work.

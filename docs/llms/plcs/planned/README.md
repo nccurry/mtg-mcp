@@ -11,7 +11,7 @@ implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 
-Six rewrite children remain planned and independently reviewable. The
+Five rewrite children remain planned and independently reviewable. The
 [legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
 approved/completed, and the
 [foundation child](../completed/rewrite-skeleton-foundation/README.md) is
@@ -19,17 +19,18 @@ approved/completed, and the
 [local deck child](../completed/local-deck-store/README.md) is
 approved/completed, and the
 [capability-toolset child](../completed/mcp-capability-toolsets/README.md) is
+approved/completed, and the
+[Scryfall child](../completed/scryfall-corpus-and-evidence/README.md) is
 approved/completed. The governing program remains
 [in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [scryfall-corpus-and-evidence](scryfall-corpus-and-evidence/README.md) | Draft; AMEND-004 review required | Define the official bulk corpus, authoritative query cache, immutable replay, and card/ruling/tag evidence. |
-| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft; AMEND-004 dependency review | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
-| [playgroup-public-api](playgroup-public-api/README.md) | Draft; AMEND-004 consistency review | Define typed coverage of the pinned official Playgroup public API. |
-| [exact-deck-statistics](exact-deck-statistics/README.md) | Draft; AMEND-004 consistency review | Define exact provider-independent deck probability and composition calculations. |
-| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; AMEND-004 review required | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |
-| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; AMEND-004 re-review | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
+| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft; independent dependency review | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
+| [playgroup-public-api](playgroup-public-api/README.md) | Draft; independent child review | Define typed coverage of the pinned official Playgroup public API. |
+| [exact-deck-statistics](exact-deck-statistics/README.md) | Draft; independent child review | Define exact provider-independent deck probability and composition calculations. |
+| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; independent child review | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |
+| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; dependent child reviews required | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
 
 ## Product Foundation Follow-ups
 

@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Rewrite disposition: absorbed/reference-only — do not implement this packet
 > as a cross-provider layer.** Current owners are
-> [Scryfall corpus and evidence](../scryfall-corpus-and-evidence/README.md),
+> [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md),
 > [Archidekt sync](../archidekt-deck-sync/README.md),
 > [Playgroup public API](../playgroup-public-api/README.md), and
 > and [deterministic deck categorization](../deterministic-deck-categorization/README.md).

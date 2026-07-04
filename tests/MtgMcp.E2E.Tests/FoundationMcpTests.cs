@@ -24,7 +24,7 @@ public sealed class FoundationMcpTests
     /// <summary>
     /// Lists the read-only deck surface available in every operation mode.
     /// </summary>
-    private static readonly string[] ReadToolNames =
+    private static readonly string[] DeckReadToolNames =
     [
         "deck_backup_list",
         "deck_export_bundle",
@@ -38,7 +38,7 @@ public sealed class FoundationMcpTests
     /// <summary>
     /// Lists the complete local deck surface available when local writes are permitted.
     /// </summary>
-    private static readonly string[] AllToolNames =
+    private static readonly string[] DeckAllToolNames =
     [
         "deck_apply_changes",
         "deck_backup_create",
@@ -66,14 +66,47 @@ public sealed class FoundationMcpTests
     ];
 
     /// <summary>
+    /// Lists the Scryfall reads visible in every operation mode.
+    /// </summary>
+    private static readonly string[] ScryfallReadToolNames =
+    [
+        "scryfall_autocomplete",
+        "scryfall_bulk_metadata",
+        "scryfall_card_collection",
+        "scryfall_card_get",
+        "scryfall_card_prints",
+        "scryfall_card_rulings",
+        "scryfall_cards_by_tag",
+        "scryfall_catalog",
+        "scryfall_corpus_status",
+        "scryfall_search",
+        "scryfall_sets",
+        "scryfall_snapshot_get",
+        "scryfall_snapshot_list",
+        "scryfall_tag_search",
+    ];
+
+    /// <summary>
+    /// Lists the complete Scryfall surface when local writes are permitted.
+    /// </summary>
+    private static readonly string[] ScryfallAllToolNames =
+    [
+        .. ScryfallReadToolNames,
+        "scryfall_corpus_delete",
+        "scryfall_corpus_rollback",
+        "scryfall_corpus_sync",
+        "scryfall_snapshot_delete",
+    ];
+
+    /// <summary>
     /// Verifies initialization, discovery, and capability content in every supported mode.
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "local", 23)]
-    [InlineData("read-only", "read-only", 7)]
-    [InlineData("local", "local", 23)]
-    [InlineData("remote", "remote", 23)]
+    [InlineData(null, "local", 41)]
+    [InlineData("read-only", "read-only", 21)]
+    [InlineData("local", "local", 41)]
+    [InlineData("remote", "remote", 41)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -97,7 +130,7 @@ public sealed class FoundationMcpTests
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         Assert.Equal(
-            expectedToolCount == 7 ? ReadToolNames : AllToolNames,
+            ExpectedToolNames("default", expectedMode),
             tools.Select(value => value.Name).Order(StringComparer.Ordinal).ToArray());
 
         IList<McpClientResource> resources = await session.Client.ListResourcesAsync(
@@ -126,14 +159,15 @@ public sealed class FoundationMcpTests
         AssertPropertyOrder(root.GetProperty("server"), "name", "packageVersion", "protocolVersion");
         AssertPropertyOrder(root.GetProperty("surface"), "toolCount", "resourceCount", "promptCount");
         AssertPropertyOrder(root.GetProperty("toolsets"), "selection", "authorityBoundary", "items");
-        AssertPropertyOrder(root.GetProperty("dataSchemas"), "applicationData", "decks", "deckInterchange");
+        AssertPropertyOrder(root.GetProperty("dataSchemas"), "applicationData", "decks", "deckInterchange", "scryfall");
         AssertPropertyOrder(
             root.GetProperty("configuration"),
             "dataRootConfigured",
             "dataRootState",
             "legacyDataState",
-            "migrationBoundary");
-        Assert.Equal(2, root.GetProperty("schemaVersion").GetInt32());
+            "migrationBoundary",
+            "scryfallFreshnessHours");
+        Assert.Equal(3, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
@@ -141,7 +175,7 @@ public sealed class FoundationMcpTests
             root.GetProperty("server").GetProperty("protocolVersion").GetString());
         Assert.Equal(expectedMode, root.GetProperty("operationMode").GetString());
         AssertSurface(root.GetProperty("surface"), expectedToolCount);
-        AssertToolsets(root.GetProperty("toolsets"), "default", true, expectedToolCount);
+        AssertToolsets(root.GetProperty("toolsets"), "default", "default", expectedMode);
         Assert.Equal(
             "v0.9",
             root.GetProperty("dataSchemas").GetProperty("applicationData").GetString());
@@ -149,6 +183,7 @@ public sealed class FoundationMcpTests
         Assert.Equal(
             "mtg-mcp.deck/v1",
             root.GetProperty("dataSchemas").GetProperty("deckInterchange").GetString());
+        Assert.Equal("v1", root.GetProperty("dataSchemas").GetProperty("scryfall").GetString());
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
         Assert.False(Directory.Exists(session.DataRoot));
@@ -159,15 +194,18 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("read-only", "default", "default", 7)]
-    [InlineData("local", "default", "default", 23)]
-    [InlineData("remote", "default", "default", 23)]
-    [InlineData("read-only", "all", "all", 7)]
-    [InlineData("local", "all", "all", 23)]
-    [InlineData("remote", "all", "all", 23)]
+    [InlineData("read-only", "default", "default", 21)]
+    [InlineData("local", "default", "default", 41)]
+    [InlineData("remote", "default", "default", 41)]
+    [InlineData("read-only", "all", "all", 21)]
+    [InlineData("local", "all", "all", 41)]
+    [InlineData("remote", "all", "all", 41)]
     [InlineData("read-only", "decks", "explicit", 7)]
     [InlineData("local", "decks", "explicit", 23)]
     [InlineData("remote", "decks", "explicit", 23)]
+    [InlineData("read-only", "scryfall", "explicit", 14)]
+    [InlineData("local", "scryfall", "explicit", 18)]
+    [InlineData("remote", "scryfall", "explicit", 18)]
     [InlineData("read-only", "none", "none", 0)]
     [InlineData("local", "none", "none", 0)]
     [InlineData("remote", "none", "none", 0)]
@@ -194,7 +232,7 @@ public sealed class FoundationMcpTests
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             IList<McpClientTool> second = await session.Client.ListToolsAsync(
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-            string[] expectedNames = expectedToolCount == 7 ? ReadToolNames : AllToolNames;
+            string[] expectedNames = ExpectedToolNames(configuredToolsets, mode);
             Assert.Equal(expectedNames, first.Select(value => value.Name));
             Assert.Equal(
                 first.Select(value => value.Name),
@@ -210,8 +248,8 @@ public sealed class FoundationMcpTests
         AssertToolsets(
             root.GetProperty("toolsets"),
             expectedSelection,
-            expectedToolCount > 0,
-            expectedToolCount);
+            configuredToolsets,
+            mode);
         Assert.False(Directory.Exists(session.DataRoot));
     }
 
@@ -224,6 +262,7 @@ public sealed class FoundationMcpTests
     {
         await using McpProcessSession session = await McpProcessSession.StartAsync(
             "local",
+            "decks",
             TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         await Assert.ThrowsAsync<McpProtocolException>(
@@ -242,6 +281,7 @@ public sealed class FoundationMcpTests
     {
         await using McpProcessSession session = await McpProcessSession.StartAsync(
             "local",
+            "decks",
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
@@ -269,7 +309,7 @@ public sealed class FoundationMcpTests
             ["deck_update"] = ["deckId", "description", "expectedRevision", "format", "name"],
             ["deck_validate"] = ["deckId"],
         };
-        HashSet<string> readOnly = [.. ReadToolNames];
+        HashSet<string> readOnly = [.. DeckReadToolNames];
         HashSet<string> destructive =
         [
             "deck_apply_changes",
@@ -318,19 +358,35 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies only the implemented decks toolset is advertised with exact relevance metadata.
+    /// Verifies both implemented toolsets are advertised with exact relevance metadata.
     /// </summary>
     private static void AssertToolsets(
         JsonElement toolsets,
         string expectedSelection,
-        bool expectedEnabled,
-        int expectedVisibleToolCount)
+        string configuredToolsets,
+        string mode)
     {
         Assert.Equal(expectedSelection, toolsets.GetProperty("selection").GetString());
         Assert.Equal(
             "Toolsets control relevance; operation mode controls authority.",
             toolsets.GetProperty("authorityBoundary").GetString());
-        JsonElement descriptor = Assert.Single(toolsets.GetProperty("items").EnumerateArray());
+        JsonElement[] descriptors = toolsets.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Equal(2, descriptors.Length);
+        bool decksEnabled = configuredToolsets is "default" or "all" or "decks";
+        bool scryfallEnabled = configuredToolsets is "default" or "all" or "scryfall";
+        AssertDescriptor(descriptors[0], "decks", decksEnabled, decksEnabled ? (mode == "read-only" ? 7 : 23) : 0);
+        AssertDescriptor(descriptors[1], "scryfall", scryfallEnabled, scryfallEnabled ? (mode == "read-only" ? 14 : 18) : 0);
+        Assert.Contains(
+            "operation mode separately controls local writes",
+            descriptors[0].GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies one implemented capability descriptor.
+    /// </summary>
+    private static void AssertDescriptor(JsonElement descriptor, string name, bool enabled, int visibleToolCount)
+    {
         AssertPropertyOrder(
             descriptor,
             "name",
@@ -340,16 +396,32 @@ public sealed class FoundationMcpTests
             "defaultEnabled",
             "visibleToolCount",
             "description");
-        Assert.Equal("decks", descriptor.GetProperty("name").GetString());
+        Assert.Equal(name, descriptor.GetProperty("name").GetString());
         Assert.Equal("available", descriptor.GetProperty("status").GetString());
         Assert.Equal("stable", descriptor.GetProperty("stability").GetString());
-        Assert.Equal(expectedEnabled, descriptor.GetProperty("enabled").GetBoolean());
+        Assert.Equal(enabled, descriptor.GetProperty("enabled").GetBoolean());
         Assert.True(descriptor.GetProperty("defaultEnabled").GetBoolean());
-        Assert.Equal(expectedVisibleToolCount, descriptor.GetProperty("visibleToolCount").GetInt32());
-        Assert.Contains(
-            "operation mode separately controls local writes",
-            descriptor.GetProperty("description").GetString(),
-            StringComparison.Ordinal);
+        Assert.Equal(visibleToolCount, descriptor.GetProperty("visibleToolCount").GetInt32());
+    }
+
+    /// <summary>
+    /// Calculates the exact stable tool names for one profile and mode.
+    /// </summary>
+    private static string[] ExpectedToolNames(string toolsets, string mode)
+    {
+        bool readsOnly = mode == "read-only";
+        IEnumerable<string> names = [];
+        if (toolsets is "default" or "all" or "decks")
+        {
+            names = names.Concat(readsOnly ? DeckReadToolNames : DeckAllToolNames);
+        }
+
+        if (toolsets is "default" or "all" or "scryfall")
+        {
+            names = names.Concat(readsOnly ? ScryfallReadToolNames : ScryfallAllToolNames);
+        }
+
+        return names.Order(StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>
@@ -378,6 +450,7 @@ public sealed class FoundationMcpTests
             "migrat",
             configuration.GetProperty("migrationBoundary").GetString(),
             StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(24, configuration.GetProperty("scryfallFreshnessHours").GetDouble());
     }
 
     /// <summary>

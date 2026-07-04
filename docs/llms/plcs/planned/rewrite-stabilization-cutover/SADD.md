@@ -46,7 +46,7 @@ payloads.
 | **Total** | **91** | |
 
 The only resource is `mtg://server/capabilities`; there are no prompts. As of
-the proposed AMEND-004 child drafts, canonical `all` discovery snapshots contain
+the accepted AMEND-004 child packets, canonical `all` discovery snapshots contain
 56, 78, and 91 tools for `read-only`, `local`, and `remote`, respectively. These are
 derived planning totals, not backward-compatibility requirements. An approved
 child may add, remove, rename, or reshape tools to improve the design; the

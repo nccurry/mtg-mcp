@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using MtgMcp.App.Capabilities;
 using MtgMcp.Core.Results;
@@ -28,6 +29,7 @@ internal static class FoundationConfigurationLoader
             ["--data-dir"] = "DATA_DIR",
             ["--mode"] = "MODE",
             ["--toolsets"] = "TOOLSETS",
+            ["--scryfall-ttl-hours"] = "SCRYFALL_TTL_HOURS",
         };
 
     /// <summary>
@@ -106,6 +108,12 @@ internal static class FoundationConfigurationLoader
             return ForwardFailure(toolsetsResult);
         }
 
+        OperationResult<TimeSpan> ttlResult = ParseScryfallTtl(configuration["SCRYFALL_TTL_HOURS"]);
+        if (ttlResult is not OperationSuccess<TimeSpan> ttl)
+        {
+            return ForwardFailure(ttlResult);
+        }
+
         string? configuredDataRoot = configuration["DATA_DIR"];
         OperationResult<DataRootResolution> dataRootResult = DataRootResolver.Resolve(
             configuredDataRoot,
@@ -124,10 +132,34 @@ internal static class FoundationConfigurationLoader
             new FoundationConfiguration(
                 mode.Data,
                 toolsets.Data,
+                ttl.Data,
                 dataRoot.Data.Path,
                 dataRoot.Data.State,
                 !string.IsNullOrWhiteSpace(configuredDataRoot),
                 legacyData));
+    }
+
+    /// <summary>
+    /// Parses the configurable positive Scryfall evidence TTL with a 24-hour default.
+    /// </summary>
+    private static OperationResult<TimeSpan> ParseScryfallTtl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new OperationSuccess<TimeSpan>(TimeSpan.FromHours(24));
+        }
+
+        bool valid = double.TryParse(
+            value,
+            NumberStyles.AllowDecimalPoint,
+            CultureInfo.InvariantCulture,
+            out double hours) &&
+            hours is > 0 and <= 8_760;
+        return valid
+            ? new OperationSuccess<TimeSpan>(TimeSpan.FromHours(hours))
+            : new OperationInvalidInput(
+                "invalid-scryfall-ttl",
+                "Scryfall freshness hours must be a positive number no greater than 8760.");
     }
 
     /// <summary>

@@ -21,9 +21,8 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - Keep the default profile limited to `decks`, `scryfall`, and `stats`.
   Provider-specific `archidekt` and `playgroup` surfaces are opt-in.
   Do not advertise dynamic list changes while registration is session-static.
-- Proposed AMEND-004 removes the separate Tagger descriptor and routes official
-  community-tag evidence through `scryfall`; do not add a placeholder or alias
-  while the amendment and replacement child await approval.
+- Accepted AMEND-004 removes the separate Tagger descriptor and routes official
+  community-tag evidence through `scryfall`; do not add a placeholder or alias.
 
 ## Host Boundary
 

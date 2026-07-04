@@ -8,6 +8,7 @@ namespace MtgMcp.App.Configuration;
 internal sealed record FoundationConfiguration(
     OperationMode Mode,
     CapabilityToolsetSelection Toolsets,
+    TimeSpan ScryfallFreshnessTtl,
     string DataRoot,
     DataRootState DataRootState,
     bool DataRootConfigured,
@@ -36,7 +37,8 @@ internal sealed record FoundationConfiguration(
                 LegacyDataState.InspectionUnavailable => "inspection-unavailable",
                 _ => "inspection-unavailable",
             },
-            LegacyData.Message);
+            LegacyData.Message,
+            ScryfallFreshnessTtl.TotalHours);
     }
 }
 
@@ -47,4 +49,5 @@ internal sealed record FoundationConfigurationStatus(
     bool DataRootConfigured,
     string DataRootState,
     string LegacyDataState,
-    string MigrationBoundary);
+    string MigrationBoundary,
+    double ScryfallFreshnessHours);

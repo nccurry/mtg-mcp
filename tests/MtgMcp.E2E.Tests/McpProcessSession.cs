@@ -53,6 +53,18 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string? toolsets,
         CancellationToken cancellationToken)
     {
+        return await StartAsync(mode, toolsets, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Starts the server after optionally seeding its otherwise isolated application-data root.
+    /// </summary>
+    internal static async Task<McpProcessSession> StartAsync(
+        string? mode,
+        string? toolsets,
+        Func<string, CancellationToken, Task>? seedDataRoot,
+        CancellationToken cancellationToken)
+    {
         string repositoryRoot = FindRepositoryRoot();
         DirectoryInfo workingDirectory = Directory.CreateTempSubdirectory("mtg-mcp-e2e-");
         string dataRoot = Path.Combine(workingDirectory.FullName, "private-data");
@@ -64,6 +76,11 @@ internal sealed class McpProcessSession : IAsyncDisposable
 
         try
         {
+            if (seedDataRoot is not null)
+            {
+                await seedDataRoot(dataRoot, cancellationToken).ConfigureAwait(false);
+            }
+
             StdioClientTransport transport = new(options);
             McpClient client = await McpClient.CreateAsync(
                 transport,

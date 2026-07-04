@@ -30,10 +30,6 @@ internal enum CapabilityToolset
     /// </summary>
     Playgroup,
 
-    /// <summary>
-    /// Covers cached Scryfall Tagger community evidence and bounded refresh.
-    /// </summary>
-    Tagger,
 }
 
 /// <summary>
@@ -111,7 +107,6 @@ internal static class CapabilityToolsetPolicy
             CapabilityToolset.Stats => "stats",
             CapabilityToolset.Archidekt => "archidekt",
             CapabilityToolset.Playgroup => "playgroup",
-            CapabilityToolset.Tagger => "tagger",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(toolset),
                 toolset,
@@ -127,7 +122,7 @@ internal static class CapabilityToolsetPolicy
         return toolset switch
         {
             CapabilityToolset.Decks or CapabilityToolset.Scryfall or CapabilityToolset.Stats => true,
-            CapabilityToolset.Archidekt or CapabilityToolset.Playgroup or CapabilityToolset.Tagger => false,
+            CapabilityToolset.Archidekt or CapabilityToolset.Playgroup => false,
             _ => false,
         };
     }

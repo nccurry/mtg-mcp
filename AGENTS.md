@@ -14,7 +14,8 @@
 - `docs/llms/` contains supplemental workflow guidance, durable plans, and PLC
   packets. `.codex/` contains optional review and validation playbooks.
 - Read the closest scoped `AGENTS.md` under `src/`, `src/MtgMcp.Core/`,
-  `src/MtgMcp.App/`, `tests/`, or `docs/` before changing that tree.
+  `src/MtgMcp.App/`, `src/MtgMcp.Scryfall/`, `tests/`, or `docs/` before
+  changing that tree.
 
 ## North Star
 
@@ -43,9 +44,8 @@
   rewrite.
 - Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
   use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, and `stats_*`
-  prefixes. Proposed AMEND-004 removes the separate Tagger prefix, adapter,
-  toolset, and database; do not implement the superseded design while the
-  amendment awaits owner review.
+  prefixes. Accepted AMEND-004 removes the separate Tagger prefix, adapter,
+  toolset, and database; do not implement the superseded design.
 - Assign every stable tool to exactly one capability toolset. Toolset selection
   controls which relevant tools an LLM sees; operation mode remains the sole
   authority boundary. Registration is fixed for an MCP session, the default
@@ -71,7 +71,7 @@
 - During the rewrite, follow the approved child module boundary: Decks owns
   local persistence/interchange, Statistics owns exact calculations, provider
   projects own transport/cache concerns, and App owns MCP hosting/composition.
-- Under proposed AMEND-004, Scryfall owns official card, ruling, and community
+- Under accepted AMEND-004, Scryfall owns official card, ruling, and community
   tag acquisition in one `scryfall.db`, while their schemas and evidence classes
   remain distinct. Corpus downloads are explicit; no background download or
   unsupported Tagger-site acquisition is allowed.

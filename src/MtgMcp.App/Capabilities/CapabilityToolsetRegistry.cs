@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Capabilities;
@@ -14,7 +15,7 @@ internal static class CapabilityToolsetRegistry
     /// Gets implemented descriptors in canonical public order.
     /// </summary>
     internal static ImmutableArray<CapabilityToolsetDescriptor> Implemented { get; } =
-        [DeckToolsetManifest.Descriptor];
+        [DeckToolsetManifest.Descriptor, ScryfallToolsetManifest.Descriptor];
 
     /// <summary>
     /// Resolves one configured startup selection against this build's implemented descriptors.
