@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -47,7 +48,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies that App depends only on Core and the approved foundation configuration packages.
+    /// Verifies that App depends only on Core and the approved foundation hosting packages.
     /// </summary>
     [Fact]
     public void AppProject_ReferencesOnlyApprovedFoundationDependencies()
@@ -71,37 +72,96 @@ public sealed class FoundationArchitectureTests
                 "Microsoft.Extensions.Configuration.CommandLine",
                 "Microsoft.Extensions.Configuration.EnvironmentVariables",
                 "Microsoft.Extensions.Configuration.Json",
+                "Microsoft.Extensions.Hosting",
+                "ModelContextProtocol",
             ],
             packages);
     }
 
     /// <summary>
-    /// Verifies that the temporary foundation contains no legacy MCP registration attributes.
+    /// Verifies that E2E tests use only the official MCP Core client package.
     /// </summary>
     [Fact]
-    public void SourceSurface_ContainsNoLegacyMcpRegistrations()
+    public void E2eProject_ReferencesOnlyApprovedClientDependency()
     {
+        XDocument project = LoadProject("tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj");
+        string[] packages = project
+            .Descendants("PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "Microsoft.NET.Test.Sdk",
+                "ModelContextProtocol.Core",
+                "xunit.runner.visualstudio",
+                "xunit.v3",
+            ],
+            packages);
+    }
+
+    /// <summary>
+    /// Verifies the application project is the sole authored default package-version source.
+    /// </summary>
+    [Fact]
+    public void Versioning_UsesOnlyApplicationProjectDefault()
+    {
+        XDocument project = LoadProject("src/MtgMcp.App/MtgMcp.App.csproj");
+        string version = Assert.Single(project.Descendants("Version")).Value;
+        string taskfile = File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml"));
+        string scripts = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(Path.Combine(RepositoryRoot, "scripts"), "*.ps1")
+                .Select(File.ReadAllText));
+        using JsonDocument manifest = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(RepositoryRoot, "server.json")));
+
+        Assert.Equal("0.9.0-preview.1", version);
+        Assert.Empty(project.Descendants("PackageVersion"));
+        Assert.Contains("VERSION: ''", taskfile, StringComparison.Ordinal);
+        Assert.DoesNotContain("-p:PackageVersion", taskfile, StringComparison.Ordinal);
+        Assert.DoesNotContain("-p:PackageVersion", scripts, StringComparison.Ordinal);
+        Assert.Equal(version, manifest.RootElement.GetProperty("version").GetString());
+        Assert.Equal(
+            version,
+            Assert.Single(manifest.RootElement.GetProperty("packages").EnumerateArray())
+                .GetProperty("version")
+                .GetString());
+    }
+
+    /// <summary>
+    /// Verifies the exact one-resource, zero-tool, zero-prompt foundation surface.
+    /// </summary>
+    [Fact]
+    public void SourceSurface_ContainsOnlyApprovedCapabilityResource()
+    {
+        string sourceRoot = Path.Combine(RepositoryRoot, "src");
+        string[] sourceFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthoredSource)
+            .ToArray();
+        string source = string.Join(Environment.NewLine, sourceFiles.Select(File.ReadAllText));
+
+        Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
+        Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
+        Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
+        Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
+        Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
+
         string[] forbiddenMarkers =
         [
             "McpServerTool",
-            "McpServerResource",
             "McpServerPrompt",
+            "WithToolsFromAssembly",
+            "WithPromptsFromAssembly",
+            "WithResourcesFromAssembly",
+            "WithTools(",
+            "WithPrompts(",
         ];
-
-        string[] sourceFiles = Directory.GetFiles(
-            Path.Combine(RepositoryRoot, "src"),
-            "*.cs",
-            SearchOption.AllDirectories)
-            .Where(IsAuthoredSource)
-            .ToArray();
-
-        foreach (string sourceFile in sourceFiles)
+        foreach (string marker in forbiddenMarkers)
         {
-            string source = File.ReadAllText(sourceFile);
-            foreach (string marker in forbiddenMarkers)
-            {
-                Assert.DoesNotContain(marker, source, StringComparison.Ordinal);
-            }
+            Assert.DoesNotContain(marker, source, StringComparison.Ordinal);
         }
     }
 

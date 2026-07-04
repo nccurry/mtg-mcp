@@ -153,31 +153,23 @@ function Invoke-Checked {
     }
 }
 
-function Get-LocalVersionBase {
-    $serverJsonPath = Resolve-RepoPath "server.json"
-    if (-not (Test-Path -LiteralPath $serverJsonPath)) {
-        return "0.0.0"
+function Get-EvaluatedProjectVersion {
+    $dotnetCommand = Get-DotnetCommand
+    $projectPath = Resolve-RepoPath $Project
+    $output = & $dotnetCommand "msbuild" $projectPath "-nologo" "-getProperty:Version"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not evaluate the application package version."
     }
 
-    try {
-        $serverJson = Get-Content -LiteralPath $serverJsonPath -Raw | ConvertFrom-Json
-        foreach ($package in @($serverJson.packages)) {
-            $matchesPackage = $package.identifier -eq $PackageId
-            $hasVersion = -not [string]::IsNullOrWhiteSpace($package.version)
-            if ($matchesPackage -and $hasVersion) {
-                return [string] $package.version
-            }
-        }
-
-        if (-not [string]::IsNullOrWhiteSpace($serverJson.version)) {
-            return [string] $serverJson.version
-        }
-    }
-    catch {
-        Write-Host "Could not read server.json version; falling back to 0.0.0."
+    $resolved = $output |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -match '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$' } |
+        Select-Object -Last 1
+    if ([string]::IsNullOrWhiteSpace($resolved)) {
+        throw "The application project did not provide a valid package version."
     }
 
-    return "0.0.0"
+    return $resolved
 }
 
 function Get-ConfiguredMcpCommandPath {
@@ -369,7 +361,7 @@ function Install-GlobalToolPackage {
 }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = Get-LocalVersionBase
+    $Version = Get-EvaluatedProjectVersion
 }
 
 if ([string]::IsNullOrWhiteSpace($Runtime)) {
@@ -399,7 +391,6 @@ Invoke-Checked $DotnetCommand `
     "--configuration" $Configuration `
     "--output" $packageDirPath `
     "-p:Version=$Version" `
-    "-p:PackageVersion=$Version" `
     "-p:ContinuousIntegrationBuild=true"
 
 Install-GlobalToolPackage

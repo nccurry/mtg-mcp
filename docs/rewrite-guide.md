@@ -4,12 +4,11 @@ This document is the bridge between the currently shipped pre-rewrite server
 and the in-progress clean-break `0.9.0` server. It prevents current implementation
 documentation from being mistaken for the rewrite target.
 
-The rewrite has entered foundation implementation. The legacy audit is
-approved/completed, the foundation child is approved/in progress, and the
-remaining eight children stay planning-only with
-`Implementation authorized: No`. Production edits are limited to the active
-foundation child and its current authorized phase. Foundation Phases 0 through
-3 are complete; Phase 4 has not started on the isolated rewrite branch.
+The rewrite foundation implementation is complete. The legacy audit and
+foundation child are approved/completed, and the remaining eight children stay
+planning-only with `Implementation authorized: No`. No later child is active;
+production capability work requires its own recorded approval and lifecycle
+transition.
 
 ## Authority And Routing
 

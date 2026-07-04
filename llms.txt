@@ -7,7 +7,7 @@ Current code, tests, project files, checked-in configuration, and `AGENTS.md`
 are authoritative. This file is a compact orientation index, not a second
 instruction file.
 
-This branch contains the Phase 3 contracts and configuration foundation of the clean-break rewrite.
+This branch contains the completed contracts, configuration, and resources-only MCP foundation of the clean-break rewrite.
 The shipped legacy server remains available through Git history and its release,
 but its production code is no longer present here. Read
 [Rewrite guide](docs/rewrite-guide.md) before treating historical architecture

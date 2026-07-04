@@ -69,7 +69,8 @@ of relying on a score of `0` to imply "not applicable."
 
 Before tagging a release:
 
-- Run `task lint`, `task test`, and `task smoke:mcp`.
+- Run `task lint`, `task test`, `task smoke:process`, and `task smoke:mcp`.
 - Confirm `README.md` covers every registered tool/resource/prompt.
 - Confirm `CHANGELOG.md` describes public surface changes.
-- Build the package and run the local install smoke path from `Taskfile.yml`.
+- Build the package and run `task release:tool-smoke` to probe and establish an
+  MCP session against the installed tool.

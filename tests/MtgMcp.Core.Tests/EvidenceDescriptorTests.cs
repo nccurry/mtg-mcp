@@ -90,6 +90,84 @@ public sealed class EvidenceDescriptorTests
     }
 
     /// <summary>
+    /// Verifies source metadata is trimmed, UTC-normalized, and rejects missing identifiers.
+    /// </summary>
+    [Fact]
+    public void SourceCases_EnforceSemanticContract()
+    {
+        DateTimeOffset localTime = new(2026, 7, 3, 8, 0, 0, TimeSpan.FromHours(-4));
+        SourceFactDescriptor fact = new(" scryfall ", localTime, " snapshot-1 ");
+        SourceEvidenceDescriptor evidence = new(
+            " archidekt ",
+            localTime,
+            " deck:42 ",
+            null);
+
+        Assert.Equal("scryfall", fact.Source);
+        Assert.Equal(TimeSpan.Zero, fact.RetrievedAtUtc.Offset);
+        Assert.Equal(localTime.ToUniversalTime(), fact.RetrievedAtUtc);
+        Assert.Equal("snapshot-1", fact.SnapshotId);
+        Assert.Equal("archidekt", evidence.Source);
+        Assert.Equal("deck:42", evidence.SourceReference);
+        Assert.Null(evidence.SnapshotId);
+        Assert.ThrowsAny<ArgumentException>(() => new SourceFactDescriptor(" ", localTime, null));
+        Assert.ThrowsAny<ArgumentException>(() => new SourceFactDescriptor("source", localTime, " "));
+        Assert.ThrowsAny<ArgumentException>(() =>
+            new SourceEvidenceDescriptor("source", localTime, " ", null));
+    }
+
+    /// <summary>
+    /// Verifies derivation metadata owns normalized immutable assumptions and required versions.
+    /// </summary>
+    [Fact]
+    public void DerivedCases_EnforceSemanticContract()
+    {
+        List<string> assumptions = [" first assumption "];
+        ExactDerivationDescriptor exact = new(" hypergeometric ", assumptions);
+        ParserClassificationDescriptor parser = new(" parser-v1 ", assumptions);
+        HeuristicEstimateDescriptor heuristic = new(" heuristic-v1 ", assumptions);
+        SampledEstimateDescriptor sampled = new(" sampler-v1 ", 100, 42, assumptions);
+        assumptions[0] = "changed";
+        assumptions.Add("new");
+
+        Assert.Equal("hypergeometric", exact.Method);
+        Assert.Equal(["first assumption"], exact.Assumptions);
+        Assert.Equal("parser-v1", parser.ParserVersion);
+        Assert.Equal(["first assumption"], parser.Assumptions);
+        Assert.Equal("heuristic-v1", heuristic.ModelVersion);
+        Assert.Equal(["first assumption"], heuristic.Assumptions);
+        Assert.Equal("sampler-v1", sampled.ModelVersion);
+        Assert.Equal(["first assumption"], sampled.Assumptions);
+        Assert.Equal(100, sampled.SampleCount);
+        Assert.Equal(42, sampled.Seed);
+
+        Assert.ThrowsAny<ArgumentException>(() => new ExactDerivationDescriptor(" ", []));
+        Assert.Throws<ArgumentNullException>(() => new ExactDerivationDescriptor("method", null!));
+        Assert.ThrowsAny<ArgumentException>(() => new ExactDerivationDescriptor("method", [" "]));
+        Assert.ThrowsAny<ArgumentException>(() => new ParserClassificationDescriptor(" ", []));
+        Assert.ThrowsAny<ArgumentException>(() => new HeuristicEstimateDescriptor(" ", []));
+        Assert.ThrowsAny<ArgumentException>(() => new SampledEstimateDescriptor(" ", 1, 0, []));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SampledEstimateDescriptor("sampler-v1", 0, 0, []));
+    }
+
+    /// <summary>
+    /// Verifies semantically invalid case payloads cannot enter through JSON round trips.
+    /// </summary>
+    [Fact]
+    public void InvalidSemanticJson_Throws()
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            JsonSerializer.Deserialize<EvidenceDescriptor>(
+                "{\"kind\":\"source-fact\",\"source\":\" \",\"retrievedAtUtc\":\"2026-07-03T12:00:00Z\"}",
+                SerializerOptions));
+        Assert.ThrowsAny<ArgumentException>(() =>
+            JsonSerializer.Deserialize<EvidenceDescriptor>(
+                "{\"kind\":\"sampled-estimate\",\"modelVersion\":\"v1\",\"sampleCount\":0,\"seed\":1,\"assumptions\":[]}",
+                SerializerOptions));
+    }
+
+    /// <summary>
     /// Exhaustively maps every closed evidence case for compile-time change detection.
     /// </summary>
     private static string Describe(EvidenceDescriptor descriptor)

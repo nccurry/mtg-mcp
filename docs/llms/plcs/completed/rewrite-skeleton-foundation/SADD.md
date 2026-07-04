@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-03
@@ -83,8 +83,9 @@ offline execution is a normal-test policy, not a fourth runtime mode.
 ## Failure Modes
 
 - Unknown operation mode fails startup with a sanitized configuration error.
-- Unwritable data root is reported unavailable; startup may continue for
-  read-only server metadata but no local capability is advertised.
+- A configured regular file is rejected as a data root. A missing directory is
+  reported `not-created` and an existing directory is reported
+  `directory-present`; the foundation makes no writability claim or write probe.
 - Missing future databases remain unavailable rather than being created by the
   foundation.
 - Legacy data is detected only to produce a migration boundary note; it is not
@@ -95,8 +96,8 @@ offline execution is a normal-test policy, not a fourth runtime mode.
 Core unit tests cover unions, serialization, stable ordering, and exhaustive
 switches. App tests cover mode normalization, redaction, configuration, surface
 inventory, and capability output. Architecture tests enforce references and
-package allowlists. Mocked process E2E starts stdio, inspects initialization,
-and reads the capability resource. The existing per-assembly coverage gate
+package allowlists. Official-client process E2E starts stdio, inspects
+initialization, and reads the capability resource. The existing per-assembly coverage gate
 applies to both production assemblies. Foundation work also rewrites legacy
 per-project coverage conveniences, integration-test lists, and surface-report
 filters so every referenced project/test still exists.

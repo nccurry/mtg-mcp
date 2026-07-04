@@ -53,7 +53,9 @@ internal static class FoundationConfigurationLoader
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(configurationFile);
 
-        OperationInvalidInput? commandLineFailure = ValidateCommandLine(arguments);
+        OperationInvalidInput? commandLineFailure = NormalizeCommandLine(
+            arguments,
+            out string[] normalizedArguments);
         if (commandLineFailure is not null)
         {
             return commandLineFailure;
@@ -65,7 +67,7 @@ internal static class FoundationConfigurationLoader
             configuration = new ConfigurationBuilder()
                 .AddJsonFile(configurationFile, optional: true, reloadOnChange: false)
                 .AddEnvironmentVariables(EnvironmentPrefix)
-                .AddCommandLine(arguments.ToArray(), SwitchMappings)
+                .AddCommandLine(normalizedArguments, SwitchMappings)
                 .Build();
         }
         catch (Exception exception) when (
@@ -92,24 +94,17 @@ internal static class FoundationConfigurationLoader
         OperationResult<OperationMode> modeResult = OperationModeParser.Parse(configuration["MODE"]);
         if (modeResult is not OperationSuccess<OperationMode> mode)
         {
-            // The parser intentionally has only success and invalid-input outcomes.
-            return (OperationInvalidInput)modeResult.Value!;
+            return ForwardFailure(modeResult);
         }
 
         string? configuredDataRoot = configuration["DATA_DIR"];
-        OperationResult<string> dataRootResult = DataRootResolver.Resolve(
+        OperationResult<DataRootResolution> dataRootResult = DataRootResolver.Resolve(
             configuredDataRoot,
             localApplicationData,
             roamingApplicationData);
-        if (dataRootResult is not OperationSuccess<string> dataRoot)
+        if (dataRootResult is not OperationSuccess<DataRootResolution> dataRoot)
         {
-            if (dataRootResult.Value is OperationInvalidInput invalidDataRoot)
-            {
-                return invalidDataRoot;
-            }
-
-            // The resolver's remaining failure outcome is unavailable platform data.
-            return (OperationUnavailable)dataRootResult.Value!;
+            return ForwardFailure(dataRootResult);
         }
 
         string applicationDataRoot = !string.IsNullOrWhiteSpace(localApplicationData)
@@ -119,28 +114,87 @@ internal static class FoundationConfigurationLoader
         return new OperationSuccess<FoundationConfiguration>(
             new FoundationConfiguration(
                 mode.Data,
-                dataRoot.Data,
+                dataRoot.Data.Path,
+                dataRoot.Data.State,
                 !string.IsNullOrWhiteSpace(configuredDataRoot),
                 legacyData));
     }
 
     /// <summary>
-    /// Rejects unknown switches and incomplete key/value pairs without echoing their contents.
+    /// Normalizes accepted switch forms and rejects duplicates or incomplete pairs.
     /// </summary>
-    private static OperationInvalidInput? ValidateCommandLine(IReadOnlyList<string> arguments)
+    private static OperationInvalidInput? NormalizeCommandLine(
+        IReadOnlyList<string> arguments,
+        out string[] normalizedArguments)
     {
-        for (int index = 0; index < arguments.Count; index += 2)
+        List<string> normalized = [];
+        HashSet<string> seenKeys = new(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < arguments.Count; index++)
         {
-            bool hasValue = index + 1 < arguments.Count &&
-                !arguments[index + 1].StartsWith("--", StringComparison.Ordinal);
-            if (!SwitchMappings.ContainsKey(arguments[index]) || !hasValue)
+            string argument = arguments[index];
+            int separatorIndex = argument.IndexOf('=', StringComparison.Ordinal);
+            string switchName = separatorIndex >= 0 ? argument[..separatorIndex] : argument;
+            if (!SwitchMappings.ContainsKey(switchName) || !seenKeys.Add(switchName))
             {
+                normalizedArguments = [];
                 return new OperationInvalidInput(
                     "invalid-command-line",
                     "Configuration contains an unsupported or incomplete command-line option.");
             }
+
+            string value;
+            if (separatorIndex >= 0)
+            {
+                value = argument[(separatorIndex + 1)..];
+            }
+            else
+            {
+                bool hasValue = index + 1 < arguments.Count &&
+                    !arguments[index + 1].StartsWith("--", StringComparison.Ordinal);
+                if (!hasValue)
+                {
+                    normalizedArguments = [];
+                    return new OperationInvalidInput(
+                        "invalid-command-line",
+                        "Configuration contains an unsupported or incomplete command-line option.");
+                }
+
+                index++;
+                value = arguments[index];
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                normalizedArguments = [];
+                return new OperationInvalidInput(
+                    "invalid-command-line",
+                    "Configuration contains an unsupported or incomplete command-line option.");
+            }
+
+            normalized.Add(switchName);
+            normalized.Add(value);
         }
 
+        normalizedArguments = normalized.ToArray();
         return null;
+    }
+
+    /// <summary>
+    /// Preserves a structured failure while rejecting an unexpected successful branch.
+    /// </summary>
+    internal static OperationResult<FoundationConfiguration> ForwardFailure<T>(OperationResult<T> result)
+    {
+        return result switch
+        {
+            OperationSuccess<T> => new OperationUnavailable(
+                "configuration-resolution-failed",
+                "Configuration could not be resolved."),
+            OperationNotFound value => value,
+            OperationNotCached value => value,
+            OperationUnsupported value => value,
+            OperationUnavailable value => value,
+            OperationConflict value => value,
+            OperationInvalidInput value => value,
+        };
     }
 }

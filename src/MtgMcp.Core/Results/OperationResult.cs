@@ -19,10 +19,30 @@ public sealed record OperationSuccess<T>(
 /// <summary>
 /// Reports that the requested entity does not exist in the consulted source.
 /// </summary>
-public sealed record OperationNotFound(
-    [property: JsonPropertyName("reasonCode")] string ReasonCode,
-    [property: JsonPropertyName("message")] string Message)
+public sealed record OperationNotFound
 {
+    /// <summary>
+    /// Creates a not-found outcome with a stable reason and safe explanation.
+    /// </summary>
+    [JsonConstructor]
+    public OperationNotFound(string reasonCode, string message)
+    {
+        ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
+        Message = ContractValidation.RequiredText(message, nameof(message));
+    }
+
+    /// <summary>
+    /// Gets the machine-readable reason for this outcome.
+    /// </summary>
+    [JsonPropertyName("reasonCode")]
+    public string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the sanitized human-readable explanation.
+    /// </summary>
+    [JsonPropertyName("message")]
+    public string Message { get; }
+
     /// <summary>
     /// Gets the stable serialized case discriminator.
     /// </summary>
@@ -34,10 +54,30 @@ public sealed record OperationNotFound(
 /// <summary>
 /// Reports that an operation requires cached data that is not locally available.
 /// </summary>
-public sealed record OperationNotCached(
-    [property: JsonPropertyName("reasonCode")] string ReasonCode,
-    [property: JsonPropertyName("message")] string Message)
+public sealed record OperationNotCached
 {
+    /// <summary>
+    /// Creates a not-cached outcome with a stable reason and safe explanation.
+    /// </summary>
+    [JsonConstructor]
+    public OperationNotCached(string reasonCode, string message)
+    {
+        ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
+        Message = ContractValidation.RequiredText(message, nameof(message));
+    }
+
+    /// <summary>
+    /// Gets the machine-readable reason for this outcome.
+    /// </summary>
+    [JsonPropertyName("reasonCode")]
+    public string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the sanitized human-readable explanation.
+    /// </summary>
+    [JsonPropertyName("message")]
+    public string Message { get; }
+
     /// <summary>
     /// Gets the stable serialized case discriminator.
     /// </summary>
@@ -49,10 +89,30 @@ public sealed record OperationNotCached(
 /// <summary>
 /// Reports that the requested behavior is outside the available contract.
 /// </summary>
-public sealed record OperationUnsupported(
-    [property: JsonPropertyName("reasonCode")] string ReasonCode,
-    [property: JsonPropertyName("message")] string Message)
+public sealed record OperationUnsupported
 {
+    /// <summary>
+    /// Creates an unsupported outcome with a stable reason and safe explanation.
+    /// </summary>
+    [JsonConstructor]
+    public OperationUnsupported(string reasonCode, string message)
+    {
+        ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
+        Message = ContractValidation.RequiredText(message, nameof(message));
+    }
+
+    /// <summary>
+    /// Gets the machine-readable reason for this outcome.
+    /// </summary>
+    [JsonPropertyName("reasonCode")]
+    public string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the sanitized human-readable explanation.
+    /// </summary>
+    [JsonPropertyName("message")]
+    public string Message { get; }
+
     /// <summary>
     /// Gets the stable serialized case discriminator.
     /// </summary>
@@ -64,10 +124,30 @@ public sealed record OperationUnsupported(
 /// <summary>
 /// Reports that a supported dependency or source cannot currently answer the request.
 /// </summary>
-public sealed record OperationUnavailable(
-    [property: JsonPropertyName("reasonCode")] string ReasonCode,
-    [property: JsonPropertyName("message")] string Message)
+public sealed record OperationUnavailable
 {
+    /// <summary>
+    /// Creates an unavailable outcome with a stable reason and safe explanation.
+    /// </summary>
+    [JsonConstructor]
+    public OperationUnavailable(string reasonCode, string message)
+    {
+        ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
+        Message = ContractValidation.RequiredText(message, nameof(message));
+    }
+
+    /// <summary>
+    /// Gets the machine-readable reason for this outcome.
+    /// </summary>
+    [JsonPropertyName("reasonCode")]
+    public string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the sanitized human-readable explanation.
+    /// </summary>
+    [JsonPropertyName("message")]
+    public string Message { get; }
+
     /// <summary>
     /// Gets the stable serialized case discriminator.
     /// </summary>
@@ -79,10 +159,30 @@ public sealed record OperationUnavailable(
 /// <summary>
 /// Reports that the requested operation conflicts with current state.
 /// </summary>
-public sealed record OperationConflict(
-    [property: JsonPropertyName("reasonCode")] string ReasonCode,
-    [property: JsonPropertyName("message")] string Message)
+public sealed record OperationConflict
 {
+    /// <summary>
+    /// Creates a conflict outcome with a stable reason and safe explanation.
+    /// </summary>
+    [JsonConstructor]
+    public OperationConflict(string reasonCode, string message)
+    {
+        ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
+        Message = ContractValidation.RequiredText(message, nameof(message));
+    }
+
+    /// <summary>
+    /// Gets the machine-readable reason for this outcome.
+    /// </summary>
+    [JsonPropertyName("reasonCode")]
+    public string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the sanitized human-readable explanation.
+    /// </summary>
+    [JsonPropertyName("message")]
+    public string Message { get; }
+
     /// <summary>
     /// Gets the stable serialized case discriminator.
     /// </summary>
@@ -94,10 +194,30 @@ public sealed record OperationConflict(
 /// <summary>
 /// Reports that caller input cannot be accepted by the operation contract.
 /// </summary>
-public sealed record OperationInvalidInput(
-    [property: JsonPropertyName("reasonCode")] string ReasonCode,
-    [property: JsonPropertyName("message")] string Message)
+public sealed record OperationInvalidInput
 {
+    /// <summary>
+    /// Creates an invalid-input outcome with a stable reason and safe explanation.
+    /// </summary>
+    [JsonConstructor]
+    public OperationInvalidInput(string reasonCode, string message)
+    {
+        ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
+        Message = ContractValidation.RequiredText(message, nameof(message));
+    }
+
+    /// <summary>
+    /// Gets the machine-readable reason for this outcome.
+    /// </summary>
+    [JsonPropertyName("reasonCode")]
+    public string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the sanitized human-readable explanation.
+    /// </summary>
+    [JsonPropertyName("message")]
+    public string Message { get; }
+
     /// <summary>
     /// Gets the stable serialized case discriminator.
     /// </summary>

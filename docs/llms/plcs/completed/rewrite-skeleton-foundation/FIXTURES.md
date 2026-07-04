@@ -12,8 +12,10 @@
 | FND-RESULT-001 | One payload per operation-result case | Empty, unknown, unavailable, and error cases remain distinct. |
 | FND-DATA-001 | Empty versioned data root | Server starts without creating future databases. |
 | FND-DATA-002 | Legacy data root present | Legacy files remain byte-identical and are not loaded. |
+| FND-DATA-003 | Configured root is a regular file | Startup rejects it with a path-free invalid-data-root failure. |
+| FND-CLI-001 | Pair and equals switch forms plus duplicate/unknown/incomplete variants | Both valid forms agree; ambiguous input fails without echoing values. |
 | FND-SECRET-001 | Config contains representative tokens and paths | Tool/resource/log output contains no secret value. |
-| FND-PACK-001 | `0.9.0-preview.N` package | Contains only Core/App assemblies and required runtime assets. |
+| FND-PACK-001 | `0.9.0-preview.N` package | Contains only Core/App assemblies and required runtime assets; installed process probe and official-client resource read pass. |
 | FND-TASK-001 | Rewritten task/project inventory | No coverage convenience, integration list, or surface-report filter names a removed project/test; new production assemblies are gateable. |
 
 ## Architecture Matrix

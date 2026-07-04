@@ -14,8 +14,8 @@ implementation work in these packets.
 Eight rewrite children remain planned and independently reviewable. The
 [legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
 approved/completed, and the
-[foundation child](../in-progress/rewrite-skeleton-foundation/README.md) is
-approved/in progress. The governing program remains
+[foundation child](../completed/rewrite-skeleton-foundation/README.md) is
+approved/completed. The governing program remains
 [in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
 
 | Packet | Status | Summary |

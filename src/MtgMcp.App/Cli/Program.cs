@@ -1,3 +1,7 @@
 using MtgMcp.App.Cli;
 
-return FoundationCli.Run(args, Console.Out, Console.Error);
+return await FoundationCli.RunAsync(
+    args,
+    Console.Out,
+    Console.Error,
+    CancellationToken.None).ConfigureAwait(false);

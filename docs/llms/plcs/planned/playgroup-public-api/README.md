@@ -27,7 +27,7 @@ reverse-engineered.
 
 ## Dependencies
 
-- [Rewrite Foundation](../../in-progress/rewrite-skeleton-foundation/README.md)
+- [Rewrite Foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

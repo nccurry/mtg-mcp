@@ -4,7 +4,10 @@ param(
     [ValidateSet("Archive", "Checksums", "Clean", "ToolSmoke", "ValidateVersion")]
     [string] $Action,
 
-    [string] $Version = "0.0.0-dev",
+    [string] $Version = "",
+    [string] $Project = "src/MtgMcp.App/MtgMcp.App.csproj",
+    [string] $E2ETestProject = "tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj",
+    [string] $Configuration = "Release",
     [string] $Runtime = "",
     [string] $ArtifactsDir = "artifacts",
     [string] $PublishDir = "artifacts/publish",
@@ -85,6 +88,29 @@ function Use-LocalDotnetRootForAppHosts {
     if ($IsWindows) {
         $env:DOTNET_ROOT_X64 = $localRoot
     }
+}
+
+function Resolve-PackageVersion {
+    if (-not [string]::IsNullOrWhiteSpace($Version)) {
+        return $Version.Trim()
+    }
+
+    $dotnetCommand = Get-DotnetCommand
+    $projectPath = Resolve-RepoPath $Project
+    $output = & $dotnetCommand "msbuild" $projectPath "-nologo" "-getProperty:Version"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not evaluate the application package version."
+    }
+
+    $resolved = $output |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -match '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$' } |
+        Select-Object -Last 1
+    if ([string]::IsNullOrWhiteSpace($resolved)) {
+        throw "The application project did not provide a valid package version."
+    }
+
+    return $resolved
 }
 
 function Test-SameOrChildPath {
@@ -280,6 +306,29 @@ function Invoke-ToolSmoke {
 
     Use-LocalDotnetRootForAppHosts
     Invoke-Checked $toolExecutable "--smoke"
+
+    $previousCommand = $env:MTGMCP_E2E_COMMAND
+    $previousVersion = $env:MTGMCP_E2E_VERSION
+    try {
+        $env:MTGMCP_E2E_COMMAND = $toolExecutable
+        $env:MTGMCP_E2E_VERSION = $Version
+        Invoke-Checked $dotnetCommand `
+            "test" `
+            (Resolve-RepoPath $E2ETestProject) `
+            "--configuration" `
+            $Configuration `
+            "--no-build" `
+            "--filter" `
+            "FullyQualifiedName~FoundationMcpTests"
+    }
+    finally {
+        $env:MTGMCP_E2E_COMMAND = $previousCommand
+        $env:MTGMCP_E2E_VERSION = $previousVersion
+    }
+}
+
+if ($Action -in @("Archive", "ToolSmoke", "ValidateVersion")) {
+    $Version = Resolve-PackageVersion
 }
 
 switch ($Action) {

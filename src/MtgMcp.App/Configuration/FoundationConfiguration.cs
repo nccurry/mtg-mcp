@@ -6,6 +6,7 @@ namespace MtgMcp.App.Configuration;
 internal sealed record FoundationConfiguration(
     OperationMode Mode,
     string DataRoot,
+    DataRootState DataRootState,
     bool DataRootConfigured,
     LegacyDataBoundary LegacyData)
 {
@@ -15,8 +16,13 @@ internal sealed record FoundationConfiguration(
     internal FoundationConfigurationStatus ToPublicStatus()
     {
         return new FoundationConfigurationStatus(
-            OperationModeParser.Format(Mode),
             DataRootConfigured,
+            DataRootState switch
+            {
+                Configuration.DataRootState.NotCreated => "not-created",
+                Configuration.DataRootState.DirectoryPresent => "directory-present",
+                _ => "not-created",
+            },
             LegacyData.State switch
             {
                 LegacyDataState.NotDetected => "not-detected",
@@ -32,7 +38,7 @@ internal sealed record FoundationConfiguration(
 /// Describes configuration state without exposing absolute paths or secret values.
 /// </summary>
 internal sealed record FoundationConfigurationStatus(
-    string Mode,
     bool DataRootConfigured,
+    string DataRootState,
     string LegacyDataState,
     string MigrationBoundary);

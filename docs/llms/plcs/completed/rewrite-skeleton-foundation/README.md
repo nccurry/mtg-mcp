@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: `docs/llms/plcs/in-progress/rewrite-skeleton-foundation/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/rewrite-skeleton-foundation/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-03
-- Current phase: Phase 3 complete; Phase 4 not started
+- Current phase: Phases 0 through 5 complete
 
 ## Summary
 
@@ -39,9 +39,10 @@ package/server identity; the two tokens are intentionally not identical.
 
 ## Project And Surface Impact
 
-Implementation will replace legacy production and test projects in the rewrite
-branch, retain repository infrastructure, and establish boundaries later
-children must follow. It does not change `main` until the eventual cutover.
+Implementation replaced legacy production and test projects in the rewrite
+branch, retained repository infrastructure, and established the boundaries
+later children must follow. It does not change `main` until the eventual
+cutover.
 
 ## Guardrail Conformance
 
@@ -71,6 +72,11 @@ evidence-aware, and normal validation is offline.
 | 2026-07-03 | Phase 2 post-implementation audits | Passed after fixes | Abstraction, code quality, dead code, dependency, test coverage, test quality, visual readability, and docs-sync audits were run. Findings fixed stale guidance/task references, incomplete wiring assertions, an unbounded process test, an unsupported-argument case, and outdated package pins. Final dependency scans report no vulnerable, deprecated, or outdated packages. |
 | 2026-07-03 | Phase 3 contracts, modes, configuration, and clean-break behavior | Passed | Added exhaustive Core result and evidence unions, the `read-only`/`local`/`remote` permission matrix, layered configuration and versioned data-root resolution, path-free status projection and redaction, and read-only legacy detection. `task lint`, `task test` (38 tests), `task surface:report`, `task coverage`, `task pack`, `task smoke:mcp`, and `task release:tool-smoke VERSION=0.9.0-preview.1` passed. App/Core line coverage is 96.06%/100%. |
 | 2026-07-03 | Phase 3 post-implementation audits | Passed after fixes | Abstraction, code quality, dead code, dependency, test coverage, test quality, visual readability, and docs-sync audits found and resolved permissive CLI parsing, overly broad configuration ownership, ambiguous evidence naming, incomplete process cleanup and startup-path tests, converter edge cases, and an unexercised redaction boundary. Dependency scans report no vulnerable, deprecated, or outdated packages. |
+| 2026-07-03 | Phase 3 hardening | Passed | Added semantic validation for result/evidence contracts, immutable assumptions, UTC normalization, positive sample counts, safe exhaustive result forwarding, duplicate-safe CLI parsing in both accepted forms, regular-file data-root rejection, non-mutating root status, and explicit legacy-inspection scope. |
+| 2026-07-03 | Phase 4 resources-only MCP host | Passed | Stable official MCP SDK 1.4.0 hosts stdio through Generic Host with cleared console logging. Official-client E2E proves exact identity, resources-only advertisement, negotiated protocol reporting, deterministic capability JSON in all modes, unknown-resource errors, sanitized invalid startup, and clean stdin shutdown. |
+| 2026-07-03 | Phase 5 versioning and package workflow | Passed | The App `<Version>` is the package/release default, explicit `VERSION` remains an override, process and MCP smokes are distinct, and the installed NuGet tool completes both readiness and official-client resource checks. |
+| 2026-07-03 | Final implementation audits | Passed after fixes | Abstraction, code quality, dead code, dependency, test coverage, test quality, visual readability, CLI, and docs-sync reviews found and fixed the stale architecture allowlist, local-install version double-source, misleading smoke names, stale Phase 3 guidance, and incomplete exact-surface assertions. Vulnerability, deprecation, and outdated-package scans are clean. |
+| 2026-07-03 | Final acceptance gates | Passed | `task lint`, `task test` (59 tests), `task surface:report`, `task coverage`, `task pack`, `task smoke:process`, `task smoke:mcp`, and `task release:tool-smoke` pass. App/Core line coverage is 94.25%/100%. Default `0.9.0-preview.1` and explicit `0.9.0-preview.99` installed-package MCP sessions both pass; package inspection contains only approved Core/App and runtime assets. |
 
 ## Phase 2 Reconciliation
 
@@ -91,9 +97,27 @@ evidence-aware, and normal validation is offline.
 | FND-010 | Passed; public configuration status is path-free, loader and CLI failures are sanitized, and the error boundary redacts supplied credentials, tokens, cookies, and absolute paths. |
 | FND-012 | Passed; startup detects legacy sibling data conservatively, reports the clean-break state without parsing or migration, preserves legacy bytes, and does not create the `v0.9` root. |
 
+## Phase 4 Reconciliation
+
+| Requirement | Result |
+| --- | --- |
+| FND-005 | Passed; standard initialization exposes the approved name, title, evaluated version, resources-only capability, and no instructions. Exactly one explicitly registered resource returns the versioned deterministic capability document; tools, prompts, subscriptions, list changes, and logging are absent. |
+| FND-006 | Passed; official-client sessions read the same schema with the exact effective mode for default, `read-only`, `local`, and `remote` startup. |
+| FND-009, FND-010, FND-012 | Passed; capability status is path-free, absent roots and legacy bytes remain unchanged, and invalid startup emits sanitized stderr before transport output. |
+
+## Phase 5 Reconciliation
+
+| Requirement | Result |
+| --- | --- |
+| FND-011 | Passed; analyzer, full offline tests, exact-surface report, per-assembly coverage, package, official-client smoke, and installed-tool session gates all execute against the final project set. |
+| FND-013 | Passed; the App project supplies `0.9.0-preview.1` by default, explicit release overrides propagate through package/server identity, and package smoke checks the installed version. |
+| FND-014 | Passed; lifecycle and umbrella registries record foundation completion without authorizing the local deck child. |
+
 ## Completion Notes
 
-Phases 0 through 3 are complete. The branch is a compiling, packaged process
-skeleton with common contracts, modes, configuration, and clean-break behavior,
-but still has no MCP surface. Phase 4 is the next unimplemented phase and will
-add only the minimal server information and capability resource defined here.
+Phases 0 through 5 are complete. The branch is a compiling, packaged,
+resources-only MCP foundation with common contracts, modes, configuration,
+clean-break behavior, standard initialization, and one capability resource.
+No deck, provider, statistics, persistence, prompt, recommendation, simulation,
+or compatibility capability entered this packet. The local deck child remains
+planned and implementation-unauthorized.

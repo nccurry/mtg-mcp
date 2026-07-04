@@ -13,7 +13,7 @@ vars:
   POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}{{.TASKFILE_DIR}}/.tools/bin/pwsh -NoProfile{{end}}'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
-  VERSION: 0.9.0-preview.1
+  VERSION: ''
   PACKAGE_ID: Nccurry.MtgMcp
   ARTIFACTS_DIR: artifacts
   PACKAGE_DIR: '{{.ARTIFACTS_DIR}}/packages'
@@ -291,14 +291,14 @@ tasks:
       - task: test
 
   surface:report:
-    desc: Verify that no legacy MCP surface remains in the foundation source
+    desc: Verify the exact resources-only foundation MCP surface
     deps: [build]
     cmds:
       - >
         {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsNoLegacyMcpRegistrations"
+        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedCapabilityResource"
         --logger "console;verbosity=detailed"
 
   ci:
@@ -308,13 +308,24 @@ tasks:
       - task: surface:report
       - task: coverage:report
       - task: coverage:gates
+      - task: smoke:process
       - task: smoke:mcp
 
-  smoke:mcp:
+  smoke:process:
     desc: Build the foundation executable and verify process readiness
     deps: [build]
     cmds:
       - '{{.DOTNET}} run --project {{.APP_PROJECT}} --configuration {{.CONFIGURATION}} --no-build -- --smoke'
+
+  smoke:mcp:
+    desc: Initialize the foundation with the official MCP client and read its capability resource
+    deps: [build]
+    cmds:
+      - >
+        {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --no-build
+        --filter "FullyQualifiedName~FoundationMcpTests"
 
   install:
     desc: Install the current branch on this workstation
@@ -355,8 +366,7 @@ tasks:
         {{.DOTNET}} pack {{.APP_PROJECT}}
         --configuration {{.CONFIGURATION}}
         --output {{.PACKAGE_DIR}}
-        -p:Version={{.VERSION}}
-        -p:PackageVersion={{.VERSION}}
+        {{if ne .VERSION ""}}-p:Version={{.VERSION}}{{end}}
         -p:ContinuousIntegrationBuild=true
         -p:IncludeSymbols=true
         -p:SymbolPackageFormat=snupkg
@@ -376,7 +386,7 @@ tasks:
         --runtime {{.RUNTIME}}
         --self-contained true
         --output {{.PUBLISH_DIR}}/{{.RUNTIME}}
-        -p:Version={{.VERSION}}
+        {{if ne .VERSION ""}}-p:Version={{.VERSION}}{{end}}
         -p:PublishSingleFile=true
         -p:PublishTrimmed=false
 
@@ -401,7 +411,7 @@ tasks:
   release:validate-version:
     desc: Validate VERSION as a stable release tag
     cmds:
-      - '{{.POWERSHELL}} -File scripts/release.ps1 ValidateVersion -Version "{{.VERSION}}"'
+      - '{{.POWERSHELL}} -File scripts/release.ps1 ValidateVersion -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}"'
 
   release:archives:
     desc: Publish and archive all release runtimes
@@ -409,15 +419,15 @@ tasks:
       - task: publish:runtime
         vars:
           RUNTIME: win-x64
-      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime win-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Runtime win-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
       - task: publish:runtime
         vars:
           RUNTIME: linux-x64
-      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime linux-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Runtime linux-x64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
       - task: publish:runtime
         vars:
           RUNTIME: osx-arm64
-      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Runtime osx-arm64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
+      - '{{.POWERSHELL}} -File scripts/release.ps1 Archive -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Runtime osx-arm64 -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PublishDir "{{.PUBLISH_DIR}}" -DistDir "{{.DIST_DIR}}"'
 
   release:checksums:
     desc: Generate SHA256 checksums for release archives
@@ -425,10 +435,10 @@ tasks:
       - '{{.POWERSHELL}} -File scripts/release.ps1 Checksums -DistDir "{{.DIST_DIR}}"'
 
   release:tool-smoke:
-    desc: Install the local NuGet tool package and smoke-run it
-    deps: [setup:dotnet]
+    desc: Install the local NuGet tool, probe it, and verify a real MCP session
+    deps: [build]
     cmds:
-      - '{{.POWERSHELL}} -File scripts/release.ps1 ToolSmoke -Version "{{.VERSION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
+      - '{{.POWERSHELL}} -File scripts/release.ps1 ToolSmoke -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Configuration "{{.CONFIGURATION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
 
   release:verify:
     desc: Run CI, package, archive, checksum, and smoke-install checks

@@ -13,6 +13,5 @@ evidence up to date as code lands.
 
 ## Active Rewrite Children
 
-| Packet | Status | Summary |
-| --- | --- | --- |
-| [rewrite-skeleton-foundation](rewrite-skeleton-foundation/README.md) | Phases 0-1 complete; Phase 2A not started | Establish the clean repository skeleton, modes, evidence contracts, and minimal host in the isolated rewrite worktree. |
+No rewrite child is currently active. The foundation is completed; the local
+deck child remains planned and requires independent implementation approval.

@@ -29,12 +29,12 @@ internal enum LegacyDataState
 internal sealed record LegacyDataBoundary(LegacyDataState State, string Message);
 
 /// <summary>
-/// Detects the presence of legacy entries without parsing, loading, or changing them.
+/// Detects legacy siblings only beneath the platform mtg-mcp application-data directory.
 /// </summary>
 internal static class LegacyDataInspector
 {
     /// <summary>
-    /// Inspects the application data root and returns a path-free clean-break status.
+    /// Inspects the platform root without searching other locations or weakening the no-migration guarantee.
     /// </summary>
     internal static LegacyDataBoundary Inspect(string applicationDataRoot)
     {

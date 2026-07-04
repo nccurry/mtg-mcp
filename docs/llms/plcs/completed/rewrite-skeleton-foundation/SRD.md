@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-03
@@ -31,7 +31,7 @@ owned by later children.
 | FND-008 | Must | Evidence metadata shall distinguish source facts, source evidence, exact derivation, parser classification, heuristic estimate, and sampled estimate. | Serialization and exhaustive-switch tests pass. |
 | FND-009 | Must | The default data root shall be platform application data under `mtg-mcp/v0.9`, overridable through `MTGMCP__DATA_DIR` and CLI configuration. | Cross-platform path unit tests and redacted server info pass. |
 | FND-010 | Must | Credentials and absolute secret paths shall never appear in server output or logs. | Redaction and configuration-resource tests pass. |
-| FND-011 | Must | Repository task, analyzer, 90-percent coverage, package, release, and mocked MCP E2E wiring shall remain green and shall enumerate the new project set rather than removed legacy adapters. | Per-assembly coverage conveniences, `test:integration`, and `surface:report` filters contain only existing projects/tests; `task lint`, `task test`, `task coverage`, `task pack`, and `task smoke:mcp` pass. |
+| FND-011 | Must | Repository task, analyzer, 90-percent coverage, package, release, and official-client MCP E2E wiring shall remain green and shall enumerate the new project set rather than removed legacy adapters. | Per-assembly coverage conveniences, `test:integration`, and `surface:report` filters contain only existing projects/tests; `task lint`, `task test`, `task coverage`, `task pack`, `task smoke:process`, and `task smoke:mcp` pass. |
 | FND-012 | Must | No automatic legacy data or tool-schema migration shall run. | Startup test with legacy data leaves it untouched and reports the clean-break boundary. |
 | FND-013 | Must | Preview packages shall use `0.9.0-preview.N`; stable `0.9.0` remains reserved for cutover. | Version validation and package metadata tests pass. |
 | FND-014 | Must | Legacy active product PLCs may receive audit-review supersession banners and cross-links, but lifecycle moves shall occur only as part of authorized foundation implementation. | Documentation diff records the new owner packet, leaves historical content intact, and performs no premature lifecycle move. |
@@ -59,7 +59,7 @@ owned by later children.
 
 ## Definition Of Done
 
-- [ ] Every Must requirement passes.
-- [ ] The minimal preview package installs and starts.
-- [ ] No legacy product capability is registered.
-- [ ] No later child capability is preimplemented.
+- [x] Every Must requirement passes.
+- [x] The minimal preview package installs and starts an official-client session.
+- [x] No legacy product capability is registered.
+- [x] No later child capability is preimplemented.

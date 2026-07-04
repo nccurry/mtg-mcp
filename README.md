@@ -8,23 +8,27 @@ for deckbuilding decisions.
 
 ## Rewrite Status
 
-This branch contains the Phase 3 repository foundation for the clean-break
-`0.9.0` rewrite. It is intentionally not a usable MCP server yet.
+This branch contains the completed repository foundation for the clean-break
+`0.9.0` rewrite. It is a minimal, usable stdio MCP server with one capability
+resource and no product tools yet.
 
 - `MtgMcp.Core` provides closed result and evidence unions with stable JSON
   discriminators.
-- `MtgMcp.App` provides operation-mode enforcement, standard configuration,
-  versioned data-root resolution, legacy-data detection, and sensitive-value
-  redaction.
-- No MCP tools, resources, prompts, provider calls, persistence,
-  recommendations, or simulations are registered.
-- `mtg-mcp --smoke` verifies configuration and process startup. The minimal MCP
-  host remains Foundation Phase 4 work.
+- `MtgMcp.App` provides the stdio MCP host, operation-mode enforcement,
+  standard configuration, versioned data-root resolution, legacy-data
+  detection, and sensitive-value redaction.
+- Standard initialization and `mtg://server/capabilities` are implemented.
+  The surface is exactly zero tools, one resource, and zero prompts.
+- `mtg-mcp --smoke` is a one-shot configuration/process probe. `task smoke:mcp`
+  establishes a real session with the official C# client and reads the
+  capability resource.
+- No provider calls, persistence, recommendations, simulations, or later-child
+  capability placeholders are registered.
 - The legacy `0.8.0` implementation remains available in Git history and its
   released package; it is not copied into this rewrite.
 
 The active requirements and phase boundaries are in the
-[Rewrite Skeleton and Repository Foundation PLC](docs/llms/plcs/in-progress/rewrite-skeleton-foundation/README.md).
+[Rewrite Skeleton and Repository Foundation PLC](docs/llms/plcs/completed/rewrite-skeleton-foundation/README.md).
 The [rewrite guide](docs/rewrite-guide.md) explains how this branch relates to
 the broader `0.9.0` program.
 
@@ -67,6 +71,7 @@ task lint
 task test
 task coverage
 task pack
+task smoke:process
 task smoke:mcp
 ```
 
@@ -78,7 +83,7 @@ foundation has no live-provider tests.
 
 - `MtgMcp.Core` contains provider-neutral, dependency-light domain logic and
   must not reference the host or third-party runtime packages.
-- `MtgMcp.App` owns process and, in later foundation phases, MCP host concerns.
+- `MtgMcp.App` owns process, configuration, and MCP host concerns.
 - Capability projects are added only when their independently approved child
   PLC is implemented.
 - Normal validation enforces at least 90 percent line coverage for each

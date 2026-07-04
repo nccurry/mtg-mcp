@@ -5,8 +5,9 @@
 > metric names and dimensions require approval in the owning App phase.
 
 The legacy host used stdio for MCP traffic, so runtime diagnostics never wrote
-protocol-adjacent text to stdout. The rewrite must preserve that boundary when
-Foundation Phase 4 introduces stdio hosting.
+protocol-adjacent text to stdout. The completed rewrite foundation preserves
+that boundary by clearing default console logging providers; stdout carries
+JSON-RPC only. Broader telemetry remains future App work.
 
 ## Tool Call Telemetry
 

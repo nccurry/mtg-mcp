@@ -5,16 +5,24 @@ It does not carry the released legacy surface forward.
 
 ## Foundation Status
 
-Foundation Phase 3 has no MCP transport or public MCP surface. The executable
-contract is `mtg-mcp --smoke` plus `--mode` and `--data-dir` configuration,
-covered through real process tests for valid and invalid startup. Client,
-protocol, initialization, tools, resources, and prompts are therefore not yet
-claimable on this branch.
+The completed foundation uses official C# SDK 1.4.0 stdio hosting and client
+APIs. Official-client E2E tests prove standard initialization in `read-only`,
+`local`, and `remote` modes, negotiated protocol reporting, resource listing
+and reading, unknown-resource errors, sanitized pre-transport failures, and
+clean process termination when stdin closes.
 
-Foundation Phase 4 will add the first compatibility row after mocked process
-E2E tests prove standard initialization and the single capability resource.
-Until then, `task surface:report` verifies that no legacy MCP registrations
-remain rather than reporting an MCP inventory.
+The public foundation surface is exactly:
+
+- server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
+  package version;
+- one static `application/json` resource at `mtg://server/capabilities`;
+- zero tools and zero prompts; and
+- no logging, subscription, or list-changed capability advertisement.
+
+`task smoke:process` is only a one-shot startup/configuration probe.
+`task smoke:mcp` establishes a real MCP session and reads the resource, while
+`task release:tool-smoke` repeats both checks against the installed package.
+`task surface:report` enforces the exact source registration boundary.
 
 ## `0.9.0` Rewrite Boundary
 

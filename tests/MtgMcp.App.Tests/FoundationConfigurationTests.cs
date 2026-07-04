@@ -31,6 +31,7 @@ public sealed class FoundationConfigurationTests
 
         Assert.Equal(OperationMode.Local, resolved.Mode);
         Assert.Equal(expectedPath, resolved.DataRoot);
+        Assert.Equal(DataRootState.NotCreated, resolved.DataRootState);
         Assert.False(resolved.DataRootConfigured);
         Assert.False(Directory.Exists(expectedPath));
     }
@@ -48,6 +49,7 @@ public sealed class FoundationConfigurationTests
             FoundationConfigurationLoader.Resolve(configuration, string.Empty, temporary.Path));
 
         Assert.Equal(Path.Combine(temporary.Path, "mtg-mcp", "v0.9"), resolved.DataRoot);
+        Assert.Equal(DataRootState.NotCreated, resolved.DataRootState);
         Assert.False(Directory.Exists(resolved.DataRoot));
     }
 
@@ -75,7 +77,7 @@ public sealed class FoundationConfigurationTests
         Assert.Equal(OperationMode.Remote, resolved.Mode);
         Assert.Equal(Path.GetFullPath(configuredPath), resolved.DataRoot);
         Assert.True(status.DataRootConfigured);
-        Assert.Equal("remote", status.Mode);
+        Assert.Equal("not-created", status.DataRootState);
         Assert.DoesNotContain(configuredPath, statusJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temporary.Path, statusJson, StringComparison.OrdinalIgnoreCase);
     }
@@ -115,7 +117,7 @@ public sealed class FoundationConfigurationTests
                 FoundationConfigurationLoader.Load([], configurationFile, temporary.Path, string.Empty));
             commandLineResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load(
-                    ["--mode", "local", "--data-dir", commandLineDataRoot],
+                    ["--mode=local", $"--data-dir={commandLineDataRoot}"],
                     configurationFile,
                     temporary.Path,
                     string.Empty));
@@ -157,6 +159,41 @@ public sealed class FoundationConfigurationTests
     }
 
     /// <summary>
+    /// Verifies a present directory is reported while a regular file is rejected as a data root.
+    /// </summary>
+    [Fact]
+    public void Resolve_ExistingDataRoot_DistinguishesDirectoryFromFile()
+    {
+        using TemporaryDirectory temporary = new();
+        string directoryPath = Path.Combine(temporary.Path, "directory");
+        string filePath = Path.Combine(temporary.Path, "private-file");
+        Directory.CreateDirectory(directoryPath);
+        File.WriteAllText(filePath, "private");
+        IConfiguration directoryConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["DATA_DIR"] = directoryPath })
+            .Build();
+        IConfiguration fileConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["DATA_DIR"] = filePath })
+            .Build();
+
+        FoundationConfiguration directory = RequireSuccess(
+            FoundationConfigurationLoader.Resolve(
+                directoryConfiguration,
+                temporary.Path,
+                string.Empty));
+        OperationResult<FoundationConfiguration> file = FoundationConfigurationLoader.Resolve(
+            fileConfiguration,
+            temporary.Path,
+            string.Empty);
+
+        Assert.Equal(DataRootState.DirectoryPresent, directory.DataRootState);
+        Assert.Equal("directory-present", directory.ToPublicStatus().DataRootState);
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(file.Value);
+        Assert.Equal("invalid-data-root", invalid.ReasonCode);
+        Assert.DoesNotContain(filePath, invalid.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Verifies malformed JSON returns a sanitized result without echoing its file path.
     /// </summary>
     [Fact]
@@ -190,6 +227,8 @@ public sealed class FoundationConfigurationTests
         [
             ["--unknown", "private-value"],
             ["--mode"],
+            ["--mode", "local", "--mode", "remote"],
+            ["--mode=local", "--mode", "remote"],
         ];
 
         foreach (IReadOnlyList<string> arguments in invalidArguments)
@@ -205,6 +244,37 @@ public sealed class FoundationConfigurationTests
             Assert.DoesNotContain("unknown", invalid.Message, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("private-value", invalid.Message, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// Verifies every valid result case is forwarded explicitly and an unexpected success fails closed.
+    /// </summary>
+    [Fact]
+    public void ForwardFailure_AllUnionCasesRemainStructured()
+    {
+        OperationResult<int>[] failures =
+        [
+            new OperationNotFound("not-found", "Not found."),
+            new OperationNotCached("not-cached", "Not cached."),
+            new OperationUnsupported("unsupported", "Unsupported."),
+            new OperationUnavailable("unavailable", "Unavailable."),
+            new OperationConflict("conflict", "Conflict."),
+            new OperationInvalidInput("invalid-input", "Invalid input."),
+        ];
+
+        foreach (OperationResult<int> failure in failures)
+        {
+            OperationResult<FoundationConfiguration> forwarded =
+                FoundationConfigurationLoader.ForwardFailure(failure);
+
+            Assert.Same(failure.Value, forwarded.Value);
+        }
+
+        OperationResult<FoundationConfiguration> unexpectedSuccess =
+            FoundationConfigurationLoader.ForwardFailure<int>(new OperationSuccess<int>(42));
+        OperationUnavailable unavailable =
+            Assert.IsType<OperationUnavailable>(unexpectedSuccess.Value);
+        Assert.Equal("configuration-resolution-failed", unavailable.ReasonCode);
     }
 
     /// <summary>
@@ -266,6 +336,7 @@ public sealed class FoundationConfigurationTests
         FoundationConfiguration configuration = new(
             OperationMode.Local,
             "private-path",
+            DataRootState.NotCreated,
             false,
             new LegacyDataBoundary((LegacyDataState)999, "Migration remains disabled."));
 

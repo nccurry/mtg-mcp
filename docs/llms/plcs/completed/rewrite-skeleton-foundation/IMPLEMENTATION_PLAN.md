@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-03
@@ -19,8 +19,8 @@
 | 2B | Restore a minimal compiling Core/App solution. | FND-003, FND-004 | Focused build and architecture tests pass. | Completed |
 | 2C | Reconcile repository tasks and tests with the new project set. | FND-011 | Coverage conveniences, integration lists, surface filters, lint, tests, coverage, package, and smoke reference no removed project. | Completed |
 | 3 | Add common result/evidence contracts and modes. | FND-006 through FND-010, FND-012 | Core/App focused tests pass. | Completed |
-| 4 | Expose minimal MCP surface. | FND-005 | Surface snapshot and process E2E pass. | Not started |
-| 5 | Package preview and close validation. | FND-011, FND-013 | Full offline gates and preview smoke pass. | Not started |
+| 4 | Expose minimal MCP surface. | FND-005 | Surface snapshot and official-client process E2E pass. | Completed |
+| 5 | Package preview and close validation. | FND-011, FND-013 | Full offline gates and installed-preview MCP smoke pass. | Completed |
 
 ## Implementation Rules
 
@@ -40,9 +40,10 @@
 ## Validation
 
 Run narrow Core/App tests first, then `task lint`, `task test`, `task coverage`,
-`task pack`, and `task smoke:mcp`. Verify the MCP surface is exactly zero tools,
-one resource, and zero prompts. Inspect package contents for legacy assemblies
-and data migration code.
+`task pack`, `task smoke:process`, `task smoke:mcp`, and
+`task release:tool-smoke`. Verify the MCP surface is exactly zero tools, one
+resource, and zero prompts. Inspect package contents for legacy assemblies and
+data migration code.
 
 ## Rollback
 

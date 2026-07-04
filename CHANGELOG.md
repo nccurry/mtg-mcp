@@ -5,7 +5,7 @@
 - Removed the audited legacy product implementation from the isolated rewrite
   branch while retaining ordinary Git history and released artifacts.
 - Reduced the production solution to dependency-light `MtgMcp.Core` and a
-  minimal `MtgMcp.App` process skeleton with no MCP or provider surface.
+  minimal resources-only `MtgMcp.App` stdio server with no provider surface.
 - Rebuilt focused unit, architecture, and process tests and reconciled task,
   CI, coverage, package, release, and smoke wiring with the foundation project
   set.
@@ -14,6 +14,11 @@
 - Added `read-only`, `local`, and `remote` mode enforcement; JSON, environment,
   and command-line configuration; a non-creating `mtg-mcp/v0.9` data root; and
   sanitized legacy-data and startup boundaries.
+- Added official MCP initialization and the deterministic
+  `mtg://server/capabilities` resource with zero tools and prompts.
+- Split the one-shot process probe from official-client MCP smoke coverage,
+  added installed-package MCP validation, and made the App project version the
+  default for package and release automation.
 
 ## 0.8.0 - 2026-06-28
 

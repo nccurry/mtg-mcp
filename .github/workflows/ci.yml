@@ -56,7 +56,7 @@ jobs:
       - name: Build with analyzers
         run: task lint
 
-      - name: Verify legacy MCP surface removal
+      - name: Verify exact foundation MCP surface
         run: task surface:report
 
       - name: Analyze with CodeQL
@@ -83,7 +83,10 @@ jobs:
           flags: all-src
           fail_ci_if_error: true
 
-      - name: Smoke foundation process
+      - name: Probe foundation process readiness
+        run: task smoke:process
+
+      - name: Exercise foundation MCP session
         run: task smoke:mcp
 
       - name: Clean release artifacts
@@ -98,5 +101,5 @@ jobs:
       - name: Generate release checksums
         run: task release:checksums
 
-      - name: Smoke local tool package
+      - name: Exercise installed tool package
         run: task release:tool-smoke VERSION=0.9.0-preview.0

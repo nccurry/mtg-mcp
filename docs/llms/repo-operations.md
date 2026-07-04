@@ -25,6 +25,7 @@ task test:unit
 task test:integration
 task test:e2e
 task coverage
+task smoke:process
 task smoke:mcp
 task ci
 task pack

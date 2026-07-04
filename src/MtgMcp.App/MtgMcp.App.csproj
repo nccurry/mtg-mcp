@@ -7,6 +7,8 @@
         <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" />
         <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="ModelContextProtocol" />
     </ItemGroup>
 
     <PropertyGroup>
@@ -16,7 +18,6 @@
         <ToolCommandName>mtg-mcp</ToolCommandName>
         <PackageId>Nccurry.MtgMcp</PackageId>
         <Version>0.9.0-preview.1</Version>
-        <PackageVersion>0.9.0-preview.1</PackageVersion>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Authors>Nick Curry</Authors>
         <Company>Nick Curry</Company>

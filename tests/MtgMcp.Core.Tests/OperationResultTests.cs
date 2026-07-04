@@ -128,6 +128,66 @@ public sealed class OperationResultTests
     }
 
     /// <summary>
+    /// Verifies failure metadata is normalized and rejects unstable or missing public text.
+    /// </summary>
+    [Fact]
+    public void FailureCases_EnforceSemanticContract()
+    {
+        Func<string, string, object>[] constructors =
+        [
+            (reason, message) => new OperationNotFound(reason, message),
+            (reason, message) => new OperationNotCached(reason, message),
+            (reason, message) => new OperationUnsupported(reason, message),
+            (reason, message) => new OperationUnavailable(reason, message),
+            (reason, message) => new OperationConflict(reason, message),
+            (reason, message) => new OperationInvalidInput(reason, message),
+        ];
+
+        foreach (Func<string, string, object> create in constructors)
+        {
+            object value = create(" valid-code ", " Safe message. ");
+            string json = JsonSerializer.Serialize(value, value.GetType(), SerializerOptions);
+
+            Assert.Contains("\"reasonCode\":\"valid-code\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"message\":\"Safe message.\"", json, StringComparison.Ordinal);
+            Assert.ThrowsAny<ArgumentException>(() => create(" ", "message"));
+            Assert.ThrowsAny<ArgumentException>(() => create("Not-Kebab", "message"));
+            Assert.ThrowsAny<ArgumentException>(() => create("bad_code", "message"));
+            Assert.ThrowsAny<ArgumentException>(() => create("valid-code", " "));
+        }
+    }
+
+    /// <summary>
+    /// Verifies semantically invalid failure JSON is rejected during construction.
+    /// </summary>
+    [Fact]
+    public void FailureCases_InvalidJsonMetadataThrows()
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            JsonSerializer.Deserialize<OperationResult<string>>(
+                "{\"kind\":\"not-found\",\"reasonCode\":\"Bad_Code\",\"message\":\"message\"}",
+                SerializerOptions));
+        Assert.ThrowsAny<ArgumentException>(() =>
+            JsonSerializer.Deserialize<OperationResult<string>>(
+                "{\"kind\":\"unavailable\",\"reasonCode\":\"unavailable\",\"message\":\" \"}",
+                SerializerOptions));
+    }
+
+    /// <summary>
+    /// Verifies callers may intentionally represent a successful nullable value.
+    /// </summary>
+    [Fact]
+    public void NullableSuccess_PreservesIntentionalNull()
+    {
+        OperationResult<string?> result = new OperationSuccess<string?>(null);
+        string json = JsonSerializer.Serialize(result, SerializerOptions);
+        OperationResult<string?> roundTrip =
+            JsonSerializer.Deserialize<OperationResult<string?>>(json, SerializerOptions);
+
+        Assert.Null(Assert.IsType<OperationSuccess<string?>>(roundTrip.Value).Data);
+    }
+
+    /// <summary>
     /// Exhaustively maps every closed result case for compile-time change detection.
     /// </summary>
     private static string Describe(OperationResult<string> result)

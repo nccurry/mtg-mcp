@@ -47,6 +47,39 @@ public sealed class FoundationProcessTests
     }
 
     /// <summary>
+    /// Verifies invalid configuration is rejected before the stdio transport writes protocol output.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task McpHost_WithInvalidStartup_EmitsOnlySanitizedDiagnostic()
+    {
+        const string rejectedValue = "private-invalid-mode";
+
+        (int exitCode, string output, string error) = await RunApplicationAsync(
+            "--mode",
+            rejectedValue).ConfigureAwait(false);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal(string.Empty, output);
+        Assert.Equal($"Operation mode must be read-only, local, or remote.{Environment.NewLine}", error);
+        Assert.DoesNotContain(rejectedValue, error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies closing standard input cleanly stops the long-running MCP host.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task McpHost_WithClosedInput_ExitsWithoutProtocolOrDiagnosticNoise()
+    {
+        (int exitCode, string output, string error) = await RunApplicationAsync().ConfigureAwait(false);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, output);
+        Assert.Equal(string.Empty, error);
+    }
+
+    /// <summary>
     /// Runs the built application with isolated configuration sources and captures its result.
     /// </summary>
     private static async Task<(int ExitCode, string Output, string Error)> RunApplicationAsync(
@@ -74,6 +107,7 @@ public sealed class FoundationProcessTests
             {
                 FileName = ResolveDotnetHost(repositoryRoot),
                 RedirectStandardError = true,
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 WorkingDirectory = workingDirectory.FullName,
@@ -88,6 +122,7 @@ public sealed class FoundationProcessTests
 
             using Process process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException("The foundation process did not start.");
+            process.StandardInput.Close();
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
             Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
             Task<string> errorTask = process.StandardError.ReadToEndAsync(timeout.Token);

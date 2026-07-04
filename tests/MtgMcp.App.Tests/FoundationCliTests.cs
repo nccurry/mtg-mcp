@@ -4,23 +4,27 @@ using MtgMcp.App.Cli;
 namespace MtgMcp.App.Tests;
 
 /// <summary>
-/// Verifies the temporary foundation process contract.
+/// Verifies the one-shot foundation process contract and sanitized startup failures.
 /// </summary>
 [Collection(ProcessEnvironmentTestGroup.Name)]
 public sealed class FoundationCliTests
 {
     /// <summary>
-    /// Verifies that the smoke probe succeeds without claiming MCP capabilities.
+    /// Verifies that the smoke probe succeeds without opening the long-running MCP host.
     /// </summary>
     [Fact]
-    public void Run_WithSmokeArgument_ReportsReadiness()
+    public async Task RunAsync_WithSmokeArgument_ReportsReadiness()
     {
         using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
         using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
         using StringWriter output = new(CultureInfo.InvariantCulture);
         using StringWriter error = new(CultureInfo.InvariantCulture);
 
-        int exitCode = FoundationCli.Run(["--smoke"], output, error);
+        int exitCode = await FoundationCli.RunAsync(
+            ["--smoke"],
+            output,
+            error,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         Assert.Equal(0, exitCode);
         Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output.ToString());
@@ -28,62 +32,73 @@ public sealed class FoundationCliTests
     }
 
     /// <summary>
-    /// Verifies that unsupported arguments fail instead of starting a partial server.
+    /// Verifies both supported configuration switch forms use the same smoke boundary.
     /// </summary>
     [Theory]
-    [InlineData()]
-    [InlineData("--unknown")]
+    [InlineData("--mode", "READ-ONLY")]
+    [InlineData("--mode=READ-ONLY")]
+    public async Task RunAsync_WithValidConfiguration_ReportsReadiness(params string[] modeArguments)
+    {
+        using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
+        using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
+        using StringWriter output = new(CultureInfo.InvariantCulture);
+        using StringWriter error = new(CultureInfo.InvariantCulture);
+        List<string> arguments = ["--smoke", .. modeArguments];
+
+        int exitCode = await FoundationCli.RunAsync(
+            arguments,
+            output,
+            error,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    /// <summary>
+    /// Verifies ambiguous and unsupported arguments fail with one stable sanitized diagnostic.
+    /// </summary>
+    [Theory]
     [InlineData("--smoke", "--smoke")]
-    public void Run_WithUnsupportedArguments_ExplainsTheBoundary(params string[] arguments)
+    [InlineData("--smoke", "--unknown")]
+    [InlineData("--mode", "--smoke", "local")]
+    [InlineData("--smoke", "--mode", "local", "--mode", "remote")]
+    public async Task RunAsync_WithAmbiguousArguments_ReturnsStableFailure(params string[] arguments)
     {
         using StringWriter output = new(CultureInfo.InvariantCulture);
         using StringWriter error = new(CultureInfo.InvariantCulture);
 
-        int exitCode = FoundationCli.Run(arguments, output, error);
+        int exitCode = await FoundationCli.RunAsync(
+            arguments,
+            output,
+            error,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         Assert.Equal(2, exitCode);
         Assert.Equal(string.Empty, output.ToString());
         Assert.Equal(
-            $"Only --smoke is available while the 0.9 MCP foundation is under construction.{Environment.NewLine}",
+            $"Configuration contains an unsupported or incomplete command-line option.{Environment.NewLine}",
             error.ToString());
+        Assert.DoesNotContain("unknown", error.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// Verifies configuration switches are accepted with the smoke probe and normalize successfully.
+    /// Verifies invalid startup configuration fails without echoing the rejected value.
     /// </summary>
     [Fact]
-    public void Run_WithValidConfiguration_ReportsReadiness()
+    public async Task RunAsync_WithInvalidMode_ReturnsSanitizedFailure()
     {
         using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
         using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
         using StringWriter output = new(CultureInfo.InvariantCulture);
         using StringWriter error = new(CultureInfo.InvariantCulture);
 
-        int exitCode = FoundationCli.Run(
-            ["--smoke", "--mode", "READ-ONLY", "--data-dir", Path.GetTempPath()],
-            output,
-            error);
-
-        Assert.Equal(0, exitCode);
-        Assert.Equal($"mtg-mcp foundation process ready{Environment.NewLine}", output.ToString());
-        Assert.Equal(string.Empty, error.ToString());
-    }
-
-    /// <summary>
-    /// Verifies invalid startup configuration fails with a sanitized message.
-    /// </summary>
-    [Fact]
-    public void Run_WithInvalidMode_ReturnsSanitizedFailure()
-    {
-        using EnvironmentVariableScope mode = new("MTGMCP__MODE", null);
-        using EnvironmentVariableScope dataRoot = new("MTGMCP__DATA_DIR", null);
-        using StringWriter output = new(CultureInfo.InvariantCulture);
-        using StringWriter error = new(CultureInfo.InvariantCulture);
-
-        int exitCode = FoundationCli.Run(
+        int exitCode = await FoundationCli.RunAsync(
             ["--smoke", "--mode", "private-invalid-value"],
             output,
-            error);
+            error,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         Assert.Equal(2, exitCode);
         Assert.Equal(string.Empty, output.ToString());
@@ -94,38 +109,30 @@ public sealed class FoundationCliTests
     }
 
     /// <summary>
-    /// Verifies unknown configuration switches fail even when they include a value.
+    /// Verifies required collaborators fail through the asynchronous argument boundary.
     /// </summary>
     [Fact]
-    public void Run_WithUnknownConfigurationSwitch_ReturnsSanitizedFailure()
-    {
-        using StringWriter output = new(CultureInfo.InvariantCulture);
-        using StringWriter error = new(CultureInfo.InvariantCulture);
-
-        int exitCode = FoundationCli.Run(
-            ["--smoke", "--private-switch", "private-value"],
-            output,
-            error);
-
-        Assert.Equal(2, exitCode);
-        Assert.Equal(string.Empty, output.ToString());
-        Assert.Equal(
-            $"Configuration contains an unsupported or incomplete command-line option.{Environment.NewLine}",
-            error.ToString());
-        Assert.DoesNotContain("private-switch", error.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("private-value", error.ToString(), StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Verifies that required collaborators are validated at the process boundary.
-    /// </summary>
-    [Fact]
-    public void Run_WithNullCollaborators_Throws()
+    public async Task RunAsync_WithNullCollaborators_Throws()
     {
         using StringWriter writer = new(CultureInfo.InvariantCulture);
 
-        Assert.Throws<ArgumentNullException>(() => FoundationCli.Run(null!, writer, writer));
-        Assert.Throws<ArgumentNullException>(() => FoundationCli.Run([], null!, writer));
-        Assert.Throws<ArgumentNullException>(() => FoundationCli.Run([], writer, null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => FoundationCli.RunAsync(
+                null!,
+                writer,
+                writer,
+                TestContext.Current.CancellationToken)).ConfigureAwait(false);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => FoundationCli.RunAsync(
+                [],
+                null!,
+                writer,
+                TestContext.Current.CancellationToken)).ConfigureAwait(false);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => FoundationCli.RunAsync(
+                [],
+                writer,
+                null!,
+                TestContext.Current.CancellationToken)).ConfigureAwait(false);
     }
 }

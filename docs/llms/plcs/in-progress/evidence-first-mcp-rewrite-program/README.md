@@ -90,7 +90,7 @@ explicitly activated.
 | Order | Child slug | Purpose | Technical dependencies | Authoring gate | Status |
 | --- | --- | --- | --- | --- | --- |
 | 1 | [`legacy-surface-audit-and-disposition`](../../completed/legacy-surface-audit-and-disposition/README.md) | Inventory and classify the current product surface and reusable evidence. | Umbrella guardrails | Repository-owner approval recorded | Approved; completed |
-| 2 | [`rewrite-skeleton-foundation`](../rewrite-skeleton-foundation/README.md) | Define the clean skeleton, repository wiring, modes, evidence, and module boundaries. | Approved audit disposition | Repository-owner implementation authorization recorded | Approved; in progress; Phases 0-3 complete |
+| 2 | [`rewrite-skeleton-foundation`](../../completed/rewrite-skeleton-foundation/README.md) | Define the clean skeleton, repository wiring, modes, evidence, and module boundaries. | Approved audit disposition | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 3 | [`local-deck-store`](../../planned/local-deck-store/README.md) | Define the local deck domain, SQLite persistence, and `deck_*` mutations. | Foundation boundaries | Child 2 draft validated | Drafted; validation passed |
 | 4 | [`manual-deck-interchange`](../../planned/manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Child 3 draft validated | Drafted; validation passed |
 | 5 | [`scryfall-evidence-snapshots`](../../planned/scryfall-evidence-snapshots/README.md) | Define immutable, rich, official Scryfall query snapshots. | Foundation and local card identity | Child 4 draft validated | Drafted; validation passed |
@@ -121,10 +121,10 @@ or authorized drafts. Their durable idea notes and promotion rules live in
 
 ## Project And Surface Impact
 
-The umbrella itself changes documentation only. The approved audit now governs
-foundation deletion/reuse decisions, and the separately authorized foundation
-child may change the rewrite branch only within its active phase. Other planned
-children remain reference material and implementation-ineligible.
+The umbrella itself changes documentation only. The approved audit governed
+the now-completed foundation deletion/reuse work. Other planned children remain
+reference material and implementation-ineligible until separately approved and
+activated.
 
 ## Current Open Questions
 
@@ -176,6 +176,7 @@ that changes a program guardrail must be raised as an umbrella amendment.
 | 2026-07-03 | Foundation Phase 1 worktree isolation | Passed | Fetch/preflight found no target collision; the required branch and sibling worktree were created from `c2aeec8`; HEAD/merge-base and clean-status checks passed without modifying existing worktrees. |
 | 2026-07-03 | Foundation Phase 2 skeleton and repository reconciliation | Passed | The rewrite branch removed the audit-disposed legacy implementation, restored only Core/App plus focused tests, reconciled task/CI/coverage/package/release wiring, passed post-implementation audits, and recorded detailed evidence in the child packet. |
 | 2026-07-03 | Foundation Phase 3 contracts and runtime boundaries | Passed | The rewrite branch now has exhaustive result/evidence unions, the accepted operation-mode matrix, layered and sanitized configuration, versioned data-root resolution, and non-mutating clean-break detection. All focused and repository gates pass with 38 tests and at least 96.06% line coverage per production assembly; detailed audit and reconciliation evidence is recorded in the child packet. |
+| 2026-07-03 | Foundation Phases 4-5 and lifecycle closure | Passed | The branch now hosts an official-SDK resources-only stdio MCP server, exposes exact initialization identity and `mtg://server/capabilities`, and validates process, official-client, and installed-package paths. All 59 tests and the per-assembly coverage gates pass; the child moved to `completed/`. Child 3 remains planned and implementation-unauthorized. |
 
 ## Completion Notes
 
