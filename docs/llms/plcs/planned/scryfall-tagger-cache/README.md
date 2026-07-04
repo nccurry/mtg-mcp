@@ -6,7 +6,7 @@
 - Folder: `docs/llms/plcs/planned/scryfall-tagger-cache/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Current phase: draft review
 
 ## Summary
@@ -26,6 +26,7 @@ does not map them to deck categories; the calling LLM may use ordinary
 
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
+- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions
@@ -98,6 +99,28 @@ This child returns exact cached community assignments and explicit acquisition
 status. It does not infer semantic roles, map tags to deck categories, refresh
 implicitly, or make a deckbuilding decision. It owns only `tagger.db`, keeps
 unsupported provider transport out of Core, and uses the program operation modes.
+
+## Toolset And North-Star Acceptance
+
+- Toolset: `tagger`, disabled by default and explicitly enabled by users who
+  accept this unsupported provider boundary.
+- Surface rule: cached reads and explicitly invoked refresh operations remain
+  separate because they have materially different network and risk behavior;
+  no classifier, category mapper, or generic tag router is added.
+- User question answered: which attributable Scryfall Tagger assignments were
+  cached for these cards, and what is their acquisition status?
+- Evidence type: community source evidence with tag/subject scope and direct or
+  inherited relationship, never an official Scryfall fact.
+- Replay boundary: Oracle/printing identity, immutable cache snapshot,
+  retrieval metadata, checksum, acquisition contract, and source scope identify
+  what was observed.
+- Unknown boundary: not-cached, source-confirmed empty, contract drift, blocked
+  refresh, partial completion, and illustration-only scope remain explicit.
+- Decision boundary: the MCP does not map tags into deck categories or infer
+  additional roles.
+- Complete LLM workflow: enable Tagger, read cached assignments for a local
+  deck, explicitly refresh bounded misses when appropriate, inspect provenance,
+  and let the client LLM decide whether to apply deck categories.
 
 ## Planning Approval
 

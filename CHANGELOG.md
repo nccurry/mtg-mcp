@@ -26,6 +26,10 @@
   deletion with integrity, schema, and database-fingerprint checks.
 - Added the exact nineteen-tool local `deck_*` surface, read-only mode filtering,
   official-client schema/annotation tests, and representative MCP workflows.
+- Added four offline `deck_*` interchange tools for lossless native JSON,
+  generic text, fingerprint-guarded import creation, and checksummed artifact
+  bundles; Archidekt and Moxfield candidate formats remain opt-in experimental
+  pending current manual UI acceptance.
 
 ## 0.8.0 - 2026-06-28
 

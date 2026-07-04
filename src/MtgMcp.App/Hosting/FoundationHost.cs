@@ -26,10 +26,12 @@ internal static class FoundationHost
             configuration.DataRoot,
             FoundationServerIdentity.PackageVersion);
         DeckReadTools readTools = new(deckStore);
+        DeckInterchangeService interchangeService = new(deckStore);
+        DeckInterchangeReadTools interchangeReadTools = new(interchangeService);
         bool writesVisible = OperationModeGuard.Allows(
             configuration.Mode,
             OperationRequirement.LocalWrite);
-        int toolCount = writesVisible ? 19 : 4;
+        int toolCount = writesVisible ? 23 : 7;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
         IMcpServerBuilder mcpBuilder = builder.Services
@@ -46,10 +48,12 @@ internal static class FoundationHost
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitImplicitLoggingCapability()))
             .WithResources(new FoundationResources(configuration, toolCount))
-            .WithTools(readTools);
+            .WithTools(readTools)
+            .WithTools(interchangeReadTools);
         if (writesVisible)
         {
             mcpBuilder.WithTools(new DeckWriteTools(deckStore, configuration.Mode));
+            mcpBuilder.WithTools(new DeckInterchangeWriteTools(interchangeService, configuration.Mode));
         }
 
         using IHost host = builder.Build();

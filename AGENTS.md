@@ -44,6 +44,11 @@
 - Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
   use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `stats_*`, and
   `tagger_*` prefixes.
+- Assign every stable tool to exactly one capability toolset. Toolset selection
+  controls which relevant tools an LLM sees; operation mode remains the sole
+  authority boundary. Registration is fixed for an MCP session, the default
+  profile stays intentionally small, and optional provider surfaces require
+  explicit enablement.
 - The rewrite is a clean break: do not add automatic legacy data/config/schema
   migration or compatibility aliases unless an approved umbrella amendment
   explicitly changes that guardrail.
@@ -64,6 +69,10 @@
 - During the rewrite, follow the approved child module boundary: Decks owns
   local persistence/interchange, Statistics owns exact calculations, provider
   projects own transport/cache concerns, and App owns MCP hosting/composition.
+- Do not solve surface growth with a generic router, intent inference, dynamic
+  per-request tool switching, or compatibility aliases. Prefer coherent,
+  capability-owned tools and merge catalog or discovery tools when one stable
+  response can describe the same domain without losing information.
 
 ## C# Style
 

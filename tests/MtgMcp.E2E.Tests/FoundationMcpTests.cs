@@ -25,7 +25,15 @@ public sealed class FoundationMcpTests
     /// Lists the read-only deck surface available in every operation mode.
     /// </summary>
     private static readonly string[] ReadToolNames =
-        ["deck_backup_list", "deck_get", "deck_list", "deck_validate"];
+    [
+        "deck_backup_list",
+        "deck_export_bundle",
+        "deck_get",
+        "deck_import_preview",
+        "deck_interchange_formats",
+        "deck_list",
+        "deck_validate",
+    ];
 
     /// <summary>
     /// Lists the complete local deck surface available when local writes are permitted.
@@ -47,7 +55,11 @@ public sealed class FoundationMcpTests
         "deck_entry_add",
         "deck_entry_remove",
         "deck_entry_update",
+        "deck_export_bundle",
         "deck_get",
+        "deck_import_create",
+        "deck_import_preview",
+        "deck_interchange_formats",
         "deck_list",
         "deck_update",
         "deck_validate",
@@ -58,10 +70,10 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "local", 19)]
-    [InlineData("read-only", "read-only", 4)]
-    [InlineData("local", "local", 19)]
-    [InlineData("remote", "remote", 19)]
+    [InlineData(null, "local", 23)]
+    [InlineData("read-only", "read-only", 7)]
+    [InlineData("local", "local", 23)]
+    [InlineData("remote", "remote", 23)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -85,7 +97,7 @@ public sealed class FoundationMcpTests
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         Assert.Equal(
-            expectedToolCount == 4 ? ReadToolNames : AllToolNames,
+            expectedToolCount == 7 ? ReadToolNames : AllToolNames,
             tools.Select(value => value.Name).Order(StringComparer.Ordinal).ToArray());
 
         IList<McpClientResource> resources = await session.Client.ListResourcesAsync(
@@ -113,7 +125,7 @@ public sealed class FoundationMcpTests
             "configuration");
         AssertPropertyOrder(root.GetProperty("server"), "name", "packageVersion", "protocolVersion");
         AssertPropertyOrder(root.GetProperty("surface"), "toolCount", "resourceCount", "promptCount");
-        AssertPropertyOrder(root.GetProperty("dataSchemas"), "applicationData", "decks");
+        AssertPropertyOrder(root.GetProperty("dataSchemas"), "applicationData", "decks", "deckInterchange");
         AssertPropertyOrder(
             root.GetProperty("configuration"),
             "dataRootConfigured",
@@ -133,6 +145,9 @@ public sealed class FoundationMcpTests
             "v0.9",
             root.GetProperty("dataSchemas").GetProperty("applicationData").GetString());
         Assert.Equal("v1", root.GetProperty("dataSchemas").GetProperty("decks").GetString());
+        Assert.Equal(
+            "mtg-mcp.deck/v1",
+            root.GetProperty("dataSchemas").GetProperty("deckInterchange").GetString());
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
         Assert.False(Directory.Exists(session.DataRoot));
@@ -183,7 +198,11 @@ public sealed class FoundationMcpTests
             ["deck_entry_add"] = ["deckId", "entry", "expectedRevision"],
             ["deck_entry_remove"] = ["deckId", "entryId", "expectedRevision"],
             ["deck_entry_update"] = ["deckId", "entry", "expectedRevision"],
+            ["deck_export_bundle"] = ["deckId", "formatId", "options"],
             ["deck_get"] = ["deckId"],
+            ["deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options"],
+            ["deck_import_preview"] = ["content", "formatId", "options"],
+            ["deck_interchange_formats"] = [],
             ["deck_list"] = ["cursor", "pageSize"],
             ["deck_update"] = ["deckId", "description", "expectedRevision", "format", "name"],
             ["deck_validate"] = ["deckId"],

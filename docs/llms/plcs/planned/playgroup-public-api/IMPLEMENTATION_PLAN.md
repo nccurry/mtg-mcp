@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -17,7 +17,7 @@
 | 2 | Add transport models, auth, and safe GET client. | PLAY-003 through PLAY-007, PLAY-010, PLAY-011, PLAY-014 | Adapter fixtures pass. |
 | 3 | Add all thirteen read tools. | PLAY-002 through PLAY-007 | Surface and E2E tests pass. |
 | 4 | Add two remote-gated write tools with fixture-only contract proof. | PLAY-008, PLAY-009, PLAY-015 | Write safety/contract fixtures pass; no live write path exists for the pinned contract. |
-| 5 | Add optional safe live-read proof and full validation. | All | Live-read discovery, no-write guards, and offline gates pass. |
+| 5 | Add the opt-in `playgroup` toolset, prove the north-star workflow, and run optional safe live-read validation. | All | Profile/mode surface, composed provider-evidence workflow, live-read discovery, no-write guards, and offline gates pass. |
 
 ## Rules
 
@@ -28,6 +28,7 @@
 - Do not add derived ranking, cross-provider hydration, or private endpoints.
 - Do not run live writes against the pinned contract; it has no documented
   cleanup. Reconsider only if a future official contract adds safe disposal.
+- Do not add aliases, ranking helpers, or a generic provider router.
 
 ## Rollback
 

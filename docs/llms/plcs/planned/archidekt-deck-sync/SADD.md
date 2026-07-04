@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -140,6 +140,17 @@ observed contract may return `400` for a deleted ID, so classification uses the
 reviewed response fixture plus fresh authenticated-list absence and never maps
 every `400` to deletion. Only a separately previewed explicit workflow may
 initialize or replace a binding.
+
+## Toolset And North-Star Design
+
+App assigns all 23 tools to the opt-in `archidekt` toolset. Enabling it changes
+model-visible relevance only: operation mode still admits 11, 12, or 23 tools
+and `OperationModeGuard` still enforces every mutation. The capability document
+reports exact enabled/visible counts without probing credentials. The acceptance
+workflow covers auth inspection, a fresh provider read, an explicit preview,
+authorized apply, and verified outcome while leaving conflict resolution and
+deckbuilding judgment to the client LLM. No provider router or compatibility
+alias is permitted.
 
 ## Alternatives Considered
 

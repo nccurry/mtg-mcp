@@ -69,6 +69,15 @@
 | SCRY-019 | SCRY-FIX-COLLECTION pinned-limit metadata and boundary cases. |
 | SCRY-020 | Price/rank projection evidence-label snapshot. |
 | SCRY-021 | Multi-face root/face coverage and round-trip fixtures. |
+| SCRY-022 | Default/all/none/explicit `scryfall` profile matrix plus a local-deck-to-immutable-card-evidence workflow. |
+
+## North-Star Workflow Fixture
+
+Given a revisioned local Commander deck and a declared card/query question,
+the client creates or selects an immutable Scryfall snapshot, resolves bounded
+card evidence, observes explicit missing/partial states, and receives no role or
+card recommendation. The same snapshot replay is byte-stable. The workflow is
+visible in the default profile and absent when `scryfall` is not selected.
 
 ## Live Tests
 

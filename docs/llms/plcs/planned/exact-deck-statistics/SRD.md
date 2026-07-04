@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -41,6 +41,7 @@ and a Magic rules engine are out of scope.
 | STAT-018 | Must | The inverse solver shall accept only a closed union of engine-proven monotone event cases and a bounded variable-count range; callers shall not assert that an arbitrary predicate is monotone. | Supported-case neighbor proofs pass and custom/non-monotone requests are rejected before calculation. |
 | STAT-019 | Must | Deck-summary percentiles shall use nearest-rank over non-missing values and report `percentileMethod`, included count, and missing count. | Golden percentile boundary and missing-data fixtures pass. |
 | STAT-020 | Must | Deck summaries shall always return exact per-zone quantities and shall expose included/excluded partitions only when the caller supplies disjoint zone-name sets; categories shall never determine partition membership. | Partition fixtures prove total equals included plus excluded plus uncovered and category changes leave zone results unchanged. |
+| STAT-021 | Must | Every tool shall belong only to the default-enabled `stats` toolset and shall pass the packet's north-star acceptance workflow using explicit caller-supplied groups and assumptions, without recommendation aliases, a free-form expression engine, or a generic router. | Default/all/explicit/none profile tests and the composed local-deck-to-exact-result fixture pass identically in every operation mode. |
 
 ## Quality Attributes
 
@@ -58,3 +59,4 @@ and a Magic rules engine are out of scope.
 - [ ] Rational and display rendering are stable.
 - [ ] No heuristic threshold or sampled fallback exists.
 - [ ] Package maintains 90-percent coverage with boundary tests.
+- [ ] Toolset assignment and the north-star acceptance workflow are proven.

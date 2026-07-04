@@ -7,18 +7,20 @@ than runtime payload fixtures.
 
 | ID | Type | Location | Purpose | Owner | Update rule |
 | --- | --- | --- | --- | --- | --- |
-| FIX-PROGRAM-REGISTRY | Planning registry | [README.md](README.md#required-child-registry) | Proves the ten-child order, dependencies, and current status. | Program owner | Update with every child draft, review, or approval. |
+| FIX-PROGRAM-REGISTRY | Planning registry | [README.md](README.md#required-child-registry) | Proves the eleven-child order, dependencies, and current status. | Program owner | Update with every child draft, review, or approval. |
 | FIX-GUARDRAILS | Decision baseline | [README.md](README.md#program-guardrails) | Gives every child one authoritative cross-topic contract. | Repository owner | Change only through an approved umbrella amendment. |
 | FIX-CHILD-CHECKLIST | Review checklist | [Child packet acceptance checklist](#child-packet-acceptance-checklist) | Makes child review consistent and objective. | Child reviewer | Amend with the umbrella if a shared requirement changes. |
 | FIX-PROVIDER-CHECKLIST | Provider review checklist | [Provider child checklist](#provider-child-checklist) | Prevents provider safety and evidence gaps. | Provider child reviewer | Update when shared provider policy changes. |
 | FIX-APPROVAL-RECORD | Approval schema | [SADD review state](SADD.md#review-and-approval-state) | Separates planning approval from implementation authority. | Child reviewer | Keep schema stable across required children. |
 | FIX-PLC-TEMPLATE | Packet template | [PLC template](../../../templates/plc/README.md) | Supplies the required five-file shape. | mtg-mcp | Follow repository template updates. |
+| FIX-TOOLSET-GUARDRAILS | Surface-governance baseline | [SADD capability toolsets](SADD.md#capability-toolset-governance) | Defines static selection, exact assignment, mode intersection, and capability reporting. | Repository owner | Change only through an approved umbrella amendment. |
+| FIX-NORTH-STAR-CHECKLIST | Product acceptance checklist | [SADD north-star gate](SADD.md#north-star-acceptance-gate) | Prevents endpoint coverage from replacing useful evidence workflows. | Child reviewer | Apply to every remaining capability child. |
 
 ## Acceptance Matrix
 
 | Requirement | Fixture or scenario | Expected result | Validation |
 | --- | --- | --- | --- |
-| PROG-001 | FIX-PROGRAM-REGISTRY | README and implementation plan contain the same ten slugs in the same order. | Document comparison |
+| PROG-001 | FIX-PROGRAM-REGISTRY | README and implementation plan contain the same eleven slugs in the same order. | Document comparison |
 | PROG-002 | SCN-001 | Each child is complete and validated before the next draft begins. | Registry and packet inspection |
 | PROG-003 | SCN-002 | Every drafted child remains independently reviewable and implementation-blocked until approval. | Registry and README inspection |
 | PROG-004 | SCN-003 | Umbrella approval cannot satisfy child implementation authorization. | Lifecycle and approval inspection |
@@ -28,6 +30,8 @@ than runtime payload fixtures.
 | PROG-010, PROG-011 | SCN-004 | Folder and status transitions match actual planning progress. | Path and README inspection |
 | PROG-012, PROG-013 | FIX-PROGRAM-REGISTRY | Required and future topics remain distinct and current. | Registry inspection |
 | PROG-015 | FIX-PROVIDER-CHECKLIST | Applicable provider concerns have explicit decisions and tests. | Provider child review |
+| PROG-017, PROG-018, PROG-019, PROG-021 | FIX-TOOLSET-GUARDRAILS, SCN-009, SCN-010 | Every tool has one toolset; default/all/none and all modes reconcile with capability output; registration remains static. | Manifest, architecture, and official-client review |
+| PROG-020 | FIX-NORTH-STAR-CHECKLIST, SCN-011 | Remaining child proves one useful composed LLM workflow and explicit evidence/decision boundaries. | Child review and fixture traceability |
 
 ## Child Packet Acceptance Checklist
 
@@ -44,6 +48,13 @@ A required child cannot be approved until all applicable checks pass:
 - [ ] Must requirements map to design and validation.
 - [ ] Public tools, resources, prompts, schemas, annotations, and modes are exact
       or explicitly unaffected.
+- [ ] Every tool belongs to exactly one named toolset; default-enabled status
+      and mode intersection are explicit.
+- [ ] Tool-versus-resource choices are justified without introducing a generic
+      router solely to reduce the numeric tool count.
+- [ ] North-star acceptance identifies player questions, evidence class,
+      determinism boundary, unknown states, MCP decision boundary, and one
+      representative composed LLM workflow.
 - [ ] Data ownership, persistence, dependencies, security, and privacy are
       resolved or explicitly not applicable.
 - [ ] Unknown, unavailable, unsupported, empty, and partial states are distinct
@@ -82,14 +93,17 @@ Tagger, and future popularity-source packets:
 | SCN-004 | Child 1 drafting begins while the umbrella remains under `planned/`. | The umbrella moves to `in-progress/` in the same change and records the active child. |
 | SCN-005 | A child requires a different operation mode or product boundary. | The queue is blocked pending an umbrella amendment and affected-child review. |
 | SCN-006 | The foundation child proposes deleting legacy code before audit approval. | Review rejects the foundation draft or change until the audit allowlist is approved. |
-| SCN-007 | All ten child packets are approved but none is implemented. | The umbrella may complete, while each child's implementation lifecycle remains unchanged. |
+| SCN-007 | All eleven child packets are approved but none is implemented. | The umbrella may complete, while each child's implementation lifecycle remains unchanged. |
 | SCN-008 | A post-cutover topic is proposed during the required sequence. | It remains a registry entry unless the repository owner explicitly amends the program. |
+| SCN-009 | Default selection starts after decks, Scryfall, and statistics are implemented. | Only those default-enabled toolsets intersected with the active mode are visible; provider integrations stay hidden. |
+| SCN-010 | `all`, `none`, an explicit list, and an unknown name are started in each mode. | Stable implemented toolsets, zero tools, the exact requested subset, and sanitized startup failure are observed respectively; no `listChanged` capability appears. |
+| SCN-011 | A child lists provider endpoints but does not state a player question, evidence class, or composed workflow. | Review rejects the child as north-star incomplete even when endpoint/schema traceability is otherwise complete. |
 
 ## MCP Surface Checks
 
 | Surface | Mode | Expected visibility | Notes |
 | --- | --- | --- | --- |
-| All existing MCP surfaces | Existing behavior | Unchanged | The umbrella and child-authoring work are documentation-only. |
+| Existing MCP surfaces | Existing behavior | Unchanged by umbrella docs | The dedicated toolset child owns runtime changes. |
 
 ## Provider Fixtures
 
@@ -106,5 +120,5 @@ payload baselines.
 - Resolve every relative Markdown link.
 - Compare child slugs and order across README and IMPLEMENTATION_PLAN.
 - Run `git diff --check`.
-- Inspect the diff to confirm that only umbrella/index documentation and the ten
-  required child packets changed; no production implementation is present.
+- Inspect the diff to confirm that umbrella/index documentation and the eleven
+  required child packets agree; production changes require their active child.

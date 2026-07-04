@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -17,7 +17,7 @@
 | 1 | Pin observed public HTML/GraphQL fixture contract, subject-scope semantics, and adapter-only dependency. | TAG-003, TAG-004, TAG-008, TAG-012, TAG-020, TAG-022 | Sanitized fixture, scope mapping, captured-request, and dependency review pass. |
 | 2 | Add SQLite read model and cache-only reads. | TAG-001 through TAG-004, TAG-013, TAG-014, TAG-017 | Temporary-DB tests pass. |
 | 3 | Add cache-aware bounded acquisition, pacing, request/time budgets, and circuit breaker. | TAG-005 through TAG-012, TAG-019, TAG-022, TAG-023 | Fake HTTP/clock/request-count tests pass. |
-| 4 | Add card/deck composition and MCP surface. | TAG-015 through TAG-018 | Surface/E2E and architecture tests pass. |
+| 4 | Add card/deck composition, the opt-in `tagger` toolset, and the north-star evidence workflow. | TAG-015 through TAG-018, TAG-024 | Profile/mode surface, composed workflow, E2E, and architecture tests pass. |
 | 5 | Run optional one-card live proof and full offline validation. | All | Live discovery and full gates pass. |
 
 ## Rules
@@ -32,6 +32,7 @@
 - Never enable moderator view, GraphQL mutations, browser impersonation, or
   Oracle-wide promotion of illustration tags.
 - A policy objection or blocking response disables acquisition, not cache reads.
+- Do not add aliases, a category mapper, or a generic tag router.
 
 ## Rollback
 

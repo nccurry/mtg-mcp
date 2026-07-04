@@ -7,7 +7,7 @@ Current code, tests, project files, checked-in configuration, and `AGENTS.md`
 are authoritative. This file is a compact orientation index, not a second
 instruction file.
 
-This branch contains the completed foundation and revisioned local deck/SQLite capability of the clean-break rewrite.
+This branch contains the completed foundation, revisioned local deck/SQLite capability, and implemented offline manual deck interchange of the clean-break rewrite.
 The shipped legacy server remains available through Git history and its release,
 but its production code is no longer present here. Read
 [Rewrite guide](docs/rewrite-guide.md) before treating historical architecture
@@ -21,7 +21,9 @@ or public-surface docs as future design requirements.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): Current-versus-target routing, rewrite guardrails, and implementation entry gate.
 - [Rewrite program](docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md): Governing `0.9.0` umbrella PLC.
+- [Capability toolsets](docs/llms/plcs/planned/mcp-capability-toolsets/README.md): Planned startup-selected surface governance and profile semantics.
 - [Local deck store](docs/llms/plcs/completed/local-deck-store/README.md): Implemented deck contracts, SQLite lifecycle, tools, and acceptance evidence.
+- [Manual deck interchange](docs/llms/plcs/in-progress/manual-deck-interchange/README.md): Native JSON, generic text, and experimental provider artifact workflows.
 - [Potential features](docs/potential-features.md): Deferred ideas that are not stable rewrite scope.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
 
@@ -30,7 +32,7 @@ or public-surface docs as future design requirements.
 - [Architecture](docs/architecture.md): Rewrite target summary plus explicitly labeled legacy implementation reference.
 - [Adapters](docs/adapters.md): Rewrite adapter boundary plus historical legacy operations.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
-- [Toolsets](docs/toolsets.md): Current legacy tool groups; not the rewrite surface.
+- [Toolsets](docs/toolsets.md): Historical legacy groups and a pointer to the clean-break replacement.
 - [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
 
 ## Agent Planning

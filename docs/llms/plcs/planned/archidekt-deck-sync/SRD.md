@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -50,6 +50,7 @@ collaboration, social, and account administration are out of scope.
 | ARCH-026 | Must | Snapshot restore shall use separate preview/apply tools. Preview shall diff a freshly fetched snapshot against the fresh current remote deck. Apply shall verify snapshot checksum, restorable-content fingerprint, remote deck fingerprint, and preview fingerprint, then use the same guarded primitive deck-write planner as push. Final verification shall require content equality while reporting provider relation IDs that were necessarily regenerated. | Exact restore, provider-ID churn, stale source/target, partial write, and final content-fingerprint fixtures pass. |
 | ARCH-027 | Must | Implementation shall re-verify and fixture the observed public frontend contracts for folder tree/detail/create/update/move/delete and snapshot list/get/create/update/delete/restore composition before exposing their tools. Contract drift returns structured unsupported and performs no guessed alternate operation. | Dated route manifest, sanitized fixture, and fail-closed drift tests pass. |
 | ARCH-028 | Must | The opt-in Archidekt live workflow shall exercise folder and snapshot lifecycle only on disposable state: create a unique private folder, create/move the unique private dummy deck, create/update/get/restore/delete a snapshot, move the deck to root, delete the empty folder, and finally delete the deck. Every cleanup step runs in `finally`; any residual folder, snapshot, or deck fails acceptance. | Live discovery and redacted residual-state report prove complete cleanup. |
+| ARCH-029 | Must | Every tool shall belong only to the opt-in `archidekt` toolset, toolset selection shall never widen operation-mode authority, and the auth/read/preview/authorized-apply/verify workflow shall pass the packet's north-star acceptance check without aliases or a generic router. | Default/all/explicit/none profile tests, per-mode zero-write spies, and the composed workflow fixture pass. |
 
 ## Quality Attributes
 
@@ -71,3 +72,4 @@ collaboration, social, and account administration are out of scope.
 - [ ] Verified remote deletion leaves no throwaway deck after the live workflow.
 - [ ] Folder and named-snapshot lifecycle/restore pass offline fixtures and the disposable live workflow.
 - [ ] Automatic history, package, tag, collaboration, social, and account-administration features are absent from the surface.
+- [ ] Toolset assignment and the north-star acceptance workflow are proven.

@@ -46,6 +46,22 @@
 - Redact credentials and sensitive local paths from logs, errors, resources,
   test data, and configuration output.
 
+## Surface Discipline
+
+- Assign every stable tool to exactly one capability toolset. Toolsets express
+  relevance; operation modes continue to express authority.
+- Keep registration static for the MCP session. Select toolsets at startup and
+  advertise the resulting exact surface without dynamic list-change claims.
+- Make `decks`, `scryfall`, and `stats` the smallest coherent default. Require
+  explicit enablement for `archidekt`, `playgroup`, and `tagger`.
+- Support `default`, `all`, `none`, and explicit toolset lists so clients and
+  tests can request a predictable surface.
+- Add a tool only when its distinct input/output contract advances a complete
+  LLM workflow. Prefer one catalog tool over parallel discovery tools that
+  return the same domain facts.
+- Do not replace a large explicit surface with a generic router, intent
+  inference, per-tool allowlists, or compatibility aliases.
+
 ## Deferred Experimental Estimation
 
 - Heuristic recommendations, blended scores, and simulation are not stable

@@ -30,7 +30,7 @@
 
 | Tool | `read-only` | `local` | `remote` |
 | --- | --- | --- | --- |
-| `deck_import_formats`, `deck_import_preview`, `deck_export_formats`, `deck_export_bundle` | Visible | Visible | Visible |
+| `deck_interchange_formats`, `deck_import_preview`, `deck_export_bundle` | Visible | Visible | Visible |
 | `deck_import_create` | Hidden | Visible | Visible |
 
 ## Manual Acceptance
@@ -44,6 +44,9 @@ Manual checks record provider, observed UTC, UI flow/path, artifact checksums,
 result, notes, and revalidation reason. They do not use automated APIs or retain
 user deck data. The acceptance is repeated during implementation and before
 stable cutover.
+
+The current not-run implementation records and exact remaining gate are in
+[Manual Provider Acceptance Records](PROVIDER_ACCEPTANCE.md).
 
 ## Syntax Research Evidence
 
@@ -71,3 +74,13 @@ does not satisfy XCHG-017 by itself.
 | XCHG-015 | XCHG-FIX-006, XCHG-FIX-009, and XCHG-FIX-010. |
 | XCHG-016 | XCHG-FIX-011 and XCHG-FIX-012. |
 | XCHG-017 | Dated manual-acceptance metadata schema and pre-cutover revalidation record. |
+| XCHG-018 | One catalog schema, exact current mode surface, direct write guard, complete dummy Commander workflow, and the dependent toolset child's future `decks` profile matrix. |
+
+## North-Star Workflow Fixture
+
+List the four format rows once, preview a generic Commander deck, inspect all
+diagnostics and unresolved identities, create it only with the matching
+fingerprint in an authorized mode, and export native/provider bundles with
+checksums and preservation rows. Replaying the same preview and export is
+deterministic, and no card identity, category, merge, or provider-ingestion
+decision is made by the MCP.

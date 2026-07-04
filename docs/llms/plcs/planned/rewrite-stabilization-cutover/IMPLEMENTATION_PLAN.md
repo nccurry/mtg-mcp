@@ -5,13 +5,13 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
 ## Entry Gate
 
-Do not begin this plan until the nine prerequisite child PLCs are approved,
+Do not begin this plan until the ten prerequisite child PLCs are approved,
 implemented, accepted, and completed. Reopen the owning child instead of fixing
 capability behavior opportunistically in this cutover.
 
@@ -20,7 +20,7 @@ capability behavior opportunistically in this cutover.
 | Phase | Goal | Requirements | Exit criteria |
 | --- | --- | --- | --- |
 | 1 | Confirm child completion and final architecture. | CUT-001, CUT-002, CUT-014 | Dependency/revision ledger and module tests pass. |
-| 2 | Reconcile the approved public surface, package metadata, and documentation. | CUT-003 through CUT-005, CUT-013, CUT-016 | Derived manifest, three mode snapshots, forbidden scans, docs review, and preview version checks pass. |
+| 2 | Reconcile toolsets, the approved public surface, package metadata, and documentation. | CUT-003 through CUT-005, CUT-013, CUT-016, CUT-020, CUT-021 | Derived profile/mode manifests, capability snapshots, forbidden scans, docs review, and preview version checks pass. |
 | 3 | Run complete offline, security, data-isolation, and coverage gates. | CUT-006 through CUT-008, CUT-012 | Final-commit offline evidence bundle passes. |
 | 4 | Run provider-specific opt-in live acceptance. | CUT-009 through CUT-011 | Required live proof and cleanup gates pass with redacted evidence. |
 | 5 | Integrate latest `main` and repeat phases 1 through 4. | CUT-015 | Conflict review and complete post-integration validation pass. |
@@ -38,6 +38,8 @@ capability behavior opportunistically in this cutover.
 - Update the child matrix, regenerate the cutover crosswalk/totals, and update
   schema snapshots in one reviewed change whenever a public tool changes. Do
   not preserve a tool or count solely for backward compatibility.
+- Prove the default end-to-end deckbuilding evidence workflow and every opt-in
+  provider workflow; a count-only surface check cannot satisfy CUT-021.
 - Record provider proof as passed, approved skip, unsupported, or failed; use
   only the waiver classes allowed by the SADD and never relabel a skip as pass.
 - Do not waive Archidekt verified deletion, secret exposure, residual remote

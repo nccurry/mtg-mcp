@@ -31,6 +31,16 @@ replacement decisions, blended scores, or strategic simulations. The current
 tool-count baseline is derived from child packets and is not a compatibility
 constraint.
 
+Every stable tool also belongs to exactly one startup-selectable capability
+toolset: `decks`, `scryfall`, `stats`, `archidekt`, `playgroup`, or `tagger`.
+The model-visible surface is the intersection of the enabled toolsets and the
+selected operation mode. Toolsets reduce irrelevant context but grant no
+authority. Registration remains fixed for a session, so the server does not
+advertise dynamic list changes. The default toolsets are `decks`, `scryfall`,
+and `stats`; provider-specific toolsets are opt-in. Exact configuration and
+capability-resource behavior belongs to the independently reviewed
+`mcp-capability-toolsets` child PLC.
+
 See the [rewrite guide](rewrite-guide.md) and
 [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).
 Exact implementation details belong to the independently approved child PLCs.

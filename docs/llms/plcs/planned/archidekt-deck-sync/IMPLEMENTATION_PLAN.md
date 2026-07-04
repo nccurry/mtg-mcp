@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -19,7 +19,7 @@
 | 3 | Implement canonical diff and transactional pull. | ARCH-005 through ARCH-009, ARCH-019 | Conflict/state/local transaction tests pass. |
 | 4 | Implement create, primitive push/delete, and optional proven bulk path. | ARCH-006, ARCH-008 through ARCH-014, ARCH-018, ARCH-019 | Request sequence, bulk equivalence/disablement, and partial failure tests pass. |
 | 5 | Implement guarded folder organization and named-snapshot lifecycle/restore. | ARCH-020 through ARCH-028 | Folder tree/cycle/empty-delete and snapshot identity/restore/partial-failure tests pass. |
-| 6 | Add the complete MCP surface and complete disposable live proof. | ARCH-015 through ARCH-028 | Surface/E2E, combined DB/HTTP, deck/folder/snapshot cleanup, and full offline gates pass. |
+| 6 | Add the opt-in `archidekt` toolset, prove the north-star workflow, and complete disposable live proof. | ARCH-015 through ARCH-029 | Profile/mode surface, composed workflow, combined DB/HTTP, deck/folder/snapshot cleanup, and full offline gates pass. |
 
 ## Rules
 
@@ -36,6 +36,8 @@
   local deck or synchronization baseline.
 - Never weaken guards to make a flaky live test pass.
 - Keep live tests opt-in and cleanup-first.
+- Do not add aliases or a generic provider router to compensate for opt-in
+  discovery.
 
 ## Rollback
 

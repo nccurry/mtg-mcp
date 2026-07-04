@@ -105,6 +105,26 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
+    /// Verifies manual interchange cannot grow an implicit provider or arbitrary filesystem path boundary.
+    /// </summary>
+    [Fact]
+    public void ManualInterchange_ContainsNoNetworkClientOrCallerPathWrites()
+    {
+        string deckSourceRoot = Path.Combine(RepositoryRoot, "src", "MtgMcp.Decks");
+        string interchangeSource = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(deckSourceRoot, "*Interchange*.cs").Select(File.ReadAllText));
+        string artifactWriter = File.ReadAllText(Path.Combine(deckSourceRoot, "DeckArtifactWriter.cs"));
+        string parser = File.ReadAllText(Path.Combine(deckSourceRoot, "DeckTextParser.cs"));
+        string combined = string.Join(Environment.NewLine, interchangeSource, artifactWriter, parser);
+
+        Assert.DoesNotContain("HttpClient", combined, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Net", combined, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Write", combined, StringComparison.Ordinal);
+        Assert.DoesNotContain("Directory.Create", combined, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that E2E tests use only the official MCP Core client package.
     /// </summary>
     [Fact]
@@ -158,7 +178,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, nineteen-tool, zero-prompt local deck surface.
+    /// Verifies the exact one-resource, twenty-three-tool, zero-prompt local deck and interchange surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedDeckToolsAndCapabilityResource()
@@ -170,9 +190,9 @@ public sealed class FoundationArchitectureTests
         string source = string.Join(Environment.NewLine, sourceFiles.Select(File.ReadAllText));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(19, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(23, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(2, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(4, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -197,7 +217,11 @@ public sealed class FoundationArchitectureTests
                 "deck_entry_add",
                 "deck_entry_remove",
                 "deck_entry_update",
+                "deck_export_bundle",
                 "deck_get",
+                "deck_import_create",
+                "deck_import_preview",
+                "deck_interchange_formats",
                 "deck_list",
                 "deck_update",
                 "deck_validate",
@@ -268,6 +292,15 @@ public sealed class FoundationArchitectureTests
                     $"Repository wiring references missing project '{projectPath.Value}'.");
             }
         }
+
+        Assert.Contains(
+            "DeckInterchangeMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "DeckInterchangeMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
+            StringComparison.Ordinal);
     }
 
     /// <summary>

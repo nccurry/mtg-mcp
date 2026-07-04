@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -84,6 +84,17 @@ client sends a project-specific User-Agent and JSON Accept header. It follows
 provider pagination URLs only after verifying HTTPS and the expected Scryfall
 host. It never follows arbitrary URLs from card fields. 403/429 stop; 5xx and
 transport failures retry twice at fixed bounded delays with cancellation.
+
+## Toolset And North-Star Design
+
+App assigns all seven tools to the default-enabled `scryfall` toolset. Startup
+registration intersects that toolset with operation-mode visibility; it never
+changes the acquisition guards. The capability document reports whether the
+toolset is enabled and its visible count. The acceptance workflow begins with
+an explicit local deck or query, creates or selects immutable source evidence,
+reads bounded objects, preserves unknown/unavailable states, and stops before
+the LLM's card-selection judgment. No alias, generic provider router, or hidden
+refresh path is part of the design.
 
 ## Alternatives Considered
 

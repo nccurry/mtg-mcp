@@ -183,6 +183,34 @@ internal static class DeckSql
     }
 
     /// <summary>
+    /// Loads canonical provider baselines for one deck in stable binding order.
+    /// </summary>
+    internal static async Task<IReadOnlyList<DeckSyncBaseline>> ReadBaselinesAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        Guid deckId,
+        CancellationToken cancellationToken)
+    {
+        List<DeckSyncBaseline> items = [];
+        await using SqliteCommand command = CreateCommand(connection, transaction, """
+            SELECT s.binding_id, s.canonical_snapshot
+            FROM sync_baselines s
+            JOIN provider_bindings b ON b.binding_id = s.binding_id
+            WHERE b.deck_id = $deckId
+            ORDER BY s.binding_id;
+            """);
+        command.Parameters.AddWithValue("$deckId", FormatId(deckId));
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            items.Add(new DeckSyncBaseline(ParseId(reader.GetString(0)), reader.GetString(1)));
+        }
+
+        return items;
+    }
+
+    /// <summary>
     /// Reads a deck revision or returns null when the deck does not exist.
     /// </summary>
     internal static async Task<long?> ReadRevisionAsync(

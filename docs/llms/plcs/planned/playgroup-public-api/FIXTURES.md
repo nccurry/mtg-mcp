@@ -54,6 +54,15 @@ provider operation count remains fifteen.
 | PLAY-013 | Contract drift cases and reviewed-fixture checksum gate. |
 | PLAY-014 | Sanitized provider error fixtures. |
 | PLAY-015 | Offline discovery, safe live-read opt-in, hard no-live-write guard, and dated owner fixture-only decision. |
+| PLAY-016 | Default/all/none/explicit `playgroup` profile matrix plus auth/provider-read/evidence-correlation workflow and remote-write spies. |
+
+## North-Star Workflow Fixture
+
+With `playgroup` explicitly enabled, the client inspects redacted auth status,
+requests one bounded provider operation, preserves endpoint/version/retrieval
+context, and correlates explicit provider IDs with caller-supplied deck context.
+No quality ranking or deck update is produced. The family is absent from the
+default profile, and enabling it never makes writes visible outside `remote`.
 
 ## Live Tests
 

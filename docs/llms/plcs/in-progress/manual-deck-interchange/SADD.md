@@ -2,16 +2,17 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
 
-Interchange lives in `MtgMcp.Decks` behind pure parser/formatter interfaces.
-App owns five MCP wrappers. A format catalog maps stable format IDs to parsers,
+Interchange lives in `MtgMcp.Decks` behind focused parser/formatter helpers.
+App owns four MCP wrappers. One format catalog maps stable format IDs and their
+supported import/export directions to parsers,
 formatters, preservation capabilities, size limits, and instructions; it is a
 closed built-in table, not a plugin or arbitrary code loader.
 
@@ -20,7 +21,8 @@ closed built-in table, not a plugin or arbitrary code loader.
 1. Validate format and byte bound.
 2. Parse without network access into a proposed canonical deck.
 3. Preserve source lines/JSON paths in bounded diagnostics.
-4. Compute SHA-256 over format ID, options, and canonical proposal.
+4. Compute SHA-256 over the format ID and canonical proposal; parsing options
+   that affect content are already represented in that proposal.
 5. Return preview and fingerprint.
 6. On create, reparse supplied content, verify fingerprint, and call the local
    deck create transaction.
@@ -34,7 +36,8 @@ issue explicit deck mutations.
 
 ### Export bundle
 
-`DeckExportBundle` contains format/version, deck/revision, generated UTC,
+`DeckExportBundle` contains format/version, deck/revision, deterministic
+generated UTC derived from the stored revision timestamp,
 ordered `ExportArtifact` records, and `FieldPreservation` rows. Each artifact
 has logical name, media type, UTF-8 content, SHA-256, and purpose. No artifact
 contains an absolute local path.
@@ -45,8 +48,8 @@ contains an absolute local path.
 | --- | --- | --- |
 | `mtg-mcp-json-v1` | `deck.mtg-mcp.json` | Lossless document tagged `mtg-mcp.deck/v1`; stable IDs and bindings included, secrets/provider payloads excluded. |
 | `generic-text-v1` | `deck.txt` | Section headings plus quantity/name/printing; manifest reports losses. |
-| `archidekt-text-v1` | `deck.archidekt.txt` | `1 Name (SET) collector` and one backtick primary category; secondary assignments in CSV/native companions. |
-| `moxfield-bulk-edit-v1` | `deck.moxfield.txt` | Manually verified board sections, set/collector and `*F*`/`*E*` tokens, and appended `#Local Tag`; native companion preserves every local field. |
+| `archidekt-text-v1` | `deck.archidekt.txt` | Candidate `1 Name (SET) collector` and one backtick primary category; secondary assignments in CSV/native companions; experimental pending UI acceptance. |
+| `moxfield-bulk-edit-v1` | `deck.moxfield.txt` | Candidate set/collector, `*F*`/`*E*`, and appended `#Local Tag` syntax; native companion preserves every local field; experimental pending UI acceptance. |
 
 The exact bundles are:
 
@@ -57,8 +60,8 @@ The exact bundles are:
 | Archidekt | `deck.archidekt.txt`, `category-assignments.csv`, `deck.mtg-mcp.json`, `preservation.json`, `README.txt` |
 | Moxfield | `deck.moxfield.txt`, `category-assignments.csv`, `deck.mtg-mcp.json`, `preservation.json`, `README.txt` |
 
-Moxfield global tags use `#!Tag Name` only when `tagScope=global` is explicitly
-requested. Both Moxfield tag forms remain a candidate contract until dated
+Moxfield global tags use `#!Tag Name` only when
+`useGlobalMoxfieldTags=true` is explicitly requested. Both Moxfield tag forms remain a candidate contract until dated
 manual disposable-deck acceptance succeeds. Archidekt secondary categories
 remain `companion-only` until current UI acceptance proves a supported
 multi-category import syntax. `README.txt` contains target-specific manual
@@ -68,6 +71,17 @@ Preview output is capped at 200 diagnostics, 512 Unicode characters per
 diagnostic, and includes `omittedDiagnosticCount`. Export is capped at 16
 artifacts and 20 MiB total UTF-8 content; bound failures return unsupported-size
 without a partial bundle.
+
+### Toolset and north-star design
+
+All four tools are declared for the default-enabled `decks` toolset. The
+separate capability-toolset child implements startup selection and tests that
+it may hide the family but cannot authorize `deck_import_create`, which retains
+its local-write guard. One catalog tool returns direction flags for
+each stable format because separate import/export discovery returned the same
+rows and added no information. The acceptance workflow covers catalog,
+preview, guarded creation, and deterministic export while preserving unresolved
+and unsupported states for the client LLM.
 
 ## Alternatives Considered
 
@@ -101,3 +115,8 @@ or pre-cutover refresh. The checks run during implementation and again before
 stable cutover so old UI evidence is never silently treated as current. The
 2026-07-03 web research is a grammar-design input only and does not count as
 manual acceptance.
+
+Current official-client tests assert the single catalog schema, exact four-tool
+surface, mode visibility, direct write guard, and full dummy Commander workflow
+required by XCHG-018. Profile filtering is a dependent acceptance check in
+`mcp-capability-toolsets`, not current runtime evidence.

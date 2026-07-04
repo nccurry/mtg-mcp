@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -38,17 +38,17 @@ payloads.
 | --- | ---: | --- |
 | Server metadata tools | 0 | Foundation uses initialization and the capability resource. |
 | `deck_*` local deck operations | 19 | Local deck store |
-| `deck_*` manual interchange | 5 | Manual interchange |
+| `deck_*` manual interchange | 4 | Manual interchange |
 | `scryfall_*` | 7 | Scryfall snapshots |
 | `archidekt_*` | 23 | Archidekt decks, folders, snapshots, and synchronization |
 | `playgroup_*` | 16 | Playgroup public API |
 | `stats_*` | 8 | Exact statistics |
 | `tagger_*` | 6 | Tagger cache |
-| **Total** | **84** | |
+| **Total** | **83** | |
 
 The only resource is `mtg://server/capabilities`; there are no prompts. As of
-the current child drafts, canonical per-mode discovery snapshots contain 49,
-71, and 84 tools for `read-only`, `local`, and `remote`, respectively. These are
+the current child drafts, canonical `all` discovery snapshots contain 48, 70,
+and 83 tools for `read-only`, `local`, and `remote`, respectively. These are
 derived planning totals, not backward-compatibility requirements. An approved
 child may add, remove, rename, or reshape tools to improve the design; the
 manifest, crosswalk, totals, and snapshots are then regenerated together.
@@ -56,7 +56,7 @@ Schema canonicalization sorts objects only where order is semantically
 irrelevant and never weakens exact name, description, annotation, input, or
 output-schema comparisons.
 
-`read-only` is a mutation-authority mode: its 49 tools may include explicit
+`read-only` is a mutation-authority mode: its 48 `all`-profile tools may include explicit
 Scryfall, Archidekt, or Playgroup network reads/previews, but every local and
 remote write spy must remain zero. “Offline” describes normal validation, not a
 runtime mode. Manual interchange is owned by `MtgMcp.Decks`; no separate
@@ -120,6 +120,19 @@ check remains visibly different from a pass.
 Rollback reinstalls the prior stable package and points it at its unchanged
 legacy configuration/data. New stores remain untouched for diagnosis or later
 manual export; the rollback never down-migrates them.
+
+## Toolset And North-Star Design
+
+Cutover derives a canonical mapping from every stable tool to exactly one of
+the six approved toolsets. It snapshots `default`, `all`, `none`, and
+representative explicit profiles in each operation mode and proves the visible
+surface is the intersection of selected relevance and existing authority. The
+default profile contains `decks`, `scryfall`, and `stats`; provider toolsets are
+opt-in. Registration stays fixed for the session and advertises no list-change
+capability. Acceptance composes local deck, official card evidence, and exact
+statistics under the default profile, then separately proves each opt-in
+provider workflow. No router, inferred intent, placeholder toolset, or decision
+surface can satisfy the gate.
 
 ## Alternatives Considered
 

@@ -103,6 +103,15 @@ adapter-level live acceptance test.
 | ARCH-026 | ARCH-FIX-027 through ARCH-FIX-030 and shared primitive-planner equivalence tests. |
 | ARCH-027 | Dated route manifest, sanitized contract fixtures, and fail-closed drift tests. |
 | ARCH-028 | ARCH-FIX-032 plus live folder/snapshot/deck lifecycle and residual-state guards. |
+| ARCH-029 | Default/all/none/explicit `archidekt` profile matrix plus auth/read/preview/authorized-apply/verify workflow and per-mode zero-write spies. |
+
+## North-Star Workflow Fixture
+
+With `archidekt` explicitly enabled, the client inspects redacted auth status,
+reads fresh remote deck/folder/snapshot evidence, previews one exact change,
+applies it only with the required authority, and verifies the provider outcome.
+The result never resolves a conflict or chooses deck content. The family is
+absent from the default profile, and enabling it never widens mode authority.
 
 ## Live Acceptance
 

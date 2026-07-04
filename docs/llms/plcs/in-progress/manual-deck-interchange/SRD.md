@@ -2,10 +2,10 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -37,6 +37,7 @@ identity guessing are out of scope.
 | XCHG-015 | Must | `deck_import_create` shall expose `allowPartial`, default it to `false`, and reject a partial preview unless the caller explicitly sets it to `true` with the matching preview fingerprint. | Default/refusal/explicit-opt-in fixtures pass with no partial deck on refusal. |
 | XCHG-016 | Must | A preview shall return at most 200 diagnostics of at most 512 Unicode characters plus an omitted count; an export shall contain at most 16 artifacts and 20 MiB total UTF-8 content. | Exact-boundary and overflow tests return deterministic bounded results. |
 | XCHG-017 | Must | Manual provider acceptance records shall include provider, observed UTC, UI flow/path, artifact checksums, result, notes, and revalidation reason; provider artifacts shall be reverified during implementation and before stable cutover. Research-only web evidence shall be labeled separately and shall not satisfy UI acceptance. | Fixture metadata schema and dated Archidekt/Moxfield records pass review. |
+| XCHG-018 | Must | The four tools shall be assigned only to the default-enabled `decks` toolset when the capability-toolset child lands. One `deck_interchange_formats` catalog shall replace direction-duplicated discovery, operation mode shall remain authoritative, and the packet's north-star import/export workflow shall pass without aliases or a generic router. | Merged-catalog schema, dummy-deck workflow, and direct write-guard tests pass now; the dependent toolset child later proves exact profile/mode assignment. |
 
 ## Quality Attributes
 
@@ -59,10 +60,13 @@ identity guessing are out of scope.
 | XCHG-015 | Partial-preview create schema and refusal/opt-in tests |
 | XCHG-016 | Diagnostic/artifact boundary tests |
 | XCHG-017 | Manual acceptance metadata and cutover checklist |
+| XCHG-018 | Toolset/profile matrix, merged catalog, and north-star workflow |
 
 ## Definition Of Done
 
-- [ ] Native JSON round trips exactly.
-- [ ] Provider preservation reports are complete and honest.
+- [x] Native JSON round trips exactly.
+- [x] Provider preservation reports are complete and honest.
 - [ ] Manual Archidekt/Moxfield checks are recorded with date and UI path.
-- [ ] No network adapter is introduced.
+- [x] No network adapter is introduced.
+- [x] One catalog and the current complete import/export workflow are proven.
+- [ ] The dependent capability-toolset child proves `decks` profile assignment.

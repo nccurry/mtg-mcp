@@ -6,14 +6,14 @@
 - Folder: `docs/llms/plcs/planned/rewrite-stabilization-cutover/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Current phase: draft review
 
 ## Summary
 
 This packet defines the integration, verification, packaging, release, rollback,
 and PLC-lifecycle gates for the evidence-first `0.9.0` rewrite. It adds no
-capability. Its job is to prove that the nine stable child implementations agree
+capability. Its job is to prove that the ten prerequisite child implementations agree
 on architecture and MCP contracts, remove the prohibited legacy surface, and can
 be released without changing or deleting legacy user data.
 
@@ -26,7 +26,8 @@ inadequate coverage, or a failed required offline gate.
 - [Legacy Surface Audit And Disposition](../../completed/legacy-surface-audit-and-disposition/README.md)
 - [Rewrite Skeleton And Repository Foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Local Deck Domain And SQLite Store](../../completed/local-deck-store/README.md)
-- [Manual Deck Interchange](../manual-deck-interchange/README.md)
+- [Manual Deck Interchange](../../in-progress/manual-deck-interchange/README.md)
+- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
 - [Archidekt Decks, Folders, Snapshots, And Synchronization](../archidekt-deck-sync/README.md)
 - [Playgroup Official API](../playgroup-public-api/README.md)
@@ -38,7 +39,7 @@ inadequate coverage, or a failed required offline gate.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The current 84-tool count is a drift-detection baseline, not a compatibility target or design constraint. |
+| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The current 83-tool `all` profile is a drift-detection baseline, not a compatibility target or design constraint. |
 | Require ordinary Git history-preserving integration. | Proposed | The rewrite is a clean product break, not a repository-history rewrite. |
 | Require preview releases and cross-platform smoke proof before `0.9.0`. | Proposed | Packaging and host failures must be found before the stable cutover. |
 | Keep legacy releases and legacy data directories available for rollback. | Proposed | Rollback must not translate or destroy user data. |
@@ -67,6 +68,28 @@ This child adds no product capability and cannot make deckbuilding decisions.
 It verifies the program's project boundaries, evidence distinctions, operation
 modes, separate databases, clean-break version, offline coverage, prohibited
 surface removal, and no-migration policy without authorizing implementation.
+
+## Toolset And North-Star Acceptance
+
+- Toolset scope: validate the default, `all`, `none`, and representative explicit
+  profiles across every operation mode. Cutover adds no toolset of its own.
+- User question answered: does the released server provide a coherent set of
+  evidence and explicit workflows that an LLM can reliably compose for deck
+  building without carrying irrelevant provider surfaces?
+- Evidence type: the release keeps provider facts, community evidence, exact
+  derivations, parser classifications, heuristics, and unavailable states
+  visibly distinct.
+- Replay boundary: canonical manifests, profile/mode matrices, schema snapshots,
+  package versions, fixture revisions, and acceptance evidence identify what
+  was released.
+- Unknown boundary: provider drift, missing credentials, stale evidence,
+  partial operations, unsupported behavior, and deferred features remain
+  visible and release-blocking where their child PLC requires it.
+- Decision boundary: no stable tool, prompt, resource, router, or profile makes
+  deckbuilding judgments for the client LLM.
+- Complete LLM workflow: default sessions support local deck work, official
+  card evidence, and exact statistics; explicitly enabled provider toolsets add
+  their bounded workflows without widening operation-mode authority.
 
 ## Planning Approval
 

@@ -22,7 +22,7 @@ approved/completed. The governing program remains
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [manual-deck-interchange](manual-deck-interchange/README.md) | Draft | Define lossless native and explicit provider-compatible manual artifacts. |
+| [mcp-capability-toolsets](mcp-capability-toolsets/README.md) | Draft | Define static startup-selected capability toolsets that keep the model-visible surface coherent without changing authority. |
 | [scryfall-evidence-snapshots](scryfall-evidence-snapshots/README.md) | Draft | Define immutable snapshots of official Scryfall reads and rich source objects. |
 | [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
 | [playgroup-public-api](playgroup-public-api/README.md) | Draft | Define typed coverage of the pinned official Playgroup public API. |

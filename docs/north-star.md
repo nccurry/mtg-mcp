@@ -23,6 +23,12 @@ An LLM using `mtg-mcp` should be able to explain:
 - Which deck changes are only proposed and which require explicit permission to
   apply locally or through Archidekt.
 
+It should also be able to discover a small, coherent set of tools for the
+workflow at hand. Stable tools belong to exactly one capability toolset. The
+default session exposes local decks, official card evidence, and exact
+statistics; provider-specific surfaces are enabled deliberately. An LLM should
+not need to reason over every integration merely because the server supports it.
+
 ## Evidence Order
 
 1. **Source facts**: oracle text, legality, prices, workspace contents, and
@@ -58,6 +64,9 @@ output can still be heuristic.
   remote operation and the workflow safeguards defined by its approved PLC.
 - Do not replace the player's goals or the LLM's final reasoning with one opaque
   power score.
+- Do not make the model-visible surface an undifferentiated inventory of every
+  supported operation. Do not hide that inventory behind a generic router or
+  inferred-intent dispatcher either.
 
 See the [rewrite guide](rewrite-guide.md), [design goals](design-goals.md),
 [heuristic model constraints](heuristic-models.md), and the

@@ -6,7 +6,7 @@
 - Folder: `docs/llms/plcs/planned/archidekt-deck-sync/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Current phase: draft review
 
 ## Summary
@@ -21,8 +21,9 @@ fingerprint. The adapter never writes through ordinary local edits.
 ## Dependencies
 
 - [Local Deck Store](../../completed/local-deck-store/README.md)
-- [Manual Deck Interchange](../manual-deck-interchange/README.md)
+- [Manual Deck Interchange](../../in-progress/manual-deck-interchange/README.md)
 - [Scryfall Evidence Snapshots](../scryfall-evidence-snapshots/README.md)
+- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions
@@ -118,11 +119,34 @@ The adapter translates provider facts and performs explicitly authorized
 workflow operations. It does not recommend changes, infer categories, or claim
 atomic rollback when Archidekt partially accepts a multi-request update.
 
+## Toolset And North-Star Acceptance
+
+- Toolset: `archidekt`, disabled by default and explicitly enabled by users who
+  need this provider.
+- Surface rule: each tool exposes a distinct provider read, preview, or guarded
+  operation. Folder and snapshot catalogs are not duplicated by generic
+  provider routers or aliases.
+- User question answered: what is the current Archidekt deck, folder, snapshot,
+  or synchronization state, and what exact operation would change it?
+- Evidence type: fresh provider observations, canonical fingerprints, explicit
+  diffs, and verified operation outcomes.
+- Replay boundary: local revision, provider fingerprint, source fingerprint,
+  preview fingerprint, retrieval metadata, and fixture contract identify the
+  evidence used for each guarded operation.
+- Unknown boundary: auth absence, contract drift, stale state, conflict,
+  partial acceptance, and unverifiable cleanup remain explicit.
+- Decision boundary: the adapter does not select a conflict winner, category,
+  folder, snapshot, or deckbuilding change.
+- Complete LLM workflow: enable Archidekt, inspect auth and fresh provider
+  state, preview a pull/push/restore or exact lifecycle operation, obtain user
+  authority, apply it in the required mode, and verify the result.
+
 ## Validation Evidence
 
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Current folder/snapshot contract inspection | Passed for draft | The public frontend exposes folder tree/detail/create/update/move/item-delete and snapshot list/get/create/update/delete plus composed restore; implementation must re-verify and sanitize fixtures. |
 | 2026-07-03 | Requirement and fixture traceability | Passed | All 28 `ARCH-*` requirements map to objective fixtures/checks. |
-| 2026-07-03 | MCP surface and cutover reconciliation | Passed for amended draft | The Archidekt family has 23 exact tools with 11/12/23 mode visibility; the program baseline is 84 tools with 49/71/84 visibility, one resource, and zero prompts. |
+| 2026-07-03 | MCP surface and cutover reconciliation | Superseded by AMEND-003 | The Archidekt family remains 23 exact tools with 11/12/23 mode visibility; program totals now account for the merged interchange catalog and capability toolsets. |
+| 2026-07-04 | Toolset and north-star reconciliation | Passed for amended draft | The entire family belongs to the opt-in `archidekt` toolset; relevance selection cannot widen operation-mode authority. |
 | 2026-07-03 | Documentation validation | Passed | Local links resolve, Markdown fences balance, and `git diff --check` reports no whitespace errors. |

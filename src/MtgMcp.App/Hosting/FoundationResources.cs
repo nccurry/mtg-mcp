@@ -63,7 +63,7 @@ internal sealed class FoundationResources
                 new FoundationModuleStatus("decks", "available"),
                 new FoundationModuleStatus("foundation", "available"),
             ],
-            new FoundationDataSchemas("v0.9", "v1"),
+            new FoundationDataSchemas("v0.9", "v1", "mtg-mcp.deck/v1"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);
     }

@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -41,6 +41,7 @@ recommendations, and automatic background refresh are out of scope.
 | SCRY-019 | Must | The collection contract fixture shall pin the observed identifier maximum and implementation shall reverify it against official documentation before changing the limit. | The fixture records observed limit 75, date, source, and fails contract review on drift. |
 | SCRY-020 | Must | Projection price and ranking fields shall be labeled provider-supplied price/popularity evidence, never card quality or recommendation scores. | Output descriptions and schema snapshots preserve source/evidence labels. |
 | SCRY-021 | Must | Multi-face card projections shall preserve ordered root and face objects separately and distinguish a source-confirmed empty field group from an absent/unknown group at each level. | Split, transform, modal DFC, and single-face fixtures round-trip without flattening or unknown-to-empty coercion. |
+| SCRY-022 | Must | Every tool shall belong only to the default-enabled `scryfall` toolset, preserve operation-mode restrictions after toolset filtering, and pass the packet's north-star acceptance workflow without adding aliases or a generic router. | Toolset/profile/mode surface tests and the composed local-deck-to-Scryfall evidence fixture pass. |
 
 ## Quality Attributes
 
@@ -63,6 +64,8 @@ recommendations, and automatic background refresh are out of scope.
 | SCRY-018 | Tombstone/dependent-provenance tests |
 | SCRY-019 | Pinned collection contract fixture |
 | SCRY-020 | Projection evidence-label schema snapshots |
+| SCRY-021 | Multi-face root/face and known-empty/unknown round trips |
+| SCRY-022 | Toolset/profile/mode matrix and north-star workflow fixture |
 
 ## Definition Of Done
 
@@ -70,3 +73,4 @@ recommendations, and automatic background refresh are out of scope.
 - [ ] Snapshot immutability and lineage are proven.
 - [ ] Provider pacing and stop behavior are proven offline.
 - [ ] No Tagger, random, or query-language clone is introduced.
+- [ ] Toolset assignment and the north-star acceptance workflow are proven.

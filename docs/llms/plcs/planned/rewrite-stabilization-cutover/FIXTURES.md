@@ -6,18 +6,20 @@
 | --- | ---: | ---: | ---: |
 | Server metadata tools | 0 | 0 | 0 |
 | Local deck store | 4 | 19 | 19 |
-| Manual deck interchange | 4 | 5 | 5 |
+| Manual deck interchange | 3 | 4 | 4 |
 | Scryfall snapshots | 4 | 7 | 7 |
 | Archidekt decks, folders, and snapshots | 11 | 12 | 23 |
 | Playgroup public API | 14 | 14 | 16 |
 | Exact statistics | 8 | 8 | 8 |
 | Tagger cache | 4 | 6 | 6 |
-| **Total tools** | **49** | **71** | **84** |
+| **`all` profile total tools** | **48** | **70** | **83** |
+| **Default profile (`decks,scryfall,stats`)** | **19** | **38** | **38** |
 
 Every mode exposes exactly one resource, `mtg://server/capabilities`, and zero
 prompts. Its capability document identifies the active mode and only the tools
-visible in that mode. The 49/71/84 counts are derived from the current child
-drafts. They detect inconsistencies in those drafts; they are not legacy-
+visible in that mode and selected toolsets. The 48/70/83 `all` counts and
+19/38/38 default counts are derived from the current child drafts. They detect
+inconsistencies in those drafts; they are not legacy-
 compatibility targets and may change with an approved better surface.
 
 This table is the surface-count crosswalk. A tool change in any child must
@@ -44,10 +46,13 @@ same change.
 | CUT-FIX-014 | CUT-015 | Latest `main` integrated | Full gate rerun passes from the resulting commit. |
 | CUT-FIX-015 | CUT-016 | Preview and stable package metadata | Preview uses suffix; accepted stable package reports `0.9.0`. |
 | CUT-FIX-016 | CUT-017 | Prior package/data rollback rehearsal | Prior host starts and passes smoke without transforming new stores. |
-| CUT-FIX-017 | CUT-018 | PLC registry after release | Ten children and umbrella have accurate lifecycle/approval evidence. |
+| CUT-FIX-017 | CUT-018 | PLC registry after release | Eleven children and umbrella have accurate lifecycle/approval evidence. |
 | CUT-FIX-018 | CUT-019 | `read-only` provider read with local/remote write spies | Read may complete; every write spy remains zero. |
 | CUT-FIX-019 | CUT-020 | Child adds/removes one tool without updating cutover | Contract test fails until child matrix, regenerated crosswalk/totals, and snapshots agree; no old count is required. |
 | CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Temporary read-proof waivers use all required fields; Archidekt/Tagger blockers remain unwaivable; Playgroup writes retain their explicit fixture-only classification; no skip is labeled passed. |
+| CUT-FIX-021 | CUT-021 | Default/all/none/explicit profiles in all modes | Exact toolset membership and capability counts match; `none` exposes zero tools; toolsets never widen mode authority. |
+| CUT-FIX-022 | CUT-021 | Default-profile deckbuilding workflow | Local deck evidence, immutable Scryfall facts, and exact statistics compose end to end without a recommendation, router, or optional provider surface. |
+| CUT-FIX-023 | CUT-021 | Each optional provider workflow | Explicitly enabled Archidekt, Playgroup, and Tagger workflows preserve provenance, unknown states, and mode guards. |
 
 ## Forbidden Stable Surface
 
@@ -65,7 +70,7 @@ path allowlist reviewed in the release bundle.
 | --- | --- |
 | Unit | Schema canonicalization, version selection, failure classification, redaction. |
 | Integration | Project graph, databases, provider fakes, mode guard, package contents. |
-| MCP schema | Exact tools/resource/prompts and annotations for all three modes. |
+| MCP schema | Exact tools/resource/prompts, toolset membership, profiles, and annotations for all three modes. |
 | End to end | Packaged host starts and responds from fresh temporary directories. |
 | Coverage | At least 90 percent line coverage for each production assembly. |
 | Live | Separate opt-in provider jobs with bounds and cleanup classification. |
@@ -87,9 +92,9 @@ path allowlist reviewed in the release bundle.
 
 ## PLC Lifecycle Sequence
 
-1. All ten planning packets are independently approved; the umbrella planning
+1. All eleven planning packets are independently approved; the umbrella planning
    program may complete without claiming implementation completion.
-2. Children 1–9 are individually implemented, accepted, and moved to
+2. Children 1-10 are individually implemented, accepted, and moved to
    `completed/`.
 3. This child moves to `in-progress/` and executes cutover.
 4. After release and rollback evidence, this child moves to `completed/` and
@@ -98,7 +103,7 @@ path allowlist reviewed in the release bundle.
 ## Lifecycle Acceptance
 
 The cutover child completes only after stable release evidence and rollback
-proof are accepted. The umbrella completes when all ten child planning packets
+proof are accepted. The umbrella completes when all eleven child planning packets
 have been independently approved; that planning milestone remains distinct from
 implementation and release completion. Registered post-cutover topics remain
 separate PLCs and do not enter the `0.9.0` acceptance surface.

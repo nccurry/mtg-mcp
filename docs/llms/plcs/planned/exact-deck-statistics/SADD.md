@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -93,6 +93,17 @@ the product of combinations across disjoint membership buckets over the common
 denominator. Enumeration estimates its state count before work and stops if it
 can exceed one million. No floating-point value participates in comparisons or
 inverse target decisions.
+
+## Toolset And North-Star Design
+
+App assigns all eight tools to the default-enabled `stats` toolset. Because the
+tools are read-only, their visibility is identical in every operation mode.
+The acceptance workflow starts from an explicit population or local deck
+revision, accepts caller-supplied groups and assumptions, returns exact
+derivations or a bounded unsupported state, and ends before strategic
+interpretation. Separate typed event families remain easier to select and
+validate than a free-form expression engine; no recommendation alias or generic
+router is allowed.
 
 ## Alternatives Considered
 

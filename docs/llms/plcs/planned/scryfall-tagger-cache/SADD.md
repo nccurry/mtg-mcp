@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -84,6 +84,17 @@ card tags only. Callers may explicitly request printing-scoped illustration
 evidence, which remains labeled with the queried printing/illustration. Deck
 reads aggregate per-card cache status but do not combine tags into deck
 categories or scores.
+
+## Toolset And North-Star Design
+
+App assigns all six tools to the opt-in `tagger` toolset. Startup selection
+does not authorize refresh: the operation mode, provider-risk gate, pacing,
+budget, and circuit breaker remain independent. The capability document
+reports registration state without contacting Tagger. The acceptance workflow
+reads immutable cached community evidence, distinguishes misses from confirmed
+empty results, optionally invokes an explicit bounded refresh, and stops before
+category assignment. No classifier, category mapper, generic router, or alias
+is part of this child.
 
 ## Alternatives Considered
 

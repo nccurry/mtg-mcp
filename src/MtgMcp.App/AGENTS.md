@@ -14,6 +14,13 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - Treat annotations as accurate risk hints, not authorization. Enforce write
   capability with `OperationModeGuard`. Rewrite modes are `read-only`, `local`,
   and `remote`, with local and remote mutation kept distinct.
+- Assign each stable tool to exactly one of `decks`, `scryfall`, `stats`,
+  `archidekt`, `playgroup`, or `tagger`. Build one deterministic registration
+  set at startup by intersecting enabled toolsets with operation-mode
+  visibility; never use toolsets as authorization.
+- Keep the default profile limited to `decks`, `scryfall`, and `stats`.
+  Provider-specific `archidekt`, `playgroup`, and `tagger` surfaces are opt-in.
+  Do not advertise dynamic list changes while registration is session-static.
 
 ## Host Boundary
 
@@ -31,6 +38,7 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - Update surface tests for every tool, resource, prompt, annotation, schema,
   operation-mode, or toolset change.
 - Stable rewrite surface tests must also prove capability-prefixed names, one
-  capability resource, zero prompts, and absence of legacy decision surfaces.
+  capability resource, zero prompts, exact toolset membership, default and
+  explicit profile behavior, and absence of legacy decision surfaces.
 - Use App unit tests for presenters and registration, and mocked process E2E
   tests for transport-visible behavior.

@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner and designated child PLC reviewers
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -17,6 +17,7 @@
 | 2026-07-03 | Codex | Initial umbrella program draft. |
 | 2026-07-03 | Codex | Applied AMEND-001 and recorded sequential drafting of all ten children without implementation. |
 | 2026-07-03 | Codex | Applied AMEND-002 to include Archidekt folder and named-snapshot workflows in child 6 and cutover. |
+| 2026-07-04 | Codex | Applied AMEND-003 for capability toolsets, north-star acceptance, and an eleven-child queue. |
 
 ## Executive Summary
 
@@ -24,7 +25,8 @@ The evidence-first rewrite crosses the MCP surface, local persistence, provider
 contracts, statistical analysis, security modes, and release strategy. One
 monolithic PLC would make those decisions difficult to review and likely to be
 implemented in oversized sessions. This program instead requires ten focused
-PLCs, authored one at a time and independently approved.
+PLCs plus one cross-cutting surface-governance PLC, authored one at a time and
+independently approved.
 
 The umbrella fixes shared product boundaries and the child authoring protocol.
 It does not define detailed child APIs and does not authorize production code.
@@ -58,7 +60,8 @@ It does not define detailed child APIs and does not authorize production code.
 | Focused planning | Each child packet covers exactly one queue topic and is completed before the next draft. | One planning run may contain multiple sequentially completed packets. |
 | Independent review | Every child has its own approval record and can be reviewed without approving another child. | Approval is planning approval, not code authorization. |
 | Stable direction | Every child repeats or links the inherited guardrails and declares no conflict. | Conflicts require an umbrella amendment. |
-| Traceable decomposition | Ten required topics have distinct packets, dependencies, and acceptance criteria. | Post-cutover topics remain registered only. |
+| Traceable decomposition | Eleven required topics have distinct packets, dependencies, and acceptance criteria. | Post-cutover topics remain registered only. |
+| Manageable active surface | Default sessions expose only implemented default-enabled toolsets while every stable capability remains selectable. | Toolsets control relevance; modes control authority. |
 | Safe implementation boundary | No production edit cites the umbrella alone as authorization. | The applicable child must be approved and explicitly activated. |
 
 ## System Overview
@@ -92,10 +95,11 @@ surfaces remain unchanged until later, explicitly authorized implementation.
 | CASE-003 | A child discovers a conflict with a shared guardrail. | Planning pauses until an umbrella amendment is reviewed. |
 | CASE-004 | An implementer is asked to build a child capability. | The implementer verifies that child approval and implementation authorization exist; the umbrella alone is insufficient. |
 | CASE-005 | All required child plans are approved. | The umbrella moves to `completed/` without claiming that the rewrite code is complete. |
+| CASE-006 | A child adds or changes an MCP operation. | The child assigns one toolset, justifies tool versus resource shape, and proves a north-star workflow before approval. |
 
 ## Scope And Non-Scope
 
-- In scope: shared rewrite guardrails, the ten-child queue, authoring and review
+- In scope: shared rewrite guardrails, the eleven-child queue, authoring and review
   protocol, approval records, lifecycle transitions, amendment handling,
   traceability, and documentation validation.
 - Out of scope: child API design, schema design, provider payload capture,
@@ -117,7 +121,7 @@ services, generated artifacts, local databases, or production assemblies.
 
 | ID | Priority | Type | Requirement | Rationale | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
-| PROG-001 | Must | Functional | The program shall define exactly ten required child PLCs in the approved order. | Each stable topic needs isolated ownership. | README and implementation plan list the same ten slugs and order. |
+| PROG-001 | Must | Functional | The program shall define exactly eleven required child PLCs in the approved order. | Each stable topic needs isolated ownership. | README and implementation plan list the same eleven slugs and order. |
 | PROG-002 | Must | Process | Required child PLCs shall be drafted sequentially, with one packet completed and validated before drafting the next. | Prevents parallel drafts from diverging on shared contracts. | Creation history and validation evidence show registry order and no overlapping incomplete drafts. |
 | PROG-003 | Must | Process | Every child shall remain independently reviewable and shall require approval before implementation. | Drafting completeness is not implementation authority. | Each child has its own approval record and remains `planned` until separately activated. |
 | PROG-004 | Must | Safety | The umbrella shall not authorize production implementation. | Planning approval and mutation authority are different. | Every program document states this boundary; implementation requires the applicable child to be activated. |
@@ -127,12 +131,17 @@ services, generated artifacts, local databases, or production assemblies.
 | PROG-008 | Must | Audit | The legacy audit child shall be approved before destructive rewrite implementation begins. | Deletion and reuse need reviewed evidence. | Child 1 contains inventories and allowlists and is approved before foundation implementation is authorized. |
 | PROG-009 | Must | Review | Every child shall contain the review-gate content defined by this program. | A narrow packet still needs complete decisions and validation. | The acceptance checklist in FIXTURES passes for the child. |
 | PROG-010 | Must | Lifecycle | Child packets shall remain `planned` until their own implementation is explicitly authorized. | Umbrella progress must not imply code authorization. | Lifecycle paths and README states agree. |
-| PROG-011 | Must | Lifecycle | The umbrella shall move to `in-progress` when child 1 is first drafted and to `completed` only after all ten children are approved. | Program state must describe planning progress accurately. | Folder, README status, registry, and validation evidence agree at each transition. |
+| PROG-011 | Must | Lifecycle | The umbrella shall move to `in-progress` when child 1 is first drafted and to `completed` only after all eleven children are approved. | Program state must describe planning progress accurately. | Folder, README status, registry, and validation evidence agree at each transition. |
 | PROG-012 | Must | Traceability | The umbrella shall maintain authoring, review, dependency, and approval status for every required child. | Maintainers need one program-level view. | Registry is updated in the same change as every child status transition. |
-| PROG-013 | Must | Deferral | Post-cutover topics shall be registered but not drafted as part of the initial ten-child sequence. | They must not expand the rewrite cutover. | No post-cutover child directory is created by this program sequence. |
+| PROG-013 | Must | Deferral | Post-cutover topics shall be registered but not drafted as part of the required eleven-child sequence. | They must not expand the rewrite cutover. | No post-cutover child directory is created by this program sequence. |
 | PROG-014 | Must | Quality | Every child shall map Must requirements to design and objective validation. | Passing review should imply implementability. | Child traceability has no unmapped Must requirement. |
 | PROG-015 | Must | Safety | Provider-owning children shall document auth, permission sensitivity, pacing, retry, cache, sanitization, fixture, and live-test boundaries. | Provider automation has operational and trust risks. | Review checklist marks each applicable concern resolved or explicitly not applicable. |
 | PROG-016 | Should | Maintainability | Existing PLCs shall remain untouched until the audit child records their disposition. | Historical planning may provide evidence. | No existing packet is moved or edited solely because this umbrella was created. |
+| PROG-017 | Must | Architecture | Every stable MCP tool shall belong to exactly one startup-selectable capability toolset, and visible tools shall equal implemented tools intersected with selected toolsets and operation-mode authority. | Tool relevance and mutation authority are separate concerns. | Toolset/mode matrix tests detect unassigned, multiply assigned, hidden-required, or overexposed tools. |
+| PROG-018 | Must | Usability | `default`, `all`, and `none` toolset selections shall be deterministic; `default` contains implemented default-enabled toolsets, `all` contains implemented stable toolsets, and `none` contains zero tools. | LLMs need a manageable ordinary surface without losing complete access. | Official-client discovery snapshots pass in all three modes for all three selections. |
+| PROG-019 | Must | Diagnostics | The capability resource shall distinguish implemented, available, enabled, default-enabled, and disabled toolsets without advertising unimplemented placeholders. | Clients need truthful surface discovery. | Capability-resource fixtures reconcile exactly with `tools/list`. |
+| PROG-020 | Must | Review | Every remaining capability child shall include a north-star acceptance section naming player questions enabled, evidence class, determinism boundary, explicit unknowns, MCP decision boundary, representative composed workflow, toolset assignment, and tool-versus-resource rationale. | Endpoint coverage alone does not prove deckbuilding usefulness or simplicity. | Child review checklist rejects any packet missing one of these decisions or objective workflow evidence. |
+| PROG-021 | Must | Stability | Toolset selection shall be resolved at startup and remain static for the session; stable `0.9.0` shall not depend on dynamic tool-list mutation or `listChanged`. | Static registration is easier to test and works consistently across clients. | Reconfiguration requires restart; initialization advertises no tool-list-change capability. |
 
 ## Interfaces, Data, States, And Modes
 
@@ -157,15 +166,16 @@ The required child approval record is defined in
 | Consistency | A shared decision is used by multiple children. | Its authoritative wording remains in the umbrella and children link or conform to it. |
 | Safety | A provider child is reviewed. | Provider safety fields are complete before approval. |
 | Maintainability | The program resumes in a later session. | Registry and approval records identify the next permitted child without reconstructing conversation history. |
+| Model usability | A default client initializes. | Only default-enabled implemented toolsets are visible, and one representative deckbuilding workflow composes them successfully. |
 | Documentation integrity | A packet is changed. | Relative links resolve and `git diff --check` passes. |
 
 ## Phased Delivery
 
 | Phase | Goal | Included requirements | Exit criteria |
 | --- | --- | --- | --- |
-| Umbrella review | Approve program rules. | PROG-001 through PROG-016 | Packet review and docs validation pass. |
-| Child authoring | Draft one complete packet at a time in registry order. | PROG-001 through PROG-015 | Each draft is structurally validated before the next begins; approvals remain independent. |
-| Program closure | Close planning decomposition. | PROG-011 through PROG-014 | All ten children are approved and umbrella completion evidence is recorded. |
+| Umbrella review | Approve program rules. | PROG-001 through PROG-021 | Packet review and docs validation pass. |
+| Child authoring | Draft one complete packet at a time in registry order. | PROG-001 through PROG-021 | Each draft is structurally validated before the next begins; approvals remain independent. |
+| Program closure | Close planning decomposition. | PROG-011 through PROG-014 | All eleven children are approved and umbrella completion evidence is recorded. |
 
 ## Traceability
 
@@ -178,6 +188,8 @@ The required child approval record is defined in
 | PROG-008, PROG-016 | SADD: Audit-first design | Registry and Git diff review | SCN-006 |
 | PROG-012, PROG-013 | SADD: Registries | Registry inspection | FIX-PROGRAM-REGISTRY |
 | PROG-015 | SADD: Provider child requirements | Provider review checklist | FIX-PROVIDER-CHECKLIST |
+| PROG-017 through PROG-019, PROG-021 | SADD: Capability toolset governance | Toolset/mode/resource contract review | FIX-TOOLSET-GUARDRAILS, SCN-007 through SCN-010 |
+| PROG-020 | SADD: North-star acceptance gate | Child workflow and evidence-boundary review | FIX-NORTH-STAR-CHECKLIST, SCN-011 |
 
 ## Risks, Assumptions, And Open Questions
 

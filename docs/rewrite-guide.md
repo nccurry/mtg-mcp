@@ -5,10 +5,12 @@ and the in-progress clean-break `0.9.0` server. It prevents current implementati
 documentation from being mistaken for the rewrite target.
 
 The rewrite foundation and local deck-store implementations are complete. The
-legacy audit, foundation, and local-deck children are approved/completed. The
-remaining seven required children stay planning-only with
-`Implementation authorized: No`; production capability work requires its own
-recorded approval and lifecycle transition.
+manual deck-interchange code is implemented with provider UI acceptance still
+open and provider formats therefore experimental. The capability-toolset child
+and remaining six capability/cutover children
+required children stay planning-only with `Implementation authorized: No`;
+production capability work requires its own recorded approval and lifecycle
+transition.
 
 ## Authority And Routing
 
@@ -36,8 +38,8 @@ another.
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 19 `deck_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current derived planning baseline: 84 tools, one resource, zero prompts; counts follow approved design and are not compatibility targets |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 23 `deck_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current derived `all` planning baseline: 83 tools, one resource, zero prompts; counts follow approved design and are not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Statistics, and Tagger |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, `scryfall.db`, and `tagger.db` stores |
@@ -59,13 +61,20 @@ The required planning sequence covers:
 2. repository foundation and minimal MCP host;
 3. revisioned local deck domain and SQLite store;
 4. offline manual deck interchange;
-5. immutable official Scryfall evidence snapshots;
-6. explicit Archidekt deck lifecycle, conflict-safe synchronization, folder
+5. startup-selected capability toolsets with a small default surface;
+6. immutable official Scryfall evidence snapshots;
+7. explicit Archidekt deck lifecycle, conflict-safe synchronization, folder
    organization, and named snapshot lifecycle/restore;
-7. the documented Playgroup public API;
-8. exact provider-independent deck statistics;
-9. exact cached Scryfall Tagger evidence with bounded explicit acquisition; and
-10. stabilization and `0.9.0` cutover.
+8. the documented Playgroup public API;
+9. exact provider-independent deck statistics;
+10. exact cached Scryfall Tagger evidence with bounded explicit acquisition; and
+11. stabilization and `0.9.0` cutover.
+
+Every stable tool belongs to one toolset. The default profile contains
+`decks`, `scryfall`, and `stats`; provider toolsets require explicit selection.
+Toolsets control relevance, modes control authority, and registration remains
+static for an MCP session. Each remaining PLC must pass its north-star workflow
+check in addition to endpoint and schema acceptance.
 
 Provider facts, exact derivations, sampled estimates, parser classifications,
 heuristics, and unknown states must remain visibly different. Stable `0.9.0`

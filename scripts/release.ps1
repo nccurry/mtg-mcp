@@ -319,7 +319,7 @@ function Invoke-ToolSmoke {
             $Configuration `
             "--no-build" `
             "--filter" `
-            "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests"
+            "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests"
     }
     finally {
         $env:MTGMCP_E2E_COMMAND = $previousCommand

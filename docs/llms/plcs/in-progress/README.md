@@ -9,9 +9,10 @@ evidence up to date as code lands.
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress | Draft ten separate, independently reviewable rewrite PLCs without implementing them. |
+| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress | Govern eleven separate, independently reviewable rewrite PLCs and their shared guardrails. |
 
 ## Active Rewrite Children
 
-No capability child is active. The next child requires separate review and
-explicit implementation authorization.
+| Packet | Status | Summary |
+| --- | --- | --- |
+| [manual-deck-interchange](manual-deck-interchange/README.md) | Automated implementation complete; manual provider acceptance open | Implement deterministic offline native, generic, Archidekt, and Moxfield manual deck interchange. |

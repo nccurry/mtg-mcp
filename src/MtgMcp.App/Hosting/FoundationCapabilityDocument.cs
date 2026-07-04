@@ -43,4 +43,5 @@ internal sealed record FoundationModuleStatus(
 /// </summary>
 internal sealed record FoundationDataSchemas(
     [property: JsonPropertyName("applicationData")] string ApplicationData,
-    [property: JsonPropertyName("decks")] string Decks);
+    [property: JsonPropertyName("decks")] string Decks,
+    [property: JsonPropertyName("deckInterchange")] string DeckInterchange);

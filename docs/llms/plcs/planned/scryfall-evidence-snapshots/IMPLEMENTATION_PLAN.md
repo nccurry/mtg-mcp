@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -17,7 +17,7 @@
 | 2 | Add safe official HTTP client and pacing. | SCRY-010 through SCRY-013, SCRY-016 | Fake HTTP/clock tests pass. |
 | 3 | Add immutable SQLite repository, staging cleanup, and tombstone deletion. | SCRY-005 through SCRY-009, SCRY-017, SCRY-018 | Temporary-DB crash/retry/delete tests pass. |
 | 4 | Compose acquisition, refresh, and cached reads. | SCRY-002, SCRY-003, SCRY-006, SCRY-014, SCRY-017 | Integration tests pass. |
-| 5 | Add `scryfall_*` MCP surface and validation. | SCRY-015 | Surface/E2E and full offline gates pass. |
+| 5 | Add the `scryfall` toolset surface and validate the complete evidence workflow. | SCRY-015, SCRY-022 | Profile/mode surface, north-star workflow, E2E, and full offline gates pass. |
 
 ## Rules
 
@@ -25,6 +25,7 @@
 - Pin fixture capture dates and sanitize headers/identifiers.
 - Do not add random cards, Tagger, local query parsing, or background refresh.
 - Never mark a partially acquired snapshot complete.
+- Depend on the approved toolset registry; do not add aliases or a router.
 
 ## Rollback
 

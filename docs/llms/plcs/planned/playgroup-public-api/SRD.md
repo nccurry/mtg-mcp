@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -36,6 +36,7 @@ out of scope.
 | PLAY-013 | Must | OpenAPI drift shall fail a contract check and require reviewed fixture/model/tool updates to the best current design; it shall not preserve obsolete operations solely for compatibility. | Altered-spec test fails with operation/schema diff until the reviewed current contract is adopted. |
 | PLAY-014 | Must | Provider errors shall retain safe status/reason detail while redacting keys, users' private data, and local secret paths. | Sanitized error fixtures pass. |
 | PLAY-015 | Must | Ordinary tests shall be offline. Safe authenticated reads may have opt-in live tests. Against the pinned 2026-07-03 contract, both writes shall remain fixture-only because the official API exposes no documented cleanup operation; evidence shall cite the owner decision and shall never label a write live-tested. | Test discovery, no-write live guards, contract fixtures, and owner-decision record pass. |
+| PLAY-016 | Must | Every tool shall belong only to the opt-in `playgroup` toolset, toolset selection shall never widen operation-mode authority, and the auth/provider-read/evidence-correlation workflow shall pass the packet's north-star acceptance check without aliases, ranking helpers, or a generic router. | Default/all/explicit/none profile tests, per-mode write spies, and the composed provider-evidence fixture pass. |
 
 ## Quality Attributes
 
@@ -53,3 +54,4 @@ out of scope.
 - [ ] No local ranking or deck-update emulation exists.
 - [ ] Write mode and retry safety are proven.
 - [ ] Live tests are discoverable but opt-in.
+- [ ] Toolset assignment and the north-star acceptance workflow are proven.

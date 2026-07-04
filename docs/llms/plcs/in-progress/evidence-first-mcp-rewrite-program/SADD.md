@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner and designated child PLC reviewers
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -17,10 +17,11 @@
 | 2026-07-03 | Codex | Initial umbrella program design. |
 | 2026-07-03 | Codex | Applied AMEND-001 for sequential drafting in one planning run. |
 | 2026-07-03 | Codex | Applied AMEND-002 for Archidekt folder and named-snapshot scope. |
+| 2026-07-04 | Codex | Applied AMEND-003 for static capability toolsets and north-star acceptance. |
 
 ## Executive Summary
 
-The chosen design is a planning-only umbrella packet plus ten sibling child
+The chosen design is a planning-only umbrella packet plus eleven sibling child
 packets created sequentially in the PLC lifecycle folders. The umbrella owns
 guardrails, registry state, authoring order, approval protocol, and amendments.
 Each child owns one topic's detailed requirements, architecture, interfaces,
@@ -80,7 +81,7 @@ future audit and do not become dependencies merely because their topics overlap.
 | Option | Summary | Strengths | Weaknesses | Decision |
 | --- | --- | --- | --- | --- |
 | Monolithic rewrite PLC | Put every capability and cutover decision in one packet. | One index and one review. | Oversized sessions, coupled review, hidden assumptions, and high drift risk. | Rejected |
-| Generate children in parallel | Create ten packets from the current research concurrently. | Fast initial decomposition. | Encourages conflicting contracts and incomplete cross-topic handoff. | Rejected |
+| Generate children in parallel | Create all packets from the current research concurrently. | Fast initial decomposition. | Encourages conflicting contracts and incomplete cross-topic handoff. | Rejected |
 | Ordinary plans without an umbrella | Create plans ad hoc as work begins. | Minimal process. | No shared guardrails, queue, approval protocol, or program completion state. | Rejected |
 | Umbrella plus sequential sibling PLCs | Keep shared decisions central and finish one independently reviewable child before drafting the next. | Durable boundaries, focused validation, and explicit dependencies. | More documentation and later per-child reviews. | Chosen |
 
@@ -108,12 +109,13 @@ implementation plan, and fixture matrix. The fixed authoring order is:
 2. `rewrite-skeleton-foundation`
 3. `local-deck-store`
 4. `manual-deck-interchange`
-5. `scryfall-evidence-snapshots`
-6. `archidekt-deck-sync`
-7. `playgroup-public-api`
-8. `exact-deck-statistics`
-9. `scryfall-tagger-cache`
-10. `rewrite-stabilization-cutover`
+5. `mcp-capability-toolsets`
+6. `scryfall-evidence-snapshots`
+7. `archidekt-deck-sync`
+8. `playgroup-public-api`
+9. `exact-deck-statistics`
+10. `scryfall-tagger-cache`
+11. `rewrite-stabilization-cutover`
 
 The first child is a docs-only audit. It creates the proposed deletion and reuse
 allowlists consumed by the foundation draft. Under AMEND-001, later packets may
@@ -163,7 +165,18 @@ child's detailed requirements or design.
   verification.
 - Exclude Moxfield network automation.
 
-#### 5. Scryfall Evidence Snapshots
+#### 5. MCP Capability Toolsets
+
+- Define startup-selected `decks`, `scryfall`, `stats`, `archidekt`,
+  `playgroup`, and `tagger` toolsets in App without adding Core dependencies.
+- Keep toolsets orthogonal to `read-only`, `local`, and `remote` authority.
+- Define deterministic `default`, `all`, and `none` selections, configuration
+  precedence, sanitized failures, capability reporting, and exact discovery
+  tests without runtime tool-list changes.
+- Assign current deck and interchange tools to `decks` and establish the
+  registration contract inherited by every later child.
+
+#### 6. Scryfall Evidence Snapshots
 
 - Define immutable named snapshots for official search, named and ID lookup,
   collection, prints, rulings, sets, catalogs, autocomplete, and bulk metadata.
@@ -173,7 +186,7 @@ child's detailed requirements or design.
   normalized projections, `scryfall_*` tools, persistence, provenance, and
   partial-fetch behavior.
 
-#### 6. Archidekt Decks, Folders, Snapshots, And Synchronization
+#### 7. Archidekt Decks, Folders, Snapshots, And Synchronization
 
 - Define authentication status, remote list/get/create/delete, and exact card,
   printing, zone, and category translation.
@@ -186,7 +199,7 @@ child's detailed requirements or design.
 - Exclude automatic activity logs/recent-change history, packages, deck tags,
   collaboration, social, and account administration.
 
-#### 7. Playgroup Official API
+#### 8. Playgroup Official API
 
 - Pin and implement planning against the documented public OpenAPI contract.
 - Define one typed `playgroup_*` tool per documented operation and preserve
@@ -195,7 +208,7 @@ child's detailed requirements or design.
 - Report absent deck updates as unsupported, detect contract drift, and prohibit
   reverse engineering of private endpoints.
 
-#### 8. Exact Deck Statistics
+#### 9. Exact Deck Statistics
 
 - Define exact univariate and multivariate hypergeometric calculations,
   cards-seen tables, explicit play/draw assumptions, and exact composition
@@ -207,7 +220,7 @@ child's detailed requirements or design.
 - Require exhaustive enumeration and property-based verification without a
   provider dependency.
 
-#### 9. Scryfall Tagger Cache
+#### 10. Scryfall Tagger Cache
 
 - Define cached direct and inherited assignments, tag type, provenance, and
   explicit cache misses by Oracle ID.
@@ -217,7 +230,7 @@ child's detailed requirements or design.
   or 429.
 - Prohibit background or bulk crawling and category inference by the MCP.
 
-#### 10. Stabilization And `0.9.0` Cutover
+#### 11. Stabilization And `0.9.0` Cutover
 
 - Define cross-module architecture, MCP-schema, offline, packaging,
   documentation, coverage, and opt-in live-provider gates.
@@ -241,11 +254,60 @@ Every child must contain:
 - Unit, integration, MCP-schema, fixture, and live-test requirements.
 - Migration, rollout, rollback, and acceptance criteria.
 - A requirement-to-design-to-test traceability table.
+- For every public-surface child, one exact toolset assignment per tool and a
+  tool-versus-resource rationale.
+- A north-star acceptance section naming the player questions enabled,
+  evidence class, determinism boundary, explicit unknown states, MCP decision
+  boundary, and one representative composed LLM workflow.
 - Guardrail conformance and an approval record in its README.
 
 Provider-owning children also document authentication, permission sensitivity,
 user agent, pacing, rate limits, retries, cache behavior, error sanitization,
 fixture provenance, and live-test mutation safety.
+
+### Capability Toolset Governance
+
+Toolsets are static App composition metadata, not Core domain concepts and not
+authorization. Every implemented tool belongs to one of `decks`, `scryfall`,
+`stats`, `archidekt`, `playgroup`, or `tagger`. `decks`, `scryfall`, and
+`stats` are default-enabled when implemented; the provider-integration and
+unsupported-acquisition toolsets require explicit selection.
+
+At startup, App resolves `default`, `all`, `none`, or an explicit canonical
+toolset list. Visible tools are the intersection of implemented toolsets,
+selected toolsets, and mode permissions. Invocation-time mode guards remain
+mandatory even when registration hides a tool. Toolsets never weaken mode
+authority and credentials never silently enable a toolset.
+
+Tool registration remains static for the MCP session. The capability resource
+reports selection and toolset state, but the server does not advertise
+`listChanged`. A selection change requires restart. Unknown names fail before
+transport with a sanitized error. `all` includes every implemented stable
+toolset but no experimental capability; `none` leaves only initialization and
+the capability resource.
+
+The default surface is the ordinary LLM working set. The all-toolset surface
+proves complete access. Both are derived manifests rather than compatibility
+targets. Every surface edit updates its child matrix, toolset manifest,
+default/all per-mode totals, capability fixture, and canonical schema snapshot.
+
+### North-Star Acceptance Gate
+
+A remaining child is not decision-complete merely because it wraps all desired
+provider operations. It must answer, with objective fixtures or E2E scenarios:
+
+1. Which concrete player or deckbuilding questions become answerable?
+2. Is each result a source fact, source evidence, exact derivation,
+   parser-derived classification, sampled estimate, heuristic, or explicit
+   unknown?
+3. What input, stored revision, snapshot, assumptions, or provider time bounds
+   determinism and replay?
+4. Which missing, stale, partial, unsupported, or unavailable states remain
+   visible?
+5. Does the MCP return evidence or execute an explicit operation without
+   making the deckbuilding judgment?
+6. Can an LLM complete one representative workflow without choosing among
+   redundant or ambiguously overlapping tools?
 
 ### Review And Approval State
 
@@ -309,19 +371,19 @@ The planning workflow is:
 3. Validate that child's five-file packet and update the umbrella registry.
 4. Draft the next child only after the preceding draft is complete and validated.
 5. If a guardrail conflict appears, stop and process an umbrella amendment.
-6. Repeat through child 10, leaving every child in `planned` and unimplemented.
+6. Repeat through child 11, leaving every unimplemented child in `planned`.
 7. Review each child independently and record approval or requested changes.
-8. Move the umbrella to `completed/` after all ten approvals are recorded.
+8. Move the umbrella to `completed/` after all eleven approvals are recorded.
 
 Child implementation may happen in separately authorized sessions. It does not
 advance the authoring queue unless its findings require an approved amendment.
 
 ## MCP Surface, Schemas, And Diagnostics
 
-This umbrella changes no MCP surface. Child packets must inventory their exact
-tool, resource, and prompt effects and prove operation-mode annotations and
-visibility. The stable target permits no advisor prompts, but removal remains
-an audited and child-owned implementation action.
+This umbrella changes no MCP surface by itself. The capability-toolset child
+owns startup selection and registration. Every later child inventories its
+exact tool, resource, prompt, toolset, and mode effects. The stable target
+permits no advisor prompts and no dynamic tool-list dependency.
 
 ## Adapter And Provider Contracts
 
@@ -386,6 +448,8 @@ Remove template placeholders before requesting child approval.
 | PROG-008, PROG-016 | Audit-first sequence and no premature PLC disposition. | Git diff and registry review. |
 | PROG-012, PROG-013 | Required and post-cutover registries. | README comparison with implementation plan. |
 | PROG-015 | Provider-specific review requirements. | Provider checklist in FIXTURES. |
+| PROG-017 through PROG-019, PROG-021 | Static toolset registry, startup selection, mode intersection, and capability projection. | Default/all/none discovery matrices and capability reconciliation. |
+| PROG-020 | North-star acceptance gate in every remaining child. | Child workflow/evidence checklist and representative E2E fixture. |
 
 ## Implementation Phases
 
@@ -432,5 +496,5 @@ data factual.
 - **Planning approval:** Confirmation that a child is decision-complete.
 - **Implementation authorization:** A separate explicit request to begin code changes.
 - **Guardrail:** A cross-child product, architecture, safety, or quality decision.
-- **Required child:** One of the ten packets needed to complete this planning program.
+- **Required child:** One of the eleven packets needed to complete this planning program.
 - **Post-cutover topic:** Registered work that is not part of the required queue.

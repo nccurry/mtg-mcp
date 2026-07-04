@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -44,6 +44,7 @@ locally inferred illustration tags, and live Scryfall lookup are out of scope.
 | TAG-021 | Must | Unsupported acquisition shall not be implemented or enabled until the repository owner accepts the documented provider-risk record after rechecking robots, terms, and observed contract behavior. | Approval record names accepter, date, revision, and reviewed policy evidence. |
 | TAG-022 | Must | Requests shall use an honest product user-agent with a project/contact URL and appropriate `Accept` headers; the adapter shall not impersonate a browser or a disallowed crawler identity. | Captured-request fixtures pass. |
 | TAG-023 | Must | Refresh shall skip Oracle IDs that already have a completed snapshot unless the caller explicitly sets `forceRefresh=true`; skipped cached IDs shall be reported and shall consume no provider request. | Default/forced mixed-cache request-count fixtures pass. |
+| TAG-024 | Must | Every tool shall belong only to the opt-in `tagger` toolset, toolset selection shall never widen operation-mode authority, and the cache-read/explicit-refresh/evidence-review workflow shall pass the packet's north-star acceptance check without a classifier, category mapper, alias, or generic router. | Default/all/explicit/none profile tests, per-mode network/write spies, and the composed local-deck tag-evidence fixture pass. |
 
 ## Quality Attributes
 
@@ -61,3 +62,4 @@ locally inferred illustration tags, and live Scryfall lookup are out of scope.
 - [ ] Circuit breaker and request bounds are proven.
 - [ ] No category classifier or background crawler exists.
 - [ ] Policy/contract notice is visible in tool descriptions and docs.
+- [ ] Toolset assignment and the north-star acceptance workflow are proven.

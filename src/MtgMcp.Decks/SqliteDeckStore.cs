@@ -194,6 +194,108 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
+    /// Reads a lossless interchange snapshot without exposing its private storage path.
+    /// </summary>
+    internal async Task<OperationResult<DeckInterchangeSnapshot>> GetInterchangeSnapshotAsync(
+        Guid deckId,
+        CancellationToken cancellationToken)
+    {
+        if (deckId == Guid.Empty)
+        {
+            return Invalid<DeckInterchangeSnapshot>("The deck ID is invalid.");
+        }
+
+        if (!database.Exists)
+        {
+            return NotFound<DeckInterchangeSnapshot>();
+        }
+
+        try
+        {
+            await using SqliteConnection connection = await database.OpenConnectionAsync(
+                writable: false,
+                cancellationToken).ConfigureAwait(false);
+            await using SqliteTransaction transaction = connection.BeginTransaction(deferred: true);
+            DeckDocument? deck = await DeckSql.ReadDeckAsync(
+                connection,
+                transaction,
+                deckId,
+                cancellationToken).ConfigureAwait(false);
+            if (deck is null)
+            {
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return NotFound<DeckInterchangeSnapshot>();
+            }
+
+            IReadOnlyList<DeckSyncBaseline> baselines = await DeckSql.ReadBaselinesAsync(
+                connection,
+                transaction,
+                deckId,
+                cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return new OperationSuccess<DeckInterchangeSnapshot>(new(deck, baselines));
+        }
+        catch (Exception exception) when (IsExpectedStorageFailure(exception))
+        {
+            return MapFailure<DeckInterchangeSnapshot>(exception);
+        }
+    }
+
+    /// <summary>
+    /// Creates an exact native interchange graph, preserving lifecycle metadata and stable identities.
+    /// </summary>
+    internal async Task<OperationResult<DeckDocument>> CreateExactAsync(
+        DeckInterchangeSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        await mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            DeckDocument deck = NormalizeExact(snapshot.Deck);
+            ValidateInitialRelationships(deck);
+            ValidateBaselines(deck, snapshot.SyncBaselines);
+            await database.EnsureInitializedAsync(
+                timeProvider.GetUtcNow().ToUniversalTime(),
+                applicationVersion,
+                cancellationToken).ConfigureAwait(false);
+            await using SqliteConnection connection = await database.OpenConnectionAsync(
+                writable: true,
+                cancellationToken).ConfigureAwait(false);
+            await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                Dictionary<Guid, string?> baselines = snapshot.SyncBaselines.ToDictionary(
+                    value => value.BindingId,
+                    value => (string?)DeckContractValidator.Required(
+                        value.CanonicalSnapshot,
+                        "Canonical baseline"));
+                await DeckSql.InsertDeckAsync(
+                    connection,
+                    transaction,
+                    deck,
+                    baselines,
+                    cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return new OperationSuccess<DeckDocument>(deck);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+        }
+        catch (Exception exception) when (IsExpectedStorageFailure(exception))
+        {
+            return MapFailure<DeckDocument>(exception);
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+    }
+
+    /// <summary>
     /// Deletes one deck only when the caller supplies its current revision.
     /// </summary>
     public async Task<OperationResult<DeckDeleteResult>> DeleteAsync(
@@ -494,6 +596,62 @@ public sealed class SqliteDeckStore : IDisposable
             categories,
             assignments,
             bindings);
+    }
+
+    /// <summary>
+    /// Validates and normalizes all fields in a lossless native deck document.
+    /// </summary>
+    private DeckDocument NormalizeExact(DeckDocument value)
+    {
+        if (value.Revision <= 0)
+        {
+            throw new DeckInputException("A native deck revision must be positive.");
+        }
+
+        if (value.CreatedAtUtc > value.UpdatedAtUtc)
+        {
+            throw new DeckInputException("A native deck update cannot predate its creation.");
+        }
+
+        return new DeckDocument(
+            DeckContractValidator.NormalizeId(value.DeckId, "deck"),
+            DeckContractValidator.Required(value.Name, "Deck name"),
+            DeckContractValidator.Optional(value.Description) ?? string.Empty,
+            DeckContractValidator.Required(value.Format, "Format").ToLowerInvariant(),
+            value.Revision,
+            value.CreatedAtUtc.ToUniversalTime(),
+            value.UpdatedAtUtc.ToUniversalTime(),
+            value.Entries.Select(DeckContractValidator.Normalize).ToArray(),
+            value.Categories.Select(DeckContractValidator.Normalize).ToArray(),
+            value.CategoryAssignments.ToArray(),
+            value.ProviderBindings.Select(NormalizeExactBinding).ToArray());
+    }
+
+    /// <summary>
+    /// Normalizes a native binding while requiring its stable identity to be present.
+    /// </summary>
+    private DeckProviderBinding NormalizeExactBinding(DeckProviderBinding value)
+    {
+        DeckContractValidator.NormalizeId(value.BindingId, "binding");
+        return DeckContractValidator.Normalize(value, createId);
+    }
+
+    /// <summary>
+    /// Rejects duplicate or orphaned provider snapshots before an exact native insert.
+    /// </summary>
+    private static void ValidateBaselines(
+        DeckDocument deck,
+        IReadOnlyList<DeckSyncBaseline> baselines)
+    {
+        HashSet<Guid> bindingIds = deck.ProviderBindings.Select(value => value.BindingId).ToHashSet();
+        HashSet<Guid> observed = [];
+        foreach (DeckSyncBaseline baseline in baselines)
+        {
+            if (!bindingIds.Contains(baseline.BindingId) || !observed.Add(baseline.BindingId))
+            {
+                throw new DeckInputException("A native synchronization baseline is invalid.");
+            }
+        }
     }
 
     /// <summary>

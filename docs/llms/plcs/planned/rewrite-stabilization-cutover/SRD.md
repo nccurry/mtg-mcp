@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -19,10 +19,10 @@ rollback, and PLC lifecycle closure. No new product behavior is in scope.
 
 | ID | Priority | Requirement | Acceptance criteria |
 | --- | --- | --- | --- |
-| CUT-001 | Must | All nine prerequisite child PLCs shall be approved, implemented, accepted, and moved to `completed/` before cutover implementation begins. | Dependency ledger contains reviewed revisions and completion evidence. |
+| CUT-001 | Must | All ten prerequisite child PLCs shall be approved, implemented, accepted, and moved to `completed/` before cutover implementation begins. | Dependency ledger contains reviewed revisions and completion evidence. |
 | CUT-002 | Must | The production solution shall contain only `MtgMcp.Core`, `MtgMcp.App`, `MtgMcp.Decks`, `MtgMcp.Scryfall`, `MtgMcp.Archidekt`, `MtgMcp.Playgroup`, `MtgMcp.Statistics`, and `MtgMcp.Tagger`; manual interchange remains part of `MtgMcp.Decks`, not a ninth assembly. | Solution/project reference architecture test passes. |
-| CUT-003 | Must | The stable MCP surface shall match the canonical manifest derived from the completed, approved capability children, expose one capability resource, and expose zero prompts. The current planning baseline is 84 tools, but no count is preserved solely for compatibility. | Approved schema snapshot matches the derived manifest byte-for-byte after canonicalization. |
-| CUT-004 | Must | Per-mode visibility shall match every approved tool's operation-mode requirement in that manifest. The current planning baseline is 49 tools in `read-only`, 71 in `local`, and 84 in `remote`; approved design changes recalculate those totals. | Per-mode discovery fixtures and manifest reconciliation pass. |
+| CUT-003 | Must | The stable MCP surface shall match the canonical manifest derived from the completed, approved capability children, expose one capability resource, and expose zero prompts. The current `all` planning baseline is 83 tools, but no count is preserved solely for compatibility. | Approved schema snapshot matches the derived manifest byte-for-byte after canonicalization. |
+| CUT-004 | Must | Per-mode visibility shall match every approved tool's operation-mode requirement in that manifest. The current `all` planning baseline is 48 tools in `read-only`, 70 in `local`, and 83 in `remote`; approved design changes recalculate those totals. | Per-mode discovery fixtures and manifest reconciliation pass. |
 | CUT-005 | Must | Stable releases shall contain no legacy advisor, intent, plan, recommendation, blended-score, simulation, Moxfield-network, CommanderSpellbook, or decklist-provider surface or assembly. | Forbidden-name and project scans return no matches outside explicit historical docs/fixtures. |
 | CUT-006 | Must | Every production assembly shall maintain at least 90 percent line coverage without unjustified exclusions. | Per-assembly coverage report passes the existing gate. |
 | CUT-007 | Must | The final release candidate shall pass repository lint, offline tests, coverage, package, and packaged-server smoke commands. | Final evidence bundle records successful supported task commands. |
@@ -36,9 +36,10 @@ rollback, and PLC lifecycle closure. No new product behavior is in scope.
 | CUT-015 | Must | The rewrite branch shall integrate the latest `main` through ordinary history-preserving Git operations and rerun all final gates after conflict resolution. | Merge-base and final validation evidence are recorded. |
 | CUT-016 | Must | Preview artifacts shall use `0.9.0-preview.N`; only an accepted release candidate may produce stable `0.9.0`. | Package metadata and server version tests pass. |
 | CUT-017 | Must | Rollback shall reinstall the prior stable release and select its prior data/configuration without transforming `0.9.0` stores. | Rollback rehearsal passes from packaged artifacts. |
-| CUT-018 | Must | Lifecycle shall remain staged: umbrella planning completes after all ten plans are approved; children 1–9 complete after their own implementations before cutover starts; child 10 moves to `in-progress` for cutover and completes after release/rollback evidence. Cutover may add evidence links to already completed packets but shall not retroactively move them. | PLC registry, approval records, folder states, and evidence links match each milestone. |
+| CUT-018 | Must | Lifecycle shall remain staged: umbrella planning completes after all eleven plans are approved; children 1–10 complete after their own implementations before cutover starts; child 11 moves to `in-progress` for cutover and completes after release/rollback evidence. Cutover may add evidence links to already completed packets but shall not retroactively move them. | PLC registry, approval records, folder states, and evidence links match each milestone. |
 | CUT-019 | Must | `read-only` shall be validated as a zero-local-write/zero-remote-write mode that may perform explicit provider reads; offline shall remain a test-suite classification rather than a runtime mode. | Mode E2E proves provider reads can occur and all write spies remain zero. |
 | CUT-020 | Must | Any approved child tool-surface change shall update that child's matrix, regenerate the cutover family crosswalk and per-mode totals, and update canonical schema snapshots in the same reviewed change. Counts follow the approved design; they do not constrain it or require legacy aliases. | Intentional drift fixture fails until the manifest, derived counts, and snapshots agree. |
+| CUT-021 | Must | Every stable tool shall belong to exactly one capability toolset. Cutover shall validate `default`, `all`, `none`, and representative explicit profiles across every operation mode, prove toolsets never widen authority, and pass the program north-star workflow gate. The current default planning baseline is 19/38/38 tools by mode; the `all` baseline is 48/70/83. | Canonical profile/mode manifests, capability-resource snapshots, zero-write spies, and composed deckbuilding workflow fixtures pass. |
 
 ## Quality Attributes
 
@@ -58,3 +59,4 @@ rollback, and PLC lifecycle closure. No new product behavior is in scope.
 - [ ] Required provider live proofs pass without leaked secrets or residual state.
 - [ ] Rollback rehearsal succeeds.
 - [ ] Stable release authorization and PLC lifecycle closure are recorded.
+- [ ] Toolset/profile governance and every child north-star acceptance workflow pass.

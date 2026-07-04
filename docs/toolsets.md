@@ -1,9 +1,12 @@
 # MCP Toolsets
 
 > Historical reference: this file documents the removed legacy pre-rewrite
-> toolset filter. The clean-break `0.9.0` surface is capability-prefixed and
-> governed by the child PLC manifests; it does not preserve legacy toolsets or
-> counts for compatibility. See [rewrite-guide.md](rewrite-guide.md).
+> toolset filter. The clean-break `0.9.0` does not preserve these names or
+> counts. Its replacement uses static startup-selected `decks`, `scryfall`,
+> `stats`, `archidekt`, `playgroup`, and `tagger` toolsets, with
+> `decks,scryfall,stats` as the default profile. See the
+> [capability-toolset PLC](llms/plcs/planned/mcp-capability-toolsets/README.md)
+> and [rewrite guide](rewrite-guide.md).
 
 `MtgMcp.Toolsets` controls which MCP tools the server advertises. Blank is the
 compatibility profile: it advertises every tool allowed by the current operation
@@ -60,6 +63,6 @@ workflows are needed.
 | Use Archidekt writeback and remote checkpoints | `workspace`, `archidekt` |
 | Use Playgroup.gg ranking context | `playgroup` |
 
-Current-server maintenance should update this file when legacy toolsets change.
-Rewrite work updates the active child surface matrix and cutover crosswalk
-instead of extending this taxonomy.
+This taxonomy is historical and must not be extended. Rewrite work updates the
+active child toolset assignment, profile matrix, capability resource, and
+cutover crosswalk instead.

@@ -5,8 +5,8 @@ It does not carry the released legacy surface forward.
 
 ## Current Rewrite Status
 
-The completed foundation and local deck capability use official C# SDK 1.4.0 stdio hosting and client
-APIs. Official-client E2E tests prove standard initialization in `read-only`,
+The completed foundation, local deck capability, and offline interchange surface
+use official C# SDK 1.4.0 stdio hosting and client APIs. Official-client E2E tests prove standard initialization in `read-only`,
 `local`, and `remote` modes, negotiated protocol reporting, resource listing
 and reading, unknown-resource errors, sanitized pre-transport failures, and
 clean process termination when stdin closes.
@@ -16,7 +16,7 @@ The current public surface is exactly:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- four read tools in `read-only`, nineteen deck tools in `local` and `remote`,
+- seven read tools in `read-only`, twenty-three deck tools in `local` and `remote`,
   and zero prompts; and
 - no logging, subscription, or list-changed capability advertisement.
 

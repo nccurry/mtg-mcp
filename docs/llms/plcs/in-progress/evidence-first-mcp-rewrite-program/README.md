@@ -6,13 +6,13 @@
 - Folder: `docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
-- Current phase: sequential child drafting
+- Last updated: 2026-07-04
+- Current phase: capability-toolset amendment and dependent child reconciliation
 
 ## Summary
 
 This packet governs the decomposition of the evidence-first MCP rewrite into
-ten smaller PLCs. Its deliverable is independently reviewable planning packets,
+eleven smaller PLCs. Its deliverable is independently reviewable planning packets,
 not production code. The children are drafted sequentially, one complete packet
 at a time, and remain individually subject to review before implementation.
 
@@ -35,7 +35,7 @@ the detailed contracts, fixtures, risks, and acceptance criteria in its topic.
 | Use an umbrella PLC that authorizes planning only. | Accepted | The rewrite must be decomposed before any child implementation starts. | [Planning boundary](SADD.md#planning-and-implementation-boundary) |
 | Draft children sequentially rather than in parallel. | Accepted | Each topic needs a complete boundary and validation pass before the next draft starts. | [Authoring protocol](IMPLEMENTATION_PLAN.md#per-child-authoring-protocol) |
 | Review children independently before implementation. | Accepted | Drafting the queue does not approve or authorize any child implementation. | [Review state](SADD.md#review-and-approval-state) |
-| Keep ten required children in dependency order. | Accepted | The queue separates audit, foundation, capabilities, and cutover while preserving dependencies. | [Required child registry](#required-child-registry) |
+| Keep eleven required children in dependency order. | Accepted | The queue separates audit, foundation, surface governance, capabilities, and cutover while preserving dependencies. | [Required child registry](#required-child-registry) |
 | Register post-cutover topics without drafting them. | Accepted | Popularity and experimental work must not expand the stable rewrite or cutover gate. | [Post-cutover registry](#post-cutover-registry) |
 | Amend this packet before changing a shared guardrail. | Accepted | Cross-topic changes must be visible to every dependent child. | [Amendments](SADD.md#guardrail-amendments) |
 
@@ -45,6 +45,7 @@ the detailed contracts, fixtures, risks, and acceptance criteria in its topic.
 | --- | --- | --- | --- | --- |
 | AMEND-001 | 2026-07-03 | Accepted | Permit all ten children to be drafted sequentially in one planning run. Remove the prerequisite that one child be approved before the next is drafted. Preserve separate packets, per-child validation, independent review, and the prohibition on production implementation. | Explicit repository-owner request |
 | AMEND-002 | 2026-07-03 | Accepted | Expand child 6 and stable cutover scope to include Archidekt folder organization and named snapshot lifecycle/guarded restore. Reconcile the audit disposition, child requirements, live cleanup, deferred registry, and derived surface baseline. | Explicit repository-owner request |
+| AMEND-003 | 2026-07-04 | Accepted | Add capability toolsets as a cross-cutting guardrail, create a dedicated toolset child before provider implementations, require north-star acceptance checks in every remaining child, and distinguish default-profile discovery from the complete stable surface. | Explicit repository-owner request |
 
 ## Program Guardrails
 
@@ -57,6 +58,21 @@ Every child PLC shall inherit these decisions:
   strategic automation.
 - Stable tool names use the `deck_*`, `scryfall_*`, `archidekt_*`,
   `playgroup_*`, `stats_*`, and `tagger_*` capability prefixes.
+- Every stable tool belongs to exactly one startup-selectable capability
+  toolset. Toolsets control relevance; operation modes continue to control
+  authority. A tool is visible only when it is implemented, its toolset is
+  selected, and the active mode permits it.
+- Toolset selection is static for one MCP session. Stable `0.9.0` does not rely
+  on runtime tool-list mutation or `listChanged`; selection changes require a
+  process restart.
+- `default` selects implemented default-enabled toolsets, `all` selects every
+  implemented stable toolset, and `none` exposes no tools. Experimental
+  capabilities never enter `default` or `all` implicitly.
+- `decks`, `scryfall`, and `stats` are default-enabled when implemented.
+  `archidekt`, `playgroup`, and `tagger` require explicit selection.
+- The capability resource reports implemented, available, enabled,
+  default-enabled, and disabled toolsets without advertising unimplemented
+  placeholder modules.
 - Operation modes are `read-only`, `local`, and `remote`; `local` is the
   default for the rewrite.
 - Provider-neutral, dependency-light logic belongs in `MtgMcp.Core`.
@@ -92,13 +108,14 @@ explicitly activated.
 | 1 | [`legacy-surface-audit-and-disposition`](../../completed/legacy-surface-audit-and-disposition/README.md) | Inventory and classify the current product surface and reusable evidence. | Umbrella guardrails | Repository-owner approval recorded | Approved; completed |
 | 2 | [`rewrite-skeleton-foundation`](../../completed/rewrite-skeleton-foundation/README.md) | Define the clean skeleton, repository wiring, modes, evidence, and module boundaries. | Approved audit disposition | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 3 | [`local-deck-store`](../../completed/local-deck-store/README.md) | Define the local deck domain, SQLite persistence, and `deck_*` mutations. | Foundation boundaries | Repository-owner implementation authorization recorded | Approved; implementation completed |
-| 4 | [`manual-deck-interchange`](../../planned/manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Child 3 draft validated | Drafted; validation passed |
-| 5 | [`scryfall-evidence-snapshots`](../../planned/scryfall-evidence-snapshots/README.md) | Define immutable, rich, official Scryfall query snapshots. | Foundation and local card identity | Child 4 draft validated | Drafted; validation passed |
-| 6 | [`archidekt-deck-sync`](../../planned/archidekt-deck-sync/README.md) | Define Archidekt deck sync, folder organization, and named snapshot lifecycle/restore. | Deck, interchange, and Scryfall contracts | Child 5 draft validated | Drafted; scope amended; re-review required |
-| 7 | [`playgroup-public-api`](../../planned/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation boundaries | Child 6 draft validated | Drafted; validation passed |
-| 8 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck model | Child 7 draft validated | Drafted; validation passed |
-| 9 | [`scryfall-tagger-cache`](../../planned/scryfall-tagger-cache/README.md) | Define exact cached Tagger assignments and conservative acquisition. | Local deck and Scryfall contracts | Child 8 draft validated | Drafted; validation passed |
-| 10 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 9 | Child 9 draft validated | Drafted; validation passed |
+| 4 | [`manual-deck-interchange`](../manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Repository-owner implementation authorization recorded | Automated implementation complete; manual provider acceptance open |
+| 5 | [`mcp-capability-toolsets`](../../planned/mcp-capability-toolsets/README.md) | Define startup-selected capability groups, default/all/none profiles, mode intersection, and surface governance. | Foundation, local decks, and interchange registration | AMEND-003 accepted | Drafted; review required before implementation |
+| 6 | [`scryfall-evidence-snapshots`](../../planned/scryfall-evidence-snapshots/README.md) | Define immutable, rich, official Scryfall query snapshots. | Toolset foundation and local card identity | Child 5 approval and implementation | Drafted; AMEND-003 reconciled, re-review required |
+| 7 | [`archidekt-deck-sync`](../../planned/archidekt-deck-sync/README.md) | Define Archidekt deck sync, folder organization, and named snapshot lifecycle/restore. | Deck, interchange, toolset, and Scryfall contracts | Child 6 draft validated | Drafted; AMEND-002/003 reconciled, re-review required |
+| 8 | [`playgroup-public-api`](../../planned/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation and toolset boundaries | Child 7 draft validated | Drafted; AMEND-003 reconciled, re-review required |
+| 9 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck and toolset contracts | Child 8 draft validated | Drafted; AMEND-003 reconciled, re-review required |
+| 10 | [`scryfall-tagger-cache`](../../planned/scryfall-tagger-cache/README.md) | Define exact cached Tagger assignments and conservative acquisition. | Local deck, Scryfall, and toolset contracts | Child 9 draft validated | Drafted; AMEND-003 reconciled, re-review required |
+| 11 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 10 | Child 10 draft validated | Drafted; AMEND-003 reconciled, re-review required |
 
 Although some technical dependencies are narrower, drafting remains sequential
 so each packet is complete and validated before work begins on the next.
@@ -149,11 +166,12 @@ that changes a program guardrail must be raised as an umbrella amendment.
 
 - [x] Umbrella packet reviewed and authoring amendment approved.
 - [x] Packet moved to `in-progress/` before child drafting.
-- [x] Each required child drafted sequentially as a separate packet.
+- [x] Each original required child drafted sequentially as a separate packet.
+- [x] AMEND-003 toolset child drafted as a separate packet.
 - [x] Each child structurally validated before the next draft begins.
 - [ ] Each child independently reviewed before its implementation.
 - [ ] Registry and validation evidence updated after each approval.
-- [ ] All ten required child packets exist and are approved.
+- [ ] All eleven required child packets exist and are approved.
 - [ ] Umbrella packet moved to `completed/` without implying code completion.
 
 ## Validation Evidence
@@ -171,7 +189,7 @@ that changes a program guardrail must be raised as an umbrella amendment.
 | 2026-07-03 | Provider follow-up research and owner decisions | Updated | Archidekt create/delete cleanup was proven live and its available-API risk accepted; Playgroup writes are owner-approved fixture-only for the pinned no-cleanup contract; Tagger is technically viable under bounded public acquisition, with owner implementation acceptance still pending; manual interchange syntax evidence was refreshed. |
 | 2026-07-03 | Follow-up child review | Passed with edit | Confirmed the ten-child split and corrected the foundation packet to consistently state zero tools, one resource, and zero prompts. |
 | 2026-07-03 | Durable guidance consistency audit | Passed | Agent instructions, README and `llms.txt`, product/design guidance, architecture/provider docs, compatibility/versioning rules, PLC workflow docs, and review playbooks now distinguish the current server from the planned clean-break target and route rewrite work through an approved active child. |
-| 2026-07-03 | Archidekt folder/snapshot scope amendment | Validated for amended draft; re-review required | Folder tree/detail/create/update/move/empty-delete and named snapshot lifecycle/guarded restore are now stable child-6 scope. All 28 child requirements trace to fixtures; the 23-tool Archidekt matrix reconciles the program baseline to 84 tools: 49/71/84 by mode, one resource, and zero prompts. |
+| 2026-07-03 | Archidekt folder/snapshot scope amendment | Superseded baseline; scope retained | Folder tree/detail/create/update/move/empty-delete and named snapshot lifecycle/guarded restore entered stable Archidekt scope. AMEND-003 later renumbered Archidekt to child 7 and recalculated the complete surface. |
 | 2026-07-03 | Audit approval and foundation Phase 0 activation | Passed | Repository owner approved the audit disposition and foundation PLC, authorized foundation implementation, moved the audit to `completed/`, moved the foundation to `in-progress/`, and retained all later children as unauthorized drafts. |
 | 2026-07-03 | Foundation Phase 1 worktree isolation | Passed | Fetch/preflight found no target collision; the required branch and sibling worktree were created from `c2aeec8`; HEAD/merge-base and clean-status checks passed without modifying existing worktrees. |
 | 2026-07-03 | Foundation Phase 2 skeleton and repository reconciliation | Passed | The rewrite branch removed the audit-disposed legacy implementation, restored only Core/App plus focused tests, reconciled task/CI/coverage/package/release wiring, passed post-implementation audits, and recorded detailed evidence in the child packet. |
@@ -179,10 +197,14 @@ that changes a program guardrail must be raised as an umbrella amendment.
 | 2026-07-03 | Foundation Phases 4-5 and lifecycle closure | Passed | The branch now hosts an official-SDK resources-only stdio MCP server, exposes exact initialization identity and `mtg://server/capabilities`, and validates process, official-client, and installed-package paths. All 59 tests and the per-assembly coverage gates pass; the child moved to `completed/`. |
 | 2026-07-03 | Local deck child approval and activation | Passed | Repository owner approved the Local Deck Store PLC at `c15476d`, authorized implementation, and moved the packet to `in-progress/` with Phase 1 active. |
 | 2026-07-03 | Local deck child lifecycle closure | Passed | All eighteen requirements, five phases, audits, offline tests, per-assembly coverage, exact surface checks, package build, process smoke, official-client MCP smoke, and installed-tool smoke passed; the packet moved to `completed/`. |
+| 2026-07-04 | Manual interchange child approval and activation | Passed | Repository owner approved the Manual Deck Interchange PLC at `4cc041b`, authorized implementation, and moved the packet to `in-progress/` with Phase 1 active. |
+| 2026-07-04 | Manual interchange automated implementation and audits | Passed with explicit manual gate | All four consolidated tools, native/generic/provider artifact workflows, bounds, official-client dummy-deck workflows, package validation, audits, 112 tests, and per-assembly coverage gates pass. Archidekt and Moxfield remain experimental because authenticated manual UI acceptance XCHG-017 is recorded as not run. |
+| 2026-07-04 | AMEND-003 capability-toolset guardrail | Accepted | Repository owner required startup-selectable toolsets, north-star acceptance checks in all remaining children, a dedicated toolset child before Scryfall, and immediate consolidation of the interchange format catalog tools. |
+| 2026-07-04 | AMEND-003 dependent reconciliation | Passed for draft review | All remaining packets identify their toolset, surface rationale, decision/evidence boundaries, unknown states, and composed north-star workflow. The merged interchange catalog yields current 7/23/23 and final `all` 48/70/83 planning totals. |
 
 ## Completion Notes
 
-Complete this packet when all ten required child PLCs have been authored and
+Complete this packet when all eleven required child PLCs have been authored and
 independently approved. Drafting all children leaves this umbrella in progress
 until those reviews occur. Child implementation and the `0.9.0` release have
 independent lifecycle and completion evidence.

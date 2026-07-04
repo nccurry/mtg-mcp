@@ -62,6 +62,15 @@
 | TAG-021 | Owner provider-risk acceptance and dated policy/contract recheck. |
 | TAG-022 | TAG-FIX-016 captured-request identity/header and prohibited-operation checks. |
 | TAG-023 | TAG-FIX-017 default-skip/explicit-force request-count tests. |
+| TAG-024 | Default/all/none/explicit `tagger` profile matrix plus cached-read/explicit-refresh/evidence-review workflow and mode/network spies. |
+
+## North-Star Workflow Fixture
+
+With `tagger` explicitly enabled, the client reads immutable cached assignments
+for a local deck, distinguishes misses from confirmed empty results, explicitly
+refreshes only bounded misses when allowed, and receives community provenance
+without automatic category assignment. The family is absent from the default
+profile, and enabling it never bypasses refresh authority or provider safety.
 
 ## Live Tests
 

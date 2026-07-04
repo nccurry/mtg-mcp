@@ -5,7 +5,7 @@
 - Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -30,11 +30,13 @@ Every child phase follows the same protocol:
 3. Work on only one child directory at a time using the standard five files.
 4. Make the child decision-complete within its narrow scope.
 5. Add guardrail conformance and the standard planning approval record.
-6. Validate links, traceability, packet structure, and `git diff --check`.
-7. Update the umbrella registry to `Draft` and record validation evidence.
-8. Do not start code; proceed to the next child only after the current packet
+6. Add the exact toolset assignment, tool-versus-resource rationale, and
+   north-star acceptance workflow when the child affects public behavior.
+7. Validate links, traceability, packet structure, and `git diff --check`.
+8. Update the umbrella registry to `Draft` and record validation evidence.
+9. Do not start code; proceed to the next child only after the current packet
    is structurally complete and validated.
-9. Record later review feedback in the child. When approved, update both the
+10. Record later review feedback in the child. When approved, update both the
    child approval record and umbrella registry.
 
 ## Phase Summary
@@ -46,13 +48,14 @@ Every child phase follows the same protocol:
 | 2 | Plan the clean skeleton and repository foundation. | PROG-002 through PROG-015 | `rewrite-skeleton-foundation` | Foundation contracts are decision-complete and validated. | Completed |
 | 3 | Plan the local deck domain and store. | PROG-002 through PROG-015 | `local-deck-store` | Deck model, persistence, tools, and validation are decision-complete. | Completed |
 | 4 | Plan manual deck interchange. | PROG-002 through PROG-015 | `manual-deck-interchange` | Native and provider artifact contracts are decision-complete. | Completed |
-| 5 | Plan Scryfall evidence snapshots. | PROG-002 through PROG-015 | `scryfall-evidence-snapshots` | Snapshot API, storage, fidelity, and provider safety are decision-complete. | Completed |
-| 6 | Plan Archidekt decks, folders, snapshots, and synchronization. | PROG-002 through PROG-015 | `archidekt-deck-sync` | Deck sync, folder organization, named snapshots, restore guards, provider safety, and cleanup are decision-complete. | Completed; AMEND-002 re-review pending |
-| 7 | Plan the Playgroup public API. | PROG-002 through PROG-015 | `playgroup-public-api` | Pinned official surface and write safety are decision-complete. | Completed |
-| 8 | Plan exact deck statistics. | PROG-002 through PROG-014 | `exact-deck-statistics` | Exact functions, assumptions, and proofs are decision-complete. | Completed |
-| 9 | Plan the Scryfall Tagger cache. | PROG-002 through PROG-015 | `scryfall-tagger-cache` | Cache and conservative acquisition contracts are decision-complete. | Completed |
-| 10 | Plan stabilization and cutover. | PROG-002 through PROG-015 | `rewrite-stabilization-cutover` | Cross-module gates, release, and rollback plan are decision-complete. | Completed |
-| 11 | Close the planning program. | PROG-011 through PROG-014 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
+| 5 | Plan MCP capability toolsets. | PROG-002 through PROG-021 | `mcp-capability-toolsets` | Startup selection, default/all/none profiles, mode intersection, and surface governance are decision-complete. | Completed; review pending |
+| 6 | Reconcile Scryfall evidence snapshots. | PROG-002 through PROG-021 | `scryfall-evidence-snapshots` | Snapshot API, storage, fidelity, provider safety, `scryfall` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
+| 7 | Reconcile Archidekt decks, folders, snapshots, and synchronization. | PROG-002 through PROG-021 | `archidekt-deck-sync` | Provider workflows, cleanup, `archidekt` assignment, and north-star acceptance are decision-complete. | Reconciled; AMEND-002/003 re-review pending |
+| 8 | Reconcile the Playgroup public API. | PROG-002 through PROG-021 | `playgroup-public-api` | Pinned official surface, write safety, `playgroup` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
+| 9 | Reconcile exact deck statistics. | PROG-002 through PROG-021 | `exact-deck-statistics` | Exact functions, assumptions, `stats` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
+| 10 | Reconcile the Scryfall Tagger cache. | PROG-002 through PROG-021 | `scryfall-tagger-cache` | Cache/acquisition boundaries, `tagger` assignment, and north-star acceptance are decision-complete. | Reconciled; re-review pending |
+| 11 | Reconcile stabilization and cutover. | PROG-002 through PROG-021 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Reconciled; re-review pending |
+| 12 | Close the planning program. | PROG-011 through PROG-021 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
 
 ## Phase Details
 
@@ -82,7 +85,7 @@ Every child phase follows the same protocol:
 - Exit drafting after the packet is complete and validated; approval remains a
   separate gate before implementation.
 
-### Phases 2 Through 9: Capability Planning
+### Phases 2 Through 10: Capability Planning
 
 - Follow the per-child protocol and the exact queue.
 - Resolve topic-specific interfaces, data, dependencies, failure modes,
@@ -92,9 +95,14 @@ Every child phase follows the same protocol:
 - Do not draft the next capability until the current packet is complete and
   validated. Never start implementation in this planning run.
 
-### Phase 10: Stabilization And Cutover Planning
+Phase 5 is the cross-cutting exception created by AMEND-003. It defines the App
+registration contract before any provider child implementation begins. Later
+children inherit the toolset registry and may add one descriptor and one
+registration group; they do not redesign selection semantics.
 
-- Draft only after children 1 through 9 are complete and structurally validated.
+### Phase 11: Stabilization And Cutover Planning
+
+- Draft only after children 1 through 10 are complete and structurally validated.
 - Define cross-module architecture, MCP-schema, offline, package, documentation,
   coverage, and opt-in live-provider gates.
 - Define the `0.9.0` merge, release, rollback, legacy retention, and PLC cleanup
@@ -103,9 +111,9 @@ Every child phase follows the same protocol:
   of every stable capability child.
 - Do not execute the cutover.
 
-### Phase 11: Program Closure
+### Phase 12: Program Closure
 
-- Confirm all ten required directories exist and have approved records.
+- Confirm all eleven required directories exist and have approved records.
 - Confirm every child has complete traceability and no unresolved guardrail
   conflict.
 - Update umbrella registry and validation evidence.
@@ -117,11 +125,11 @@ Every child phase follows the same protocol:
 
 | Risk | Affected phases | Mitigation | Owner |
 | --- | --- | --- | --- |
-| A child expands into adjacent topics. | 1 through 10 | Enforce one topic, explicit non-goals, and separate packet validation. | Child author and reviewer |
-| Proposed upstream decisions change during review. | 2 through 10 | Reconcile dependent drafts and revalidate them before approval or implementation. | Program owner |
-| Shared guardrails prove incorrect. | 1 through 10 | Pause and review an umbrella amendment. | Repository owner |
+| A child expands into adjacent topics. | 1 through 11 | Enforce one topic, explicit non-goals, and separate packet validation. | Child author and reviewer |
+| Proposed upstream decisions change during review. | 2 through 11 | Reconcile dependent drafts and revalidate them before approval or implementation. | Program owner |
+| Shared guardrails prove incorrect. | 1 through 11 | Pause and review an umbrella amendment. | Repository owner |
 | Existing PLCs conflict with the rewrite. | 1 and 2 | Leave them untouched until the audit records disposition. | Audit child owner |
-| Provider research becomes stale. | 5 through 9 | Re-verify during the owning child session. | Provider child owner |
+| Provider research becomes stale. | 6 through 10 | Re-verify during the owning child session. | Provider child owner |
 | Planning completion is mistaken for code completion. | All | Keep approval, implementation authorization, lifecycle, and release evidence separate. | Program owner |
 
 ## Completion Criteria

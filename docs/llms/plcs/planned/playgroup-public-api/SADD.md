@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -55,6 +55,17 @@ pacer serializes request starts at 250 ms. The pinned OpenAPI publishes no rate
 guidance, so this is a conservative client-owned default rather than a claimed
 provider limit. Writes have no retry. The adapter does not launch, monitor, or
 automatically update live sessions.
+
+## Toolset And North-Star Design
+
+App assigns all sixteen tools to the opt-in `playgroup` toolset. Startup
+selection cannot make either documented write visible outside `remote`, and
+the capability document reports the exact selected/visible surface without an
+auth probe. The acceptance workflow reads redacted auth status, retrieves one
+bounded provider-shaped observation, preserves contract/retrieval context, and
+allows the client LLM to correlate it with explicitly supplied deck context.
+No ranking helper, private endpoint, generic router, or compatibility alias is
+part of this child.
 
 ## Alternatives Considered
 

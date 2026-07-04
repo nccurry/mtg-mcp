@@ -6,7 +6,7 @@
 - Folder: `docs/llms/plcs/planned/playgroup-public-api/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-07-04
 - Current phase: draft review
 
 ## Summary
@@ -28,6 +28,7 @@ reverse-engineered.
 ## Dependencies
 
 - [Rewrite Foundation](../../completed/rewrite-skeleton-foundation/README.md)
+- [MCP Capability Toolsets](../mcp-capability-toolsets/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions
@@ -77,6 +78,26 @@ may add disposable live-write tests.
 The adapter returns provider records, pagination, and retrieval metadata. It
 does not infer power, rank deck quality, blend local meta scores, or silently
 hydrate Archidekt decks.
+
+## Toolset And North-Star Acceptance
+
+- Toolset: `playgroup`, disabled by default and explicitly enabled by users who
+  need this provider.
+- Surface rule: the pinned public operations remain typed tools because their
+  provider contracts differ; no private endpoint, generic router, or ranking
+  alias is added.
+- User question answered: what games, decks, users, commanders, playgroups, and
+  provider-computed statistics does Playgroup currently report?
+- Evidence type: provider-shaped observations with endpoint, API version,
+  pagination, retrieval time, and limitations.
+- Replay boundary: the pinned OpenAPI revision and captured response metadata
+  identify the contract and observation; live provider state may later change.
+- Unknown boundary: unsupported deck updates, missing credentials, partial
+  pages, contract drift, and unavailable provider responses remain explicit.
+- Decision boundary: the adapter never ranks deck quality or selects changes.
+- Complete LLM workflow: enable Playgroup, inspect auth, fetch bounded provider
+  evidence, correlate explicit IDs with user-supplied/local context, and let
+  the client LLM explain the observed results.
 
 ## Planning Approval
 

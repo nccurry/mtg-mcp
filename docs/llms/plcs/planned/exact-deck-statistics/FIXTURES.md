@@ -67,6 +67,15 @@ read-only, idempotent, non-destructive, and closed-world.
 | STAT-018 | STAT-FIX-008, STAT-FIX-012, and neighboring-count properties. |
 | STAT-019 | STAT-FIX-009 and STAT-FIX-014. |
 | STAT-020 | STAT-FIX-015 and local-deck zone/category independence fixture. |
+| STAT-021 | Default/all/none/explicit `stats` profile matrix plus a local-deck-and-explicit-groups-to-exact-result workflow. |
+
+## North-Star Workflow Fixture
+
+Given a revisioned local Commander deck, explicit success groups, and a stated
+draw or mana scenario, the client receives a reduced exact rational, documented
+display value, formula, inputs, assumptions, and counted entries. An over-limit
+case returns unsupported without a probability. No threshold, keep decision,
+role inference, or deckbuilding recommendation is returned.
 
 ## Live Tests
 
