@@ -6,9 +6,9 @@
 | --- | --- | --- |
 | XCHG-FIX-001 | Fully populated local deck | Native JSON exact round trip. |
 | XCHG-FIX-002 | Name-only and split/Unicode card names | No identity invention or text corruption. |
-| XCHG-FIX-003 | Main, commander, sideboard, maybeboard, excluded zones | Provider sections and preservation report are exact. |
+| XCHG-FIX-003 | Main, commander, sideboard, maybeboard, excluded zones | Generic sections are exact; provider text omits excluded entries and reports other zones as companion-only. |
 | XCHG-FIX-004 | Three categories with one primary | Moxfield emits three local tags; Archidekt emits verified primary plus companion assignments. |
-| XCHG-FIX-005 | Same card in multiple printings/finishes | Printing hints emitted; unsupported finish detail reported. |
+| XCHG-FIX-005 | Same card in multiple printings/finishes | Printing hints are emitted; Moxfield finishes are preserved while Archidekt same-print finish merging is reported. |
 | XCHG-FIX-006 | Malformed lines around valid cards | Bounded one-based diagnostics and partial status. |
 | XCHG-FIX-007 | 5 MiB and 10,000-entry boundaries | Limits accept exact bound and reject overflow. |
 | XCHG-FIX-008 | Preview content changed before create | Fingerprint conflict and no deck. |
@@ -37,23 +37,23 @@
 
 | Provider | Procedure | Pass condition |
 | --- | --- | --- |
-| Archidekt | Paste artifact into a disposable deck's Import Cards UI. | Quantities, names, supported printings, and documented primary categories match; companion-only rows are not claimed applied. |
-| Moxfield | Paste artifact into a disposable deck's Bulk Edit UI. | Boards, printings, and all local `#Tag` assignments match; global tags appear only when requested. |
+| Archidekt | Paste artifact into a disposable deck's Import Cards UI. | Quantities, names, supported printings, and one primary category match; merged zones/finishes and secondary categories are companion-only. |
+| Moxfield | Paste artifact into a disposable deck's Bulk Edit UI. | Printings, finishes, and all local `#Tag` assignments match; zones are companion-only and global tags appear only when requested. |
 
 Manual checks record provider, observed UTC, UI flow/path, artifact checksums,
 result, notes, and revalidation reason. They do not use automated APIs or retain
 user deck data. The acceptance is repeated during implementation and before
 stable cutover.
 
-The current not-run implementation records and exact remaining gate are in
+The dated implementation records and exact cleanup gate are in
 [Manual Provider Acceptance Records](PROVIDER_ACCEPTANCE.md).
 
 ## Syntax Research Evidence
 
 | Provider | Evidence observed 2026-07-03 | Planning conclusion | Acceptance state |
 | --- | --- | --- | --- |
-| Archidekt | Staff examples show exact lookup as `1 Name (SET) collector`, a single backtick category, and Ctrl+Shift+C full-syntax copy. Sources: [exact printing](https://archidekt.com/forum/thread/15546991), [category syntax](https://archidekt.com/forum/thread/137035), and [full syntax copy](https://archidekt.com/forum/thread/5487112). | Canonical formatter grammar is `quantity Name (SET) collector` plus at most one primary category; secondary categories stay companion-only. | Research corroborated; disposable-deck UI acceptance still required. |
-| Moxfield | The [official feedback site](https://moxfield.nolt.io/1091) confirms Bulk Edit tag workflows; a current [community UI report](https://www.reddit.com/r/Moxfield/comments/1npidgj/tags_and_bulk_edit/) shows `#Deck Tag` and `#!Global Tag`. An older [Moxfield primer](https://gist.github.com/Jerakin/24be913c6106546136c45d1d028f9af9) and current importer documentation agree on set/collector plus `*F*`/`*E*` tokens but disagree on token order. Moxfield publishes no official grammar and its [terms](https://moxfield.com/help/terms) prohibit automated probing. | Retain the components as candidate grammar only; manually pin current line/section/token order in a disposable deck and perform no network automation. | Not manually accepted. |
+| Archidekt | Staff examples show exact lookup as `1 Name (SET) collector`, a single backtick category, and Ctrl+Shift+C full-syntax copy. Sources: [exact printing](https://archidekt.com/forum/thread/15546991), [category syntax](https://archidekt.com/forum/thread/137035), and [full syntax copy](https://archidekt.com/forum/thread/5487112). | Canonical formatter grammar is `quantity Name (SET) collector` plus at most one primary category; secondary categories stay companion-only. | Manually accepted for quantities, printings, and one primary category; zones, distinct same-print finishes, and secondary categories are companion-only. |
+| Moxfield | The [official feedback site](https://moxfield.nolt.io/1091) confirms Bulk Edit tag workflows; a current [community UI report](https://www.reddit.com/r/Moxfield/comments/1npidgj/tags_and_bulk_edit/) shows `#Deck Tag` and `#!Global Tag`. An older [Moxfield primer](https://gist.github.com/Jerakin/24be913c6106546136c45d1d028f9af9) and current importer documentation agree on set/collector plus `*F*`/`*E*` tokens but disagree on token order. Moxfield publishes no official grammar and its [terms](https://moxfield.com/help/terms) prohibit automated probing. | Use the accepted local-tag and finish-marker grammar without network automation; keep zones in the native companion. | Manually accepted for exact printings, finishes, and multiple local tags. |
 
 Research evidence does not claim that an artifact was imported successfully and
 does not satisfy XCHG-017 by itself.

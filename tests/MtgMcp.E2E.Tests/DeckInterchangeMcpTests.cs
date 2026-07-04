@@ -20,7 +20,13 @@ public sealed class DeckInterchangeMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         Guid commanderId = Guid.CreateVersion7();
         Guid landId = Guid.CreateVersion7();
-        Guid categoryId = Guid.CreateVersion7();
+        Guid sideboardId = Guid.CreateVersion7();
+        Guid candidateId = Guid.CreateVersion7();
+        Guid excludedId = Guid.CreateVersion7();
+        Guid manaSourcesId = Guid.CreateVersion7();
+        Guid basicsId = Guid.CreateVersion7();
+        Guid candidateCategoryId = Guid.CreateVersion7();
+        Guid creaturesId = Guid.CreateVersion7();
         JsonElement original = await CallSuccessAsync(session, "deck_create", new Dictionary<string, object?>
         {
             ["request"] = new
@@ -30,11 +36,26 @@ public sealed class DeckInterchangeMcpTests
                 format = "commander",
                 entries = new object[]
                 {
-                    new { quantity = 1, cardName = "Atraxa, Praetors' Voice", setCode = "2x2", collectorNumber = "190", zone = "commander", entryId = commanderId },
+                    new { quantity = 1, cardName = "Atraxa, Praetors' Voice", setCode = "2xm", collectorNumber = "190", zone = "commander", finish = "nonfoil", entryId = commanderId },
                     new { quantity = 10, cardName = "Island", setCode = "dmu", collectorNumber = "278", zone = "main", entryId = landId },
+                    new { quantity = 1, cardName = "Island", setCode = "dmu", collectorNumber = "278", zone = "sideboard", finish = "foil", entryId = sideboardId },
+                    new { quantity = 1, cardName = "Abbot of Keral Keep", setCode = "2x2", collectorNumber = "446", zone = "maybeboard", finish = "etched", entryId = candidateId },
+                    new { quantity = 1, cardName = "Call to the Feast", setCode = "2x2", collectorNumber = "190", zone = "excluded", entryId = excludedId },
                 },
-                categories = new[] { new { name = "Mana Sources", color = "#3366ff", categoryId } },
-                categoryAssignments = new[] { new { entryId = landId, categoryId, isPrimary = true } },
+                categories = new[]
+                {
+                    new { name = "Mana Sources", color = "#3366ff", categoryId = manaSourcesId },
+                    new { name = "Basics", color = "#88aaff", categoryId = basicsId },
+                    new { name = "Candidate", color = "#ff9900", categoryId = candidateCategoryId },
+                    new { name = "Creatures", color = "#cc3333", categoryId = creaturesId },
+                },
+                categoryAssignments = new[]
+                {
+                    new { entryId = landId, categoryId = manaSourcesId, isPrimary = true },
+                    new { entryId = landId, categoryId = basicsId, isPrimary = false },
+                    new { entryId = candidateId, categoryId = candidateCategoryId, isPrimary = true },
+                    new { entryId = candidateId, categoryId = creaturesId, isPrimary = false },
+                },
             },
         }).ConfigureAwait(false);
         Guid originalId = original.GetProperty("deckId").GetGuid();
@@ -47,9 +68,13 @@ public sealed class DeckInterchangeMcpTests
         Assert.Equal(4, interchangeFormats.GetArrayLength());
         Assert.All(
             interchangeFormats.EnumerateArray(),
-            format => Assert.True(
-                format.GetProperty("supportsImport").GetBoolean() &&
-                format.GetProperty("supportsExport").GetBoolean()));
+            format =>
+            {
+                Assert.True(
+                    format.GetProperty("supportsImport").GetBoolean() &&
+                    format.GetProperty("supportsExport").GetBoolean());
+                Assert.Equal("available", format.GetProperty("status").GetString());
+            });
 
         Dictionary<string, JsonElement> bundles = new(StringComparer.Ordinal);
         foreach (string formatId in new[]
@@ -60,14 +85,13 @@ public sealed class DeckInterchangeMcpTests
                      "moxfield-bulk-edit-v1",
                  })
         {
-            bool experimental = formatId is "archidekt-text-v1" or "moxfield-bulk-edit-v1";
             JsonElement bundle = await CallSuccessAsync(session, "deck_export_bundle", new Dictionary<string, object?>
             {
                 ["deckId"] = originalId,
                 ["formatId"] = formatId,
-                ["options"] = experimental ? new { allowExperimental = true } : null,
             }).ConfigureAwait(false);
             bundles.Add(formatId, bundle);
+            Assert.Equal("available", bundle.GetProperty("status").GetString());
             Assert.All(
                 bundle.GetProperty("artifacts").EnumerateArray(),
                 artifact => Assert.Matches("^[0-9a-f]{64}$", artifact.GetProperty("sha256").GetString()));
@@ -77,7 +101,6 @@ public sealed class DeckInterchangeMcpTests
         foreach ((string formatId, JsonElement bundle) in bundles)
         {
             string content = Artifact(bundle, PrimaryArtifact(formatId));
-            bool experimental = formatId is "archidekt-text-v1" or "moxfield-bulk-edit-v1";
             JsonElement preview = await CallSuccessAsync(session, "deck_import_preview", new Dictionary<string, object?>
             {
                 ["formatId"] = formatId,
@@ -86,7 +109,6 @@ public sealed class DeckInterchangeMcpTests
                 {
                     deckName = "Imported Dummy Commander",
                     format = "commander",
-                    allowExperimental = experimental,
                 },
             }).ConfigureAwait(false);
             previews.Add(formatId, preview);
@@ -120,11 +142,24 @@ public sealed class DeckInterchangeMcpTests
 
         Assert.Equal(originalId, restored.GetProperty("deckId").GetGuid());
         Assert.Equal(originalRevision, restored.GetProperty("revision").GetInt64());
-        Assert.Equal(2, restored.GetProperty("entries").GetArrayLength());
-        Assert.Single(restored.GetProperty("categoryAssignments").EnumerateArray());
+        Assert.Equal(5, restored.GetProperty("entries").GetArrayLength());
+        Assert.Equal(4, restored.GetProperty("categoryAssignments").GetArrayLength());
         Assert.Contains("`Mana Sources`", Artifact(bundles["archidekt-text-v1"], "deck.archidekt.txt"), StringComparison.Ordinal);
-        Assert.Contains("#Mana Sources", Artifact(bundles["moxfield-bulk-edit-v1"], "deck.moxfield.txt"), StringComparison.Ordinal);
-        Assert.DoesNotContain("#!", Artifact(bundles["moxfield-bulk-edit-v1"], "deck.moxfield.txt"), StringComparison.Ordinal);
+        Assert.DoesNotContain("`Basics`", Artifact(bundles["archidekt-text-v1"], "deck.archidekt.txt"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Call to the Feast", Artifact(bundles["archidekt-text-v1"], "deck.archidekt.txt"), StringComparison.Ordinal);
+        string moxfieldText = Artifact(bundles["moxfield-bulk-edit-v1"], "deck.moxfield.txt");
+        Assert.Contains("#Mana Sources #Basics", moxfieldText, StringComparison.Ordinal);
+        Assert.Contains("*F*", moxfieldText, StringComparison.Ordinal);
+        Assert.Contains("*E* #Candidate #Creatures", moxfieldText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Call to the Feast", moxfieldText, StringComparison.Ordinal);
+        Assert.DoesNotContain("#!", moxfieldText, StringComparison.Ordinal);
+        Assert.Equal("companion-only", PreservationStatus(bundles["archidekt-text-v1"], "zone"));
+        Assert.Equal("companion-only", PreservationStatus(bundles["archidekt-text-v1"], "finishes"));
+        Assert.Equal("preserved", PreservationStatus(bundles["archidekt-text-v1"], "primary-category"));
+        Assert.Equal("companion-only", PreservationStatus(bundles["archidekt-text-v1"], "secondary-categories"));
+        Assert.Equal("preserved", PreservationStatus(bundles["moxfield-bulk-edit-v1"], "finishes"));
+        Assert.Equal("preserved", PreservationStatus(bundles["moxfield-bulk-edit-v1"], "secondary-categories"));
+        Assert.Equal("companion-only", PreservationStatus(bundles["moxfield-bulk-edit-v1"], "excluded-entries"));
 
         _ = await CallSuccessAsync(session, "deck_delete", new Dictionary<string, object?>
         {
@@ -152,6 +187,18 @@ public sealed class DeckInterchangeMcpTests
             .EnumerateArray()
             .Single(value => value.GetProperty("fileName").GetString() == fileName)
             .GetProperty("content")
+            .GetString()!;
+    }
+
+    /// <summary>
+    /// Reads one exact preservation status from a structured export bundle.
+    /// </summary>
+    private static string PreservationStatus(JsonElement bundle, string field)
+    {
+        return bundle.GetProperty("preservation")
+            .EnumerateArray()
+            .Single(value => value.GetProperty("field").GetString() == field)
+            .GetProperty("status")
             .GetString()!;
     }
 

@@ -9,33 +9,27 @@ namespace MtgMcp.Decks.Tests;
 public sealed class DeckInterchangeServiceTests
 {
     /// <summary>
-    /// Verifies the catalog is stable and provider candidates require explicit experimental use.
+    /// Verifies the catalog exposes every manually accepted provider format without an opt-in.
     /// </summary>
     [Fact]
-    public async Task Formats_ExposeStableCapabilitiesAndGuardExperimentalDialects()
+    public async Task Formats_ExposeStableAcceptedCapabilities()
     {
         using TemporaryDeckDirectory temporary = new();
         using SqliteDeckStore store = CreateStore(temporary.Path);
         DeckInterchangeService service = new(store);
 
         IReadOnlyList<DeckInterchangeFormat> formats = RequireSuccess(service.ListFormats());
-        OperationResult<DeckImportPreview> blocked = await service.PreviewAsync(
-            "archidekt-text-v1",
-            "1 Sol Ring",
-            null,
-            TestContext.Current.CancellationToken);
         DeckImportPreview enabled = RequireSuccess(await service.PreviewAsync(
             "archidekt-text-v1",
             "1 Sol Ring (CMM) 396 `Ramp`",
-            new DeckImportOptions(DeckName: "Archidekt", AllowExperimental: true),
+            new DeckImportOptions(DeckName: "Archidekt"),
             TestContext.Current.CancellationToken));
 
         Assert.Equal(
             ["mtg-mcp-json-v1", "generic-text-v1", "archidekt-text-v1", "moxfield-bulk-edit-v1"],
             formats.Select(value => value.FormatId));
-        Assert.IsType<OperationUnsupported>(blocked.Value);
         Assert.All(formats, value => Assert.True(value.SupportsImport && value.SupportsExport));
-        Assert.Equal("experimental", Assert.Single(formats, value => value.FormatId == "archidekt-text-v1").Status);
+        Assert.All(formats, value => Assert.Equal("available", value.Status));
         Assert.Equal("cmm", Assert.Single(enabled.Proposal!.Entries).SetCode);
         Assert.Equal("Ramp", Assert.Single(enabled.Proposal.Categories).Name);
     }
@@ -49,7 +43,7 @@ public sealed class DeckInterchangeServiceTests
         using TemporaryDeckDirectory temporary = new();
         using SqliteDeckStore store = CreateStore(temporary.Path);
         DeckInterchangeService service = new(store);
-        const string content = "[commander]\n1 Atraxa, Praetors' Voice (2X2) 190\n\n[main]\n3 Île\n1 Sol Ring";
+        const string content = "[commander]\n1 Atraxa, Praetors' Voice (2XM) 190\n\n[main]\n3 Île\n1 Sol Ring";
         DeckImportOptions options = new(DeckName: "Unicode Commander", Description: "fixture");
 
         DeckImportPreview first = RequireSuccess(await service.PreviewAsync(
@@ -81,7 +75,7 @@ public sealed class DeckInterchangeServiceTests
         Assert.Equal("complete", first.Completeness);
         Assert.Equal(3, first.UnresolvedIdentities.Count);
         Assert.Equal("commander", first.Proposal.Entries[0].Zone);
-        Assert.Equal("2x2", first.Proposal.Entries[0].SetCode);
+        Assert.Equal("2xm", first.Proposal.Entries[0].SetCode);
         Assert.Equal("190", first.Proposal.Entries[0].CollectorNumber);
         Assert.NotEqual(created.Deck.DeckId, repeated.Deck.DeckId);
         Assert.Empty(created.Diagnostics);
@@ -233,7 +227,7 @@ public sealed class DeckInterchangeServiceTests
     /// Verifies provider bundles retain all assignments and never create global Moxfield tags implicitly.
     /// </summary>
     [Fact]
-    public async Task ProviderBundles_EmitCandidateTextAndLosslessCompanions()
+    public async Task ProviderBundles_EmitAcceptedTextAndLosslessCompanions()
     {
         using TemporaryDeckDirectory temporary = new();
         using SqliteDeckStore store = CreateStore(temporary.Path);
@@ -255,28 +249,24 @@ public sealed class DeckInterchangeServiceTests
                 ]),
             TestContext.Current.CancellationToken));
         DeckInterchangeService service = new(store);
-        OperationResult<DeckExportBundle> blocked = await service.ExportAsync(
-            deck.DeckId,
-            "moxfield-bulk-edit-v1",
-            null,
-            TestContext.Current.CancellationToken);
         DeckExportBundle archidekt = RequireSuccess(await service.ExportAsync(
             deck.DeckId,
             "archidekt-text-v1",
-            new DeckExportOptions(AllowExperimental: true),
+            null,
             TestContext.Current.CancellationToken));
         DeckExportBundle moxfield = RequireSuccess(await service.ExportAsync(
             deck.DeckId,
             "moxfield-bulk-edit-v1",
-            new DeckExportOptions(AllowExperimental: true),
+            null,
             TestContext.Current.CancellationToken));
         DeckExportBundle global = RequireSuccess(await service.ExportAsync(
             deck.DeckId,
             "moxfield-bulk-edit-v1",
-            new DeckExportOptions(AllowExperimental: true, UseGlobalMoxfieldTags: true),
+            new DeckExportOptions(UseGlobalMoxfieldTags: true),
             TestContext.Current.CancellationToken));
 
-        Assert.IsType<OperationUnsupported>(blocked.Value);
+        Assert.Equal("available", archidekt.Status);
+        Assert.Equal("available", moxfield.Status);
         Assert.Equal(
             ["deck.archidekt.txt", "category-assignments.csv", "deck.mtg-mcp.json", "preservation.json", "README.txt"],
             archidekt.Artifacts.Select(value => value.FileName));
@@ -285,7 +275,20 @@ public sealed class DeckInterchangeServiceTests
         Assert.Contains("*F* #Ramp #Mana", moxfield.Artifacts[0].Content, StringComparison.Ordinal);
         Assert.DoesNotContain("#!", moxfield.Artifacts[0].Content, StringComparison.Ordinal);
         Assert.Contains("#!Ramp #!Mana", global.Artifacts[0].Content, StringComparison.Ordinal);
+        Assert.Equal(
+            "companion-only",
+            global.Preservation.Single(value => value.Field == "primary-category").Status);
+        Assert.Equal(
+            "companion-only",
+            global.Preservation.Single(value => value.Field == "secondary-categories").Status);
         Assert.All(moxfield.Artifacts, value => Assert.Matches("^[0-9a-f]{64}$", value.Sha256));
+        Assert.Equal("companion-only", archidekt.Preservation.Single(value => value.Field == "finishes").Status);
+        Assert.Equal("companion-only", archidekt.Preservation.Single(value => value.Field == "secondary-categories").Status);
+        Assert.Equal("preserved", moxfield.Preservation.Single(value => value.Field == "finishes").Status);
+        Assert.Equal("preserved", moxfield.Preservation.Single(value => value.Field == "secondary-categories").Status);
+        Assert.All(
+            [archidekt, moxfield],
+            bundle => Assert.Equal("companion-only", bundle.Preservation.Single(value => value.Field == "zone").Status));
     }
 
     /// <summary>
@@ -463,12 +466,12 @@ public sealed class DeckInterchangeServiceTests
         DeckImportPreview moxfield = RequireSuccess(await service.PreviewAsync(
             "moxfield-bulk-edit-v1",
             "1 Test Card (TST) 7 *E* #First Tag #Second Tag",
-            new DeckImportOptions(AllowExperimental: true),
+            null,
             TestContext.Current.CancellationToken));
         DeckImportPreview archidekt = RequireSuccess(await service.PreviewAsync(
             "archidekt-text-v1",
             "1 Test Card `Primary`",
-            new DeckImportOptions(DefaultZone: "sideboard", AllowExperimental: true),
+            new DeckImportOptions(DefaultZone: "sideboard"),
             TestContext.Current.CancellationToken));
 
         Assert.Equal(["commander", "excluded", "main", "maybeboard", "sideboard"],
@@ -477,6 +480,9 @@ public sealed class DeckInterchangeServiceTests
         Assert.Equal(generic.Artifacts, repeated.Artifacts);
         Assert.Equal(deck.UpdatedAtUtc, generic.GeneratedAtUtc);
         Assert.DoesNotContain('\r', genericText);
+        Assert.Equal(
+            "preserved",
+            generic.Preservation.Single(value => value.Field == "excluded-entries").Status);
         Assert.All(
             generic.Preservation,
             value => Assert.Matches("^(preserved|companion-only|unsupported)$", value.Status));

@@ -5,12 +5,12 @@ and the in-progress clean-break `0.9.0` server. It prevents current implementati
 documentation from being mistaken for the rewrite target.
 
 The rewrite foundation and local deck-store implementations are complete. The
-manual deck-interchange code is implemented with provider UI acceptance still
-open and provider formats therefore experimental. The capability-toolset child
-is implemented and complete. The Scryfall child is implemented with its manual
-full-corpus acceptance gate still open. The remaining five capability/cutover
-children stay planning-only with `Implementation authorized: No`; production
-capability work requires its own recorded approval and lifecycle transition.
+manual deck-interchange provider imports passed UI acceptance and its formats
+are available with explicit companion-only limits; disposable-deck cleanup is
+the packet's remaining gate. The capability-toolset and Scryfall children are
+implemented and complete. The remaining five capability/cutover children stay
+planning-only with `Implementation authorized: No`; production capability work
+requires its own recorded approval and lifecycle transition.
 
 ## Authority And Routing
 

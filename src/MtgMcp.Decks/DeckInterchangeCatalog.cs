@@ -18,12 +18,12 @@ internal static class DeckInterchangeCatalog
     internal const string Generic = "generic-text-v1";
 
     /// <summary>
-    /// Identifies the manually pasted Archidekt candidate contract.
+    /// Identifies the manually pasted Archidekt contract.
     /// </summary>
     internal const string Archidekt = "archidekt-text-v1";
 
     /// <summary>
-    /// Identifies the manually pasted Moxfield Bulk Edit candidate contract.
+    /// Identifies the manually pasted Moxfield Bulk Edit contract.
     /// </summary>
     internal const string Moxfield = "moxfield-bulk-edit-v1";
 
@@ -57,13 +57,11 @@ internal static class DeckInterchangeCatalog
                 true,
                 true,
                 false,
-                "experimental",
-                "Enable experimental use, paste deck.archidekt.txt into Archidekt's " +
-                "manual importer, and review its preview.",
+                "available",
+                "Paste deck.archidekt.txt into Archidekt's manual importer and retain the companions.",
                 [
-                    "Current UI acceptance has not been recorded for this build.",
-                    "Archidekt accepts at most one backtick category per imported line; " +
-                    "use category-assignments.csv for all assignments.",
+                    "Exact quantities, names, printings, and one primary category passed the current UI acceptance.",
+                    "Zones, distinct same-print finishes, and secondary categories remain companion-only.",
                 ]),
             new DeckInterchangeFormat(
                 Moxfield,
@@ -71,11 +69,12 @@ internal static class DeckInterchangeCatalog
                 true,
                 true,
                 false,
-                "experimental",
-                "Enable experimental use, paste deck.moxfield.txt into Moxfield Bulk Edit, and review its preview.",
+                "available",
+                "Paste deck.moxfield.txt into Moxfield Bulk Edit, review it, and retain the companions.",
                 [
                     "Moxfield does not publish a stable machine-readable Bulk Edit contract.",
-                    "Local deck tags are emitted by default; global tags require explicit opt-in.",
+                    "Exact printings, finish markers, and local tags passed the current UI acceptance; zones remain companion-only.",
+                    "The explicit global-tag option remains unverified and is reported as companion-only.",
                 ]),
         ]);
 

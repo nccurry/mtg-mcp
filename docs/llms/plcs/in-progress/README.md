@@ -15,4 +15,4 @@ evidence up to date as code lands.
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [manual-deck-interchange](manual-deck-interchange/README.md) | Automated implementation complete; manual provider acceptance open | Implement deterministic offline native, generic, Archidekt, and Moxfield manual deck interchange. |
+| [manual-deck-interchange](manual-deck-interchange/README.md) | Provider imports accepted; disposable-deck cleanup open | Implement deterministic offline native, generic, Archidekt, and Moxfield manual deck interchange. |

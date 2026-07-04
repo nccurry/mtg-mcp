@@ -56,7 +56,7 @@ jobs:
       - name: Build with analyzers
         run: task lint
 
-      - name: Verify exact local-deck MCP surface
+      - name: Verify exact implemented MCP surface
         run: task surface:report
 
       - name: Analyze with CodeQL
@@ -86,7 +86,7 @@ jobs:
       - name: Probe process readiness
         run: task smoke:process
 
-      - name: Exercise MCP and local deck workflows
+      - name: Exercise MCP deck and Scryfall workflows
         run: task smoke:mcp
 
       - name: Clean release artifacts

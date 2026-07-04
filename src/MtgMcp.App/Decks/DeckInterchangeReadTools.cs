@@ -35,7 +35,7 @@ internal sealed class DeckInterchangeReadTools
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Lists format IDs, supported import/export directions, losslessness, instructions, and experimental boundaries.")]
+    [Description("Lists format IDs, supported import/export directions, losslessness, instructions, and preservation boundaries.")]
     internal OperationResult<IReadOnlyList<DeckInterchangeFormat>> ListFormats()
     {
         return service.ListFormats();

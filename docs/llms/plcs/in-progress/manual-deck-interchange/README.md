@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-04
-- Current phase: Implementation complete; manual provider acceptance open
+- Current phase: Provider imports accepted; disposable-deck cleanup open
 
 ## Summary
 
@@ -47,8 +47,8 @@ Archidekt staff examples currently support exact-printing text in the form
 Archidekt also documents that
 Ctrl+Shift+C copies its full syntax. The canonical planned export therefore
 uses `quantity name (set) collector` followed by one backtick primary category;
-secondary categories remain companion-only until a disposable-deck UI check
-proves more.
+secondary categories remain companion-only because the disposable-deck UI
+check did not preserve them.
 
 Moxfield does not publish an official Bulk Edit grammar. Current user-facing
 evidence corroborates `#Deck Tag` and `#!Global Tag`, and Moxfield's own
@@ -84,11 +84,11 @@ that a provider consumed companion metadata.
   exact local deck would an import create, and which metadata would each
   artifact preserve?
 - Evidence type: parser-derived classifications and deterministic artifact
-  preservation evidence, never provider-confirmed ingestion.
+  preservation evidence, and dated provider-confirmed field observations.
 - Replay boundary: format/version, canonical proposal, preview fingerprint,
   deck revision, artifact checksum, and parsing options identify each result.
 - Unknown boundary: malformed lines, unresolved card identities, partial
-  imports, unsupported fields, and experimental provider syntax remain explicit.
+  imports, unsupported fields, and provider UI drift remain explicit.
 - Decision boundary: the module does not resolve cards, choose categories,
   merge decks, or infer whether an import should be applied.
 - Complete LLM workflow: list formats once, preview caller-provided content,
@@ -109,11 +109,12 @@ Remote Archidekt synchronization is owned by `archidekt-deck-sync`; Moxfield
 network automation remains excluded.
 
 The four-tool implementation, offline dummy-deck workflows, and automated
-acceptance gates are complete. Archidekt and Moxfield remain opt-in
-`experimental` because authenticated manual UI imports were not performed in
-this agent session. The exact open record is in
-[Manual Provider Acceptance Records](PROVIDER_ACCEPTANCE.md); this packet stays
-in progress until XCHG-017 is completed or the owner explicitly waives it.
+acceptance gates are complete. The repository owner accepted both authenticated
+manual UI imports. Archidekt and Moxfield are now `available`, with empirical
+companion-only limits recorded instead of inferred syntax. The exact record is
+in [Manual Provider Acceptance Records](PROVIDER_ACCEPTANCE.md); this packet
+stays in progress only until both disposable provider decks are confirmed
+deleted.
 
 ## Implementation Evidence
 
@@ -130,8 +131,8 @@ in progress until XCHG-017 is completed or the owner explicitly waives it.
   installed NuGet tool.
 - `task lint`, `task test`, `task surface:report`, `task coverage`, `task pack`,
   `task smoke:process`, `task smoke:mcp`, and `task release:tool-smoke` pass.
-  The suite has 112 passing tests. Line coverage is App 95.90%, Core 100%, and
-  Decks 94.29%.
+  The suite has 205 passing tests. Line coverage is App 94.64%, Core 100%,
+  Decks 94.15%, and Scryfall 93.75%.
 - Abstraction, code-quality, visual-readability, dead-code, dependency,
   test-coverage, test-quality, and documentation-sync audits passed after
   fixes. NuGet reports no vulnerable, deprecated, or outdated packages.

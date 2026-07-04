@@ -100,9 +100,13 @@ provider service, and partial text imports require explicit acceptance.
 `mtg-mcp.deck/v1`. `generic-text-v1` preserves quantity, name, zone headings,
 and available printing hints while reporting companion-only fields.
 `archidekt-text-v1` and `moxfield-bulk-edit-v1` generate manual artifact bundles
-with native JSON and category-assignment companions. Those provider formats
-remain explicit opt-in experiments until current manual UI acceptance is
-recorded; their output does not claim a successful provider import.
+with native JSON and category-assignment companions. Both formats passed dated
+manual UI acceptance and are available without an experimental opt-in.
+Archidekt preserves quantities, exact printings, and one primary category, but
+zones, distinct same-print finishes, and secondary categories are
+companion-only. Moxfield preserves exact printings, finish markers, and local
+tags, while zones remain companion-only. Excluded entries are never emitted to
+provider text and remain in the native companion.
 
 ## Scryfall Evidence Surface
 

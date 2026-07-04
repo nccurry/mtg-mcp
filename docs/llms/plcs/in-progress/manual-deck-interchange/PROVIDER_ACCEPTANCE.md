@@ -11,32 +11,54 @@ research-only or not-run record never satisfies manual acceptance.
 ### Archidekt
 
 - Provider: Archidekt
-- Observed UTC: 2026-07-04T15:32:15Z
-- UI flow/path: Deck editor, Import Cards dialog; intended manual path only
-- Artifact checksums: Not recorded because no authenticated manual UI import
-  was performed
-- Result: Not run; `archidekt-text-v1` remains experimental
-- Notes: Current public staff examples corroborate exact printing hints and one
-  backtick category. Automated provider access is outside this child PLC.
+- Observed UTC: 2026-07-04T22:48:08Z
+- UI flow/path: Deck editor, Import Cards dialog
+- Primary artifact generated UTC: 2026-07-04T21:48:47Z
+- Primary artifact SHA-256:
+  `232639820ea6742f236f7c4d80ff67fe5146843be87d4d301dbb90df6bbebde8`
+- Result: Core import passed; disposable-deck cleanup pending.
+- Preserved: Total quantities, card names, exact `2XM` 190, `DMU` 278, and
+  `2X2` 446 printings, and the emitted `Mana Sources` and `Candidate` primary
+  categories.
+- Companion-only: Commander/sideboard/maybeboard zones, the separate foil
+  Island row, and the `Basics` and `Creatures` secondary categories. Archidekt
+  merged the two DMU Island rows into one quantity-11 normal row.
+- Notes: Call to the Feast was absent from provider text and remained present
+  in the native companion. No raw payload, account identity, or remote deck ID
+  is retained in this record.
+- Cleanup: Pending repository-owner confirmation.
 - Revalidation reason: Implementation-time verification
 
 ### Moxfield
 
 - Provider: Moxfield
-- Observed UTC: 2026-07-04T15:32:15Z
-- UI flow/path: Deck editor, Bulk Edit; intended manual path only
-- Artifact checksums: Not recorded because no authenticated manual UI import
-  was performed
-- Result: Not run; `moxfield-bulk-edit-v1` remains experimental
-- Notes: Moxfield publishes no stable Bulk Edit grammar, and its terms exclude
-  automated probing. Candidate artifacts were exercised only through offline
-  parser/formatter round trips.
+- Observed UTC: 2026-07-04T22:48:08Z
+- UI flow/path: Deck editor, Bulk Edit
+- Primary artifact generated UTC: 2026-07-04T21:48:47Z
+- Primary artifact SHA-256:
+  `47610c01219d39aa56d280f37281d583c5e3ea18ca7bfb88c8f244a8b591e9a0`
+- Result: Core import passed by repository-owner UI verification;
+  disposable-deck cleanup pending.
+- Preserved: Quantities, card names, exact printings, foil/etched markers, and
+  multiple local tags.
+- Companion-only: Commander/sideboard/maybeboard zones, which are not encoded
+  by the accepted primary artifact.
+- Notes: Call to the Feast was absent from provider text and remained present
+  in the native companion. The provider page was blocked from independent
+  read-only inspection by its anti-automation boundary, so this record relies
+  on the repository owner's authenticated UI confirmation. No remote deck ID
+  is retained.
+- Cleanup: Pending repository-owner confirmation.
 - Revalidation reason: Implementation-time verification
 
 ## Open Acceptance Gate
 
-These records prove the required metadata shape and make the missing UI checks
-explicit. They do not satisfy XCHG-017 or authorize either provider format to
-claim compatibility. A repository owner can complete the gate by manually
-importing a generated dummy-deck artifact, recording its checksum and observed
-result here, and repeating the check before stable cutover.
+These records bind the UI checks to exact artifacts and distinguish applied
+fields from companion-only fields. The core-import portion of XCHG-017 passed;
+the packet remains open only until the repository owner confirms both
+disposable decks were deleted.
+
+The opt-in generator is
+`ManualInterchangeAcceptanceTests.GenerateProviderBundlesForDisposableUiChecks`.
+It requires `MTGMCP_PROVIDER_ACCEPTANCE_DIR` to name a new caller-selected
+directory and never performs provider network access.

@@ -29,8 +29,8 @@
   official-client schema/annotation tests, and representative MCP workflows.
 - Added four offline `deck_*` interchange tools for lossless native JSON,
   generic text, fingerprint-guarded import creation, and checksummed artifact
-  bundles; Archidekt and Moxfield candidate formats remain opt-in experimental
-  pending current manual UI acceptance.
+  bundles; dated UI acceptance makes Archidekt and Moxfield formats available
+  with provider-applied and companion-only fields reported separately.
 - Added static startup-selected capability toolsets with `default`, `all`,
   `none`, and explicit profiles, exact mode intersection, schema-v3 capability
   metadata, and no dynamic tool-list advertisement.

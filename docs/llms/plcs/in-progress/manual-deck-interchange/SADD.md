@@ -48,8 +48,8 @@ contains an absolute local path.
 | --- | --- | --- |
 | `mtg-mcp-json-v1` | `deck.mtg-mcp.json` | Lossless document tagged `mtg-mcp.deck/v1`; stable IDs and bindings included, secrets/provider payloads excluded. |
 | `generic-text-v1` | `deck.txt` | Section headings plus quantity/name/printing; manifest reports losses. |
-| `archidekt-text-v1` | `deck.archidekt.txt` | Candidate `1 Name (SET) collector` and one backtick primary category; secondary assignments in CSV/native companions; experimental pending UI acceptance. |
-| `moxfield-bulk-edit-v1` | `deck.moxfield.txt` | Candidate set/collector, `*F*`/`*E*`, and appended `#Local Tag` syntax; native companion preserves every local field; experimental pending UI acceptance. |
+| `archidekt-text-v1` | `deck.archidekt.txt` | Accepted `1 Name (SET) collector` and one backtick primary category; zones, distinct same-print finishes, excluded entries, and secondary assignments remain in CSV/native companions. |
+| `moxfield-bulk-edit-v1` | `deck.moxfield.txt` | Accepted set/collector, `*F*`/`*E*`, and appended `#Local Tag` syntax; zones and excluded entries remain in the native companion. |
 
 The exact bundles are:
 
@@ -61,11 +61,12 @@ The exact bundles are:
 | Moxfield | `deck.moxfield.txt`, `category-assignments.csv`, `deck.mtg-mcp.json`, `preservation.json`, `README.txt` |
 
 Moxfield global tags use `#!Tag Name` only when
-`useGlobalMoxfieldTags=true` is explicitly requested. Both Moxfield tag forms remain a candidate contract until dated
-manual disposable-deck acceptance succeeds. Archidekt secondary categories
-remain `companion-only` until current UI acceptance proves a supported
-multi-category import syntax. `README.txt` contains target-specific manual
-instructions and limitation warnings.
+`useGlobalMoxfieldTags=true` is explicitly requested. Dated manual acceptance
+verified the default local-tag form, exact printings, and finish markers.
+Archidekt acceptance verified one primary category and showed that same-print
+rows can merge across zones and finishes; secondary categories and all zones
+therefore remain `companion-only`. `README.txt` contains target-specific
+manual instructions and limitation warnings.
 
 Preview output is capped at 200 diagnostics, 512 Unicode characters per
 diagnostic, and includes `omittedDiagnosticCount`. Export is capped at 16

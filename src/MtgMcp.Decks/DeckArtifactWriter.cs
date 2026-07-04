@@ -18,7 +18,9 @@ internal static class DeckArtifactWriter
         DeckInterchangeSnapshot snapshot,
         DeckExportOptions options)
     {
-        IReadOnlyList<DeckFieldPreservation> preservation = BuildPreservation(formatId);
+        DeckInterchangeFormat format = DeckInterchangeCatalog.Find(formatId) ??
+            throw new ArgumentException("The interchange format is not registered.", nameof(formatId));
+        IReadOnlyList<DeckFieldPreservation> preservation = BuildPreservation(formatId, options);
         List<DeckExportArtifact> artifacts = [];
         string native = DeckInterchangeCodec.SerializeNative(snapshot);
         switch (formatId)
@@ -36,7 +38,7 @@ internal static class DeckArtifactWriter
                     "deck.archidekt.txt",
                     "text/plain",
                     WriteArchidekt(snapshot.Deck),
-                    "Candidate Archidekt manual import text.");
+                    "Archidekt manual import text.");
                 Add(
                     artifacts,
                     "category-assignments.csv",
@@ -51,7 +53,7 @@ internal static class DeckArtifactWriter
                     "deck.moxfield.txt",
                     "text/plain",
                     WriteMoxfield(snapshot.Deck, options),
-                    "Candidate Moxfield Bulk Edit text.");
+                    "Moxfield Bulk Edit text.");
                 Add(
                     artifacts,
                     "category-assignments.csv",
@@ -72,11 +74,11 @@ internal static class DeckArtifactWriter
         if (formatId is DeckInterchangeCatalog.Archidekt or DeckInterchangeCatalog.Moxfield)
         {
             string provider = formatId == DeckInterchangeCatalog.Archidekt ? "Archidekt" : "Moxfield";
-            string readme = $"{provider} manual interchange candidate\n\n" +
-                "This format is experimental until a current UI acceptance is recorded. " +
-                "Paste the provider text artifact manually, inspect the provider preview, " +
-                "and retain the native JSON companion.\n";
-            Add(artifacts, "README.txt", "text/plain", readme, "Manual import instructions and compatibility warning.");
+            string readme = $"{provider} manual interchange\n\n" +
+                "Paste the provider text artifact manually, inspect the provider result, " +
+                "and retain the native JSON and category-assignment companions for fields " +
+                "the provider text cannot represent.\n";
+            Add(artifacts, "README.txt", "text/plain", readme, "Manual import instructions and preservation limits.");
         }
 
         return new DeckExportBundle(
@@ -85,9 +87,7 @@ internal static class DeckArtifactWriter
             snapshot.Deck.DeckId,
             snapshot.Deck.Revision,
             snapshot.Deck.UpdatedAtUtc,
-            formatId is DeckInterchangeCatalog.Archidekt or DeckInterchangeCatalog.Moxfield
-                ? "experimental"
-                : "available",
+            format.Status,
             artifacts,
             preservation);
     }
@@ -126,6 +126,11 @@ internal static class DeckArtifactWriter
         StringBuilder builder = new();
         foreach (DeckEntry entry in deck.Entries)
         {
+            if (entry.Zone == "excluded")
+            {
+                continue;
+            }
+
             builder.Append(WriteBaseLine(entry));
             if (primary.TryGetValue(entry.EntryId, out DeckCategoryAssignment? assignment) &&
                 categories.TryGetValue(assignment.CategoryId, out string? category))
@@ -140,7 +145,7 @@ internal static class DeckArtifactWriter
     }
 
     /// <summary>
-    /// Writes Moxfield candidate Bulk Edit lines with explicit local or global tag scope.
+    /// Writes accepted Moxfield Bulk Edit lines with explicit local or global tag scope.
     /// </summary>
     private static string WriteMoxfield(DeckDocument deck, DeckExportOptions options)
     {
@@ -153,6 +158,11 @@ internal static class DeckArtifactWriter
         StringBuilder builder = new();
         foreach (DeckEntry entry in deck.Entries)
         {
+            if (entry.Zone == "excluded")
+            {
+                continue;
+            }
+
             builder.Append(WriteBaseLine(entry));
             if (entry.Finish == "foil")
             {
@@ -175,7 +185,7 @@ internal static class DeckArtifactWriter
     }
 
     /// <summary>
-    /// Appends ordered Moxfield tag candidates without changing category scope implicitly.
+    /// Appends ordered Moxfield tags without changing category scope implicitly.
     /// </summary>
     private static void AppendMoxfieldTags(
         StringBuilder builder,
@@ -248,7 +258,9 @@ internal static class DeckArtifactWriter
     /// <summary>
     /// Describes field representation for the selected target format.
     /// </summary>
-    private static IReadOnlyList<DeckFieldPreservation> BuildPreservation(string formatId)
+    private static IReadOnlyList<DeckFieldPreservation> BuildPreservation(
+        string formatId,
+        DeckExportOptions options)
     {
         if (formatId == DeckInterchangeCatalog.Native)
         {
@@ -256,34 +268,82 @@ internal static class DeckArtifactWriter
         }
 
         bool generic = formatId == DeckInterchangeCatalog.Generic;
+        bool archidekt = formatId == DeckInterchangeCatalog.Archidekt;
+        bool moxfield = formatId == DeckInterchangeCatalog.Moxfield;
+        bool verifiedMoxfieldTags = moxfield && !options.UseGlobalMoxfieldTags;
+        string finishStatus = moxfield ? "preserved" : "companion-only";
+        string finishDetail = "Preserved in deck.mtg-mcp.json.";
+        if (moxfield)
+        {
+            finishDetail = "Foil and etched markers were verified by current manual provider acceptance.";
+        }
+        else if (archidekt)
+        {
+            finishDetail = "Distinct same-print finishes can merge; preserved in deck.mtg-mcp.json.";
+        }
+
+        string primaryCategoryStatus = "companion-only";
+        string primaryCategoryDetail = "Preserved only in native JSON.";
+        string secondaryCategoryStatus = "companion-only";
+        string secondaryCategoryDetail = "Preserved in category-assignments.csv and deck.mtg-mcp.json.";
+        if (archidekt)
+        {
+            primaryCategoryStatus = "preserved";
+            primaryCategoryDetail = "One primary category per line was verified by current manual acceptance.";
+        }
+        else if (verifiedMoxfieldTags)
+        {
+            primaryCategoryStatus = "preserved";
+            primaryCategoryDetail = "Local tag emission was verified by current manual acceptance.";
+            secondaryCategoryStatus = "preserved";
+            secondaryCategoryDetail = "Multiple local tags were verified by current manual acceptance.";
+        }
+        else if (moxfield)
+        {
+            const string unverifiedGlobalTags =
+                "Global tag application is unverified; assignments remain in the companions.";
+            primaryCategoryDetail = unverifiedGlobalTags;
+            secondaryCategoryDetail = unverifiedGlobalTags;
+        }
+
         return
         [
             new DeckFieldPreservation(
                 "quantity-name",
-                generic ? "preserved" : "unsupported",
-                generic
-                    ? "Represented in deck.txt."
-                    : "Candidate text is emitted but current UI acceptance is absent."),
+                "preserved",
+                generic ? "Represented in deck.txt." : "Verified by current manual provider acceptance."),
             new DeckFieldPreservation(
                 "zone",
-                generic ? "preserved" : "unsupported",
+                generic ? "preserved" : "companion-only",
                 generic
                     ? "Represented by section headings."
-                    : "Preserved only in the native companion until provider acceptance."),
+                    : "Provider text has no board sections; preserved in deck.mtg-mcp.json."),
             new DeckFieldPreservation(
                 "printing-hints",
-                generic ? "preserved" : "unsupported",
+                "preserved",
                 generic
                     ? "Set and collector are represented when present."
-                    : "Candidate hints are emitted but current UI acceptance is absent."),
+                    : "Set and collector were verified by current manual provider acceptance."),
+            new DeckFieldPreservation(
+                "finishes",
+                finishStatus,
+                finishDetail),
             new DeckFieldPreservation("stable-identities", "companion-only", "Preserved in deck.mtg-mcp.json."),
             new DeckFieldPreservation("lifecycle-and-bindings", "companion-only", "Preserved in deck.mtg-mcp.json."),
             new DeckFieldPreservation(
-                "categories",
-                "companion-only",
+                "primary-category",
+                primaryCategoryStatus,
+                primaryCategoryDetail),
+            new DeckFieldPreservation(
+                "secondary-categories",
+                secondaryCategoryStatus,
+                secondaryCategoryDetail),
+            new DeckFieldPreservation(
+                "excluded-entries",
+                generic ? "preserved" : "companion-only",
                 generic
-                    ? "Preserved only in native JSON."
-                    : "All assignments are in category-assignments.csv; target text support is limited."),
+                    ? "Represented by the excluded section."
+                    : "Excluded entries are omitted from provider text and preserved in deck.mtg-mcp.json."),
         ];
     }
 

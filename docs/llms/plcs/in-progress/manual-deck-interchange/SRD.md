@@ -26,9 +26,9 @@ identity guessing are out of scope.
 | XCHG-004 | Must | Import shall never query a provider or invent a Scryfall identity. | Architecture and fake-network tests prove no HTTP path. |
 | XCHG-005 | Must | Export shall return an ordered bundle of named artifacts, media types, content, checksums, and a preservation report. | Bundle schema snapshots and checksum tests pass. |
 | XCHG-006 | Must | Generic text shall preserve quantity, name, zone headings, and supported printing hints while reporting all omitted fields. | Golden text and loss-report fixtures pass. |
-| XCHG-007 | Must | Archidekt text shall use canonical `quantity Name (SET) collector` syntax followed by at most one backtick primary category; secondary categories remain companion-only unless current manual acceptance proves a richer grammar. | Manual UI acceptance imports quantities, printings, zones/primary categories without claiming secondary-category preservation. |
+| XCHG-007 | Must | Archidekt text shall use canonical `quantity Name (SET) collector` syntax followed by at most one backtick primary category. Zones, distinct same-print finishes, and secondary categories shall remain companion-only because current acceptance did not preserve them. | Manual UI acceptance imports quantities, printings, and one primary category while the preservation report identifies the observed merge and companion-only fields. |
 | XCHG-008 | Must | Archidekt bundles shall include canonical category-assignment CSV and native JSON for secondary or unsupported metadata. | Every local category appears in at least one lossless companion artifact. |
-| XCHG-009 | Must | After a dated manual UI acceptance confirms the current line, board-section, finish-marker, and tag grammar, Moxfield Bulk Edit text shall preserve exact supported printings/finishes and append local tags using `#Tag Name`, including multiple tags deterministically. Until then, the provider format shall remain unavailable/experimental rather than claiming compatibility. | Golden syntax plus manual disposable-deck acceptance confirms current behavior and exact token order. |
+| XCHG-009 | Must | Moxfield Bulk Edit text shall preserve exact supported printings/finishes and append local tags using `#Tag Name`, including multiple tags deterministically. The accepted primary artifact shall not claim board preservation; zones remain companion-only. | Golden syntax plus dated disposable-deck acceptance confirms current token order, applied fields, and zone limitation. |
 | XCHG-010 | Must | Global Moxfield tag syntax shall not be emitted unless the caller explicitly selects global tags. | Default artifact contains no `#!` tag. |
 | XCHG-011 | Must | Provider artifacts shall never claim lossless or successful import without a verified target round trip. | Preservation report uses `preserved`, `companion-only`, and `unsupported` states. |
 | XCHG-012 | Must | Inputs shall be limited to 5 MiB and 10,000 parsed entries with cancellation. | Boundary and cancellation tests pass. |
@@ -66,7 +66,7 @@ identity guessing are out of scope.
 
 - [x] Native JSON round trips exactly.
 - [x] Provider preservation reports are complete and honest.
-- [ ] Manual Archidekt/Moxfield checks are recorded with date and UI path.
+- [x] Manual Archidekt/Moxfield checks are recorded with date and UI path.
 - [x] No network adapter is introduced.
 - [x] One catalog and the current complete import/export workflow are proven.
 - [x] The dependent capability-toolset child proves `decks` profile assignment.
