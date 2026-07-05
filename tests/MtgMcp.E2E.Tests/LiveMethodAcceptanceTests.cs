@@ -112,8 +112,16 @@ public sealed class LiveMethodAcceptanceTests
                 "deck_list",
                 new Dictionary<string, object?> { ["pageSize"] = 1 },
                 token).ConfigureAwait(false);
-            Assert.Equal(2, listed.GetProperty("totalCount").GetInt32());
-            Assert.False(string.IsNullOrWhiteSpace(listed.GetProperty("nextCursor").GetString()));
+            Assert.Single(listed.GetProperty("items").EnumerateArray());
+            string listCursor = listed.GetProperty("nextCursor").GetString()!;
+            JsonElement secondPage = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_list",
+                new Dictionary<string, object?> { ["cursor"] = listCursor, ["pageSize"] = 100 },
+                token).ConfigureAwait(false);
+            Assert.Single(secondPage.GetProperty("items").EnumerateArray());
+            Assert.False(secondPage.TryGetProperty("nextCursor", out _));
 
             JsonElement loaded = await CallSuccessAsync(
                 environment,
