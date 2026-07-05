@@ -1580,6 +1580,7 @@ public sealed class LiveMethodAcceptanceTests
     /// </summary>
     private static async Task DeletePhaseRootAsync(string dataRoot, CancellationToken cancellationToken)
     {
+        SqliteConnection.ClearAllPools();
         for (int attempt = 0; attempt < 20; attempt++)
         {
             if (!Directory.Exists(dataRoot))
@@ -1790,11 +1791,18 @@ public sealed class LiveMethodAcceptanceTests
 
         await Task.Run(() =>
         {
-            using SqliteConnection source = new($"Data Source={sourcePath};Mode=ReadOnly");
-            using SqliteConnection destination = new($"Data Source={destinationPath}");
-            source.Open();
-            destination.Open();
-            source.BackupDatabase(destination);
+            try
+            {
+                using SqliteConnection source = new($"Data Source={sourcePath};Mode=ReadOnly");
+                using SqliteConnection destination = new($"Data Source={destinationPath}");
+                source.Open();
+                destination.Open();
+                source.BackupDatabase(destination);
+            }
+            finally
+            {
+                SqliteConnection.ClearAllPools();
+            }
         }, cancellationToken).ConfigureAwait(false);
     }
 
