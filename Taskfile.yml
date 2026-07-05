@@ -223,6 +223,10 @@ tasks:
         {{.DOTNET}} test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
+      - >
+        {{.DOTNET}} test tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
 
   test:e2e:
     desc: Run foundation process end-to-end tests
@@ -296,6 +300,12 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Archidekt'
 
+  coverage:playgroup:
+    desc: Enforce 90 percent line coverage for the Playgroup adapter using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Playgroup'
+
   format:
     desc: Format source
     deps: [setup:dotnet]
@@ -348,7 +358,7 @@ tasks:
       - '{{.DOTNET}} run --project {{.APP_PROJECT}} --configuration {{.CONFIGURATION}} --no-build -- --smoke'
 
   smoke:mcp:
-    desc: Verify MCP initialization, resources, deck workflows, Scryfall evidence, and Archidekt schemas
+    desc: Verify MCP initialization, resources, deck workflows, Scryfall evidence, and provider schemas
     deps: [build]
     cmds:
       - >

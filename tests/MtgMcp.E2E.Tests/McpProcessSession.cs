@@ -142,6 +142,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
                 ["MTGMCP__DATA_DIR"] = dataRoot,
                 ["MTGMCP__MODE"] = mode,
                 ["MTGMCP__TOOLSETS"] = toolsets,
+                ["MTGMCP__PLAYGROUP__API_KEY"] = null,
             },
             ShutdownTimeout = TimeSpan.FromMilliseconds(500),
         };

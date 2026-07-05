@@ -60,11 +60,14 @@ internal sealed class FoundationResources
                 enabled,
                 descriptor.DefaultEnabled,
                 enabled ? descriptor.GetVisibleToolCount(configuration.Mode) : 0,
-                descriptor.Description));
+                descriptor.Description,
+                descriptor.Toolset == CapabilityToolset.Playgroup
+                    ? ["deck-update"]
+                    : []));
         }
 
         FoundationCapabilityDocument document = new(
-            4,
+            5,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
@@ -75,7 +78,13 @@ internal sealed class FoundationResources
                 configuration.Toolsets.Label,
                 "Toolsets control relevance; operation mode controls authority.",
                 toolsets),
-            new FoundationDataSchemas("v0.9", "v1", "mtg-mcp.deck/v1", "v1", "observed-2026-07-04"),
+            new FoundationDataSchemas(
+                "v0.9",
+                "v1",
+                "mtg-mcp.deck/v1",
+                "v1",
+                "observed-2026-07-04",
+                "public-api-1.0.0"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);
     }

@@ -30,7 +30,7 @@ inadequate coverage, or a failed required offline gate.
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Scryfall Corpus And Evidence](../../completed/scryfall-corpus-and-evidence/README.md)
 - [Archidekt Decks, Folders, Snapshots, And Synchronization](../../completed/archidekt-deck-sync/README.md)
-- [Playgroup Official API](../playgroup-public-api/README.md)
+- [Playgroup Official API](../../completed/playgroup-public-api/README.md)
 - [Exact Deck Statistics](../exact-deck-statistics/README.md)
 - [Deterministic Deck Categorization](../deterministic-deck-categorization/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)

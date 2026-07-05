@@ -49,7 +49,8 @@ internal sealed record FoundationToolsetStatus(
     [property: JsonPropertyName("enabled")] bool Enabled,
     [property: JsonPropertyName("defaultEnabled")] bool DefaultEnabled,
     [property: JsonPropertyName("visibleToolCount")] int VisibleToolCount,
-    [property: JsonPropertyName("description")] string Description);
+    [property: JsonPropertyName("description")] string Description,
+    [property: JsonPropertyName("unsupportedOperations")] IReadOnlyList<string> UnsupportedOperations);
 
 /// <summary>
 /// Reports the application-data schema family without exposing a filesystem path.
@@ -59,4 +60,5 @@ internal sealed record FoundationDataSchemas(
     [property: JsonPropertyName("decks")] string Decks,
     [property: JsonPropertyName("deckInterchange")] string DeckInterchange,
     [property: JsonPropertyName("scryfall")] string Scryfall,
-    [property: JsonPropertyName("archidekt")] string Archidekt);
+    [property: JsonPropertyName("archidekt")] string Archidekt,
+    [property: JsonPropertyName("playgroup")] string Playgroup);

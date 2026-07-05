@@ -60,6 +60,14 @@
 - Added a bounded official-client Red/White Weenies workflow that proves local
   deck creation, structural validation, batch card resolution, evidence
   persistence, and immutable replay without bulk corpus acquisition.
+- Added the opt-in 16-tool Playgroup Public API 1.0.0 capability: all 15
+  documented operations plus redacted auth status, lossless provider evidence,
+  explicit unsupported deck updates, exact 14/14/16 mode visibility, and no
+  cross-provider ranking or hydration.
+- Added fixed-origin bearer isolation, process-wide 250-millisecond pacing,
+  bounded GET retry and `Retry-After` handling, single-attempt remote writes,
+  exact OpenAPI drift checks, fixture-only write proof, and an opt-in `/me`
+  live-read test that cannot mutate provider state.
 
 ## 0.8.0 - 2026-06-28
 

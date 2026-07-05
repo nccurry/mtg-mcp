@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\MtgMcp.Core\MtgMcp.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\OpenApi\public-v1-1.0.0.yaml" />
+  </ItemGroup>
+</Project>

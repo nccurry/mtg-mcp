@@ -7,8 +7,8 @@ projects own third-party HTTP request and response shapes.
 ## Clean-Break `0.9.0` Target
 
 The stable rewrite uses implemented isolated adapters for official Scryfall
-evidence and explicit Archidekt operations, and plans a separate adapter for
-the documented Playgroup public API. It has no separate Tagger adapter, Moxfield
+evidence, explicit Archidekt operations, and the documented Playgroup public
+API. It has no separate Tagger adapter, Moxfield
 network adapter, Commander Spellbook adapter, generic decklist provider, or
 recommendation source framework.
 
@@ -46,6 +46,14 @@ between starts, permits at most 30 starts in a rolling minute, and shares one
 150-request budget across every adapter call composed by a tool invocation.
 `Retry-After` creates a bounded shared cooldown; `403`/`429` and ambiguous
 writes are not retried.
+
+Current Playgroup configuration is `PLAYGROUP:API_KEY`, with the equivalent
+`MTGMCP__PLAYGROUP__API_KEY` environment key. Its origin and User-Agent are
+fixed. Request starts share a process-wide non-secret credential lane and wait
+at least 250 milliseconds. Idempotent GETs have at most two transient retries,
+while writes are always single-attempt. A `429` is replayed once only when its
+`Retry-After` is present and within the bounded wait; all other throttle cases
+stop with a structured unavailable result.
 
 ## Historical Legacy Adapter Operations
 

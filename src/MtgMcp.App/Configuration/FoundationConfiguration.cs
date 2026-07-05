@@ -1,5 +1,6 @@
 using MtgMcp.App.Capabilities;
 using MtgMcp.Archidekt;
+using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Configuration;
 
@@ -14,7 +15,8 @@ internal sealed record FoundationConfiguration(
     DataRootState DataRootState,
     bool DataRootConfigured,
     LegacyDataBoundary LegacyData,
-    ArchidektOptions Archidekt)
+    ArchidektOptions Archidekt,
+    PlaygroupOptions Playgroup)
 {
     /// <summary>
     /// Creates the path-free status projection safe for future server metadata.

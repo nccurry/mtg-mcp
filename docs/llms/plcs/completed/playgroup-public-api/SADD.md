@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-04
@@ -11,9 +11,12 @@
 ## Chosen Design
 
 `MtgMcp.Playgroup` owns the pinned spec fixture, handwritten typed HTTP client,
-transport records, mapping, pacing, and sanitized errors. Handwritten code is
-preferred over checked-in generator output because the surface is fifteen
-operations and reviewability outweighs generator/toolchain dependency.
+typed request records, lossless evidence envelope, pacing, and sanitized
+errors. Provider response payloads remain detached `JsonElement` values inside
+the envelope. This preserves nullable and additive fields exactly while the
+operation, input, provenance, limitations, and failure contracts stay typed.
+It also avoids a second provider-model hierarchy that would become stale
+independently from the pinned fixture.
 
 ### Operation mapping
 
@@ -42,10 +45,11 @@ surface. The result is fifteen operation tools plus one status tool: sixteen
 
 ### Data and evidence
 
-Transport types mirror the pinned schemas and use extension-data preservation.
-Public outputs wrap provider records in source metadata but do not normalize
-them into local deck quality concepts. Pagination is caller-controlled and one
-tool call maps to one provider request except a single bounded GET retry.
+Public outputs wrap complete provider records in typed source metadata and do
+not normalize them into local deck quality concepts. The detached provider
+document is itself structured JSON and retains unknown fields and explicit
+nulls. Pagination is caller-controlled and one tool call maps to one provider
+request except a bounded GET retry.
 
 ### Authentication and safety
 

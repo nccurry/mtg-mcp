@@ -4,6 +4,7 @@ using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
+using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Tests;
 
@@ -72,6 +73,7 @@ public sealed class FoundationConfigurationTests
             {
                 ["MODE"] = "REMOTE",
                 ["DATA_DIR"] = configuredPath,
+                ["PLAYGROUP:API_KEY"] = "private-test-key",
             })
             .Build();
 
@@ -83,9 +85,11 @@ public sealed class FoundationConfigurationTests
         Assert.Equal(OperationMode.Remote, resolved.Mode);
         Assert.Equal(Path.GetFullPath(configuredPath), resolved.DataRoot);
         Assert.True(status.DataRootConfigured);
+        Assert.Equal("private-test-key", resolved.Playgroup.ApiKey);
         Assert.Equal("not-created", status.DataRootState);
         Assert.DoesNotContain(configuredPath, statusJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temporary.Path, statusJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private-test-key", statusJson, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -412,7 +416,8 @@ public sealed class FoundationConfigurationTests
             DataRootState.NotCreated,
             false,
             new LegacyDataBoundary((LegacyDataState)999, "Migration remains disabled."),
-            ArchidektOptions.CreateDefault());
+            ArchidektOptions.CreateDefault(),
+            PlaygroupOptions.CreateDefault(null));
 
         FoundationConfigurationStatus status = configuration.ToPublicStatus();
 

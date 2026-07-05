@@ -133,10 +133,10 @@ public sealed class ToolsetNorthStarMcpTests
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             JsonElement capability = await ReadCapabilityAsync(allSession).ConfigureAwait(false);
 
-            Assert.Equal(53, tools.Count);
+            Assert.Equal(67, tools.Count);
             Assert.Equal(tools.Select(tool => tool.Name).Order(StringComparer.Ordinal), tools.Select(tool => tool.Name));
             Assert.Equal("all", capability.GetProperty("toolsets").GetProperty("selection").GetString());
-            Assert.Equal(53, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
+            Assert.Equal(67, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
             Assert.False(Directory.Exists(allSession.DataRoot));
         }
     }

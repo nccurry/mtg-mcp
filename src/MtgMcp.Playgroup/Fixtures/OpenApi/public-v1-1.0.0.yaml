@@ -1,0 +1,1347 @@
+openapi: 3.1.0
+info:
+  title: Playgroup.gg Public API
+  version: 1.0.0
+  description: |
+    Public API for accessing Magic: The Gathering Commander statistics from playgroup.gg.
+
+    ## Authentication
+
+    Most endpoints are publicly accessible. Some endpoints require or optionally accept API key authentication:
+
+    - **Public endpoints** (no auth required): Commander endpoints
+    - **Optional auth**: User and Deck endpoints - public profiles/decks accessible without auth, private ones require auth
+    - **Required auth**: Games endpoint - must be a member of the playgroup
+
+    To authenticate, create an API key in your account settings at playgroup.gg, then include it in the Authorization header:
+    ```
+    Authorization: Bearer <your-api-key>
+    ```
+
+servers:
+  - url: https://playgroup.gg/api/public/v1
+    description: Production server
+  - url: http://localhost:3000/api/public/v1
+    description: Development server
+
+security: []
+
+paths:
+  /me:
+    get:
+      operationId: getCurrentUser
+      summary: Get the authenticated user
+      description: |
+        Returns the user associated with the provided API key.
+        **Authentication required.**
+      tags: [Users]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: The authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized - valid API key required.
+
+  /commanders/{id}:
+    get:
+      operationId: getCommanderById
+      summary: Get a commander by id
+      description: Returns detailed statistics for a specific commander including top decks and graphs.
+      tags: [Commanders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric commander identifier.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Commander record with detailed stats.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Commander"
+        "404":
+          description: Commander not found.
+
+  /commanders/by_name/{name}:
+    get:
+      operationId: getCommanderByName
+      summary: Get a commander by (approximate) name
+      description: |
+        Returns the commander that best matches the provided name using fuzzy matching (Levenshtein distance).
+        Useful when you don't know the exact commander name or spelling.
+      tags: [Commanders]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Commander name (partial or full, case-insensitive). The closest match is returned.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Commander record with detailed stats.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Commander"
+        "400":
+          description: Name parameter is required.
+        "404":
+          description: Commander not found.
+
+  /commanders/turn_damage:
+    get:
+      operationId: getCommandersTurnDamage
+      summary: Get average turn damage data for all commanders
+      description: Returns all commanders with their average damage dealt per turn, useful for analyzing aggression patterns.
+      tags: [Commanders]
+      responses:
+        "200":
+          description: Array of commanders with turn damage data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommanderTurnDamage"
+
+  /decks/{id}:
+    get:
+      operationId: getDeckById
+      summary: Get a deck by id
+      description: |
+        Returns deck details if accessible. Access rules:
+        - Public decks are always accessible
+        - Private decks require authentication AND either:
+          - You are the deck owner, OR
+          - You share a playgroup with the deck owner
+      tags: [Decks]
+      security:
+        - {}
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric deck identifier.
+          schema:
+            type: integer
+        - name: include_archived
+          in: query
+          required: false
+          description: >
+            Include the deck even if it is archived. Defaults to false, in which
+            case archived decks return 404.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Deck record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+        "401":
+          description: Unauthorized - deck is private and you don't have access.
+        "404":
+          description: Deck not found.
+
+  /decks/{id}/elo_history:
+    get:
+      operationId: getDeckEloHistory
+      summary: Get ELO rating history for a deck
+      description: |
+        Returns the ELO rating history for a deck, ordered chronologically (oldest first).
+        By default returns global ELO history. Use query parameters to scope to a specific
+        playgroup or league.
+
+        Access rules are the same as the deck show endpoint:
+        - Public decks are always accessible
+        - Private decks require authentication AND shared playgroup membership
+      tags: [Decks]
+      security:
+        - {}
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric deck identifier.
+          schema:
+            type: integer
+        - name: playgroup_id
+          in: query
+          required: false
+          description: Scope ELO history to a specific playgroup. Omit for global ELO.
+          schema:
+            type: integer
+        - name: league_id
+          in: query
+          required: false
+          description: Scope ELO history to a specific league within the playgroup. Requires playgroup_id.
+          schema:
+            type: integer
+        - name: include_archived
+          in: query
+          required: false
+          description: >
+            Return history even if the deck is archived. Defaults to false, in
+            which case archived decks return 404.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: ELO history for the deck.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EloHistory"
+        "401":
+          description: Unauthorized - deck is private and you don't have access.
+        "404":
+          description: Deck, playgroup, or league not found.
+        "422":
+          description: Invalid parameter combination (e.g. league_id without playgroup_id).
+
+  /users/{id}:
+    get:
+      operationId: getUserById
+      summary: Get a user by id
+      description: |
+        Returns user profile and statistics if accessible. Access rules:
+        - Public profiles are always accessible
+        - Private profiles require authentication AND either:
+          - You are the user, OR
+          - You share a playgroup with the user
+      tags: [Users]
+      security:
+        - {}
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric user identifier.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User record with statistics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized - user profile is private.
+        "404":
+          description: User not found.
+
+  /users/{user_id}/decks:
+    get:
+      operationId: listUserDecks
+      summary: List a user's decks
+      description: |
+        Returns all accessible decks for a user. Access rules:
+        - Public profiles show public decks
+        - Private profiles require authentication AND shared playgroup membership
+      tags: [Decks]
+      security:
+        - {}
+        - ApiKeyAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: Numeric user identifier.
+          schema:
+            type: integer
+        - name: include_archived
+          in: query
+          required: false
+          description: >
+            Include the user's archived decks in the list. Defaults to false, so
+            only active decks are returned. Use the `archived` field on each deck
+            to distinguish them.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Array of decks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deck"
+        "401":
+          description: Unauthorized - user profile is private.
+        "404":
+          description: User not found.
+
+  /users/{user_id}/playgroups:
+    get:
+      operationId: listUserPlaygroups
+      summary: List a user's playgroups
+      description: |
+        Returns all playgroups for a user with associated leagues and stats.
+        **Authentication required** - you must be the user OR share a playgroup with them.
+      tags: [Playgroups]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: Numeric user identifier.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Array of playgroups with leagues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaygroupSummary"
+        "401":
+          description: Unauthorized - authentication required.
+        "404":
+          description: User not found.
+
+  /users/{user_id}/playgroups/{playgroup_id}:
+    get:
+      operationId: getUserPlaygroup
+      summary: Get a specific playgroup for a user
+      description: |
+        Returns a specific playgroup for a user with associated leagues and stats.
+        **Authentication required** - you must be the user OR share a playgroup with them.
+      tags: [Playgroups]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: Numeric user identifier.
+          schema:
+            type: integer
+        - name: playgroup_id
+          in: path
+          required: true
+          description: Numeric playgroup identifier.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Playgroup with leagues
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaygroupSummary"
+        "401":
+          description: Unauthorized - authentication required.
+        "404":
+          description: User or playgroup not found.
+
+  /playgroups/{playgroup_id}/members:
+    get:
+      operationId: listPlaygroupMembers
+      summary: List members of a playgroup
+      description: |
+        Returns the active roster of a playgroup you belong to: one entry per
+        member who has a linked user account, each carrying the `user_id` you
+        need to seat that player in a game and their display `username`.
+        Email-only invite placeholders are excluded (this matches the
+        `member_count` reported on the playgroup).
+        **Authentication required** - you must be a member of the playgroup.
+      tags: [Playgroups]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: playgroup_id
+          in: path
+          required: true
+          description: Numeric playgroup identifier.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Array of the playgroup's active members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaygroupMember"
+        "401":
+          description: Unauthorized - authentication required.
+        "404":
+          description: Playgroup not found or you are not a member.
+
+  /playgroups/{playgroup_id}/games:
+    get:
+      operationId: listPlaygroupGames
+      summary: List games in a playgroup
+      description: |
+        Returns paginated list of games for a playgroup you are a member of.
+        By default, each game includes participations and an empty `events` array for fast listing.
+        Pass `include_events=true` to include the full event history for each returned game.
+        **Authentication required** - you must be a member of the playgroup.
+      tags: [Games]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: playgroup_id
+          in: path
+          required: true
+          description: Numeric playgroup identifier.
+          schema:
+            type: integer
+        - name: page
+          in: query
+          required: false
+          description: Page number (default 1). A page past the last page returns an empty array.
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          description: Number of games per page. Defaults to 10 and is capped at 100.
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: include_events
+          in: query
+          required: false
+          description: Include full game event history. Defaults to false for faster listing.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Paginated array of games with participations. Events are included only when requested.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+        "401":
+          description: Unauthorized - authentication required.
+        "404":
+          description: Playgroup not found or you are not a member.
+
+  /playgroups/{playgroup_id}/games/{game_id}:
+    get:
+      operationId: getPlaygroupGame
+      summary: Get a single game in a playgroup
+      description: |
+        Returns a single game from a playgroup you are a member of, including its participations.
+        Like the list endpoint, the `events` array is empty by default for a fast response.
+        Pass `include_events=true` to include the full event history.
+        **Authentication required** - you must be a member of the playgroup.
+      tags: [Games]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: playgroup_id
+          in: path
+          required: true
+          description: Numeric playgroup identifier.
+          schema:
+            type: integer
+        - name: game_id
+          in: path
+          required: true
+          description: Numeric game identifier.
+          schema:
+            type: integer
+        - name: include_events
+          in: query
+          required: false
+          description: Include full game event history. Defaults to false for a faster response.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: A single game with participations. Events are included only when requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+        "401":
+          description: Unauthorized - authentication required.
+        "404":
+          description: Game not found, or the playgroup is not found or you are not a member.
+
+  /games/{game_id}/events/batch:
+    post:
+      operationId: batchImportEvents
+      summary: Batch import game events
+      description: |
+        Atomically import a batch of game events for a completed or in-progress game.
+        All events must pass validation or the entire batch is rejected.
+        **Authentication required** - you must be a participant in the game.
+
+        Supports standard game events (Damage, Kill, PassTurn, etc.) and
+        **Endorsement** events for post-game player endorsements.
+
+        **Endorsement events** create Endorsement records (not Event records):
+        ```json
+        {
+          "name": "Endorsement",
+          "source_player_id": "0",
+          "target_player_id": "1",
+          "metadata": { "tag": "good_sport" }
+        }
+        ```
+        Valid tags: `deck_matched_bracket`, `good_tempo`, `good_sport`,
+        `clear_communicator`, `would_play_again`. Max 2 per source/target pair per game.
+        The `id` field is not required for Endorsement events.
+      tags: [Events]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          description: Numeric game identifier.
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, source_player_id]
+                    properties:
+                      id:
+                        type: integer
+                        description: Client-side event ID (not required for Endorsement events)
+                      name:
+                        type: string
+                        description: Event type name
+                      source_player_id:
+                        type: string
+                        description: HUD index of the source player ("0"-"5")
+                      target_player_id:
+                        type: string
+                        description: HUD index of the target player ("0"-"5")
+                      time:
+                        type: integer
+                        description: Unix timestamp
+                      turn:
+                        type: integer
+                        description: Turn number
+                      amount:
+                        type: integer
+                      commander_id:
+                        type: integer
+                      metadata:
+                        type: object
+                        description: "Event-specific metadata (e.g. { \"tag\": \"good_sport\" } for Endorsement)"
+      responses:
+        "201":
+          description: All events imported successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  imported_count:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+        "401":
+          description: Unauthorized - authentication required.
+        "403":
+          description: Forbidden - you are not a participant in this game.
+        "404":
+          description: Game not found.
+        "422":
+          description: Validation failed for one or more events.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  error:
+                    type: string
+                  failed_event_index:
+                    type: integer
+                  validation_errors:
+                    type: object
+
+  /live_sessions:
+    post:
+      operationId: createLiveSession
+      summary: Create a live session
+      description: |
+        Create a new Playgroup Live session. The authenticated user becomes the host
+        and first participant. The returned URL can be shared with other players to join.
+
+        Sessions can be either:
+        - **Public / discoverable** (default `discoverable: false`) — set `discoverable: true`
+          to list the session in the public Playgroup Live lobby. Only allowed when no
+          `playgroup_id` is supplied.
+        - **Playgroup-private** — pass `playgroup_id` to associate the session with a
+          playgroup. Only members of that playgroup can join. Optionally pass `league_id`
+          to attribute the session to a league within that playgroup.
+      tags: [LiveSessions]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                player_amount:
+                  type: integer
+                  minimum: 1
+                  maximum: 6
+                  default: 4
+                  description: Maximum number of players at the table (1-6).
+                life_amount:
+                  type: integer
+                  default: 40
+                  description: Starting life total for each player.
+                bracket:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: |
+                    Optional Commander bracket: 1=Exhibition, 2=Core, 3=Upgraded,
+                    4=Optimized, 5=cEDH.
+                playgroup_id:
+                  type: integer
+                  description: |
+                    Optional. Associate the session with a playgroup. The acting user
+                    must be a member. Sessions with a `playgroup_id` are private to that
+                    playgroup and cannot be discoverable.
+                league_id:
+                  type: integer
+                  description: |
+                    Optional. Attribute the session to a league. Requires `playgroup_id`
+                    and the league must belong to that playgroup.
+                discoverable:
+                  type: boolean
+                  default: false
+                  description: |
+                    If true, the session is publicly listed in the live lobby so others
+                    can find and join it. Ignored when `playgroup_id` is set.
+                language_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: Optional list of Language IDs spoken at the table.
+                client_identifier:
+                  type: string
+                  description: |
+                    Optional identifier for tracking which client created the session
+                    (e.g. companion apps, integrations). Auto-creates a `ClientApplication`
+                    record if it doesn't exist yet.
+      responses:
+        "201":
+          description: Session created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://playgroup.gg/live_sessions/abc123xyz"
+        "401":
+          description: Missing or invalid API key.
+        "422":
+          description: Invalid `playgroup_id` or `league_id`.
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: |
+        API key authentication. Create an API key in your account settings at playgroup.gg.
+        Pass as: `Authorization: Bearer <your-api-key>`
+
+  schemas:
+    Commander:
+      type: object
+      description: Detailed commander information with statistics, graphs, and top decks
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          example: 3186
+        name:
+          type: string
+          example: "Y'shtola, Night's Blessed"
+        art_crop_url:
+          type: string
+          format: uri
+        normal_url:
+          type: string
+          format: uri
+          description: Full-card Scryfall image (name, rules text, P/T)
+        card_image:
+          type: string
+          format: uri
+        cached_elo:
+          type: integer
+          example: 1520
+        global_rank:
+          type: integer
+          example: 1284
+        stats:
+          $ref: "#/components/schemas/CommanderStats"
+        graphs:
+          $ref: "#/components/schemas/Graphs"
+        top_decks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckSummary"
+
+    CommanderSummary:
+      type: object
+      description: Commander with dashboard statistics (used in list endpoints)
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          example: 3186
+        name:
+          type: string
+          example: "Y'shtola, Night's Blessed"
+        scryfall_id:
+          type: string
+          format: uuid
+        art_crop_url:
+          type: string
+          format: uri
+        normal_url:
+          type: string
+          format: uri
+          description: Full-card Scryfall image (name, rules text, P/T)
+        global_elo:
+          type: integer
+          example: 1520
+        average_turn_time:
+          type: number
+          format: float
+          example: 132.09
+        average_round_amount:
+          type: number
+          format: float
+          example: 10.5
+        average_damage_per_game:
+          type: number
+          format: float
+          example: 15.2
+        average_normal_damage_per_game:
+          type: number
+          format: float
+          example: 12.0
+        average_commander_damage_per_game:
+          type: number
+          format: float
+          example: 2.5
+        average_poison_tokens_per_game:
+          type: number
+          format: float
+          example: 0.3
+        average_healing_per_game:
+          type: number
+          format: float
+          example: 5.1
+        average_mulligans_taken:
+          type: number
+          format: float
+          example: 1.2
+        average_fun_rating:
+          type: number
+          format: float
+          example: 4.2
+        average_salt_rating:
+          type: number
+          format: float
+          example: 2.1
+        pilot_count:
+          type: integer
+          description: Number of unique players who have built this commander
+          example: 45
+        color_identity:
+          type: array
+          items:
+            type: string
+          example: ["W", "U"]
+        game_played_count:
+          type: integer
+          example: 1581
+        game_win_count:
+          type: integer
+          example: 550
+
+    CommanderTurnDamage:
+      type: object
+      description: Commander with average turn damage data
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          example: 3186
+        name:
+          type: string
+          example: "Y'shtola, Night's Blessed"
+        scryfall_id:
+          type: string
+          format: uuid
+        art_crop_url:
+          type: string
+          format: uri
+        normal_url:
+          type: string
+          format: uri
+          description: Full-card Scryfall image (name, rules text, P/T)
+        average_turn_data:
+          type: array
+          description: Array of average damage per turn
+          items:
+            type: object
+            properties:
+              turn:
+                type: integer
+                example: 1
+              average_damage:
+                type: number
+                format: float
+                example: 2.5
+
+    CommanderStats:
+      type: object
+      properties:
+        games_won:
+          type: integer
+          example: 550
+        games_lost:
+          type: integer
+          example: 1031
+        win_rate:
+          type: number
+          description: Win percentage (0-100)
+          example: 34
+        average_wins_by_turn:
+          type: integer
+          description: Average turn number when winning
+          example: 10
+        average_damage_per_game:
+          type: integer
+          example: 15
+        average_commander_damage_per_game:
+          type: integer
+          example: 2
+        average_poison_counters_per_game:
+          type: integer
+          example: 0
+        average_kills_per_game:
+          type: number
+          format: float
+          example: 0.73
+        average_turn_length_seconds:
+          type: number
+          format: float
+          example: 132.09
+        decks_count:
+          type: integer
+          example: 669
+        games_count:
+          type: integer
+          example: 1581
+        total_seconds_played:
+          type: integer
+          example: 1907934
+
+    Graphs:
+      type: object
+      properties:
+        elo_rating:
+          type: array
+          description: ELO rating over time. Each element contains a label and rating.
+          items:
+            $ref: "#/components/schemas/EloPoint"
+        weekly_games_played:
+          type: object
+          description: ISO week starting date mapped to games played count.
+          additionalProperties:
+            type: integer
+            example: 341
+
+    EloPoint:
+      type: object
+      required: [label, rating]
+      properties:
+        label:
+          type: string
+          example: "Game 1"
+        rating:
+          type: integer
+          example: 1528
+
+    DeckSummary:
+      type: object
+      description: Brief deck information shown in commander top decks
+      properties:
+        rank:
+          type: integer
+          example: 1
+        id:
+          type: integer
+          example: 431905
+        name:
+          type: string
+          example: "Y'shtole the Show"
+        elo:
+          type: integer
+          example: 1581
+        user:
+          type: string
+          example: "Drakorex"
+        games_count:
+          type: integer
+          example: 5
+        wins:
+          type: integer
+          example: 3
+        win_rate:
+          type: number
+          example: 60
+        url:
+          type: string
+          format: uri
+          example: "https://playgroup.gg/profiles/drakorex/decks/431905"
+
+    Deck:
+      type: object
+      description: Full deck details with statistics
+      required: [id, name, user_id]
+      properties:
+        id:
+          type: integer
+          example: 431905
+        name:
+          type: string
+          example: "Y'shtole the Show"
+        user_id:
+          type: integer
+          example: 1234
+        decklist_url:
+          type: string
+          format: uri
+          example: "https://archidekt.com/decks/123456"
+        bracket:
+          type: integer
+          nullable: true
+          description: >
+            Optional Commander bracket: 1=Exhibition, 2=Core, 3=Upgraded,
+            4=Optimized, 5=cEDH. Null when the owner has not set one.
+          enum: [1, 2, 3, 4, 5]
+          example: 3
+        archived:
+          type: boolean
+          description: >
+            Whether the deck is archived. Archived decks are kept for accurate
+            history but excluded from stats and leaderboards, and are hidden from
+            deck list/show responses unless `include_archived=true` is passed.
+          example: false
+        win_rate_percentage:
+          type: number
+          example: 60
+        games_won:
+          type: integer
+          example: 3
+        games_lost:
+          type: integer
+          example: 2
+        average_mulligans:
+          type: number
+          example: 1.2
+        most_popular_wincon:
+          type: string
+          example: "Combat Damage"
+        average_wins_by_round:
+          type: integer
+          example: 10
+        cover_image:
+          type: string
+          format: uri
+        color_identity:
+          type: array
+          description: >
+            Combined color identity of the deck across the commander and any
+            partner, de-duplicated. For partner decks this includes both
+            commanders' colors.
+          items:
+            type: string
+          example: ["G", "U"]
+        last_game_played_at:
+          type: string
+          format: date-time
+        power_level:
+          type: number
+          format: float
+          example: 7.5
+        confidence_factor:
+          type: number
+          format: float
+          example: 0.92
+        competitiveness_rating:
+          type: number
+          format: float
+          example: 0.8
+        commander:
+          $ref: "#/components/schemas/Commander"
+        partner:
+          $ref: "#/components/schemas/Commander"
+        url:
+          type: string
+          format: uri
+          example: "https://playgroup.gg/profiles/drakorex/decks/431905"
+
+    User:
+      type: object
+      description: User profile with statistics
+      required: [id, username]
+      properties:
+        id:
+          type: integer
+          example: 1234
+        username:
+          type: string
+          example: "Drakorex"
+        games_played:
+          type: integer
+          example: 1581
+        average_wins_by_round:
+          type: integer
+          example: 10
+        games_won:
+          type: integer
+          example: 550
+        games_lost:
+          type: integer
+          example: 1031
+        global_winrate:
+          type: number
+          example: 34
+        decks_url:
+          type: string
+          format: uri
+          example: "https://playgroup.gg/api/public/v1/users/1234/decks"
+        total_game_time:
+          type: integer
+          description: Total time played in seconds
+          example: 1907934
+        total_turn_time:
+          type: integer
+          description: Total turn time in seconds
+          example: 500000
+        total_damage_done:
+          type: integer
+          example: 25000
+        total_healing:
+          type: integer
+          example: 5000
+        total_turns_played:
+          type: integer
+          example: 15000
+        average_damage_per_game:
+          type: number
+          format: float
+          example: 15.8
+        average_commander_damage_per_game:
+          type: number
+          format: float
+          example: 2.5
+        average_turn_time:
+          type: number
+          format: float
+          description: Average turn time in seconds
+          example: 33.3
+        joined_at:
+          type: string
+          format: date-time
+
+    Game:
+      type: object
+      description: A completed game session with all participants. Events default to an empty array unless `include_events=true` is passed.
+      required: [id]
+      properties:
+        id:
+          type: integer
+          example: 12345
+        total_rounds:
+          type: integer
+          description: Number of rounds in the game
+          example: 12
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        life_amount:
+          type: integer
+          description: Starting life total
+          example: 40
+        playgroup_id:
+          type: integer
+          example: 567
+        win_con:
+          type: string
+          description: How the game was won
+          example: "combat_damage"
+        participations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Participation"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+
+    Participation:
+      type: object
+      description: A player's participation in a game
+      required: [id]
+      properties:
+        id:
+          type: integer
+          example: 98765
+        winner:
+          type: boolean
+          example: true
+        deck_id:
+          type: integer
+          example: 431905
+        user_id:
+          type: integer
+          example: 1234
+        salt_rating:
+          type: integer
+          description: Salt rating given (1-5)
+          example: 2
+        fun_rating:
+          type: integer
+          description: Fun rating given (1-5)
+          example: 5
+        mulligans_taken:
+          type: integer
+          example: 1
+        deck_name:
+          type: string
+          example: "Y'shtole the Show"
+        user_name:
+          type: string
+          example: "Drakorex"
+
+    Event:
+      type: object
+      description: An event that occurred during a game (damage, healing, etc.)
+      required: [id]
+      properties:
+        id:
+          type: integer
+          example: 555555
+        happened_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          description: Type of event
+          enum: [normal_damage, commander_damage, poison_tokens, healing, mill, life_loss]
+          example: "normal_damage"
+        turn:
+          type: integer
+          description: Turn number when event occurred
+          example: 5
+        amount:
+          type: integer
+          description: Amount of damage/healing/etc.
+          example: 10
+        user_id:
+          type: integer
+          description: User who caused the event
+          example: 1234
+        commander_id:
+          type: integer
+          description: Commander associated with the event
+          example: 3186
+        deck_id:
+          type: integer
+          description: Deck that caused the event
+          example: 431905
+        receiver_user_id:
+          type: integer
+          description: User who received the damage/healing
+          example: 5678
+        receiver_commander_id:
+          type: integer
+          description: Commander of the receiver
+          example: 1000
+        receiver_deck_id:
+          type: integer
+          description: Deck of the receiver
+          example: 999999
+
+    PlaygroupSummary:
+      type: object
+      description: Playgroup with summary statistics and leagues
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          example: 123
+        name:
+          type: string
+          example: "Friday Night Magic"
+        game_count:
+          type: integer
+          description: Number of finished games in this playgroup
+          example: 45
+        member_count:
+          type: integer
+          description: Number of active members
+          example: 6
+        created_at:
+          type: string
+          format: date-time
+        leagues:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeagueSummary"
+
+    PlaygroupMember:
+      type: object
+      description: |
+        A user-linked member of a playgroup. Returned by the members endpoint
+        so a client can resolve who to seat in a game.
+      required: [user_id]
+      properties:
+        user_id:
+          type: integer
+          description: |
+            The member's user id. Use this to seat the player (for example as
+            Login.metadata.user_id when driving an API 1.0 game).
+          example: 42
+        username:
+          type: string
+          description: The member's display name.
+          example: "Maran"
+        admin:
+          type: boolean
+          description: Whether this member administers the playgroup.
+          example: true
+        joined_at:
+          type: string
+          format: date-time
+          description: When the member joined the playgroup.
+
+    EloHistory:
+      type: object
+      description: ELO rating history for a deck
+      required: [deck_id, current_rating, scope, history]
+      properties:
+        deck_id:
+          type: integer
+          example: 431905
+        current_rating:
+          type: integer
+          description: Current ELO rating in the requested scope (default 1500 if no games played)
+          example: 1560
+        scope:
+          type: string
+          enum: [global, playgroup, league]
+          description: The scope of the returned ELO history
+          example: global
+        playgroup_id:
+          type: integer
+          nullable: true
+          description: Playgroup ID if scoped, null for global
+        league_id:
+          type: integer
+          nullable: true
+          description: League ID if scoped, null otherwise
+        history:
+          type: array
+          description: ELO snapshots ordered chronologically (oldest first)
+          items:
+            $ref: "#/components/schemas/EloHistoryEntry"
+
+    EloHistoryEntry:
+      type: object
+      required: [rating, delta, game_id, played_at]
+      properties:
+        rating:
+          type: integer
+          description: ELO rating after this game
+          example: 1520
+        delta:
+          type: integer
+          description: Change from previous rating (first entry is relative to default 1500)
+          example: 20
+        game_id:
+          type: integer
+          example: 12345
+        played_at:
+          type: string
+          format: date-time
+          description: When the game ended
+
+    LeagueSummary:
+      type: object
+      description: League within a playgroup
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Season 1"
+        active:
+          type: boolean
+          description: Whether this league is currently active
+          example: true

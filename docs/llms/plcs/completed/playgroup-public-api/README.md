@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/playgroup-public-api/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/playgroup-public-api/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-04
-- Current phase: independent child review
+- Current phase: Completed
 
 ## Summary
 
@@ -35,17 +35,19 @@ reverse-engineered.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Pin the official OpenAPI document and implement one typed tool per operation. | Proposed | Provider capability is explicit and drift is detectable. |
-| Preserve provider-shaped facts rather than local ranking models. | Proposed | Playgroup observations must not become opaque quality scores. |
-| Add no deck-update tool while the official API lacks one. | Proposed | Private endpoint reverse engineering is outside scope. |
-| Gate event batch and live session creation behind `remote`. | Proposed | They mutate external state. |
-| Never retry write requests automatically. | Proposed | Ambiguous provider acceptance could duplicate events/sessions. |
+| Pin the official OpenAPI document and implement one typed tool per operation. | Accepted | Provider capability is explicit and drift is detectable. |
+| Preserve provider-shaped facts rather than local ranking models. | Accepted | Playgroup observations must not become opaque quality scores. |
+| Add no deck-update tool while the official API lacks one. | Accepted | Private endpoint reverse engineering is outside scope. |
+| Gate event batch and live session creation behind `remote`. | Accepted | They mutate external state. |
+| Never retry write requests automatically. | Accepted | Ambiguous provider acceptance could duplicate events/sessions. |
+| Preserve provider payloads as detached JSON inside a typed evidence envelope. | Accepted | The pinned schemas contain broad nullable and additive provider records; lossless JSON keeps unknown fields and nulls without a second stale model hierarchy. Inputs, operations, metadata, and failure states remain typed. |
 | Treat official contract drift as routine adapter maintenance. | Accepted | The goal is the best current API coverage, not compatibility with an obsolete schema. |
 
 ## Pinned Contract
 
 - URL: `https://playgroup.gg/api/public/v1/openapi.yaml`
 - Observed: 2026-07-03
+- Reverified unchanged: 2026-07-04
 - OpenAPI: 3.1.0
 - API version: 1.0.0
 - Bytes: 41,646
@@ -101,8 +103,39 @@ hydrate Archidekt decks.
 
 ## Planning Approval
 
-- Status: Draft
-- Reviewed by: Not reviewed
-- Review date: Not reviewed
-- Reviewed revision: Not reviewed
-- Implementation authorized: No
+- Status: Approved
+- Reviewed by: Nick Curry
+- Review date: 2026-07-04
+- Reviewed revision: `bf62dfb`
+- Implementation authorized: Yes, by the repository owner's explicit request to implement the next PLC on 2026-07-04
+
+## Implementation Evidence
+
+- The checked-in OpenAPI fixture is exactly 41,646 bytes with SHA-256
+  `2996db9134045e255987dda80ec1110dc28d2a84f2705622833d2ab339cb7ad4`.
+- All fifteen documented operations map one-to-one to typed `playgroup_*`
+  tools; `playgroup_auth_status` makes sixteen total. Visibility is exactly
+  14/14/16 in `read-only`/`local`/`remote`.
+- Official-client tests verify discovery, input/output schemas, annotations,
+  unsupported deck updates, redacted auth, missing-key behavior, and the
+  current 46/67/80 complete-profile counts.
+- Offline fixtures cover every route, provider pagination bounds, unknown and
+  nullable fields, two-megabyte response limits, bearer headers, shared
+  pacing, cancellation, transient reads, bounded `Retry-After`, terminal
+  `401`/`403`, malformed data, and single-attempt writes.
+- The safe live `/me` test is discoverable and opt-in. It was not executed for
+  this closure because no Playgroup API key was configured. Both writes remain
+  explicitly fixture-only and are not labeled live-tested because Public API
+  1.0.0 has no documented cleanup operation.
+- Abstraction, code-quality, dead-code, test-coverage, test-quality, visual,
+  dependency, and documentation audits passed after fixes. Valid findings
+  removed an unused DTO, omitted absent optional JSON fields, bounded response
+  bodies, sanitized body-stream failures, and prevented E2E credential
+  inheritance.
+- `task lint`, `task test`, `task surface:report`, `task coverage`, `task pack`,
+  `task smoke:process`, `task smoke:mcp`, and `task release:tool-smoke` passed.
+  Final line coverage is App 91.22%, Archidekt 91.01%, Core 100.00%, Decks
+  93.85%, Playgroup 98.26%, and Scryfall 93.75%.
+- Vulnerability and deprecation scans are clean. Outdated inspection found no
+  direct Playgroup dependency because the adapter is BCL-only; unrelated
+  transitive updates remain owned by existing repository pins.

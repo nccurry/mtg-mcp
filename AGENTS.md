@@ -14,7 +14,8 @@
 - `docs/llms/` contains supplemental workflow guidance, durable plans, and PLC
   packets. `.codex/` contains optional review and validation playbooks.
 - Read the closest scoped `AGENTS.md` under `src/`, `src/MtgMcp.Core/`,
-  `src/MtgMcp.App/`, `src/MtgMcp.Scryfall/`, `tests/`, or `docs/` before
+  `src/MtgMcp.App/`, `src/MtgMcp.Scryfall/`, `src/MtgMcp.Playgroup/`,
+  `tests/`, or `docs/` before
   changing that tree.
 
 ## North Star

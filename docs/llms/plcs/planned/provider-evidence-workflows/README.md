@@ -5,7 +5,7 @@
 > as a cross-provider layer.** Current owners are
 > [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md),
 > [Archidekt sync](../../completed/archidekt-deck-sync/README.md),
-> [Playgroup public API](../playgroup-public-api/README.md), and
+> [Playgroup public API](../../completed/playgroup-public-api/README.md), and
 > and [deterministic deck categorization](../deterministic-deck-categorization/README.md).
 > Popularity/tournament
 > sources remain in the program's

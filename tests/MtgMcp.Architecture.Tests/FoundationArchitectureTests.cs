@@ -15,7 +15,7 @@ public sealed class FoundationArchitectureTests
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
     /// <summary>
-    /// Verifies that only the five currently approved production projects exist.
+    /// Verifies that only the six currently approved production projects exist.
     /// </summary>
     [Fact]
     public void ProductionProjects_ContainOnlyApprovedImplementedModules()
@@ -33,6 +33,7 @@ public sealed class FoundationArchitectureTests
                 "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj",
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
                 "src/MtgMcp.Decks/MtgMcp.Decks.csproj",
+                "src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj",
                 "src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj",
             ],
             projects);
@@ -70,7 +71,7 @@ public sealed class FoundationArchitectureTests
             .ToArray();
 
         Assert.Equal(
-            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj"],
+            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj"],
             references);
         Assert.Equal(
             [
@@ -157,6 +158,31 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
+    /// Verifies Playgroup owns provider HTTP concerns while depending only on provider-neutral Core contracts.
+    /// </summary>
+    [Fact]
+    public void PlaygroupProject_ReferencesOnlyCoreAndBcl()
+    {
+        XDocument project = LoadProject("src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj");
+        string[] references = project
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
+            .OfType<string>()
+            .ToArray();
+
+        Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
+        Assert.Empty(project.Descendants("PackageReference"));
+
+        string liveTest = File.ReadAllText(Path.Combine(
+            RepositoryRoot,
+            "tests",
+            "MtgMcp.Playgroup.Tests",
+            "PlaygroupLiveTests.cs"));
+        Assert.DoesNotContain("CreateLiveSessionAsync", liveTest, StringComparison.Ordinal);
+        Assert.DoesNotContain("CreateGameEventsBatchAsync", liveTest, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies manual interchange cannot grow an implicit provider or arbitrary filesystem path boundary.
     /// </summary>
     [Fact]
@@ -230,7 +256,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, sixty-four-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, eighty-tool, zero-prompt toolset-owned surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()
@@ -248,11 +274,13 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Scryfall", "ScryfallToolsetManifest.cs"));
         string archidektManifestSource = File.ReadAllText(
             Path.Combine(sourceRoot, "MtgMcp.App", "Archidekt", "ArchidektToolsetManifest.cs"));
+        string playgroupManifestSource = File.ReadAllText(
+            Path.Combine(sourceRoot, "MtgMcp.App", "Playgroup", "PlaygroupToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(64, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(80, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(9, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(11, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -308,6 +336,22 @@ public sealed class FoundationArchitectureTests
                 "deck_list",
                 "deck_update",
                 "deck_validate",
+                "playgroup_auth_status",
+                "playgroup_commander_get",
+                "playgroup_commander_get_by_name",
+                "playgroup_commander_turn_damage_get",
+                "playgroup_deck_elo_history_get",
+                "playgroup_deck_get",
+                "playgroup_game_events_batch_create",
+                "playgroup_live_session_create",
+                "playgroup_me_get",
+                "playgroup_playgroup_game_get",
+                "playgroup_playgroup_games_list",
+                "playgroup_playgroup_members_list",
+                "playgroup_user_decks_list",
+                "playgroup_user_get",
+                "playgroup_user_playgroup_get",
+                "playgroup_user_playgroups_list",
                 "scryfall_autocomplete",
                 "scryfall_bulk_metadata",
                 "scryfall_card_collection",
@@ -332,8 +376,9 @@ public sealed class FoundationArchitectureTests
             Environment.NewLine,
             deckManifestSource,
             scryfallManifestSource,
-            archidektManifestSource);
-        string[] assignedToolNames = Regex.Matches(manifestSource, "\\\"((?:archidekt|deck|scryfall)_[^\\\"]+)\\\"")
+            archidektManifestSource,
+            playgroupManifestSource);
+        string[] assignedToolNames = Regex.Matches(manifestSource, "\\\"((?:archidekt|deck|playgroup|scryfall)_[^\\\"]+)\\\"")
             .Select(match => match.Groups[1].Value)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -343,6 +388,7 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(4, Regex.Count(deckManifestSource, @"\.WithTools\("));
         Assert.Equal(2, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
         Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithTools\("));
+        Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
         Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);
@@ -410,6 +456,8 @@ public sealed class FoundationArchitectureTests
             "MtgMcp.Decks",
             "MtgMcp.Decks.Tests",
             "MtgMcp.E2E.Tests",
+            "MtgMcp.Playgroup",
+            "MtgMcp.Playgroup.Tests",
             "MtgMcp.Scryfall",
             "MtgMcp.Scryfall.Tests",
         ];

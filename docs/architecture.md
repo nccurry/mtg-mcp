@@ -19,8 +19,8 @@ The rewrite is an evidence/workflow server, not a deck advisor. It uses:
 - `MtgMcp.Decks` for the revisioned local deck domain, SQLite storage, and
   manual interchange;
 - `MtgMcp.Statistics` for exact provider-independent calculations;
-- the implemented isolated `MtgMcp.Scryfall` and `MtgMcp.Archidekt` adapters
-  plus the planned Playgroup adapter;
+- the implemented isolated `MtgMcp.Scryfall`, `MtgMcp.Archidekt`, and
+  `MtgMcp.Playgroup` adapters;
 - `MtgMcp.App` for MCP hosting, composition, modes, schemas, and the capability
   resource; and
 - separate versioned `decks.db` and unified `scryfall.db` stores.
@@ -39,9 +39,9 @@ selected operation mode. Toolsets reduce irrelevant context but grant no
 authority. Registration remains fixed for a session, so the server does not
 advertise dynamic list changes. The implemented default contains `decks` and
 `scryfall`; `archidekt` is opt-in. The accepted target later adds default
-`stats` and opt-in Playgroup. The current App registry contains `decks`,
-`scryfall`, and `archidekt`, rejects unimplemented names, and projects exact
-selection and counts through capability schema version 4. The
+`stats` and opt-in provider toolsets. The current App registry contains
+`decks`, `scryfall`, `archidekt`, and `playgroup`, rejects unimplemented names,
+and projects exact selection and counts through capability schema version 5. The
 independently reviewed `mcp-capability-toolsets` child PLC owns this contract.
 
 Accepted AMEND-004 governs the implemented unified Scryfall boundary. It uses
@@ -58,6 +58,12 @@ and snapshot restoration, and never resolves conflicts. Provider starts share
 one process-wide per-account lane with two-second spacing, a rolling
 30-per-minute ceiling, bounded read retries, fail-fast blocking responses, and
 a composed 150-request tool budget.
+
+The Playgroup adapter pins the official Public API 1.0.0 document and exposes
+one typed operation per documented route. It preserves complete provider JSON
+inside evidence metadata, performs no cross-provider hydration or ranking,
+reports the absent deck-update capability explicitly, and gates its two
+single-attempt writes behind `remote` mode.
 
 See the [rewrite guide](rewrite-guide.md) and
 [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).

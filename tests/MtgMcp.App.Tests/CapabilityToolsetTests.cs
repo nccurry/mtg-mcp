@@ -137,19 +137,21 @@ public sealed class CapabilityToolsetTests
     /// Verifies reserved and explicit selections resolve against only implemented descriptors.
     /// </summary>
     [Theory]
-    [InlineData(null, "default", true, true, false)]
-    [InlineData("default", "default", true, true, false)]
-    [InlineData("all", "all", true, true, true)]
-    [InlineData("none", "none", false, false, false)]
-    [InlineData("decks", "explicit", true, false, false)]
-    [InlineData("scryfall", "explicit", false, true, false)]
-    [InlineData("archidekt", "explicit", false, false, true)]
+    [InlineData(null, "default", true, true, false, false)]
+    [InlineData("default", "default", true, true, false, false)]
+    [InlineData("all", "all", true, true, true, true)]
+    [InlineData("none", "none", false, false, false, false)]
+    [InlineData("decks", "explicit", true, false, false, false)]
+    [InlineData("scryfall", "explicit", false, true, false, false)]
+    [InlineData("archidekt", "explicit", false, false, true, false)]
+    [InlineData("playgroup", "explicit", false, false, false, true)]
     public void Parser_ResolvesCurrentProfiles(
         string? value,
         string expectedSelection,
         bool decksEnabled,
         bool scryfallEnabled,
-        bool archidektEnabled)
+        bool archidektEnabled,
+        bool playgroupEnabled)
     {
         CapabilityToolsetSelection selection = RequireSuccess(
             CapabilityToolsetSelectionParser.Parse(value, CapabilityToolsetRegistry.Implemented));
@@ -158,13 +160,16 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(decksEnabled, selection.Includes(CapabilityToolset.Decks));
         Assert.Equal(scryfallEnabled, selection.Includes(CapabilityToolset.Scryfall));
         Assert.Equal(archidektEnabled, selection.Includes(CapabilityToolset.Archidekt));
-        CapabilityToolset[] expected = (decksEnabled, scryfallEnabled, archidektEnabled) switch
+        Assert.Equal(playgroupEnabled, selection.Includes(CapabilityToolset.Playgroup));
+        CapabilityToolset[] expected = (decksEnabled, scryfallEnabled, archidektEnabled, playgroupEnabled) switch
         {
-            (true, true, true) => [CapabilityToolset.Decks, CapabilityToolset.Scryfall, CapabilityToolset.Archidekt],
-            (true, true, false) => [CapabilityToolset.Decks, CapabilityToolset.Scryfall],
-            (true, false, false) => [CapabilityToolset.Decks],
-            (false, true, false) => [CapabilityToolset.Scryfall],
-            (false, false, true) => [CapabilityToolset.Archidekt],
+            (true, true, true, true) =>
+                [CapabilityToolset.Decks, CapabilityToolset.Scryfall, CapabilityToolset.Archidekt, CapabilityToolset.Playgroup],
+            (true, true, false, false) => [CapabilityToolset.Decks, CapabilityToolset.Scryfall],
+            (true, false, false, false) => [CapabilityToolset.Decks],
+            (false, true, false, false) => [CapabilityToolset.Scryfall],
+            (false, false, true, false) => [CapabilityToolset.Archidekt],
+            (false, false, false, true) => [CapabilityToolset.Playgroup],
             _ => [],
         };
         Assert.Equal(expected, selection.EnabledToolsets);
@@ -286,15 +291,16 @@ public sealed class CapabilityToolsetTests
     }
 
     /// <summary>
-    /// Verifies the implemented registry owns the exact deck, Scryfall, and Archidekt surfaces.
+    /// Verifies the implemented registry owns the exact deck, Scryfall, Archidekt, and Playgroup surfaces.
     /// </summary>
     [Fact]
     public void Registry_AssignsCurrentSurfaceToImplementedToolsets()
     {
-        Assert.Equal(3, CapabilityToolsetRegistry.Implemented.Length);
+        Assert.Equal(4, CapabilityToolsetRegistry.Implemented.Length);
         CapabilityToolsetDescriptor decks = CapabilityToolsetRegistry.Implemented[0];
         CapabilityToolsetDescriptor scryfall = CapabilityToolsetRegistry.Implemented[1];
         CapabilityToolsetDescriptor archidekt = CapabilityToolsetRegistry.Implemented[2];
+        CapabilityToolsetDescriptor playgroup = CapabilityToolsetRegistry.Implemented[3];
         CapabilityToolsetSelection defaultSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve(null));
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
@@ -308,14 +314,19 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(11, archidekt.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(12, archidekt.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(23, archidekt.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(CapabilityToolset.Playgroup, playgroup.Toolset);
+        Assert.False(playgroup.DefaultEnabled);
+        Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(16, playgroup.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(21, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
         Assert.Equal(41, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
         Assert.Equal(41, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
         Assert.Equal(0, CapabilityToolsetRegistry.CountVisibleTools(noneSelection, OperationMode.Local));
         CapabilityToolsetSelection allSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("all"));
-        Assert.Equal(32, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
-        Assert.Equal(53, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
-        Assert.Equal(64, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
+        Assert.Equal(46, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
+        Assert.Equal(67, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
+        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
     }
 
     /// <summary>

@@ -74,3 +74,11 @@ decision recorded on 2026-07-03 for OpenAPI SHA-256
 The evidence explicitly says "not live-tested" and does not treat that state as
 a pass. A later official cleanup operation may replace this decision through a
 reviewed contract update.
+
+## Acceptance Result
+
+All offline fixtures, contract inventory, MCP mode/schema checks, north-star
+workflow checks, coverage gates, and package/install smokes passed on
+2026-07-04. The opt-in authenticated read remains unexecuted because no API key
+was configured. Both writes remain deliberately fixture-only under the owner
+decision above.

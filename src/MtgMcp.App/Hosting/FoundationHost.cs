@@ -6,9 +6,11 @@ using MtgMcp.App.Archidekt;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Playgroup;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Archidekt;
 using MtgMcp.Decks;
+using MtgMcp.Playgroup;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Hosting;
@@ -43,6 +45,10 @@ internal static class FoundationHost
         using ArchidektService? archidektService = archidektEnabled
             ? new ArchidektService(configuration.Archidekt, FoundationServerIdentity.PackageVersion)
             : null;
+        bool playgroupEnabled = configuration.Toolsets.Includes(CapabilityToolset.Playgroup);
+        using PlaygroupService? playgroupService = playgroupEnabled
+            ? new PlaygroupService(configuration.Playgroup, FoundationServerIdentity.PackageVersion)
+            : null;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
         IMcpServerBuilder mcpBuilder = builder.Services
@@ -76,6 +82,11 @@ internal static class FoundationHost
                 archidektService,
                 deckStore,
                 configuration.Mode);
+        }
+
+        if (playgroupService is not null)
+        {
+            PlaygroupToolsetManifest.Register(mcpBuilder, playgroupService, configuration.Mode);
         }
 
         using IHost host = builder.Build();

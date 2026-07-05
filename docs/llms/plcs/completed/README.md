@@ -17,3 +17,4 @@ checked-in configuration remain authoritative.
 | [mcp-capability-toolsets](mcp-capability-toolsets/README.md) | Added deterministic startup-selected toolsets, static default/all/none profiles, exact mode intersection, and schema-version-2 capability metadata. |
 | [scryfall-corpus-and-evidence](scryfall-corpus-and-evidence/README.md) | Added the unified official corpus, authoritative API evidence, immutable request replay, community-tag joins, and exact `scryfall_*` surface. |
 | [archidekt-deck-sync](archidekt-deck-sync/README.md) | Added rate-safe Archidekt deck, folder, and snapshot evidence plus guarded synchronization and verified disposable cleanup. |
+| [playgroup-public-api](playgroup-public-api/README.md) | Added every pinned official Playgroup operation, lossless provider evidence, exact mode guards, conservative pacing, and fixture-only write safety. |

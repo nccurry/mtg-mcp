@@ -106,7 +106,7 @@ and future popularity-source packets:
 | Profile | `read-only` | `local` | `remote` | Notes |
 | --- | ---: | ---: | ---: | --- |
 | Current implemented `default` | 21 | 41 | 41 | Default-enabled `decks` and `scryfall` toolsets. |
-| Current implemented `all` | 32 | 53 | 64 | Adds the opt-in implemented `archidekt` toolset. |
+| Current implemented `all` | 46 | 67 | 80 | Adds the opt-in implemented `archidekt` and `playgroup` toolsets. |
 | Planned `default` | 31 | 52 | 52 | `decks,scryfall,stats` after the remaining affected child is approved and implemented. |
 | Planned `all` | 56 | 78 | 91 | All five target toolsets; derived from child matrices. |
 | `none` | 0 | 0 | 0 | Existing static-selection behavior remains. |

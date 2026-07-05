@@ -86,7 +86,7 @@ jobs:
       - name: Probe process readiness
         run: task smoke:process
 
-      - name: Exercise MCP deck and Scryfall workflows
+      - name: Exercise MCP deck, Scryfall, and Playgroup surfaces
         run: task smoke:mcp
 
       - name: Clean release artifacts

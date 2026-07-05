@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using MtgMcp.App.Capabilities;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
+using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Configuration;
 
@@ -135,6 +136,12 @@ internal static class FoundationConfigurationLoader
             return ForwardFailure(archidektResult);
         }
 
+        OperationResult<PlaygroupOptions> playgroupResult = ResolvePlaygroup(configuration);
+        if (playgroupResult is not OperationSuccess<PlaygroupOptions> playgroup)
+        {
+            return ForwardFailure(playgroupResult);
+        }
+
         return new OperationSuccess<FoundationConfiguration>(
             new FoundationConfiguration(
                 mode.Data,
@@ -144,7 +151,27 @@ internal static class FoundationConfigurationLoader
                 dataRoot.Data.State,
                 !string.IsNullOrWhiteSpace(configuredDataRoot),
                 legacyData,
-                archidekt.Data));
+                archidekt.Data,
+                playgroup.Data));
+    }
+
+    /// <summary>
+    /// Resolves private Playgroup bearer configuration without echoing or probing the value.
+    /// </summary>
+    private static OperationResult<PlaygroupOptions> ResolvePlaygroup(IConfiguration configuration)
+    {
+        PlaygroupOptions options = PlaygroupOptions.CreateDefault(configuration["PLAYGROUP:API_KEY"]);
+        try
+        {
+            options.Validate();
+            return new OperationSuccess<PlaygroupOptions>(options);
+        }
+        catch (ArgumentException)
+        {
+            return new OperationInvalidInput(
+                "invalid-playgroup-configuration",
+                "Playgroup configuration is invalid.");
+        }
     }
 
     /// <summary>

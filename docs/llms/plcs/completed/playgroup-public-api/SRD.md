@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-04
@@ -50,8 +50,8 @@ out of scope.
 
 ## Definition Of Done
 
-- [ ] Pinned specification and all operation fixtures pass.
-- [ ] No local ranking or deck-update emulation exists.
-- [ ] Write mode and retry safety are proven.
-- [ ] Live tests are discoverable but opt-in.
-- [ ] Toolset assignment and the north-star acceptance workflow are proven.
+- [x] Pinned specification and all operation fixtures pass.
+- [x] No local ranking or deck-update emulation exists.
+- [x] Write mode and retry safety are proven.
+- [x] Live tests are discoverable but opt-in.
+- [x] Toolset assignment and the north-star acceptance workflow are proven.

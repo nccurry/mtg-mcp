@@ -137,6 +137,37 @@ public sealed class FoundationMcpTests
     ];
 
     /// <summary>
+    /// Lists Playgroup authentication status and all thirteen documented reads.
+    /// </summary>
+    private static readonly string[] PlaygroupReadToolNames =
+    [
+        "playgroup_auth_status",
+        "playgroup_commander_get",
+        "playgroup_commander_get_by_name",
+        "playgroup_commander_turn_damage_get",
+        "playgroup_deck_elo_history_get",
+        "playgroup_deck_get",
+        "playgroup_me_get",
+        "playgroup_playgroup_game_get",
+        "playgroup_playgroup_games_list",
+        "playgroup_playgroup_members_list",
+        "playgroup_user_decks_list",
+        "playgroup_user_get",
+        "playgroup_user_playgroup_get",
+        "playgroup_user_playgroups_list",
+    ];
+
+    /// <summary>
+    /// Lists the complete Playgroup surface in remote mode.
+    /// </summary>
+    private static readonly string[] PlaygroupAllToolNames =
+    [
+        .. PlaygroupReadToolNames,
+        "playgroup_game_events_batch_create",
+        "playgroup_live_session_create",
+    ];
+
+    /// <summary>
     /// Verifies initialization, discovery, and capability content in every supported mode.
     /// </summary>
     [Theory]
@@ -203,7 +234,8 @@ public sealed class FoundationMcpTests
             "decks",
             "deckInterchange",
             "scryfall",
-            "archidekt");
+            "archidekt",
+            "playgroup");
         AssertPropertyOrder(
             root.GetProperty("configuration"),
             "dataRootConfigured",
@@ -211,7 +243,7 @@ public sealed class FoundationMcpTests
             "legacyDataState",
             "migrationBoundary",
             "scryfallFreshnessHours");
-        Assert.Equal(4, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
@@ -231,6 +263,9 @@ public sealed class FoundationMcpTests
         Assert.Equal(
             "observed-2026-07-04",
             root.GetProperty("dataSchemas").GetProperty("archidekt").GetString());
+        Assert.Equal(
+            "public-api-1.0.0",
+            root.GetProperty("dataSchemas").GetProperty("playgroup").GetString());
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
         Assert.False(Directory.Exists(session.DataRoot));
@@ -244,9 +279,9 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "default", "default", 21)]
     [InlineData("local", "default", "default", 41)]
     [InlineData("remote", "default", "default", 41)]
-    [InlineData("read-only", "all", "all", 32)]
-    [InlineData("local", "all", "all", 53)]
-    [InlineData("remote", "all", "all", 64)]
+    [InlineData("read-only", "all", "all", 46)]
+    [InlineData("local", "all", "all", 67)]
+    [InlineData("remote", "all", "all", 80)]
     [InlineData("read-only", "decks", "explicit", 7)]
     [InlineData("local", "decks", "explicit", 23)]
     [InlineData("remote", "decks", "explicit", 23)]
@@ -256,6 +291,9 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "archidekt", "explicit", 11)]
     [InlineData("local", "archidekt", "explicit", 12)]
     [InlineData("remote", "archidekt", "explicit", 23)]
+    [InlineData("read-only", "playgroup", "explicit", 14)]
+    [InlineData("local", "playgroup", "explicit", 14)]
+    [InlineData("remote", "playgroup", "explicit", 16)]
     [InlineData("read-only", "none", "none", 0)]
     [InlineData("local", "none", "none", 0)]
     [InlineData("remote", "none", "none", 0)]
@@ -468,6 +506,74 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
+    /// Verifies every Playgroup tool publishes its exact schema, annotations, and redacted local status.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task PlaygroupTools_RemoteMode_PublishExactSchemasAndAnnotations()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "playgroup",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
+        {
+            ["playgroup_auth_status"] = [],
+            ["playgroup_commander_get"] = ["commanderId"],
+            ["playgroup_commander_get_by_name"] = ["name"],
+            ["playgroup_commander_turn_damage_get"] = [],
+            ["playgroup_deck_elo_history_get"] = ["deckId", "includeArchived", "leagueId", "playgroupId"],
+            ["playgroup_deck_get"] = ["deckId", "includeArchived"],
+            ["playgroup_game_events_batch_create"] = ["events", "gameId"],
+            ["playgroup_live_session_create"] = ["request"],
+            ["playgroup_me_get"] = [],
+            ["playgroup_playgroup_game_get"] = ["gameId", "includeEvents", "playgroupId"],
+            ["playgroup_playgroup_games_list"] = ["includeEvents", "limit", "page", "playgroupId"],
+            ["playgroup_playgroup_members_list"] = ["playgroupId"],
+            ["playgroup_user_decks_list"] = ["includeArchived", "userId"],
+            ["playgroup_user_get"] = ["userId"],
+            ["playgroup_user_playgroup_get"] = ["playgroupId", "userId"],
+            ["playgroup_user_playgroups_list"] = ["userId"],
+        };
+        HashSet<string> reads = [.. PlaygroupReadToolNames];
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        Assert.Equal(16, tools.Count);
+        foreach (McpClientTool tool in tools)
+        {
+            Assert.Equal(
+                expectedProperties[tool.Name],
+                tool.ProtocolTool.InputSchema.GetProperty("properties")
+                    .EnumerateObject()
+                    .Select(value => value.Name)
+                    .Order(StringComparer.Ordinal));
+            Assert.NotNull(tool.ProtocolTool.OutputSchema);
+            Assert.NotNull(tool.ProtocolTool.Annotations);
+            Assert.Equal(reads.Contains(tool.Name), tool.ProtocolTool.Annotations.ReadOnlyHint);
+            Assert.Equal(tool.Name == "playgroup_game_events_batch_create", tool.ProtocolTool.Annotations.DestructiveHint);
+            Assert.Equal(reads.Contains(tool.Name), tool.ProtocolTool.Annotations.IdempotentHint);
+            Assert.Equal(tool.Name != "playgroup_auth_status", tool.ProtocolTool.Annotations.OpenWorldHint);
+        }
+
+        CallToolResult authCall = await session.Client.CallToolAsync(
+            "playgroup_auth_status",
+            new Dictionary<string, object?>(),
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        JsonElement authContent = Assert.IsType<JsonElement>(authCall.StructuredContent);
+        JsonElement auth = authContent.GetProperty("result");
+        Assert.Equal("success", auth.GetProperty("kind").GetString());
+        Assert.False(auth.GetProperty("data").GetProperty("credentialsConfigured").GetBoolean());
+
+        CallToolResult meCall = await session.Client.CallToolAsync(
+            "playgroup_me_get",
+            new Dictionary<string, object?>(),
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        JsonElement meContent = Assert.IsType<JsonElement>(meCall.StructuredContent);
+        Assert.Equal("unavailable", meContent.GetProperty("result").GetProperty("kind").GetString());
+    }
+
+    /// <summary>
     /// Verifies the exact mode-specific tool count, one resource, and zero prompts.
     /// </summary>
     private static void AssertSurface(JsonElement surface, int expectedToolCount)
@@ -491,10 +597,11 @@ public sealed class FoundationMcpTests
             "Toolsets control relevance; operation mode controls authority.",
             toolsets.GetProperty("authorityBoundary").GetString());
         JsonElement[] descriptors = toolsets.GetProperty("items").EnumerateArray().ToArray();
-        Assert.Equal(3, descriptors.Length);
+        Assert.Equal(4, descriptors.Length);
         bool decksEnabled = configuredToolsets is "default" or "all" or "decks";
         bool scryfallEnabled = configuredToolsets is "default" or "all" or "scryfall";
         bool archidektEnabled = configuredToolsets is "all" or "archidekt";
+        bool playgroupEnabled = configuredToolsets is "all" or "playgroup";
         AssertDescriptor(
             descriptors[0],
             "decks",
@@ -518,6 +625,17 @@ public sealed class FoundationMcpTests
                 "local" => 12,
                 _ => 23,
             } : 0);
+        AssertDescriptor(
+            descriptors[3],
+            "playgroup",
+            playgroupEnabled,
+            defaultEnabled: false,
+            playgroupEnabled ? (mode == "remote" ? 16 : 14) : 0);
+        Assert.Equal(
+            ["deck-update"],
+            descriptors[3].GetProperty("unsupportedOperations")
+                .EnumerateArray()
+                .Select(value => value.GetString()));
         Assert.Contains(
             "operation mode separately controls local writes",
             descriptors[0].GetProperty("description").GetString(),
@@ -542,7 +660,8 @@ public sealed class FoundationMcpTests
             "enabled",
             "defaultEnabled",
             "visibleToolCount",
-            "description");
+            "description",
+            "unsupportedOperations");
         Assert.Equal(name, descriptor.GetProperty("name").GetString());
         Assert.Equal("available", descriptor.GetProperty("status").GetString());
         Assert.Equal("stable", descriptor.GetProperty("stability").GetString());
@@ -576,6 +695,11 @@ public sealed class FoundationMcpTests
                 "local" => [.. ArchidektReadToolNames, "archidekt_pull_apply"],
                 _ => ArchidektAllToolNames,
             });
+        }
+
+        if (toolsets is "all" or "playgroup")
+        {
+            names = names.Concat(mode == "remote" ? PlaygroupAllToolNames : PlaygroupReadToolNames);
         }
 
         return names.Order(StringComparer.Ordinal).ToArray();
