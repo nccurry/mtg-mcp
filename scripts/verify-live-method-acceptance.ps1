@@ -38,7 +38,7 @@ if ($report.capabilityResourceStatus -ne "live-pass") {
 }
 
 $records = @($report.records)
-$duplicates = $records | Group-Object tool | Where-Object Count -ne 1
+$duplicates = @($records | Group-Object tool | Where-Object Count -ne 1)
 if ($duplicates.Count -gt 0) {
     throw "The live method journal contains duplicate tool rows."
 }
