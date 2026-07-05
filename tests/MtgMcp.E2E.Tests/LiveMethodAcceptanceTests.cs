@@ -437,10 +437,7 @@ public sealed class LiveMethodAcceptanceTests
         }
         finally
         {
-            if (Directory.Exists(dataRoot))
-            {
-                Directory.Delete(dataRoot, recursive: true);
-            }
+            await DeletePhaseRootAsync(dataRoot, token).ConfigureAwait(false);
         }
     }
 
@@ -718,10 +715,7 @@ public sealed class LiveMethodAcceptanceTests
         }
         finally
         {
-            if (Directory.Exists(dataRoot))
-            {
-                Directory.Delete(dataRoot, recursive: true);
-            }
+            await DeletePhaseRootAsync(dataRoot, token).ConfigureAwait(false);
         }
     }
 
@@ -1335,10 +1329,7 @@ public sealed class LiveMethodAcceptanceTests
             finally
             {
                 await session.DisposeAsync().ConfigureAwait(false);
-                if (Directory.Exists(dataRoot))
-                {
-                    Directory.Delete(dataRoot, recursive: true);
-                }
+                await DeletePhaseRootAsync(dataRoot, token).ConfigureAwait(false);
             }
         }
     }
@@ -1539,10 +1530,7 @@ public sealed class LiveMethodAcceptanceTests
         }
         finally
         {
-            if (Directory.Exists(dataRoot))
-            {
-                Directory.Delete(dataRoot, recursive: true);
-            }
+            await DeletePhaseRootAsync(dataRoot, token).ConfigureAwait(false);
         }
     }
 
@@ -1585,6 +1573,36 @@ public sealed class LiveMethodAcceptanceTests
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Removes one known ephemeral phase root after bounded retries for Windows process-handle release.
+    /// </summary>
+    private static async Task DeletePhaseRootAsync(string dataRoot, CancellationToken cancellationToken)
+    {
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            if (!Directory.Exists(dataRoot))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(dataRoot, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < 19)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 19)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        Assert.False(Directory.Exists(dataRoot), "The ephemeral live-acceptance phase directory could not be removed.");
     }
 
     /// <summary>

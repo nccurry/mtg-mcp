@@ -201,7 +201,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
             Arguments = arguments,
             WorkingDirectory = repositoryRoot,
             EnvironmentVariables = environment,
-            ShutdownTimeout = TimeSpan.FromMilliseconds(500),
+            ShutdownTimeout = requireInstalledCommand
+                ? TimeSpan.FromSeconds(10)
+                : TimeSpan.FromMilliseconds(500),
         };
     }
 
