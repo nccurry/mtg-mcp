@@ -498,6 +498,12 @@ public sealed class ArchidektServiceTests
             """;
         RemoteDeckSnapshot current = ParseDeck();
         RemoteDeckSnapshot target = ParseDeck(finalJson);
+        target = target with
+        {
+            Entries = target.Entries.Select(value => value.CardName == "Lightning Bolt"
+                ? value with { ProviderRelationId = string.Empty }
+                : value).ToArray(),
+        };
         ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
         ArchidektTestHttpHandler handler = new();
         AddLogin(handler);

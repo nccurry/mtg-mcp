@@ -381,6 +381,108 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
+    /// Verifies a completed apply after binding uniquely matched rows to provider-generated identities.
+    /// </summary>
+    public static ArchidektRemotePlan PlanRemoteVerification(
+        RemoteDeckSnapshot current,
+        RemoteDeckSnapshot target)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(target);
+        Dictionary<int, int> targetOrderCounts = target.Entries
+            .GroupBy(value => value.SortOrder)
+            .ToDictionary(group => group.Key, group => group.Count());
+        HashSet<string> matchedRelations = new(StringComparer.Ordinal);
+        List<RemoteDeckEntry> reconciledEntries = [];
+        foreach (RemoteDeckEntry targetEntry in target.Entries)
+        {
+            RemoteDeckEntry? matched = current.Entries.FirstOrDefault(value =>
+                !string.IsNullOrWhiteSpace(targetEntry.ProviderRelationId) &&
+                !matchedRelations.Contains(value.ProviderRelationId) &&
+                string.Equals(
+                    value.ProviderRelationId,
+                    targetEntry.ProviderRelationId,
+                    StringComparison.Ordinal));
+            if (matched is null)
+            {
+                RemoteDeckEntry[] candidates = current.Entries
+                    .Where(value =>
+                        !matchedRelations.Contains(value.ProviderRelationId) &&
+                        VerificationContentEqual(value, targetEntry))
+                    .ToArray();
+                matched = candidates.Length == 1 ? candidates[0] : null;
+            }
+
+            if (matched is null)
+            {
+                reconciledEntries.Add(targetEntry);
+                continue;
+            }
+
+            matchedRelations.Add(matched.ProviderRelationId);
+            int sortOrder = targetOrderCounts[targetEntry.SortOrder] > 1
+                ? matched.SortOrder
+                : targetEntry.SortOrder;
+            reconciledEntries.Add(targetEntry with
+            {
+                ProviderRelationId = matched.ProviderRelationId,
+                ProviderCardId = matched.ProviderCardId,
+                SortOrder = sortOrder,
+            });
+        }
+
+        return PlanRemoteApply(current, target with { Entries = reconciledEntries });
+    }
+
+    /// <summary>
+    /// Matches one uniquely identifiable row while excluding provider-owned IDs and an ambiguous order rank.
+    /// </summary>
+    private static bool VerificationContentEqual(RemoteDeckEntry observed, RemoteDeckEntry expected)
+    {
+        return CardIdentityEqual(observed, expected) &&
+            observed.Quantity == expected.Quantity &&
+            string.Equals(observed.CardName, expected.CardName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(observed.Language, expected.Language, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(observed.Finish, expected.Finish, StringComparison.Ordinal) &&
+            string.Equals(observed.Zone, expected.Zone, StringComparison.Ordinal) &&
+            observed.CategoryNames.SequenceEqual(expected.CategoryNames, StringComparer.OrdinalIgnoreCase) &&
+            string.Equals(
+                observed.PrimaryCategoryName,
+                expected.PrimaryCategoryName,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Compares the strongest caller-supplied printing identity available for one verification row.
+    /// </summary>
+    private static bool CardIdentityEqual(RemoteDeckEntry observed, RemoteDeckEntry expected)
+    {
+        if (expected.PrintingId is not null)
+        {
+            return observed.PrintingId == expected.PrintingId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(expected.SetCode) &&
+            !string.IsNullOrWhiteSpace(expected.CollectorNumber))
+        {
+            return string.Equals(observed.SetCode, expected.SetCode, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    observed.CollectorNumber,
+                    expected.CollectorNumber,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (expected.OracleId is not null)
+        {
+            return observed.OracleId == expected.OracleId;
+        }
+
+        return !string.IsNullOrWhiteSpace(expected.ProviderCardId)
+            ? string.Equals(observed.ProviderCardId, expected.ProviderCardId, StringComparison.Ordinal)
+            : string.Equals(observed.CardName, expected.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Reports whether provider-editable metadata is already equivalent.
     /// </summary>
     private static bool MetadataEqual(RemoteDeckSnapshot left, RemoteDeckSnapshot right)

@@ -857,7 +857,7 @@ public sealed class ArchidektService : IDisposable
             requireAuthentication: true,
             budget,
             cancellationToken).ConfigureAwait(false);
-        ArchidektRemotePlan residual = ArchidektSyncPlanner.PlanRemoteApply(verified, target);
+        ArchidektRemotePlan residual = ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
         if (residual.PlannedOperations.Count > 0)
         {
             return new ArchidektApplyResult(

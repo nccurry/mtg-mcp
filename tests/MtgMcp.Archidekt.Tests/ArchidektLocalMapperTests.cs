@@ -181,6 +181,57 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies final apply checks bind unique provider-generated relations and accept provider ordering inside a caller tie.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteVerification_RebindsGeneratedRelationsWithinTiedOrder()
+    {
+        RemoteDeckSnapshot observed = ParseDeck();
+        RemoteDeckSnapshot expected = observed with
+        {
+            Entries = observed.Entries.Select(value => value with
+            {
+                ProviderRelationId = string.Empty,
+                ProviderCardId = string.Empty,
+                SortOrder = 0,
+            }).ToArray(),
+        };
+
+        ArchidektRemotePlan ordinary = ArchidektSyncPlanner.PlanRemoteApply(observed, expected);
+        ArchidektRemotePlan verification = ArchidektSyncPlanner.PlanRemoteVerification(observed, expected);
+
+        Assert.NotEmpty(ordinary.PublicOperations);
+        Assert.Empty(verification.PublicOperations);
+    }
+
+    /// <summary>
+    /// Verifies final apply checks refuse to guess when two observed relations satisfy one unbound row.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteVerification_LeavesAmbiguousGeneratedRelationUnmatched()
+    {
+        RemoteDeckSnapshot observed = ParseDeck();
+        RemoteDeckEntry first = observed.Entries[0];
+        RemoteDeckEntry duplicate = first with { ProviderRelationId = "different-relation" };
+        observed = observed with { Entries = [first, duplicate] };
+        RemoteDeckSnapshot expected = observed with
+        {
+            Entries =
+            [
+                first with
+                {
+                    ProviderRelationId = string.Empty,
+                    ProviderCardId = string.Empty,
+                },
+            ],
+        };
+
+        ArchidektRemotePlan verification = ArchidektSyncPlanner.PlanRemoteVerification(observed, expected);
+
+        Assert.Contains(verification.PublicOperations, value => value.Kind == "entry-add");
+    }
+
+    /// <summary>
     /// Verifies model collections copy caller-owned mutable inputs.
     /// </summary>
     [Fact]
