@@ -220,7 +220,8 @@ internal sealed class ScryfallDatabase : IDisposable
                     "WHERE c.generation_id = $generation AND (c.name_key = $value OR EXISTS " +
                     "(SELECT 1 FROM card_faces f WHERE f.generation_id = c.generation_id " +
                     "AND f.card_id = c.card_id AND f.name_key = $value)) " +
-                    "ORDER BY c.lang = 'en' DESC, c.released_at DESC, c.set_code, c.collector_number LIMIT 1;";
+                    "ORDER BY c.name_key = $value DESC, c.lang = 'en' DESC, c.released_at DESC, " +
+                    "c.set_code, c.collector_number LIMIT 1;";
                 command.Parameters.AddWithValue("$value", lookup.Value!.Trim().ToUpperInvariant());
                 break;
             case "printing":

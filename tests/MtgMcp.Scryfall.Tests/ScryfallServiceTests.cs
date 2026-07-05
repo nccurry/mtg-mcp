@@ -1248,6 +1248,49 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
+    /// Verifies exact-name corpus lookup prefers a whole-card match over the same name on an art-series face.
+    /// </summary>
+    [Fact]
+    public async Task CorpusCard_ExactNamePrefersWholeCardOverFaceMatch()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        JsonObject artSeries = JsonNode.Parse(ScryfallTestFixture.RedCard())!.AsObject();
+        artSeries["id"] = "77777777-7777-4777-8777-777777777777";
+        artSeries["oracle_id"] = ScryfallTestFixture.RedOracleId.ToString("D");
+        artSeries["name"] = "Monastery Swiftspear // Monastery Swiftspear";
+        artSeries["set"] = "aaa";
+        artSeries["collector_number"] = "1";
+        artSeries["layout"] = "art_series";
+        artSeries["card_faces"] = new JsonArray
+        {
+            new JsonObject { ["name"] = "Monastery Swiftspear" },
+        };
+        RecordingHandler handler = ScryfallTestFixture.Provider(
+            intercept: request => request.RequestUri!.AbsolutePath == "/download/all_cards.jsonl.gz"
+                ? ScryfallTestFixture.Bytes(ScryfallTestFixture.GzipLines(
+                    [ScryfallTestFixture.WhiteCard(), ScryfallTestFixture.RedCard(), artSeries.ToJsonString()]))
+                : null);
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        OperationResult<ScryfallCorpusSyncResult> sync = await service.SyncCorpusAsync(
+            "refresh",
+            cancellationToken: TestContext.Current.CancellationToken);
+        if (sync.Value is OperationUnavailable failure)
+        {
+            Assert.Fail($"{failure.ReasonCode}: {failure.Message}");
+        }
+
+        _ = RequireSuccess(sync);
+
+        ScryfallCardResult result = RequireSuccess(await service.GetCardAsync(
+            new ScryfallCardLookup("exact-name", "Monastery Swiftspear"),
+            "cache-only",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(ScryfallTestFixture.RedCardId, result.Card.Id);
+        Assert.Equal("Monastery Swiftspear", result.Card.Name);
+    }
+
+    /// <summary>
     /// Verifies an expired corpus lease lets the next explicit sync remove abandoned staging data.
     /// </summary>
     [Fact]
