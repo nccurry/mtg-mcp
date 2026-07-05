@@ -303,11 +303,25 @@ internal sealed class LiveAcceptanceJournal
     private readonly string journalPath;
 
     /// <summary>
+    /// Pins every retained method result to one clean repository commit.
+    /// </summary>
+    private readonly string testedCommit;
+
+    /// <summary>
+    /// Pins every retained method result to one installed package version.
+    /// </summary>
+    private readonly string packageVersion;
+
+    /// <summary>
     /// Creates a journal under the validated caller-owned root.
     /// </summary>
     internal LiveAcceptanceJournal(string rootPath)
     {
         journalPath = Path.Combine(rootPath, "live-method-results.json");
+        testedCommit = Environment.GetEnvironmentVariable("MTGMCP_LIVE_ACCEPTANCE_COMMIT") ?? string.Empty;
+        packageVersion = Environment.GetEnvironmentVariable("MTGMCP_E2E_VERSION") ?? string.Empty;
+        Assert.Matches("^[0-9a-f]{40}$", testedCommit);
+        Assert.False(string.IsNullOrWhiteSpace(packageVersion));
     }
 
     /// <summary>
@@ -333,6 +347,8 @@ internal sealed class LiveAcceptanceJournal
             DateTimeOffset.UtcNow);
         LiveAcceptanceReport report = new(
             1,
+            testedCommit,
+            packageVersion,
             current.CapabilityResourceStatus,
             records.Values.OrderBy(value => value.Tool, StringComparer.Ordinal).ToArray());
         string json = JsonSerializer.Serialize(report, SerializerOptions);
@@ -378,12 +394,24 @@ internal sealed class LiveAcceptanceJournal
     {
         if (!File.Exists(journalPath))
         {
-            return new LiveAcceptanceReport(1, "not-run", []);
+            return EmptyReport();
         }
 
         string json = await File.ReadAllTextAsync(journalPath, cancellationToken).ConfigureAwait(false);
         LiveAcceptanceReport? report = JsonSerializer.Deserialize<LiveAcceptanceReport>(json);
-        return report ?? new LiveAcceptanceReport(1, "not-run", []);
+        return report is not null &&
+            string.Equals(report.TestedCommit, testedCommit, StringComparison.Ordinal) &&
+            string.Equals(report.PackageVersion, packageVersion, StringComparison.Ordinal)
+            ? report
+            : EmptyReport();
+    }
+
+    /// <summary>
+    /// Creates one empty report for the exact package build under test.
+    /// </summary>
+    private LiveAcceptanceReport EmptyReport()
+    {
+        return new LiveAcceptanceReport(1, testedCommit, packageVersion, "not-run", []);
     }
 }
 
@@ -401,5 +429,7 @@ internal sealed record LiveAcceptanceRecord(
 /// </summary>
 internal sealed record LiveAcceptanceReport(
     int SchemaVersion,
+    string TestedCommit,
+    string PackageVersion,
     string CapabilityResourceStatus,
     IReadOnlyList<LiveAcceptanceRecord> Records);

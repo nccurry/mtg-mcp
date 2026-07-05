@@ -20,6 +20,11 @@ command, and an explicitly created `MTGMCP_LIVE_ACCEPTANCE_DATA_DIR` outside
 both the repository and the normal application-data root. An empty root is
 marked on first use. A nonempty unmarked root is refused.
 
+The task also refuses a dirty worktree, resolves the exact tested commit, and
+binds every retained result to that commit and the installed package version.
+Changing either identity starts a new empty journal rather than reusing stale
+passes from an earlier build.
+
 The scratch root owns a path-free JSON journal. It never contains credentials,
 account identities, provider payloads, game identifiers, disposable provider
 identifiers, or local paths. Provider calls are sequential and use production

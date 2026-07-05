@@ -555,7 +555,8 @@ public sealed class LiveMethodAcceptanceTests
                     ["freshnessPolicy"] = "cache-only",
                 },
                 token).ConfigureAwait(false);
-            Assert.Equal("corpus", rulings.GetProperty("origin").GetString());
+            Assert.NotEqual(Guid.Empty, rulings.GetProperty("corpusGenerationId").GetGuid());
+            Assert.False(rulings.TryGetProperty("snapshot", out _));
 
             JsonElement sets = await CallSuccessAsync(
                 environment,
@@ -595,7 +596,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["pageSize"] = 5,
                 },
                 token).ConfigureAwait(false);
-            Assert.NotEmpty(catalog.GetProperty("items").EnumerateArray());
+            Assert.NotEmpty(catalog.GetProperty("page").GetProperty("items").EnumerateArray());
 
             JsonElement autocomplete = await CallSuccessAsync(
                 environment,
@@ -609,7 +610,7 @@ public sealed class LiveMethodAcceptanceTests
                 },
                 token).ConfigureAwait(false);
             Assert.Contains(
-                autocomplete.GetProperty("items").EnumerateArray(),
+                autocomplete.GetProperty("page").GetProperty("items").EnumerateArray(),
                 value => value.GetString()!.Contains("Obeka", StringComparison.OrdinalIgnoreCase));
 
             const string query = "!\"Obeka, Splitter of Seconds\" or !\"Paradox Haze\"";
@@ -856,6 +857,10 @@ public sealed class LiveMethodAcceptanceTests
             baselineCaptured = true;
             Assert.Equal(ArchidektDeckId, baseline.GetProperty("remoteId").GetString());
             string baselineContentFingerprint = baseline.GetProperty("contentFingerprint").GetString()!;
+            baselineRestored = true;
+            await CleanupStaleArchidektRecoverySnapshotsAsync(
+                session,
+                token).ConfigureAwait(false);
 
             JsonElement decks = await CallSuccessAsync(
                 environment,
@@ -913,9 +918,17 @@ public sealed class LiveMethodAcceptanceTests
                     ["snapshotId"] = recoverySnapshotId,
                 },
                 token).ConfigureAwait(false);
-            Assert.Equal(
-                baselineContentFingerprint,
-                fullSnapshot.GetProperty("deck").GetProperty("contentFingerprint").GetString());
+            JsonElement unchangedRestore = RequireSuccess(await CallResultAsync(
+                session,
+                "archidekt_snapshot_restore_preview",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = ArchidektDeckId,
+                    ["snapshotId"] = recoverySnapshotId,
+                },
+                token).ConfigureAwait(false));
+            Assert.Empty(unchangedRestore.GetProperty("differences").EnumerateArray());
+            Assert.Empty(unchangedRestore.GetProperty("operations").EnumerateArray());
 
             snapshot = await CallSuccessAsync(
                 environment,
@@ -928,7 +941,7 @@ public sealed class LiveMethodAcceptanceTests
                         deckId = ArchidektDeckId,
                         snapshotId = recoverySnapshotId,
                         expectedChecksum = fullSnapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                        name = $"mtg-mcp acceptance recovery {suffix} verified",
+                        name = $"mtg-mcp recovery {suffix}",
                     },
                 },
                 token).ConfigureAwait(false);
@@ -1017,13 +1030,34 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["deckId"] = localDeckId,
                     ["expectedRevision"] = localRevision,
-                    ["category"] = new { name = "Acceptance Added", color = "#6633ff", sortOrder = 1000 },
+                    ["category"] = new { name = "Acceptance Added", color = "#6633ff", sortOrder = 0 },
                 },
                 token).ConfigureAwait(false);
             localRevision = categorizedDeck.GetProperty("revision").GetInt64();
             Guid categoryId = categorizedDeck.GetProperty("categories").EnumerateArray()
                 .Single(value => value.GetProperty("name").GetString() == "Acceptance Added")
                 .GetProperty("categoryId").GetGuid();
+            Guid commanderCategoryId = categorizedDeck.GetProperty("categories").EnumerateArray()
+                .Single(value => value.GetProperty("name").GetString() == "Commander")
+                .GetProperty("categoryId").GetGuid();
+            categorizedDeck = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_category_update",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = localDeckId,
+                    ["expectedRevision"] = localRevision,
+                    ["category"] = new
+                    {
+                        categoryId = commanderCategoryId,
+                        name = "Commander",
+                        color = (string?)null,
+                        sortOrder = 1,
+                    },
+                },
+                token).ConfigureAwait(false);
+            localRevision = categorizedDeck.GetProperty("revision").GetInt64();
             foreach (Guid entryId in addedEntries)
             {
                 categorizedDeck = await CallSuccessAsync(
@@ -1036,7 +1070,7 @@ public sealed class LiveMethodAcceptanceTests
                         ["expectedRevision"] = localRevision,
                         ["entryId"] = entryId,
                         ["categoryId"] = categoryId,
-                        ["isPrimary"] = false,
+                        ["isPrimary"] = true,
                     },
                     token).ConfigureAwait(false);
                 localRevision = categorizedDeck.GetProperty("revision").GetInt64();
@@ -1065,8 +1099,8 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             Assert.Equal("conflict", stalePush.GetProperty("kind").GetString());
 
-            JsonElement pushed = await CallSuccessAsync(
-                environment,
+            baselineRestored = false;
+            JsonElement pushed = RequireSuccess(await CallResultAsync(
                 session,
                 "archidekt_push_apply",
                 new Dictionary<string, object?>
@@ -1079,8 +1113,47 @@ public sealed class LiveMethodAcceptanceTests
                         previewFingerprint = pushPreview.GetProperty("previewFingerprint").GetString(),
                     },
                 },
+                token).ConfigureAwait(false));
+            if (!string.Equals(pushed.GetProperty("outcome").GetString(), "applied", StringComparison.Ordinal))
+            {
+                JsonElement residual = RequireSuccess(await CallResultAsync(
+                    session,
+                    "archidekt_push_preview",
+                    new Dictionary<string, object?> { ["localDeckId"] = localDeckId },
+                    token).ConfigureAwait(false));
+                JsonElement observedRemote = RequireSuccess(await CallResultAsync(
+                    session,
+                    "archidekt_deck_get",
+                    new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+                    token).ConfigureAwait(false));
+                JsonElement observedLocal = RequireSuccess(await CallResultAsync(
+                    session,
+                    "deck_get",
+                    new Dictionary<string, object?> { ["deckId"] = localDeckId },
+                    token).ConfigureAwait(false));
+                string diagnostic = JsonSerializer.Serialize(
+                    new { pushed, residual, observedRemote, observedLocal },
+                    SourceStateJsonOptions);
+                await File.WriteAllTextAsync(
+                    Path.Combine(environment.RootPath, "archidekt-push-diagnostic.json"),
+                    diagnostic + Environment.NewLine,
+                    token).ConfigureAwait(false);
+                string attempted = string.Join(
+                    ", ",
+                    pushed.GetProperty("operations").EnumerateArray().Select(value =>
+                        $"{value.GetProperty("kind").GetString()}:{value.GetProperty("subject").GetString()}={value.GetProperty("status").GetString()}"));
+                string remaining = string.Join(
+                    ", ",
+                    residual.GetProperty("operations").EnumerateArray().Select(value =>
+                        $"{value.GetProperty("kind").GetString()}:{value.GetProperty("subject").GetString()}"));
+                Assert.Fail($"Archidekt push verification failed; attempted [{attempted}], remaining [{remaining}].");
+            }
+
+            await environment.Journal.RecordAsync(
+                "archidekt_push_apply",
+                "live-pass",
+                "packaged-mcp-call-passed",
                 token).ConfigureAwait(false);
-            Assert.Equal("applied", pushed.GetProperty("outcome").GetString());
 
             JsonElement cleanDiff = await CallSuccessAsync(
                 environment,
@@ -1121,7 +1194,7 @@ public sealed class LiveMethodAcceptanceTests
                         deckId = ArchidektDeckId,
                         snapshotId = recoverySnapshotId,
                         expectedChecksum = fullSnapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                        confirmation = $"delete restored acceptance snapshot {recoverySnapshotId}",
+                        confirmation = $"delete snapshot {recoverySnapshotId}",
                     },
                 },
                 token).ConfigureAwait(false);
@@ -1272,7 +1345,7 @@ public sealed class LiveMethodAcceptanceTests
                     {
                         deckId = temporaryDeckId,
                         expectedRemoteFingerprint = temporaryDeck.GetProperty("remoteFingerprint").GetString(),
-                        confirmation = $"delete disposable acceptance deck {temporaryDeckId}",
+                        confirmation = $"delete {temporaryDeckId}",
                     },
                 },
                 token).ConfigureAwait(false);
@@ -1295,7 +1368,7 @@ public sealed class LiveMethodAcceptanceTests
                         folderId = temporaryFolderId,
                         expectedName = temporaryFolderName,
                         expectedTreeFingerprint = folderTree.GetProperty("treeFingerprint").GetString(),
-                        confirmation = $"delete disposable acceptance folder {temporaryFolderId}",
+                        confirmation = $"delete folder {temporaryFolderId}",
                     },
                 },
                 token).ConfigureAwait(false);
@@ -1607,6 +1680,57 @@ public sealed class LiveMethodAcceptanceTests
     }
 
     /// <summary>
+    /// Removes only a prior acceptance snapshot after proving it contains the still-current baseline.
+    /// </summary>
+    private static async Task CleanupStaleArchidektRecoverySnapshotsAsync(
+        McpProcessSession session,
+        CancellationToken cancellationToken)
+    {
+        JsonElement page = RequireSuccess(await CallResultAsync(
+            session,
+            "archidekt_snapshot_list",
+            new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+            cancellationToken).ConfigureAwait(false));
+        foreach (JsonElement summary in page.GetProperty("items").EnumerateArray())
+        {
+            string name = summary.GetProperty("name").GetString()!;
+            if (!name.StartsWith("mtg-mcp acceptance recovery", StringComparison.Ordinal) &&
+                !name.StartsWith("mtg-mcp recovery", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string snapshotId = summary.GetProperty("snapshotId").GetString()!;
+            JsonElement snapshot = RequireSuccess(await CallResultAsync(
+                session,
+                "archidekt_snapshot_get",
+                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
+                cancellationToken).ConfigureAwait(false));
+            JsonElement preview = RequireSuccess(await CallResultAsync(
+                session,
+                "archidekt_snapshot_restore_preview",
+                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
+                cancellationToken).ConfigureAwait(false));
+            Assert.Empty(preview.GetProperty("differences").EnumerateArray());
+            Assert.Empty(preview.GetProperty("operations").EnumerateArray());
+            _ = RequireSuccess(await CallResultAsync(
+                session,
+                "archidekt_snapshot_delete",
+                new Dictionary<string, object?>
+                {
+                    ["request"] = new
+                    {
+                        deckId = ArchidektDeckId,
+                        snapshotId,
+                        expectedChecksum = snapshot.GetProperty("summary").GetProperty("checksum").GetString(),
+                        confirmation = $"delete snapshot {snapshotId}",
+                    },
+                },
+                cancellationToken).ConfigureAwait(false));
+        }
+    }
+
+    /// <summary>
     /// Restores the recovery snapshot and verifies provider-generated identifiers do not affect content equality.
     /// </summary>
     private static async Task RestoreArchidektBaselineAsync(
@@ -1667,7 +1791,7 @@ public sealed class LiveMethodAcceptanceTests
             expectedSnapshotContentFingerprint = preview.GetProperty("snapshotContentFingerprint").GetString(),
             expectedRemoteFingerprint = preview.GetProperty("remoteFingerprint").GetString(),
             previewFingerprint = preview.GetProperty("previewFingerprint").GetString(),
-            confirmation = $"restore acceptance snapshot {snapshotId}",
+            confirmation = $"restore snapshot {snapshotId}",
         };
     }
 
@@ -1702,7 +1826,7 @@ public sealed class LiveMethodAcceptanceTests
                         {
                             deckId = temporaryDeckId,
                             expectedRemoteFingerprint = deck.GetProperty("remoteFingerprint").GetString(),
-                            confirmation = $"cleanup disposable acceptance deck {temporaryDeckId}",
+                            confirmation = $"delete {temporaryDeckId}",
                         },
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -1734,7 +1858,7 @@ public sealed class LiveMethodAcceptanceTests
                                 folderId = temporaryFolderId,
                                 expectedName = temporaryFolderName,
                                 expectedTreeFingerprint = tree.GetProperty("treeFingerprint").GetString(),
-                                confirmation = $"cleanup disposable acceptance folder {temporaryFolderId}",
+                                confirmation = $"delete folder {temporaryFolderId}",
                             },
                         },
                         cancellationToken).ConfigureAwait(false);
@@ -1762,7 +1886,7 @@ public sealed class LiveMethodAcceptanceTests
                             deckId = ArchidektDeckId,
                             snapshotId,
                             expectedChecksum = snapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                            confirmation = $"cleanup restored acceptance snapshot {snapshotId}",
+                            confirmation = $"delete snapshot {snapshotId}",
                         },
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -1775,7 +1899,18 @@ public sealed class LiveMethodAcceptanceTests
     /// </summary>
     private static JsonElement RequireSuccess(JsonElement result)
     {
-        Assert.Equal("success", result.GetProperty("kind").GetString());
+        string? kind = result.GetProperty("kind").GetString();
+        if (!string.Equals(kind, "success", StringComparison.Ordinal))
+        {
+            string reason = result.TryGetProperty("reasonCode", out JsonElement reasonElement)
+                ? reasonElement.GetString() ?? "unknown-reason"
+                : "unknown-reason";
+            string message = result.TryGetProperty("message", out JsonElement messageElement)
+                ? messageElement.GetString() ?? "No failure message was returned."
+                : "No failure message was returned.";
+            Assert.Fail($"Expected operation success but received {kind} ({reason}): {message}");
+        }
+
         return result.GetProperty("data");
     }
 
@@ -1984,13 +2119,13 @@ public sealed class LiveMethodAcceptanceTests
             toolName,
             arguments,
             cancellationToken).ConfigureAwait(false);
-        Assert.Equal("success", result.GetProperty("kind").GetString());
+        JsonElement data = RequireSuccess(result);
         await environment.Journal.RecordAsync(
             toolName,
             "live-pass",
             "packaged-mcp-call-passed",
             cancellationToken).ConfigureAwait(false);
-        return result.GetProperty("data");
+        return data;
     }
 
     /// <summary>

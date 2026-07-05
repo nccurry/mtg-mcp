@@ -328,6 +328,20 @@ function Invoke-ToolSmoke {
 }
 
 function Invoke-LiveAcceptance {
+    $workingTreeStatus = & git status --porcelain
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect the repository before live acceptance."
+    }
+
+    if ($workingTreeStatus) {
+        throw "Live method acceptance requires a clean committed worktree."
+    }
+
+    $testedCommit = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $testedCommit -notmatch '^[0-9a-f]{40}$') {
+        throw "Could not resolve the exact commit for live acceptance."
+    }
+
     $packageSource = Resolve-RepoPath $PackageDir
     $packagePath = Join-Path $packageSource "$PackageId.$Version.nupkg"
     if (-not (Test-Path -LiteralPath $packagePath)) {
@@ -355,9 +369,11 @@ function Invoke-LiveAcceptance {
 
     $previousCommand = $env:MTGMCP_E2E_COMMAND
     $previousVersion = $env:MTGMCP_E2E_VERSION
+    $previousCommit = $env:MTGMCP_LIVE_ACCEPTANCE_COMMIT
     try {
         $env:MTGMCP_E2E_COMMAND = $toolExecutable
         $env:MTGMCP_E2E_VERSION = $Version
+        $env:MTGMCP_LIVE_ACCEPTANCE_COMMIT = $testedCommit
         Invoke-Checked $dotnetCommand `
             "test" `
             (Resolve-RepoPath $E2ETestProject) `
@@ -380,6 +396,7 @@ function Invoke-LiveAcceptance {
     finally {
         $env:MTGMCP_E2E_COMMAND = $previousCommand
         $env:MTGMCP_E2E_VERSION = $previousVersion
+        $env:MTGMCP_LIVE_ACCEPTANCE_COMMIT = $previousCommit
     }
 }
 

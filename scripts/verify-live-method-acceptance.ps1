@@ -23,6 +23,16 @@ if ($report.schemaVersion -ne 1) {
     throw "The live method journal schema is unsupported."
 }
 
+if ($report.testedCommit -notmatch '^[0-9a-f]{40}$' -or
+    $report.testedCommit -ne $env:MTGMCP_LIVE_ACCEPTANCE_COMMIT) {
+    throw "The live method journal is not pinned to the current tested commit."
+}
+
+if ([string]::IsNullOrWhiteSpace($report.packageVersion) -or
+    $report.packageVersion -ne $env:MTGMCP_E2E_VERSION) {
+    throw "The live method journal is not pinned to the installed package version."
+}
+
 if ($report.capabilityResourceStatus -ne "live-pass") {
     throw "The capability resource has not passed packaged live acceptance."
 }
