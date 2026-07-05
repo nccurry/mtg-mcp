@@ -260,6 +260,7 @@ task coverage
 task pack
 task smoke:process
 task smoke:mcp
+task test:live:methods
 ```
 
 From a fresh checkout, run `./bootstrap.sh`; on Windows, run
@@ -273,6 +274,10 @@ when `MTGMCP__PLAYGROUP__API_KEY` is configured.
 The multi-gigabyte corpus acceptance additionally requires
 `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` and an explicit
 `MTGMCP_SCRYFALL_ACCEPTANCE_DATA_DIR`; it never deletes that directory.
+The separate [live method acceptance](docs/llms/plans/live-method-acceptance.md)
+installs the generated package and exercises all 80 public tools. It requires
+an explicitly marked scratch root, restores its owner-authorized Archidekt
+deck before cleanup, and never invokes the two Playgroup writes.
 
 ## Architecture
 

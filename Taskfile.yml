@@ -244,6 +244,12 @@ tasks:
     cmds:
       - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"'
 
+  test:live:methods:
+    desc: Install the package and run explicitly enabled method-by-method live acceptance
+    deps: [build, pack]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/release.ps1 LiveAcceptance -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Configuration "{{.CONFIGURATION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
+
   coverage:
     desc: Run coverage gates and generate the Codecov report
     cmds:

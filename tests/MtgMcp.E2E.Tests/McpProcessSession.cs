@@ -72,7 +72,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
             repositoryRoot,
             dataRoot,
             mode,
-            toolsets);
+            toolsets,
+            environmentOverrides: null,
+            requireInstalledCommand: false);
 
         try
         {
@@ -86,6 +88,44 @@ internal sealed class McpProcessSession : IAsyncDisposable
                 transport,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             return new McpProcessSession(client, workingDirectory, dataRoot);
+        }
+        catch
+        {
+            workingDirectory.Delete(recursive: true);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Starts an installed package against a caller-owned persistent live-acceptance data root.
+    /// </summary>
+    internal static async Task<McpProcessSession> StartLiveAsync(
+        string dataRoot,
+        string mode,
+        string toolsets,
+        IReadOnlyDictionary<string, string?> environmentOverrides,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
+        ArgumentNullException.ThrowIfNull(environmentOverrides);
+
+        string repositoryRoot = FindRepositoryRoot();
+        DirectoryInfo workingDirectory = Directory.CreateTempSubdirectory("mtg-mcp-live-e2e-");
+        StdioClientTransportOptions options = CreateTransportOptions(
+            repositoryRoot,
+            Path.GetFullPath(dataRoot),
+            mode,
+            toolsets,
+            environmentOverrides,
+            requireInstalledCommand: true);
+
+        try
+        {
+            StdioClientTransport transport = new(options);
+            McpClient client = await McpClient.CreateAsync(
+                transport,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            return new McpProcessSession(client, workingDirectory, Path.GetFullPath(dataRoot));
         }
         catch
         {
@@ -115,13 +155,21 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string repositoryRoot,
         string dataRoot,
         string? mode,
-        string? toolsets)
+        string? toolsets,
+        IReadOnlyDictionary<string, string?>? environmentOverrides,
+        bool requireInstalledCommand)
     {
         string? installedCommand = Environment.GetEnvironmentVariable("MTGMCP_E2E_COMMAND");
         string command;
         string[] arguments;
         if (string.IsNullOrWhiteSpace(installedCommand))
         {
+            if (requireInstalledCommand)
+            {
+                throw new InvalidOperationException(
+                    "MTGMCP_E2E_COMMAND must identify the installed package command for live acceptance.");
+            }
+
             command = ResolveDotnetHost(repositoryRoot);
             arguments = [ResolveApplicationPath(repositoryRoot)];
         }
@@ -131,19 +179,28 @@ internal sealed class McpProcessSession : IAsyncDisposable
             arguments = [];
         }
 
+        Dictionary<string, string?> environment = new(StringComparer.Ordinal)
+        {
+            ["MTGMCP__DATA_DIR"] = dataRoot,
+            ["MTGMCP__MODE"] = mode,
+            ["MTGMCP__TOOLSETS"] = toolsets,
+            ["MTGMCP__PLAYGROUP__API_KEY"] = null,
+        };
+        if (environmentOverrides is not null)
+        {
+            foreach ((string key, string? value) in environmentOverrides)
+            {
+                environment[key] = value;
+            }
+        }
+
         return new StdioClientTransportOptions
         {
             Name = "mtg-mcp-foundation-e2e",
             Command = command,
             Arguments = arguments,
             WorkingDirectory = repositoryRoot,
-            EnvironmentVariables = new Dictionary<string, string?>
-            {
-                ["MTGMCP__DATA_DIR"] = dataRoot,
-                ["MTGMCP__MODE"] = mode,
-                ["MTGMCP__TOOLSETS"] = toolsets,
-                ["MTGMCP__PLAYGROUP__API_KEY"] = null,
-            },
+            EnvironmentVariables = environment,
             ShutdownTimeout = TimeSpan.FromMilliseconds(500),
         };
     }

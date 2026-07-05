@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("Archive", "Checksums", "Clean", "ToolSmoke", "ValidateVersion")]
+    [ValidateSet("Archive", "Checksums", "Clean", "LiveAcceptance", "ToolSmoke", "ValidateVersion")]
     [string] $Action,
 
     [string] $Version = "",
@@ -327,7 +327,62 @@ function Invoke-ToolSmoke {
     }
 }
 
-if ($Action -in @("Archive", "ToolSmoke", "ValidateVersion")) {
+function Invoke-LiveAcceptance {
+    $packageSource = Resolve-RepoPath $PackageDir
+    $packagePath = Join-Path $packageSource "$PackageId.$Version.nupkg"
+    if (-not (Test-Path -LiteralPath $packagePath)) {
+        throw "Package not found: $packagePath"
+    }
+
+    $toolPath = New-CleanDirectory (Join-Path $ArtifactsDir "live-method-acceptance-tool")
+    $dotnetCommand = Get-DotnetCommand
+    Invoke-Checked $dotnetCommand "tool" "install" $PackageId "--tool-path" $toolPath "--add-source" $packageSource "--version" $Version
+
+    $toolExecutable = if ($IsWindows) {
+        Join-Path $toolPath "mtg-mcp.exe"
+    }
+    else {
+        Join-Path $toolPath "mtg-mcp"
+    }
+
+    if (-not (Test-Path -LiteralPath $toolExecutable)) {
+        throw "Installed tool executable not found: $toolExecutable"
+    }
+
+    Use-LocalDotnetRootForAppHosts
+    Invoke-Checked $toolExecutable "--smoke"
+
+    $previousCommand = $env:MTGMCP_E2E_COMMAND
+    $previousVersion = $env:MTGMCP_E2E_VERSION
+    try {
+        $env:MTGMCP_E2E_COMMAND = $toolExecutable
+        $env:MTGMCP_E2E_VERSION = $Version
+        Invoke-Checked $dotnetCommand `
+            "test" `
+            (Resolve-RepoPath $E2ETestProject) `
+            "--configuration" `
+            $Configuration `
+            "--no-build" `
+            "--filter" `
+            "FullyQualifiedName~LiveMethodAcceptanceTests"
+        $dataRoot = $env:MTGMCP_LIVE_ACCEPTANCE_DATA_DIR
+        if ([string]::IsNullOrWhiteSpace($dataRoot)) {
+            throw "MTGMCP_LIVE_ACCEPTANCE_DATA_DIR is required."
+        }
+
+        $verifyScript = Resolve-RepoPath "scripts/verify-live-method-acceptance.ps1"
+        & $verifyScript -DataRoot $dataRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "Live method journal verification failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        $env:MTGMCP_E2E_COMMAND = $previousCommand
+        $env:MTGMCP_E2E_VERSION = $previousVersion
+    }
+}
+
+if ($Action -in @("Archive", "LiveAcceptance", "ToolSmoke", "ValidateVersion")) {
     $Version = Resolve-PackageVersion
 }
 
@@ -340,6 +395,7 @@ switch ($Action) {
         Ensure-Directory $DistDir | Out-Null
         Ensure-Directory $PublishDir | Out-Null
     }
+    "LiveAcceptance" { Invoke-LiveAcceptance }
     "ToolSmoke" { Invoke-ToolSmoke }
     "ValidateVersion" { Assert-StableSemVer }
 }
