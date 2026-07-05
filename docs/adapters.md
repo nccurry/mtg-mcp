@@ -6,9 +6,9 @@ projects own third-party HTTP request and response shapes.
 
 ## Clean-Break `0.9.0` Target
 
-The stable rewrite uses an implemented isolated adapter for official Scryfall
-evidence and plans separate adapters for explicit Archidekt operations and the
-documented Playgroup public API. It has no separate Tagger adapter, Moxfield
+The stable rewrite uses implemented isolated adapters for official Scryfall
+evidence and explicit Archidekt operations, and plans a separate adapter for
+the documented Playgroup public API. It has no separate Tagger adapter, Moxfield
 network adapter, Commander Spellbook adapter, generic decklist provider, or
 recommendation source framework.
 
@@ -35,6 +35,17 @@ Current Scryfall configuration uses `SCRYFALL_TTL_HOURS` in `mtg-mcp.json`,
 `--scryfall-ttl-hours`; it defaults to 24 hours. The product/version User-Agent
 and documented JSON Accept header are fixed by the adapter rather than exposed
 as arbitrary runtime header input.
+
+Current Archidekt configuration is `ARCHIDEKT:USERNAME`,
+`ARCHIDEKT:PASSWORD`, and `ARCHIDEKT:CREDENTIALS_FILE`, with equivalent
+`MTGMCP__ARCHIDEKT__...` environment keys. The provider origin is fixed to
+Archidekt so configured credentials cannot be redirected to another host. The
+adapter retains login tokens only in memory. It starts at most one
+request at a time per account in the process, waits at least two seconds
+between starts, permits at most 30 starts in a rolling minute, and shares one
+150-request budget across every adapter call composed by a tool invocation.
+`Retry-After` creates a bounded shared cooldown; `403`/`429` and ambiguous
+writes are not retried.
 
 ## Historical Legacy Adapter Operations
 

@@ -16,20 +16,20 @@
 | ARCH-FIX-010 | Failure after two remote operations | Applied/unknown/not-attempted statuses; baseline unchanged. |
 | ARCH-FIX-011 | Create private shell | Remote ID bound locally; contents remain unpushed. |
 | ARCH-FIX-012 | Delete contract missing/drifted | Structured unsupported, no emulation, and child/cutover gate failed. |
-| ARCH-FIX-013 | Existing binding has no baseline | `baseline_missing` conflict; no remote or local write. |
+| ARCH-FIX-013 | Existing binding has no baseline | `baseline-missing` conflict; no remote or local write. |
 | ARCH-FIX-014 | Baseline checksum is corrupt/stale | Unavailable/conflict with evidence; no guessed direction or write. |
-| ARCH-FIX-015 | Previously bound remote deck returns the reviewed missing/deleted response and is absent from a fresh authenticated listing | `remote_deleted`; local deck and binding remain unchanged. An unrelated `400` is not sufficient. |
-| ARCH-FIX-016 | Predicted primitive plan requires 151 requests | `request_limit_exceeded` before the first mutation. |
+| ARCH-FIX-015 | Previously bound remote deck returns the reviewed missing/deleted response and is absent from a fresh authenticated listing | `remote-deleted`; local deck and binding remain unchanged. An unrelated `400` is not sufficient. |
+| ARCH-FIX-016 | Predicted primitive plan requires 151 requests | `request-limit-exceeded` before the first mutation. |
 | ARCH-FIX-017 | Bulk fixture passes but live equivalence proof is absent | Bulk path remains disabled; primitive plan is used or cap refusal returned. |
 | ARCH-FIX-018 | Bulk and primitive plans over same throwaway content | Final fingerprint and failure classification match before bulk can be enabled. |
 | ARCH-FIX-019 | Recursive folder tree plus one folder detail | Exact IDs, visibility, parents, paths, children, deck summaries, checksum, and unknown fields are preserved. |
 | ARCH-FIX-020 | Folder create/update with an exact parent and fresh tree fingerprint | Verified folder state is returned; no name-based destination inference occurs. |
 | ARCH-FIX-021 | Move typed deck/folder items to another folder or root | Inputs are deduplicated; source assignments and destination verify exactly. |
-| ARCH-FIX-022 | Folder move would place a folder under itself or a descendant | `folder_cycle`; zero provider writes. |
+| ARCH-FIX-022 | Folder move would place a folder under itself or a descendant | `folder-cycle`; zero provider writes. |
 | ARCH-FIX-023 | Delete a stale or non-empty folder | Conflict with exact contents/tree evidence; zero provider writes or deck-delete items. |
 | ARCH-FIX-024 | Delete a confirmed empty folder | One folder-only delete item is submitted and fresh tree absence is verified. |
 | ARCH-FIX-025 | Snapshot list row and full snapshot get | Metadata-only list stays distinct from complete canonical saved deck state; unknown fields round trip. |
-| ARCH-FIX-026 | Snapshot create then metadata update | Exact deck/snapshot IDs and verified name/description/timestamps are returned. |
+| ARCH-FIX-026 | Snapshot create then name update | Exact deck/snapshot IDs and verified name/timestamps are returned; description remains create-only. |
 | ARCH-FIX-027 | Snapshot restore preview | Exact snapshot-to-current-remote diff plus source checksum, restorable-content, remote, and preview fingerprints is returned with zero writes. |
 | ARCH-FIX-028 | Snapshot or remote deck changes after restore preview | Restore apply refuses with zero writes. |
 | ARCH-FIX-029 | Snapshot restore fails after two primitive operations | Applied/unknown/not-attempted statuses are explicit; baseline and local deck remain unchanged. |
@@ -57,6 +57,8 @@ The Archidekt family therefore contributes 11 tools in `read-only`, 12 in
 - One request at a time, at least two seconds between starts, and at most 30
   starts in any rolling 60 seconds per configured account.
 - Maximum 150 requests per tool call.
+- Composed service calls share that one budget; preview replay, login,
+  refetch, mutation, and final verification cannot reset it.
 - One login retry after 401.
 - No retry after 403, 429, or ambiguous mutation failure; a valid
   `Retry-After` sets the earliest permitted future request time.
@@ -71,6 +73,7 @@ The Archidekt family therefore contributes 11 tools in `read-only`, 12 in
 | 2026-07-03 | Provider pacing research | Current Archidekt staff guidance says throttling begins around 40 requests/minute. | Client ceiling is 30 starts/minute with two-second spacing. |
 | 2026-07-03 | Public folder frontend contract | Current frontend uses folder tree/detail, create, typed mass update, and item-delete operations. | Rebuild guarded folder outcomes; never expose generic item deletion directly. |
 | 2026-07-03 | Public snapshot frontend contract | Current frontend uses snapshot list/get/create/update/delete and restores by fetching saved state before deck overwrite. | Rebuild full snapshot evidence and guarded restore preview/apply. |
+| 2026-07-04 | Adapter-level disposable acceptance | Private deck create/list/get/delete, folder create/rename/move/root-move/empty-delete, snapshot create/rename/get/restore/delete, and final residual checks passed under production pacing. | The observed owned-list v3 route, direct-root tree, mass-update envelope, name-only snapshot update, and snapshot account-metadata exclusions are pinned in code and fixtures. |
 
 The live probe used the configured credential file but retained no credential,
 token, path, deck URL, or remote ID. This planning evidence does not replace the

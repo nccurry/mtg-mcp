@@ -41,6 +41,14 @@
   generations, cross-process SQLite leases and conservative 500-millisecond
   pacing, fail-fast blocking responses, bounded retry, and offline/live
   acceptance suites.
+- Added the opt-in 23-tool `archidekt` capability for fresh deck, folder, and
+  named-snapshot evidence; guarded pull/push/restore; private deck lifecycle;
+  and verified empty-folder/snapshot cleanup.
+- Added strict redacted credential loading, two-second process-wide per-account
+  pacing, a rolling 30-request/minute ceiling, composed 150-request tool
+  budgets, bounded read retry, fail-fast `403`/`429`, and no ambiguous write
+  retry. The provider origin is fixed to Archidekt. A disposable authenticated
+  lifecycle verifies current provider routes and leaves no remote test state.
 - Added content-addressed immutable snapshot payloads, schema-checksum
   validation, abandoned-staging recovery, alias and face-art tag joins,
   face-aware exact-name matching, and provider-timestamped price/rank freshness.

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Tests;
@@ -410,7 +411,8 @@ public sealed class FoundationConfigurationTests
             "private-path",
             DataRootState.NotCreated,
             false,
-            new LegacyDataBoundary((LegacyDataState)999, "Migration remains disabled."));
+            new LegacyDataBoundary((LegacyDataState)999, "Migration remains disabled."),
+            ArchidektOptions.CreateDefault());
 
         FoundationConfigurationStatus status = configuration.ToPublicStatus();
 

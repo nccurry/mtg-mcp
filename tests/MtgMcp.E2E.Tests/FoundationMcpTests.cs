@@ -99,6 +99,44 @@ public sealed class FoundationMcpTests
     ];
 
     /// <summary>
+    /// Lists the Archidekt reads and previews visible in every operation mode.
+    /// </summary>
+    private static readonly string[] ArchidektReadToolNames =
+    [
+        "archidekt_auth_status",
+        "archidekt_deck_get",
+        "archidekt_deck_list",
+        "archidekt_folder_get",
+        "archidekt_folder_list",
+        "archidekt_pull_preview",
+        "archidekt_push_preview",
+        "archidekt_snapshot_get",
+        "archidekt_snapshot_list",
+        "archidekt_snapshot_restore_preview",
+        "archidekt_sync_diff",
+    ];
+
+    /// <summary>
+    /// Lists the complete Archidekt surface when remote writes are permitted.
+    /// </summary>
+    private static readonly string[] ArchidektAllToolNames =
+    [
+        .. ArchidektReadToolNames,
+        "archidekt_pull_apply",
+        "archidekt_deck_create",
+        "archidekt_deck_delete",
+        "archidekt_folder_create",
+        "archidekt_folder_delete",
+        "archidekt_folder_move_items",
+        "archidekt_folder_update",
+        "archidekt_push_apply",
+        "archidekt_snapshot_create",
+        "archidekt_snapshot_delete",
+        "archidekt_snapshot_restore_apply",
+        "archidekt_snapshot_update",
+    ];
+
+    /// <summary>
     /// Verifies initialization, discovery, and capability content in every supported mode.
     /// </summary>
     [Theory]
@@ -159,7 +197,13 @@ public sealed class FoundationMcpTests
         AssertPropertyOrder(root.GetProperty("server"), "name", "packageVersion", "protocolVersion");
         AssertPropertyOrder(root.GetProperty("surface"), "toolCount", "resourceCount", "promptCount");
         AssertPropertyOrder(root.GetProperty("toolsets"), "selection", "authorityBoundary", "items");
-        AssertPropertyOrder(root.GetProperty("dataSchemas"), "applicationData", "decks", "deckInterchange", "scryfall");
+        AssertPropertyOrder(
+            root.GetProperty("dataSchemas"),
+            "applicationData",
+            "decks",
+            "deckInterchange",
+            "scryfall",
+            "archidekt");
         AssertPropertyOrder(
             root.GetProperty("configuration"),
             "dataRootConfigured",
@@ -167,7 +211,7 @@ public sealed class FoundationMcpTests
             "legacyDataState",
             "migrationBoundary",
             "scryfallFreshnessHours");
-        Assert.Equal(3, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(4, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
@@ -184,6 +228,9 @@ public sealed class FoundationMcpTests
             "mtg-mcp.deck/v1",
             root.GetProperty("dataSchemas").GetProperty("deckInterchange").GetString());
         Assert.Equal("v1", root.GetProperty("dataSchemas").GetProperty("scryfall").GetString());
+        Assert.Equal(
+            "observed-2026-07-04",
+            root.GetProperty("dataSchemas").GetProperty("archidekt").GetString());
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
         Assert.False(Directory.Exists(session.DataRoot));
@@ -197,15 +244,18 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "default", "default", 21)]
     [InlineData("local", "default", "default", 41)]
     [InlineData("remote", "default", "default", 41)]
-    [InlineData("read-only", "all", "all", 21)]
-    [InlineData("local", "all", "all", 41)]
-    [InlineData("remote", "all", "all", 41)]
+    [InlineData("read-only", "all", "all", 32)]
+    [InlineData("local", "all", "all", 53)]
+    [InlineData("remote", "all", "all", 64)]
     [InlineData("read-only", "decks", "explicit", 7)]
     [InlineData("local", "decks", "explicit", 23)]
     [InlineData("remote", "decks", "explicit", 23)]
     [InlineData("read-only", "scryfall", "explicit", 14)]
     [InlineData("local", "scryfall", "explicit", 18)]
     [InlineData("remote", "scryfall", "explicit", 18)]
+    [InlineData("read-only", "archidekt", "explicit", 11)]
+    [InlineData("local", "archidekt", "explicit", 12)]
+    [InlineData("remote", "archidekt", "explicit", 23)]
     [InlineData("read-only", "none", "none", 0)]
     [InlineData("local", "none", "none", 0)]
     [InlineData("remote", "none", "none", 0)]
@@ -348,6 +398,76 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
+    /// Verifies every Archidekt tool publishes its exact top-level schema and safety annotations.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task ArchidektTools_RemoteMode_PublishExactSchemasAndAnnotations()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "archidekt",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
+        {
+            ["archidekt_auth_status"] = [],
+            ["archidekt_deck_create"] = ["expectedLocalRevision", "localDeckId", "request"],
+            ["archidekt_deck_delete"] = ["request"],
+            ["archidekt_deck_get"] = ["deckId"],
+            ["archidekt_deck_list"] = ["cursor", "pageSize"],
+            ["archidekt_folder_create"] = ["request"],
+            ["archidekt_folder_delete"] = ["request"],
+            ["archidekt_folder_get"] = ["folderId"],
+            ["archidekt_folder_list"] = [],
+            ["archidekt_folder_move_items"] = ["request"],
+            ["archidekt_folder_update"] = ["request"],
+            ["archidekt_pull_apply"] = ["request"],
+            ["archidekt_pull_preview"] = ["localDeckId", "remoteDeckId"],
+            ["archidekt_push_apply"] = ["request"],
+            ["archidekt_push_preview"] = ["localDeckId"],
+            ["archidekt_snapshot_create"] = ["request"],
+            ["archidekt_snapshot_delete"] = ["request"],
+            ["archidekt_snapshot_get"] = ["deckId", "snapshotId"],
+            ["archidekt_snapshot_list"] = ["deckId"],
+            ["archidekt_snapshot_restore_apply"] = ["request"],
+            ["archidekt_snapshot_restore_preview"] = ["deckId", "snapshotId"],
+            ["archidekt_snapshot_update"] = ["request"],
+            ["archidekt_sync_diff"] = ["localDeckId"],
+        };
+        HashSet<string> reads = [.. ArchidektReadToolNames];
+        HashSet<string> destructive =
+        [
+            "archidekt_deck_delete",
+            "archidekt_folder_delete",
+            "archidekt_folder_move_items",
+            "archidekt_pull_apply",
+            "archidekt_push_apply",
+            "archidekt_snapshot_delete",
+            "archidekt_snapshot_restore_apply",
+        ];
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        Assert.Equal(23, tools.Count);
+        foreach (McpClientTool tool in tools)
+        {
+            Assert.Equal(
+                expectedProperties[tool.Name],
+                tool.ProtocolTool.InputSchema.GetProperty("properties")
+                    .EnumerateObject()
+                    .Select(value => value.Name)
+                    .Order(StringComparer.Ordinal));
+            Assert.Equal("object", tool.ProtocolTool.InputSchema.GetProperty("type").GetString());
+            Assert.NotNull(tool.ProtocolTool.OutputSchema);
+            Assert.NotNull(tool.ProtocolTool.Annotations);
+            Assert.Equal(reads.Contains(tool.Name), tool.ProtocolTool.Annotations.ReadOnlyHint);
+            Assert.Equal(destructive.Contains(tool.Name), tool.ProtocolTool.Annotations.DestructiveHint);
+            Assert.Equal(reads.Contains(tool.Name), tool.ProtocolTool.Annotations.IdempotentHint);
+            Assert.Equal(tool.Name != "archidekt_auth_status", tool.ProtocolTool.Annotations.OpenWorldHint);
+        }
+    }
+
+    /// <summary>
     /// Verifies the exact mode-specific tool count, one resource, and zero prompts.
     /// </summary>
     private static void AssertSurface(JsonElement surface, int expectedToolCount)
@@ -358,7 +478,7 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies both implemented toolsets are advertised with exact relevance metadata.
+    /// Verifies all implemented toolsets are advertised with exact relevance metadata.
     /// </summary>
     private static void AssertToolsets(
         JsonElement toolsets,
@@ -371,11 +491,33 @@ public sealed class FoundationMcpTests
             "Toolsets control relevance; operation mode controls authority.",
             toolsets.GetProperty("authorityBoundary").GetString());
         JsonElement[] descriptors = toolsets.GetProperty("items").EnumerateArray().ToArray();
-        Assert.Equal(2, descriptors.Length);
+        Assert.Equal(3, descriptors.Length);
         bool decksEnabled = configuredToolsets is "default" or "all" or "decks";
         bool scryfallEnabled = configuredToolsets is "default" or "all" or "scryfall";
-        AssertDescriptor(descriptors[0], "decks", decksEnabled, decksEnabled ? (mode == "read-only" ? 7 : 23) : 0);
-        AssertDescriptor(descriptors[1], "scryfall", scryfallEnabled, scryfallEnabled ? (mode == "read-only" ? 14 : 18) : 0);
+        bool archidektEnabled = configuredToolsets is "all" or "archidekt";
+        AssertDescriptor(
+            descriptors[0],
+            "decks",
+            decksEnabled,
+            defaultEnabled: true,
+            decksEnabled ? (mode == "read-only" ? 7 : 23) : 0);
+        AssertDescriptor(
+            descriptors[1],
+            "scryfall",
+            scryfallEnabled,
+            defaultEnabled: true,
+            scryfallEnabled ? (mode == "read-only" ? 14 : 18) : 0);
+        AssertDescriptor(
+            descriptors[2],
+            "archidekt",
+            archidektEnabled,
+            defaultEnabled: false,
+            archidektEnabled ? mode switch
+            {
+                "read-only" => 11,
+                "local" => 12,
+                _ => 23,
+            } : 0);
         Assert.Contains(
             "operation mode separately controls local writes",
             descriptors[0].GetProperty("description").GetString(),
@@ -385,7 +527,12 @@ public sealed class FoundationMcpTests
     /// <summary>
     /// Verifies one implemented capability descriptor.
     /// </summary>
-    private static void AssertDescriptor(JsonElement descriptor, string name, bool enabled, int visibleToolCount)
+    private static void AssertDescriptor(
+        JsonElement descriptor,
+        string name,
+        bool enabled,
+        bool defaultEnabled,
+        int visibleToolCount)
     {
         AssertPropertyOrder(
             descriptor,
@@ -400,7 +547,7 @@ public sealed class FoundationMcpTests
         Assert.Equal("available", descriptor.GetProperty("status").GetString());
         Assert.Equal("stable", descriptor.GetProperty("stability").GetString());
         Assert.Equal(enabled, descriptor.GetProperty("enabled").GetBoolean());
-        Assert.True(descriptor.GetProperty("defaultEnabled").GetBoolean());
+        Assert.Equal(defaultEnabled, descriptor.GetProperty("defaultEnabled").GetBoolean());
         Assert.Equal(visibleToolCount, descriptor.GetProperty("visibleToolCount").GetInt32());
     }
 
@@ -419,6 +566,16 @@ public sealed class FoundationMcpTests
         if (toolsets is "default" or "all" or "scryfall")
         {
             names = names.Concat(readsOnly ? ScryfallReadToolNames : ScryfallAllToolNames);
+        }
+
+        if (toolsets is "all" or "archidekt")
+        {
+            names = names.Concat(mode switch
+            {
+                "read-only" => ArchidektReadToolNames,
+                "local" => [.. ArchidektReadToolNames, "archidekt_pull_apply"],
+                _ => ArchidektAllToolNames,
+            });
         }
 
         return names.Order(StringComparer.Ordinal).ToArray();

@@ -16,3 +16,12 @@ values or local paths. Its stdio host clears default console logging so stdout
 contains only JSON-RPC. The current Scryfall adapter requires no credential,
 rejects unexpected pagination/download hosts, and returns path-free provider
 and storage failures.
+
+The Archidekt adapter reads credentials from explicit configuration or the
+standard user-profile credential file, but returns only configured/usable/error
+state. Its provider origin is fixed to Archidekt so runtime configuration
+cannot redirect credentials to another host. Tokens remain in process memory.
+Provider bodies, credential values, account identities, and secret paths are
+excluded from public errors and acceptance evidence. Remote mutations require
+`remote` mode and exact guarded requests; pull is the only Archidekt operation
+permitted to mutate local state in `local` mode.

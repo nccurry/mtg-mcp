@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/archidekt-deck-sync/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/archidekt-deck-sync/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-04
-- Current phase: independent child review
+- Current phase: Completed
 
 ## Summary
 
@@ -31,12 +31,12 @@ fingerprint. The adapter never writes through ordinary local edits.
 | Decision | Status | Rationale |
 | --- | --- | --- |
 | Use Archidekt's currently available web API as an observed, replaceable contract. | Accepted | There is no stable public specification; adapter drift is normal maintenance rather than a compatibility promise. |
-| Keep local editing and remote mutation separate. | Proposed | Users must see the diff before provider changes. |
-| Use fresh canonical remote fingerprints rather than assumed ETags. | Proposed | The observed contract does not guarantee concurrency validators. |
-| Refuse automatic conflict resolution. | Proposed | The MCP must expose differences, not choose winners. |
-| Default newly created remote decks to private. | Proposed | Least exposure for remote writes. |
-| Include folder organization and named snapshot lifecycle/restore. | Accepted | These are explicit Archidekt workflow operations and the repository owner placed them in stable cutover scope. |
-| Exclude automatic activity logs/recent-change history, packages, deck tags, collaboration, social, and account administration. | Proposed | They are separate provider surfaces and are not required for the requested folder/snapshot workflows. |
+| Keep local editing and remote mutation separate. | Implemented | Users see the diff before provider changes. |
+| Use fresh canonical remote fingerprints rather than assumed ETags. | Implemented | The observed contract does not guarantee concurrency validators. |
+| Refuse automatic conflict resolution. | Implemented | The MCP exposes differences, not chosen winners. |
+| Default newly created remote decks to private. | Implemented | Least exposure for remote writes. |
+| Include folder organization and named snapshot lifecycle/restore. | Implemented | These are explicit Archidekt workflow operations and the repository owner placed them in stable cutover scope. |
+| Exclude automatic activity logs/recent-change history, packages, deck tags, collaboration, social, and account administration. | Implemented | They are separate provider surfaces and are not required for the requested folder/snapshot workflows. |
 
 ## Public Surface
 
@@ -71,8 +71,8 @@ Remote apply: `archidekt_deck_create`, `archidekt_deck_delete`,
   [staff rate-limit guidance](https://archidekt.com/forum/thread/19112643),
   current frontend routes, and the live probe below.
 
-This acceptance resolves the product-boundary question. It does not approve
-this PLC or authorize implementation.
+This acceptance resolved the product-boundary question. The later Planning
+Approval separately approved this PLC and authorized its implementation.
 
 ## 2026-07-03 Contract Probe
 
@@ -105,13 +105,21 @@ fixtures, and prove disposable cleanup. Missing folder deletion or snapshot
 cleanup blocks these stable capabilities rather than permitting a live test to
 leave remote state.
 
+The completed adapter observation is retained in
+[CONTRACT_ACCEPTANCE.md](CONTRACT_ACCEPTANCE.md). It records the owned-list v3
+route, direct-root folder shape, mass-update envelope, name-only snapshot
+update, snapshot restore exclusions, production pacing, and verified cleanup
+without retaining credentials, account identity, remote IDs, or raw payloads.
+
 ## Planning Approval
 
-- Status: Draft
-- Reviewed by: Not reviewed
-- Review date: Not reviewed
-- Reviewed revision: Not reviewed
-- Implementation authorized: No
+- Status: Approved
+- Reviewed by: Nick Curry, repository owner
+- Review date: 2026-07-04
+- Reviewed revision: `e256a37`
+- Implementation authorized: Yes
+- Authorization: Explicit request to implement this PLC with strong
+  rate-limit handling, followed by PLC-completeness and audit passes.
 
 ## Guardrail Conformance
 
@@ -146,7 +154,13 @@ atomic rollback when Archidekt partially accepts a multi-request update.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Current folder/snapshot contract inspection | Passed for draft | The public frontend exposes folder tree/detail/create/update/move/item-delete and snapshot list/get/create/update/delete plus composed restore; implementation must re-verify and sanitize fixtures. |
-| 2026-07-03 | Requirement and fixture traceability | Passed | All 28 `ARCH-*` requirements map to objective fixtures/checks. |
+| 2026-07-03 | Requirement and fixture traceability | Passed | All 29 `ARCH-*` requirements map to objective fixtures/checks. |
 | 2026-07-03 | MCP surface and cutover reconciliation | Superseded by AMEND-003 | The Archidekt family remains 23 exact tools with 11/12/23 mode visibility; program totals now account for the merged interchange catalog and capability toolsets. |
 | 2026-07-04 | Toolset and north-star reconciliation | Passed for amended draft | The entire family belongs to the opt-in `archidekt` toolset; relevance selection cannot widen operation-mode authority. |
-| 2026-07-03 | Documentation validation | Passed | Local links resolve, Markdown fences balance, and `git diff --check` reports no whitespace errors. |
+| 2026-07-04 | Offline implementation and exact surface | Passed | All 23 tools, 11/12/23 mode visibility, schema-v4 capability metadata, fake HTTP, SQLite composition, request-budget, and operation-mode tests pass. |
+| 2026-07-04 | Disposable authenticated lifecycle | Passed | Private deck/folder/snapshot create, read, rename, move, root move, restore, delete, and residual cleanup passed under production pacing; see `CONTRACT_ACCEPTANCE.md`. |
+| 2026-07-04 | Per-assembly coverage | Passed | `MtgMcp.Archidekt` is above the 90 percent line gate and the coverage verifier includes the assembly. |
+| 2026-07-04 | Audit suite | Passed | Abstraction, code quality, dead code, test coverage/quality, visual readability, dependencies, docs sync, and local-CI audits found no unresolved issue after fixes. |
+| 2026-07-04 | Full repository gates | Passed | Lint, 287 non-live tests, exact surface, 91.01 percent Archidekt line coverage, package, process/MCP/installed-tool smokes, and dependency scans pass. |
+| 2026-07-04 | Final production-paced live rerun | Passed | The complete private deck/folder/snapshot lifecycle passed in 1 minute 58 seconds and verified cleanup. |
+| 2026-07-04 | Documentation validation | Passed | Local links resolve, Markdown fences balance, and `git diff --check` reports no whitespace errors. |

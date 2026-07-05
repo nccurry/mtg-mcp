@@ -11,7 +11,7 @@ implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 
-Five rewrite children remain planned and independently reviewable. The
+Four rewrite children remain planned and independently reviewable. The
 [legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
 approved/completed, and the
 [foundation child](../completed/rewrite-skeleton-foundation/README.md) is
@@ -21,12 +21,13 @@ approved/completed, and the
 [capability-toolset child](../completed/mcp-capability-toolsets/README.md) is
 approved/completed, and the
 [Scryfall child](../completed/scryfall-corpus-and-evidence/README.md) is
+approved/completed, and the
+[Archidekt child](../completed/archidekt-deck-sync/README.md) is
 approved/completed. The governing program remains
 [in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [archidekt-deck-sync](archidekt-deck-sync/README.md) | Draft; independent dependency review | Define Archidekt deck sync, folder organization, named snapshots, and cleanup. |
 | [playgroup-public-api](playgroup-public-api/README.md) | Draft; independent child review | Define typed coverage of the pinned official Playgroup public API. |
 | [exact-deck-statistics](exact-deck-statistics/README.md) | Draft; independent child review | Define exact provider-independent deck probability and composition calculations. |
 | [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; independent child review | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |

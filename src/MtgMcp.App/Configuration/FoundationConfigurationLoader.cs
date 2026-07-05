@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using MtgMcp.App.Capabilities;
+using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Configuration;
@@ -128,6 +129,12 @@ internal static class FoundationConfigurationLoader
             ? localApplicationData
             : roamingApplicationData;
         LegacyDataBoundary legacyData = LegacyDataInspector.Inspect(applicationDataRoot);
+        OperationResult<ArchidektOptions> archidektResult = ResolveArchidekt(configuration);
+        if (archidektResult is not OperationSuccess<ArchidektOptions> archidekt)
+        {
+            return ForwardFailure(archidektResult);
+        }
+
         return new OperationSuccess<FoundationConfiguration>(
             new FoundationConfiguration(
                 mode.Data,
@@ -136,7 +143,28 @@ internal static class FoundationConfigurationLoader
                 dataRoot.Data.Path,
                 dataRoot.Data.State,
                 !string.IsNullOrWhiteSpace(configuredDataRoot),
-                legacyData));
+                legacyData,
+                archidekt.Data));
+    }
+
+    /// <summary>
+    /// Resolves the private Archidekt transport configuration without loading or echoing credentials.
+    /// </summary>
+    private static OperationResult<ArchidektOptions> ResolveArchidekt(IConfiguration configuration)
+    {
+        string? credentialsFile = configuration["ARCHIDEKT:CREDENTIALS_FILE"];
+        if (string.IsNullOrWhiteSpace(credentialsFile))
+        {
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string defaultFile = Path.Combine(userProfile, ".mtg-mcp", "archidekt.json");
+            credentialsFile = File.Exists(defaultFile) ? defaultFile : null;
+        }
+
+        ArchidektOptions options = ArchidektOptions.CreateDefault(
+            configuration["ARCHIDEKT:USERNAME"],
+            configuration["ARCHIDEKT:PASSWORD"],
+            credentialsFile);
+        return new OperationSuccess<ArchidektOptions>(options);
     }
 
     /// <summary>

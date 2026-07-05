@@ -11,6 +11,55 @@ namespace MtgMcp.Decks.Tests;
 public sealed class SqliteDeckStoreTests
 {
     /// <summary>
+    /// Verifies synchronized creation commits the deck, binding, and canonical baseline atomically.
+    /// </summary>
+    [Fact]
+    public async Task CreateSynchronized_CommitsAndReadsMatchingBaseline()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "test");
+        Guid bindingId = Guid.CreateVersion7();
+        DeckProviderBinding binding = new(
+            bindingId,
+            "archidekt",
+            "42",
+            "https://archidekt.com/decks/42",
+            "observed-2026-07-04",
+            "remote-fingerprint",
+            DateTimeOffset.UtcNow,
+            LastPushedAtUtc: null);
+
+        DeckDocument created = RequireSuccess(await store.CreateSynchronizedAsync(
+            new DeckCreateRequest(
+                "Synchronized",
+                Format: "commander",
+                ProviderBindings: [binding]),
+            new DeckSyncBaseline(bindingId, "{\"schemaVersion\":1}"),
+            TestContext.Current.CancellationToken));
+        DeckSyncBaseline baseline = RequireSuccess(await store.GetSyncBaselineAsync(
+            created.DeckId,
+            bindingId,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal("{\"schemaVersion\":1}", baseline.CanonicalSnapshot);
+        Assert.Equal(binding, Assert.Single(created.ProviderBindings));
+
+        OperationResult<DeckDocument> invalid = await store.CreateSynchronizedAsync(
+            new DeckCreateRequest("Invalid"),
+            new DeckSyncBaseline(Guid.CreateVersion7(), "{}"),
+            TestContext.Current.CancellationToken);
+        Assert.IsType<OperationInvalidInput>(invalid.Value);
+        Assert.IsType<OperationInvalidInput>((await store.GetSyncBaselineAsync(
+            Guid.Empty,
+            bindingId,
+            TestContext.Current.CancellationToken)).Value);
+        Assert.IsType<OperationNotFound>((await store.GetSyncBaselineAsync(
+            created.DeckId,
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken)).Value);
+    }
+
+    /// <summary>
     /// Verifies malformed identities, pagination, and empty mutations return bounded input failures.
     /// </summary>
     [Fact]

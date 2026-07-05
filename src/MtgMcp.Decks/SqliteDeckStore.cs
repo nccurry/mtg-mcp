@@ -194,6 +194,107 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
+    /// Creates one deck and its initial provider synchronization baseline in a single transaction.
+    /// </summary>
+    public async Task<OperationResult<DeckDocument>> CreateSynchronizedAsync(
+        DeckCreateRequest request,
+        DeckSyncBaseline baseline,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(baseline);
+        await mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            DateTimeOffset now = timeProvider.GetUtcNow().ToUniversalTime();
+            await database.EnsureInitializedAsync(now, applicationVersion, cancellationToken)
+                .ConfigureAwait(false);
+            DeckDocument deck = BuildNewDeck(request, now);
+            ValidateInitialRelationships(deck);
+            if (!deck.ProviderBindings.Any(value => value.BindingId == baseline.BindingId))
+            {
+                return Invalid<DeckDocument>("The synchronization baseline has no matching provider binding.");
+            }
+
+            string canonicalBaseline = DeckContractValidator.Required(
+                baseline.CanonicalSnapshot,
+                "Canonical baseline");
+            await using SqliteConnection connection = await database.OpenConnectionAsync(
+                writable: true,
+                cancellationToken).ConfigureAwait(false);
+            await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                await DeckSql.InsertDeckAsync(
+                    connection,
+                    transaction,
+                    deck,
+                    new Dictionary<Guid, string?>
+                    {
+                        [baseline.BindingId] = canonicalBaseline,
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return new OperationSuccess<DeckDocument>(deck);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+        }
+        catch (Exception exception) when (IsExpectedStorageFailure(exception))
+        {
+            return MapFailure<DeckDocument>(exception);
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Gets one provider synchronization baseline without exposing any filesystem path.
+    /// </summary>
+    public async Task<OperationResult<DeckSyncBaseline>> GetSyncBaselineAsync(
+        Guid deckId,
+        Guid bindingId,
+        CancellationToken cancellationToken)
+    {
+        if (deckId == Guid.Empty || bindingId == Guid.Empty)
+        {
+            return Invalid<DeckSyncBaseline>("Valid deck and binding IDs are required.");
+        }
+
+        if (!database.Exists)
+        {
+            return NotFound<DeckSyncBaseline>();
+        }
+
+        try
+        {
+            await using SqliteConnection connection = await database.OpenConnectionAsync(
+                writable: false,
+                cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<DeckSyncBaseline> baselines = await DeckSql.ReadBaselinesAsync(
+                connection,
+                transaction: null,
+                deckId,
+                cancellationToken).ConfigureAwait(false);
+            DeckSyncBaseline? baseline = baselines.FirstOrDefault(value => value.BindingId == bindingId);
+            return baseline is null
+                ? new OperationNotFound(
+                    "deck-sync-baseline-not-found",
+                    "The provider synchronization baseline was not found.")
+                : new OperationSuccess<DeckSyncBaseline>(baseline);
+        }
+        catch (Exception exception) when (IsExpectedStorageFailure(exception))
+        {
+            return MapFailure<DeckSyncBaseline>(exception);
+        }
+    }
+
+    /// <summary>
     /// Reads a lossless interchange snapshot without exposing its private storage path.
     /// </summary>
     internal async Task<OperationResult<DeckInterchangeSnapshot>> GetInterchangeSnapshotAsync(

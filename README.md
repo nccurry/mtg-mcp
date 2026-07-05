@@ -9,10 +9,10 @@ for deckbuilding decisions.
 ## Rewrite Status
 
 This branch contains the completed repository foundation and local deck store,
-implemented offline manual deck interchange, and the unified Scryfall evidence
-capability for the clean-break `0.9.0` rewrite. It is a usable stdio MCP server
-with one capability resource plus deterministic `deck_*` and evidence-oriented
-`scryfall_*` workflows.
+implemented offline manual deck interchange, the unified Scryfall evidence
+capability, and guarded Archidekt synchronization for the clean-break `0.9.0`
+rewrite. It is a usable stdio MCP server with one capability resource plus
+deterministic `deck_*`, `scryfall_*`, and opt-in `archidekt_*` workflows.
 
 - `MtgMcp.Core` provides closed result and evidence unions with stable JSON
   discriminators plus immutable, provider-neutral deck contracts.
@@ -22,12 +22,16 @@ with one capability resource plus deterministic `deck_*` and evidence-oriented
 - `MtgMcp.Scryfall` owns official API reads, exact-request snapshots, explicit
   four-dataset corpus synchronization, community-tag joins, cross-process
   pacing, and the shared `scryfall.db` store.
+- `MtgMcp.Archidekt` owns observed provider contracts, credential isolation,
+  fresh deck/folder/snapshot evidence, guarded remote operations, and a
+  conservative process-wide per-account request lane.
 - `MtgMcp.App` provides the stdio MCP host, operation-mode enforcement,
   static capability-toolset selection, standard configuration, versioned
   data-root resolution, legacy-data detection, and sensitive-value redaction.
 - Standard initialization and `mtg://server/capabilities` are implemented.
   The default surface is twenty-one tools in `read-only`, forty-one tools in
-  `local` and `remote`, one resource, and zero prompts.
+  `local` and `remote`, one resource, and zero prompts. The complete opt-in
+  `all` profile is 32/53/64 tools by mode.
 - `mtg-mcp --smoke` is a one-shot configuration/process probe. `task smoke:mcp`
   establishes a real session with the official C# client and reads the
   capability resource.
@@ -41,6 +45,8 @@ The deck requirements and implementation evidence are in the
 [Manual Deck Interchange PLC](docs/llms/plcs/in-progress/manual-deck-interchange/README.md).
 Scryfall requirements and acceptance evidence are in the
 [Scryfall Corpus And Evidence PLC](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md).
+Archidekt requirements and acceptance evidence are in the
+[Archidekt Deck Sync PLC](docs/llms/plcs/completed/archidekt-deck-sync/README.md).
 The [rewrite guide](docs/rewrite-guide.md) explains how this branch relates to
 the broader `0.9.0` program.
 
@@ -54,6 +60,14 @@ directory uses the corresponding `MODE`, `TOOLSETS`, `DATA_DIR`, and
 `SCRYFALL_TTL_HOURS` keys. The Scryfall evidence TTL defaults to 24 hours.
 Command-line values override environment values, which override JSON.
 
+Archidekt uses the nested JSON keys `ARCHIDEKT:USERNAME`,
+`ARCHIDEKT:PASSWORD`, and `ARCHIDEKT:CREDENTIALS_FILE`, or their
+`MTGMCP__ARCHIDEKT__...` environment forms. The provider origin is fixed to
+Archidekt so a configuration mistake cannot send credentials to another host.
+The standard fallback credential file is `.mtg-mcp/archidekt.json` beneath the
+user profile when it exists. Authentication status never returns an identity,
+secret value, token, or path.
+
 Modes are `read-only`, `local` (the default), and `remote`. Read-only mode
 forbids local and remote mutation. A provider-shaped read may be visible there,
 but the current Scryfall tools return `local-write-required` before HTTP when a
@@ -64,7 +78,8 @@ Toolsets control relevance, not authority. Omitted `TOOLSETS` or `default`
 enables implemented default toolsets, `all` enables every implemented stable
 toolset, `none` exposes zero tools, and a comma-separated exact lowercase list
 selects an explicit subset. `decks` and `scryfall` are implemented and both are
-default-enabled. They can also be selected independently; `none` leaves only
+default-enabled. `archidekt` is implemented and opt-in. They can be selected
+independently; `none` leaves only
 MCP initialization and `mtg://server/capabilities`. Unimplemented names fail
 startup instead of creating placeholder tools. Selection is fixed for the
 session and the server does not advertise dynamic tool-list changes.
@@ -146,18 +161,45 @@ Scryfall's supported catalog vocabulary is documented under
 [Catalogs](https://scryfall.com/docs/api/catalogs); live catalog endpoints use
 `/catalog/{name}`.
 
+## Archidekt Evidence And Synchronization
+
+Enable `archidekt` explicitly. It contributes 11 read/preview tools in
+`read-only`, adds local pull apply in `local`, and exposes all 23 tools in
+`remote`. The surface covers authentication readiness; owned deck list/get;
+three-way local/baseline/remote diffs; guarded pull and push; private-by-default
+deck create and verified delete; folder list/get/create/update/move/empty-only
+delete; and named snapshot list/get/create/rename/delete/guarded restore.
+
+Every read returns fresh provider evidence. Every apply replays local revision,
+remote fingerprint, source checksum, and preview fingerprint guards. The MCP
+never chooses a conflict winner. Folder deletion independently checks the
+owned deck list because the observed folder-tree response omits deck rows.
+Snapshot restore preserves current deck name, visibility, and folder placement
+because Archidekt snapshots do not own those account-level fields.
+
+Provider starts are serialized per configured account within the process, at
+least two seconds apart, and capped at 30 in any rolling 60 seconds. A single
+MCP invocation has a hard 150-request budget shared across composed preview,
+authentication, apply, and verification calls. `403` stops immediately; `429`
+stops the operation and installs the bounded `Retry-After` cooldown; ambiguous
+mutations are never retried. Read retries are bounded to two transient
+transport/5xx failures. Archidekt is an observed replaceable web contract, so
+contract drift returns structured unavailable/unsupported outcomes instead of
+guessed behavior.
+
 ## Product Direction
 
 The proposed stable target will provide explicit, capability-prefixed
 operations for local decks, a unified Scryfall corpus and evidence store,
-Archidekt, Playgroup, and exact deck statistics. Official card facts and
+Playgroup, and exact deck statistics in addition to the implemented Archidekt
+surface. Official card facts and
 community tag evidence share `scryfall.db` but retain distinct schemas and
 evidence classes. Provider facts, exact derivations, parser classifications,
 heuristics, and sampled estimates remain visibly distinct.
 
-The capability-toolset layer keeps ordinary discovery small:
-`decks`, `scryfall`, and `stats` form the default profile, while Archidekt,
-and Playgroup require explicit enablement. Toolsets control relevance;
+The target capability-toolset layer keeps ordinary discovery small:
+`decks`, `scryfall`, and `stats` form the default profile, while Archidekt and
+Playgroup require explicit enablement. Toolsets control relevance;
 operation modes remain the authority boundary. Only implemented descriptors
 appear in capability metadata or can be selected.
 
@@ -190,7 +232,9 @@ From a fresh checkout, run `./bootstrap.sh`; on Windows, run
 `.\bootstrap.ps1`. Normal tests are deterministic and offline. Opt-in
 `Category=Live` tests verify current Scryfall metadata, a bounded read, and a
 disposable 60-card Red/White Weenies deck resolved through the official MCP
-client. The multi-gigabyte corpus acceptance additionally requires
+client. `MTGMCP_RUN_ARCHIDEKT_LIVE=1` enables a private disposable
+deck/folder/snapshot lifecycle with verified cleanup under production pacing.
+The multi-gigabyte corpus acceptance additionally requires
 `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` and an explicit
 `MTGMCP_SCRYFALL_ACCEPTANCE_DATA_DIR`; it never deletes that directory.
 
@@ -202,6 +246,8 @@ client. The multi-gigabyte corpus acceptance additionally requires
   the pinned SQLite runtime.
 - `MtgMcp.Scryfall` contains official provider transport, evidence mapping,
   SQLite snapshots/corpus storage, and cross-process coordination.
+- `MtgMcp.Archidekt` contains the observed provider contract, transport,
+  canonical evidence mapping, synchronization planning, and pacing.
 - `MtgMcp.App` owns process, configuration, and MCP host concerns.
 - Capability projects are added only when their independently approved child
   PLC is implemented.

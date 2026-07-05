@@ -7,7 +7,7 @@ Current code, tests, project files, checked-in configuration, and `AGENTS.md`
 are authoritative. This file is a compact orientation index, not a second
 instruction file.
 
-This branch contains the completed foundation, revisioned local deck/SQLite capability, implemented offline manual deck interchange, and the unified Scryfall evidence capability of the clean-break rewrite.
+This branch contains the completed foundation, revisioned local deck/SQLite capability, implemented offline manual deck interchange, unified Scryfall evidence, and opt-in guarded Archidekt synchronization of the clean-break rewrite.
 The shipped legacy server remains available through Git history and its release,
 but its production code is no longer present here. Read
 [Rewrite guide](docs/rewrite-guide.md) before treating historical architecture
@@ -16,7 +16,7 @@ or public-surface docs as future design requirements.
 ## Start Here
 
 - [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
-- [README](README.md): Current deck and Scryfall surfaces, configuration, product direction, and development commands.
+- [README](README.md): Current deck, Scryfall, and Archidekt surfaces, configuration, product direction, and development commands.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): Current-versus-target routing, rewrite guardrails, and implementation entry gate.
@@ -25,6 +25,7 @@ or public-surface docs as future design requirements.
 - [Local deck store](docs/llms/plcs/completed/local-deck-store/README.md): Implemented deck contracts, SQLite lifecycle, tools, and acceptance evidence.
 - [Manual deck interchange](docs/llms/plcs/in-progress/manual-deck-interchange/README.md): Native JSON, generic text, and UI-accepted provider artifacts with explicit preservation limits; disposable cleanup remains open.
 - [Scryfall corpus and evidence](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md): Completed unified official corpus, authoritative API, cache, replay, and tag-evidence capability with retained full-corpus acceptance.
+- [Archidekt synchronization](docs/llms/plcs/completed/archidekt-deck-sync/README.md): Completed opt-in deck, folder, snapshot, pull/push, pacing, audits, and disposable live acceptance.
 - [Deterministic deck categorization](docs/llms/plcs/planned/deterministic-deck-categorization/README.md): Proposed caller-configured tag-rule evaluation; implementation is not authorized.
 - [Potential features](docs/potential-features.md): Deferred ideas that are not stable rewrite scope.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.

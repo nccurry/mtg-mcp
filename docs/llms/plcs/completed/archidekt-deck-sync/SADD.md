@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-04
@@ -36,8 +36,10 @@ Scryfall adapter directly, and an unresolved identity remains explicit.
 
 Folder payloads map into provider-owned `RemoteFolderRecord` values containing
 exact ID, name, visibility when present, parent ID, path, direct child-folder
-IDs, contained deck summaries, retrieval metadata, source checksum, and an
-unknown-field extension bag. Snapshot list rows map into
+IDs, retrieval metadata, source checksum, and an unknown-field extension bag.
+The observed folder tree omits decks, so public folder reads join the fresh
+authenticated owned-deck listing and recompute the tree fingerprint with those
+assignments. Snapshot list rows map into
 `RemoteNamedSnapshotSummary`; snapshot get maps the same metadata plus the
 complete `RemoteDeckSnapshot` returned by Archidekt. These are remote evidence
 models, not local deck categories or persistence entities.
@@ -49,12 +51,13 @@ models, not local deck categories or persistence entities.
 accept exact parent IDs and never select a same-named folder automatically.
 `archidekt_folder_move_items` accepts typed deck/folder IDs, deduplicates them,
 checks a fresh tree for missing items and cycles, fingerprints their current
-assignments, applies the explicit destination, and verifies every result.
+folder assignments, reads deck assignments from exact authenticated deck
+detail, applies the explicit destination, and verifies every result.
 
 `archidekt_folder_delete` is intentionally narrower than the provider's generic
 item-delete operation. It submits exactly one folder item only after proving
 that the folder contains no decks or child folders and after matching folder
-ID/name, tree fingerprint, and explicit confirmation. It never recursively
+ID/name, joined tree fingerprint, and explicit confirmation. It never recursively
 deletes or submits deck items. Ambiguous mutation failure returns unknown state
 and requires a fresh folder read.
 
@@ -62,7 +65,7 @@ and requires a fresh folder read.
 
 Snapshot create captures the current remote deck under an explicit name and
 optional description. List/get preserve provider identity and timestamps;
-update changes only provider-supported metadata; delete requires exact identity
+update changes only the provider-supported snapshot name; delete requires exact identity
 and confirmation. Every mutation refetches the affected snapshot collection
 and verifies the expected result.
 
@@ -77,7 +80,9 @@ push, and succeeds only when the final restorable-content fingerprint equals
 the snapshot's. Provider relation IDs that must be regenerated are preserved as
 an explicit before/after provider-identity delta, not treated as content
 equality. Restore does not change the local deck or sync baseline; a later pull
-is an explicit separate operation.
+is an explicit separate operation. Restore also preserves the current deck
+name, visibility, and folder placement because the observed snapshot payload
+does not own those account-level fields.
 
 ### Folder and snapshot MCP contracts
 
@@ -96,7 +101,7 @@ in all modes; every mutation below is visible only in `remote`.
 | `archidekt_snapshot_list` | `deckId` | Ordered snapshot summaries and collection checksum | Read-only provider request |
 | `archidekt_snapshot_get` | `deckId`, `snapshotId` | Snapshot metadata plus complete canonical saved deck state | Read-only; deck ownership is cross-checked |
 | `archidekt_snapshot_create` | `deckId`, expected remote fingerprint, name, optional description | Verified snapshot summary/checksum | Refuses if source deck changed |
-| `archidekt_snapshot_update` | `deckId`, `snapshotId`, expected checksum, explicit metadata patch | Verified updated snapshot | Provider-supported metadata only |
+| `archidekt_snapshot_update` | `deckId`, `snapshotId`, expected checksum, explicit name | Verified renamed snapshot | Name-only observed contract |
 | `archidekt_snapshot_delete` | `deckId`, `snapshotId`, expected checksum, exact confirmation | Verified snapshot absence | Destructive and stale-safe |
 | `archidekt_snapshot_restore_preview` | `deckId`, `snapshotId` | Exact snapshot-to-current diff plus source checksum, content, remote, and preview fingerprints | Read-only; zero local/remote writes |
 | `archidekt_snapshot_restore_apply` | `deckId`, `snapshotId`, snapshot checksum, content, remote, and preview fingerprints, exact confirmation | Primitive-operation statuses, provider-ID delta, and verified final content fingerprint | Destructive, no ambiguous retries, no local/baseline update |
@@ -128,17 +133,20 @@ cannot enable it. Ambiguous failure does not retry and does not update the
 baseline.
 
 Before applying, the planner computes a conservative upper bound on provider
-requests. A value above 150 returns `request_limit_exceeded` with zero remote
-writes. A process-wide per-account pacer permits at most 30 starts in a rolling
+requests. One opaque operation scope follows every adapter call composed by an
+MCP tool, so authentication, guard reads, apply, and verification cannot reset
+the ceiling. A value above the remaining 150-request budget returns
+`request-limit-exceeded` with zero remote writes. A process-wide per-account
+pacer permits at most 30 starts in a rolling
 60-second window and spaces starts by at least two seconds. This stays below the
 current Archidekt staff statement that throttling begins around 40 requests per
 minute and leaves room for ordinary browser use. It is a client safety policy,
 not a provider guarantee; stricter published guidance supersedes it.
 
-A missing baseline on an existing binding returns `baseline_missing` conflict;
+A missing baseline on an existing binding returns `baseline-missing` conflict;
 a corrupt baseline returns unavailable; neither selects pull or push. A
 verified provider-missing result for a previously bound deck returns
-`remote_deleted` evidence while leaving the local deck/binding untouched. The
+`remote-deleted` evidence while leaving the local deck/binding untouched. The
 observed contract may return `400` for a deleted ID, so classification uses the
 reviewed response fixture plus fresh authenticated-list absence and never maps
 every `400` to deletion. Only a separately previewed explicit workflow may

@@ -19,8 +19,8 @@ The rewrite is an evidence/workflow server, not a deck advisor. It uses:
 - `MtgMcp.Decks` for the revisioned local deck domain, SQLite storage, and
   manual interchange;
 - `MtgMcp.Statistics` for exact provider-independent calculations;
-- the implemented isolated `MtgMcp.Scryfall` adapter plus planned Archidekt
-  and Playgroup adapters;
+- the implemented isolated `MtgMcp.Scryfall` and `MtgMcp.Archidekt` adapters
+  plus the planned Playgroup adapter;
 - `MtgMcp.App` for MCP hosting, composition, modes, schemas, and the capability
   resource; and
 - separate versioned `decks.db` and unified `scryfall.db` stores.
@@ -37,10 +37,11 @@ toolset: `decks`, `scryfall`, `stats`, `archidekt`, or `playgroup`.
 The model-visible surface is the intersection of the enabled toolsets and the
 selected operation mode. Toolsets reduce irrelevant context but grant no
 authority. Registration remains fixed for a session, so the server does not
-advertise dynamic list changes. The default toolsets are `decks`, `scryfall`,
-and `stats`; Archidekt and Playgroup toolsets are opt-in. The implemented App
-registry currently contains `decks` and `scryfall`, rejects unimplemented names,
-and projects exact selection and counts through capability schema version 3. The
+advertise dynamic list changes. The implemented default contains `decks` and
+`scryfall`; `archidekt` is opt-in. The accepted target later adds default
+`stats` and opt-in Playgroup. The current App registry contains `decks`,
+`scryfall`, and `archidekt`, rejects unimplemented names, and projects exact
+selection and counts through capability schema version 4. The
 independently reviewed `mcp-capability-toolsets` child PLC owns this contract.
 
 Accepted AMEND-004 governs the implemented unified Scryfall boundary. It uses
@@ -49,6 +50,14 @@ keeping source facts and community evidence separate. Corpus acquisition is
 explicit, arbitrary queries remain provider-authoritative, and immutable exact
 request snapshots are shared across processes. It does not use the Tagger
 website or run background downloads.
+
+The Archidekt adapter uses a replaceable observed contract for explicit
+user-owned operations. It returns fresh provider evidence, keeps local decks
+and sync baselines in `decks.db`, requires preview fingerprints for pull/push
+and snapshot restoration, and never resolves conflicts. Provider starts share
+one process-wide per-account lane with two-second spacing, a rolling
+30-per-minute ceiling, bounded read retries, fail-fast blocking responses, and
+a composed 150-request tool budget.
 
 See the [rewrite guide](rewrite-guide.md) and
 [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).

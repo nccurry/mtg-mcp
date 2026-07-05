@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <ItemGroup>
         <ProjectReference Include="..\MtgMcp.Core\MtgMcp.Core.csproj" />
+        <ProjectReference Include="..\MtgMcp.Archidekt\MtgMcp.Archidekt.csproj" />
         <ProjectReference Include="..\MtgMcp.Decks\MtgMcp.Decks.csproj" />
         <ProjectReference Include="..\MtgMcp.Scryfall\MtgMcp.Scryfall.csproj" />
     </ItemGroup>

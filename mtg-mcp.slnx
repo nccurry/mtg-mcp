@@ -1,12 +1,14 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MtgMcp.App/MtgMcp.App.csproj" />
+    <Project Path="src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj" />
     <Project Path="src/MtgMcp.Core/MtgMcp.Core.csproj" />
     <Project Path="src/MtgMcp.Decks/MtgMcp.Decks.csproj" />
     <Project Path="src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj" />
+    <Project Path="tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj" />
     <Project Path="tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj" />
     <Project Path="tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj" />
     <Project Path="tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj" />

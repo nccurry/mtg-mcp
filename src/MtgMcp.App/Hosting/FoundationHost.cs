@@ -2,10 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
+using MtgMcp.App.Archidekt;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Scryfall;
+using MtgMcp.Archidekt;
 using MtgMcp.Decks;
 using MtgMcp.Scryfall;
 
@@ -26,7 +28,8 @@ internal static class FoundationHost
         ArgumentNullException.ThrowIfNull(configuration);
 
         bool decksEnabled = configuration.Toolsets.Includes(CapabilityToolset.Decks);
-        using SqliteDeckStore? deckStore = decksEnabled
+        bool archidektEnabled = configuration.Toolsets.Includes(CapabilityToolset.Archidekt);
+        using SqliteDeckStore? deckStore = decksEnabled || archidektEnabled
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
         bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
@@ -36,6 +39,9 @@ internal static class FoundationHost
                 OperationModeGuard.Allows(configuration.Mode, OperationRequirement.LocalWrite),
                 FoundationServerIdentity.PackageVersion,
                 freshnessTtl: configuration.ScryfallFreshnessTtl)
+            : null;
+        using ArchidektService? archidektService = archidektEnabled
+            ? new ArchidektService(configuration.Archidekt, FoundationServerIdentity.PackageVersion)
             : null;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
@@ -53,7 +59,7 @@ internal static class FoundationHost
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitUnsupportedImplicitCapabilities()))
             .WithResources(new FoundationResources(configuration));
-        if (deckStore is not null)
+        if (decksEnabled && deckStore is not null)
         {
             DeckToolsetManifest.Register(mcpBuilder, deckStore, configuration.Mode);
         }
@@ -61,6 +67,15 @@ internal static class FoundationHost
         if (scryfallService is not null)
         {
             ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode);
+        }
+
+        if (archidektService is not null && deckStore is not null)
+        {
+            ArchidektToolsetManifest.Register(
+                mcpBuilder,
+                archidektService,
+                deckStore,
+                configuration.Mode);
         }
 
         using IHost host = builder.Build();
