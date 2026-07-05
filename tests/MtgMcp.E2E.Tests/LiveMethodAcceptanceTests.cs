@@ -815,7 +815,7 @@ public sealed class LiveMethodAcceptanceTests
             "scryfall_corpus_status",
             EmptyArguments(),
             token).ConfigureAwait(false);
-        Assert.Equal("not-installed", after.GetProperty("state").GetString());
+        Assert.Equal("not-cached", after.GetProperty("state").GetString());
         await VerifyCorpusSourceUnchangedAsync(sourceState, token).ConfigureAwait(false);
     }
 
@@ -1960,8 +1960,19 @@ public sealed class LiveMethodAcceptanceTests
         {
             Assert.True(File.Exists(statePath), "An existing corpus scratch database lacks its source-state guard.");
             string priorJson = await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<CorpusSourceState>(priorJson)
+            CorpusSourceState prior = JsonSerializer.Deserialize<CorpusSourceState>(priorJson)
                 ?? throw new InvalidDataException("The retained source-state guard is invalid.");
+            if (await CorpusScratchHasActiveGenerationAsync(
+                    destinationPath,
+                    cancellationToken).ConfigureAwait(false))
+            {
+                return prior;
+            }
+
+            SqliteConnection.ClearAllPools();
+            File.Delete(destinationPath);
+            await BackupRetainedCorpusAsync(destinationRoot, cancellationToken).ConfigureAwait(false);
+            return prior;
         }
 
         CorpusSourceState state = await ReadCorpusSourceStateAsync(cancellationToken).ConfigureAwait(false);
@@ -1971,6 +1982,28 @@ public sealed class LiveMethodAcceptanceTests
             JsonSerializer.Serialize(state, SourceStateJsonOptions) + Environment.NewLine,
             cancellationToken).ConfigureAwait(false);
         return state;
+    }
+
+    /// <summary>
+    /// Distinguishes a resumable corpus copy from a successfully deleted empty database.
+    /// </summary>
+    private static async Task<bool> CorpusScratchHasActiveGenerationAsync(
+        string databasePath,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using SqliteConnection connection = new($"Data Source={databasePath};Mode=ReadOnly");
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT active_generation_id FROM corpus_state WHERE singleton = 1;";
+            object? value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            return value is string generationId && !string.IsNullOrWhiteSpace(generationId);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+        }
     }
 
     /// <summary>
