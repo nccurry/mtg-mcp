@@ -1218,7 +1218,7 @@ public sealed class LiveMethodAcceptanceTests
             temporaryDeckId = temporaryDeck.GetProperty("remoteId").GetString();
             Assert.Equal("private", temporaryDeck.GetProperty("visibility").GetString());
 
-            temporaryFolderName = $"mtg-mcp acceptance folder {suffix}";
+            temporaryFolderName = $"mcp method {suffix}";
             JsonElement temporaryFolder = await CallSuccessAsync(
                 environment,
                 session,
@@ -1247,7 +1247,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             Assert.Single(folderDetail.GetProperty("items").EnumerateArray());
 
-            temporaryFolderName = $"mtg-mcp acceptance folder {suffix} renamed";
+            temporaryFolderName = $"mcp method r {suffix}";
             temporaryFolder = await CallSuccessAsync(
                 environment,
                 session,
