@@ -334,7 +334,8 @@ function Invoke-LiveAcceptance {
         throw "Package not found: $packagePath"
     }
 
-    $toolPath = New-CleanDirectory (Join-Path $ArtifactsDir "live-method-acceptance-tool")
+    $toolDirectoryName = "la-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $toolPath = New-CleanDirectory (Join-Path $ArtifactsDir $toolDirectoryName)
     $dotnetCommand = Get-DotnetCommand
     Invoke-Checked $dotnetCommand "tool" "install" $PackageId "--tool-path" $toolPath "--add-source" $packageSource "--version" $Version
 
