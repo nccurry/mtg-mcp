@@ -762,7 +762,7 @@ public sealed class LiveMethodAcceptanceTests
             },
             token).ConfigureAwait(false);
         Assert.Equal(4, sync.GetProperty("datasets").GetArrayLength());
-        Guid activeGeneration = sync.GetProperty("generationId").GetGuid();
+        Guid activeGeneration = sync.GetProperty("activeGenerationId").GetGuid();
         if (!sync.TryGetProperty("previousGenerationId", out JsonElement previousValue) ||
             previousValue.ValueKind == JsonValueKind.Null)
         {
