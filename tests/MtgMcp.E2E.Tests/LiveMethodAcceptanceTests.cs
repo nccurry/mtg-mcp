@@ -833,6 +833,7 @@ public sealed class LiveMethodAcceptanceTests
 
         string? recoverySnapshotId = null;
         string? temporaryDeckId = null;
+        string? temporaryDeckInitialFolderId = null;
         string? temporaryFolderId = null;
         string? temporaryFolderName = null;
         JsonElement baseline = default;
@@ -1216,6 +1217,11 @@ public sealed class LiveMethodAcceptanceTests
                 },
                 token).ConfigureAwait(false);
             temporaryDeckId = temporaryDeck.GetProperty("remoteId").GetString();
+            temporaryDeckInitialFolderId = temporaryDeck.TryGetProperty(
+                "parentFolderId",
+                out JsonElement initialParentFolder)
+                ? initialParentFolder.GetString()
+                : null;
             Assert.Equal("private", temporaryDeck.GetProperty("visibility").GetString());
 
             temporaryFolderName = $"mcp method {suffix}";
@@ -1284,7 +1290,7 @@ public sealed class LiveMethodAcceptanceTests
                             {
                                 kind = "deck",
                                 id = temporaryDeckId,
-                                expectedParentFolderId = (string?)null,
+                                expectedParentFolderId = temporaryDeckInitialFolderId,
                             },
                         },
                         destinationFolderId = temporaryFolderId,
