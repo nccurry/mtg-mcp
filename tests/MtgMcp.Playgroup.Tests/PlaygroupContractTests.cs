@@ -85,8 +85,10 @@ public sealed class PlaygroupContractTests
 
         Assert.Throws<ArgumentException>(() => new PlaygroupOptions(
             " ",
+            null,
             TimeSpan.FromMilliseconds(250),
             TimeSpan.FromSeconds(1)).Validate());
+        Assert.Throws<ArgumentException>(() => (defaults with { CredentialsFile = " " }).Validate());
         Assert.Throws<ArgumentOutOfRangeException>(() => (defaults with
         {
             MinimumRequestInterval = TimeSpan.FromMilliseconds(249),

@@ -35,13 +35,13 @@ The two Playgroup writes remain `fixture-only-owner-approved`: Public API
 
 ## Running
 
-Set the broad opt-in, scratch root, and Playgroup key in the invoking process.
-The standard Archidekt credential file is discovered by the application.
+Set the broad opt-in and scratch root in the invoking process. The standard
+Archidekt and Playgroup credential files are discovered by the application.
+`MTGMCP__PLAYGROUP__API_KEY` remains an optional explicit override.
 
 ```powershell
 $env:MTGMCP_RUN_LIVE_METHOD_ACCEPTANCE = '1'
 $env:MTGMCP_LIVE_ACCEPTANCE_DATA_DIR = 'C:\path\outside\the\repository'
-$env:MTGMCP__PLAYGROUP__API_KEY = '<private value>'
 task test:live:methods
 ```
 

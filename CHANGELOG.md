@@ -68,6 +68,9 @@
   bounded GET retry and `Retry-After` handling, single-attempt remote writes,
   exact OpenAPI drift checks, fixture-only write proof, and an opt-in `/me`
   live-read test that cannot mutate provider state.
+- Added strict Playgroup API-key loading from the standard user-profile
+  `.mtg-mcp/playgroup.json` file, with explicit configuration precedence,
+  redacted failures, and deterministic test-process isolation.
 
 ## 0.8.0 - 2026-06-28
 

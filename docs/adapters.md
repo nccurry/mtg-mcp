@@ -48,9 +48,12 @@ between starts, permits at most 30 starts in a rolling minute, and shares one
 writes are not retried.
 
 Current Playgroup configuration is `PLAYGROUP:API_KEY`, with the equivalent
-`MTGMCP__PLAYGROUP__API_KEY` environment key. Its origin and User-Agent are
-fixed. Request starts share a process-wide non-secret credential lane and wait
-at least 250 milliseconds. Idempotent GETs have at most two transient retries,
+`MTGMCP__PLAYGROUP__API_KEY` environment key. When neither is set, the adapter
+loads the `apiKey` property from `.mtg-mcp/playgroup.json` beneath the user
+profile if that file exists. Explicit configuration takes precedence, and
+credential errors remain path-free. Its origin and User-Agent are fixed.
+Request starts share a process-wide non-secret credential lane and wait at
+least 250 milliseconds. Idempotent GETs have at most two transient retries,
 while writes are always single-attempt. A `429` is replayed once only when its
 `Retry-After` is present and within the bounded wait; all other throttle cases
 stop with a structured unavailable result.

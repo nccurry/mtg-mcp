@@ -93,9 +93,11 @@ internal static class FoundationConfigurationLoader
     internal static OperationResult<FoundationConfiguration> Resolve(
         IConfiguration configuration,
         string localApplicationData,
-        string roamingApplicationData)
+        string roamingApplicationData,
+        string? userProfile = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        userProfile ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
         OperationResult<OperationMode> modeResult = OperationModeParser.Parse(configuration["MODE"]);
         if (modeResult is not OperationSuccess<OperationMode> mode)
@@ -130,13 +132,13 @@ internal static class FoundationConfigurationLoader
             ? localApplicationData
             : roamingApplicationData;
         LegacyDataBoundary legacyData = LegacyDataInspector.Inspect(applicationDataRoot);
-        OperationResult<ArchidektOptions> archidektResult = ResolveArchidekt(configuration);
+        OperationResult<ArchidektOptions> archidektResult = ResolveArchidekt(configuration, userProfile);
         if (archidektResult is not OperationSuccess<ArchidektOptions> archidekt)
         {
             return ForwardFailure(archidektResult);
         }
 
-        OperationResult<PlaygroupOptions> playgroupResult = ResolvePlaygroup(configuration);
+        OperationResult<PlaygroupOptions> playgroupResult = ResolvePlaygroup(configuration, userProfile);
         if (playgroupResult is not OperationSuccess<PlaygroupOptions> playgroup)
         {
             return ForwardFailure(playgroupResult);
@@ -158,11 +160,22 @@ internal static class FoundationConfigurationLoader
     /// <summary>
     /// Resolves private Playgroup bearer configuration without echoing or probing the value.
     /// </summary>
-    private static OperationResult<PlaygroupOptions> ResolvePlaygroup(IConfiguration configuration)
+    private static OperationResult<PlaygroupOptions> ResolvePlaygroup(
+        IConfiguration configuration,
+        string userProfile)
     {
-        PlaygroupOptions options = PlaygroupOptions.CreateDefault(configuration["PLAYGROUP:API_KEY"]);
+        string? credentialsFile = configuration["PLAYGROUP:CREDENTIALS_FILE"];
+        if (string.IsNullOrWhiteSpace(credentialsFile) && !string.IsNullOrWhiteSpace(userProfile))
+        {
+            string defaultFile = Path.Combine(userProfile, ".mtg-mcp", "playgroup.json");
+            credentialsFile = File.Exists(defaultFile) ? defaultFile : null;
+        }
+
         try
         {
+            PlaygroupOptions options = PlaygroupOptions.CreateDefault(
+                configuration["PLAYGROUP:API_KEY"],
+                credentialsFile);
             options.Validate();
             return new OperationSuccess<PlaygroupOptions>(options);
         }
@@ -177,12 +190,13 @@ internal static class FoundationConfigurationLoader
     /// <summary>
     /// Resolves the private Archidekt transport configuration without loading or echoing credentials.
     /// </summary>
-    private static OperationResult<ArchidektOptions> ResolveArchidekt(IConfiguration configuration)
+    private static OperationResult<ArchidektOptions> ResolveArchidekt(
+        IConfiguration configuration,
+        string userProfile)
     {
         string? credentialsFile = configuration["ARCHIDEKT:CREDENTIALS_FILE"];
-        if (string.IsNullOrWhiteSpace(credentialsFile))
+        if (string.IsNullOrWhiteSpace(credentialsFile) && !string.IsNullOrWhiteSpace(userProfile))
         {
-            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string defaultFile = Path.Combine(userProfile, ".mtg-mcp", "archidekt.json");
             credentialsFile = File.Exists(defaultFile) ? defaultFile : null;
         }

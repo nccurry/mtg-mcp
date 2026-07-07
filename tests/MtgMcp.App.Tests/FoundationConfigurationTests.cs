@@ -93,6 +93,58 @@ public sealed class FoundationConfigurationTests
     }
 
     /// <summary>
+    /// Verifies an explicit Playgroup credential file remains private configuration rather than public status.
+    /// </summary>
+    [Fact]
+    public void Resolve_PlaygroupCredentialsFile_ProjectsPathFreeStatus()
+    {
+        using TemporaryDirectory temporary = new();
+        string credentialsFile = Path.Combine(temporary.Path, "playgroup.json");
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PLAYGROUP:CREDENTIALS_FILE"] = credentialsFile,
+            })
+            .Build();
+
+        FoundationConfiguration resolved = RequireSuccess(
+            FoundationConfigurationLoader.Resolve(configuration, temporary.Path, string.Empty));
+        string statusJson = JsonSerializer.Serialize(resolved.ToPublicStatus(), SerializerOptions);
+
+        Assert.Null(resolved.Playgroup.ApiKey);
+        Assert.Equal(Path.GetFullPath(credentialsFile), resolved.Playgroup.CredentialsFile);
+        Assert.DoesNotContain(credentialsFile, statusJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temporary.Path, statusJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies the standard Playgroup credential file is discovered beneath the supplied user profile.
+    /// </summary>
+    [Fact]
+    public void Resolve_StandardPlaygroupCredentialsFile_UsesUserProfileFallback()
+    {
+        using TemporaryDirectory temporary = new();
+        string credentialsDirectory = Path.Combine(temporary.Path, ".mtg-mcp");
+        Directory.CreateDirectory(credentialsDirectory);
+        string credentialsFile = Path.Combine(credentialsDirectory, "playgroup.json");
+        File.WriteAllText(credentialsFile, "{\"apiKey\":\"private-test-key\"}");
+        IConfiguration configuration = new ConfigurationBuilder().Build();
+
+        FoundationConfiguration resolved = RequireSuccess(
+            FoundationConfigurationLoader.Resolve(
+                configuration,
+                temporary.Path,
+                string.Empty,
+                temporary.Path));
+        string statusJson = JsonSerializer.Serialize(resolved.ToPublicStatus(), SerializerOptions);
+
+        Assert.Null(resolved.Playgroup.ApiKey);
+        Assert.Equal(credentialsFile, resolved.Playgroup.CredentialsFile);
+        Assert.DoesNotContain(credentialsFile, statusJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private-test-key", statusJson, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies standard source precedence from JSON through environment to command line.
     /// </summary>
     [Fact]

@@ -23,13 +23,14 @@ public sealed class PlaygroupLiveTests
         }
 
         string? apiKey = Environment.GetEnvironmentVariable("MTGMCP__PLAYGROUP__API_KEY");
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            Assert.Skip("Set MTGMCP__PLAYGROUP__API_KEY to run the authenticated Playgroup read.");
-        }
+        string fallbackPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".mtg-mcp",
+            "playgroup.json");
+        string? credentialsFile = File.Exists(fallbackPath) ? fallbackPath : null;
 
         using PlaygroupService service = new(
-            PlaygroupOptions.CreateDefault(apiKey),
+            PlaygroupOptions.CreateDefault(apiKey, credentialsFile),
             "0.9.0-preview.1");
         OperationResult<PlaygroupEvidence> result = await service.GetCurrentUserAsync(
             TestContext.Current.CancellationToken);

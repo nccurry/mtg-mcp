@@ -25,3 +25,8 @@ Provider bodies, credential values, account identities, and secret paths are
 excluded from public errors and acceptance evidence. Remote mutations require
 `remote` mode and exact guarded requests; pull is the only Archidekt operation
 permitted to mutate local state in `local` mode.
+
+The Playgroup adapter likewise accepts explicit private configuration or the
+standard user-profile `.mtg-mcp/playgroup.json` file. It parses only one
+string-valued `apiKey`, fixes the provider origin, and reports credential
+readiness without returning the key or file path.

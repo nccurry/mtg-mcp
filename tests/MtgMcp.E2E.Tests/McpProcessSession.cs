@@ -186,6 +186,16 @@ internal sealed class McpProcessSession : IAsyncDisposable
             ["MTGMCP__TOOLSETS"] = toolsets,
             ["MTGMCP__PLAYGROUP__API_KEY"] = null,
         };
+        if (!requireInstalledCommand)
+        {
+            environment["MTGMCP__PLAYGROUP__CREDENTIALS_FILE"] = Path.Combine(
+                repositoryRoot,
+                "tests",
+                "MtgMcp.E2E.Tests",
+                "Fixtures",
+                "empty-playgroup-credentials.json");
+        }
+
         if (environmentOverrides is not null)
         {
             foreach ((string key, string? value) in environmentOverrides)

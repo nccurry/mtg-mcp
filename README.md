@@ -74,10 +74,12 @@ The standard fallback credential file is `.mtg-mcp/archidekt.json` beneath the
 user profile when it exists. Authentication status never returns an identity,
 secret value, token, or path.
 
-Playgroup uses `PLAYGROUP:API_KEY` in `mtg-mcp.json` or
-`MTGMCP__PLAYGROUP__API_KEY` in the environment. The origin is fixed to the
-official public API, and `playgroup_auth_status` reports only whether a key is
-configured.
+Playgroup uses `PLAYGROUP:API_KEY` in `mtg-mcp.json`,
+`MTGMCP__PLAYGROUP__API_KEY` in the environment, or the standard fallback file
+`.mtg-mcp/playgroup.json` beneath the user profile. The fallback file contains
+one `apiKey` property; an explicit configuration value takes precedence. The
+origin is fixed to the official public API, and `playgroup_auth_status` reports
+only whether usable credentials are configured.
 
 Modes are `read-only`, `local` (the default), and `remote`. Read-only mode
 forbids local and remote mutation. A provider-shaped read may be visible there,
@@ -270,7 +272,8 @@ disposable 60-card Red/White Weenies deck resolved through the official MCP
 client. `MTGMCP_RUN_ARCHIDEKT_LIVE=1` enables a private disposable
 deck/folder/snapshot lifecycle with verified cleanup under production pacing.
 `MTGMCP_RUN_PLAYGROUP_LIVE=1` enables a read-only authenticated `/me` probe
-when `MTGMCP__PLAYGROUP__API_KEY` is configured.
+when a Playgroup API key is configured through the environment or the standard
+credential file.
 The multi-gigabyte corpus acceptance additionally requires
 `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` and an explicit
 `MTGMCP_SCRYFALL_ACCEPTANCE_DATA_DIR`; it never deletes that directory.

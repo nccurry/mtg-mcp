@@ -28,8 +28,8 @@ internal sealed class PlaygroupTransport : IDisposable
     /// <summary>Reports whether this transport owns the injected client.</summary>
     private readonly bool ownsHttpClient;
 
-    /// <summary>Stores validated private configuration.</summary>
-    private readonly PlaygroupOptions options;
+    /// <summary>Stores one privately loaded key for request construction.</summary>
+    private readonly PlaygroupCredentials.CredentialLoad credentials;
 
     /// <summary>Applies shared conservative provider pacing.</summary>
     private readonly PlaygroupRequestPacer pacer;
@@ -49,20 +49,19 @@ internal sealed class PlaygroupTransport : IDisposable
     {
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.ownsHttpClient = ownsHttpClient;
-        this.options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
         options.Validate();
-        string laneKey = options.ApiKey is null
+        credentials = new PlaygroupCredentials(options).Load();
+        string laneKey = credentials.ApiKey is null
             ? "anonymous"
-            : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(options.ApiKey)));
+            : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(credentials.ApiKey)));
         this.pacer = pacer ?? new PlaygroupRequestPacer(laneKey, options);
     }
 
     /// <summary>Reports key readiness without provider I/O or identity disclosure.</summary>
     internal PlaygroupAuthStatus GetAuthStatus()
     {
-        return options.ApiKey is null
-            ? new PlaygroupAuthStatus("not-configured", false, "A Playgroup API key is not configured.")
-            : new PlaygroupAuthStatus("configured", true, "A Playgroup API key is configured.");
+        return new PlaygroupAuthStatus(credentials.State, credentials.IsUsable, credentials.Message);
     }
 
     /// <summary>Sends one provider operation and returns lossless response evidence.</summary>
@@ -75,7 +74,7 @@ internal sealed class PlaygroupTransport : IDisposable
         bool idempotentRead,
         CancellationToken cancellationToken)
     {
-        if (requiresAuthentication && options.ApiKey is null)
+        if (requiresAuthentication && credentials.ApiKey is null)
         {
             throw new PlaygroupProviderException(
                 PlaygroupFailureKind.Unavailable,
@@ -88,7 +87,7 @@ internal sealed class PlaygroupTransport : IDisposable
         while (true)
         {
             await pacer.WaitForPermitAsync(cancellationToken).ConfigureAwait(false);
-            using HttpRequestMessage request = CreateRequest(method, pathAndQuery, payload, options.ApiKey);
+            using HttpRequestMessage request = CreateRequest(method, pathAndQuery, payload, credentials.ApiKey);
             HttpResponseMessage response;
             try
             {

@@ -1420,12 +1420,6 @@ public sealed class LiveMethodAcceptanceTests
     [Trait("Category", "Live")]
     public async Task PlaygroupReadMethods_FollowAuthenticatedGameEvidence()
     {
-        string? apiKey = Environment.GetEnvironmentVariable("MTGMCP__PLAYGROUP__API_KEY");
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            Assert.Skip("Set MTGMCP__PLAYGROUP__API_KEY to run authenticated Playgroup method acceptance.");
-        }
-
         CancellationToken token = TestContext.Current.CancellationToken;
         LiveAcceptanceEnvironment environment = await LiveAcceptanceEnvironment.RequireAsync(token).ConfigureAwait(false);
         await environment.Journal.RecordFixtureOnlyWritesAsync(token).ConfigureAwait(false);
