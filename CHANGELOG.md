@@ -71,6 +71,9 @@
 - Added strict Playgroup API-key loading from the standard user-profile
   `.mtg-mcp/playgroup.json` file, with explicit configuration precedence,
   redacted failures, and deterministic test-process isolation.
+- Bounded the provider's multi-megabyte all-commander turn-damage response and
+  changed its MCP tool to return only the exact caller-selected commander row
+  with full-source checksum evidence.
 
 ## 0.8.0 - 2026-06-28
 

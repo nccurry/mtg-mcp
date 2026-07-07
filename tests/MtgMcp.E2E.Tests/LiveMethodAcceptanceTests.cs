@@ -1597,9 +1597,11 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "playgroup_commander_turn_damage_get",
-                EmptyArguments(),
+                new Dictionary<string, object?> { ["commanderId"] = commanderId },
                 token).ConfigureAwait(false);
-            Assert.Equal(JsonValueKind.Array, ProviderData(damageEvidence, "getCommandersTurnDamage").ValueKind);
+            Assert.Equal(
+                commanderId,
+                ProviderData(damageEvidence, "getCommandersTurnDamage").GetProperty("id").GetInt32());
         }
         finally
         {

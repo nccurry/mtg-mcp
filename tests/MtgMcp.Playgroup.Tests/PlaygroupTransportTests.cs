@@ -203,10 +203,11 @@ public sealed class PlaygroupTransportTests
     public async Task OversizedSuccess_ReturnsUnavailableWithoutParsingPayload()
     {
         PlaygroupTestHttpHandler handler = new();
-        handler.AddJson(new string('x', PlaygroupTransport.MaximumResponseBytes + 1));
+        handler.AddJson(new string('x', PlaygroupTransport.MaximumTurnDamageResponseBytes + 1));
         using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
 
         OperationResult<PlaygroupEvidence> result = await service.GetCommanderTurnDamageAsync(
+            1,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(

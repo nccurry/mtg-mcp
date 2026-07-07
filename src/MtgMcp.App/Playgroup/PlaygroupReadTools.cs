@@ -55,13 +55,14 @@ internal sealed class PlaygroupReadTools
         return service.GetCommanderByNameAsync(name, cancellationToken);
     }
 
-    /// <summary>Gets provider-computed commander turn-damage observations.</summary>
+    /// <summary>Gets one provider-computed commander turn-damage observation.</summary>
     [McpServerTool(Name = "playgroup_commander_turn_damage_get", Title = "Get Commander Turn Damage", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Returns Playgroup's documented commander turn-damage observations as provider evidence, not a quality ranking.")]
+    [Description("Gets Playgroup's turn-damage observation for one exact commander ID as provider evidence, not a quality ranking.")]
     internal Task<OperationResult<PlaygroupEvidence>> GetCommanderTurnDamageAsync(
+        int commanderId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetCommanderTurnDamageAsync(cancellationToken);
+        return service.GetCommanderTurnDamageAsync(commanderId, cancellationToken);
     }
 
     /// <summary>Gets one provider deck.</summary>

@@ -15,6 +15,9 @@ internal sealed class PlaygroupTransport : IDisposable
     /// <summary>Caps one provider response so list endpoints cannot consume unbounded memory or model context.</summary>
     internal const int MaximumResponseBytes = 2 * 1024 * 1024;
 
+    /// <summary>Caps the documented all-commander dataset before exact local row selection.</summary>
+    internal const int MaximumTurnDamageResponseBytes = 16 * 1024 * 1024;
+
     /// <summary>Serializes documented snake-case request fields.</summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -72,8 +75,10 @@ internal sealed class PlaygroupTransport : IDisposable
         object? payload,
         bool requiresAuthentication,
         bool idempotentRead,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int maximumResponseBytes = MaximumResponseBytes)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumResponseBytes);
         if (requiresAuthentication && credentials.ApiKey is null)
         {
             throw new PlaygroupProviderException(
@@ -138,7 +143,10 @@ internal sealed class PlaygroupTransport : IDisposable
                 string json;
                 try
                 {
-                    json = await ReadBoundedJsonAsync(response.Content, cancellationToken)
+                    json = await ReadBoundedJsonAsync(
+                        response.Content,
+                        maximumResponseBytes,
+                        cancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (PlaygroupProviderException)
@@ -236,9 +244,10 @@ internal sealed class PlaygroupTransport : IDisposable
     /// <summary>Reads one UTF-8 provider document while enforcing the adapter response ceiling.</summary>
     private static async Task<string> ReadBoundedJsonAsync(
         HttpContent content,
+        int maximumResponseBytes,
         CancellationToken cancellationToken)
     {
-        if (content.Headers.ContentLength > MaximumResponseBytes)
+        if (content.Headers.ContentLength > maximumResponseBytes)
         {
             throw new PlaygroupProviderException(
                 PlaygroupFailureKind.Unavailable,
@@ -257,7 +266,7 @@ internal sealed class PlaygroupTransport : IDisposable
                 return Encoding.UTF8.GetString(destination.GetBuffer(), 0, checked((int)destination.Length));
             }
 
-            if (destination.Length + read > MaximumResponseBytes)
+            if (destination.Length + read > maximumResponseBytes)
             {
                 throw new PlaygroupProviderException(
                     PlaygroupFailureKind.Unavailable,

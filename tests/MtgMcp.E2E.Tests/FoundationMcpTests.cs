@@ -521,7 +521,7 @@ public sealed class FoundationMcpTests
             ["playgroup_auth_status"] = [],
             ["playgroup_commander_get"] = ["commanderId"],
             ["playgroup_commander_get_by_name"] = ["name"],
-            ["playgroup_commander_turn_damage_get"] = [],
+            ["playgroup_commander_turn_damage_get"] = ["commanderId"],
             ["playgroup_deck_elo_history_get"] = ["deckId", "includeArchived", "leagueId", "playgroupId"],
             ["playgroup_deck_get"] = ["deckId", "includeArchived"],
             ["playgroup_game_events_batch_create"] = ["events", "gameId"],

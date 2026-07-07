@@ -58,6 +58,11 @@ while writes are always single-attempt. A `429` is replayed once only when its
 `Retry-After` is present and within the bounded wait; all other throttle cases
 stop with a structured unavailable result.
 
+The documented commander turn-damage route returns one large all-commander
+array with no provider pagination or filter. The MCP requires an exact
+caller-supplied commander ID and returns only the matching provider row while
+retaining the checksum of the complete bounded source response.
+
 ## Historical Legacy Adapter Operations
 
 ### User-Agent defaults

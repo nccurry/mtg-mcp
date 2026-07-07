@@ -15,7 +15,9 @@ public sealed class PlaygroupServiceTests
         PlaygroupTestHttpHandler handler = new();
         for (int index = 0; index < 13; index++)
         {
-            handler.AddJson($"{{\"index\":{index},\"extension\":null}}");
+            handler.AddJson(index == 3
+                ? "[{\"id\":7,\"average_turn_data\":[],\"extension\":null}]"
+                : $"{{\"index\":{index},\"extension\":null}}");
         }
 
         using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
@@ -25,7 +27,7 @@ public sealed class PlaygroupServiceTests
             await service.GetCurrentUserAsync(token),
             await service.GetCommanderAsync(7, token),
             await service.GetCommanderByNameAsync("Y'shtola, Night's Blessed", token),
-            await service.GetCommanderTurnDamageAsync(token),
+            await service.GetCommanderTurnDamageAsync(7, token),
             await service.GetDeckAsync(8, includeArchived: true, token),
             await service.GetDeckEloHistoryAsync(8, 2, 3, includeArchived: true, token),
             await service.GetUserAsync(9, token),
@@ -76,7 +78,15 @@ public sealed class PlaygroupServiceTests
         {
             PlaygroupEvidence evidence = Success(results[index]);
             Assert.Equal(expectedOperationIds[index], evidence.OperationId);
-            Assert.Equal(index, evidence.Data.GetProperty("index").GetInt32());
+            if (index == 3)
+            {
+                Assert.Equal(7, evidence.Data.GetProperty("id").GetInt32());
+            }
+            else
+            {
+                Assert.Equal(index, evidence.Data.GetProperty("index").GetInt32());
+            }
+
             Assert.Equal(JsonValueKind.Null, evidence.Data.GetProperty("extension").ValueKind);
             Assert.Equal("1.0.0", evidence.ApiVersion);
             Assert.Equal(PlaygroupContract.OpenApiChecksum, evidence.ContractChecksum);
@@ -84,6 +94,42 @@ public sealed class PlaygroupServiceTests
             Assert.Equal(TimeSpan.Zero, evidence.RetrievedAtUtc.Offset);
             Assert.Contains(evidence.Limitations, value => value.Contains("deck updates", StringComparison.Ordinal));
         }
+    }
+
+    /// <summary>Verifies the large aggregate endpoint returns only the exact caller-selected provider row.</summary>
+    [Fact]
+    public async Task TurnDamageSelection_BoundsAggregateAndReturnsExactRow()
+    {
+        PlaygroupTestHttpHandler handler = new();
+        string padding = new('x', PlaygroupTransport.MaximumResponseBytes);
+        handler.AddJson(
+            $"[{{\"id\":1,\"padding\":\"{padding}\"}},{{\"id\":7,\"average_turn_data\":[{{\"turn\":3,\"damage\":2.5}}]}}]");
+        using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
+
+        PlaygroupEvidence evidence = Success(await service.GetCommanderTurnDamageAsync(
+            7,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(7, evidence.Data.GetProperty("id").GetInt32());
+        Assert.False(evidence.Data.TryGetProperty("padding", out _));
+        Assert.Contains(evidence.Limitations, value => value.Contains("caller-supplied", StringComparison.Ordinal));
+        Assert.Single(handler.Requests);
+    }
+
+    /// <summary>Verifies an absent commander row returns not-found evidence after one aggregate request.</summary>
+    [Fact]
+    public async Task TurnDamageSelection_MissingCommander_ReturnsNotFound()
+    {
+        PlaygroupTestHttpHandler handler = new();
+        handler.AddJson("[{\"id\":1,\"average_turn_data\":[]}]");
+        using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
+
+        OperationResult<PlaygroupEvidence> result = await service.GetCommanderTurnDamageAsync(
+            7,
+            TestContext.Current.CancellationToken);
+
+        Assert.IsType<OperationNotFound>(result.Value);
+        Assert.Single(handler.Requests);
     }
 
     /// <summary>Verifies both writes preserve documented snake-case fields and use one POST each.</summary>
@@ -156,6 +202,7 @@ public sealed class PlaygroupServiceTests
     /// <summary>Verifies invalid read parameters fail before provider I/O.</summary>
     [Theory]
     [InlineData("commander-id")]
+    [InlineData("turn-damage-commander-id")]
     [InlineData("commander-name")]
     [InlineData("elo-scope")]
     [InlineData("game-page")]
@@ -169,6 +216,7 @@ public sealed class PlaygroupServiceTests
         OperationResult<PlaygroupEvidence> result = scenario switch
         {
             "commander-id" => await service.GetCommanderAsync(0, token),
+            "turn-damage-commander-id" => await service.GetCommanderTurnDamageAsync(0, token),
             "commander-name" => await service.GetCommanderByNameAsync(" ", token),
             "elo-scope" => await service.GetDeckEloHistoryAsync(1, null, 2, false, token),
             "game-page" => await service.ListPlaygroupGamesAsync(1, 0, 10, false, token),

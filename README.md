@@ -209,12 +209,18 @@ session. The official contract has no deck-update operation, so capability
 metadata reports `deck-update` as unsupported and the adapter never probes a
 private route.
 
-Each result contains the exact provider JSON together with operation ID,
+Each result contains exact provider JSON for the returned entity or page together with operation ID,
 endpoint, API version, pinned-contract checksum, retrieval time, source-body
 checksum, and limitations. Provider fields, explicit nulls, pagination, and
 additive fields are preserved without turning Playgroup observations into deck
 rankings or local quality scores. One tool invocation makes one provider call
 unless an idempotent GET receives a bounded transient failure.
+
+The provider's turn-damage endpoint returns a multi-megabyte all-commander
+dataset. `playgroup_commander_turn_damage_get` therefore requires an exact
+`commanderId`, makes the one documented provider request, and returns only that
+unchanged provider row. Its evidence retains the checksum of the complete
+source response and identifies the deterministic local selection.
 
 Request starts share a process-wide credential lane and are at least 250 ms
 apart. GETs retry transient transport/5xx failures at most twice; `401` and

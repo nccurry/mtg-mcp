@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Playgroup;
@@ -61,15 +62,22 @@ public sealed class PlaygroupService : IDisposable
             cancellationToken));
     }
 
-    /// <summary>Gets the provider-computed commander turn-damage observations.</summary>
+    /// <summary>Gets one caller-selected provider-computed commander turn-damage observation.</summary>
     public Task<OperationResult<PlaygroupEvidence>> GetCommanderTurnDamageAsync(
+        int commanderId,
         CancellationToken cancellationToken)
     {
-        return GetAsync(
-            "commanders/turn_damage",
-            "getCommandersTurnDamage",
-            requiresAuthentication: false,
-            cancellationToken);
+        return ExecuteAsync(async () =>
+        {
+            int selectedId = PlaygroupContract.PositiveId(commanderId, nameof(commanderId));
+            PlaygroupEvidence evidence = await GetCoreAsync(
+                "commanders/turn_damage",
+                "getCommandersTurnDamage",
+                requiresAuthentication: false,
+                cancellationToken,
+                PlaygroupTransport.MaximumTurnDamageResponseBytes).ConfigureAwait(false);
+            return SelectCommanderTurnDamage(evidence, selectedId);
+        });
     }
 
     /// <summary>Gets one provider deck, optionally including an archived deck.</summary>
@@ -343,7 +351,8 @@ public sealed class PlaygroupService : IDisposable
         string path,
         string operationId,
         bool requiresAuthentication,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int maximumResponseBytes = PlaygroupTransport.MaximumResponseBytes)
     {
         return transport.SendAsync(
             HttpMethod.Get,
@@ -352,7 +361,8 @@ public sealed class PlaygroupService : IDisposable
             payload: null,
             requiresAuthentication,
             idempotentRead: true,
-            cancellationToken);
+            cancellationToken,
+            maximumResponseBytes);
     }
 
     /// <summary>Sends one non-idempotent documented write.</summary>
@@ -371,6 +381,74 @@ public sealed class PlaygroupService : IDisposable
             requiresAuthentication: true,
             idempotentRead: false,
             cancellationToken);
+    }
+
+    /// <summary>Returns one exact commander row from the provider's documented aggregate response.</summary>
+    private static PlaygroupEvidence SelectCommanderTurnDamage(
+        PlaygroupEvidence evidence,
+        int commanderId)
+    {
+        if (evidence.Data.ValueKind != JsonValueKind.Array)
+        {
+            throw new PlaygroupProviderException(
+                PlaygroupFailureKind.Unsupported,
+                "provider-contract-unsupported",
+                "Playgroup returned data that does not match the pinned JSON contract.");
+        }
+
+        JsonElement? match = null;
+        foreach (JsonElement row in evidence.Data.EnumerateArray())
+        {
+            if (row.ValueKind != JsonValueKind.Object ||
+                !row.TryGetProperty("id", out JsonElement id))
+            {
+                throw new PlaygroupProviderException(
+                    PlaygroupFailureKind.Unsupported,
+                    "provider-contract-unsupported",
+                    "Playgroup returned data that does not match the pinned JSON contract.");
+            }
+
+            if (!id.TryGetInt32(out int rowId))
+            {
+                throw new PlaygroupProviderException(
+                    PlaygroupFailureKind.Unsupported,
+                    "provider-contract-unsupported",
+                    "Playgroup returned data that does not match the pinned JSON contract.");
+            }
+
+            if (rowId != commanderId)
+            {
+                continue;
+            }
+
+            if (match is not null)
+            {
+                throw new PlaygroupProviderException(
+                    PlaygroupFailureKind.Unsupported,
+                    "provider-contract-unsupported",
+                    "Playgroup returned duplicate commander observations.");
+            }
+
+            match = row.Clone();
+        }
+
+        if (match is null)
+        {
+            throw new PlaygroupProviderException(
+                PlaygroupFailureKind.NotFound,
+                "provider-entity-not-found",
+                "Playgroup did not find turn-damage evidence for the requested commander.");
+        }
+
+        return evidence with
+        {
+            Limitations = Array.AsReadOnly<string>(
+            [
+                .. evidence.Limitations,
+                "The provider returns all commanders; this result was selected by exact caller-supplied commander ID.",
+            ]),
+            Data = match.Value,
+        };
     }
 
     /// <summary>Converts only expected provider failures into the shared exhaustive result union.</summary>
