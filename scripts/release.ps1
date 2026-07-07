@@ -166,13 +166,39 @@ function Assert-StableSemVer {
     }
 }
 
+function Remove-DirectoryTree {
+    param([Parameter(Mandatory = $true)][string] $Path)
+
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        return
+    }
+    catch {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            return
+        }
+
+        if ([System.IO.Path]::DirectorySeparatorChar -ne '\') {
+            throw
+        }
+
+        $extendedPath = if ($Path.StartsWith('\\', [System.StringComparison]::Ordinal)) {
+            "\\?\UNC\$($Path.TrimStart('\'))"
+        }
+        else {
+            "\\?\$Path"
+        }
+        [System.IO.Directory]::Delete($extendedPath, $true)
+    }
+}
+
 function New-CleanDirectory {
     param([Parameter(Mandatory = $true)][string] $Path)
 
     $fullPath = Resolve-RepoPath $Path
     Assert-SafeCleanPath $fullPath
     if (Test-Path -LiteralPath $fullPath) {
-        Remove-Item -LiteralPath $fullPath -Recurse -Force
+        Remove-DirectoryTree $fullPath
     }
 
     New-Item -ItemType Directory -Path $fullPath -Force | Out-Null

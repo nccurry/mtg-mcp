@@ -74,6 +74,8 @@
 - Bounded the provider's multi-megabyte all-commander turn-damage response and
   changed its MCP tool to return only the exact caller-selected commander row
   with full-source checksum evidence.
+- Made Windows release cleanup fall back to extended-length filesystem paths
+  for deeply nested installed-tool artifacts.
 
 ## 0.8.0 - 2026-06-28
 
