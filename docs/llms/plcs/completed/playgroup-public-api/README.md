@@ -127,6 +127,11 @@ hydrate Archidekt decks.
   this closure because no Playgroup API key was configured. Both writes remain
   explicitly fixture-only and are not labeled live-tested because Public API
   1.0.0 has no documented cleanup operation.
+- Post-closure packaged acceptance on 2026-07-06 exercised all fourteen safe
+  reads against the owner-authorized playgroup and sent zero writes. It exposed
+  the provider's 7,044,277-byte all-commander turn-damage payload; revision
+  `7d8a494` bounds that aggregate and deterministically returns only the exact
+  caller-selected commander row while retaining its full-source checksum.
 - Abstraction, code-quality, dead-code, test-coverage, test-quality, visual,
   dependency, and documentation audits passed after fixes. Valid findings
   removed an unused DTO, omitted absent optional JSON fields, bounded response

@@ -221,6 +221,7 @@ topic-specific questions belong in their owning child packet.
 | 2026-07-04 | Archidekt implementation and lifecycle closure | Passed | All 23 opt-in tools, exact 11/12/23 mode visibility, provider/local composition, composed request budgets, audits, full gates, package smokes, and the final production-paced private deck/folder/snapshot lifecycle pass. At that milestone, `all` mode totals were 32/53/64; default remained 21/41/41. |
 | 2026-07-04 | Playgroup child approval and activation | Passed | Repository owner approved the pinned official API child, authorized implementation, retained fixture-only writes because the contract has no cleanup, and activated the packet on the rewrite branch. |
 | 2026-07-04 | Playgroup implementation and lifecycle closure | Passed | All 15 official operations plus redacted auth status, exact 14/14/16 visibility, lossless provider evidence, conservative rate handling, fixture-only writes, audits, coverage, packages, and installed MCP smokes passed. No key was configured, so the safe `/me` live test remains explicitly unexecuted. Current `all` totals are 46/67/80; default remains 21/41/41. |
+| 2026-07-06 | Playgroup packaged live acceptance | Passed | All 14 safe reads passed through the installed MCP against the owner-authorized playgroup, both writes remained fixture-only, and zero writes were sent. The run exposed and resolved the unbounded all-commander turn-damage result by requiring exact caller-selected row evidence with a bounded aggregate fetch and full-source checksum. |
 
 ## Completion Notes
 

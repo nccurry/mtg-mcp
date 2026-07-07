@@ -68,11 +68,19 @@ directions before scratch-corpus deletion.
 
 ## Current Evidence
 
-- Playgroup implementation baseline: `04dc9b5`.
+- Playgroup packaged live baseline: `7d8a494` (2026-07-06).
 - Package version: `0.9.0-preview.1`.
-- Harness status: implemented; live execution pending explicit environment and
-  packaged-run evidence.
-- Playgroup write status: `fixture-only-owner-approved`.
+- Playgroup status: all 14 safe reads passed through the installed MCP package
+  against the owner-authorized playgroup. The run sent zero Playgroup writes.
+- Playgroup write status: both tools remain
+  `fixture-only-owner-approved`; the public API still exposes no cleanup.
+- Live finding resolved: the official all-commander turn-damage payload was
+  7,044,277 bytes and exceeded the generic evidence ceiling. The MCP now
+  requires an exact `commanderId`, bounds the aggregate fetch, and returns only
+  the unchanged matching provider row with the full-source checksum.
+- Full harness status: Playgroup is complete. A single exact-commit 78-read
+  combined run and the provider-generation-dependent corpus rollback gate
+  remain open; this segment result does not claim overall acceptance closure.
 
-Update this section only from the sanitized journal summary after a complete
-packaged run. A schema listing or adapter-only test is not a live pass.
+Update this section only from sanitized packaged-run evidence. A schema listing
+or adapter-only test is not a live pass.
