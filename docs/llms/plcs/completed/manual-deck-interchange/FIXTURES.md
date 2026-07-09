@@ -45,7 +45,7 @@ result, notes, and revalidation reason. They do not use automated APIs or retain
 user deck data. The acceptance is repeated during implementation and before
 stable cutover.
 
-The dated implementation records and exact cleanup gate are in
+The dated implementation records and completed cleanup gate are in
 [Manual Provider Acceptance Records](PROVIDER_ACCEPTANCE.md).
 
 ## Syntax Research Evidence

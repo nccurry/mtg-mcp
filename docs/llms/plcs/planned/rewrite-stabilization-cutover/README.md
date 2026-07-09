@@ -6,14 +6,14 @@
 - Folder: `docs/llms/plcs/planned/rewrite-stabilization-cutover/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
-- Current phase: dependent child reviews
+- Last updated: 2026-07-06
+- Current phase: blocked pending statistics, categorization, and prerequisite implementation completion
 
 ## Summary
 
 This packet defines the integration, verification, packaging, release, rollback,
 and PLC-lifecycle gates for the evidence-first `0.9.0` rewrite. It adds no
-capability. Its job is to prove that the ten prerequisite child implementations agree
+capability. Its job is to prove that the eleven prerequisite child implementations agree
 on architecture and MCP contracts, remove the prohibited legacy surface, and can
 be released without changing or deleting legacy user data.
 
@@ -26,7 +26,8 @@ inadequate coverage, or a failed required offline gate.
 - [Legacy Surface Audit And Disposition](../../completed/legacy-surface-audit-and-disposition/README.md)
 - [Rewrite Skeleton And Repository Foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Local Deck Domain And SQLite Store](../../completed/local-deck-store/README.md)
-- [Manual Deck Interchange](../../in-progress/manual-deck-interchange/README.md)
+- [Manual Deck Interchange](../../completed/manual-deck-interchange/README.md)
+- [MCP Contract And Adapter Hardening](../../completed/mcp-contract-and-adapter-hardening/README.md)
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Scryfall Corpus And Evidence](../../completed/scryfall-corpus-and-evidence/README.md)
 - [Archidekt Decks, Folders, Snapshots, And Synchronization](../../completed/archidekt-deck-sync/README.md)
@@ -39,7 +40,7 @@ inadequate coverage, or a failed required offline gate.
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
-| Derive the release surface from the approved capability children and validate it exactly. | Accepted | The accepted AMEND-004 baseline has 91 tools in the remote `all` profile; it is a consistency check, not a compatibility target or design constraint. |
+| Derive the release surface from the approved capability children and validate it exactly. | Accepted update | The accepted AMEND-005 baseline has 93 tools in the remote `all` profile; it is a consistency check, not a compatibility target or design constraint. |
 | Require ordinary Git history-preserving integration. | Proposed | The rewrite is a clean product break, not a repository-history rewrite. |
 | Require preview releases and cross-platform smoke proof before `0.9.0`. | Proposed | Packaging and host failures must be found before the stable cutover. |
 | Keep legacy releases and legacy data directories available for rollback. | Proposed | Rollback must not translate or destroy user data. |
@@ -92,8 +93,8 @@ surface removal, and no-migration policy without authorizing implementation.
   exact statistics; explicitly enabled provider toolsets add their bounded
   workflows without widening operation-mode authority.
 
-This packet incorporates accepted umbrella amendment AMEND-004 for planning
-consistency. Neither AMEND-004 nor this child is approved for implementation.
+This packet incorporates accepted AMEND-004 and AMEND-005 for planning
+consistency. This child is not approved for implementation.
 
 ## Planning Approval
 

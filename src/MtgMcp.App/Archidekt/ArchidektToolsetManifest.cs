@@ -16,7 +16,6 @@ internal static class ArchidektToolsetManifest
     /// </summary>
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Archidekt,
-        CapabilityToolsetAvailability.Available,
         CapabilityToolsetStability.Stable,
         "Fresh Archidekt evidence plus explicit guarded deck, folder, snapshot, and synchronization workflows. This provider toolset is opt-in; operation mode separately controls authority.",
         [

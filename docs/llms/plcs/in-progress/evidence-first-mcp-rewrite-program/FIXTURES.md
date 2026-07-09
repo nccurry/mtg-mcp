@@ -7,7 +7,7 @@ than runtime payload fixtures.
 
 | ID | Type | Location | Purpose | Owner | Update rule |
 | --- | --- | --- | --- | --- | --- |
-| FIX-PROGRAM-REGISTRY | Planning registry | [README.md](README.md#required-child-registry) | Proves the eleven-child order, dependencies, and current status. | Program owner | Update with every child draft, review, or approval. |
+| FIX-PROGRAM-REGISTRY | Planning registry | [README.md](README.md#required-child-registry) | Proves the proposed twelve-child order, dependencies, and current status. | Program owner | Update with every child draft, review, or approval. |
 | FIX-GUARDRAILS | Decision baseline | [README.md](README.md#program-guardrails) | Gives every child one authoritative cross-topic contract. | Repository owner | Change only through an approved umbrella amendment. |
 | FIX-CHILD-CHECKLIST | Review checklist | [Child packet acceptance checklist](#child-packet-acceptance-checklist) | Makes child review consistent and objective. | Child reviewer | Amend with the umbrella if a shared requirement changes. |
 | FIX-PROVIDER-CHECKLIST | Provider review checklist | [Provider child checklist](#provider-child-checklist) | Prevents provider safety and evidence gaps. | Provider child reviewer | Update when shared provider policy changes. |
@@ -20,7 +20,7 @@ than runtime payload fixtures.
 
 | Requirement | Fixture or scenario | Expected result | Validation |
 | --- | --- | --- | --- |
-| PROG-001 | FIX-PROGRAM-REGISTRY | README and implementation plan contain the same eleven slugs in the same order. | Document comparison |
+| PROG-001 | FIX-PROGRAM-REGISTRY | README and implementation plan contain the same twelve slugs in the same order after AMEND-005 acceptance. | Document comparison |
 | PROG-002 | SCN-001 | Each child is complete and validated before the next draft begins. | Registry and packet inspection |
 | PROG-003 | SCN-002 | Every drafted child remains independently reviewable and implementation-blocked until approval. | Registry and README inspection |
 | PROG-004 | SCN-003 | Umbrella approval cannot satisfy child implementation authorization. | Lifecycle and approval inspection |
@@ -33,6 +33,7 @@ than runtime payload fixtures.
 | PROG-017, PROG-018, PROG-019, PROG-021 | FIX-TOOLSET-GUARDRAILS, SCN-009, SCN-010 | Every tool has one toolset; default/all/none and all modes reconcile with capability output; registration remains static. | Manifest, architecture, and official-client review |
 | PROG-020 | FIX-NORTH-STAR-CHECKLIST, SCN-011 | Remaining child proves one useful composed LLM workflow and explicit evidence/decision boundaries. | Child review and fixture traceability |
 | PROG-022, PROG-023, PROG-024 | FIX-GUARDRAILS, FIX-PROGRAM-REGISTRY, SCN-012 | Unified Scryfall evidence, explicit bulk acquisition, removed Tagger capability, and deferred local query evaluation agree across every active packet. | Cross-packet terminology, surface, and provider-boundary review |
+| PROG-025 | FIX-GUARDRAILS, FIX-PROGRAM-REGISTRY, SCN-013 | Hardening remains independently reviewed, exact-only, legality-free, behavior-preserving, and prerequisite to statistics. | Child traceability, schema/surface, and dependency review |
 
 ## Child Packet Acceptance Checklist
 
@@ -94,21 +95,22 @@ and future popularity-source packets:
 | SCN-004 | Child 1 drafting begins while the umbrella remains under `planned/`. | The umbrella moves to `in-progress/` in the same change and records the active child. |
 | SCN-005 | A child requires a different operation mode or product boundary. | The queue is blocked pending an umbrella amendment and affected-child review. |
 | SCN-006 | The foundation child proposes deleting legacy code before audit approval. | Review rejects the foundation draft or change until the audit allowlist is approved. |
-| SCN-007 | All eleven child packets are approved but none is implemented. | The umbrella may complete, while each child's implementation lifecycle remains unchanged. |
+| SCN-007 | All twelve child packets are approved but none is implemented. | The umbrella may complete, while each child's implementation lifecycle remains unchanged. |
 | SCN-008 | A post-cutover topic is proposed during the required sequence. | It remains a registry entry unless the repository owner explicitly amends the program. |
 | SCN-009 | Default selection starts after decks, Scryfall, and statistics are implemented. | Only those default-enabled toolsets intersected with the active mode are visible; provider integrations stay hidden. |
 | SCN-010 | `all`, `none`, an explicit list, and an unknown name are started in each mode. | Stable implemented toolsets, zero tools, the exact requested subset, and sanitized startup failure are observed respectively; no `listChanged` capability appears. |
 | SCN-011 | A child lists provider endpoints but does not state a player question, evidence class, or composed workflow. | Review rejects the child as north-star incomplete even when endpoint/schema traceability is otherwise complete. |
 | SCN-012 | A planned document proposes a separate community-tag database, adapter, tool prefix/toolset, unsupported website traffic, automatic bulk download, or local execution of an uncached arbitrary Scryfall query. | Review rejects the document as conflicting with accepted AMEND-004; implementation remains blocked until the affected child is amended and approved. |
+| SCN-013 | An implementer starts statistics before AMEND-005 and the hardening child are approved and completed, or adds legality/fuzzy identity behavior while hardening. | Work stops; child 9 remains the prerequisite and its explicit non-goals are restored. |
 
 ## MCP Surface Checks
 
 | Profile | `read-only` | `local` | `remote` | Notes |
 | --- | ---: | ---: | ---: | --- |
-| Current implemented `default` | 21 | 41 | 41 | Default-enabled `decks` and `scryfall` toolsets. |
-| Current implemented `all` | 46 | 67 | 80 | Adds the opt-in implemented `archidekt` and `playgroup` toolsets. |
-| Planned `default` | 31 | 52 | 52 | `decks,scryfall,stats` after the remaining affected child is approved and implemented. |
-| Planned `all` | 56 | 78 | 91 | All five target toolsets; derived from child matrices. |
+| Current implemented `default` | 22 | 43 | 43 | Default-enabled `decks` and `scryfall` toolsets after hardening. |
+| Current implemented `all` | 47 | 69 | 82 | Adds the opt-in implemented `archidekt` and `playgroup` toolsets. |
+| Planned final `default` | 32 | 54 | 54 | `decks,scryfall,stats` after hardening, statistics, and categorization. |
+| Planned final `all` | 57 | 80 | 93 | All five target toolsets; derived from child matrices after AMEND-005. |
 | `none` | 0 | 0 | 0 | Existing static-selection behavior remains. |
 
 ## Provider Fixtures
@@ -126,7 +128,7 @@ payload baselines.
 - Resolve every relative Markdown link.
 - Compare child slugs and order across README and IMPLEMENTATION_PLAN.
 - Run `git diff --check`.
-- Inspect the diff to confirm that umbrella/index documentation and the eleven
+- Inspect the diff to confirm that umbrella/index documentation and the twelve
   required child packets agree; production changes require their active child.
 - Search every non-completed packet and durable design document for obsolete
   Tagger storage/adapter/toolset/scraping claims and superseded surface totals.

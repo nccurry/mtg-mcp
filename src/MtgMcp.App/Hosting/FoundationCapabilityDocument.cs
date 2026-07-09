@@ -40,11 +40,13 @@ internal sealed record FoundationToolsetsStatus(
     [property: JsonPropertyName("items")] IReadOnlyList<FoundationToolsetStatus> Items);
 
 /// <summary>
-/// Reports one implemented toolset's relevance, availability, and visible surface.
+/// Reports one implemented toolset's relevance, credential configuration, and visible surface.
 /// </summary>
 internal sealed record FoundationToolsetStatus(
     [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("implementationStatus")] string ImplementationStatus,
+    [property: JsonPropertyName("credentialState")] string CredentialState,
+    [property: JsonPropertyName("authenticationStatusTool")] string? AuthenticationStatusTool,
     [property: JsonPropertyName("stability")] string Stability,
     [property: JsonPropertyName("enabled")] bool Enabled,
     [property: JsonPropertyName("defaultEnabled")] bool DefaultEnabled,

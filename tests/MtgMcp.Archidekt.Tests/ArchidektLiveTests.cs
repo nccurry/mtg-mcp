@@ -8,6 +8,40 @@ namespace MtgMcp.Archidekt.Tests;
 public sealed class ArchidektLiveTests
 {
     /// <summary>
+    /// Verifies one bounded authenticated read without creating or changing provider state.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Live")]
+    public async Task OwnedDecks_ReturnOneBoundedReadPage()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("MTGMCP_RUN_ARCHIDEKT_READ_LIVE"),
+                "1",
+                StringComparison.Ordinal))
+        {
+            Assert.Skip("Set MTGMCP_RUN_ARCHIDEKT_READ_LIVE=1 to run the authenticated read-only Archidekt check.");
+        }
+
+        string credentialsFile = GetCredentialsFile();
+        if (!File.Exists(credentialsFile))
+        {
+            Assert.Skip("The standard Archidekt credentials file is not available.");
+        }
+
+        using ArchidektService service = new(
+            ArchidektOptions.CreateDefault(credentialsFile: credentialsFile),
+            "0.9.0-preview.1");
+        RemoteDeckPage page = Success(await service.ListDecksAsync(
+            cursor: null,
+            pageSize: 1,
+            TestContext.Current.CancellationToken));
+
+        Assert.True(page.Items.Count <= 1);
+        Assert.Equal("archidekt", page.Evidence.Source);
+        Assert.NotEmpty(page.Evidence.SourceChecksum);
+    }
+
+    /// <summary>
     /// Creates, organizes, snapshots, and removes disposable provider state under conservative production pacing.
     /// </summary>
     [Fact]
@@ -22,11 +56,7 @@ public sealed class ArchidektLiveTests
             Assert.Skip("Set MTGMCP_RUN_ARCHIDEKT_LIVE=1 to run the disposable authenticated Archidekt lifecycle.");
         }
 
-        string credentialsFile = Environment.GetEnvironmentVariable("MTGMCP_ARCHIDEKT_CREDENTIALS_FILE")
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".mtg-mcp",
-                "archidekt.json");
+        string credentialsFile = GetCredentialsFile();
         if (!File.Exists(credentialsFile))
         {
             Assert.Skip("The standard Archidekt credentials file is not available.");
@@ -275,6 +305,18 @@ public sealed class ArchidektLiveTests
     private static Xunit.Sdk.XunitException Failure(string reasonCode, string message)
     {
         return new Xunit.Sdk.XunitException($"{reasonCode}: {message}");
+    }
+
+    /// <summary>
+    /// Resolves the explicit or standard credential-file location without exposing it.
+    /// </summary>
+    private static string GetCredentialsFile()
+    {
+        return Environment.GetEnvironmentVariable("MTGMCP_ARCHIDEKT_CREDENTIALS_FILE")
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".mtg-mcp",
+                "archidekt.json");
     }
 
     /// <summary>

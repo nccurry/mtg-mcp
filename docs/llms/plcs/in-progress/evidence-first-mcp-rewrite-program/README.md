@@ -6,13 +6,13 @@
 - Folder: `docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
-- Current phase: child 6 implementation acceptance
+- Last updated: 2026-07-06
+- Current phase: children 1–9 complete; child 10 awaits owner review
 
 ## Summary
 
 This packet governs the decomposition of the evidence-first MCP rewrite into
-eleven smaller PLCs. Its deliverable is independently reviewable planning packets,
+twelve smaller PLCs under accepted AMEND-005. Its deliverable is independently reviewable planning packets,
 not production code. The children are drafted sequentially, one complete packet
 at a time, and remain individually subject to review before implementation.
 
@@ -35,7 +35,7 @@ the detailed contracts, fixtures, risks, and acceptance criteria in its topic.
 | Use an umbrella PLC that authorizes planning only. | Accepted | The rewrite must be decomposed before any child implementation starts. | [Planning boundary](SADD.md#planning-and-implementation-boundary) |
 | Draft children sequentially rather than in parallel. | Accepted | Each topic needs a complete boundary and validation pass before the next draft starts. | [Authoring protocol](IMPLEMENTATION_PLAN.md#per-child-authoring-protocol) |
 | Review children independently before implementation. | Accepted | Drafting the queue does not approve or authorize any child implementation. | [Review state](SADD.md#review-and-approval-state) |
-| Keep eleven required children in dependency order. | Accepted | The queue separates audit, foundation, surface governance, capabilities, and cutover while preserving dependencies. | [Required child registry](#required-child-registry) |
+| Add a pre-statistics hardening child and expand to twelve required children. | Accepted by AMEND-005 | Contract honesty, identity reconciliation, and proven adapter boundaries need independent review before statistics expands the system. | [Required child registry](#required-child-registry) |
 | Register post-cutover topics without drafting them. | Accepted | Popularity and experimental work must not expand the stable rewrite or cutover gate. | [Post-cutover registry](#post-cutover-registry) |
 | Amend this packet before changing a shared guardrail. | Accepted | Cross-topic changes must be visible to every dependent child. | [Amendments](SADD.md#guardrail-amendments) |
 
@@ -47,11 +47,12 @@ the detailed contracts, fixtures, risks, and acceptance criteria in its topic.
 | AMEND-002 | 2026-07-03 | Accepted | Expand the then-numbered child 6 (Archidekt) and stable cutover scope to include folder organization and named snapshot lifecycle/guarded restore. Reconcile the audit disposition, child requirements, live cleanup, deferred registry, and derived surface baseline. | Explicit repository-owner request |
 | AMEND-003 | 2026-07-04 | Accepted | Add capability toolsets as a cross-cutting guardrail, create a dedicated toolset child before provider implementations, require north-star acceptance checks in every remaining child, and distinguish default-profile discovery from the complete stable surface. | Explicit repository-owner request |
 | AMEND-004 | 2026-07-04 | Accepted | Unify official Scryfall cards, rulings, Oracle tags, and art tags in `scryfall.db`; remove the planned Tagger adapter/store/toolset; expand child 6 to corpus/evidence; replace child 10 with deterministic caller-defined deck categorization; register local Scryfall query evaluation as deferred work. | Explicit repository-owner implementation direction |
+| AMEND-005 | 2026-07-06 | Accepted | Add `mcp-contract-and-adapter-hardening` before statistics; separate implementation state from credential configuration; replace the flat batch-change schema; add exact-only deck identity preview/apply; decompose Scryfall and Archidekt owners without changing provider behavior; add no legality capability; recalculate the target surfaces. | Explicit repository-owner implementation request |
 
 ## Program Guardrails
 
-Every child PLC shall inherit these decisions. The remaining planned children
-are reconciled to accepted AMEND-004, but each still requires its own review and
+Every child PLC shall inherit the accepted decisions. The remaining planned children
+are reconciled to accepted AMEND-004 and AMEND-005, and each child still requires its own review and
 implementation authorization:
 
 - The MCP returns evidence, provider data, explicit workflow operations, and
@@ -73,9 +74,10 @@ implementation authorization:
   capabilities never enter `default` or `all` implicitly.
 - `decks`, `scryfall`, and `stats` are default-enabled when implemented.
   `archidekt` and `playgroup` require explicit selection.
-- The capability resource reports implemented, available, enabled,
-  default-enabled, and disabled toolsets without advertising unimplemented
-  placeholder modules.
+- Under accepted AMEND-005, the capability resource reports implementation
+  separately from credential configuration. It never treats static
+  registration or configured-but-unverified credentials as proof of provider
+  availability and never performs provider I/O while rendering metadata.
 - Operation modes are `read-only`, `local`, and `remote`; `local` is the
   default for the rewrite.
 - Provider-neutral, dependency-light logic belongs in `MtgMcp.Core`.
@@ -117,14 +119,15 @@ explicitly activated.
 | 1 | [`legacy-surface-audit-and-disposition`](../../completed/legacy-surface-audit-and-disposition/README.md) | Inventory and classify the current product surface and reusable evidence. | Umbrella guardrails | Repository-owner approval recorded | Approved; completed |
 | 2 | [`rewrite-skeleton-foundation`](../../completed/rewrite-skeleton-foundation/README.md) | Define the clean skeleton, repository wiring, modes, evidence, and module boundaries. | Approved audit disposition | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 3 | [`local-deck-store`](../../completed/local-deck-store/README.md) | Define the local deck domain, SQLite persistence, and `deck_*` mutations. | Foundation boundaries | Repository-owner implementation authorization recorded | Approved; implementation completed |
-| 4 | [`manual-deck-interchange`](../manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Repository-owner implementation authorization recorded | Provider imports accepted; disposable-deck cleanup open |
+| 4 | [`manual-deck-interchange`](../../completed/manual-deck-interchange/README.md) | Define native, Archidekt, and Moxfield manual import/export artifacts. | Local deck model | Repository-owner implementation authorization recorded | Approved; implementation and cleanup completed |
 | 5 | [`mcp-capability-toolsets`](../../completed/mcp-capability-toolsets/README.md) | Define startup-selected capability groups, default/all/none profiles, mode intersection, and surface governance. | Foundation, local decks, and interchange registration | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 6 | [`scryfall-corpus-and-evidence`](../../completed/scryfall-corpus-and-evidence/README.md) | Define the shared official bulk corpus, authoritative query cache, immutable replay, and card/ruling/tag evidence. | Toolset foundation and local card identity | Repository-owner authorization recorded | Approved; implementation and retained full-corpus acceptance completed |
 | 7 | [`archidekt-deck-sync`](../../completed/archidekt-deck-sync/README.md) | Define Archidekt deck sync, folder organization, and named snapshot lifecycle/restore. | Deck, interchange, toolset, and Scryfall contracts | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 8 | [`playgroup-public-api`](../../completed/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation and toolset boundaries | Repository-owner implementation authorization recorded | Approved; implementation completed |
-| 9 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck and toolset contracts | Child 8 draft validated | Drafted; AMEND-003/004 consistency review required |
-| 10 | [`deterministic-deck-categorization`](../../planned/deterministic-deck-categorization/README.md) | Define caller-authored tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, and toolset contracts | Accepted AMEND-004 and child 6 acceptance | Rewritten; independent child review required |
-| 11 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 10 | Child 10 draft validated | Drafted; dependent child reviews required |
+| 9 | [`mcp-contract-and-adapter-hardening`](../../completed/mcp-contract-and-adapter-hardening/README.md) | Define capability/schema honesty, exact-only deck identity reconciliation, and cohesive Scryfall/Archidekt ownership before statistics. | Children 3, 5, 6, 7, and 8 | Repository-owner approval and authorization recorded | Approved; implementation completed |
+| 10 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck, toolset, and approved hardening contracts | Child 9 completion | Ready for independent owner review; implementation unauthorized |
+| 11 | [`deterministic-deck-categorization`](../../planned/deterministic-deck-categorization/README.md) | Define caller-authored tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, toolset, and hardening contracts | Child 9 completion and child 10 review | Rewritten; independent child review required |
+| 12 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Child 11 draft validated | Drafted; AMEND-005 reconciliation required |
 
 Although some technical dependencies are narrower, drafting remains sequential
 so each packet is complete and validated before work begins on the next.
@@ -155,9 +158,10 @@ activated.
 
 ## Current Open Questions
 
-AMEND-004 and the Scryfall child are approved for implementation. Deterministic
-categorization remains separately review-gated and unauthorized. Other
-topic-specific questions belong in their owning child packet.
+AMEND-005 and the hardening child are complete. Exact statistics is next for
+independent owner review and remains implementation-ineligible until its
+approval record explicitly authorizes work. Categorization remains separately
+review-gated and unauthorized.
 
 ## Planning Readiness Checklist
 
@@ -182,7 +186,7 @@ topic-specific questions belong in their owning child packet.
 - [x] Each child structurally validated before the next draft begins.
 - [ ] Each child independently reviewed before its implementation.
 - [ ] Registry and validation evidence updated after each approval.
-- [ ] All eleven required child packets exist and are approved.
+- [ ] All twelve required child packets exist and are approved after AMEND-005 acceptance.
 - [ ] Umbrella packet moved to `completed/` without implying code completion.
 
 ## Validation Evidence
@@ -209,7 +213,7 @@ topic-specific questions belong in their owning child packet.
 | 2026-07-03 | Local deck child approval and activation | Passed | Repository owner approved the Local Deck Store PLC at `c15476d`, authorized implementation, and moved the packet to `in-progress/` with Phase 1 active. |
 | 2026-07-03 | Local deck child lifecycle closure | Passed | All eighteen requirements, five phases, audits, offline tests, per-assembly coverage, exact surface checks, package build, process smoke, official-client MCP smoke, and installed-tool smoke passed; the packet moved to `completed/`. |
 | 2026-07-04 | Manual interchange child approval and activation | Passed | Repository owner approved the Manual Deck Interchange PLC at `4cc041b`, authorized implementation, and moved the packet to `in-progress/` with Phase 1 active. |
-| 2026-07-04 | Manual interchange implementation, audits, and provider UI acceptance | Passed; cleanup confirmation open | All four consolidated tools, native/generic/provider artifact workflows, bounds, official-client dummy-deck workflows, package validation, audits, and per-assembly coverage gates pass. Dated authenticated UI checks make Archidekt and Moxfield available with empirical companion-only limits; only disposable-deck deletion remains to close XCHG-017. |
+| 2026-07-04 | Manual interchange implementation, audits, provider UI acceptance, and cleanup | Passed | All four consolidated tools, native/generic/provider artifact workflows, bounds, official-client dummy-deck workflows, package validation, audits, and per-assembly coverage gates pass. Dated authenticated UI checks make Archidekt and Moxfield available with empirical companion-only limits; the repository owner confirmed both disposable decks were deleted, closing XCHG-017. |
 | 2026-07-04 | Archidekt child approval and activation | Passed | Repository owner approved the Archidekt PLC at `e256a37`, authorized implementation with strong rate-limit handling, and activated Phase 0. |
 | 2026-07-04 | AMEND-003 capability-toolset guardrail | Accepted | Repository owner required startup-selectable toolsets, north-star acceptance checks in all remaining children, a dedicated toolset child before Scryfall, and immediate consolidation of the interchange format catalog tools. |
 | 2026-07-04 | AMEND-003 dependent reconciliation | Superseded by proposed AMEND-004 | All remaining packets gained toolset, surface-rationale, evidence-boundary, and north-star checks; AMEND-004 replaces its derived surface totals. |
@@ -222,10 +226,12 @@ topic-specific questions belong in their owning child packet.
 | 2026-07-04 | Playgroup child approval and activation | Passed | Repository owner approved the pinned official API child, authorized implementation, retained fixture-only writes because the contract has no cleanup, and activated the packet on the rewrite branch. |
 | 2026-07-04 | Playgroup implementation and lifecycle closure | Passed | All 15 official operations plus redacted auth status, exact 14/14/16 visibility, lossless provider evidence, conservative rate handling, fixture-only writes, audits, coverage, packages, and installed MCP smokes passed. No key was configured, so the safe `/me` live test remains explicitly unexecuted. Current `all` totals are 46/67/80; default remains 21/41/41. |
 | 2026-07-06 | Playgroup packaged live acceptance | Passed | All 14 safe reads passed through the installed MCP against the owner-authorized playgroup, both writes remained fixture-only, and zero writes were sent. The run exposed and resolved the unbounded all-commander turn-damage result by requiring exact caller-selected row evidence with a bounded aggregate fetch and full-source checksum. |
+| 2026-07-06 | AMEND-005 and hardening child approval | Accepted and activated | The repository owner approved the decision-complete plan, authorized implementation, and activated Phase 1. The accepted targets are 22/43/43 default, 47/69/82 all, 32/54/54 final default, and 57/80/93 final all. |
+| 2026-07-06 | Hardening implementation and lifecycle closure | Passed | Capability schema 6, the closed batch union, 25 deck tools including exact identity preview/apply, 47/69/82 complete-profile counts, provider ownership refactors, full offline/package/coverage/dependency/audit gates, and bounded read-only Scryfall/Archidekt live checks passed. Child 9 moved to completed; child 10 remains unauthorized pending owner review. |
 
 ## Completion Notes
 
-Complete this packet when all eleven required child PLCs have been authored and
+Complete this packet when all twelve required child PLCs under accepted AMEND-005 have been authored and
 independently approved. Drafting all children leaves this umbrella in progress
 until those reviews occur. Child implementation and the `0.9.0` release have
 independent lifecycle and completion evidence.

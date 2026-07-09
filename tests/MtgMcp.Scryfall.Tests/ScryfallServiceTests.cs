@@ -1109,6 +1109,171 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
+    /// Verifies exact deck-identity evidence deduplicates, skips unsupported language acquisition, and replays locally.
+    /// </summary>
+    [Fact]
+    public async Task ExactCollectionEvidence_ResolvesAndReplaysRetainedEvidence()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = ScryfallTestFixture.Provider();
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        ScryfallEvidenceLookup red = new(
+            new ScryfallCardLookup("exact-name", "Monastery Swiftspear"));
+        ScryfallEvidenceLookup nonEnglish = new(
+            new ScryfallCardLookup("printing", SetCode: "eld", CollectorNumber: "35"),
+            "fr");
+        ScryfallEvidenceLookup[] lookups = [red, red, nonEnglish];
+
+        ScryfallExactCollectionEvidence first = RequireSuccess(await service.ResolveExactCollectionAsync(
+            lookups,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(["found", "found", "not-cached"], first.Rows.Select(value => value.Status));
+        Assert.Equal([0, 1, 2], first.Rows.Select(value => value.Index));
+        Assert.NotNull(first.Binding.Snapshot);
+        RecordedRequest request = Assert.Single(handler.Requests.Where(
+            value => value.Uri.AbsolutePath == "/cards/collection"));
+        using (JsonDocument body = JsonDocument.Parse(request.Body!))
+        {
+            Assert.Single(body.RootElement.GetProperty("identifiers").EnumerateArray());
+        }
+
+        int requestCount = handler.Requests.Count;
+        ScryfallExactCollectionEvidence replay = RequireSuccess(await service.ReplayExactCollectionAsync(
+            lookups,
+            first.Binding,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            JsonSerializer.Serialize(first.Rows),
+            JsonSerializer.Serialize(replay.Rows));
+        Assert.Equal(requestCount, handler.Requests.Count);
+
+        ScryfallCollectionEvidenceBinding wrongChecksum = first.Binding with
+        {
+            EvidenceChecksum = new string('0', first.Binding.EvidenceChecksum.Length),
+        };
+        OperationUnavailable mismatch = Assert.IsType<OperationUnavailable>((await service.ReplayExactCollectionAsync(
+            lookups,
+            wrongChecksum,
+            TestContext.Current.CancellationToken)).Value);
+        Assert.Equal("identity-evidence-unavailable", mismatch.ReasonCode);
+
+        _ = RequireSuccess(await service.DeleteSnapshotAsync(
+            first.Binding.Snapshot!.SnapshotId,
+            first.Binding.Snapshot.Checksum,
+            true,
+            TestContext.Current.CancellationToken));
+        OperationUnavailable pruned = Assert.IsType<OperationUnavailable>((await service.ReplayExactCollectionAsync(
+            lookups,
+            first.Binding,
+            TestContext.Current.CancellationToken)).Value);
+        Assert.Equal("identity-evidence-unavailable", pruned.ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies exact identity acquisition retains the 150-row MCP bound and 75-identifier provider batches.
+    /// </summary>
+    [Fact]
+    public async Task ExactCollectionEvidence_BatchesOneHundredFiftyAndRejectsOneHundredFiftyOne()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = ScryfallTestFixture.Provider();
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        ScryfallEvidenceLookup[] lookups = Enumerable.Range(0, 150)
+            .Select(index => new ScryfallEvidenceLookup(
+                new ScryfallCardLookup("exact-name", $"Missing Exact Fixture {index}")))
+            .ToArray();
+
+        ScryfallExactCollectionEvidence evidence = RequireSuccess(await service.ResolveExactCollectionAsync(
+            lookups,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(150, evidence.Rows.Count);
+        Assert.All(evidence.Rows, value => Assert.Equal("not-found", value.Status));
+        RecordedRequest[] batches = handler.Requests.Where(
+            value => value.Uri.AbsolutePath == "/cards/collection").ToArray();
+        Assert.Equal(2, batches.Length);
+        Assert.All(batches, request =>
+        {
+            using JsonDocument body = JsonDocument.Parse(request.Body!);
+            Assert.Equal(75, body.RootElement.GetProperty("identifiers").GetArrayLength());
+        });
+
+        OperationInvalidInput rejected = Assert.IsType<OperationInvalidInput>(
+            (await service.ResolveExactCollectionAsync(
+                [.. lookups, lookups[0]],
+                cancellationToken: TestContext.Current.CancellationToken)).Value);
+        Assert.Equal("invalid-scryfall-collection", rejected.ReasonCode);
+        Assert.Equal(2, batches.Length);
+    }
+
+    /// <summary>
+    /// Verifies the exact-evidence acquisition boundary uses one batch at 75 and two at 76.
+    /// </summary>
+    [Theory]
+    [InlineData(75, 1)]
+    [InlineData(76, 2)]
+    public async Task ExactCollectionEvidence_UsesProviderBatchBoundary(
+        int lookupCount,
+        int expectedBatchCount)
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = ScryfallTestFixture.Provider();
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        ScryfallEvidenceLookup[] lookups = Enumerable.Range(0, lookupCount)
+            .Select(index => new ScryfallEvidenceLookup(
+                new ScryfallCardLookup("exact-name", $"Boundary Fixture {index}")))
+            .ToArray();
+
+        ScryfallExactCollectionEvidence evidence = RequireSuccess(await service.ResolveExactCollectionAsync(
+            lookups,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(lookupCount, evidence.Rows.Count);
+        RecordedRequest[] batches = handler.Requests.Where(
+            value => value.Uri.AbsolutePath == "/cards/collection").ToArray();
+        Assert.Equal(expectedBatchCount, batches.Length);
+        Assert.All(batches, request =>
+        {
+            using JsonDocument body = JsonDocument.Parse(request.Body!);
+            Assert.InRange(body.RootElement.GetProperty("identifiers").GetArrayLength(), 1, 75);
+        });
+    }
+
+    /// <summary>
+    /// Verifies cache-only exact resolution remains a successful explicit miss and read-only acquisition never writes.
+    /// </summary>
+    [Fact]
+    public async Task ExactCollectionEvidence_CacheOnlyAndReadOnlyPreserveZeroWriteBehavior()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = ScryfallTestFixture.Provider();
+        ScryfallEvidenceLookup[] lookups =
+            [new(new ScryfallCardLookup("exact-name", "Monastery Swiftspear"))];
+        using ScryfallService reader = new(
+            temporary.Path,
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ScryfallTestFixture.ApiBaseUri,
+            handler: handler);
+
+        ScryfallExactCollectionEvidence cached = RequireSuccess(await reader.ResolveExactCollectionAsync(
+            lookups,
+            "cache-only",
+            TestContext.Current.CancellationToken));
+        Assert.Equal("not-cached", Assert.Single(cached.Rows).Status);
+        Assert.False(File.Exists(Path.Combine(temporary.Path, "scryfall.db")));
+        Assert.Empty(handler.Requests);
+
+        OperationUnavailable required = Assert.IsType<OperationUnavailable>((await reader.ResolveExactCollectionAsync(
+            lookups,
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+        Assert.Equal("local-write-required", required.ReasonCode);
+        Assert.False(File.Exists(Path.Combine(temporary.Path, "scryfall.db")));
+        Assert.Empty(handler.Requests);
+    }
+
+    /// <summary>
     /// Verifies a collection cursor replays its retained generation and fails explicitly after pruning.
     /// </summary>
     [Fact]

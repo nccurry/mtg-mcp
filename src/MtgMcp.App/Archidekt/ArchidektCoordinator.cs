@@ -8,7 +8,7 @@ namespace MtgMcp.App.Archidekt;
 /// <summary>
 /// Composes provider evidence with the revisioned local deck store without leaking persistence into the adapter.
 /// </summary>
-internal sealed class ArchidektCoordinator
+internal sealed class ArchidektSynchronizationContext
 {
     /// <summary>
     /// Identifies local bindings owned by this provider adapter.
@@ -23,7 +23,7 @@ internal sealed class ArchidektCoordinator
     /// <summary>
     /// Creates one App-owned composition boundary.
     /// </summary>
-    internal ArchidektCoordinator(ArchidektService service, SqliteDeckStore deckStore)
+    internal ArchidektSynchronizationContext(ArchidektService service, SqliteDeckStore deckStore)
     {
         Service = service ?? throw new ArgumentNullException(nameof(service));
         this.deckStore = deckStore ?? throw new ArgumentNullException(nameof(deckStore));

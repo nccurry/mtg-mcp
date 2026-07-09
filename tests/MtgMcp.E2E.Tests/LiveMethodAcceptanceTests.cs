@@ -106,6 +106,33 @@ public sealed class LiveMethodAcceptanceTests
             Guid deckId = deck.GetProperty("deckId").GetGuid();
             long revision = deck.GetProperty("revision").GetInt64();
 
+            JsonElement identityPreview = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_identity_reconcile_preview",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["freshnessPolicy"] = "default",
+                },
+                token).ConfigureAwait(false);
+            Assert.True(identityPreview.GetProperty("isComplete").GetBoolean());
+            deck = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_identity_reconcile_apply",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["previewFingerprint"] = identityPreview.GetProperty("previewFingerprint").GetString(),
+                    ["applyToken"] = identityPreview.GetProperty("applyToken").GetString(),
+                    ["allowPartial"] = false,
+                },
+                token).ConfigureAwait(false);
+            revision = deck.GetProperty("revision").GetInt64();
+
             JsonElement listed = await CallSuccessAsync(
                 environment,
                 session,
@@ -2057,12 +2084,12 @@ public sealed class LiveMethodAcceptanceTests
     {
         (string Mode, string Toolsets, int Count)[] cases =
         [
-            ("read-only", "default", 21),
-            ("local", "default", 41),
-            ("remote", "default", 41),
-            ("read-only", "all", 46),
-            ("local", "all", 67),
-            ("remote", "all", 80),
+            ("read-only", "default", 22),
+            ("local", "default", 43),
+            ("remote", "default", 43),
+            ("read-only", "all", 47),
+            ("local", "all", 69),
+            ("remote", "all", 82),
             ("read-only", "none", 0),
             ("local", "none", 0),
             ("remote", "none", 0),

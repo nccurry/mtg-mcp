@@ -9,7 +9,7 @@ namespace MtgMcp.App.Tests;
 public sealed class DeckChangeInputTests
 {
     /// <summary>
-    /// Verifies every supported discriminator maps without inspecting unrelated optional fields.
+    /// Verifies every supported variant maps to its exact Core mutation case.
     /// </summary>
     [Fact]
     public void TryMap_AllDiscriminators_ProduceExpectedCases()
@@ -20,17 +20,17 @@ public sealed class DeckChangeInputTests
         DeckProviderBinding binding = new(id, "archidekt", "42", null, null, null, null, null);
         DeckChangeInput[] inputs =
         [
-            new("update-metadata", Name: "Deck", Format: "commander"),
-            new("add-entry", EntryDraft: new DeckEntryDraft(1, "Card")),
-            new("update-entry", Entry: entry),
-            new("remove-entry", EntryId: id),
-            new("add-category", CategoryDraft: new DeckCategoryDraft("Ramp")),
-            new("update-category", Category: category),
-            new("remove-category", CategoryId: id),
-            new("assign-category", EntryId: id, CategoryId: id, IsPrimary: true),
-            new("unassign-category", EntryId: id, CategoryId: id),
-            new("upsert-provider-binding", ProviderBinding: binding, CanonicalBaseline: "{}"),
-            new("remove-provider-binding", BindingId: id),
+            new UpdateDeckMetadataInput("Deck", null, "commander"),
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Card")),
+            new UpdateDeckEntryInput(entry),
+            new RemoveDeckEntryInput(id),
+            new AddDeckCategoryInput(new DeckCategoryDraft("Ramp")),
+            new UpdateDeckCategoryInput(category),
+            new RemoveDeckCategoryInput(id),
+            new AssignDeckCategoryInput(id, id, true),
+            new UnassignDeckCategoryInput(id, id),
+            new UpsertDeckProviderBindingInput(binding, "{}"),
+            new RemoveDeckProviderBindingInput(id),
         ];
 
         bool success = DeckChangeInputMapper.TryMap(inputs, out IReadOnlyList<DeckChange> changes, out string failure);
@@ -53,7 +53,7 @@ public sealed class DeckChangeInputTests
     }
 
     /// <summary>
-    /// Verifies empty, unknown, and incomplete changes fail before any transaction can begin.
+    /// Verifies empty, unsupported, and semantically incomplete changes fail before execution.
     /// </summary>
     [Fact]
     public void TryMap_InvalidInputs_ReturnBoundedFailure()
@@ -63,17 +63,26 @@ public sealed class DeckChangeInputTests
         Assert.NotEmpty(nullFailure);
 
         Assert.False(DeckChangeInputMapper.TryMap(
-            [new DeckChangeInput("future-change")],
+            [new UnsupportedDeckChangeInput()],
             out IReadOnlyList<DeckChange> unknownChanges,
             out string unknownFailure));
         Assert.Empty(unknownChanges);
-        Assert.NotEmpty(unknownFailure);
+        Assert.Equal(
+            "Deck change at index 0 with kind 'unsupported' requires a supported change kind.",
+            unknownFailure);
 
         Assert.False(DeckChangeInputMapper.TryMap(
-            [new DeckChangeInput("add-entry")],
+            [new RemoveDeckEntryInput(Guid.Empty)],
             out IReadOnlyList<DeckChange> incompleteChanges,
             out string incompleteFailure));
         Assert.Empty(incompleteChanges);
-        Assert.NotEmpty(incompleteFailure);
+        Assert.Equal(
+            "Deck change at index 0 with kind 'remove-entry' requires a non-empty entryId.",
+            incompleteFailure);
     }
+
+    /// <summary>
+    /// Represents a future union case so the mapper's defensive failure remains covered.
+    /// </summary>
+    private sealed record UnsupportedDeckChangeInput : DeckChangeInput;
 }

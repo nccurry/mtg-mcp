@@ -5,13 +5,13 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-04
+- Last updated: 2026-07-06
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
 ## Entry Gate
 
-Do not begin this plan until the ten prerequisite child PLCs are approved,
+Do not begin this plan until the eleven prerequisite child PLCs are approved,
 implemented, accepted, and completed. Reopen the owning child instead of fixing
 capability behavior opportunistically in this cutover.
 

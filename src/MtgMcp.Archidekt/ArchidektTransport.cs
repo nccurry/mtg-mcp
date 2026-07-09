@@ -8,7 +8,7 @@ namespace MtgMcp.Archidekt;
 /// <summary>
 /// Owns authentication, HTTP, conservative retries, pacing, and the observed Archidekt route contract.
 /// </summary>
-internal sealed class ArchidektTransport : IDisposable
+internal sealed class ArchidektTransportContext : IDisposable
 {
     /// <summary>
     /// Sends provider requests through an injected or owned HTTP client.
@@ -48,7 +48,7 @@ internal sealed class ArchidektTransport : IDisposable
     /// <summary>
     /// Creates a production transport with an honestly identified HTTP client.
     /// </summary>
-    internal ArchidektTransport(ArchidektOptions options, string packageVersion)
+    internal ArchidektTransportContext(ArchidektOptions options, string packageVersion)
         : this(CreateHttpClient(options, packageVersion), ownsHttpClient: true, options)
     {
     }
@@ -56,7 +56,7 @@ internal sealed class ArchidektTransport : IDisposable
     /// <summary>
     /// Creates a deterministic transport over an injected HTTP client.
     /// </summary>
-    internal ArchidektTransport(
+    internal ArchidektTransportContext(
         HttpClient httpClient,
         bool ownsHttpClient,
         ArchidektOptions options,
@@ -112,7 +112,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        RemoteDeckPage complete = ArchidektContractMapper.MapDeckPage(
+        RemoteDeckPage complete = ArchidektDeckContractMapper.MapDeckPage(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,
@@ -163,7 +163,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        return ArchidektContractMapper.MapDeck(
+        return ArchidektDeckContractMapper.MapDeck(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,
@@ -210,7 +210,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        return ArchidektContractMapper.MapDeck(
+        return ArchidektDeckContractMapper.MapDeck(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,
@@ -378,7 +378,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        return ArchidektContractMapper.MapFolderTree(
+        return ArchidektFolderContractMapper.MapFolderTree(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,
@@ -403,7 +403,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        return ArchidektContractMapper.MapFolderDetail(
+        return ArchidektFolderContractMapper.MapFolderDetail(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,
@@ -526,7 +526,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        return ArchidektContractMapper.MapSnapshotPage(
+        return ArchidektSnapshotContractMapper.MapSnapshotPage(
             document.RootElement,
             deckId,
             response.Json,
@@ -554,7 +554,7 @@ internal sealed class ArchidektTransport : IDisposable
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ParseJson(response.Json);
-        return ArchidektContractMapper.MapSnapshot(
+        return ArchidektSnapshotContractMapper.MapSnapshot(
             document.RootElement,
             deckId,
             response.Json,

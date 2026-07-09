@@ -53,9 +53,14 @@ internal sealed class FoundationResources
         foreach (CapabilityToolsetDescriptor descriptor in CapabilityToolsetRegistry.Implemented)
         {
             bool enabled = configuration.Toolsets.Includes(descriptor.Toolset);
+            (string credentialState, string? authenticationStatusTool) = GetCredentialProjection(
+                configuration,
+                descriptor.Toolset);
             toolsets.Add(new FoundationToolsetStatus(
                 descriptor.Name,
-                CapabilityToolsetPolicy.Format(descriptor.Availability),
+                "implemented",
+                credentialState,
+                authenticationStatusTool,
                 CapabilityToolsetPolicy.Format(descriptor.Stability),
                 enabled,
                 descriptor.DefaultEnabled,
@@ -67,7 +72,7 @@ internal sealed class FoundationResources
         }
 
         FoundationCapabilityDocument document = new(
-            5,
+            6,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
@@ -87,5 +92,46 @@ internal sealed class FoundationResources
                 "public-api-1.0.0"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);
+    }
+
+    /// <summary>
+    /// Projects configuration presence without loading credentials or contacting a provider.
+    /// </summary>
+    internal static (string CredentialState, string? AuthenticationStatusTool) GetCredentialProjection(
+        FoundationConfiguration configuration,
+        CapabilityToolset toolset)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        return toolset switch
+        {
+            CapabilityToolset.Decks or CapabilityToolset.Scryfall => ("not-required", null),
+            CapabilityToolset.Archidekt => (
+                IsArchidektConfigured(configuration) ? "configured-unverified" : "not-configured",
+                "archidekt_auth_status"),
+            CapabilityToolset.Playgroup => (
+                IsPlaygroupConfigured(configuration) ? "configured-unverified" : "not-configured",
+                "playgroup_auth_status"),
+            _ => ("not-required", null),
+        };
+    }
+
+    /// <summary>
+    /// Reports whether any Archidekt credential source was configured without reading it.
+    /// </summary>
+    private static bool IsArchidektConfigured(FoundationConfiguration configuration)
+    {
+        return !string.IsNullOrWhiteSpace(configuration.Archidekt.Username) ||
+            !string.IsNullOrWhiteSpace(configuration.Archidekt.Password) ||
+            !string.IsNullOrWhiteSpace(configuration.Archidekt.CredentialsFile);
+    }
+
+    /// <summary>
+    /// Reports whether any Playgroup credential source was configured without reading it.
+    /// </summary>
+    private static bool IsPlaygroupConfigured(FoundationConfiguration configuration)
+    {
+        return !string.IsNullOrWhiteSpace(configuration.Playgroup.ApiKey) ||
+            !string.IsNullOrWhiteSpace(configuration.Playgroup.CredentialsFile);
     }
 }

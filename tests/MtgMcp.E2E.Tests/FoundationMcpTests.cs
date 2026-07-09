@@ -22,6 +22,12 @@ public sealed class FoundationMcpTests
         ["not-detected", "detected", "inspection-unavailable"];
 
     /// <summary>
+    /// Lists credential-presence states permitted for provider-backed toolsets.
+    /// </summary>
+    private static readonly string[] ProviderCredentialStates =
+        ["not-configured", "configured-unverified"];
+
+    /// <summary>
     /// Lists the read-only deck surface available in every operation mode.
     /// </summary>
     private static readonly string[] DeckReadToolNames =
@@ -29,6 +35,7 @@ public sealed class FoundationMcpTests
         "deck_backup_list",
         "deck_export_bundle",
         "deck_get",
+        "deck_identity_reconcile_preview",
         "deck_import_preview",
         "deck_interchange_formats",
         "deck_list",
@@ -57,6 +64,8 @@ public sealed class FoundationMcpTests
         "deck_entry_update",
         "deck_export_bundle",
         "deck_get",
+        "deck_identity_reconcile_apply",
+        "deck_identity_reconcile_preview",
         "deck_import_create",
         "deck_import_preview",
         "deck_interchange_formats",
@@ -172,10 +181,10 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "local", 41)]
-    [InlineData("read-only", "read-only", 21)]
-    [InlineData("local", "local", 41)]
-    [InlineData("remote", "remote", 41)]
+    [InlineData(null, "local", 43)]
+    [InlineData("read-only", "read-only", 22)]
+    [InlineData("local", "local", 43)]
+    [InlineData("remote", "remote", 43)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -243,7 +252,7 @@ public sealed class FoundationMcpTests
             "legacyDataState",
             "migrationBoundary",
             "scryfallFreshnessHours");
-        Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(6, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
@@ -276,15 +285,15 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("read-only", "default", "default", 21)]
-    [InlineData("local", "default", "default", 41)]
-    [InlineData("remote", "default", "default", 41)]
-    [InlineData("read-only", "all", "all", 46)]
-    [InlineData("local", "all", "all", 67)]
-    [InlineData("remote", "all", "all", 80)]
-    [InlineData("read-only", "decks", "explicit", 7)]
-    [InlineData("local", "decks", "explicit", 23)]
-    [InlineData("remote", "decks", "explicit", 23)]
+    [InlineData("read-only", "default", "default", 22)]
+    [InlineData("local", "default", "default", 43)]
+    [InlineData("remote", "default", "default", 43)]
+    [InlineData("read-only", "all", "all", 47)]
+    [InlineData("local", "all", "all", 69)]
+    [InlineData("remote", "all", "all", 82)]
+    [InlineData("read-only", "decks", "explicit", 8)]
+    [InlineData("local", "decks", "explicit", 25)]
+    [InlineData("remote", "decks", "explicit", 25)]
     [InlineData("read-only", "scryfall", "explicit", 14)]
     [InlineData("local", "scryfall", "explicit", 18)]
     [InlineData("remote", "scryfall", "explicit", 18)]
@@ -390,6 +399,8 @@ public sealed class FoundationMcpTests
             ["deck_entry_update"] = ["deckId", "entry", "expectedRevision"],
             ["deck_export_bundle"] = ["deckId", "formatId", "options"],
             ["deck_get"] = ["deckId"],
+            ["deck_identity_reconcile_apply"] = ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint"],
+            ["deck_identity_reconcile_preview"] = ["deckId", "entryIds", "expectedRevision", "freshnessPolicy"],
             ["deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options"],
             ["deck_import_preview"] = ["content", "formatId", "options"],
             ["deck_interchange_formats"] = [],
@@ -407,6 +418,7 @@ public sealed class FoundationMcpTests
             "deck_category_unassign",
             "deck_delete",
             "deck_entry_remove",
+            "deck_identity_reconcile_apply",
         ];
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
@@ -431,7 +443,9 @@ public sealed class FoundationMcpTests
             Assert.Equal(readOnly.Contains(tool.Name), tool.ProtocolTool.Annotations.ReadOnlyHint);
             Assert.Equal(destructive.Contains(tool.Name), tool.ProtocolTool.Annotations.DestructiveHint);
             Assert.Equal(readOnly.Contains(tool.Name), tool.ProtocolTool.Annotations.IdempotentHint);
-            Assert.False(tool.ProtocolTool.Annotations.OpenWorldHint);
+            Assert.Equal(
+                tool.Name == "deck_identity_reconcile_preview",
+                tool.ProtocolTool.Annotations.OpenWorldHint);
         }
     }
 
@@ -574,6 +588,84 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
+    /// Verifies every public root input field and batch-change variant field explains its contract.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task AllTools_RemoteMode_DescribeEveryPublicInputField()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "all",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        List<string> missing = [];
+
+        foreach (McpClientTool tool in tools)
+        {
+            foreach (JsonProperty property in tool.ProtocolTool.InputSchema
+                         .GetProperty("properties")
+                         .EnumerateObject())
+            {
+                if (!HasDescription(property.Value))
+                {
+                    missing.Add($"{tool.Name}.{property.Name}");
+                }
+            }
+        }
+
+        McpClientTool batchTool = Assert.Single(tools, value => value.Name == "deck_apply_changes");
+        JsonElement itemSchema = batchTool.ProtocolTool.InputSchema
+            .GetProperty("properties")
+            .GetProperty("changes")
+            .GetProperty("items");
+        JsonElement variants = itemSchema.TryGetProperty("anyOf", out JsonElement anyOf)
+            ? anyOf
+            : itemSchema.GetProperty("oneOf");
+        Dictionary<string, string[]> expectedVariants = new(StringComparer.Ordinal)
+        {
+            ["update-metadata"] = ["description", "format", "kind", "name"],
+            ["add-entry"] = ["entryDraft", "kind"],
+            ["update-entry"] = ["entry", "kind"],
+            ["remove-entry"] = ["entryId", "kind"],
+            ["add-category"] = ["categoryDraft", "kind"],
+            ["update-category"] = ["category", "kind"],
+            ["remove-category"] = ["categoryId", "kind"],
+            ["assign-category"] = ["categoryId", "entryId", "isPrimary", "kind"],
+            ["unassign-category"] = ["categoryId", "entryId", "kind"],
+            ["upsert-provider-binding"] = ["canonicalBaseline", "kind", "providerBinding"],
+            ["remove-provider-binding"] = ["bindingId", "kind"],
+        };
+        HashSet<string> observedKinds = new(StringComparer.Ordinal);
+        foreach (JsonElement variant in variants.EnumerateArray())
+        {
+            JsonElement properties = variant.GetProperty("properties");
+            string kind = properties.GetProperty("kind").GetProperty("const").GetString()!;
+            Assert.True(observedKinds.Add(kind), $"Duplicate deck change discriminator: {kind}");
+            Assert.Equal(
+                expectedVariants[kind],
+                properties.EnumerateObject().Select(value => value.Name).Order(StringComparer.Ordinal));
+            Assert.Equal(
+                expectedVariants[kind].Where(value => value != "kind"),
+                variant.GetProperty("required").EnumerateArray()
+                    .Select(value => value.GetString())
+                    .Order(StringComparer.Ordinal));
+            foreach (JsonProperty property in properties.EnumerateObject())
+            {
+                if (!HasDescription(property.Value))
+                {
+                    missing.Add($"deck_apply_changes.changes[].{property.Name}");
+                }
+            }
+        }
+
+        Assert.Equal(expectedVariants.Keys.Order(StringComparer.Ordinal), observedKinds.Order(StringComparer.Ordinal));
+
+        Assert.True(missing.Count == 0, $"Missing MCP input descriptions: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>
     /// Verifies the exact mode-specific tool count, one resource, and zero prompts.
     /// </summary>
     private static void AssertSurface(JsonElement surface, int expectedToolCount)
@@ -607,7 +699,7 @@ public sealed class FoundationMcpTests
             "decks",
             decksEnabled,
             defaultEnabled: true,
-            decksEnabled ? (mode == "read-only" ? 7 : 23) : 0);
+            decksEnabled ? (mode == "read-only" ? 8 : 25) : 0);
         AssertDescriptor(
             descriptors[1],
             "scryfall",
@@ -655,7 +747,9 @@ public sealed class FoundationMcpTests
         AssertPropertyOrder(
             descriptor,
             "name",
-            "status",
+            "implementationStatus",
+            "credentialState",
+            "authenticationStatusTool",
             "stability",
             "enabled",
             "defaultEnabled",
@@ -663,11 +757,35 @@ public sealed class FoundationMcpTests
             "description",
             "unsupportedOperations");
         Assert.Equal(name, descriptor.GetProperty("name").GetString());
-        Assert.Equal("available", descriptor.GetProperty("status").GetString());
+        Assert.Equal("implemented", descriptor.GetProperty("implementationStatus").GetString());
+        if (name is "decks" or "scryfall")
+        {
+            Assert.Equal("not-required", descriptor.GetProperty("credentialState").GetString());
+            Assert.Equal(JsonValueKind.Null, descriptor.GetProperty("authenticationStatusTool").ValueKind);
+        }
+        else
+        {
+            Assert.Contains(
+                descriptor.GetProperty("credentialState").GetString(),
+                ProviderCredentialStates);
+            Assert.Equal(
+                name == "archidekt" ? "archidekt_auth_status" : "playgroup_auth_status",
+                descriptor.GetProperty("authenticationStatusTool").GetString());
+        }
+
         Assert.Equal("stable", descriptor.GetProperty("stability").GetString());
         Assert.Equal(enabled, descriptor.GetProperty("enabled").GetBoolean());
         Assert.Equal(defaultEnabled, descriptor.GetProperty("defaultEnabled").GetBoolean());
         Assert.Equal(visibleToolCount, descriptor.GetProperty("visibleToolCount").GetInt32());
+    }
+
+    /// <summary>
+    /// Reports whether one generated schema node contains useful descriptive text.
+    /// </summary>
+    private static bool HasDescription(JsonElement schema)
+    {
+        return schema.TryGetProperty("description", out JsonElement description) &&
+            !string.IsNullOrWhiteSpace(description.GetString());
     }
 
     /// <summary>

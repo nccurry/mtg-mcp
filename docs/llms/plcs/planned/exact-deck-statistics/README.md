@@ -6,8 +6,8 @@
 - Folder: `docs/llms/plcs/planned/exact-deck-statistics/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
-- Current phase: independent child review
+- Last updated: 2026-07-06
+- Current phase: ready for independent owner review; implementation unauthorized
 
 ## Summary
 
@@ -21,6 +21,7 @@ bottom policies. The package never classifies cards or falls back to sampling.
 
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
+- [MCP Contract And Adapter Hardening](../../completed/mcp-contract-and-adapter-hardening/README.md)
 - [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions

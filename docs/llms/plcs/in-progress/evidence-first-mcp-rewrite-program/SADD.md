@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: repository owner and designated child PLC reviewers
-- Last updated: 2026-07-04
+- Last updated: 2026-07-06
 - Related SRD: [SRD.md](SRD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -20,10 +20,11 @@
 | 2026-07-04 | Codex | Applied AMEND-003 for static capability toolsets and north-star acceptance. |
 | 2026-07-04 | Codex | Reconciled proposed AMEND-004 for one official Scryfall corpus, no separate Tagger capability, deterministic deck categorization, and deferred local query evaluation. |
 | 2026-07-04 | Repository owner and Codex | Accepted AMEND-004 and activated the independently approved Scryfall corpus/evidence child. |
+| 2026-07-06 | Codex | Drafted proposed AMEND-005 and the pre-statistics contract/adapter hardening child for independent review. |
 
 ## Executive Summary
 
-The chosen design is a planning-only umbrella packet plus eleven sibling child
+The chosen design is a planning-only umbrella packet plus twelve sibling child
 packets created sequentially in the PLC lifecycle folders. The umbrella owns
 guardrails, registry state, authoring order, approval protocol, and amendments.
 Each child owns one topic's detailed requirements, architecture, interfaces,
@@ -115,9 +116,10 @@ implementation plan, and fixture matrix. The fixed authoring order is:
 6. `scryfall-corpus-and-evidence`
 7. `archidekt-deck-sync`
 8. `playgroup-public-api`
-9. `exact-deck-statistics`
-10. `deterministic-deck-categorization`
-11. `rewrite-stabilization-cutover`
+9. `mcp-contract-and-adapter-hardening`
+10. `exact-deck-statistics`
+11. `deterministic-deck-categorization`
+12. `rewrite-stabilization-cutover`
 
 The first child is a docs-only audit. It creates the proposed deletion and reuse
 allowlists consumed by the foundation draft. Under AMEND-001, later packets may
@@ -216,7 +218,17 @@ child's detailed requirements or design.
 - Report absent deck updates as unsupported, detect contract drift, and prohibit
   reverse engineering of private endpoints.
 
-#### 9. Exact Deck Statistics
+#### 9. MCP Contract And Adapter Hardening
+
+- Separate implemented toolsets from non-I/O credential configuration in the
+  capability resource.
+- Replace the flat deck batch input with a described discriminated union.
+- Add exact-only, evidence-bound deck identity preview/apply without legality,
+  fuzzy resolution, printing choice, or strategic judgment.
+- Decompose proven Scryfall and Archidekt responsibility families while
+  preserving public, provider, persistence, pacing, and failure behavior.
+
+#### 10. Exact Deck Statistics
 
 - Define exact univariate and multivariate hypergeometric calculations,
   cards-seen tables, explicit play/draw assumptions, and exact composition
@@ -228,7 +240,7 @@ child's detailed requirements or design.
 - Require exhaustive enumeration and property-based verification without a
   provider dependency.
 
-#### 10. Deterministic Deck Categorization
+#### 11. Deterministic Deck Categorization
 
 - Define caller-authored rules mapping existing category IDs to exact Oracle or
   art tag selectors, hierarchy behavior, weights, exclusions, assignment mode,
@@ -239,7 +251,7 @@ child's detailed requirements or design.
 - Add exactly three `deck_*` tools to `decks` without provider acquisition,
   hidden default meanings, recommendation, or adapter dependency cycles.
 
-#### 11. Stabilization And `0.9.0` Cutover
+#### 12. Stabilization And `0.9.0` Cutover
 
 - Define cross-module architecture, MCP-schema, offline, packaging,
   documentation, coverage, and opt-in live-provider gates.
@@ -289,9 +301,10 @@ selected toolsets, and mode permissions. Invocation-time mode guards remain
 mandatory even when registration hides a tool. Toolsets never weaken mode
 authority and credentials never silently enable a toolset.
 
-Tool registration remains static for the MCP session. The capability resource
-reports selection and toolset state, but the server does not advertise
-`listChanged`. A selection change requires restart. Unknown names fail before
+Tool registration remains static for the MCP session. Under accepted
+AMEND-005, the capability resource reports implementation, selection, and
+configured-but-unverified credential state separately and without provider
+I/O, but the server does not advertise `listChanged`. A selection change requires restart. Unknown names fail before
 transport with a sanitized error. `all` includes every implemented stable
 toolset but no experimental capability; `none` leaves only initialization and
 the capability resource.
@@ -371,6 +384,7 @@ Lifecycle movement uses ordinary directory moves under `planned/`,
 | Umbrella implementation plan | Sequential packet queue and exit criteria. | Until all children approved | Authoring phases | Registry and approvals | Phase-status inspection |
 | Umbrella fixtures | Review artifacts and acceptance scenarios. | Program lifetime | Checklists | SRD requirements | Acceptance-matrix review |
 | Child PLC | One topic's decision-complete implementation plan. | Independent lifecycle | Standard five-file packet | Approved prerequisites | Child-specific review |
+| Hardening child | Pre-statistics contract correction, exact identity workflow, and provider ownership decomposition. | Independent lifecycle | Two `deck_*` tools and replaced schemas only after approval | Completed children 3, 5, 6, 7, and 8 | Schema, behavior-preservation, audit, and lifecycle review |
 
 ## Runtime And Data Flow
 
@@ -381,9 +395,9 @@ The planning workflow is:
 3. Validate that child's five-file packet and update the umbrella registry.
 4. Draft the next child only after the preceding draft is complete and validated.
 5. If a guardrail conflict appears, stop and process an umbrella amendment.
-6. Repeat through child 11, leaving every unimplemented child in `planned`.
+6. Repeat through child 12, leaving every unimplemented child in `planned`.
 7. Review each child independently and record approval or requested changes.
-8. Move the umbrella to `completed/` after all eleven approvals are recorded.
+8. Move the umbrella to `completed/` after all twelve approvals are recorded.
 
 Child implementation may happen in separately authorized sessions. It does not
 advance the authoring queue unless its findings require an approved amendment.
@@ -465,6 +479,7 @@ Remove template placeholders before requesting child approval.
 | PROG-017 through PROG-019, PROG-021 | Static toolset registry, startup selection, mode intersection, and capability projection. | Default/all/none discovery matrices and capability reconciliation. |
 | PROG-020 | North-star acceptance gate in every remaining child. | Child workflow/evidence checklist and representative E2E fixture. |
 | PROG-022 through PROG-024 | Unified official Scryfall corpus, removed Tagger capability, explicit bulk boundary, authoritative queries, and deferred local evaluator. | Cross-packet terminology, surface/count, provider-contract, and deferred-registry review. |
+| PROG-025 | Pre-statistics hardening child with exact identity and explicit non-goals. | Child traceability, schema/surface matrices, characterization tests, and audit plan. |
 
 ## Implementation Phases
 
@@ -511,5 +526,5 @@ data factual.
 - **Planning approval:** Confirmation that a child is decision-complete.
 - **Implementation authorization:** A separate explicit request to begin code changes.
 - **Guardrail:** A cross-child product, architecture, safety, or quality decision.
-- **Required child:** One of the eleven packets needed to complete this planning program.
+- **Required child:** One of the twelve packets needed to complete this planning program after AMEND-005 acceptance.
 - **Post-cutover topic:** Registered work that is not part of the required queue.

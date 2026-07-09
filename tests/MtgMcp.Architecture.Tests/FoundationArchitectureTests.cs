@@ -256,7 +256,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, eighty-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, eighty-two-tool, zero-prompt toolset-owned surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()
@@ -278,9 +278,9 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Playgroup", "PlaygroupToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(80, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(82, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(11, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(14, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -330,6 +330,8 @@ public sealed class FoundationArchitectureTests
                 "deck_entry_update",
                 "deck_export_bundle",
                 "deck_get",
+                "deck_identity_reconcile_apply",
+                "deck_identity_reconcile_preview",
                 "deck_import_create",
                 "deck_import_preview",
                 "deck_interchange_formats",
@@ -385,7 +387,8 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(toolNames, assignedToolNames);
         Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
-        Assert.Equal(4, Regex.Count(deckManifestSource, @"\.WithTools\("));
+        Assert.Equal(7, Regex.Count(deckManifestSource, @"\.WithTools\("));
+        Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
         Assert.Equal(2, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
         Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithTools\("));
         Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithTools\("));

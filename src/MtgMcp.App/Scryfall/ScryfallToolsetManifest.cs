@@ -15,7 +15,6 @@ internal static class ScryfallToolsetManifest
     /// </summary>
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Scryfall,
-        CapabilityToolsetAvailability.Available,
         CapabilityToolsetStability.Stable,
         "Official Scryfall evidence with exact-request snapshots, an explicitly synchronized local " +
         "corpus, and community tags kept distinct from card facts.",

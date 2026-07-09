@@ -775,7 +775,7 @@ public sealed class ArchidektServiceTests
     {
         json ??= ArchidektTestPayloads.Deck;
         using JsonDocument document = JsonDocument.Parse(json);
-        return ArchidektContractMapper.MapDeck(
+        return ArchidektDeckContractMapper.MapDeck(
             document.RootElement,
             json,
             DateTimeOffset.UtcNow,
@@ -788,7 +788,7 @@ public sealed class ArchidektServiceTests
     private static RemoteFolderTree ParseTree(string json)
     {
         using JsonDocument document = JsonDocument.Parse(json);
-        return ArchidektContractMapper.MapFolderTree(
+        return ArchidektFolderContractMapper.MapFolderTree(
             document.RootElement,
             json,
             DateTimeOffset.UtcNow,

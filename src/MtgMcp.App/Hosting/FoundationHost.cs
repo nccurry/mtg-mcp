@@ -35,7 +35,7 @@ internal static class FoundationHost
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
         bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
-        using ScryfallService? scryfallService = scryfallEnabled
+        using ScryfallService? scryfallService = scryfallEnabled || decksEnabled
             ? new ScryfallService(
                 configuration.DataRoot,
                 OperationModeGuard.Allows(configuration.Mode, OperationRequirement.LocalWrite),
@@ -65,12 +65,12 @@ internal static class FoundationHost
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitUnsupportedImplicitCapabilities()))
             .WithResources(new FoundationResources(configuration));
-        if (decksEnabled && deckStore is not null)
+        if (decksEnabled && deckStore is not null && scryfallService is not null)
         {
-            DeckToolsetManifest.Register(mcpBuilder, deckStore, configuration.Mode);
+            DeckToolsetManifest.Register(mcpBuilder, deckStore, scryfallService, configuration.Mode);
         }
 
-        if (scryfallService is not null)
+        if (scryfallEnabled && scryfallService is not null)
         {
             ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode);
         }

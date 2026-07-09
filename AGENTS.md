@@ -38,6 +38,9 @@
 - The umbrella PLC owns cross-child guardrails. Each child remains independently
   reviewable and must say `Implementation authorized: Yes` before production
   edits begin for that child.
+- Accepted AMEND-005 and the completed `mcp-contract-and-adapter-hardening`
+  child define the current 82-tool runtime. Exact statistics is the next child
+  but remains implementation-ineligible until separately reviewed and approved.
 - Stable `0.9.0` returns evidence, provider data, explicit workflow operations,
   and exact mathematics. The client LLM makes deckbuilding decisions.
 - Do not carry advisor prompts, intent inference, recommendations, weak-card

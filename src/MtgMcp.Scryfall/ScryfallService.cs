@@ -1,16 +1,14 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Evidence;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall;
 
 /// <summary>
-/// Composes local-first Scryfall evidence, authoritative provider acquisition, snapshots, and corpus lifecycle.
+/// Owns local-first card, query, metadata, and tag evidence plus their shared runtime resources.
 /// </summary>
-public sealed class ScryfallService : IDisposable
+internal sealed class ScryfallCardEvidenceOperations : IDisposable
 {
     /// <summary>
     /// Defines the fixed official corpus profile in deterministic order.
@@ -49,34 +47,49 @@ public sealed class ScryfallService : IDisposable
     private readonly ScryfallDatabase database;
 
     /// <summary>
+    /// Owns corpus, card, ruling, and tag persistence operations.
+    /// </summary>
+    internal ScryfallCorpusStore CorpusStore { get; }
+
+    /// <summary>
+    /// Owns immutable request snapshot persistence operations.
+    /// </summary>
+    internal ScryfallSnapshotStore SnapshotStore { get; }
+
+    /// <summary>
+    /// Owns cross-process acquisition leases and provider pacing coordination.
+    /// </summary>
+    internal ScryfallRequestCoordinationStore CoordinationStore { get; }
+
+    /// <summary>
     /// Stores the bounded official provider boundary.
     /// </summary>
-    private readonly ScryfallProviderClient provider;
+    internal ScryfallProviderClient Provider { get; }
 
     /// <summary>
     /// Supplies deterministic time and delays.
     /// </summary>
-    private readonly TimeProvider timeProvider;
+    internal TimeProvider TimeProvider { get; }
 
     /// <summary>
     /// Selects snapshot eligibility.
     /// </summary>
-    private readonly TimeSpan freshnessTtl;
+    internal TimeSpan FreshnessTtl { get; }
 
     /// <summary>
     /// Records whether this process may mutate the local evidence store.
     /// </summary>
-    private readonly bool allowLocalWrites;
+    internal bool AllowLocalWrites { get; }
 
     /// <summary>
     /// Stores the private data root only for free-space preflight.
     /// </summary>
-    private readonly string dataRoot;
+    internal string DataRoot { get; }
 
     /// <summary>
     /// Creates the shared Scryfall capability with official production defaults.
     /// </summary>
-    public ScryfallService(
+    internal ScryfallCardEvidenceOperations(
         string dataRoot,
         bool allowLocalWrites,
         string packageVersion,
@@ -87,21 +100,24 @@ public sealed class ScryfallService : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(packageVersion);
-        this.dataRoot = dataRoot;
-        this.allowLocalWrites = allowLocalWrites;
-        this.freshnessTtl = freshnessTtl ?? TimeSpan.FromHours(24);
-        if (this.freshnessTtl <= TimeSpan.Zero)
+        DataRoot = dataRoot;
+        AllowLocalWrites = allowLocalWrites;
+        FreshnessTtl = freshnessTtl ?? TimeSpan.FromHours(24);
+        if (FreshnessTtl <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(freshnessTtl), "Freshness TTL must be positive.");
         }
 
-        this.timeProvider = timeProvider ?? TimeProvider.System;
+        TimeProvider = timeProvider ?? System.TimeProvider.System;
         database = new ScryfallDatabase(dataRoot);
-        provider = new ScryfallProviderClient(
+        CorpusStore = new ScryfallCorpusStore(database);
+        SnapshotStore = new ScryfallSnapshotStore(database);
+        CoordinationStore = new ScryfallRequestCoordinationStore(database);
+        Provider = new ScryfallProviderClient(
             apiBaseUri ?? new Uri("https://api.scryfall.com/", UriKind.Absolute),
             $"mtg-mcp/{packageVersion}",
-            database,
-            this.timeProvider,
+            CoordinationStore,
+            TimeProvider,
             handler);
     }
 
@@ -159,7 +175,7 @@ public sealed class ScryfallService : IDisposable
             "search",
             request,
             freshnessPolicy,
-            token => provider.GetPagedAsync(path, token),
+            token => Provider.GetPagedAsync(path, token),
             ValidateCardMembers,
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
@@ -205,7 +221,7 @@ public sealed class ScryfallService : IDisposable
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh && lookup.Kind != "fuzzy-name")
         {
-            StoredCorpusObject? stored = await database.FindCardAsync(lookup, cancellationToken).ConfigureAwait(false);
+            StoredCorpusObject? stored = await CorpusStore.FindCardAsync(lookup, cancellationToken).ConfigureAwait(false);
             if (stored is not null)
             {
                 ScryfallCard card = await MapCorpusCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
@@ -222,8 +238,8 @@ public sealed class ScryfallService : IDisposable
             ("value", lookup.Value));
         string path = BuildCardPath(lookup);
         Func<CancellationToken, Task<ProviderAcquisition>> acquire = lookup.Kind == "oracle-id"
-            ? token => provider.GetPagedAsync(path, token)
-            : token => provider.GetSingleAsync(path, token);
+            ? token => Provider.GetPagedAsync(path, token)
+            : token => Provider.GetSingleAsync(path, token);
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
             "card-get",
             request,
@@ -307,14 +323,14 @@ public sealed class ScryfallService : IDisposable
 
         Guid? corpusGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
             ? null
-            : await database.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
+            : await CorpusStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
         List<StoredCorpusObject?> corpusMatches = [];
         List<(int Index, ScryfallCardLookup Lookup)> misses = [];
         for (int index = 0; index < lookups.Count; index++)
         {
             ScryfallCardLookup lookup = lookups[index];
             StoredCorpusObject? stored = corpusGenerationId is Guid generationId
-                ? await database.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
+                ? await CorpusStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
                 : null;
             corpusMatches.Add(stored);
             if (stored is null)
@@ -387,6 +403,309 @@ public sealed class ScryfallService : IDisposable
     }
 
     /// <summary>
+    /// Resolves exact deck-identity evidence without fuzzy matching or arbitrary non-English printing selection.
+    /// </summary>
+    public async Task<OperationResult<ScryfallExactCollectionEvidence>> ResolveExactCollectionAsync(
+        IReadOnlyList<ScryfallEvidenceLookup>? lookups,
+        string freshnessPolicy = "default",
+        CancellationToken cancellationToken = default)
+    {
+        OperationInvalidInput? validation = ValidateEvidenceLookups(lookups);
+        if (validation is not null)
+        {
+            return validation;
+        }
+
+        OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
+        if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
+        {
+            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallExactCollectionEvidence>(policyResult);
+        }
+
+        IReadOnlyList<ScryfallEvidenceLookup> validatedLookups = lookups!;
+        Guid? corpusGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
+            ? null
+            : await CorpusStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
+        List<StoredCorpusObject?> corpusMatches = await LoadExactCorpusMatchesAsync(
+            validatedLookups,
+            corpusGenerationId,
+            cancellationToken).ConfigureAwait(false);
+        List<JsonElement> providerIdentifiers = BuildExactProviderIdentifiers(validatedLookups, corpusMatches);
+        AcquiredSnapshot? acquired = null;
+        if (providerIdentifiers.Count > 0)
+        {
+            SortedDictionary<string, object?> request = Request(
+                ("identifiers", providerIdentifiers),
+                ("operation", "card-collection"),
+                ("providerBatchSize", 75));
+            OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
+                "card-collection",
+                request,
+                freshnessPolicy,
+                token => AcquireCollectionBatchesAsync(providerIdentifiers, token),
+                ValidateCardMembers,
+                cancellationToken).ConfigureAwait(false);
+            if (acquisition is OperationSuccess<AcquiredSnapshot> success)
+            {
+                acquired = success.Data;
+            }
+            else if (acquisition is not OperationNotCached ||
+                     policy.Data != ScryfallFreshnessPolicy.CacheOnly)
+            {
+                return ForwardFailure<AcquiredSnapshot, ScryfallExactCollectionEvidence>(acquisition);
+            }
+        }
+
+        CollectionResolution resolution = await BuildExactCollectionResolutionAsync(
+            validatedLookups,
+            corpusMatches,
+            acquired?.Stored,
+            includeRaw: false,
+            cancellationToken).ConfigureAwait(false);
+        ScryfallSnapshotReference? snapshot = acquired is null ? null : SnapshotReference(acquired);
+        return new OperationSuccess<ScryfallExactCollectionEvidence>(
+            new ScryfallExactCollectionEvidence(
+                resolution.Rows,
+                new ScryfallCollectionEvidenceBinding(
+                    corpusGenerationId,
+                    snapshot,
+                    resolution.Checksum)));
+    }
+
+    /// <summary>
+    /// Replays exact deck-identity resolution from one retained evidence binding without provider access or writes.
+    /// </summary>
+    public async Task<OperationResult<ScryfallExactCollectionEvidence>> ReplayExactCollectionAsync(
+        IReadOnlyList<ScryfallEvidenceLookup>? lookups,
+        ScryfallCollectionEvidenceBinding? binding,
+        CancellationToken cancellationToken = default)
+    {
+        OperationInvalidInput? validation = ValidateEvidenceLookups(lookups);
+        if (validation is not null || binding is null || string.IsNullOrWhiteSpace(binding.EvidenceChecksum))
+        {
+            return validation ?? new OperationInvalidInput(
+                "invalid-scryfall-evidence-binding",
+                "The Scryfall evidence binding is invalid.");
+        }
+
+        if (binding.CorpusGenerationId is Guid generationId &&
+            !await CorpusStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
+        {
+            return IdentityEvidenceUnavailable("The required Scryfall corpus generation is no longer retained.");
+        }
+
+        StoredSnapshot? snapshot = null;
+        if (binding.Snapshot is ScryfallSnapshotReference snapshotReference)
+        {
+            snapshot = await SnapshotStore.FindByIdAsync(snapshotReference.SnapshotId, cancellationToken)
+                .ConfigureAwait(false);
+            if (snapshot is null)
+            {
+                return IdentityEvidenceUnavailable("The required Scryfall request snapshot is no longer retained.");
+            }
+
+            if (!string.Equals(snapshot.Header.Operation, "card-collection", StringComparison.Ordinal) ||
+                !string.Equals(snapshot.Header.Checksum, snapshotReference.Checksum, StringComparison.Ordinal))
+            {
+                return new OperationInvalidInput(
+                    "invalid-scryfall-evidence-binding",
+                    "The Scryfall request snapshot does not match the evidence binding.");
+            }
+        }
+
+        IReadOnlyList<ScryfallEvidenceLookup> validatedLookups = lookups!;
+        List<StoredCorpusObject?> corpusMatches = await LoadExactCorpusMatchesAsync(
+            validatedLookups,
+            binding.CorpusGenerationId,
+            cancellationToken).ConfigureAwait(false);
+        CollectionResolution resolution = await BuildExactCollectionResolutionAsync(
+            validatedLookups,
+            corpusMatches,
+            snapshot,
+            includeRaw: false,
+            cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(resolution.Checksum, binding.EvidenceChecksum, StringComparison.Ordinal))
+        {
+            return IdentityEvidenceUnavailable("The retained Scryfall evidence no longer reproduces the preview.");
+        }
+
+        return new OperationSuccess<ScryfallExactCollectionEvidence>(
+            new ScryfallExactCollectionEvidence(resolution.Rows, binding));
+    }
+
+    /// <summary>
+    /// Validates the bounded exact evidence vocabulary before storage or provider access.
+    /// </summary>
+    private static OperationInvalidInput? ValidateEvidenceLookups(
+        IReadOnlyList<ScryfallEvidenceLookup>? lookups)
+    {
+        if (lookups is null || lookups.Count is < 1 or > 150)
+        {
+            return new OperationInvalidInput(
+                "invalid-scryfall-collection",
+                "Scryfall exact evidence resolution requires 1 through 150 identifiers.");
+        }
+
+        foreach (ScryfallEvidenceLookup evidenceLookup in lookups)
+        {
+            if (evidenceLookup is null)
+            {
+                return new OperationInvalidInput(
+                    "invalid-scryfall-lookup",
+                    "Scryfall lookup descriptors cannot be null.");
+            }
+
+            OperationInvalidInput? invalid = ValidateLookup(evidenceLookup.Lookup);
+            if (invalid is not null)
+            {
+                return invalid;
+            }
+
+            if (string.Equals(evidenceLookup.Lookup.Kind, "fuzzy-name", StringComparison.Ordinal) ||
+                evidenceLookup.RequiredLanguage is not null &&
+                (string.IsNullOrWhiteSpace(evidenceLookup.RequiredLanguage) ||
+                 !string.Equals(
+                     evidenceLookup.RequiredLanguage,
+                     evidenceLookup.RequiredLanguage.Trim().ToLowerInvariant(),
+                     StringComparison.Ordinal)))
+            {
+                return new OperationInvalidInput(
+                    "invalid-scryfall-lookup",
+                    "Exact evidence lookups require non-fuzzy identities and normalized language codes.");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Loads exact candidates from one retained generation, including printing language when supplied.
+    /// </summary>
+    private async Task<List<StoredCorpusObject?>> LoadExactCorpusMatchesAsync(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        Guid? corpusGenerationId,
+        CancellationToken cancellationToken)
+    {
+        List<StoredCorpusObject?> matches = [];
+        foreach (ScryfallEvidenceLookup lookup in lookups)
+        {
+            StoredCorpusObject? stored = corpusGenerationId is Guid generationId
+                ? await CorpusStore.FindCardInGenerationAsync(
+                    lookup.Lookup,
+                    generationId,
+                    lookup.RequiredLanguage,
+                    cancellationToken).ConfigureAwait(false)
+                : null;
+            matches.Add(stored);
+        }
+
+        return matches;
+    }
+
+    /// <summary>
+    /// Builds globally deduplicated provider identifiers for misses the collection endpoint can represent exactly.
+    /// </summary>
+    private static List<JsonElement> BuildExactProviderIdentifiers(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        IReadOnlyList<StoredCorpusObject?> corpusMatches)
+    {
+        List<JsonElement> identifiers = [];
+        HashSet<string> keys = new(StringComparer.Ordinal);
+        for (int index = 0; index < lookups.Count; index++)
+        {
+            ScryfallEvidenceLookup evidenceLookup = lookups[index];
+            if (corpusMatches[index] is not null ||
+                evidenceLookup.RequiredLanguage is not null && evidenceLookup.RequiredLanguage != "en")
+            {
+                continue;
+            }
+
+            if (keys.Add(CollectionKey(evidenceLookup.Lookup)))
+            {
+                identifiers.Add(CollectionIdentifier(evidenceLookup.Lookup));
+            }
+        }
+
+        return identifiers;
+    }
+
+    /// <summary>
+    /// Reconstructs exact-language result rows and a checksum tied to raw retained evidence.
+    /// </summary>
+    private async Task<CollectionResolution> BuildExactCollectionResolutionAsync(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        IReadOnlyList<StoredCorpusObject?> corpusMatches,
+        StoredSnapshot? snapshot,
+        bool includeRaw,
+        CancellationToken cancellationToken)
+    {
+        List<(string Raw, ScryfallCard Card)> providerCards = [];
+        if (snapshot is not null)
+        {
+            foreach (string raw in snapshot.Members)
+            {
+                providerCards.Add((raw, MapSnapshotCard(raw, snapshot.Header, includeRaw)));
+            }
+        }
+
+        List<ScryfallCollectionRow> rows = [];
+        List<string> checksumMembers = [];
+        for (int index = 0; index < lookups.Count; index++)
+        {
+            ScryfallEvidenceLookup evidenceLookup = lookups[index];
+            StoredCorpusObject? stored = corpusMatches[index];
+            string languageKey = evidenceLookup.RequiredLanguage ?? "-";
+            if (stored is not null)
+            {
+                ScryfallCard card = await MapCorpusCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
+                rows.Add(new ScryfallCollectionRow(index, evidenceLookup.Lookup, "found", "corpus", card, null));
+                checksumMembers.Add(
+                    $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|corpus|" +
+                    $"{stored.GenerationId:D}|{ScryfallDatabase.Hash(stored.RawJson)}");
+                continue;
+            }
+
+            (string Raw, ScryfallCard Card)? providerMatch = providerCards.FirstOrDefault(value =>
+                LookupMatches(evidenceLookup.Lookup, value.Card) &&
+                (evidenceLookup.RequiredLanguage is null ||
+                 string.Equals(evidenceLookup.RequiredLanguage, value.Card.Language, StringComparison.Ordinal)));
+            if (providerMatch is { } found && found.Card is not null)
+            {
+                rows.Add(new ScryfallCollectionRow(
+                    index,
+                    evidenceLookup.Lookup,
+                    "found",
+                    "request-snapshot",
+                    found.Card,
+                    null));
+                checksumMembers.Add(
+                    $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|request-snapshot|" +
+                    $"{snapshot!.Header.SnapshotId:D}|{ScryfallDatabase.Hash(found.Raw)}");
+                continue;
+            }
+
+            bool providerRepresentable = evidenceLookup.RequiredLanguage is null ||
+                evidenceLookup.RequiredLanguage == "en";
+            string status = providerRepresentable && snapshot is not null ? "not-found" : "not-cached";
+            string message = status == "not-cached"
+                ? "Exact card evidence is not cached."
+                : "Card was not found by Scryfall.";
+            rows.Add(new ScryfallCollectionRow(index, evidenceLookup.Lookup, status, null, null, message));
+            checksumMembers.Add($"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|{status}");
+        }
+
+        return new CollectionResolution(rows, ScryfallDatabase.Hash(string.Join('\n', checksumMembers)));
+    }
+
+    /// <summary>
+    /// Creates the stable unavailable result used when exact preview evidence was pruned or changed.
+    /// </summary>
+    private static OperationUnavailable IdentityEvidenceUnavailable(string message)
+    {
+        return new OperationUnavailable("identity-evidence-unavailable", message);
+    }
+
+    /// <summary>
     /// Replays one collection continuation from its exact retained corpus and provider evidence.
     /// </summary>
     private async Task<OperationResult<ScryfallCollectionResult>> ContinueCollectionAsync(
@@ -405,7 +724,7 @@ public sealed class ScryfallService : IDisposable
         }
 
         if (state.CorpusGenerationId is Guid generationId &&
-            !await database.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
+            !await CorpusStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
         {
             return new OperationUnavailable(
                 "collection-cursor-evidence-unavailable",
@@ -415,7 +734,7 @@ public sealed class ScryfallService : IDisposable
         StoredSnapshot? snapshot = null;
         if (state.SnapshotId is Guid snapshotId)
         {
-            snapshot = await database.FindSnapshotByIdAsync(snapshotId, cancellationToken).ConfigureAwait(false);
+            snapshot = await SnapshotStore.FindByIdAsync(snapshotId, cancellationToken).ConfigureAwait(false);
             if (snapshot is null)
             {
                 return new OperationUnavailable(
@@ -474,7 +793,7 @@ public sealed class ScryfallService : IDisposable
         {
             JsonElement[] batch = identifiers.Skip(offset).Take(75).ToArray();
             string providerRequest = JsonSerializer.Serialize(new { identifiers = batch }, SerializerOptions);
-            ProviderAcquisition acquired = await provider.PostCollectionAsync(providerRequest, cancellationToken)
+            ProviderAcquisition acquired = await Provider.PostCollectionAsync(providerRequest, cancellationToken)
                 .ConfigureAwait(false);
             pages.AddRange(acquired.Pages);
             members.AddRange(acquired.Members);
@@ -496,7 +815,7 @@ public sealed class ScryfallService : IDisposable
         foreach (ScryfallCardLookup lookup in lookups)
         {
             StoredCorpusObject? stored = corpusGenerationId is Guid generationId
-                ? await database.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
+                ? await CorpusStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
                 : null;
             matches.Add(stored);
         }
@@ -611,7 +930,7 @@ public sealed class ScryfallService : IDisposable
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
         {
-            StoredCorpusCollection? stored = await database.GetPrintsAsync(oracleId, cancellationToken).ConfigureAwait(false);
+            StoredCorpusCollection? stored = await CorpusStore.GetPrintsAsync(oracleId, cancellationToken).ConfigureAwait(false);
             if (stored is not null && stored.Items.Count > 0)
             {
                 OperationResult<ScryfallPage<ScryfallCard>> corpusPage = MapCorpusCardPage(
@@ -635,7 +954,7 @@ public sealed class ScryfallService : IDisposable
             "card-prints",
             request,
             freshnessPolicy,
-            token => provider.GetPagedAsync(path, token),
+            token => Provider.GetPagedAsync(path, token),
             ValidateCardMembers,
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
@@ -685,7 +1004,7 @@ public sealed class ScryfallService : IDisposable
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
         {
-            StoredCorpusCollection? stored = await database.GetRulingsAsync(oracleId, cancellationToken).ConfigureAwait(false);
+            StoredCorpusCollection? stored = await CorpusStore.GetRulingsAsync(oracleId, cancellationToken).ConfigureAwait(false);
             if (stored is not null && stored.Items.Count > 0)
             {
                 OperationResult<ScryfallPage<ScryfallRuling>> corpusPage = MapCorpusRulingPage(
@@ -718,7 +1037,7 @@ public sealed class ScryfallService : IDisposable
             "card-rulings",
             request,
             freshnessPolicy,
-            token => provider.GetDataArrayAsync($"cards/{scryfallCardId:D}/rulings", token),
+            token => Provider.GetDataArrayAsync($"cards/{scryfallCardId:D}/rulings", token),
             ValidateRulingMembers,
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
@@ -766,8 +1085,8 @@ public sealed class ScryfallService : IDisposable
         string operation = codeOrId is null ? "sets" : "set-get";
         SortedDictionary<string, object?> request = Request(("codeOrId", codeOrId), ("operation", operation));
         Func<CancellationToken, Task<ProviderAcquisition>> acquire = codeOrId is null
-            ? token => provider.GetDataArrayAsync("sets", token)
-            : token => provider.GetSingleAsync($"sets/{Uri.EscapeDataString(codeOrId)}", token);
+            ? token => Provider.GetDataArrayAsync("sets", token)
+            : token => Provider.GetSingleAsync($"sets/{Uri.EscapeDataString(codeOrId)}", token);
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
             operation,
             request,
@@ -815,7 +1134,7 @@ public sealed class ScryfallService : IDisposable
             "catalog",
             request,
             freshnessPolicy,
-            token => provider.GetDataArrayAsync($"catalog/{Uri.EscapeDataString(catalog)}", token),
+            token => Provider.GetDataArrayAsync($"catalog/{Uri.EscapeDataString(catalog)}", token),
             ValidateStringMembers,
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
@@ -866,7 +1185,7 @@ public sealed class ScryfallService : IDisposable
             "autocomplete",
             request,
             freshnessPolicy,
-            token => provider.GetDataArrayAsync(path, token),
+            token => Provider.GetDataArrayAsync(path, token),
             ValidateStringMembers,
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
@@ -896,7 +1215,7 @@ public sealed class ScryfallService : IDisposable
             "bulk-metadata",
             request,
             freshnessPolicy,
-            token => provider.GetDataArrayAsync("bulk-data", token),
+            token => Provider.GetDataArrayAsync("bulk-data", token),
             ValidateBulkMembers,
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
@@ -927,276 +1246,6 @@ public sealed class ScryfallService : IDisposable
     }
 
     /// <summary>
-    /// Reports network-free corpus status without creating storage.
-    /// </summary>
-    public Task<OperationResult<ScryfallCorpusStatus>> GetCorpusStatusAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return database.GetCorpusStatusAsync(timeProvider.GetUtcNow(), freshnessTtl, cancellationToken);
-    }
-
-    /// <summary>
-    /// Explicitly streams, validates, and atomically activates the fixed official corpus profile.
-    /// </summary>
-    public async Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusAsync(
-        string metadataPolicy = "default",
-        Guid? expectedActiveGeneration = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (!allowLocalWrites)
-        {
-            return LocalWriteRequired<ScryfallCorpusSyncResult>();
-        }
-
-        if (!AllowedValue(metadataPolicy, "default", "refresh"))
-        {
-            return new OperationInvalidInput("invalid-freshness-policy", "Corpus sync policy must be default or refresh.");
-        }
-
-        const string leaseKey = "corpus-sync";
-        string leaseOwner = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
-        bool acquired = await database.TryAcquireLeaseAsync(
-            leaseKey,
-            leaseOwner,
-            timeProvider.GetUtcNow(),
-            TimeSpan.FromHours(2),
-            cancellationToken).ConfigureAwait(false);
-        if (!acquired)
-        {
-            return new OperationUnavailable(
-                "scryfall-corpus-sync-in-progress",
-                "Another process is synchronizing the Scryfall corpus.");
-        }
-
-        try
-        {
-            await database.RemoveAbandonedStagingGenerationsAsync(cancellationToken).ConfigureAwait(false);
-            return await SyncCorpusUnderLeaseAsync(
-                metadataPolicy,
-                expectedActiveGeneration,
-                cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            await database.ReleaseLeaseAsync(leaseKey, leaseOwner, CancellationToken.None).ConfigureAwait(false);
-        }
-    }
-
-    /// <summary>
-    /// Performs one complete corpus synchronization while the caller holds the process-wide lease.
-    /// </summary>
-    private async Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusUnderLeaseAsync(
-        string metadataPolicy,
-        Guid? expectedActiveGeneration,
-        CancellationToken cancellationToken)
-    {
-
-        OperationResult<ScryfallCorpusStatus> statusResult = await GetCorpusStatusAsync(cancellationToken).ConfigureAwait(false);
-        if (statusResult is not OperationSuccess<ScryfallCorpusStatus> statusSuccess)
-        {
-            return ForwardFailure<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(statusResult);
-        }
-
-        ScryfallCorpusStatus status = statusSuccess.Data;
-        if (expectedActiveGeneration is Guid expected && status.Active?.GenerationId != expected)
-        {
-            return new OperationConflict("stale-scryfall-generation", "The active corpus generation changed before synchronization.");
-        }
-
-        string providerPolicy = metadataPolicy == "refresh" ? "refresh" : "default";
-        OperationResult<ScryfallBulkMetadataResult> metadataResult = await GetBulkMetadataAsync(
-            providerPolicy,
-            cancellationToken).ConfigureAwait(false);
-        if (metadataResult is not OperationSuccess<ScryfallBulkMetadataResult> metadata)
-        {
-            return ForwardFailure<ScryfallBulkMetadataResult, ScryfallCorpusSyncResult>(metadataResult);
-        }
-
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        if (await database.ActiveMetadataMatchesAsync(metadata.Data.Datasets, cancellationToken).ConfigureAwait(false))
-        {
-            await database.RecordMetadataCheckAsync(now, cancellationToken).ConfigureAwait(false);
-            OperationResult<ScryfallCorpusStatus> currentResult = await GetCorpusStatusAsync(cancellationToken)
-                .ConfigureAwait(false);
-            if (currentResult is not OperationSuccess<ScryfallCorpusStatus> currentSuccess)
-            {
-                return ForwardFailure<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(currentResult);
-            }
-
-            ScryfallCorpusStatus current = currentSuccess.Data;
-            return new OperationSuccess<ScryfallCorpusSyncResult>(
-                new ScryfallCorpusSyncResult(
-                    "unchanged",
-                    current.Active!.GenerationId,
-                    current.Previous?.GenerationId,
-                    current.Active.Datasets));
-        }
-
-        OperationUnavailable? spaceFailure = CheckDiskSpace(metadata.Data.Datasets);
-        if (spaceFailure is not null)
-        {
-            return spaceFailure;
-        }
-
-        Guid generationId = await database.BeginGenerationAsync(now, cancellationToken).ConfigureAwait(false);
-        string stage = "initialization";
-        string? datasetType = null;
-        try
-        {
-            foreach (ScryfallBulkData dataset in metadata.Data.Datasets)
-            {
-                datasetType = dataset.Type;
-                stage = "download";
-                await using ProviderDownload download = await provider.OpenDownloadAsync(
-                    dataset.JsonlDownloadUri,
-                    cancellationToken).ConfigureAwait(false);
-                stage = "import";
-                await using GZipStream decompressed = new(download.Stream, CompressionMode.Decompress, leaveOpen: true);
-                await database.ImportDatasetAsync(generationId, dataset, decompressed, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            datasetType = null;
-            stage = "activation";
-            return await database.ActivateGenerationAsync(generationId, now, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            await database.DeleteGenerationAsync(generationId, CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
-        catch (Exception exception) when (
-            exception is InvalidDataException or JsonException or IOException or ScryfallProviderException or SqliteException)
-        {
-            await database.DeleteGenerationAsync(generationId, CancellationToken.None).ConfigureAwait(false);
-            string subject = datasetType is null ? "corpus" : $"{datasetType} dataset";
-            return exception switch
-            {
-                ScryfallProviderException providerFailure =>
-                    new OperationUnavailable(providerFailure.ReasonCode, providerFailure.Message),
-                InvalidDataException or JsonException =>
-                    new OperationUnavailable(
-                        "invalid-scryfall-corpus",
-                        $"The Scryfall {subject} did not match the expected contract during {stage}."),
-                IOException =>
-                    new OperationUnavailable(
-                        "scryfall-corpus-io-failed",
-                        $"The Scryfall {subject} could not be read completely during {stage}."),
-                SqliteException =>
-                    new OperationUnavailable(
-                        "scryfall-corpus-storage-failed",
-                        $"The Scryfall {subject} could not be stored during {stage}."),
-                _ => new OperationUnavailable(
-                    "scryfall-corpus-sync-failed",
-                    "Scryfall corpus synchronization failed without changing the active generation."),
-            };
-        }
-    }
-
-    /// <summary>
-    /// Guardedly swaps the active and previous complete corpus generations.
-    /// </summary>
-    public Task<OperationResult<ScryfallCorpusMutationResult>> RollbackCorpusAsync(
-        Guid expectedActiveGeneration,
-        Guid expectedPreviousGeneration,
-        bool acknowledgeActivationChange,
-        CancellationToken cancellationToken = default)
-    {
-        return allowLocalWrites
-            ? database.RollbackCorpusAsync(
-                expectedActiveGeneration,
-                expectedPreviousGeneration,
-                acknowledgeActivationChange,
-                cancellationToken)
-            : Task.FromResult(LocalWriteRequired<ScryfallCorpusMutationResult>());
-    }
-
-    /// <summary>
-    /// Guardedly deletes installed corpus generations without affecting request snapshots or decks.
-    /// </summary>
-    public Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
-        Guid expectedActiveGeneration,
-        bool acknowledgeDataLoss,
-        CancellationToken cancellationToken = default)
-    {
-        return allowLocalWrites
-            ? database.DeleteCorpusAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken)
-            : Task.FromResult(LocalWriteRequired<ScryfallCorpusMutationResult>());
-    }
-
-    /// <summary>
-    /// Lists immutable request snapshots using a checksum-bound cursor.
-    /// </summary>
-    public Task<OperationResult<ScryfallPage<ScryfallSnapshotSummary>>> ListSnapshotsAsync(
-        string? operation = null,
-        DateTimeOffset? retrievedAfterUtc = null,
-        DateTimeOffset? retrievedBeforeUtc = null,
-        string? cursor = null,
-        int pageSize = 25,
-        CancellationToken cancellationToken = default)
-    {
-        if (retrievedAfterUtc is DateTimeOffset after &&
-            retrievedBeforeUtc is DateTimeOffset before &&
-            after > before)
-        {
-            return Task.FromResult<OperationResult<ScryfallPage<ScryfallSnapshotSummary>>>(
-                new OperationInvalidInput(
-                    "invalid-snapshot-time-range",
-                    "Snapshot retrieval bounds must be in chronological order."));
-        }
-
-        OperationInvalidInput? failure = ValidatePageSize(pageSize, rawSource: false);
-        return failure is null
-            ? database.ListSnapshotsAsync(
-                operation,
-                retrievedAfterUtc,
-                retrievedBeforeUtc,
-                cursor,
-                pageSize,
-                cancellationToken)
-            : Task.FromResult<OperationResult<ScryfallPage<ScryfallSnapshotSummary>>>(failure);
-    }
-
-    /// <summary>
-    /// Replays a bounded immutable request snapshot page.
-    /// </summary>
-    public Task<OperationResult<ScryfallSnapshotPage>> GetSnapshotAsync(
-        Guid snapshotId,
-        string? cursor = null,
-        int pageSize = 25,
-        bool includeRaw = false,
-        CancellationToken cancellationToken = default)
-    {
-        OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw);
-        return failure is null
-            ? database.GetSnapshotAsync(snapshotId, cursor, pageSize, includeRaw, cancellationToken)
-            : Task.FromResult<OperationResult<ScryfallSnapshotPage>>(failure);
-    }
-
-    /// <summary>
-    /// Guardedly deletes one immutable request snapshot.
-    /// </summary>
-    public Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteSnapshotAsync(
-        Guid snapshotId,
-        string expectedChecksum,
-        bool acknowledgeDataLoss,
-        CancellationToken cancellationToken = default)
-    {
-        if (!allowLocalWrites)
-        {
-            return Task.FromResult(LocalWriteRequired<ScryfallSnapshotDeleteResult>());
-        }
-
-        if (string.IsNullOrWhiteSpace(expectedChecksum))
-        {
-            return Task.FromResult<OperationResult<ScryfallSnapshotDeleteResult>>(
-                new OperationInvalidInput("invalid-snapshot-checksum", "Expected snapshot checksum cannot be blank."));
-        }
-
-        return database.DeleteSnapshotAsync(snapshotId, expectedChecksum, acknowledgeDataLoss, cancellationToken);
-    }
-
-    /// <summary>
     /// Searches installed tag metadata without provider traffic.
     /// </summary>
     public Task<OperationResult<ScryfallPage<ScryfallTag>>> SearchTagsAsync(
@@ -1215,7 +1264,7 @@ public sealed class ScryfallService : IDisposable
 
         OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw);
         return failure is null
-            ? database.SearchTagsAsync(query.Trim(), tagType, includeRaw, cursor, pageSize, cancellationToken)
+            ? CorpusStore.SearchTagsAsync(query.Trim(), tagType, includeRaw, cursor, pageSize, cancellationToken)
             : Task.FromResult<OperationResult<ScryfallPage<ScryfallTag>>>(failure);
     }
 
@@ -1245,7 +1294,7 @@ public sealed class ScryfallService : IDisposable
             return pageFailure;
         }
 
-        OperationResult<StoredCardsByTag> result = await database.GetCardsByTagAsync(
+        OperationResult<StoredCardsByTag> result = await CorpusStore.GetCardsByTagAsync(
             tagIdentity.Trim(),
             tagType,
             includeDescendants,
@@ -1311,7 +1360,7 @@ public sealed class ScryfallService : IDisposable
     /// </summary>
     public void Dispose()
     {
-        provider.Dispose();
+        Provider.Dispose();
         database.Dispose();
     }
 
@@ -1334,15 +1383,15 @@ public sealed class ScryfallService : IDisposable
 
         string requestJson = JsonSerializer.Serialize(request, SerializerOptions);
         string fingerprint = ScryfallDatabase.Hash(requestJson);
-        DateTimeOffset now = timeProvider.GetUtcNow();
+        DateTimeOffset now = TimeProvider.GetUtcNow();
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
         {
-            DateTimeOffset? minimum = policy.Data == ScryfallFreshnessPolicy.Default ? now - freshnessTtl : null;
-            StoredSnapshot? stored = await database.FindSnapshotAsync(fingerprint, minimum, cancellationToken)
+            DateTimeOffset? minimum = policy.Data == ScryfallFreshnessPolicy.Default ? now - FreshnessTtl : null;
+            StoredSnapshot? stored = await SnapshotStore.FindAsync(fingerprint, minimum, cancellationToken)
                 .ConfigureAwait(false);
             if (stored is not null)
             {
-                string freshness = now - stored.Header.RetrievedAtUtc <= freshnessTtl ? "fresh" : "stale";
+                string freshness = now - stored.Header.RetrievedAtUtc <= FreshnessTtl ? "fresh" : "stale";
                 return new OperationSuccess<AcquiredSnapshot>(new AcquiredSnapshot(stored, freshness, []));
             }
         }
@@ -1352,17 +1401,17 @@ public sealed class ScryfallService : IDisposable
             return new OperationNotCached("scryfall-request-not-cached", "The exact Scryfall request is not cached.");
         }
 
-        if (!allowLocalWrites)
+        if (!AllowLocalWrites)
         {
             return LocalWriteRequired<AcquiredSnapshot>();
         }
 
         string owner = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
-        StoredSnapshot? staleCandidate = await database.FindSnapshotAsync(
+        StoredSnapshot? staleCandidate = await SnapshotStore.FindAsync(
             fingerprint,
             null,
             cancellationToken).ConfigureAwait(false);
-        bool lease = await database.TryAcquireLeaseAsync(
+        bool lease = await CoordinationStore.TryAcquireLeaseAsync(
             fingerprint,
             owner,
             now,
@@ -1372,8 +1421,8 @@ public sealed class ScryfallService : IDisposable
         {
             for (int attempt = 0; attempt < 50; attempt++)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100), timeProvider, cancellationToken).ConfigureAwait(false);
-                StoredSnapshot? concurrent = await database.FindSnapshotAsync(fingerprint, now - freshnessTtl, cancellationToken)
+                await Task.Delay(TimeSpan.FromMilliseconds(100), TimeProvider, cancellationToken).ConfigureAwait(false);
+                StoredSnapshot? concurrent = await SnapshotStore.FindAsync(fingerprint, now - FreshnessTtl, cancellationToken)
                     .ConfigureAwait(false);
                 if (concurrent is not null && concurrent.Header.SnapshotId != staleCandidate?.Header.SnapshotId)
                 {
@@ -1388,13 +1437,13 @@ public sealed class ScryfallService : IDisposable
         {
             ProviderAcquisition providerResult = await acquire(cancellationToken).ConfigureAwait(false);
             validateMembers(providerResult.Members);
-            StoredSnapshot snapshot = await database.SaveSnapshotAsync(
+            StoredSnapshot snapshot = await SnapshotStore.SaveAsync(
                 operation,
                 requestJson,
                 fingerprint,
                 providerResult.Pages,
                 providerResult.Members,
-                timeProvider.GetUtcNow(),
+                TimeProvider.GetUtcNow(),
                 cancellationToken).ConfigureAwait(false);
             return new OperationSuccess<AcquiredSnapshot>(
                 new AcquiredSnapshot(snapshot, "fresh", providerResult.Warnings));
@@ -1418,7 +1467,7 @@ public sealed class ScryfallService : IDisposable
         }
         finally
         {
-            await database.ReleaseLeaseAsync(fingerprint, owner, CancellationToken.None).ConfigureAwait(false);
+            await CoordinationStore.ReleaseLeaseAsync(fingerprint, owner, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -1451,7 +1500,7 @@ public sealed class ScryfallService : IDisposable
             }
         }
 
-        IReadOnlyList<ScryfallTagEvidence> tags = await database.GetDirectTagsInGenerationAsync(
+        IReadOnlyList<ScryfallTagEvidence> tags = await CorpusStore.GetDirectTagsInGenerationAsync(
             stored.GenerationId,
             oracleId,
             illustrationIds,
@@ -1929,32 +1978,11 @@ public sealed class ScryfallService : IDisposable
     }
 
     /// <summary>
-    /// Performs a conservative free-space preflight before multi-gigabyte synchronization.
-    /// </summary>
-    private OperationUnavailable? CheckDiskSpace(IReadOnlyList<ScryfallBulkData> datasets)
-    {
-        try
-        {
-            string root = Path.GetPathRoot(Path.GetFullPath(dataRoot))!;
-            DriveInfo drive = new(root);
-            long sourceBytes = datasets.Sum(value => value.Size);
-            long required = checked(sourceBytes * 3);
-            return drive.AvailableFreeSpace >= required
-                ? null
-                : new OperationUnavailable("insufficient-scryfall-disk-space", "Scryfall corpus synchronization requires more free disk space.");
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OverflowException)
-        {
-            return new OperationUnavailable("scryfall-disk-check-unavailable", "Available disk space could not be verified safely.");
-        }
-    }
-
-    /// <summary>
     /// Reports whether time-sensitive price and rank evidence exceeded the configured freshness window.
     /// </summary>
     private bool IsStale(DateTimeOffset retrievedAtUtc)
     {
-        return timeProvider.GetUtcNow() - retrievedAtUtc > freshnessTtl;
+        return TimeProvider.GetUtcNow() - retrievedAtUtc > FreshnessTtl;
     }
 
     /// <summary>

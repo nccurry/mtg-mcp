@@ -41,8 +41,16 @@ advertise dynamic list changes. The implemented default contains `decks` and
 `scryfall`; `archidekt` is opt-in. The accepted target later adds default
 `stats` and opt-in provider toolsets. The current App registry contains
 `decks`, `scryfall`, `archidekt`, and `playgroup`, rejects unimplemented names,
-and projects exact selection and counts through capability schema version 5. The
-independently reviewed `mcp-capability-toolsets` child PLC owns this contract.
+and projects exact selection and counts through capability schema version 6.
+That schema distinguishes implementation state from credential configuration
+without provider I/O. The independently reviewed
+`mcp-capability-toolsets` and `mcp-contract-and-adapter-hardening` child PLCs
+own this contract.
+
+The deck capability also owns exact-only identity reconciliation against
+retained Scryfall evidence. It follows explicit printing, set/collector/language,
+Oracle, and exact-name identities in that order, never performs fuzzy matching,
+never selects an arbitrary printing, and never evaluates deck legality.
 
 Accepted AMEND-004 governs the implemented unified Scryfall boundary. It uses
 official bulk All Cards, Rulings, Oracle Tags, and Art Tags in one store while

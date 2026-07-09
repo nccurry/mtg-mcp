@@ -15,7 +15,6 @@ internal static class PlaygroupToolsetManifest
     /// </summary>
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Playgroup,
-        CapabilityToolsetAvailability.Available,
         CapabilityToolsetStability.Stable,
         "Provider-shaped evidence from every documented Playgroup Public API 1.0.0 operation. Deck updates are explicitly unsupported; this provider toolset is opt-in.",
         [

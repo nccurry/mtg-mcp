@@ -9,10 +9,9 @@ evidence up to date as code lands.
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress; accepted AMEND-004 execution | Govern eleven independently reviewable rewrite PLCs, including unified Scryfall evidence and deterministic categorization. |
+| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress; children 1–9 complete | Govern the independently reviewable rewrite PLCs; exact statistics is next for owner review. |
 
 ## Active Rewrite Children
 
-| Packet | Status | Summary |
-| --- | --- | --- |
-| [manual-deck-interchange](manual-deck-interchange/README.md) | Provider imports accepted; disposable-deck cleanup open | Implement deterministic offline native, generic, Archidekt, and Moxfield manual deck interchange. |
+No capability child is currently active. Exact statistics remains in
+`planned/` pending independent owner review and authorization.

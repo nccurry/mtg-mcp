@@ -22,7 +22,7 @@ runtime surface mutation, or compatibility alias is introduced.
 - [AMEND-003 program guardrail](../../in-progress/evidence-first-mcp-rewrite-program/README.md#program-amendments)
 - [Completed rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Completed local deck store](../../completed/local-deck-store/README.md)
-- [Manual deck interchange](../../in-progress/manual-deck-interchange/README.md)
+- [Manual deck interchange](../manual-deck-interchange/README.md)
 
 ## Decisions
 

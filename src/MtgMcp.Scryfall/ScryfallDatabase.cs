@@ -143,7 +143,7 @@ internal sealed class ScryfallDatabase : IDisposable
             return null;
         }
 
-        return await FindCardOnConnectionAsync(connection, generationId.Value, lookup, cancellationToken)
+        return await FindCardOnConnectionAsync(connection, generationId.Value, lookup, null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -155,10 +155,31 @@ internal sealed class ScryfallDatabase : IDisposable
         Guid generationId,
         CancellationToken cancellationToken)
     {
+        return await FindCardInGenerationAsync(
+            lookup,
+            generationId,
+            null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Finds a corpus card in one retained generation with an optional exact printing language.
+    /// </summary>
+    internal async Task<StoredCorpusObject?> FindCardInGenerationAsync(
+        ScryfallCardLookup lookup,
+        Guid generationId,
+        string? requiredLanguage,
+        CancellationToken cancellationToken)
+    {
         await using SqliteConnection? connection = await OpenReadAsync(cancellationToken).ConfigureAwait(false);
         return connection is null
             ? null
-            : await FindCardOnConnectionAsync(connection, generationId, lookup, cancellationToken).ConfigureAwait(false);
+            : await FindCardOnConnectionAsync(
+                connection,
+                generationId,
+                lookup,
+                requiredLanguage,
+                cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -188,6 +209,7 @@ internal sealed class ScryfallDatabase : IDisposable
         SqliteConnection connection,
         Guid generationId,
         ScryfallCardLookup lookup,
+        string? requiredLanguage,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -230,9 +252,15 @@ internal sealed class ScryfallDatabase : IDisposable
                     "JOIN corpus_generations g ON g.generation_id = c.generation_id " +
                     "JOIN corpus_datasets d ON d.generation_id = c.generation_id AND d.dataset_type = 'all_cards' " +
                     "WHERE c.generation_id = $generation AND c.set_code = $set AND c.collector_number = $collector " +
+                    "AND ($language IS NULL OR c.lang = $language) " +
                     "ORDER BY c.lang = 'en' DESC, c.card_id LIMIT 1;";
                 command.Parameters.AddWithValue("$set", lookup.SetCode!.Trim().ToLowerInvariant());
                 command.Parameters.AddWithValue("$collector", lookup.CollectorNumber!.Trim());
+                command.Parameters.AddWithValue(
+                    "$language",
+                    string.IsNullOrWhiteSpace(requiredLanguage)
+                        ? DBNull.Value
+                        : requiredLanguage.Trim().ToLowerInvariant());
                 break;
             default:
                 return null;

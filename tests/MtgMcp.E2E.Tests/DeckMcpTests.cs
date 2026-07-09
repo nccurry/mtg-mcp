@@ -9,7 +9,7 @@ namespace MtgMcp.E2E.Tests;
 public sealed class DeckMcpTests
 {
     /// <summary>
-    /// Verifies all nineteen public deck tools in one disposable Commander lifecycle.
+    /// Verifies the complete local deck-store tool family in one disposable lifecycle.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
@@ -163,6 +163,28 @@ public sealed class DeckMcpTests
             });
         revision = deck.GetProperty("revision").GetInt64();
         Assert.Empty(deck.GetProperty("categoryAssignments").EnumerateArray());
+
+        JsonElement invalidBatch = await CallAsync(
+            session,
+            "deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["changes"] = new[]
+                {
+                    new
+                    {
+                        kind = "remove-entry",
+                        entryId = Guid.Empty,
+                    },
+                },
+            });
+        Assert.Equal("invalid-input", invalidBatch.GetProperty("kind").GetString());
+        Assert.Equal("invalid-deck-change", invalidBatch.GetProperty("reasonCode").GetString());
+        Assert.Equal(
+            "Deck change at index 0 with kind 'remove-entry' requires a non-empty entryId.",
+            invalidBatch.GetProperty("message").GetString());
 
         deck = await CallSuccessAsync(
             session,

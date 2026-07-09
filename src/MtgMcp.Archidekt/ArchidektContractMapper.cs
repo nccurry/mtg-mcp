@@ -6,7 +6,7 @@ namespace MtgMcp.Archidekt;
 /// <summary>
 /// Maps observed Archidekt payloads into deterministic provider evidence without leaking transport types.
 /// </summary>
-internal static class ArchidektContractMapper
+internal static class ArchidektJsonContract
 {
     /// <summary>
     /// Lists top-level deck fields consumed by the normalized projection.

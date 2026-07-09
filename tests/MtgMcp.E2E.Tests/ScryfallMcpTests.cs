@@ -291,6 +291,76 @@ public sealed class ScryfallMcpTests
     }
 
     /// <summary>
+    /// Verifies an official client can preview and atomically apply corpus-backed deck identity fields.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task DeckIdentityTools_ReconcileDummyDeckFromRetainedScryfallEvidence()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "local",
+            "default",
+            SeedAsync,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        JsonElement deck = await CallSuccessAsync(
+            session,
+            "deck_create",
+            new Dictionary<string, object?>
+            {
+                ["request"] = new
+                {
+                    name = "Identity E2E Fixture",
+                    format = "custom",
+                    entries = new[]
+                    {
+                        new { quantity = 2, cardName = "venerable knight", finish = "foil", zone = "sideboard" },
+                        new { quantity = 1, cardName = "monastery swiftspear", finish = "nonfoil", zone = "main" },
+                    },
+                },
+            }).ConfigureAwait(false);
+        Guid deckId = deck.GetProperty("deckId").GetGuid();
+        long revision = deck.GetProperty("revision").GetInt64();
+        JsonElement preview = await CallSuccessAsync(
+            session,
+            "deck_identity_reconcile_preview",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["freshnessPolicy"] = "cache-only",
+            }).ConfigureAwait(false);
+
+        Assert.True(preview.GetProperty("isComplete").GetBoolean());
+        Assert.Equal(2, preview.GetProperty("proposedChangeCount").GetInt32());
+        Assert.All(preview.GetProperty("rows").EnumerateArray(), row =>
+        {
+            Assert.Equal("exact-name", row.GetProperty("matchedBy").GetString());
+            Assert.Equal("corpus", row.GetProperty("evidenceOrigin").GetString());
+        });
+
+        JsonElement applied = await CallSuccessAsync(
+            session,
+            "deck_identity_reconcile_apply",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
+                ["applyToken"] = preview.GetProperty("applyToken").GetString(),
+                ["allowPartial"] = false,
+            }).ConfigureAwait(false);
+        Assert.Equal(revision + 1, applied.GetProperty("revision").GetInt64());
+        JsonElement foil = Assert.Single(
+            applied.GetProperty("entries").EnumerateArray(),
+            value => value.GetProperty("cardName").GetString() == "Venerable Knight");
+        Assert.Equal(2, foil.GetProperty("quantity").GetInt32());
+        Assert.Equal("foil", foil.GetProperty("finish").GetString());
+        Assert.Equal("sideboard", foil.GetProperty("zone").GetString());
+        Assert.True(foil.GetProperty("oracleId").GetGuid() != Guid.Empty);
+        Assert.False(foil.TryGetProperty("printingId", out _));
+    }
+
+    /// <summary>
     /// Seeds a complete corpus and one exact search through the same production service boundary.
     /// </summary>
     private static async Task SeedAsync(string dataRoot, CancellationToken cancellationToken)

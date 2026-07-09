@@ -5,7 +5,7 @@
 - Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-04
+- Last updated: 2026-07-06
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -52,10 +52,11 @@ Every child phase follows the same protocol:
 | 6 | Reconcile the Scryfall corpus and evidence store. | PROG-002 through PROG-024 | `scryfall-corpus-and-evidence` | Bulk corpus, authoritative query cache, immutable replay, tags, `scryfall` assignment, and north-star acceptance are decision-complete. | Completed; implementation and retained full-corpus acceptance passed |
 | 7 | Reconcile Archidekt decks, folders, snapshots, and synchronization. | PROG-002 through PROG-024 | `archidekt-deck-sync` | Provider workflows, cleanup, `archidekt` assignment, and north-star acceptance are decision-complete. | Completed; implementation accepted |
 | 8 | Reconcile the Playgroup public API. | PROG-002 through PROG-024 | `playgroup-public-api` | Pinned official surface, write safety, `playgroup` assignment, and north-star acceptance are decision-complete. | Completed; implementation accepted |
-| 9 | Reconcile exact deck statistics. | PROG-002 through PROG-024 | `exact-deck-statistics` | Exact functions, assumptions, `stats` assignment, and north-star acceptance are decision-complete. | Reconciled; independent child review pending |
-| 10 | Reconcile deterministic deck categorization. | PROG-002 through PROG-024 | `deterministic-deck-categorization` | Caller rules, evidence-preserving preview, guarded apply, `decks` assignment, and north-star acceptance are decision-complete. | Rewritten; independent child review pending |
-| 11 | Reconcile stabilization and cutover. | PROG-002 through PROG-024 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Reconciled; dependent child reviews pending |
-| 12 | Close the planning program. | PROG-011 through PROG-024 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
+| 9 | Plan MCP contract and adapter hardening. | PROG-002 through PROG-025 | `mcp-contract-and-adapter-hardening` | Capability/batch schemas, exact identity workflow, adapter boundaries, and non-goals are decision-complete. | Completed; implementation accepted |
+| 10 | Reconcile exact deck statistics. | PROG-002 through PROG-025 | `exact-deck-statistics` | Exact functions, assumptions, `stats` assignment, and north-star acceptance are decision-complete. | Ready for independent owner review; implementation unauthorized |
+| 11 | Reconcile deterministic deck categorization. | PROG-002 through PROG-025 | `deterministic-deck-categorization` | Caller rules, evidence-preserving preview, guarded apply, `decks` assignment, and north-star acceptance are decision-complete. | Rewritten; awaiting its later independent review |
+| 12 | Reconcile stabilization and cutover. | PROG-002 through PROG-025 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Reconciled; prerequisite implementations pending |
+| 13 | Close the planning program. | PROG-011 through PROG-025 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
 
 ## Phase Details
 
@@ -85,7 +86,7 @@ Every child phase follows the same protocol:
 - Exit drafting after the packet is complete and validated; approval remains a
   separate gate before implementation.
 
-### Phases 2 Through 10: Capability Planning
+### Phases 2 Through 11: Capability Planning
 
 - Follow the per-child protocol and the exact queue.
 - Resolve topic-specific interfaces, data, dependencies, failure modes,
@@ -98,12 +99,14 @@ Every child phase follows the same protocol:
 Phase 5 is the cross-cutting exception created by AMEND-003. It defines the App
 registration contract before any provider child implementation begins. Later
 children inherit the toolset registry and may add one descriptor or extend an
-existing owning manifest; they do not redesign selection semantics. Proposed
+existing owning manifest; they do not redesign selection semantics. Accepted
 AMEND-004 removes the never-implemented Tagger descriptor before stable cutover.
+Accepted AMEND-005 inserts the independently reviewed hardening child before
+statistics and prevents statistics activation until that child completes.
 
-### Phase 11: Stabilization And Cutover Planning
+### Phase 12: Stabilization And Cutover Planning
 
-- Draft only after children 1 through 10 are complete and structurally validated.
+- Draft only after children 1 through 11 are complete and structurally validated.
 - Define cross-module architecture, MCP-schema, offline, package, documentation,
   coverage, and opt-in live-provider gates.
 - Define the `0.9.0` merge, release, rollback, legacy retention, and PLC cleanup
@@ -112,9 +115,9 @@ AMEND-004 removes the never-implemented Tagger descriptor before stable cutover.
   of every stable capability child.
 - Do not execute the cutover.
 
-### Phase 12: Program Closure
+### Phase 13: Program Closure
 
-- Confirm all eleven required directories exist and have approved records.
+- Confirm all twelve required directories exist and have approved records.
 - Confirm every child has complete traceability and no unresolved guardrail
   conflict.
 - Update umbrella registry and validation evidence.
@@ -126,11 +129,11 @@ AMEND-004 removes the never-implemented Tagger descriptor before stable cutover.
 
 | Risk | Affected phases | Mitigation | Owner |
 | --- | --- | --- | --- |
-| A child expands into adjacent topics. | 1 through 11 | Enforce one topic, explicit non-goals, and separate packet validation. | Child author and reviewer |
-| Proposed upstream decisions change during review. | 2 through 11 | Reconcile dependent drafts and revalidate them before approval or implementation. | Program owner |
-| Shared guardrails prove incorrect. | 1 through 11 | Pause and review an umbrella amendment. | Repository owner |
+| A child expands into adjacent topics. | 1 through 12 | Enforce one topic, explicit non-goals, and separate packet validation. | Child author and reviewer |
+| Proposed upstream decisions change during review. | 2 through 12 | Reconcile dependent drafts and revalidate them before approval or implementation. | Program owner |
+| Shared guardrails prove incorrect. | 1 through 12 | Pause and review an umbrella amendment. | Repository owner |
 | Existing PLCs conflict with the rewrite. | 1 and 2 | Leave them untouched until the audit records disposition. | Audit child owner |
-| Provider research becomes stale. | 6 through 10 | Re-verify during the owning child session. | Provider child owner |
+| Provider research becomes stale. | 6 through 12 | Re-verify during the owning child session. | Provider child owner |
 | Planning completion is mistaken for code completion. | All | Keep approval, implementation authorization, lifecycle, and release evidence separate. | Program owner |
 
 ## Completion Criteria

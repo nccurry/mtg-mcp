@@ -59,22 +59,6 @@ internal enum CapabilityToolsetSelectionKind
 }
 
 /// <summary>
-/// Reports whether an implemented toolset can currently serve its operations.
-/// </summary>
-internal enum CapabilityToolsetAvailability
-{
-    /// <summary>
-    /// The toolset's local or provider prerequisites are currently usable.
-    /// </summary>
-    Available,
-
-    /// <summary>
-    /// The toolset is implemented but a runtime prerequisite is unavailable.
-    /// </summary>
-    Unavailable,
-}
-
-/// <summary>
 /// Distinguishes stable capability families from explicitly selected experiments.
 /// </summary>
 internal enum CapabilityToolsetStability
@@ -142,22 +126,6 @@ internal static class CapabilityToolsetPolicy
                 nameof(kind),
                 kind,
                 "Unknown capability selection kind."),
-        };
-    }
-
-    /// <summary>
-    /// Formats one toolset availability state for capability metadata.
-    /// </summary>
-    internal static string Format(CapabilityToolsetAvailability availability)
-    {
-        return availability switch
-        {
-            CapabilityToolsetAvailability.Available => "available",
-            CapabilityToolsetAvailability.Unavailable => "unavailable",
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(availability),
-                availability,
-                "Unknown capability availability."),
         };
     }
 

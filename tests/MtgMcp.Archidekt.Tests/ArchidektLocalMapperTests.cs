@@ -253,7 +253,7 @@ public sealed class ArchidektLocalMapperTests
     {
         using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(
             ArchidektTestPayloads.Deck);
-        return ArchidektContractMapper.MapDeck(
+        return ArchidektDeckContractMapper.MapDeck(
             document.RootElement,
             ArchidektTestPayloads.Deck,
             DateTimeOffset.UtcNow,

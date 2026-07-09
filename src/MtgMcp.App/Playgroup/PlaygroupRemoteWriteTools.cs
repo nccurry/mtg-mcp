@@ -28,7 +28,8 @@ internal sealed class PlaygroupRemoteWriteTools
     [McpServerTool(Name = "playgroup_game_events_batch_create", Title = "Create Playgroup Game Events", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
     [Description("Submits one explicit event batch exactly once. Playgroup exposes no public cleanup operation, so callers must inspect provider state before retrying.")]
     internal Task<OperationResult<PlaygroupEvidence>> CreateGameEventsBatchAsync(
-        int gameId,
+        [Description("Exact Playgroup game identifier receiving the events.")] int gameId,
+        [Description("Caller-supplied ordered event batch sent exactly once.")]
         IReadOnlyList<PlaygroupEventImport> events,
         CancellationToken cancellationToken = default)
     {
@@ -39,6 +40,7 @@ internal sealed class PlaygroupRemoteWriteTools
     [McpServerTool(Name = "playgroup_live_session_create", Title = "Create Playgroup Live Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
     [Description("Creates one explicit live session exactly once; it does not poll, monitor, join, close, or retry the session.")]
     internal Task<OperationResult<PlaygroupEvidence>> CreateLiveSessionAsync(
+        [Description("Complete caller-supplied live-session creation request sent exactly once.")]
         PlaygroupLiveSessionCreateRequest request,
         CancellationToken cancellationToken = default)
     {

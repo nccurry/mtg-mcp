@@ -5,7 +5,7 @@ namespace MtgMcp.Archidekt;
 /// <summary>
 /// Exposes guarded Archidekt evidence and workflow operations over the isolated provider transport.
 /// </summary>
-public sealed class ArchidektService : IDisposable
+internal sealed class ArchidektOperationContext : IDisposable
 {
     /// <summary>
     /// Owns every credential, HTTP, pacing, retry, and provider-route concern.
@@ -20,7 +20,7 @@ public sealed class ArchidektService : IDisposable
     /// <summary>
     /// Creates a production service over the configured Archidekt account.
     /// </summary>
-    public ArchidektService(ArchidektOptions options, string packageVersion)
+    internal ArchidektOperationContext(ArchidektOptions options, string packageVersion)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
@@ -31,7 +31,7 @@ public sealed class ArchidektService : IDisposable
     /// <summary>
     /// Creates a deterministic service over an injected transport.
     /// </summary>
-    internal ArchidektService(ArchidektTransport transport, int maximumRequestsPerOperation)
+    internal ArchidektOperationContext(ArchidektTransport transport, int maximumRequestsPerOperation)
     {
         this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRequestsPerOperation);

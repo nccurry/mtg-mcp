@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-04
+- Last updated: 2026-07-06
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design
@@ -38,16 +38,17 @@ payloads.
 | Server metadata tools | 0 | Foundation uses initialization and the capability resource. |
 | `deck_*` local deck operations | 19 | Local deck store |
 | `deck_*` manual interchange | 4 | Manual interchange |
+| `deck_*` identity reconciliation | 2 | MCP contract and adapter hardening |
 | `deck_*` deterministic categorization | 3 | Deterministic deck categorization |
 | `scryfall_*` | 18 | Scryfall corpus and evidence |
 | `archidekt_*` | 23 | Archidekt decks, folders, snapshots, and synchronization |
 | `playgroup_*` | 16 | Playgroup public API |
 | `stats_*` | 8 | Exact statistics |
-| **Total** | **91** | |
+| **Total** | **93** | |
 
 The only resource is `mtg://server/capabilities`; there are no prompts. As of
-the accepted AMEND-004 child packets, canonical `all` discovery snapshots contain
-56, 78, and 91 tools for `read-only`, `local`, and `remote`, respectively. These are
+the accepted AMEND-005 child packets, canonical `all` discovery snapshots contain
+57, 80, and 93 tools for `read-only`, `local`, and `remote`, respectively. These are
 derived planning totals, not backward-compatibility requirements. An approved
 child may add, remove, rename, or reshape tools to improve the design; the
 manifest, crosswalk, totals, and snapshots are then regenerated together.
@@ -55,7 +56,7 @@ Schema canonicalization sorts objects only where order is semantically
 irrelevant and never weakens exact name, description, annotation, input, or
 output-schema comparisons.
 
-`read-only` is a mutation-authority mode: its 56 `all`-profile tools may include explicit
+`read-only` is a mutation-authority mode: its 57 `all`-profile tools may include explicit
 Scryfall, Archidekt, or Playgroup network reads/previews, but every local and
 remote write spy must remain zero. “Offline” describes normal validation, not a
 runtime mode. Manual interchange is owned by `MtgMcp.Decks`; no separate
@@ -76,7 +77,7 @@ tool or count.
 | Scryfall official metadata and bounded read | Must normally pass; repository owner may approve a temporary operational skip with current official contract evidence, offline fixtures, reason, date, and expiry. |
 | Scryfall full-corpus lifecycle | Must pass as explicit manual acceptance against official All Cards, Rulings, Oracle Tags, and Art Tags bulk files before stable release; it does not run in ordinary CI. |
 | Playgroup official reads | Must normally pass; repository owner may approve a credential/availability skip with pinned-contract and offline-fixture evidence. |
-| Playgroup writes without safe cleanup | Fixture-only under the child-7 repository-owner decision for the pinned 2026-07-03 contract; never labeled live-tested. |
+| Playgroup writes without safe cleanup | Fixture-only under the child-8 repository-owner decision for the pinned 2026-07-03 contract; never labeled live-tested. |
 
 An approved skip is never recorded as passed. Waivers cannot excuse contract
 drift, unsafe setup, credential leakage, residual state, or a required

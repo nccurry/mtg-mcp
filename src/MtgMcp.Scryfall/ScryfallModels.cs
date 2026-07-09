@@ -35,6 +35,13 @@ public sealed record ScryfallCardLookup(
     [property: JsonPropertyName("collectorNumber")] string? CollectorNumber = null);
 
 /// <summary>
+/// Adds an optional exact language requirement for internal deck-identity evidence resolution.
+/// </summary>
+public sealed record ScryfallEvidenceLookup(
+    [property: JsonPropertyName("lookup")] ScryfallCardLookup Lookup,
+    [property: JsonPropertyName("requiredLanguage")] string? RequiredLanguage = null);
+
+/// <summary>
 /// Preserves one normalized card face alongside its lossless source object.
 /// </summary>
 public sealed record ScryfallCardFace(
@@ -207,6 +214,21 @@ public sealed record ScryfallCollectionResult(
     [property: JsonPropertyName("page")] ScryfallPage<ScryfallCollectionRow> Page,
     [property: JsonPropertyName("snapshot")] ScryfallSnapshotReference? Snapshot,
     [property: JsonPropertyName("corpusGenerationId")] Guid? CorpusGenerationId);
+
+/// <summary>
+/// Binds an exact collection result to retained corpus and provider evidence.
+/// </summary>
+public sealed record ScryfallCollectionEvidenceBinding(
+    [property: JsonPropertyName("corpusGenerationId")] Guid? CorpusGenerationId,
+    [property: JsonPropertyName("snapshot")] ScryfallSnapshotReference? Snapshot,
+    [property: JsonPropertyName("evidenceChecksum")] string EvidenceChecksum);
+
+/// <summary>
+/// Returns every ordered exact-resolution row with the evidence required for deterministic replay.
+/// </summary>
+public sealed record ScryfallExactCollectionEvidence(
+    [property: JsonPropertyName("rows")] IReadOnlyList<ScryfallCollectionRow> Rows,
+    [property: JsonPropertyName("binding")] ScryfallCollectionEvidenceBinding Binding);
 
 /// <summary>
 /// Returns card printings from either the active corpus or an immutable request snapshot.

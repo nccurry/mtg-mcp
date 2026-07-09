@@ -63,11 +63,11 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Updates local deck name, description, and format when expectedRevision is current.")]
     internal Task<OperationResult<DeckDocument>> UpdateAsync(
-        Guid deckId,
-        long expectedRevision,
-        string name,
-        string? description,
-        string format,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Complete replacement deck name.")] string name,
+        [Description("Complete replacement description, or null to clear it.")] string? description,
+        [Description("Complete replacement format label; legality is not evaluated.")] string format,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -90,8 +90,8 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Deletes one local deck and dependent rows when expectedRevision is current.")]
     internal Task<OperationResult<DeckDeleteResult>> DeleteAsync(
-        Guid deckId,
-        long expectedRevision,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => store.DeleteAsync(deckId, expectedRevision, cancellationToken));
@@ -110,9 +110,9 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Adds one entry without merging cards that share a name or Oracle identity.")]
     internal Task<OperationResult<DeckDocument>> AddEntryAsync(
-        Guid deckId,
-        long expectedRevision,
-        DeckEntryDraft entry,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Complete draft for the new independently addressable entry.")] DeckEntryDraft entry,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -135,9 +135,9 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Updates one local entry, including quantity, printing, zone, and order.")]
     internal Task<OperationResult<DeckDocument>> UpdateEntryAsync(
-        Guid deckId,
-        long expectedRevision,
-        DeckEntry entry,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Complete replacement entry including its existing entryId.")] DeckEntry entry,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -160,9 +160,9 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Removes one entry by stable ID without affecting other equivalent card rows.")]
     internal Task<OperationResult<DeckDocument>> RemoveEntryAsync(
-        Guid deckId,
-        long expectedRevision,
-        Guid entryId,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Stable identifier of the entry to remove.")] Guid entryId,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -185,9 +185,9 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Creates one functional category without changing entry inclusion or zones.")]
     internal Task<OperationResult<DeckDocument>> CreateCategoryAsync(
-        Guid deckId,
-        long expectedRevision,
-        DeckCategoryDraft category,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Complete draft for the new ordered functional category.")] DeckCategoryDraft category,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -210,9 +210,9 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Updates one category name, color, and order without changing entry zones.")]
     internal Task<OperationResult<DeckDocument>> UpdateCategoryAsync(
-        Guid deckId,
-        long expectedRevision,
-        DeckCategory category,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Complete replacement category including its existing categoryId.")] DeckCategory category,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -235,9 +235,9 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Deletes one functional category while preserving every card row and zone.")]
     internal Task<OperationResult<DeckDocument>> DeleteCategoryAsync(
-        Guid deckId,
-        long expectedRevision,
-        Guid categoryId,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Stable identifier of the category to delete.")] Guid categoryId,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -260,11 +260,11 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Creates or updates one entry-category assignment with at most one primary per entry.")]
     internal Task<OperationResult<DeckDocument>> AssignCategoryAsync(
-        Guid deckId,
-        long expectedRevision,
-        Guid entryId,
-        Guid categoryId,
-        bool isPrimary = false,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Stable identifier of the entry receiving the category.")] Guid entryId,
+        [Description("Stable identifier of the category to assign.")] Guid categoryId,
+        [Description("Whether this assignment becomes the entry's primary category.")] bool isPrimary = false,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -287,10 +287,10 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Removes one functional category assignment without changing deck zones.")]
     internal Task<OperationResult<DeckDocument>> UnassignCategoryAsync(
-        Guid deckId,
-        long expectedRevision,
-        Guid entryId,
-        Guid categoryId,
+        [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Stable identifier of the entry losing the category.")] Guid entryId,
+        [Description("Stable identifier of the category to unassign.")] Guid categoryId,
         CancellationToken cancellationToken = default)
     {
         return ApplyOneAsync(
@@ -298,34 +298,6 @@ internal sealed class DeckWriteTools
             expectedRevision,
             new UnassignDeckCategoryChange(entryId, categoryId),
             cancellationToken);
-    }
-
-    /// <summary>
-    /// Applies an explicit ordered batch atomically through the same granular mutation path.
-    /// </summary>
-    [McpServerTool(
-        Name = "deck_apply_changes",
-        Title = "Apply Local Deck Changes",
-        ReadOnly = false,
-        Destructive = true,
-        Idempotent = false,
-        OpenWorld = false,
-        UseStructuredContent = true)]
-    [Description("Applies an ordered batch atomically; any invalid change rolls back the full batch.")]
-    internal Task<OperationResult<DeckDocument>> ApplyChangesAsync(
-        Guid deckId,
-        long expectedRevision,
-        IReadOnlyList<DeckChangeInput>? changes,
-        CancellationToken cancellationToken = default)
-    {
-        if (!DeckChangeInputMapper.TryMap(changes, out IReadOnlyList<DeckChange> mapped, out string failure))
-        {
-            return Task.FromResult<OperationResult<DeckDocument>>(
-                new OperationInvalidInput("invalid-deck-change", failure));
-        }
-
-        return ExecuteAsync(() =>
-            store.ApplyChangesAsync(deckId, expectedRevision, mapped, cancellationToken));
     }
 
     /// <summary>
@@ -359,7 +331,8 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Restores a verified backup only when the supplied current database fingerprint still matches.")]
     internal Task<OperationResult<DeckRestoreResult>> RestoreBackupAsync(
-        Guid backupId,
+        [Description("Opaque backup UUID returned by deck_backup_list or deck_backup_create.")] Guid backupId,
+        [Description("Current database fingerprint returned by deck_backup_list.")]
         string expectedDatabaseFingerprint,
         CancellationToken cancellationToken = default)
     {
@@ -382,7 +355,7 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description("Deletes one local deck backup by opaque ID without accepting a filesystem path.")]
     internal Task<OperationResult<DeckDeleteResult>> DeleteBackupAsync(
-        Guid backupId,
+        [Description("Opaque backup UUID returned by deck_backup_list or deck_backup_create.")] Guid backupId,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => store.Backups.DeleteAsync(backupId, cancellationToken));

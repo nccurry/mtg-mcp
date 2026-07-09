@@ -33,9 +33,11 @@ deterministic `deck_*`, `scryfall_*`, and opt-in `archidekt_*` and
   static capability-toolset selection, standard configuration, versioned
   data-root resolution, legacy-data detection, and sensitive-value redaction.
 - Standard initialization and `mtg://server/capabilities` are implemented.
-  The default surface is twenty-one tools in `read-only`, forty-one tools in
+  The default surface is twenty-two tools in `read-only`, forty-three tools in
   `local` and `remote`, one resource, and zero prompts. The complete opt-in
-  `all` profile is 46/67/80 tools by mode.
+  `all` profile is 47/69/82 tools by mode. Capability schema 6 reports
+  implementation and credential configuration separately without contacting
+  a provider.
 - `mtg-mcp --smoke` is a one-shot configuration/process probe. `task smoke:mcp`
   establishes a real session with the official C# client and reads the
   capability resource.
@@ -46,13 +48,15 @@ deterministic `deck_*`, `scryfall_*`, and opt-in `archidekt_*` and
 
 The deck requirements and implementation evidence are in the
 [Local Deck Store PLC](docs/llms/plcs/completed/local-deck-store/README.md) and
-[Manual Deck Interchange PLC](docs/llms/plcs/in-progress/manual-deck-interchange/README.md).
+[Manual Deck Interchange PLC](docs/llms/plcs/completed/manual-deck-interchange/README.md).
 Scryfall requirements and acceptance evidence are in the
 [Scryfall Corpus And Evidence PLC](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md).
 Archidekt requirements and acceptance evidence are in the
 [Archidekt Deck Sync PLC](docs/llms/plcs/completed/archidekt-deck-sync/README.md).
 Playgroup requirements and acceptance evidence are in the
 [Playgroup Public API PLC](docs/llms/plcs/completed/playgroup-public-api/README.md).
+Cross-provider contract and identity hardening evidence is in the
+[MCP Contract And Adapter Hardening PLC](docs/llms/plcs/completed/mcp-contract-and-adapter-hardening/README.md).
 The [rewrite guide](docs/rewrite-guide.md) explains how this branch relates to
 the broader `0.9.0` program.
 
@@ -116,6 +120,15 @@ existing-deck mutation requires `expectedRevision`.
 The store is format-neutral and preserves unresolved card identities. Its
 Commander validation checks only explicitly documented local structure; it
 does not infer legality, card roles, provider validity, or deck quality.
+
+`deck_identity_reconcile_preview` and `deck_identity_reconcile_apply` provide
+an exact-only way to enrich unresolved local entries with retained Scryfall
+evidence. Resolution follows printing ID, exact set/collector/language, Oracle
+ID, then exact name. It never uses fuzzy matching, selects an arbitrary
+printing, or determines whether a deck is legal. Apply is revision-, evidence-,
+fingerprint-, and process-token-guarded and preserves quantities, zones,
+finishes, ordering, categories, and provider bindings. A preview must be
+applied through the same running MCP process that produced its opaque token.
 
 ## Manual Deck Interchange
 
@@ -284,7 +297,7 @@ The multi-gigabyte corpus acceptance additionally requires
 `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` and an explicit
 `MTGMCP_SCRYFALL_ACCEPTANCE_DATA_DIR`; it never deletes that directory.
 The separate [live method acceptance](docs/llms/plans/live-method-acceptance.md)
-installs the generated package and exercises all 80 public tools. It requires
+installs the generated package and exercises all 82 public tools. It requires
 an explicitly marked scratch root and clean committed worktree, pins results
 to that commit and package version, restores its owner-authorized Archidekt
 deck before cleanup, and never invokes the two Playgroup writes.

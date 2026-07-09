@@ -76,6 +76,15 @@
   with full-source checksum evidence.
 - Made Windows release cleanup fall back to extended-length filesystem paths
   for deeply nested installed-tool artifacts.
+- Added exact-only, evidence-bound deck identity reconciliation preview/apply,
+  raising the deck toolset to 25 tools and the complete surface to 47/69/82 by
+  mode without adding legality or fuzzy-resolution behavior.
+- Replaced the flat batch-change input with an eleven-variant closed schema,
+  described every public MCP input, and upgraded capability metadata to schema
+  6 with separate implementation and credential states and no provider I/O.
+- Split Scryfall card, corpus, snapshot, storage, and pacing ownership and
+  Archidekt deck, folder, snapshot, transport, mapping, and synchronization
+  ownership behind behavior-preserving public facades.
 
 ## 0.8.0 - 2026-06-28
 

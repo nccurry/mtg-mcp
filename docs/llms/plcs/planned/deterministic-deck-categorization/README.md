@@ -6,8 +6,8 @@
 - Folder: `docs/llms/plcs/planned/deterministic-deck-categorization/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
-- Current phase: independent child review
+- Last updated: 2026-07-06
+- Current phase: awaiting independent review after hardening; implementation unauthorized
 
 ## Summary
 
@@ -27,6 +27,7 @@ acquisition, storage, hierarchy, and tag lookup belong to the unified
 - [Completed local deck store](../../completed/local-deck-store/README.md)
 - [Scryfall Corpus And Evidence](../../completed/scryfall-corpus-and-evidence/README.md)
 - [Completed MCP capability toolsets](../../completed/mcp-capability-toolsets/README.md)
+- [MCP Contract And Adapter Hardening](../../completed/mcp-contract-and-adapter-hardening/README.md)
 
 ## Current-State Disposition
 

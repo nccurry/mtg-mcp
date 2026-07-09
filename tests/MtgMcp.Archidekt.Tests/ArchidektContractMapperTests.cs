@@ -20,7 +20,7 @@ public sealed class ArchidektContractMapperTests
             """;
         using JsonDocument document = JsonDocument.Parse(json);
 
-        RemoteFolderTree tree = ArchidektContractMapper.MapFolderTree(
+        RemoteFolderTree tree = ArchidektFolderContractMapper.MapFolderTree(
             document.RootElement,
             json,
             DateTimeOffset.UtcNow,
@@ -39,7 +39,7 @@ public sealed class ArchidektContractMapperTests
     {
         using JsonDocument document = JsonDocument.Parse(ArchidektTestPayloads.Deck);
 
-        RemoteDeckSnapshot deck = ArchidektContractMapper.MapDeck(
+        RemoteDeckSnapshot deck = ArchidektDeckContractMapper.MapDeck(
             document.RootElement,
             ArchidektTestPayloads.Deck,
             new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
@@ -78,12 +78,12 @@ public sealed class ArchidektContractMapperTests
             .Replace("\"sortOrder\": 1", "\"sortOrder\": 0", StringComparison.Ordinal);
         using JsonDocument secondDocument = JsonDocument.Parse(reordered);
 
-        RemoteDeckSnapshot first = ArchidektContractMapper.MapDeck(
+        RemoteDeckSnapshot first = ArchidektDeckContractMapper.MapDeck(
             firstDocument.RootElement,
             ArchidektTestPayloads.Deck,
             DateTimeOffset.UtcNow,
             "GET");
-        RemoteDeckSnapshot second = ArchidektContractMapper.MapDeck(
+        RemoteDeckSnapshot second = ArchidektDeckContractMapper.MapDeck(
             secondDocument.RootElement,
             reordered,
             DateTimeOffset.UtcNow,
@@ -101,7 +101,7 @@ public sealed class ArchidektContractMapperTests
     {
         using JsonDocument document = JsonDocument.Parse(ArchidektTestPayloads.DeckList);
 
-        RemoteDeckPage page = ArchidektContractMapper.MapDeckPage(
+        RemoteDeckPage page = ArchidektDeckContractMapper.MapDeckPage(
             document.RootElement,
             ArchidektTestPayloads.DeckList,
             DateTimeOffset.UtcNow,
@@ -123,7 +123,7 @@ public sealed class ArchidektContractMapperTests
     {
         using JsonDocument document = JsonDocument.Parse(ArchidektTestPayloads.FolderTree);
 
-        RemoteFolderTree tree = ArchidektContractMapper.MapFolderTree(
+        RemoteFolderTree tree = ArchidektFolderContractMapper.MapFolderTree(
             document.RootElement,
             ArchidektTestPayloads.FolderTree,
             DateTimeOffset.UtcNow,
@@ -149,13 +149,13 @@ public sealed class ArchidektContractMapperTests
         using JsonDocument listDocument = JsonDocument.Parse(ArchidektTestPayloads.SnapshotList);
         using JsonDocument snapshotDocument = JsonDocument.Parse(ArchidektTestPayloads.Snapshot);
 
-        RemoteNamedSnapshotPage page = ArchidektContractMapper.MapSnapshotPage(
+        RemoteNamedSnapshotPage page = ArchidektSnapshotContractMapper.MapSnapshotPage(
             listDocument.RootElement,
             "42",
             ArchidektTestPayloads.SnapshotList,
             DateTimeOffset.UtcNow,
             "GET snapshots");
-        RemoteNamedSnapshot snapshot = ArchidektContractMapper.MapSnapshot(
+        RemoteNamedSnapshot snapshot = ArchidektSnapshotContractMapper.MapSnapshot(
             snapshotDocument.RootElement,
             "42",
             ArchidektTestPayloads.Snapshot,
@@ -182,7 +182,7 @@ public sealed class ArchidektContractMapperTests
         using JsonDocument document = JsonDocument.Parse(json);
 
         ArchidektProviderException exception = Assert.Throws<ArchidektProviderException>(() =>
-            ArchidektContractMapper.MapDeck(
+            ArchidektDeckContractMapper.MapDeck(
                 document.RootElement,
                 json,
                 DateTimeOffset.UtcNow,
@@ -204,7 +204,7 @@ public sealed class ArchidektContractMapperTests
         using JsonDocument document = JsonDocument.Parse(json);
 
         ArchidektProviderException exception = Assert.Throws<ArchidektProviderException>(() =>
-            ArchidektContractMapper.MapSnapshot(
+            ArchidektSnapshotContractMapper.MapSnapshot(
                 document.RootElement,
                 "42",
                 json,

@@ -1,6 +1,9 @@
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
+using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
+using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Tests;
 
@@ -23,8 +26,6 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(
             [true, true, true, false, false],
             toolsets.Select(CapabilityToolsetPolicy.IsDefaultEnabled));
-        Assert.Equal("available", CapabilityToolsetPolicy.Format(CapabilityToolsetAvailability.Available));
-        Assert.Equal("unavailable", CapabilityToolsetPolicy.Format(CapabilityToolsetAvailability.Unavailable));
         Assert.Equal("stable", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Stable));
         Assert.Equal("experimental", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Experimental));
         Assert.Equal("default", CapabilityToolsetPolicy.Format(CapabilityToolsetSelectionKind.Default));
@@ -46,8 +47,6 @@ public sealed class CapabilityToolsetTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => CapabilityToolsetPolicy.Format((CapabilityToolsetSelectionKind)999));
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => CapabilityToolsetPolicy.Format((CapabilityToolsetAvailability)999));
-        Assert.Throws<ArgumentOutOfRangeException>(
             () => CapabilityToolsetPolicy.Format((CapabilityToolsetStability)999));
     }
 
@@ -62,7 +61,6 @@ public sealed class CapabilityToolsetTests
         string[] remoteWrites = ["remote_write"];
         CapabilityToolsetDescriptor descriptor = new(
             CapabilityToolset.Decks,
-            CapabilityToolsetAvailability.Available,
             CapabilityToolsetStability.Stable,
             " Test capability. ",
             reads,
@@ -98,7 +96,6 @@ public sealed class CapabilityToolsetTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new CapabilityToolsetDescriptor(
                 (CapabilityToolset)999,
-                CapabilityToolsetAvailability.Available,
                 CapabilityToolsetStability.Stable,
                 "description",
                 [],
@@ -107,16 +104,6 @@ public sealed class CapabilityToolsetTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new CapabilityToolsetDescriptor(
                 CapabilityToolset.Decks,
-                (CapabilityToolsetAvailability)999,
-                CapabilityToolsetStability.Stable,
-                "description",
-                [],
-                [],
-                []));
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new CapabilityToolsetDescriptor(
-                CapabilityToolset.Decks,
-                CapabilityToolsetAvailability.Available,
                 (CapabilityToolsetStability)999,
                 "description",
                 [],
@@ -125,7 +112,6 @@ public sealed class CapabilityToolsetTests
         Assert.Throws<ArgumentNullException>(
             () => new CapabilityToolsetDescriptor(
                 CapabilityToolset.Decks,
-                CapabilityToolsetAvailability.Available,
                 CapabilityToolsetStability.Stable,
                 "description",
                 null!,
@@ -305,7 +291,7 @@ public sealed class CapabilityToolsetTests
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
         Assert.Equal(CapabilityToolset.Decks, decks.Toolset);
-        Assert.Equal(23, decks.AllToolNames.Length);
+        Assert.Equal(25, decks.AllToolNames.Length);
         Assert.Equal(CapabilityToolset.Scryfall, scryfall.Toolset);
         Assert.Equal(18, scryfall.AllToolNames.Length);
         Assert.Equal(14, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
@@ -319,14 +305,47 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(16, playgroup.GetVisibleToolCount(OperationMode.Remote));
-        Assert.Equal(21, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
-        Assert.Equal(41, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
-        Assert.Equal(41, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
+        Assert.Equal(22, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
+        Assert.Equal(43, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
+        Assert.Equal(43, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
         Assert.Equal(0, CapabilityToolsetRegistry.CountVisibleTools(noneSelection, OperationMode.Local));
         CapabilityToolsetSelection allSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("all"));
-        Assert.Equal(46, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
-        Assert.Equal(67, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
-        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
+        Assert.Equal(47, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
+        Assert.Equal(69, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
+        Assert.Equal(82, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
+    }
+
+    /// <summary>
+    /// Verifies capability credential metadata reports configuration presence without authenticating.
+    /// </summary>
+    [Fact]
+    public void CredentialProjection_DistinguishesPresenceWithoutProviderAccess()
+    {
+        FoundationConfiguration absent = CreateConfiguration(
+            ArchidektOptions.CreateDefault(),
+            PlaygroupOptions.CreateDefault(null));
+        FoundationConfiguration configured = CreateConfiguration(
+            ArchidektOptions.CreateDefault("private-user", "private-password"),
+            PlaygroupOptions.CreateDefault("private-key"));
+
+        Assert.Equal(
+            ("not-required", null),
+            FoundationResources.GetCredentialProjection(absent, CapabilityToolset.Decks));
+        Assert.Equal(
+            ("not-required", null),
+            FoundationResources.GetCredentialProjection(configured, CapabilityToolset.Scryfall));
+        Assert.Equal(
+            ("not-configured", "archidekt_auth_status"),
+            FoundationResources.GetCredentialProjection(absent, CapabilityToolset.Archidekt));
+        Assert.Equal(
+            ("not-configured", "playgroup_auth_status"),
+            FoundationResources.GetCredentialProjection(absent, CapabilityToolset.Playgroup));
+        Assert.Equal(
+            ("configured-unverified", "archidekt_auth_status"),
+            FoundationResources.GetCredentialProjection(configured, CapabilityToolset.Archidekt));
+        Assert.Equal(
+            ("configured-unverified", "playgroup_auth_status"),
+            FoundationResources.GetCredentialProjection(configured, CapabilityToolset.Playgroup));
     }
 
     /// <summary>
@@ -340,12 +359,32 @@ public sealed class CapabilityToolsetTests
     {
         return new CapabilityToolsetDescriptor(
             CapabilityToolset.Decks,
-            CapabilityToolsetAvailability.Available,
             CapabilityToolsetStability.Stable,
             description,
             readTools,
             localWriteTools,
             remoteWriteTools);
+    }
+
+    /// <summary>
+    /// Creates private runtime configuration for capability-projection tests.
+    /// </summary>
+    private static FoundationConfiguration CreateConfiguration(
+        ArchidektOptions archidekt,
+        PlaygroupOptions playgroup)
+    {
+        return new FoundationConfiguration(
+            OperationMode.Local,
+            RequireSuccess(CapabilityToolsetRegistry.Resolve("default")),
+            TimeSpan.FromHours(24),
+            Path.Combine(Path.GetTempPath(), "mtg-mcp-capability-test"),
+            DataRootState.NotCreated,
+            false,
+            new LegacyDataBoundary(
+                LegacyDataState.NotDetected,
+                "Legacy data was not detected; automatic migration remains disabled."),
+            archidekt,
+            playgroup);
     }
 
     /// <summary>
@@ -358,7 +397,6 @@ public sealed class CapabilityToolsetTests
     {
         return new CapabilityToolsetDescriptor(
             toolset,
-            CapabilityToolsetAvailability.Available,
             stability,
             $"Synthetic {toolName} capability.",
             [$"{toolName}_read"],

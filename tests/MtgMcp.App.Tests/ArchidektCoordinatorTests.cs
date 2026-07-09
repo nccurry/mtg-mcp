@@ -250,7 +250,7 @@ public sealed class ArchidektCoordinatorTests
             using ArchidektService service = CreateService(handler);
             using SqliteDeckStore store = new(root, "test");
             using JsonDocument document = JsonDocument.Parse(RemoteDeck);
-            RemoteDeckSnapshot remote = ArchidektContractMapper.MapDeck(
+            RemoteDeckSnapshot remote = ArchidektDeckContractMapper.MapDeck(
                 document.RootElement,
                 RemoteDeck,
                 new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),

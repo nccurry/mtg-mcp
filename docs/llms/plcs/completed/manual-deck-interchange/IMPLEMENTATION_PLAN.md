@@ -2,10 +2,10 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-04
+- Last updated: 2026-07-06
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 
@@ -15,9 +15,9 @@
 | --- | --- | --- | --- | --- |
 | 1 | Add native JSON contract and exact round trip. | XCHG-001 through XCHG-005, XCHG-016 | Catalog/schema and golden/property tests pass. | Completed |
 | 2 | Add generic text preview/export. | XCHG-002 through XCHG-006, XCHG-012, XCHG-013, XCHG-015, XCHG-016 | Parser/formatter, partial-opt-in, and boundary tests pass. | Completed |
-| 3 | Add Archidekt artifact bundle. | XCHG-007, XCHG-008, XCHG-011, XCHG-017 | Exact bundle golden and dated manual acceptance pass. | Core import accepted; cleanup confirmation open |
-| 4 | Add Moxfield Bulk Edit bundle. | XCHG-009 through XCHG-011, XCHG-017 | Exact bundle golden and dated manual acceptance pass. | Core import accepted; cleanup confirmation open |
-| 5 | Add the four MCP wrappers, one interchange catalog, and current north-star validation. | XCHG-003, XCHG-014 through XCHG-018 | Current mode surface, dummy-deck workflow, bounds, manual-record, and full offline gates pass; the dependent toolset child owns profile filtering. | Automated validation and provider field observations complete; cleanup open |
+| 3 | Add Archidekt artifact bundle. | XCHG-007, XCHG-008, XCHG-011, XCHG-017 | Exact bundle golden and dated manual acceptance pass. | Completed |
+| 4 | Add Moxfield Bulk Edit bundle. | XCHG-009 through XCHG-011, XCHG-017 | Exact bundle golden and dated manual acceptance pass. | Completed |
+| 5 | Add the four MCP wrappers, one interchange catalog, and current north-star validation. | XCHG-003, XCHG-014 through XCHG-018 | Current mode surface, dummy-deck workflow, bounds, manual-record, and full offline gates pass; the dependent toolset child owns profile filtering. | Completed |
 
 ## Rules
 

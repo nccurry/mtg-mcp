@@ -23,7 +23,6 @@ internal sealed class CapabilityToolsetDescriptor
     /// </summary>
     internal CapabilityToolsetDescriptor(
         CapabilityToolset toolset,
-        CapabilityToolsetAvailability availability,
         CapabilityToolsetStability stability,
         string description,
         IEnumerable<string> readTools,
@@ -33,14 +32,6 @@ internal sealed class CapabilityToolsetDescriptor
         if (!Enum.IsDefined(toolset))
         {
             throw new ArgumentOutOfRangeException(nameof(toolset), toolset, "Unknown capability toolset.");
-        }
-
-        if (!Enum.IsDefined(availability))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(availability),
-                availability,
-                "Unknown capability availability.");
         }
 
         if (!Enum.IsDefined(stability))
@@ -53,7 +44,6 @@ internal sealed class CapabilityToolsetDescriptor
 
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         Toolset = toolset;
-        Availability = availability;
         Stability = stability;
         Description = description.Trim();
 
@@ -81,11 +71,6 @@ internal sealed class CapabilityToolsetDescriptor
     /// Gets whether the ordinary profile enables this descriptor.
     /// </summary>
     internal bool DefaultEnabled => CapabilityToolsetPolicy.IsDefaultEnabled(Toolset);
-
-    /// <summary>
-    /// Gets the current non-secret prerequisite status.
-    /// </summary>
-    internal CapabilityToolsetAvailability Availability { get; }
 
     /// <summary>
     /// Gets whether the descriptor participates in stable reserved profiles.

@@ -17,10 +17,10 @@ The current public surface is exactly:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- a default profile of 21/41/41 tools and complete `all` profile of 46/67/80
+- a default profile of 22/43/43 tools and complete `all` profile of 47/69/82
   tools by mode, plus zero prompts;
 - static `default`, `all`, `none`, and explicit implemented-toolset selection,
-  with capability schema version 5; and
+  with capability schema version 6; and
 - no logging, subscription, or list-changed capability advertisement.
 
 `task smoke:process` is only a one-shot startup/configuration probe.

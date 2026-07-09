@@ -64,6 +64,8 @@ internal static class LiveAcceptanceManifest
         "deck_entry_update",
         "deck_export_bundle",
         "deck_get",
+        "deck_identity_reconcile_apply",
+        "deck_identity_reconcile_preview",
         "deck_import_create",
         "deck_import_preview",
         "deck_interchange_formats",

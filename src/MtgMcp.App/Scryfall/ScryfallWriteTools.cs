@@ -65,9 +65,9 @@ internal sealed class ScryfallWriteTools
         UseStructuredContent = true)]
     [Description("Guardedly swaps the active and previous complete corpus generations without changing deck or request snapshot data.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> RollbackCorpusAsync(
-        Guid expectedActiveGeneration,
-        Guid expectedPreviousGeneration,
-        bool acknowledgeActivationChange,
+        [Description("Current active corpus generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
+        [Description("Current previous corpus generation UUID that should become active.")] Guid expectedPreviousGeneration,
+        [Description("Explicit acknowledgement that active evidence will change.")] bool acknowledgeActivationChange,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => service.RollbackCorpusAsync(expectedActiveGeneration, expectedPreviousGeneration,
@@ -87,8 +87,8 @@ internal sealed class ScryfallWriteTools
         UseStructuredContent = true)]
     [Description("Deletes installed corpus generations only with the current active generation and an explicit data-loss acknowledgement.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
-        Guid expectedActiveGeneration,
-        bool acknowledgeDataLoss,
+        [Description("Current active corpus generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
+        [Description("Explicit acknowledgement that installed corpus generations will be deleted.")] bool acknowledgeDataLoss,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => service.DeleteCorpusAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken));
@@ -107,9 +107,9 @@ internal sealed class ScryfallWriteTools
         UseStructuredContent = true)]
     [Description("Deletes one immutable request snapshot only when its expected checksum matches and data loss is acknowledged.")]
     internal Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteSnapshotAsync(
-        Guid snapshotId,
-        string expectedChecksum,
-        bool acknowledgeDataLoss,
+        [Description("Immutable snapshot UUID to delete.")] Guid snapshotId,
+        [Description("Current snapshot checksum used as a stale-write guard.")] string expectedChecksum,
+        [Description("Explicit acknowledgement that retained evidence will be deleted.")] bool acknowledgeDataLoss,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => service.DeleteSnapshotAsync(snapshotId, expectedChecksum,

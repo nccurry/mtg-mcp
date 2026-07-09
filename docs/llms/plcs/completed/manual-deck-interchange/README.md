@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: `docs/llms/plcs/in-progress/manual-deck-interchange/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/manual-deck-interchange/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
-- Current phase: Provider imports accepted; disposable-deck cleanup open
+- Last updated: 2026-07-06
+- Current phase: Completed
 
 ## Summary
 
@@ -113,8 +113,8 @@ acceptance gates are complete. The repository owner accepted both authenticated
 manual UI imports. Archidekt and Moxfield are now `available`, with empirical
 companion-only limits recorded instead of inferred syntax. The exact record is
 in [Manual Provider Acceptance Records](PROVIDER_ACCEPTANCE.md); this packet
-stays in progress only until both disposable provider decks are confirmed
-deleted.
+is complete because the repository owner confirmed both disposable provider
+decks were deleted without retaining their IDs or URLs.
 
 ## Implementation Evidence
 

@@ -28,7 +28,7 @@ internal sealed class ScryfallProviderClient : IDisposable
     /// <summary>
     /// Coordinates pacing through the shared database.
     /// </summary>
-    private readonly ScryfallDatabase database;
+    private readonly ScryfallRequestCoordinationStore coordinationStore;
 
     /// <summary>
     /// Supplies deterministic time in tests.
@@ -41,13 +41,13 @@ internal sealed class ScryfallProviderClient : IDisposable
     internal ScryfallProviderClient(
         Uri apiBaseUri,
         string userAgent,
-        ScryfallDatabase database,
+        ScryfallRequestCoordinationStore coordinationStore,
         TimeProvider timeProvider,
         HttpMessageHandler? handler = null)
     {
         ArgumentNullException.ThrowIfNull(apiBaseUri);
         ArgumentException.ThrowIfNullOrWhiteSpace(userAgent);
-        ArgumentNullException.ThrowIfNull(database);
+        ArgumentNullException.ThrowIfNull(coordinationStore);
         ArgumentNullException.ThrowIfNull(timeProvider);
         if (!apiBaseUri.IsAbsoluteUri ||
             (apiBaseUri.Scheme != Uri.UriSchemeHttps && apiBaseUri.Scheme != Uri.UriSchemeHttp))
@@ -56,7 +56,7 @@ internal sealed class ScryfallProviderClient : IDisposable
         }
 
         this.apiBaseUri = EnsureTrailingSlash(apiBaseUri);
-        this.database = database;
+        this.coordinationStore = coordinationStore;
         this.timeProvider = timeProvider;
         httpClient = handler is null
             ? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: true)
@@ -227,7 +227,7 @@ internal sealed class ScryfallProviderClient : IDisposable
     {
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            TimeSpan delay = await database.ReserveProviderStartAsync(
+            TimeSpan delay = await coordinationStore.ReserveProviderStartAsync(
                 timeProvider.GetUtcNow(),
                 RequestInterval,
                 cancellationToken).ConfigureAwait(false);
