@@ -15,7 +15,7 @@ public sealed class FoundationArchitectureTests
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
     /// <summary>
-    /// Verifies that only the six currently approved production projects exist.
+    /// Verifies that only the seven currently approved production projects exist.
     /// </summary>
     [Fact]
     public void ProductionProjects_ContainOnlyApprovedImplementedModules()
@@ -35,6 +35,7 @@ public sealed class FoundationArchitectureTests
                 "src/MtgMcp.Decks/MtgMcp.Decks.csproj",
                 "src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj",
                 "src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj",
+                "src/MtgMcp.Statistics/MtgMcp.Statistics.csproj",
             ],
             projects);
     }
@@ -71,7 +72,7 @@ public sealed class FoundationArchitectureTests
             .ToArray();
 
         Assert.Equal(
-            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj"],
+            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj", "../MtgMcp.Statistics/MtgMcp.Statistics.csproj"],
             references);
         Assert.Equal(
             [
@@ -128,6 +129,37 @@ public sealed class FoundationArchitectureTests
 
         Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
         Assert.Equal(["Microsoft.Data.Sqlite", "SQLitePCLRaw.bundle_e_sqlite3"], packages);
+    }
+
+    /// <summary>
+    /// Verifies Statistics contains only provider-neutral exact logic over Core contracts.
+    /// </summary>
+    [Fact]
+    public void StatisticsProject_ReferencesOnlyCoreAndBcl()
+    {
+        XDocument project = LoadProject("src/MtgMcp.Statistics/MtgMcp.Statistics.csproj");
+        string[] references = project
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
+            .OfType<string>()
+            .ToArray();
+
+        Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
+        Assert.Empty(project.Descendants("PackageReference"));
+
+        string source = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(
+                    Path.Combine(RepositoryRoot, "src", "MtgMcp.Statistics"),
+                    "*.cs",
+                    SearchOption.AllDirectories)
+                .Where(IsAuthoredSource)
+                .Select(File.ReadAllText));
+        Assert.DoesNotContain("HttpClient", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.Data.Sqlite", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModelContextProtocol", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MtgMcp.Decks", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MtgMcp.Scryfall", source, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -256,7 +288,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, eighty-two-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, ninety-tool, zero-prompt toolset-owned surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()
@@ -272,15 +304,17 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Decks", "DeckToolsetManifest.cs"));
         string scryfallManifestSource = File.ReadAllText(
             Path.Combine(sourceRoot, "MtgMcp.App", "Scryfall", "ScryfallToolsetManifest.cs"));
+        string statisticsManifestSource = File.ReadAllText(
+            Path.Combine(sourceRoot, "MtgMcp.App", "Statistics", "StatisticsToolsetManifest.cs"));
         string archidektManifestSource = File.ReadAllText(
             Path.Combine(sourceRoot, "MtgMcp.App", "Archidekt", "ArchidektToolsetManifest.cs"));
         string playgroupManifestSource = File.ReadAllText(
             Path.Combine(sourceRoot, "MtgMcp.App", "Playgroup", "PlaygroupToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(82, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(90, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(14, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(15, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -372,15 +406,24 @@ public sealed class FoundationArchitectureTests
                 "scryfall_snapshot_get",
                 "scryfall_snapshot_list",
                 "scryfall_tag_search",
+                "stats_deck_summary",
+                "stats_hypergeometric",
+                "stats_mana_availability",
+                "stats_minimum_count",
+                "stats_mulligan",
+                "stats_multivariate",
+                "stats_package_assembly",
+                "stats_turn_table",
             ],
             toolNames);
         string manifestSource = string.Join(
             Environment.NewLine,
             deckManifestSource,
             scryfallManifestSource,
+            statisticsManifestSource,
             archidektManifestSource,
             playgroupManifestSource);
-        string[] assignedToolNames = Regex.Matches(manifestSource, "\\\"((?:archidekt|deck|playgroup|scryfall)_[^\\\"]+)\\\"")
+        string[] assignedToolNames = Regex.Matches(manifestSource, "\\\"((?:archidekt|deck|playgroup|scryfall|stats)_[^\\\"]+)\\\"")
             .Select(match => match.Groups[1].Value)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -390,6 +433,7 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(7, Regex.Count(deckManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
         Assert.Equal(2, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
+        Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithTools\("));
         Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithTools\("));
         Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
@@ -463,6 +507,8 @@ public sealed class FoundationArchitectureTests
             "MtgMcp.Playgroup.Tests",
             "MtgMcp.Scryfall",
             "MtgMcp.Scryfall.Tests",
+            "MtgMcp.Statistics",
+            "MtgMcp.Statistics.Tests",
         ];
 
         foreach (string wiringFile in wiringFiles)

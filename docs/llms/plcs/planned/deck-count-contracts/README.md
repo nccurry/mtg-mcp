@@ -5,7 +5,7 @@
 > legacy additive `cardCounts` compatibility surface.** The rewrite removes the
 > root ambiguity by making zones independent from categories in
 > [local deck storage](../../completed/local-deck-store/README.md); exact composition lives in
-> [deck statistics](../exact-deck-statistics/README.md). Count invariants remain
+> [deck statistics](../../completed/exact-deck-statistics/README.md). Count invariants remain
 > fixture rationale, but primary-category bucketing and preservation of legacy
 > `maybeboardCards`/`roleCounts` do not transfer. Reviewed against the rewrite
 > on 2026-07-03; lifecycle movement is deferred to authorized foundation work.

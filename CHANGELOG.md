@@ -79,6 +79,15 @@
 - Added exact-only, evidence-bound deck identity reconciliation preview/apply,
   raising the deck toolset to 25 tools and the complete surface to 47/69/82 by
   mode without adding legality or fuzzy-resolution behavior.
+- Added eight default-enabled, read-only `stats_*` tools for exact
+  hypergeometric and multivariate probability, explicit turn and mulligan
+  schedules, caller-declared mana/package allocation, inverse counts, and
+  deterministic deck summaries. The current surfaces are 30/51/51 for
+  `default` and 55/77/90 for `all`.
+- Added `MtgMcp.Statistics` as a BCL-only project with reduced `BigInteger`
+  rationals, invariant 12-place displays, a request-wide work budget, and
+  independent exhaustive combinatorial oracles. No format or legality rule,
+  provider lookup, sampling fallback, or recommendation entered the surface.
 - Replaced the flat batch-change input with an eleven-variant closed schema,
   described every public MCP input, and upgraded capability metadata to schema
   6 with separate implementation and credential states and no provider I/O.

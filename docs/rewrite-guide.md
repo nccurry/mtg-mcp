@@ -5,10 +5,9 @@ and the in-progress clean-break `0.9.0` server. It prevents current implementati
 documentation from being mistaken for the rewrite target.
 
 The rewrite foundation, local deck store, manual deck interchange, capability
-toolsets, Scryfall, Archidekt, Playgroup, and pre-statistics hardening children
-are complete. Accepted AMEND-005 defines the resulting contracts. The three
-later capability/cutover children remain planning-only with
-`Implementation authorized: No`.
+toolsets, Scryfall, Archidekt, Playgroup, pre-statistics hardening, and exact
+statistics children are complete. Accepted AMEND-005 defines their contracts;
+categorization and cutover remain planning-only.
 
 ## Authority And Routing
 
@@ -36,8 +35,8 @@ another.
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 25 `deck_*`, 18 `scryfall_*`, 23 opt-in `archidekt_*`, and 16 opt-in `playgroup_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 22/43/43 and current `all` is 47/69/82 tools by mode after hardening; accepted AMEND-005 targets 32/54/54 and 57/80/93 after remaining stable capabilities, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 25 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, and 16 opt-in `playgroup_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 30/51/51 and current `all` is 55/77/90 tools by mode after exact statistics; accepted AMEND-005 targets 32/54/54 and 57/80/93 after categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, and Statistics |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db` and unified `scryfall.db` stores |
@@ -79,8 +78,8 @@ static for an MCP session. Each remaining PLC must pass its north-star workflow
 check in addition to endpoint and schema acceptance.
 
 Items 6 and 11 reflect accepted umbrella amendment AMEND-004. Item 9 reflects
-accepted AMEND-005 and is complete. Item 10 is next for independent owner
-review and remains unauthorized for implementation.
+accepted AMEND-005 and is complete. Item 10 is active under its independently
+reviewed and owner-authorized packet.
 
 Completed PLCs remain accurate evidence for the revision they implemented, but
 they do not override a later reviewed umbrella amendment for unfinished work.

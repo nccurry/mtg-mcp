@@ -202,6 +202,10 @@ tasks:
         {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --filter "Category!=Live"
+      - >
+        {{.DOTNET}} test tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --filter "Category!=Live"
 
   test:integration:
     desc: Run architecture and local deck integration tests
@@ -312,6 +316,12 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Playgroup'
 
+  coverage:statistics:
+    desc: Enforce 90 percent line coverage for exact statistics using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Statistics'
+
   format:
     desc: Format source
     deps: [setup:dotnet]
@@ -371,7 +381,7 @@ tasks:
         {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests"
+        --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~StatisticsMcpTests"
 
   install:
     desc: Install the current branch on this workstation

@@ -2,7 +2,7 @@
 
 > [!WARNING]
 > **Rewrite disposition: reference-only — do not implement this classifier in
-> stable `0.9.0`.** [Exact statistics](../exact-deck-statistics/README.md) uses
+> stable `0.9.0`.** [Exact statistics](../../completed/exact-deck-statistics/README.md) uses
 > caller-supplied source capability masks and usable-turn constraints and never
 > parses oracle text. Preserve the phrase matrix only as documentation/example
 > input for callers or a future

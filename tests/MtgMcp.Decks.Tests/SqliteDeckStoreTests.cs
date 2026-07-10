@@ -751,10 +751,10 @@ public sealed class SqliteDeckStoreTests
     }
 
     /// <summary>
-    /// Verifies local validation reports only documented structural observations.
+    /// Verifies local validation does not interpret a deck format or require a commander zone.
     /// </summary>
     [Fact]
-    public async Task Validate_ReportsCommanderStructureWithoutStrategicClaims()
+    public async Task Validate_WithEmptyCommanderLabel_ReturnsStructurallyValid()
     {
         using TemporaryDeckDirectory temporary = new();
         using SqliteDeckStore store = CreateStore(temporary.Path);
@@ -765,11 +765,8 @@ public sealed class SqliteDeckStoreTests
         DeckValidationReport report = RequireSuccess(
             await store.ValidateAsync(deck.DeckId, TestContext.Current.CancellationToken));
 
-        DeckValidationIssue issue = Assert.Single(report.Issues);
-        Assert.Equal("commander-zone-empty", issue.ReasonCode);
-        Assert.False(report.IsStructurallyValid);
-        Assert.DoesNotContain("legal", issue.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("quality", issue.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(report.IsStructurallyValid);
+        Assert.Empty(report.Issues);
     }
 
     /// <summary>

@@ -56,9 +56,10 @@ copy for a later rerun.
 | --- | ---: | ---: | ---: |
 | Decks | 25 | 25 | 0 |
 | Scryfall | 18 | 18 | 0 |
+| Statistics | 8 | 8 | 0 |
 | Archidekt | 23 | 23 | 0 |
 | Playgroup | 16 | 14 | 2 |
-| **Total** | **82** | **80** | **2** |
+| **Total** | **90** | **88** | **2** |
 
 Completion additionally requires one capability resource pass, exact
 `default`/`all`/`none` mode counts, exact Archidekt baseline restoration, no
@@ -78,7 +79,7 @@ directions before scratch-corpus deletion.
   7,044,277 bytes and exceeded the generic evidence ceiling. The MCP now
   requires an exact `commanderId`, bounds the aggregate fetch, and returns only
   the unchanged matching provider row with the full-source checksum.
-- Full harness status: Playgroup is complete. A single exact-commit 80-read
+- Full harness status: Playgroup is complete. A single exact-commit 88-method
   combined run and the provider-generation-dependent corpus rollback gate
   remain open; this segment result does not claim overall acceptance closure.
 

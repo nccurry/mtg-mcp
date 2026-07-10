@@ -428,6 +428,13 @@ public sealed class LiveMethodAcceptanceTests
             Assert.Equal("Obeka Batched Acceptance", loaded.GetProperty("name").GetString());
             revision = loaded.GetProperty("revision").GetInt64();
 
+            await ExerciseStatisticsMethodsAsync(
+                environment,
+                session,
+                deckId,
+                revision,
+                token).ConfigureAwait(false);
+
             foreach (Guid id in new[] { backupId, rollbackBackupId })
             {
                 _ = await CallSuccessAsync(
@@ -2084,12 +2091,12 @@ public sealed class LiveMethodAcceptanceTests
     {
         (string Mode, string Toolsets, int Count)[] cases =
         [
-            ("read-only", "default", 22),
-            ("local", "default", 43),
-            ("remote", "default", 43),
-            ("read-only", "all", 47),
-            ("local", "all", 69),
-            ("remote", "all", 82),
+            ("read-only", "default", 30),
+            ("local", "default", 51),
+            ("remote", "default", 51),
+            ("read-only", "all", 55),
+            ("local", "all", 77),
+            ("remote", "all", 90),
             ("read-only", "none", 0),
             ("local", "none", 0),
             ("remote", "none", 0),
@@ -2164,6 +2171,108 @@ public sealed class LiveMethodAcceptanceTests
         Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
         return content.GetProperty("result");
+    }
+
+    /// <summary>
+    /// Exercises all deterministic statistics methods without provider traffic or inferred deck rules.
+    /// </summary>
+    private static async Task ExerciseStatisticsMethodsAsync(
+        LiveAcceptanceEnvironment environment,
+        McpProcessSession session,
+        Guid deckId,
+        long revision,
+        CancellationToken cancellationToken)
+    {
+        string[] redCapability = ["R"];
+        string[] hitsGroup = ["hits"];
+        string[] mainZone = ["main"];
+        int[] medianPercentile = [50];
+        object population = new
+        {
+            kind = "raw",
+            buckets = new object[]
+            {
+                new { count = 4, groups = new[] { "hits" } },
+                new { count = 6, groups = Array.Empty<string>() },
+            },
+            declaredGroups = new[] { "hits" },
+        };
+        async Task ExactAsync(string toolName, object request)
+        {
+            JsonElement calculation = await CallSuccessAsync(
+                environment,
+                session,
+                toolName,
+                new Dictionary<string, object?> { ["request"] = request },
+                cancellationToken).ConfigureAwait(false);
+            Assert.Equal("exact", calculation.GetProperty("kind").GetString());
+        }
+
+        await ExactAsync(
+            "stats_hypergeometric",
+            new { population, successGroup = "hits", drawCount = 3, @event = new { kind = "at-least", count = 1 } }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_multivariate",
+            new { population, drawCount = 3, conditions = new[] { new { group = "hits", minimum = 1, maximum = 2 } } }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_turn_table",
+            new
+            {
+                population,
+                successGroup = "hits",
+                openingHandSize = 2,
+                drawsByTurn = new[] { new { turn = 1, draws = 0 }, new { turn = 2, draws = 1 } },
+                @event = new { kind = "at-least", count = 1 },
+            }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_mana_availability",
+            new
+            {
+                population,
+                drawCount = 3,
+                sources = new[] { new { group = "hits", capabilities = redCapability } },
+                requirement = new { red = 1 },
+                maximumUsableSources = 1,
+            }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_package_assembly",
+            new
+            {
+                population,
+                drawCount = 3,
+                requirements = new[] { new { name = "piece", count = 1, eligibleGroups = hitsGroup } },
+            }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_mulligan",
+            new
+            {
+                population,
+                attempts = new[] { new { drawCount = 3, bottomCount = 0, forced = false }, new { drawCount = 3, bottomCount = 1, forced = true } },
+                keepConditions = new[] { new { group = "hits", minimum = 1, maximum = 3 } },
+                bottomPriority = Array.Empty<string>(),
+                finalConditions = (object?)null,
+            }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_minimum_count",
+            new
+            {
+                @event = new { kind = "hypergeometric-at-least", populationSize = 10, drawCount = 3, requiredSuccesses = 1 },
+                targetNumerator = "1",
+                targetDenominator = "2",
+                minimumCount = 0,
+                maximumCount = 10,
+            }).ConfigureAwait(false);
+        await ExactAsync(
+            "stats_deck_summary",
+            new
+            {
+                deckId,
+                expectedRevision = revision,
+                populationSelectors = new object[] { new { kind = "zone-names", zoneNames = mainZone } },
+                numericSeries = Array.Empty<object>(),
+                percentiles = medianPercentile,
+                zonePartition = (object?)null,
+            }).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -13,7 +13,7 @@ implemented offline manual deck interchange, the unified Scryfall evidence
 capability, and guarded Archidekt synchronization for the clean-break `0.9.0`
 rewrite. It is a usable stdio MCP server with one capability resource plus
 deterministic `deck_*`, `scryfall_*`, and opt-in `archidekt_*` and
-`playgroup_*` workflows.
+`playgroup_*` workflows plus exact `stats_*` calculations.
 
 - `MtgMcp.Core` provides closed result and evidence unions with stable JSON
   discriminators plus immutable, provider-neutral deck contracts.
@@ -29,13 +29,16 @@ deterministic `deck_*`, `scryfall_*`, and opt-in `archidekt_*` and
 - `MtgMcp.Playgroup` owns the pinned official Public API 1.0.0 contract,
   lossless provider-shaped evidence, bearer isolation, conservative pacing,
   bounded read retry, and single-attempt remote writes.
+- `MtgMcp.Statistics` owns provider-independent exact rational probability,
+  caller-defined source/package allocation, explicit mulligan and turn
+  schedules, inverse copy-count solving, and deterministic deck summaries.
 - `MtgMcp.App` provides the stdio MCP host, operation-mode enforcement,
   static capability-toolset selection, standard configuration, versioned
   data-root resolution, legacy-data detection, and sensitive-value redaction.
 - Standard initialization and `mtg://server/capabilities` are implemented.
-  The default surface is twenty-two tools in `read-only`, forty-three tools in
+  The default surface is thirty tools in `read-only`, fifty-one tools in
   `local` and `remote`, one resource, and zero prompts. The complete opt-in
-  `all` profile is 47/69/82 tools by mode. Capability schema 6 reports
+  `all` profile is 55/77/90 tools by mode. Capability schema 6 reports
   implementation and credential configuration separately without contacting
   a provider.
 - `mtg-mcp --smoke` is a one-shot configuration/process probe. `task smoke:mcp`
@@ -57,6 +60,8 @@ Playgroup requirements and acceptance evidence are in the
 [Playgroup Public API PLC](docs/llms/plcs/completed/playgroup-public-api/README.md).
 Cross-provider contract and identity hardening evidence is in the
 [MCP Contract And Adapter Hardening PLC](docs/llms/plcs/completed/mcp-contract-and-adapter-hardening/README.md).
+Exact mathematics requirements and verification evidence are in the
+[Exact Deck Statistics PLC](docs/llms/plcs/completed/exact-deck-statistics/README.md).
 The [rewrite guide](docs/rewrite-guide.md) explains how this branch relates to
 the broader `0.9.0` program.
 
@@ -94,8 +99,8 @@ local writes, and remote mode adds explicit remote writes.
 Toolsets control relevance, not authority. Omitted `TOOLSETS` or `default`
 enables implemented default toolsets, `all` enables every implemented stable
 toolset, `none` exposes zero tools, and a comma-separated exact lowercase list
-selects an explicit subset. `decks` and `scryfall` are implemented and both are
-default-enabled. `archidekt` and `playgroup` are implemented and opt-in. They can be selected
+selects an explicit subset. `decks`, `scryfall`, and `stats` are implemented
+and default-enabled. `archidekt` and `playgroup` are implemented and opt-in. They can be selected
 independently; `none` leaves only
 MCP initialization and `mtg://server/capabilities`. Unimplemented names fail
 startup instead of creating placeholder tools. Selection is fixed for the
@@ -117,9 +122,10 @@ deck, entry, category, batch, and backup mutations. Categories are independent
 of zones, duplicate card rows remain independently addressable, and every
 existing-deck mutation requires `expectedRevision`.
 
-The store is format-neutral and preserves unresolved card identities. Its
-Commander validation checks only explicitly documented local structure; it
-does not infer legality, card roles, provider validity, or deck quality.
+The store is format-neutral and preserves unresolved card identities. Local
+validation checks relational structure only; it never interprets a format,
+requires a commander zone, or infers legality, card roles, provider validity,
+or deck quality.
 
 `deck_identity_reconcile_preview` and `deck_identity_reconcile_apply` provide
 an exact-only way to enrich unresolved local entries with retained Scryfall
@@ -245,18 +251,33 @@ live test performs `/me` and cannot mutate provider state.
 
 ## Product Direction
 
-The proposed stable target will provide explicit, capability-prefixed
-operations for exact deck statistics in addition to the implemented local and
-provider surfaces. Official card facts and
+The implemented stable direction provides explicit, capability-prefixed exact
+deck statistics alongside the local and provider surfaces. Official card facts and
 community tag evidence share `scryfall.db` but retain distinct schemas and
 evidence classes. Provider facts, exact derivations, parser classifications,
 heuristics, and sampled estimates remain visibly distinct.
 
-The target capability-toolset layer keeps ordinary discovery small:
+The capability-toolset layer keeps ordinary discovery small:
 `decks`, `scryfall`, and `stats` form the default profile, while Archidekt and
 Playgroup require explicit enablement. Toolsets control relevance;
 operation modes remain the authority boundary. Only implemented descriptors
 appear in capability metadata or can be selected.
+
+## Exact Statistics Surface
+
+The default `stats` toolset contains eight read-only operations for exact
+hypergeometric and multivariate probability, explicit probability-by-turn
+tables, caller-declared mana-source availability, one-use package assembly,
+explicit mulligan schedules, minimum-count solving, and deterministic local
+deck summaries. Every probability includes a reduced numerator/denominator and
+stable display strings; bounded exact work returns a structured limit instead
+of a sample or partial result.
+
+Callers must identify the population and groups. Deck-backed requests require
+an exact deck revision plus entry-ID, zone-name, or category-ID selectors and
+disclose selected and excluded entries. The MCP does not infer a Commander
+library, legality, card roles, mana capabilities, turn draws, keep rules, or
+whether a probability is good.
 
 Accepted AMEND-004 governs the implemented unified Scryfall boundary. The later
 [deterministic categorization](docs/llms/plcs/planned/deterministic-deck-categorization/README.md)
@@ -297,7 +318,7 @@ The multi-gigabyte corpus acceptance additionally requires
 `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` and an explicit
 `MTGMCP_SCRYFALL_ACCEPTANCE_DATA_DIR`; it never deletes that directory.
 The separate [live method acceptance](docs/llms/plans/live-method-acceptance.md)
-installs the generated package and exercises all 82 public tools. It requires
+installs the generated package and exercises all 90 public tools. It requires
 an explicitly marked scratch root and clean committed worktree, pins results
 to that commit and package version, restores its owner-authorized Archidekt
 deck before cleanup, and never invokes the two Playgroup writes.
@@ -314,6 +335,8 @@ deck before cleanup, and never invokes the two Playgroup writes.
   canonical evidence mapping, synchronization planning, and pacing.
 - `MtgMcp.Playgroup` contains the pinned official API fixture, lossless
   provider evidence transport, authentication, pacing, and retry policy.
+- `MtgMcp.Statistics` contains BCL-only exact calculations and depends only on
+  provider-neutral Core contracts.
 - `MtgMcp.App` owns process, configuration, and MCP host concerns.
 - Capability projects are added only when their independently approved child
   PLC is implemented.

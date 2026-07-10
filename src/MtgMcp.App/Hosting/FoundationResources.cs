@@ -105,7 +105,8 @@ internal sealed class FoundationResources
 
         return toolset switch
         {
-            CapabilityToolset.Decks or CapabilityToolset.Scryfall => ("not-required", null),
+            CapabilityToolset.Decks or CapabilityToolset.Scryfall or CapabilityToolset.Stats =>
+                ("not-required", null),
             CapabilityToolset.Archidekt => (
                 IsArchidektConfigured(configuration) ? "configured-unverified" : "not-configured",
                 "archidekt_auth_status"),

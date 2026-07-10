@@ -75,8 +75,8 @@ internal sealed class DeckReadTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Checks local references, quantities, zones, primary categories, and Commander fixture " +
-        "structure without legality or quality judgments.")]
+        "Checks local references, quantities, zones, and primary categories without format, " +
+        "legality, or quality judgments.")]
     internal Task<OperationResult<DeckValidationReport>> ValidateAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         CancellationToken cancellationToken = default)

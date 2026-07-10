@@ -8,10 +8,12 @@ using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
 using MtgMcp.App.Scryfall;
+using MtgMcp.App.Statistics;
 using MtgMcp.Archidekt;
 using MtgMcp.Decks;
 using MtgMcp.Playgroup;
 using MtgMcp.Scryfall;
+using MtgMcp.Statistics;
 
 namespace MtgMcp.App.Hosting;
 
@@ -31,7 +33,8 @@ internal static class FoundationHost
 
         bool decksEnabled = configuration.Toolsets.Includes(CapabilityToolset.Decks);
         bool archidektEnabled = configuration.Toolsets.Includes(CapabilityToolset.Archidekt);
-        using SqliteDeckStore? deckStore = decksEnabled || archidektEnabled
+        bool statisticsEnabled = configuration.Toolsets.Includes(CapabilityToolset.Stats);
+        using SqliteDeckStore? deckStore = decksEnabled || archidektEnabled || statisticsEnabled
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
         bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
@@ -73,6 +76,14 @@ internal static class FoundationHost
         if (scryfallEnabled && scryfallService is not null)
         {
             ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode);
+        }
+
+        if (statisticsEnabled && deckStore is not null)
+        {
+            StatisticsToolsetManifest.Register(
+                mcpBuilder,
+                deckStore,
+                new ExactStatisticsCalculator(FoundationServerIdentity.PackageVersion));
         }
 
         if (archidektService is not null && deckStore is not null)

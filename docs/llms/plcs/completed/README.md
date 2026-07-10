@@ -20,3 +20,4 @@ checked-in configuration remain authoritative.
 | [archidekt-deck-sync](archidekt-deck-sync/README.md) | Added rate-safe Archidekt deck, folder, and snapshot evidence plus guarded synchronization and verified disposable cleanup. |
 | [playgroup-public-api](playgroup-public-api/README.md) | Added every pinned official Playgroup operation, lossless provider evidence, exact mode guards, conservative pacing, and fixture-only write safety. |
 | [mcp-contract-and-adapter-hardening](mcp-contract-and-adapter-hardening/README.md) | Added truthful capability/schema contracts, exact-only deck identity reconciliation, and behavior-preserving provider ownership boundaries. |
+| [exact-deck-statistics](exact-deck-statistics/README.md) | Added eight exact, provider-independent statistics tools over caller-defined raw or revisioned deck populations with no legality or recommendation behavior. |

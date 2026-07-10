@@ -35,7 +35,8 @@ function Invoke-VerifyGates {
         "MtgMcp.Core",
         "MtgMcp.Decks",
         "MtgMcp.Playgroup",
-        "MtgMcp.Scryfall"
+        "MtgMcp.Scryfall",
+        "MtgMcp.Statistics"
     )
 
     if ($PackageName.Count -gt 0) {

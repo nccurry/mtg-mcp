@@ -40,7 +40,6 @@ public sealed class DeckValidatorTests
         Assert.False(result.IsStructurallyValid);
         Assert.Equal(
             [
-                "commander-zone-empty",
                 "duplicate-entry-id",
                 "invalid-category-reference",
                 "invalid-entry-quantity",
@@ -51,7 +50,7 @@ public sealed class DeckValidatorTests
     }
 
     /// <summary>
-    /// Verifies extensible non-Commander formats do not acquire invented structure rules.
+    /// Verifies all deck formats use the same relational checks.
     /// </summary>
     [Fact]
     public void Validate_WithCustomFormatAndValidGraph_ReturnsValid()
@@ -61,6 +60,31 @@ public sealed class DeckValidatorTests
             "Custom",
             string.Empty,
             "future-format",
+            1,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            [],
+            [],
+            [],
+            []);
+
+        DeckValidationReport result = DeckValidator.Validate(deck);
+
+        Assert.True(result.IsStructurallyValid);
+        Assert.Empty(result.Issues);
+    }
+
+    /// <summary>
+    /// Verifies a Commander label does not imply a required zone or legality rule.
+    /// </summary>
+    [Fact]
+    public void Validate_WithCommanderLabelAndEmptyGraph_ReturnsValid()
+    {
+        DeckDocument deck = new(
+            Guid.CreateVersion7(),
+            "Format-neutral",
+            string.Empty,
+            "commander",
             1,
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,

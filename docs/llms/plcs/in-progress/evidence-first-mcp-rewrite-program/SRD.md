@@ -21,6 +21,8 @@
 | 2026-07-04 | Codex | Reconciled proposed AMEND-004 for unified official Scryfall bulk/tag evidence, deterministic deck categorization, and deferred local query evaluation. |
 | 2026-07-04 | Repository owner and Codex | Accepted AMEND-004 and authorized the Scryfall corpus/evidence child; implementation retains the manual full-corpus gate. |
 | 2026-07-06 | Codex | Drafted proposed AMEND-005 and the independently reviewable pre-statistics hardening child without implementation authorization. |
+| 2026-07-09 | Codex and independent review sub-agent | Reconciled and activated child 10 with explicit format-neutral selectors, exact allocation semantics, structured bounded outcomes, and post-child surface counts. |
+| 2026-07-09 | Codex | Closed child 10 after its exact engines, MCP surface, offline/package gates, audits, and independent-formula deck workflow passed. |
 
 ## Executive Summary
 

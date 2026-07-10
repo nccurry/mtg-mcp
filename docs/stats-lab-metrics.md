@@ -3,7 +3,7 @@
 > Legacy reference: these are sampled heuristic contracts for the removed
 > server. Stable `0.9.0` implements exact statistics from caller-supplied groups
 > in `MtgMcp.Statistics`; it does not retain Stats Lab simulation. See the
-> [exact-statistics PLC](llms/plcs/planned/exact-deck-statistics/README.md).
+> [exact-statistics PLC](llms/plcs/completed/exact-deck-statistics/README.md).
 
 Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not a Magic rules engine. Metrics describe the behavior of the heuristic sampler for a fixed deck, profile, seed, simulation count, and turn horizon.
 

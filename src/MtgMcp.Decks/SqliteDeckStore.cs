@@ -546,7 +546,7 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
-    /// Reports local referential and Commander fixture structure without legality inference.
+    /// Reports local referential structure without format or legality inference.
     /// </summary>
     public async Task<OperationResult<DeckValidationReport>> ValidateAsync(
         Guid deckId,

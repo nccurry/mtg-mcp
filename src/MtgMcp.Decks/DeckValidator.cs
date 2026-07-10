@@ -3,7 +3,7 @@ using MtgMcp.Core.Decks;
 namespace MtgMcp.Decks;
 
 /// <summary>
-/// Evaluates only local relational and documented Commander fixture structure.
+/// Evaluates only local relational structure without interpreting deck formats.
 /// </summary>
 internal static class DeckValidator
 {
@@ -62,19 +62,6 @@ internal static class DeckValidator
                     "An entry has more than one primary category.",
                     assignment.EntryId,
                     assignment.CategoryId));
-            }
-        }
-
-        if (deck.Format.Equals("commander", StringComparison.OrdinalIgnoreCase))
-        {
-            int commanderQuantity = deck.Entries
-                .Where(value => value.Zone.Equals("commander", StringComparison.OrdinalIgnoreCase))
-                .Sum(value => value.Quantity);
-            if (commanderQuantity == 0)
-            {
-                issues.Add(new DeckValidationIssue(
-                    "commander-zone-empty",
-                    "A Commander fixture has no entry in the commander zone."));
             }
         }
 

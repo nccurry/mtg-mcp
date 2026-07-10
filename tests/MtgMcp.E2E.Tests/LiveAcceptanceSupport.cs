@@ -106,6 +106,14 @@ internal static class LiveAcceptanceManifest
         "scryfall_snapshot_get",
         "scryfall_snapshot_list",
         "scryfall_tag_search",
+        "stats_deck_summary",
+        "stats_hypergeometric",
+        "stats_mana_availability",
+        "stats_minimum_count",
+        "stats_mulligan",
+        "stats_multivariate",
+        "stats_package_assembly",
+        "stats_turn_table",
     ];
 
     /// <summary>

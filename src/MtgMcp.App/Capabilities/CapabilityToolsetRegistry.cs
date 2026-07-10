@@ -4,6 +4,7 @@ using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
 using MtgMcp.App.Scryfall;
+using MtgMcp.App.Statistics;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Capabilities;
@@ -20,6 +21,7 @@ internal static class CapabilityToolsetRegistry
         [
             DeckToolsetManifest.Descriptor,
             ScryfallToolsetManifest.Descriptor,
+            StatisticsToolsetManifest.Descriptor,
             ArchidektToolsetManifest.Descriptor,
             PlaygroupToolsetManifest.Descriptor,
         ];

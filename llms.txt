@@ -25,6 +25,7 @@ or public-surface docs as future design requirements.
 - [Local deck store](docs/llms/plcs/completed/local-deck-store/README.md): Implemented deck contracts, SQLite lifecycle, tools, and acceptance evidence.
 - [Manual deck interchange](docs/llms/plcs/completed/manual-deck-interchange/README.md): Completed native JSON, generic text, and UI-accepted provider artifacts with explicit preservation limits and confirmed cleanup.
 - [Pre-statistics hardening](docs/llms/plcs/completed/mcp-contract-and-adapter-hardening/README.md): Completed AMEND-005 contracts, exact identity reconciliation, and adapter-boundary hardening.
+- [Exact deck statistics](docs/llms/plcs/completed/exact-deck-statistics/README.md): Implemented eight exact-mathematics tools over caller-defined populations and assumptions, with no legality or recommendations.
 - [Scryfall corpus and evidence](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md): Completed unified official corpus, authoritative API, cache, replay, and tag-evidence capability with retained full-corpus acceptance.
 - [Archidekt synchronization](docs/llms/plcs/completed/archidekt-deck-sync/README.md): Completed opt-in deck, folder, snapshot, pull/push, pacing, audits, and disposable live acceptance.
 - [Playgroup public API](docs/llms/plcs/completed/playgroup-public-api/README.md): Completed opt-in official operations, provider evidence, mode guards, fixture-only write safety, and safe live-read boundary.

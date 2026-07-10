@@ -21,6 +21,8 @@
 | 2026-07-04 | Codex | Reconciled proposed AMEND-004 for one official Scryfall corpus, no separate Tagger capability, deterministic deck categorization, and deferred local query evaluation. |
 | 2026-07-04 | Repository owner and Codex | Accepted AMEND-004 and activated the independently approved Scryfall corpus/evidence child. |
 | 2026-07-06 | Codex | Drafted proposed AMEND-005 and the pre-statistics contract/adapter hardening child for independent review. |
+| 2026-07-09 | Codex and independent review sub-agent | Locked child 10's exact result, selector, work-budget, schema, and format-neutral composition boundaries before implementation. |
+| 2026-07-09 | Codex | Recorded child 10 implementation closure and retained categorization as the next independently review-gated boundary. |
 
 ## Executive Summary
 

@@ -6,6 +6,7 @@
     <Project Path="src/MtgMcp.Decks/MtgMcp.Decks.csproj" />
     <Project Path="src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj" />
     <Project Path="src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj" />
+    <Project Path="src/MtgMcp.Statistics/MtgMcp.Statistics.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj" />
@@ -16,5 +17,6 @@
     <Project Path="tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj" />
     <Project Path="tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj" />
     <Project Path="tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj" />
+    <Project Path="tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj" />
   </Folder>
 </Solution>

@@ -5,7 +5,7 @@
 > Its durable evidence-vocabulary ideas are owned by
 > [rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md),
 > [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md),
-> [exact statistics](../exact-deck-statistics/README.md), and
+> [exact statistics](../../completed/exact-deck-statistics/README.md), and
 > and [deterministic deck categorization](../deterministic-deck-categorization/README.md).
 > Legacy legality,
 > recommendation, bracket, role, and scoring work is not part of the stable

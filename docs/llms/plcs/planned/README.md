@@ -30,8 +30,7 @@ approved/completed. The governing program remains
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [exact-deck-statistics](exact-deck-statistics/README.md) | Draft; blocked on hardening | Define exact provider-independent deck probability and composition calculations. |
-| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; blocked on hardening and statistics review | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |
+| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; ready for independent owner review, implementation unauthorized | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |
 | [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; blocked on all prerequisite children | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
 
 ## Product Foundation Follow-ups

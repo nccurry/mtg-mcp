@@ -108,6 +108,21 @@ public sealed class FoundationMcpTests
     ];
 
     /// <summary>
+    /// Lists the complete provider-independent exact statistics surface in every operation mode.
+    /// </summary>
+    private static readonly string[] StatisticsToolNames =
+    [
+        "stats_deck_summary",
+        "stats_hypergeometric",
+        "stats_mana_availability",
+        "stats_minimum_count",
+        "stats_mulligan",
+        "stats_multivariate",
+        "stats_package_assembly",
+        "stats_turn_table",
+    ];
+
+    /// <summary>
     /// Lists the Archidekt reads and previews visible in every operation mode.
     /// </summary>
     private static readonly string[] ArchidektReadToolNames =
@@ -181,10 +196,10 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "local", 43)]
-    [InlineData("read-only", "read-only", 22)]
-    [InlineData("local", "local", 43)]
-    [InlineData("remote", "remote", 43)]
+    [InlineData(null, "local", 51)]
+    [InlineData("read-only", "read-only", 30)]
+    [InlineData("local", "local", 51)]
+    [InlineData("remote", "remote", 51)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -285,18 +300,21 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("read-only", "default", "default", 22)]
-    [InlineData("local", "default", "default", 43)]
-    [InlineData("remote", "default", "default", 43)]
-    [InlineData("read-only", "all", "all", 47)]
-    [InlineData("local", "all", "all", 69)]
-    [InlineData("remote", "all", "all", 82)]
+    [InlineData("read-only", "default", "default", 30)]
+    [InlineData("local", "default", "default", 51)]
+    [InlineData("remote", "default", "default", 51)]
+    [InlineData("read-only", "all", "all", 55)]
+    [InlineData("local", "all", "all", 77)]
+    [InlineData("remote", "all", "all", 90)]
     [InlineData("read-only", "decks", "explicit", 8)]
     [InlineData("local", "decks", "explicit", 25)]
     [InlineData("remote", "decks", "explicit", 25)]
     [InlineData("read-only", "scryfall", "explicit", 14)]
     [InlineData("local", "scryfall", "explicit", 18)]
     [InlineData("remote", "scryfall", "explicit", 18)]
+    [InlineData("read-only", "stats", "explicit", 8)]
+    [InlineData("local", "stats", "explicit", 8)]
+    [InlineData("remote", "stats", "explicit", 8)]
     [InlineData("read-only", "archidekt", "explicit", 11)]
     [InlineData("local", "archidekt", "explicit", 12)]
     [InlineData("remote", "archidekt", "explicit", 23)]
@@ -689,9 +707,10 @@ public sealed class FoundationMcpTests
             "Toolsets control relevance; operation mode controls authority.",
             toolsets.GetProperty("authorityBoundary").GetString());
         JsonElement[] descriptors = toolsets.GetProperty("items").EnumerateArray().ToArray();
-        Assert.Equal(4, descriptors.Length);
+        Assert.Equal(5, descriptors.Length);
         bool decksEnabled = configuredToolsets is "default" or "all" or "decks";
         bool scryfallEnabled = configuredToolsets is "default" or "all" or "scryfall";
+        bool statsEnabled = configuredToolsets is "default" or "all" or "stats";
         bool archidektEnabled = configuredToolsets is "all" or "archidekt";
         bool playgroupEnabled = configuredToolsets is "all" or "playgroup";
         AssertDescriptor(
@@ -708,6 +727,12 @@ public sealed class FoundationMcpTests
             scryfallEnabled ? (mode == "read-only" ? 14 : 18) : 0);
         AssertDescriptor(
             descriptors[2],
+            "stats",
+            statsEnabled,
+            defaultEnabled: true,
+            statsEnabled ? 8 : 0);
+        AssertDescriptor(
+            descriptors[3],
             "archidekt",
             archidektEnabled,
             defaultEnabled: false,
@@ -718,14 +743,14 @@ public sealed class FoundationMcpTests
                 _ => 23,
             } : 0);
         AssertDescriptor(
-            descriptors[3],
+            descriptors[4],
             "playgroup",
             playgroupEnabled,
             defaultEnabled: false,
             playgroupEnabled ? (mode == "remote" ? 16 : 14) : 0);
         Assert.Equal(
             ["deck-update"],
-            descriptors[3].GetProperty("unsupportedOperations")
+            descriptors[4].GetProperty("unsupportedOperations")
                 .EnumerateArray()
                 .Select(value => value.GetString()));
         Assert.Contains(
@@ -758,7 +783,7 @@ public sealed class FoundationMcpTests
             "unsupportedOperations");
         Assert.Equal(name, descriptor.GetProperty("name").GetString());
         Assert.Equal("implemented", descriptor.GetProperty("implementationStatus").GetString());
-        if (name is "decks" or "scryfall")
+        if (name is "decks" or "scryfall" or "stats")
         {
             Assert.Equal("not-required", descriptor.GetProperty("credentialState").GetString());
             Assert.Equal(JsonValueKind.Null, descriptor.GetProperty("authenticationStatusTool").ValueKind);
@@ -803,6 +828,11 @@ public sealed class FoundationMcpTests
         if (toolsets is "default" or "all" or "scryfall")
         {
             names = names.Concat(readsOnly ? ScryfallReadToolNames : ScryfallAllToolNames);
+        }
+
+        if (toolsets is "default" or "all" or "stats")
+        {
+            names = names.Concat(StatisticsToolNames);
         }
 
         if (toolsets is "all" or "archidekt")

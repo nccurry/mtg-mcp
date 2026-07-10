@@ -6,8 +6,8 @@
 - Folder: `docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-06
-- Current phase: children 1–9 complete; child 10 awaits owner review
+- Last updated: 2026-07-09
+- Current phase: children 1–10 complete; child 11 awaits independent review
 
 ## Summary
 
@@ -125,7 +125,7 @@ explicitly activated.
 | 7 | [`archidekt-deck-sync`](../../completed/archidekt-deck-sync/README.md) | Define Archidekt deck sync, folder organization, and named snapshot lifecycle/restore. | Deck, interchange, toolset, and Scryfall contracts | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 8 | [`playgroup-public-api`](../../completed/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation and toolset boundaries | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 9 | [`mcp-contract-and-adapter-hardening`](../../completed/mcp-contract-and-adapter-hardening/README.md) | Define capability/schema honesty, exact-only deck identity reconciliation, and cohesive Scryfall/Archidekt ownership before statistics. | Children 3, 5, 6, 7, and 8 | Repository-owner approval and authorization recorded | Approved; implementation completed |
-| 10 | [`exact-deck-statistics`](../../planned/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis. | Local deck, toolset, and approved hardening contracts | Child 9 completion | Ready for independent owner review; implementation unauthorized |
+| 10 | [`exact-deck-statistics`](../../completed/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis over caller-supplied populations. | Local deck, toolset, and approved hardening contracts | Child 9 completion | Approved; implementation completed |
 | 11 | [`deterministic-deck-categorization`](../../planned/deterministic-deck-categorization/README.md) | Define caller-authored tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, toolset, and hardening contracts | Child 9 completion and child 10 review | Rewritten; independent child review required |
 | 12 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Child 11 draft validated | Drafted; AMEND-005 reconciliation required |
 
@@ -158,10 +158,9 @@ activated.
 
 ## Current Open Questions
 
-AMEND-005 and the hardening child are complete. Exact statistics is next for
-independent owner review and remains implementation-ineligible until its
-approval record explicitly authorizes work. Categorization remains separately
-review-gated and unauthorized.
+AMEND-005, hardening, and exact statistics are complete. Categorization is the
+next independently reviewable child and remains unauthorized until the
+repository owner approves its packet and explicitly authorizes implementation.
 
 ## Planning Readiness Checklist
 
@@ -228,6 +227,8 @@ review-gated and unauthorized.
 | 2026-07-06 | Playgroup packaged live acceptance | Passed | All 14 safe reads passed through the installed MCP against the owner-authorized playgroup, both writes remained fixture-only, and zero writes were sent. The run exposed and resolved the unbounded all-commander turn-damage result by requiring exact caller-selected row evidence with a bounded aggregate fetch and full-source checksum. |
 | 2026-07-06 | AMEND-005 and hardening child approval | Accepted and activated | The repository owner approved the decision-complete plan, authorized implementation, and activated Phase 1. The accepted targets are 22/43/43 default, 47/69/82 all, 32/54/54 final default, and 57/80/93 final all. |
 | 2026-07-06 | Hardening implementation and lifecycle closure | Passed | Capability schema 6, the closed batch union, 25 deck tools including exact identity preview/apply, 47/69/82 complete-profile counts, provider ownership refactors, full offline/package/coverage/dependency/audit gates, and bounded read-only Scryfall/Archidekt live checks passed. Child 9 moved to completed; child 10 remains unauthorized pending owner review. |
+| 2026-07-09 | Exact-statistics independent review and activation | Passed | Structured bounded outcomes, explicit format-neutral deck selectors, caller numeric values, exact turn/mulligan/mana/package semantics, one request-wide work budget, schema descriptions, and the 90-tool post-child surface were locked. The owner authorized implementation and Phase 1 became active. |
+| 2026-07-09 | Exact-statistics implementation and lifecycle closure | Passed | All eight exact read tools, structured failure outcomes, explicit selector evidence, 30/51/51 default and 55/77/90 all surfaces, 630 offline tests, 96.27 percent Statistics line coverage, package/install smokes, dependency checks, audits, and the independent-formula 99-card workflow passed. Child 10 moved to completed; child 11 remains unauthorized pending independent review. |
 
 ## Completion Notes
 

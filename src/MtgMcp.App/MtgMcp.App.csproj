@@ -5,6 +5,7 @@
         <ProjectReference Include="..\MtgMcp.Decks\MtgMcp.Decks.csproj" />
         <ProjectReference Include="..\MtgMcp.Playgroup\MtgMcp.Playgroup.csproj" />
         <ProjectReference Include="..\MtgMcp.Scryfall\MtgMcp.Scryfall.csproj" />
+        <ProjectReference Include="..\MtgMcp.Statistics\MtgMcp.Statistics.csproj" />
     </ItemGroup>
 
     <ItemGroup>

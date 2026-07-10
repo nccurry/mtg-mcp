@@ -107,8 +107,8 @@ and future popularity-source packets:
 
 | Profile | `read-only` | `local` | `remote` | Notes |
 | --- | ---: | ---: | ---: | --- |
-| Current implemented `default` | 22 | 43 | 43 | Default-enabled `decks` and `scryfall` toolsets after hardening. |
-| Current implemented `all` | 47 | 69 | 82 | Adds the opt-in implemented `archidekt` and `playgroup` toolsets. |
+| Current implemented `default` | 30 | 51 | 51 | Default-enabled `decks`, `scryfall`, and eight read-only `stats_*` tools. |
+| Current implemented `all` | 55 | 77 | 90 | Adds the opt-in implemented `archidekt` and `playgroup` toolsets. |
 | Planned final `default` | 32 | 54 | 54 | `decks,scryfall,stats` after hardening, statistics, and categorization. |
 | Planned final `all` | 57 | 80 | 93 | All five target toolsets; derived from child matrices after AMEND-005. |
 | `none` | 0 | 0 | 0 | Existing static-selection behavior remains. |

@@ -46,7 +46,7 @@ if ($duplicates.Count -gt 0) {
 $live = @($records | Where-Object status -eq "live-pass")
 $fixtureOnly = @($records | Where-Object status -eq "fixture-only-owner-approved")
 $incomplete = @($records | Where-Object status -notin @("live-pass", "fixture-only-owner-approved"))
-if ($records.Count -ne 80 -or $live.Count -ne 78 -or $fixtureOnly.Count -ne 2 -or $incomplete.Count -ne 0) {
+if ($records.Count -ne 90 -or $live.Count -ne 88 -or $fixtureOnly.Count -ne 2 -or $incomplete.Count -ne 0) {
     $summary = $records |
         Group-Object status |
         Sort-Object Name |
@@ -63,4 +63,4 @@ if (Compare-Object $expectedFixtureOnly $actualFixtureOnly) {
     throw "The fixture-only disposition does not match the reviewed Playgroup write boundary."
 }
 
-Write-Host "Live method acceptance complete: resource=1, live-pass=78, fixture-only=2."
+Write-Host "Live method acceptance complete: resource=1, live-pass=88, fixture-only=2."
