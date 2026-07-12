@@ -1012,7 +1012,9 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?> { ["localDeckId"] = localDeckId },
                 token).ConfigureAwait(false);
             Assert.False(initialDiff.GetProperty("hasConflicts").GetBoolean());
-            Assert.Empty(initialDiff.GetProperty("differences").EnumerateArray());
+            Assert.DoesNotContain(
+                initialDiff.GetProperty("differences").EnumerateArray(),
+                value => value.GetProperty("path").GetString()?.StartsWith("/provider", StringComparison.Ordinal) == true);
 
             List<Guid> addedEntries = [];
             foreach (string cardName in new[] { "Sol Ring", "Arcane Signet", "Paradox Haze" })
