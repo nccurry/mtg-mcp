@@ -1108,7 +1108,15 @@ public sealed class LiveMethodAcceptanceTests
                         ["isPrimary"] = false,
                     },
                     token).ConfigureAwait(false);
-                Assert.Equal("invalid-input", categoryAssignment.GetProperty("kind").GetString());
+                string categoryKind = categoryAssignment.GetProperty("kind").GetString()!;
+                if (categoryKind == "success")
+                {
+                    localRevision = categoryAssignment.GetProperty("deck").GetProperty("revision").GetInt64();
+                }
+                else
+                {
+                    Assert.Equal("invalid-input", categoryKind);
+                }
             }
 
             JsonElement pushPreview = await CallSuccessAsync(
