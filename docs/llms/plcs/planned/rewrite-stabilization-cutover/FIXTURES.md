@@ -50,7 +50,7 @@ same change.
 | CUT-FIX-017 | CUT-018 | PLC registry after release | Twelve children and umbrella have accurate lifecycle/approval evidence. |
 | CUT-FIX-018 | CUT-019 | `read-only` provider read with local/remote write spies | Read may complete; every write spy remains zero. |
 | CUT-FIX-019 | CUT-020 | Child adds/removes one tool without updating cutover | Contract test fails until child matrix, regenerated crosswalk/totals, and snapshots agree; no old count is required. |
-| CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Temporary read-proof waivers use all required fields; the Scryfall full-corpus and Archidekt cleanup gates remain unwaivable; Playgroup writes retain their explicit fixture-only classification; no skip is labeled passed. |
+| CUT-FIX-020 | CUT-009, CUT-011 | Provider proof unavailable | Scryfall generation rollover may be recorded as `pending-provider-generation` when no newer official generation exists; deterministic rollback fixtures still pass, Archidekt cleanup remains unwaivable, and Playgroup writes retain their explicit fixture-only classification. |
 | CUT-FIX-021 | CUT-021 | Default/all/none/explicit profiles in all modes | Exact toolset membership and capability counts match; `none` exposes zero tools; toolsets never widen mode authority. |
 | CUT-FIX-022 | CUT-021 | Default-profile deckbuilding workflow | Local deck evidence, corpus-backed Scryfall facts/tags, deterministic caller rules, and exact statistics compose end to end without a recommendation, router, or optional provider surface. |
 | CUT-FIX-023 | CUT-021 | Each optional provider workflow | Explicitly enabled Archidekt and Playgroup workflows preserve provenance, unknown states, and mode guards. |

@@ -75,7 +75,7 @@ tool or count.
 | --- | --- |
 | Archidekt deck/folder/snapshot lifecycle and restore | Must pass against disposable state with verified cleanup; no waiver. |
 | Scryfall official metadata and bounded read | Must normally pass; repository owner may approve a temporary operational skip with current official contract evidence, offline fixtures, reason, date, and expiry. |
-| Scryfall full-corpus lifecycle | Must pass as explicit manual acceptance against official All Cards, Rulings, Oracle Tags, and Art Tags bulk files before stable release; it does not run in ordinary CI. |
+| Scryfall full-corpus lifecycle | Must use official All Cards, Rulings, Oracle Tags, and Art Tags bulk files. If no newer provider generation exists, the rollback row may be recorded as `pending-provider-generation`; deterministic fixture rollback remains required and the pending status is never labeled live-pass. |
 | Playgroup official reads | Must normally pass; repository owner may approve a credential/availability skip with pinned-contract and offline-fixture evidence. |
 | Playgroup writes without safe cleanup | Fixture-only under the child-8 repository-owner decision for the pinned 2026-07-03 contract; never labeled live-tested. |
 
