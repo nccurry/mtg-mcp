@@ -20,6 +20,8 @@ internal static class DeckToolsetManifest
         "Local deck storage and manual interchange. Toolset selection controls relevance; operation mode separately controls local writes.",
         [
             "deck_backup_list",
+            "deck_category_rules_preview",
+            "deck_category_rules_validate",
             "deck_export_bundle",
             "deck_get",
             "deck_import_preview",
@@ -38,6 +40,7 @@ internal static class DeckToolsetManifest
             "deck_category_delete",
             "deck_category_unassign",
             "deck_category_update",
+            "deck_category_rules_apply",
             "deck_create",
             "deck_delete",
             "deck_entry_add",
@@ -64,16 +67,19 @@ internal static class DeckToolsetManifest
 
         DeckInterchangeService interchangeService = new(deckStore);
         DeckIdentityReconciliationCoordinator identityCoordinator = new(deckStore, scryfallService);
+        DeckCategorizationCoordinator categorizationCoordinator = new(deckStore, scryfallService);
         builder
             .WithTools(new DeckReadTools(deckStore))
             .WithTools(new DeckInterchangeReadTools(interchangeService))
             .WithTools(new DeckIdentityReconciliationReadTools(identityCoordinator));
+        builder.WithTools(new DeckCategorizationReadTools(categorizationCoordinator));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder
                 .WithTools(new DeckWriteTools(deckStore, mode))
                 .WithTools(new DeckInterchangeWriteTools(interchangeService, mode))
                 .WithTools(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode))
+                .WithTools(new DeckCategorizationWriteTools(categorizationCoordinator, mode))
                 .WithTools([DeckBatchWriteTools.Create(deckStore, mode)]);
         }
     }
