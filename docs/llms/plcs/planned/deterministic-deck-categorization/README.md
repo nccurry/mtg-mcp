@@ -6,16 +6,19 @@
 - Folder: `docs/llms/plcs/planned/deterministic-deck-categorization/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-06
-- Current phase: awaiting independent review after hardening; implementation unauthorized
+- Last updated: 2026-07-12
+- Current phase: awaiting independent review after exact statistics; implementation unauthorized
 
 ## Summary
 
-This packet defines deterministic evaluation of caller-supplied deck category
-rules against locally installed Scryfall Oracle/art tag evidence. It performs
-no provider acquisition and invents no category meaning. Validation and preview
-are read operations; apply requires an exact preview fingerprint, unchanged
-deck revision, unchanged Scryfall corpus generation, and local-write authority.
+This packet defines deterministic evaluation of explicit deck category rules
+against locally installed Scryfall Oracle/art tag evidence. A caller may submit
+complete inline rules or explicitly select one transparent, versioned bundled
+preset and bind its role keys to existing deck category IDs. It performs no
+provider acquisition and never silently selects or applies category meaning.
+Validation and preview are read operations; apply requires an exact preview
+fingerprint, unchanged deck revision, unchanged Scryfall corpus generation,
+and local-write authority.
 
 This packet supersedes the former Scryfall Tagger Cache design. Official tag
 acquisition, storage, hierarchy, and tag lookup belong to the unified
@@ -47,6 +50,8 @@ transport, cache, classifier, or hidden taxonomy is an implementation source.
 | Bind apply to deck revision, corpus generation, rules, and preview result. | Proposed | Stale evidence cannot mutate a changed deck. |
 | Preserve assignments outside rule-owned categories. | Proposed | Categorization cannot erase unrelated user organization. |
 | Add the tools to `decks`, not a separate Tagger toolset. | Proposed | The operations validate and mutate local deck categories using already acquired evidence. |
+| Offer an explicit `common-v1` preset as an alternative to inline rules. | Proposed | Most agents need a sane inspectable starting point; requiring every session to reinvent common functional roles would reduce consistency. |
+| Expand presets into ordinary canonical rules during validation. | Proposed | The caller can inspect the exact tags and then use the expansion unchanged or edit it as an inline rule set without a second override language. |
 
 ## Public Surface
 
@@ -64,12 +69,35 @@ guarded mutation are tools rather than static reference documents.
 
 ## Rule Boundary
 
-Each rule identifies one existing deck category and declares `allOf`, `anyOf`,
-and `noneOf` selectors. A selector names exactly one Oracle or art tag by ID or
-slug, whether descendants count, and a minimum direct-assignment weight. The
-rule set declares `add-only` or `synchronize-listed-categories` behavior and may
-assign unique primary priorities. Ties or ambiguous identities are invalid,
-not heuristically resolved.
+Every request contains a closed `ruleSource`: `inline` supplies a complete rule
+set, while `preset` explicitly names `common-v1`, an assignment mode, and one
+or more bindings from discoverable preset role keys to existing deck category
+IDs. An omitted source never defaults to a preset.
+
+Each expanded rule identifies one existing deck category and declares `allOf`,
+`anyOf`, and `noneOf` selectors. A selector names exactly one Oracle or art tag
+by ID or slug, whether descendants count, and a minimum direct-assignment
+weight. The rule set declares `add-only` or
+`synchronize-listed-categories` behavior and may assign unique primary
+priorities. Ties or ambiguous identities are invalid, not heuristically
+resolved.
+
+## Sane Defaults Without Hidden Decisions
+
+`common-v1` is a checked-in, reviewable data artifact with a stable ID, schema
+version, checksum, closed role vocabulary, exact tag selectors, exclusions,
+hierarchy behavior, and short rationale per role. The initial vocabulary stays
+small and functional. It distinguishes durable ramp from `burst-mana`,
+`cost-reduction`, and `mana-fixing`, and also covers common evidence roles such
+as card draw, card selection, tutors, targeted removal, board wipes,
+counterspells, protection, graveyard hate, and recursion.
+
+The schema exposes the supported preset ID and role keys. Validation returns
+the fully expanded canonical inline rules plus preset identity and checksum.
+An agent that wants deck-specific semantics edits that returned expansion and
+submits it as `inline`; the MCP does not need an override mini-language. A
+changed mapping creates `common-v2` rather than silently changing `common-v1`.
+No preset is selected, bound, previewed, or applied automatically.
 
 ## North-Star Acceptance
 
@@ -79,8 +107,9 @@ not heuristically resolved.
   result produce one fingerprint and one exact mutation set.
 - Unknown states: missing corpus, missing card identity, missing tag, ambiguous
   slug, stale deck, stale corpus, and unmatched card remain explicit.
-- Decision boundary: the caller chooses categories, selectors, removal policy,
-  and primary priority; the MCP only evaluates and applies them.
+- Decision boundary: the caller chooses inline rules or an explicit preset,
+  category bindings, removal policy, and primary priority; the MCP expands,
+  evaluates, and applies only that visible choice.
 
 ## Guardrail Conformance
 

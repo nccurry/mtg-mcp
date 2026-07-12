@@ -30,7 +30,7 @@ approved/completed. The governing program remains
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft; ready for independent owner review, implementation unauthorized | Define caller-authored tag rules, evidence-preserving category preview, and guarded apply. |
+| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft with transparent `common-v1` proposal; ready for independent owner review, implementation unauthorized | Define explicit inline or preset tag rules, evidence-preserving category preview, and guarded apply. |
 | [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; blocked on all prerequisite children | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
 
 ## Product Foundation Follow-ups

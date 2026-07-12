@@ -115,9 +115,29 @@ must expose its components and never imply functional equivalence.
 A future PLC may investigate executing part of Scryfall's query language over
 the local corpus. It is not a `0.9.0` cutover dependency. Any proposal must
 publish query-coverage limits, differential-test supported semantics against
-Scryfall, and fall back to the provider whenever complete local equivalence
-cannot be proven. The unified corpus does not itself authorize local execution
-of arbitrary searches.
+ Scryfall, and fall back to the provider whenever complete local equivalence
+ cannot be proven. The unified corpus does not itself authorize local execution
+ of arbitrary searches.
+
+### Local Scryfall cohort analysis
+
+Build a deterministic evidence layer for cross-card questions over explicit
+local-corpus populations: subtype/tag frequency, feature distributions,
+Spirit-versus-Bird comparisons, Pirate tag counts, and overlap between cohorts.
+The design seed is [local Scryfall cohort analysis](llms/plans/local-scryfall-cohort-analysis.md).
+
+This remains post-cutover work and must depend on the local query-engine
+coverage boundary. Callers define colors versus color identity, exact subtype
+membership, changeling treatment, feature families, and distinct-card versus
+quantity counting. Results return exact counts, denominators, supporting card
+IDs, corpus generations, and unknown/unsupported states. “Synergy” is exposed
+as separate observable evidence such as exact subtype references, tags,
+keywords, type-line components, or exact Oracle-text predicates; the MCP does
+not produce a synergy score or recommendation.
+
+The future PLC should keep cohort selection, feature grouping, and cohort
+comparison explicit and bounded. It must not add legality assumptions, hidden
+tribal taxonomies, popularity joins, or a Magic rules engine.
 
 ## Explicitly Not Queued
 
