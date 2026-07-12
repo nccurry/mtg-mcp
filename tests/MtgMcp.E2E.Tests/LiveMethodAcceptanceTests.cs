@@ -134,10 +134,38 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
 
-            object emptyCategoryRules = new
+            deck = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_category_create",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["category"] = new { name = "Rule Acceptance", color = (string?)null, sortOrder = 0 },
+                },
+                token).ConfigureAwait(false);
+            revision = deck.GetProperty("revision").GetInt64();
+            Guid ruleCategoryId = deck.GetProperty("categories").EnumerateArray()
+                .Single(value => value.GetProperty("name").GetString() == "Rule Acceptance")
+                .GetProperty("categoryId").GetGuid();
+            object categoryRules = new
             {
                 kind = "inline",
-                ruleSet = new { assignmentMode = "add-only", rules = Array.Empty<object>() },
+                ruleSet = new
+                {
+                    assignmentMode = "add-only",
+                    rules = new[]
+                    {
+                        new
+                        {
+                            categoryId = ruleCategoryId,
+                            allOf = Array.Empty<object>(),
+                            anyOf = Array.Empty<object>(),
+                            noneOf = Array.Empty<object>(),
+                        },
+                    },
+                },
             };
             _ = await CallSuccessAsync(
                 environment,
@@ -146,7 +174,7 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
-                    ["source"] = emptyCategoryRules,
+                    ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                 },
                 token).ConfigureAwait(false);
@@ -158,7 +186,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["source"] = emptyCategoryRules,
+                    ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                 },
                 token).ConfigureAwait(false);
@@ -171,7 +199,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
                     ["expectedCorpusGeneration"] = (Guid?)null,
-                    ["source"] = emptyCategoryRules,
+                    ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                     ["previewFingerprint"] = categoryPreview.GetProperty("previewFingerprint").GetString(),
                     ["applyToken"] = categoryPreview.GetProperty("applyToken").GetString(),
