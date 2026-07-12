@@ -134,19 +134,30 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
 
-            deck = await CallSuccessAsync(
+            JsonElement rulesDeck = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_create",
+                new Dictionary<string, object?>
+                {
+                    ["request"] = new { name = "Category Rules Acceptance" },
+                },
+                token).ConfigureAwait(false);
+            Guid rulesDeckId = rulesDeck.GetProperty("deckId").GetGuid();
+            long rulesRevision = rulesDeck.GetProperty("revision").GetInt64();
+            rulesDeck = await CallSuccessAsync(
                 environment,
                 session,
                 "deck_category_create",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = deckId,
-                    ["expectedRevision"] = revision,
+                    ["deckId"] = rulesDeckId,
+                    ["expectedRevision"] = rulesRevision,
                     ["category"] = new { name = "Rule Acceptance", color = (string?)null, sortOrder = 0 },
                 },
                 token).ConfigureAwait(false);
-            revision = deck.GetProperty("revision").GetInt64();
-            Guid ruleCategoryId = deck.GetProperty("categories").EnumerateArray()
+            rulesRevision = rulesDeck.GetProperty("revision").GetInt64();
+            Guid ruleCategoryId = rulesDeck.GetProperty("categories").EnumerateArray()
                 .Single(value => value.GetProperty("name").GetString() == "Rule Acceptance")
                 .GetProperty("categoryId").GetGuid();
             object categoryRules = new
@@ -173,7 +184,7 @@ public sealed class LiveMethodAcceptanceTests
                 "deck_category_rules_validate",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = deckId,
+                    ["deckId"] = rulesDeckId,
                     ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                 },
@@ -184,20 +195,20 @@ public sealed class LiveMethodAcceptanceTests
                 "deck_category_rules_preview",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = deckId,
-                    ["expectedRevision"] = revision,
+                    ["deckId"] = rulesDeckId,
+                    ["expectedRevision"] = rulesRevision,
                     ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                 },
                 token).ConfigureAwait(false);
-            deck = await CallSuccessAsync(
+            rulesDeck = await CallSuccessAsync(
                 environment,
                 session,
                 "deck_category_rules_apply",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = deckId,
-                    ["expectedRevision"] = revision,
+                    ["deckId"] = rulesDeckId,
+                    ["expectedRevision"] = rulesRevision,
                     ["expectedCorpusGeneration"] = (Guid?)null,
                     ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
@@ -205,7 +216,18 @@ public sealed class LiveMethodAcceptanceTests
                     ["applyToken"] = categoryPreview.GetProperty("applyToken").GetString(),
                 },
                 token).ConfigureAwait(false);
-            revision = deck.GetProperty("revision").GetInt64();
+            rulesRevision = rulesDeck.GetProperty("revision").GetInt64();
+            _ = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_delete",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = rulesDeckId,
+                    ["expectedRevision"] = rulesRevision,
+                    ["confirmation"] = $"delete deck {rulesDeckId}",
+                },
+                token).ConfigureAwait(false);
 
             JsonElement listed = await CallSuccessAsync(
                 environment,
