@@ -1111,9 +1111,8 @@ public sealed class LiveMethodAcceptanceTests
                 string categoryKind = categoryAssignment.GetProperty("kind").GetString()!;
                 if (categoryKind == "success")
                 {
-                    localRevision = categoryAssignment.TryGetProperty("revision", out JsonElement directRevision)
-                        ? directRevision.GetInt64()
-                        : categoryAssignment.GetProperty("deck").GetProperty("revision").GetInt64();
+                    JsonElement categoryData = RequireSuccess(categoryAssignment);
+                    localRevision = categoryData.GetProperty("revision").GetInt64();
                 }
                 else
                 {
