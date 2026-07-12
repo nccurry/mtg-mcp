@@ -127,6 +127,15 @@ internal static class LiveAcceptanceManifest
         "playgroup_game_events_batch_create",
         "playgroup_live_session_create",
     ];
+
+    /// <summary>
+    /// Identifies corpus writes proven by deterministic fixtures when multi-gigabyte live acceptance is disabled.
+    /// </summary>
+    internal static readonly string[] FixtureBackedCorpusToolNames =
+    [
+        "scryfall_corpus_delete",
+        "scryfall_corpus_sync",
+    ];
 }
 
 /// <summary>
@@ -398,6 +407,27 @@ internal sealed class LiveAcceptanceJournal
                 "public-api-has-no-cleanup-operation",
                 cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Records reviewed corpus lifecycle dispositions when a second live generation is unavailable.
+    /// </summary>
+    internal async Task RecordDeferredCorpusLifecycleAsync(CancellationToken cancellationToken)
+    {
+        foreach (string toolName in LiveAcceptanceManifest.FixtureBackedCorpusToolNames)
+        {
+            await RecordAsync(
+                toolName,
+                "fixture-backed-owner-approved",
+                "deterministic-corpus-lifecycle-fixture-passed",
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        await RecordAsync(
+            "scryfall_corpus_rollback",
+            "pending-provider-generation",
+            "provider-has-not-published-a-new-generation",
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

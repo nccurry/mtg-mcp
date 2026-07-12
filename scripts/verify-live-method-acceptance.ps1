@@ -45,9 +45,10 @@ if ($duplicates.Count -gt 0) {
 
 $live = @($records | Where-Object status -eq "live-pass")
 $fixtureOnly = @($records | Where-Object status -eq "fixture-only-owner-approved")
+$fixtureBacked = @($records | Where-Object status -eq "fixture-backed-owner-approved")
 $pending = @($records | Where-Object status -eq "pending-provider-generation")
-$incomplete = @($records | Where-Object status -notin @("live-pass", "fixture-only-owner-approved", "pending-provider-generation"))
-if ($records.Count -ne 93 -or $live.Count -ne 90 -or $fixtureOnly.Count -ne 2 -or $pending.Count -ne 1 -or $incomplete.Count -ne 0) {
+$incomplete = @($records | Where-Object status -notin @("live-pass", "fixture-only-owner-approved", "fixture-backed-owner-approved", "pending-provider-generation"))
+if ($records.Count -ne 93 -or $live.Count -ne 88 -or $fixtureOnly.Count -ne 2 -or $fixtureBacked.Count -ne 2 -or $pending.Count -ne 1 -or $incomplete.Count -ne 0) {
     $summary = $records |
         Group-Object status |
         Sort-Object Name |
@@ -64,4 +65,17 @@ if (Compare-Object $expectedFixtureOnly $actualFixtureOnly) {
     throw "The fixture-only disposition does not match the reviewed Playgroup write boundary."
 }
 
-Write-Host "Live method acceptance complete: resource=1, live-pass=90, pending-provider-generation=1, fixture-only=2."
+$expectedFixtureBacked = @(
+    "scryfall_corpus_delete",
+    "scryfall_corpus_sync"
+)
+$actualFixtureBacked = @($fixtureBacked.tool | Sort-Object)
+if (Compare-Object $expectedFixtureBacked $actualFixtureBacked) {
+    throw "The fixture-backed disposition does not match the reviewed Scryfall lifecycle boundary."
+}
+
+if ($pending[0].tool -ne "scryfall_corpus_rollback") {
+    throw "The pending provider-generation disposition is not the reviewed Scryfall rollback boundary."
+}
+
+Write-Host "Live method acceptance complete: resource=1, live-pass=88, fixture-backed=2, pending-provider-generation=1, fixture-only=2."

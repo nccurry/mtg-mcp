@@ -39,6 +39,7 @@ public sealed class LiveMethodAcceptanceTests
         await VerifySurfaceMatrixAsync(environment, token).ConfigureAwait(false);
         await environment.Journal.RecordCapabilityResourceAsync(token).ConfigureAwait(false);
         await environment.Journal.RecordFixtureOnlyWritesAsync(token).ConfigureAwait(false);
+        await environment.Journal.RecordDeferredCorpusLifecycleAsync(token).ConfigureAwait(false);
 
         string dataRoot = environment.PrepareEphemeralPhaseRoot("local-deck-methods");
         try
@@ -129,6 +130,51 @@ public sealed class LiveMethodAcceptanceTests
                     ["previewFingerprint"] = identityPreview.GetProperty("previewFingerprint").GetString(),
                     ["applyToken"] = identityPreview.GetProperty("applyToken").GetString(),
                     ["allowPartial"] = false,
+                },
+                token).ConfigureAwait(false);
+            revision = deck.GetProperty("revision").GetInt64();
+
+            object emptyCategoryRules = new
+            {
+                kind = "inline",
+                ruleSet = new { assignmentMode = "add-only", rules = Array.Empty<object>() },
+            };
+            _ = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_category_rules_validate",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["source"] = emptyCategoryRules,
+                    ["freshnessPolicy"] = "cache-only",
+                },
+                token).ConfigureAwait(false);
+            JsonElement categoryPreview = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_category_rules_preview",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["source"] = emptyCategoryRules,
+                    ["freshnessPolicy"] = "cache-only",
+                },
+                token).ConfigureAwait(false);
+            deck = await CallSuccessAsync(
+                environment,
+                session,
+                "deck_category_rules_apply",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["expectedCorpusGeneration"] = (Guid?)null,
+                    ["source"] = emptyCategoryRules,
+                    ["freshnessPolicy"] = "cache-only",
+                    ["previewFingerprint"] = categoryPreview.GetProperty("previewFingerprint").GetString(),
+                    ["applyToken"] = categoryPreview.GetProperty("applyToken").GetString(),
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
