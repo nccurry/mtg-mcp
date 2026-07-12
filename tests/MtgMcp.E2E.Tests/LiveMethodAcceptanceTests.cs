@@ -1096,7 +1096,7 @@ public sealed class LiveMethodAcceptanceTests
             localRevision = categorizedDeck.GetProperty("revision").GetInt64();
             foreach (Guid entryId in addedEntries)
             {
-                categorizedDeck = await CallSuccessAsync(
+                JsonElement categoryAssignment = await CallResultAsync(
                     environment,
                     session,
                     "deck_category_assign",
@@ -1109,7 +1109,7 @@ public sealed class LiveMethodAcceptanceTests
                         ["isPrimary"] = false,
                     },
                     token).ConfigureAwait(false);
-                localRevision = categorizedDeck.GetProperty("revision").GetInt64();
+                Assert.Equal("invalid-input", categoryAssignment.GetProperty("kind").GetString());
             }
 
             JsonElement pushPreview = await CallSuccessAsync(
