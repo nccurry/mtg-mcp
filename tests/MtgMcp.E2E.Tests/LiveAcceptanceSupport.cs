@@ -308,6 +308,7 @@ internal sealed class LiveAcceptanceJournal
     [
         "live-pass",
         "fixture-only-owner-approved",
+        "fixture-backed-owner-approved",
         "pending-provider-generation",
         "fixture-unavailable",
         "blocked",
