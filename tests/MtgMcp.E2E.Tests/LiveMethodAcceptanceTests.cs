@@ -1097,7 +1097,6 @@ public sealed class LiveMethodAcceptanceTests
             foreach (Guid entryId in addedEntries)
             {
                 JsonElement categoryAssignment = await CallResultAsync(
-                    environment,
                     session,
                     "deck_category_assign",
                     new Dictionary<string, object?>
