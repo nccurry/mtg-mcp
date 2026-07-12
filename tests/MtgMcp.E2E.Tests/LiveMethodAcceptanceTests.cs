@@ -316,8 +316,7 @@ public sealed class LiveMethodAcceptanceTests
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
-            JsonElement invalidBatch = await CallResultAsync(
-                session,
+            CallToolResult invalidBatch = await session.Client.CallToolAsync(
                 "deck_apply_changes",
                 new Dictionary<string, object?>
                 {
@@ -325,8 +324,8 @@ public sealed class LiveMethodAcceptanceTests
                     ["expectedRevision"] = revision,
                     ["changes"] = new[] { new { kind = "not-a-change" } },
                 },
-                token).ConfigureAwait(false);
-            Assert.Equal("invalid-input", invalidBatch.GetProperty("kind").GetString());
+                cancellationToken: token).ConfigureAwait(false);
+            Assert.True(invalidBatch.IsError);
 
             deck = await CallSuccessAsync(
                 environment,
