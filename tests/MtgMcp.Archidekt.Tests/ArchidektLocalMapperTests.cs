@@ -205,10 +205,10 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
-    /// Verifies final apply checks refuse to guess when two observed relations satisfy one unbound row.
+    /// Verifies indistinguishable provider relations bind deterministically while preserving multiplicity.
     /// </summary>
     [Fact]
-    public void PlanRemoteVerification_LeavesAmbiguousGeneratedRelationUnmatched()
+    public void PlanRemoteVerification_BindsOneDuplicateAndRemovesTheExtra()
     {
         RemoteDeckSnapshot observed = ParseDeck();
         RemoteDeckEntry first = observed.Entries[0];
@@ -228,7 +228,40 @@ public sealed class ArchidektLocalMapperTests
 
         ArchidektRemotePlan verification = ArchidektSyncPlanner.PlanRemoteVerification(observed, expected);
 
-        Assert.Contains(verification.PublicOperations, value => value.Kind == "entry-add");
+        Assert.DoesNotContain(verification.PublicOperations, value => value.Kind == "entry-add");
+        Assert.Single(verification.PublicOperations, value => value.Kind == "entry-remove");
+    }
+
+    /// <summary>
+    /// Verifies provider-controlled category array ordering does not create a false residual mutation.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteVerification_IgnoresCategoryArrayOrder()
+    {
+        RemoteDeckSnapshot observed = ParseDeck();
+        RemoteDeckEntry source = observed.Entries[0] with
+        {
+            CategoryNames = ["Commander", "Mainboard"],
+            PrimaryCategoryName = "Commander",
+        };
+        observed = observed with { Entries = [source, .. observed.Entries.Skip(1)] };
+        RemoteDeckSnapshot expected = observed with
+        {
+            Entries =
+            [
+                source with
+                {
+                    ProviderRelationId = string.Empty,
+                    ProviderCardId = string.Empty,
+                    CategoryNames = ["Mainboard", "Commander"],
+                },
+                .. observed.Entries.Skip(1),
+            ],
+        };
+
+        ArchidektRemotePlan verification = ArchidektSyncPlanner.PlanRemoteVerification(observed, expected);
+
+        Assert.Empty(verification.PublicOperations);
     }
 
     /// <summary>

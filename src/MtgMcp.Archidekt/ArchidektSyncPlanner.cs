@@ -409,8 +409,9 @@ public static class ArchidektSyncPlanner
                     .Where(value =>
                         !matchedRelations.Contains(value.ProviderRelationId) &&
                         VerificationContentEqual(value, targetEntry))
+                    .OrderBy(value => value.ProviderRelationId, StringComparer.Ordinal)
                     .ToArray();
-                matched = candidates.Length == 1 ? candidates[0] : null;
+                matched = candidates.FirstOrDefault();
             }
 
             if (matched is null)
@@ -427,6 +428,7 @@ public static class ArchidektSyncPlanner
             {
                 ProviderRelationId = matched.ProviderRelationId,
                 ProviderCardId = matched.ProviderCardId,
+                CategoryNames = matched.CategoryNames,
                 SortOrder = sortOrder,
             });
         }
@@ -445,11 +447,27 @@ public static class ArchidektSyncPlanner
             string.Equals(observed.Language, expected.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(observed.Finish, expected.Finish, StringComparison.Ordinal) &&
             string.Equals(observed.Zone, expected.Zone, StringComparison.Ordinal) &&
-            observed.CategoryNames.SequenceEqual(expected.CategoryNames, StringComparer.OrdinalIgnoreCase) &&
+            CategoryMembershipEqual(observed.CategoryNames, expected.CategoryNames) &&
             string.Equals(
                 observed.PrimaryCategoryName,
                 expected.PrimaryCategoryName,
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Compares category membership independently of provider-controlled array ordering.
+    /// </summary>
+    private static bool CategoryMembershipEqual(
+        IReadOnlyList<string> observed,
+        IReadOnlyList<string> expected)
+    {
+        return observed.Count == expected.Count &&
+            observed.OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(value => value, StringComparer.Ordinal)
+                .SequenceEqual(
+                    expected.OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(value => value, StringComparer.Ordinal),
+                    StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
