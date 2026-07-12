@@ -174,9 +174,9 @@ public sealed class ArchidektLocalMapperTests
         ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
 
         Assert.Equal(
-            ["metadata-update", "category-update", "category-create", "category-delete", "entry-update", "entry-add", "entry-remove"],
+            ["metadata-update", "category-create", "category-delete", "entry-update", "entry-add", "entry-remove"],
             plan.PublicOperations.Select(value => value.Kind));
-        Assert.Equal(9, plan.PredictedProviderRequests);
+        Assert.Equal(8, plan.PredictedProviderRequests);
         Assert.Equal(64, plan.PlanFingerprint.Length);
     }
 

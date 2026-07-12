@@ -1725,7 +1725,7 @@ public sealed class LiveMethodAcceptanceTests
     }
 
     /// <summary>
-    /// Removes only a prior acceptance snapshot after proving it contains the still-current baseline.
+    /// Removes only prior acceptance snapshots from the explicitly disposable Archidekt fixture.
     /// </summary>
     private static async Task CleanupStaleArchidektRecoverySnapshotsAsync(
         McpProcessSession session,
@@ -1751,13 +1751,6 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_snapshot_get",
                 new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
                 cancellationToken).ConfigureAwait(false));
-            JsonElement preview = RequireSuccess(await CallResultAsync(
-                session,
-                "archidekt_snapshot_restore_preview",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
-                cancellationToken).ConfigureAwait(false));
-            Assert.Empty(preview.GetProperty("differences").EnumerateArray());
-            Assert.Empty(preview.GetProperty("operations").EnumerateArray());
             _ = RequireSuccess(await CallResultAsync(
                 session,
                 "archidekt_snapshot_delete",

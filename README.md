@@ -208,6 +208,11 @@ never chooses a conflict winner. Folder deletion independently checks the
 owned deck list because the observed folder-tree response omits deck rows.
 Snapshot restore preserves current deck name, visibility, and folder placement
 because Archidekt snapshots do not own those account-level fields.
+Archidekt may renumber category positions after category mutations, especially
+for premier categories. The adapter preserves and returns the observed rank,
+but content equality and restore verification treat that numeric rank as
+provider-normalized; category identity, membership, flags, and primary
+assignments remain exact.
 
 Provider starts are serialized per configured account within the process, at
 least two seconds apart, and capped at 30 in any rolling 60 seconds. A single

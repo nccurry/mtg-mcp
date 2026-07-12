@@ -502,8 +502,7 @@ public static class ArchidektSyncPlanner
         return string.Equals(left.Name, right.Name, StringComparison.Ordinal) &&
             left.IncludedInDeck == right.IncludedInDeck &&
             left.IncludedInPrice == right.IncludedInPrice &&
-            left.IsPremier == right.IsPremier &&
-            left.SortOrder == right.SortOrder;
+            left.IsPremier == right.IsPremier;
     }
 
     /// <summary>

@@ -74,8 +74,14 @@ public sealed class ArchidektContractMapperTests
     {
         using JsonDocument firstDocument = JsonDocument.Parse(ArchidektTestPayloads.Deck);
         string reordered = ArchidektTestPayloads.Deck
-            .Replace("\"sortOrder\": 0", "\"sortOrder\": 1", StringComparison.Ordinal)
-            .Replace("\"sortOrder\": 1", "\"sortOrder\": 0", StringComparison.Ordinal);
+            .Replace(
+                "\"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0",
+                "\"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 1",
+                StringComparison.Ordinal)
+            .Replace(
+                "\"name\": \"Commander\", \"includedInDeck\": true, \"includedInPrice\": true, \"isPremier\": true, \"sortOrder\": 1",
+                "\"name\": \"Commander\", \"includedInDeck\": true, \"includedInPrice\": true, \"isPremier\": true, \"sortOrder\": 0",
+                StringComparison.Ordinal);
         using JsonDocument secondDocument = JsonDocument.Parse(reordered);
 
         RemoteDeckSnapshot first = ArchidektDeckContractMapper.MapDeck(
@@ -89,7 +95,7 @@ public sealed class ArchidektContractMapperTests
             DateTimeOffset.UtcNow,
             "GET");
 
-        Assert.NotEqual(first.ContentFingerprint, second.ContentFingerprint);
+        Assert.Equal(first.ContentFingerprint, second.ContentFingerprint);
         Assert.NotEqual(first.RemoteFingerprint, second.RemoteFingerprint);
     }
 

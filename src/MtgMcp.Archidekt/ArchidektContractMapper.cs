@@ -645,14 +645,16 @@ internal static class ArchidektJsonContract
             format,
             visibility,
             parentFolderId,
-            categories = categories.Select(value => new
-            {
-                value.Name,
-                value.IncludedInDeck,
-                value.IncludedInPrice,
-                value.IsPremier,
-                value.SortOrder,
-            }),
+            categories = categories
+                .OrderBy(value => value.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(value => value.Name, StringComparer.Ordinal)
+                .Select(value => new
+                {
+                    value.Name,
+                    value.IncludedInDeck,
+                    value.IncludedInPrice,
+                    value.IsPremier,
+                }),
             entries = entries.Select(value => new
             {
                 value.Quantity,

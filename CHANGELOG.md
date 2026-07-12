@@ -49,6 +49,9 @@
   budgets, bounded read retry, fail-fast `403`/`429`, and no ambiguous write
   retry. The provider origin is fixed to Archidekt. A disposable authenticated
   lifecycle verifies current provider routes and leaves no remote test state.
+- Treat Archidekt's post-mutation category rank as provider-normalized evidence
+  so snapshot restore does not report a false mismatch when the provider
+  renumbers otherwise identical categories.
 - Added content-addressed immutable snapshot payloads, schema-checksum
   validation, abandoned-staging recovery, alias and face-art tag joins,
   face-aware exact-name matching, and provider-timestamped price/rank freshness.
