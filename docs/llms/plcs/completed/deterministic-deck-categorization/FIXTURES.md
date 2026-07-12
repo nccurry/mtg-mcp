@@ -21,11 +21,10 @@ Rules exercise:
 
 The checked-in `common-v1` fixture has a stable preset ID, schema version,
 checksum, closed role keys, exact Oracle/art-tag selectors, exclusions,
-hierarchy and weight settings, and a short rationale for each role. Its initial
-functional vocabulary stays intentionally small and distinguishes persistent
-ramp from burst mana, cost reduction, and mana fixing. It also covers common
-draw/selection/tutor, interaction/protection, graveyard-hate, and recursion
-roles without asserting that any role is desirable in a particular deck.
+hierarchy and weight settings, and a short rationale for each role. The
+implemented role keys are intentionally limited to `ramp`, `card-draw`,
+`removal`, and `recursion`; later preset versions may add other roles without
+asserting that any role is desirable in a particular deck.
 
 The exact role/tag mapping is an owner-reviewed artifact, not an inferred
 runtime taxonomy. A preset request binds selected roles to existing deck

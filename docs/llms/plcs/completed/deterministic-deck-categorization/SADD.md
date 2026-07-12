@@ -98,10 +98,10 @@ destructive only when synchronize mode removes assignments, and protected by
 
 Every call explicitly supplies either inline rules or a preset selection. The
 first implementation stores no caller rules and never defaults to a preset.
-`common-v1` is immutable: semantic changes require a new preset ID. Its small
-functional vocabulary distinguishes persistent ramp from burst mana, cost
-reduction, and mana fixing rather than silently treating those roles as
-equivalent. Validation returns the expansion so an agent can copy, edit, and
+`common-v1` is immutable: semantic changes require a new preset ID. Its
+implemented vocabulary is `ramp`, `card-draw`, `removal`, and `recursion`; burst
+mana, cost reduction, and mana fixing are not silently treated as equivalent.
+Validation returns the expansion so an agent can copy, edit, and
 resubmit it as inline rules; there is no preset-override language. Wire values
 use the exact kebab-case enums shown above. Blank IDs, unknown enum values,
 duplicate fields/rules/selectors, and missing required fields are invalid rather

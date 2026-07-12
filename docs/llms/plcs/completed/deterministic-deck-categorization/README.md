@@ -86,11 +86,10 @@ resolved.
 
 `common-v1` is a checked-in, reviewable data artifact with a stable ID, schema
 version, checksum, closed role vocabulary, exact tag selectors, exclusions,
-hierarchy behavior, and short rationale per role. The initial vocabulary stays
-small and functional. It distinguishes durable ramp from `burst-mana`,
-`cost-reduction`, and `mana-fixing`, and also covers common evidence roles such
-as card draw, card selection, tutors, targeted removal, board wipes,
-counterspells, protection, graveyard hate, and recursion.
+hierarchy behavior, and short rationale per role. Its implemented role keys are
+intentionally limited to `ramp`, `card-draw`, `removal`, and `recursion`.
+Burst mana, cost reduction, mana fixing, and other roles remain candidates for
+later preset versions rather than being silently folded into these roles.
 
 The schema exposes the supported preset ID and role keys. Validation returns
 the fully expanded canonical inline rules plus preset identity and checksum.
