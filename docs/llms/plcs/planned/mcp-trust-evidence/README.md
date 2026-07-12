@@ -6,7 +6,7 @@
 > [rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md),
 > [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md),
 > [exact statistics](../../completed/exact-deck-statistics/README.md), and
-> and [deterministic deck categorization](../deterministic-deck-categorization/README.md).
+> and [deterministic deck categorization](../../completed/deterministic-deck-categorization/README.md).
 > Legacy legality,
 > recommendation, bracket, role, and scoring work is not part of the stable
 > rewrite. Reviewed against the rewrite on 2026-07-03; lifecycle movement is

@@ -11,7 +11,7 @@ implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 
-Three rewrite children remain planned and independently reviewable. The
+One rewrite child remains planned and independently reviewable. The
 [legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
 approved/completed, and the
 [foundation child](../completed/rewrite-skeleton-foundation/README.md) is
@@ -30,7 +30,6 @@ approved/completed. The governing program remains
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Draft with transparent `common-v1` proposal; ready for independent owner review, implementation unauthorized | Define explicit inline or preset tag rules, evidence-preserving category preview, and guarded apply. |
 | [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; blocked on all prerequisite children | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
 
 ## Product Foundation Follow-ups

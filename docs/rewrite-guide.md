@@ -36,7 +36,7 @@ another.
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
 | Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 25 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, and 16 opt-in `playgroup_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 30/51/51 and current `all` is 55/77/90 tools by mode after exact statistics; accepted AMEND-005 targets 32/54/54 and 57/80/93 after categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 32/54/54 and current `all` is 57/80/93 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, and Statistics |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db` and unified `scryfall.db` stores |

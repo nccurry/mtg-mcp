@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-12
@@ -76,9 +76,9 @@ are out of scope.
 
 ## Definition Of Done
 
-- [ ] The three-tool surface and exact mode visibility pass.
-- [ ] Equivalent rule inputs produce identical previews/fingerprints.
-- [ ] Apply cannot exceed or differ from an unchanged preview.
-- [ ] Unknown evidence never becomes a positive category claim.
-- [ ] No acquisition, category inference, recommendation, or project cycle is introduced.
-- [ ] `common-v1` is explicit, inspectable, immutable, and byte-stable; agents can use its expanded rules unchanged or resubmit edited inline rules.
+- [x] The three-tool surface and exact mode visibility pass.
+- [x] Equivalent rule inputs produce identical previews/fingerprints.
+- [x] Apply cannot exceed or differ from an unchanged preview.
+- [x] Unknown evidence never becomes a positive category claim.
+- [x] No acquisition, category inference, recommendation, or project cycle is introduced.
+- [x] `common-v1` is explicit, inspectable, immutable, and byte-stable; agents can use its expanded rules unchanged or resubmit edited inline rules.

@@ -312,9 +312,9 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Playgroup", "PlaygroupToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(90, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(93, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(15, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(17, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -355,6 +355,9 @@ public sealed class FoundationArchitectureTests
                 "deck_category_assign",
                 "deck_category_create",
                 "deck_category_delete",
+                "deck_category_rules_apply",
+                "deck_category_rules_preview",
+                "deck_category_rules_validate",
                 "deck_category_unassign",
                 "deck_category_update",
                 "deck_create",
@@ -430,7 +433,7 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(toolNames, assignedToolNames);
         Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
-        Assert.Equal(7, Regex.Count(deckManifestSource, @"\.WithTools\("));
+        Assert.Equal(9, Regex.Count(deckManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
         Assert.Equal(2, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithTools\("));

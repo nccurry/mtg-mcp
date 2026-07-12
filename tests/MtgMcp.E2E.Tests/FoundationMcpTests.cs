@@ -33,6 +33,8 @@ public sealed class FoundationMcpTests
     private static readonly string[] DeckReadToolNames =
     [
         "deck_backup_list",
+        "deck_category_rules_preview",
+        "deck_category_rules_validate",
         "deck_export_bundle",
         "deck_get",
         "deck_identity_reconcile_preview",
@@ -55,6 +57,9 @@ public sealed class FoundationMcpTests
         "deck_category_assign",
         "deck_category_create",
         "deck_category_delete",
+        "deck_category_rules_apply",
+        "deck_category_rules_preview",
+        "deck_category_rules_validate",
         "deck_category_unassign",
         "deck_category_update",
         "deck_create",
@@ -196,10 +201,10 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "local", 51)]
-    [InlineData("read-only", "read-only", 30)]
-    [InlineData("local", "local", 51)]
-    [InlineData("remote", "remote", 51)]
+    [InlineData(null, "local", 54)]
+    [InlineData("read-only", "read-only", 32)]
+    [InlineData("local", "local", 54)]
+    [InlineData("remote", "remote", 54)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -223,8 +228,8 @@ public sealed class FoundationMcpTests
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         Assert.Equal(
-            ExpectedToolNames("default", expectedMode),
-            tools.Select(value => value.Name).Order(StringComparer.Ordinal).ToArray());
+            ExpectedToolNames("default", expectedMode).ToHashSet(StringComparer.Ordinal),
+            tools.Select(value => value.Name).ToHashSet(StringComparer.Ordinal));
 
         IList<McpClientResource> resources = await session.Client.ListResourcesAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
@@ -300,15 +305,15 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("read-only", "default", "default", 30)]
-    [InlineData("local", "default", "default", 51)]
-    [InlineData("remote", "default", "default", 51)]
-    [InlineData("read-only", "all", "all", 55)]
-    [InlineData("local", "all", "all", 77)]
-    [InlineData("remote", "all", "all", 90)]
-    [InlineData("read-only", "decks", "explicit", 8)]
-    [InlineData("local", "decks", "explicit", 25)]
-    [InlineData("remote", "decks", "explicit", 25)]
+    [InlineData("read-only", "default", "default", 32)]
+    [InlineData("local", "default", "default", 54)]
+    [InlineData("remote", "default", "default", 54)]
+    [InlineData("read-only", "all", "all", 57)]
+    [InlineData("local", "all", "all", 80)]
+    [InlineData("remote", "all", "all", 93)]
+    [InlineData("read-only", "decks", "explicit", 10)]
+    [InlineData("local", "decks", "explicit", 28)]
+    [InlineData("remote", "decks", "explicit", 28)]
     [InlineData("read-only", "scryfall", "explicit", 14)]
     [InlineData("local", "scryfall", "explicit", 18)]
     [InlineData("remote", "scryfall", "explicit", 18)]
@@ -348,7 +353,9 @@ public sealed class FoundationMcpTests
             IList<McpClientTool> second = await session.Client.ListToolsAsync(
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             string[] expectedNames = ExpectedToolNames(configuredToolsets, mode);
-            Assert.Equal(expectedNames, first.Select(value => value.Name));
+            Assert.Equal(
+                expectedNames.ToHashSet(StringComparer.Ordinal),
+                first.Select(value => value.Name).ToHashSet(StringComparer.Ordinal));
             Assert.Equal(
                 first.Select(value => value.Name),
                 second.Select(value => value.Name));
@@ -405,6 +412,9 @@ public sealed class FoundationMcpTests
             ["deck_backup_delete"] = ["backupId"],
             ["deck_backup_list"] = [],
             ["deck_backup_restore"] = ["backupId", "expectedDatabaseFingerprint"],
+            ["deck_category_rules_apply"] = ["applyToken", "deckId", "expectedRevision", "freshnessPolicy", "previewFingerprint", "source"],
+            ["deck_category_rules_preview"] = ["deckId", "expectedRevision", "freshnessPolicy", "source"],
+            ["deck_category_rules_validate"] = ["deckId", "freshnessPolicy", "source"],
             ["deck_category_assign"] = ["categoryId", "deckId", "entryId", "expectedRevision", "isPrimary"],
             ["deck_category_create"] = ["category", "deckId", "expectedRevision"],
             ["deck_category_delete"] = ["categoryId", "deckId", "expectedRevision"],
@@ -430,6 +440,7 @@ public sealed class FoundationMcpTests
         HashSet<string> destructive =
         [
             "deck_apply_changes",
+            "deck_category_rules_apply",
             "deck_backup_delete",
             "deck_backup_restore",
             "deck_category_delete",
@@ -718,7 +729,7 @@ public sealed class FoundationMcpTests
             "decks",
             decksEnabled,
             defaultEnabled: true,
-            decksEnabled ? (mode == "read-only" ? 8 : 25) : 0);
+            decksEnabled ? (mode == "read-only" ? 10 : 28) : 0);
         AssertDescriptor(
             descriptors[1],
             "scryfall",

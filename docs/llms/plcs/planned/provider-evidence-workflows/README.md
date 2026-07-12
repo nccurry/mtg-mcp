@@ -6,7 +6,7 @@
 > [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md),
 > [Archidekt sync](../../completed/archidekt-deck-sync/README.md),
 > [Playgroup public API](../../completed/playgroup-public-api/README.md), and
-> and [deterministic deck categorization](../deterministic-deck-categorization/README.md).
+> and [deterministic deck categorization](../../completed/deterministic-deck-categorization/README.md).
 > Popularity/tournament
 > sources remain in the program's
 > [post-cutover registry](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry).

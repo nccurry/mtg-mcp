@@ -36,9 +36,9 @@ deterministic `deck_*`, `scryfall_*`, and opt-in `archidekt_*` and
   static capability-toolset selection, standard configuration, versioned
   data-root resolution, legacy-data detection, and sensitive-value redaction.
 - Standard initialization and `mtg://server/capabilities` are implemented.
-  The default surface is thirty tools in `read-only`, fifty-one tools in
+  The default surface is thirty-two tools in `read-only`, fifty-four tools in
   `local` and `remote`, one resource, and zero prompts. The complete opt-in
-  `all` profile is 55/77/90 tools by mode. Capability schema 6 reports
+  `all` profile is 57/80/93 tools by mode. Capability schema 6 reports
   implementation and credential configuration separately without contacting
   a provider.
 - `mtg-mcp --smoke` is a one-shot configuration/process probe. `task smoke:mcp`
@@ -280,7 +280,7 @@ library, legality, card roles, mana capabilities, turn draws, keep rules, or
 whether a probability is good.
 
 Accepted AMEND-004 governs the implemented unified Scryfall boundary. The later
-[deterministic categorization](docs/llms/plcs/planned/deterministic-deck-categorization/README.md)
+[deterministic categorization](docs/llms/plcs/completed/deterministic-deck-categorization/README.md)
 packet remains planning-only and will evaluate caller-owned rules without
 inventing category meanings.
 

@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-12
-- Current phase: children 1–10 complete; child 11's transparent-preset proposal awaits independent review
+- Current phase: children 1–11 complete; child 12 stabilization remains
 
 ## Summary
 
@@ -126,8 +126,8 @@ explicitly activated.
 | 8 | [`playgroup-public-api`](../../completed/playgroup-public-api/README.md) | Define the complete documented Playgroup public API surface. | Foundation and toolset boundaries | Repository-owner implementation authorization recorded | Approved; implementation completed |
 | 9 | [`mcp-contract-and-adapter-hardening`](../../completed/mcp-contract-and-adapter-hardening/README.md) | Define capability/schema honesty, exact-only deck identity reconciliation, and cohesive Scryfall/Archidekt ownership before statistics. | Children 3, 5, 6, 7, and 8 | Repository-owner approval and authorization recorded | Approved; implementation completed |
 | 10 | [`exact-deck-statistics`](../../completed/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis over caller-supplied populations. | Local deck, toolset, and approved hardening contracts | Child 9 completion | Approved; implementation completed |
-| 11 | [`deterministic-deck-categorization`](../../planned/deterministic-deck-categorization/README.md) | Define explicit inline or transparent preset tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, toolset, and hardening contracts | Child 9 completion and child 10 review | Amended with `common-v1` proposal; independent child review required |
-| 12 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Child 11 draft validated | Drafted; AMEND-005 reconciliation required |
+| 11 | [`deterministic-deck-categorization`](../../completed/deterministic-deck-categorization/README.md) | Define explicit inline or transparent preset tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, toolset, and hardening contracts | Child 9 completion and child 10 review | Approved; implementation completed |
+| 12 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Child 11 implementation completed | Drafted; implementation remains unauthorized |
 
 Although some technical dependencies are narrower, drafting remains sequential
 so each packet is complete and validated before work begins on the next.
@@ -158,15 +158,12 @@ activated.
 
 ## Current Open Questions
 
-AMEND-005, hardening, and exact statistics are complete. Categorization is the
-next independently reviewable child and remains unauthorized until the
-repository owner approves its packet and explicitly authorizes implementation.
-Its packet now proposes one deliberately small sane-default mechanism: each
-request must choose fully inline rules or explicitly select the immutable,
-transparent `common-v1` preset and bind desired roles to existing categories.
-The exact initial role/tag mapping must be independently reviewed before
-implementation. This is child-11 contract work, not a deferred feature or a
-new toolset; it adds no automatic selection, extra tool/resource, stored rule
+AMEND-005, hardening, exact statistics, and deterministic categorization are
+complete. Child 12 stabilization and cutover remains independently gated. The
+categorization implementation uses the deliberately small sane-default
+mechanism: each request chooses fully inline rules or explicitly selects the
+immutable, transparent `common-v1` preset and binds desired roles to existing
+categories. It adds no automatic selection, extra tool/resource, stored rule
 profile, or override language.
 
 ## Planning Readiness Checklist
@@ -236,7 +233,7 @@ profile, or override language.
 | 2026-07-06 | Hardening implementation and lifecycle closure | Passed | Capability schema 6, the closed batch union, 25 deck tools including exact identity preview/apply, 47/69/82 complete-profile counts, provider ownership refactors, full offline/package/coverage/dependency/audit gates, and bounded read-only Scryfall/Archidekt live checks passed. Child 9 moved to completed; child 10 remains unauthorized pending owner review. |
 | 2026-07-09 | Exact-statistics independent review and activation | Passed | Structured bounded outcomes, explicit format-neutral deck selectors, caller numeric values, exact turn/mulligan/mana/package semantics, one request-wide work budget, schema descriptions, and the 90-tool post-child surface were locked. The owner authorized implementation and Phase 1 became active. |
 | 2026-07-09 | Exact-statistics implementation and lifecycle closure | Passed | All eight exact read tools, structured failure outcomes, explicit selector evidence, 30/51/51 default and 55/77/90 all surfaces, 630 offline tests, 96.27 percent Statistics line coverage, package/install smokes, dependency checks, audits, and the independent-formula 99-card workflow passed. Child 10 moved to completed; child 11 remains unauthorized pending independent review. |
-| 2026-07-12 | Categorization sane-default proposal | Drafted for review | Child 11 now permits an explicit immutable `common-v1` preset or complete inline rules through the same three tools. Preset schema discovery, full expansion, category binding, fingerprinting, and no-default/no-override boundaries are specified; the exact role/tag artifact still requires independent approval before implementation. |
+| 2026-07-12 | Deterministic categorization implementation and closure | Passed | Three `deck_*` tools, explicit inline/common-v1 sources, evidence-bound preview/apply, hierarchy and primary handling, 23 focused Core tests, updated 93-tool surfaces, full offline gates, and official-client surface/schema tests passed. Child 11 moved to completed; child 12 remains unauthorized. |
 
 ## Completion Notes
 

@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/deterministic-deck-categorization/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/deterministic-deck-categorization/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-12
-- Current phase: awaiting independent review after exact statistics; implementation unauthorized
+- Current phase: implementation complete; stabilization remains
 
 ## Summary
 
@@ -120,10 +120,25 @@ toolset, existing deck revision guards, provider-neutral Core inputs, and the
 three program modes without a new database, adapter, prompt, or compatibility
 surface.
 
+## Implementation Evidence
+
+- Phase 1: Core contracts and evaluator implemented with exact, unknown,
+  descendant, primary-priority, synchronization, and ordering tests.
+- Phase 2: App composition resolves local deck entries through the shared
+  Scryfall service, preserves corpus-generation evidence, and fingerprints the
+  expanded rules and decisions.
+- Phase 3: Apply recomputes the preview, verifies its token/fingerprint and
+  revision, and commits only the exact category delta through one deck-store
+  transaction.
+- Phase 4: The three tools are registered in `decks`; official-client schema,
+  mode, annotation, architecture, package, and full offline gates pass.
+- Current surface after this child is 32/54/54 for `default` and 57/80/93 for
+  `all` by mode. No provider write or legality decision was introduced.
+
 ## Planning Approval
 
-- Status: Draft; independent child review required
-- Reviewed by: Not reviewed
-- Review date: Not reviewed
-- Reviewed revision: Not reviewed
-- Implementation authorized: No
+- Status: Approved and implemented
+- Reviewed by: Repository owner via implementation request
+- Review date: 2026-07-12
+- Reviewed revision: d7307f8 plus implementation changes
+- Implementation authorized: Yes
