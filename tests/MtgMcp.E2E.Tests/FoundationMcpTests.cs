@@ -412,7 +412,7 @@ public sealed class FoundationMcpTests
             ["deck_backup_delete"] = ["backupId"],
             ["deck_backup_list"] = [],
             ["deck_backup_restore"] = ["backupId", "expectedDatabaseFingerprint"],
-            ["deck_category_rules_apply"] = ["applyToken", "deckId", "expectedRevision", "freshnessPolicy", "previewFingerprint", "source"],
+            ["deck_category_rules_apply"] = ["applyToken", "deckId", "expectedCorpusGeneration", "expectedRevision", "freshnessPolicy", "previewFingerprint", "source"],
             ["deck_category_rules_preview"] = ["deckId", "expectedRevision", "freshnessPolicy", "source"],
             ["deck_category_rules_validate"] = ["deckId", "freshnessPolicy", "source"],
             ["deck_category_assign"] = ["categoryId", "deckId", "entryId", "expectedRevision", "isPrimary"],

@@ -85,6 +85,7 @@ internal sealed class DeckCategorizationCoordinator
     internal async Task<OperationResult<DeckDocument>> ApplyAsync(
         Guid deckId,
         long expectedRevision,
+        Guid? expectedCorpusGeneration,
         CategoryRuleSource source,
         string freshnessPolicy,
         string previewFingerprint,
@@ -107,6 +108,11 @@ internal sealed class DeckCategorizationCoordinator
         if (!string.Equals(preview.Data.PreviewFingerprint, previewFingerprint, StringComparison.Ordinal))
         {
             return new OperationConflict("category-preview-mismatch", "The category evidence no longer reproduces the preview.");
+        }
+
+        if (preview.Data.CorpusGenerationId != expectedCorpusGeneration)
+        {
+            return new OperationConflict("category-corpus-conflict", "The Scryfall corpus generation changed after preview.");
         }
 
         if (!preview.Data.IsComplete)
@@ -366,8 +372,8 @@ internal sealed class DeckCategorizationReadTools
     [Description("Evaluates explicit category rules and returns evidence, unknowns, and an apply fingerprint.")]
     internal Task<OperationResult<DeckCategoryRulesPreview>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
-        [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
-        [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
+         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+         [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
         [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {
@@ -397,6 +403,7 @@ internal sealed class DeckCategorizationWriteTools
     internal Task<OperationResult<DeckDocument>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("Scryfall corpus generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
         [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
         [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy,
         [Description("Fingerprint returned by deck_category_rules_preview.")] string previewFingerprint,
@@ -409,6 +416,6 @@ internal sealed class DeckCategorizationWriteTools
                 new OperationUnsupported("operation-mode-denied", "The effective operation mode does not permit local writes."));
         }
 
-        return coordinator.ApplyAsync(deckId, expectedRevision, source, freshnessPolicy, previewFingerprint, applyToken, cancellationToken);
+        return coordinator.ApplyAsync(deckId, expectedRevision, expectedCorpusGeneration, source, freshnessPolicy, previewFingerprint, applyToken, cancellationToken);
     }
 }
