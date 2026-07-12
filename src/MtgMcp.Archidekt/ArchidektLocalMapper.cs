@@ -381,6 +381,11 @@ public static class ArchidektLocalMapper
             primary = assignment.IsPrimary ? categoryName : primary;
         }
 
+        if (primary is null && names.Count == 1)
+        {
+            primary = names[0];
+        }
+
         return (names, primary);
     }
 }

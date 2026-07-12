@@ -983,7 +983,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             ["patchId"] = ArchidektContract.StableGuid(
                 "patch",
                 $"{deckId}:{operation.Public.Sequence}:{operation.Public.Kind}:{operation.Public.Subject}").ToString("N"),
-            ["categories"] = entry.CategoryNames,
+            ["categories"] = ProviderCategories(entry),
             ["modifications"] = new
             {
                 quantity = action == "remove" ? 0 : entry.Quantity,
@@ -1382,6 +1382,22 @@ internal sealed class ArchidektOperationContext : IDisposable
             "etched" => "Etched",
             _ => "Normal",
         };
+    }
+
+    /// <summary>
+    /// Orders category names with the explicit primary first because Archidekt promotes the first submitted category.
+    /// </summary>
+    private static IReadOnlyList<string> ProviderCategories(RemoteDeckEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.PrimaryCategoryName))
+        {
+            return entry.CategoryNames;
+        }
+
+        List<string> ordered = [entry.PrimaryCategoryName];
+        ordered.AddRange(entry.CategoryNames.Where(value =>
+            !string.Equals(value, entry.PrimaryCategoryName, StringComparison.OrdinalIgnoreCase)));
+        return ordered;
     }
 
     /// <summary>
