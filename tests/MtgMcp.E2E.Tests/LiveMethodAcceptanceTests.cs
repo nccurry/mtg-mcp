@@ -15,7 +15,7 @@ public sealed class LiveMethodAcceptanceTests
     /// <summary>
     /// Identifies the owner-authorized mutable Archidekt acceptance deck.
     /// </summary>
-    private const string ArchidektDeckId = "24086044";
+    private const string ArchidektDeckId = "24257863";
 
     /// <summary>
     /// Identifies the owner-selected authenticated Playgroup read fixture.
