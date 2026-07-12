@@ -1106,7 +1106,7 @@ public sealed class LiveMethodAcceptanceTests
                         ["expectedRevision"] = localRevision,
                         ["entryId"] = entryId,
                         ["categoryId"] = categoryId,
-                        ["isPrimary"] = true,
+                        ["isPrimary"] = false,
                     },
                     token).ConfigureAwait(false);
                 localRevision = categorizedDeck.GetProperty("revision").GetInt64();
