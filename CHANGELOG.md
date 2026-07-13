@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-07-12
 
 - Removed the audited legacy product implementation from the isolated rewrite
   branch while retaining ordinary Git history and released artifacts.
@@ -97,6 +97,21 @@
 - Split Scryfall card, corpus, snapshot, storage, and pacing ownership and
   Archidekt deck, folder, snapshot, transport, mapping, and synchronization
   ownership behind behavior-preserving public facades.
+- Added three deterministic `deck_*` categorization tools with explicit inline
+  rules or the transparent `common-v1` preset, evidence-bound preview/apply,
+  and no inferred category meaning.
+- Completed the stable surface at 28 deck, 18 Scryfall, 8 statistics, 23
+  Archidekt, and 16 Playgroup tools. The default profile exposes 32/54/54 tools
+  by mode; the complete profile exposes 57/80/93.
+- Fixed Archidekt synchronization for provider-renumbered categories, explicit
+  primary-category submission, category-array reordering, and duplicate
+  provider relations while preserving multiplicity.
+- Passed packaged method acceptance for all 93 tools with 88 live passes, two
+  fixture-backed Scryfall lifecycle operations, one provider-generation-pending
+  rollback, and two fixture-only Playgroup writes. Archidekt cleanup and zero
+  Playgroup writes were verified.
+- Replaced active legacy architecture, adapter, and toolset documentation with
+  concise task-oriented `0.9.0` guidance.
 
 ## 0.8.0 - 2026-06-28
 

@@ -7,7 +7,7 @@
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-12
-- Current phase: preview validation complete; stable artifact and rollback authorization pending
+- Current phase: stable release authorized; tag pipeline and lifecycle closure pending
 
 ## Summary
 
@@ -106,4 +106,4 @@ capability.
 - Review date: 2026-07-12
 - Reviewed revision: `e0d68e7cf897430f9c43b4657307fd520469cbf7`
 - Implementation authorized: Yes
-- Release authorized: No
+- Release authorized: Yes, by repository owner on 2026-07-12

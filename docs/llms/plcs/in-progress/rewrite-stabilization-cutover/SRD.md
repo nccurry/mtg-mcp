@@ -57,6 +57,6 @@ rollback, and PLC lifecycle closure. No new product behavior is in scope.
 - [x] Exact per-mode MCP schema snapshots are approved.
 - [ ] Offline, package, smoke, security, and coverage gates pass from the final release commit. The preview working tree passes.
 - [x] Required provider live proofs pass with reviewed fixture/pending classifications and without leaked secrets or residual state.
-- [ ] Rollback rehearsal succeeds.
-- [ ] Stable release authorization and PLC lifecycle closure are recorded.
+- [x] Rollback rehearsal succeeds against the latest installable prior package.
+- [ ] Stable release authorization is recorded; PLC lifecycle closure follows the release pipeline.
 - [x] Toolset/profile governance and every child north-star acceptance workflow pass.

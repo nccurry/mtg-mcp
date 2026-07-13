@@ -24,8 +24,8 @@ capability behavior opportunistically in this cutover.
 | 3 | Run complete offline, security, data-isolation, and coverage gates. | CUT-006 through CUT-008, CUT-012 | Final-commit offline evidence bundle passes. | Working-tree gates pass; release-commit rerun pending |
 | 4 | Run provider-specific opt-in live acceptance. | CUT-009 through CUT-011 | Required live proof and cleanup gates pass with redacted evidence. | Completed with reviewed dispositions |
 | 5 | Integrate latest `main` and repeat phases 1 through 4. | CUT-015 | Conflict review and complete post-integration validation pass. | `origin/main` is an ancestor; release-commit rerun pending |
-| 6 | Build, install, smoke, and approve stable artifacts. | CUT-007, CUT-013, CUT-016 | Cross-platform packaged-server and documentation gates pass. | Pending release authority |
-| 7 | Rehearse rollback and close release/PLC records. | CUT-017, CUT-018 | Rollback proof, approval record, release notes, and lifecycle updates pass. | Pending release authority |
+| 6 | Build, install, smoke, and approve stable artifacts. | CUT-007, CUT-013, CUT-016 | Cross-platform packaged-server and documentation gates pass. | Release authorized; final pipeline pending |
+| 7 | Rehearse rollback and close release/PLC records. | CUT-017, CUT-018 | Rollback proof, approval record, release notes, and lifecycle updates pass. | Prior-package smoke passed; lifecycle closure pending release |
 
 ## Execution Rules
 

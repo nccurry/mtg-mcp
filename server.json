@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nccurry/mtg-mcp",
   "title": "mtg-mcp",
-  "description": "The evidence-first foundation preview of a .NET MCP server for Magic: The Gathering.",
-  "version": "0.9.0-preview.1",
+  "description": "An evidence-first .NET MCP server for Magic: The Gathering deckbuilding workflows.",
+  "version": "0.9.0",
   "repository": {
     "url": "https://github.com/nccurry/mtg-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "nuget",
       "identifier": "Nccurry.MtgMcp",
-      "version": "0.9.0-preview.1",
+      "version": "0.9.0",
       "transport": {
         "type": "stdio"
       }

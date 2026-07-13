@@ -48,6 +48,12 @@ current-guidance searches, encoding checks, debug-marker checks, and
 
 - Approve and test stable artifacts on supported platforms.
 - Repeat all gates from the final release commit.
-- Rehearse prior-package rollback without migrating either data root.
 - Record stable release authority, tag, package publication, and final PLC
   lifecycle closure.
+
+## Rollback rehearsal
+
+The latest installable prior NuGet package is `0.7.0`; the `0.8.0` Git tag has
+no corresponding NuGet package or GitHub release artifact. An isolated `0.7.0`
+tool installation completed its process smoke without copying or migrating the
+`v0.9` data root. The temporary installation was removed after the check.

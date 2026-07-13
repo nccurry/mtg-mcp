@@ -22,7 +22,7 @@
         <PackAsTool>true</PackAsTool>
         <ToolCommandName>mtg-mcp</ToolCommandName>
         <PackageId>Nccurry.MtgMcp</PackageId>
-        <Version>0.9.0-preview.1</Version>
+        <Version>0.9.0</Version>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Authors>Nick Curry</Authors>
         <Company>Nick Curry</Company>

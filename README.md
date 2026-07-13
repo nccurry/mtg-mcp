@@ -4,14 +4,14 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-The clean-break `0.9.0-preview.1` server uses stdio. It exposes 93 tools, one
+The clean-break `0.9.0` server uses stdio. It exposes 93 tools, one
 capability resource, and no prompts. It does not migrate `0.8.x` data or tool
 schemas.
 
 ## Status
 
-The evidence-first rewrite is feature complete. Stabilization is active. Stable
-release, cross-platform package approval, and rollback rehearsal remain open.
+The evidence-first rewrite is complete. `0.9.0` is the first stable release of
+the new surface.
 
 | Capability | Tools | Default | Writes |
 | --- | ---: | --- | --- |
