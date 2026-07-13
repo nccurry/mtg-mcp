@@ -31,6 +31,11 @@ jobs:
           mkdir -p .dotnet
           ln -sf "$(command -v dotnet)" .dotnet/dotnet
 
+      - name: Use image PowerShell for Taskfile
+        run: |
+          mkdir -p .tools/bin
+          ln -sf "$(command -v pwsh)" .tools/bin/pwsh
+
       - name: Validate release tag
         shell: pwsh
         run: |
