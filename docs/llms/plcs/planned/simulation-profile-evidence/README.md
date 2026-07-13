@@ -4,7 +4,7 @@
 > **Rewrite disposition: superseded/post-cutover experimental — do not implement
 > before `0.9.0`.** Automatic simulation-profile selection and its legacy base
 > are absent from the stable rewrite. A future
-> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
 > PLC must absorb this packet with `configurable-decision-models`,
 > `stats-lab-interaction-readiness`, and `conservative-goldfish-v2`. Retain only
 > the per-family deduplication, stable tie, and no-invented-routes fixtures.

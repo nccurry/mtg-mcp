@@ -38,10 +38,10 @@
 - The umbrella PLC owns cross-child guardrails. Each child remains independently
   reviewable and must say `Implementation authorized: Yes` before production
   edits begin for that child.
-- Accepted AMEND-005 plus the completed hardening and exact-statistics children
-  define the current 90-tool baseline. Statistics remains exact,
-  caller-supplied, provider-independent, and legality-free. Categorization and
-  cutover remain independently review-gated and unauthorized.
+- Accepted AMEND-005 plus the completed hardening, statistics, and
+  categorization children define the current 93-tool baseline. Statistics
+  remains exact, caller-supplied, provider-independent, and legality-free.
+  The stabilization child is active and adds no capability.
 - Stable `0.9.0` returns evidence, provider data, explicit workflow operations,
   and exact mathematics. The client LLM makes deckbuilding decisions.
 - Do not carry advisor prompts, intent inference, recommendations, weak-card

@@ -1,150 +1,77 @@
-# Adapter Operations
+# Provider Adapters
 
-mtg-mcp adapters talk to public or user-configured services with provider-local
-contracts. Core owns shared domain models and safe helper defaults; adapter
-projects own third-party HTTP request and response shapes.
+## Rules
 
-## Clean-Break `0.9.0` Target
+Each adapter owns its provider transport, authentication, pacing, retries,
+payloads, and evidence mapping. Core contains no provider transport type.
 
-The stable rewrite uses implemented isolated adapters for official Scryfall
-evidence, explicit Archidekt operations, and the documented Playgroup public
-API. It has no separate Tagger adapter, Moxfield
-network adapter, Commander Spellbook adapter, generic decklist provider, or
-recommendation source framework.
+Adapters must:
 
-- Archidekt uses the currently available web API for explicit user-owned deck
-  synchronization, folder organization, and named snapshot lifecycle/restore,
-  with conservative pacing, preview/apply guards, and verified cleanup.
-- Playgroup follows the pinned official OpenAPI contract; missing operations are
-  reported unsupported rather than reverse engineered.
-- Scryfall explicitly synchronizes official All Cards, Rulings, Oracle Tags,
-  and Art Tags bulk files into one corpus. Arbitrary uncached searches remain
-  provider-authoritative; no Tagger-site acquisition is planned. API request
-  starts share a SQLite-backed 500-millisecond minimum interval, blocking
-  responses stop immediately, and transient transport/5xx failures retry at
-  most twice.
-- Moxfield is manual interchange only because its terms prohibit automated
-  access.
+- fix the provider origin;
+- sanitize errors;
+- pass cancellation;
+- bound requests and retries;
+- stop on blocking responses;
+- preserve provider evidence and unknown fields; and
+- keep normal tests offline.
 
-See the [rewrite guide](rewrite-guide.md) and the individual provider PLCs for
-the reviewed contract. The sections below describe removed legacy adapters as
-historical reference only; those projects are not present on this branch.
+## Scryfall
 
-Current Scryfall configuration uses `SCRYFALL_TTL_HOURS` in `mtg-mcp.json`,
-`MTGMCP__SCRYFALL_TTL_HOURS` in the environment, or
-`--scryfall-ttl-hours`; it defaults to 24 hours. The product/version User-Agent
-and documented JSON Accept header are fixed by the adapter rather than exposed
-as arbitrary runtime header input.
+`MtgMcp.Scryfall` uses official API and bulk-data endpoints.
 
-Current Archidekt configuration is `ARCHIDEKT:USERNAME`,
-`ARCHIDEKT:PASSWORD`, and `ARCHIDEKT:CREDENTIALS_FILE`, with equivalent
-`MTGMCP__ARCHIDEKT__...` environment keys. The provider origin is fixed to
-Archidekt so configured credentials cannot be redirected to another host. The
-adapter retains login tokens only in memory. It starts at most one
-request at a time per account in the process, waits at least two seconds
-between starts, permits at most 30 starts in a rolling minute, and shares one
-150-request budget across every adapter call composed by a tool invocation.
-`Retry-After` creates a bounded shared cooldown; `403`/`429` and ambiguous
-writes are not retried.
+- API starts share a cross-process 500-millisecond minimum interval.
+- `403` and `429` stop immediately.
+- Transient transport and 5xx failures retry at most twice.
+- Arbitrary searches remain provider-authoritative.
+- Exact request snapshots are immutable.
+- Corpus sync is explicit and never runs in the background.
+- All Cards, Rulings, Oracle Tags, and Art Tags share `scryfall.db` but retain
+  separate evidence classes.
 
-Current Playgroup configuration is `PLAYGROUP:API_KEY`, with the equivalent
-`MTGMCP__PLAYGROUP__API_KEY` environment key. When neither is set, the adapter
-loads the `apiKey` property from `.mtg-mcp/playgroup.json` beneath the user
-profile if that file exists. Explicit configuration takes precedence, and
-credential errors remain path-free. Its origin and User-Agent are fixed.
-Request starts share a process-wide non-secret credential lane and wait at
-least 250 milliseconds. Idempotent GETs have at most two transient retries,
-while writes are always single-attempt. A `429` is replayed once only when its
-`Retry-After` is present and within the bounded wait; all other throttle cases
-stop with a structured unavailable result.
+The TTL defaults to 24 hours. Configure it with
+`--scryfall-ttl-hours`, `MTGMCP__SCRYFALL_TTL_HOURS`, or
+`SCRYFALL_TTL_HOURS` in `mtg-mcp.json`.
 
-The documented commander turn-damage route returns one large all-commander
-array with no provider pagination or filter. The MCP requires an exact
-caller-supplied commander ID and returns only the matching provider row while
-retaining the checksum of the complete bounded source response.
+## Archidekt
 
-## Historical Legacy Adapter Operations
+`MtgMcp.Archidekt` uses an observed, replaceable web contract for explicit
+user-owned operations.
 
-### User-Agent defaults
+- Requests are serialized per configured account.
+- Starts are at least two seconds apart.
+- At most 30 starts are allowed in 60 seconds.
+- One tool invocation has a 150-request budget.
+- `403` and `429` stop the operation.
+- Ambiguous writes are never retried.
+- Read retries are bounded to two transient failures.
 
-Adapters use a shared default User-Agent:
+Configure credentials with `MTGMCP__ARCHIDEKT__USERNAME` and
+`MTGMCP__ARCHIDEKT__PASSWORD`, or use `~/.mtg-mcp/archidekt.json`.
+Credentials and session tokens remain in memory and never appear in output.
 
-```text
-mtg-mcp/<version> (+https://github.com/nccurry/mtg-mcp)
-```
+## Playgroup
 
-When the host assembly version is not available, the fallback version is `0.0.0`. Override
-the value only when a provider asks for a specific contact string or a local deployment
-needs a recognizable identifier.
+`MtgMcp.Playgroup` pins the official Public API 1.0.0 contract.
 
-Supported override keys:
+- Starts are at least 250 milliseconds apart per credential lane.
+- GET requests retry transient failures at most twice.
+- A `429` retries once only with a bounded `Retry-After`.
+- Writes are single-attempt.
+- Missing public operations return unsupported results. The adapter does not
+  probe private routes.
 
-| Adapter or source | Canonical config key | Short alias |
-|---|---|---|
-| Scryfall | `MtgMcp:Scryfall:UserAgent` | `SCRYFALL:USER_AGENT` |
-| Archidekt | `MtgMcp:Archidekt:UserAgent` | `ARCHIDEKT:USER_AGENT` |
-| Moxfield | `MtgMcp:Moxfield:UserAgent` | `MOXFIELD:USER_AGENT` |
-| Playgroup | `MtgMcp:Playgroup:UserAgent` | `PLAYGROUP:USER_AGENT` |
-| Commander Spellbook | `MtgMcp:CommanderSpellbook:UserAgent` | `COMMANDERSPELLBOOK:USER_AGENT` |
-| TopDeck source | `MtgMcp:Intelligence:Sources:TopDeck:UserAgent` | `INTELLIGENCE:SOURCES:TOPDECK:USER_AGENT` |
-| EDHREC source | `MtgMcp:Intelligence:Sources:Edhrec:UserAgent` | `INTELLIGENCE:SOURCES:EDHREC:USER_AGENT` |
-| EDHTop16 source | `MtgMcp:Intelligence:Sources:EdhTop16:UserAgent` | `INTELLIGENCE:SOURCES:EDHTOP16:USER_AGENT` |
+Configure `MTGMCP__PLAYGROUP__API_KEY`, or use
+`~/.mtg-mcp/playgroup.json`. The two public writes remain fixture-only in live
+acceptance because the provider exposes no cleanup.
 
-When setting these from a shell, prepend `MTGMCP__` and write `:` as `__`, such as
-`MTGMCP__MOXFIELD__USER_AGENT`.
+## Moxfield
 
-### Archidekt card-id cache
+There is no Moxfield network adapter. `MtgMcp.Decks` generates manual Bulk Edit
+and tag artifacts with explicit preservation limits.
 
-Archidekt writeback needs Archidekt's provider-specific card ids when adding cards to a
-deck. Imported workspaces usually start with provider-neutral card facts such as Scryfall
-ids, printed set/collector numbers, and names, so the Archidekt adapter resolves missing
-Archidekt ids through Archidekt card search before mutation calls.
+## Tests
 
-Those resolved ids are stored in an adapter-local card-id cache. This cache is deliberately
-separate from the shared recommendation source-fact cache:
-
-- It stores mutation support state, not recommendation evidence.
-- Entries are keyed by Scryfall id, printed set/collector number, and card name so future
-  writebacks can avoid repeated Archidekt card search requests.
-- Structured entries include source, timestamp, card name, Scryfall uid, Archidekt id, and
-  validation status; older string-only entries are upgraded when read.
-- If Archidekt rejects a mutation because a cached id is stale, the adapter evicts the
-  suspect ids, re-resolves them once, and retries the mutation batch.
-- Normal tests use temporary cache files and do not mutate real Archidekt decks.
-
-Configuration:
-
-| Setting | Default | Notes |
-|---|---|---|
-| `MtgMcp:Archidekt:CardIdCacheFile` / `ARCHIDEKT:CARD_ID_CACHE_FILE` | user-local `mtg-mcp/archidekt-card-ids.json` | Override for hermetic tests, service accounts, or shared installations that need an explicit writable path. |
-
-### Moxfield curl fallback
-
-Moxfield imports primarily use the .NET HTTP client against the anonymous deck API. Some
-Moxfield edge paths can reject that HTTP fingerprint with `403 Forbidden`; when that
-happens and `MtgMcp:Moxfield:EnableCurlFallback` is true, the gateway retries the same URL
-through `curl`.
-
-The fallback is intentionally narrow:
-
-- It only runs after a `403 Forbidden` response from the normal HTTP request.
-- It uses `ProcessStartInfo.ArgumentList` with `UseShellExecute = false`; request values are
-  not concatenated into a shell command.
-- It sends `Accept: application/json`, follows redirects, uses the configured User-Agent,
-  and sets curl `--max-time 30`.
-- It returns to the normal sanitized HTTP error path if curl is missing, exits nonzero,
-  returns empty output, or returns malformed JSON.
-- Unit tests keep `EnableCurlFallback = false`, so normal `task test` does not require
-  network access or a local curl binary.
-
-Configuration:
-
-| Setting | Default | Notes |
-|---|---|---|
-| `MtgMcp:Moxfield:EnableCurlFallback` / `MOXFIELD:CURL_FALLBACK_ENABLED` | `true` | Disable for hermetic environments or when curl is not permitted. |
-| `MtgMcp:Moxfield:CurlPath` / `MOXFIELD:CURL_PATH` | `curl` | Set to an absolute path when PATH is controlled by a service manager. |
-| `MtgMcp:Moxfield:UserAgent` / `MOXFIELD:USER_AGENT` | shared default | Also used by the curl retry. |
-
-This is a compatibility workaround, not a provider contract. If Moxfield changes its edge
-behavior or anonymous API requirements, the fallback may stop helping and should fail closed
-into the existing sanitized error message.
+Adapter unit tests use fake HTTP and sanitized fixtures. Live tests require
+`Category=Live` and explicit provider opt-in. Remote mutation tests use
+disposable state with verified cleanup, or remain fixture-only when cleanup is
+not available.

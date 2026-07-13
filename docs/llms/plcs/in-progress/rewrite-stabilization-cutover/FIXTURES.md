@@ -1,6 +1,6 @@
 # Rewrite Stabilization And 0.9.0 Cutover Fixtures And Acceptance Matrix
 
-## Current Planned MCP Surface Baseline
+## Current MCP Surface Baseline
 
 | Family | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |

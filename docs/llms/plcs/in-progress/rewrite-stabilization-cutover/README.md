@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/rewrite-stabilization-cutover/`
+- Status: In progress
+- Folder: `docs/llms/plcs/in-progress/rewrite-stabilization-cutover/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-06
-- Current phase: blocked pending statistics, categorization, and prerequisite implementation completion
+- Last updated: 2026-07-12
+- Current phase: preview validation complete; stable artifact and rollback authorization pending
 
 ## Summary
 
@@ -17,9 +17,12 @@ capability. Its job is to prove that the eleven prerequisite child implementatio
 on architecture and MCP contracts, remove the prohibited legacy surface, and can
 be released without changing or deleting legacy user data.
 
-Cutover is blocked by an incomplete child, missing verified Archidekt
-deck/folder/snapshot cleanup, unresolved high-severity defects, schema drift,
-inadequate coverage, or a failed required offline gate.
+All eleven prerequisites are complete. Packaged live acceptance is recorded in
+[LIVE_ACCEPTANCE.md](LIVE_ACCEPTANCE.md). Stable publishing and rollback
+approval remain separate release gates.
+
+The current preview gate results are recorded in
+[VALIDATION.md](VALIDATION.md).
 
 ## Dependencies
 
@@ -34,18 +37,18 @@ inadequate coverage, or a failed required offline gate.
 - [Playgroup Official API](../../completed/playgroup-public-api/README.md)
 - [Exact Deck Statistics](../../completed/exact-deck-statistics/README.md)
 - [Deterministic Deck Categorization](../../completed/deterministic-deck-categorization/README.md)
-- [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
+- [Rewrite program](../../completed/evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions
 
 | Decision | Status | Rationale |
 | --- | --- | --- |
 | Derive the release surface from the approved capability children and validate it exactly. | Accepted update | The accepted AMEND-005 baseline has 93 tools in the remote `all` profile; it is a consistency check, not a compatibility target or design constraint. |
-| Require ordinary Git history-preserving integration. | Proposed | The rewrite is a clean product break, not a repository-history rewrite. |
-| Require preview releases and cross-platform smoke proof before `0.9.0`. | Proposed | Packaging and host failures must be found before the stable cutover. |
-| Keep legacy releases and legacy data directories available for rollback. | Proposed | Rollback must not translate or destroy user data. |
-| Block on unresolved priority-1/priority-2 defects and contract drift. | Proposed | Known material defects are incompatible with a stable evidence server. |
-| Keep popularity and experimental decision-adjacent work post-cutover. | Proposed | Those topics are outside the stable rewrite acceptance boundary. |
+| Require ordinary Git history-preserving integration. | Accepted | The rewrite is a clean product break, not a repository-history rewrite. |
+| Require preview releases and cross-platform smoke proof before `0.9.0`. | Accepted | Packaging and host failures must be found before the stable cutover. |
+| Keep legacy releases and legacy data directories available for rollback. | Accepted | Rollback must not translate or destroy user data. |
+| Block on unresolved priority-1/priority-2 defects and contract drift. | Accepted | Known material defects are incompatible with a stable evidence server. |
+| Keep popularity and experimental decision-adjacent work post-cutover. | Accepted | Those topics are outside the stable rewrite acceptance boundary. |
 
 ## Non-Goals
 
@@ -93,13 +96,14 @@ surface removal, and no-migration policy without authorizing implementation.
   exact statistics; explicitly enabled provider toolsets add their bounded
   workflows without widening operation-mode authority.
 
-This packet incorporates accepted AMEND-004 and AMEND-005 for planning
-consistency. This child is not approved for implementation.
+This packet incorporates accepted AMEND-004 and AMEND-005. It adds no product
+capability.
 
 ## Planning Approval
 
-- Status: Draft; dependent child reviews required
-- Reviewed by: Not reviewed
-- Review date: Not reviewed
-- Reviewed revision: Not reviewed
-- Implementation authorized: No
+- Status: Approved; implementation in progress
+- Reviewed by: Repository owner
+- Review date: 2026-07-12
+- Reviewed revision: `e0d68e7cf897430f9c43b4657307fd520469cbf7`
+- Implementation authorized: Yes
+- Release authorized: No

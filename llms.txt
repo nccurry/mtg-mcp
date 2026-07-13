@@ -20,7 +20,7 @@ or public-surface docs as future design requirements.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): Current-versus-target routing, rewrite guardrails, and implementation entry gate.
-- [Rewrite program](docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md): Governing `0.9.0` umbrella PLC.
+- [Rewrite program](docs/llms/plcs/completed/evidence-first-mcp-rewrite-program/README.md): Approved `0.9.0` umbrella guardrails and child registry.
 - [Capability toolsets](docs/llms/plcs/completed/mcp-capability-toolsets/README.md): Implemented startup-selected surface governance and static profiles.
 - [Local deck store](docs/llms/plcs/completed/local-deck-store/README.md): Implemented deck contracts, SQLite lifecycle, tools, and acceptance evidence.
 - [Manual deck interchange](docs/llms/plcs/completed/manual-deck-interchange/README.md): Completed native JSON, generic text, and UI-accepted provider artifacts with explicit preservation limits and confirmed cleanup.
@@ -29,16 +29,17 @@ or public-surface docs as future design requirements.
 - [Scryfall corpus and evidence](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md): Completed unified official corpus, authoritative API, cache, replay, and tag-evidence capability with retained full-corpus acceptance.
 - [Archidekt synchronization](docs/llms/plcs/completed/archidekt-deck-sync/README.md): Completed opt-in deck, folder, snapshot, pull/push, pacing, audits, and disposable live acceptance.
 - [Playgroup public API](docs/llms/plcs/completed/playgroup-public-api/README.md): Completed opt-in official operations, provider evidence, mode guards, fixture-only write safety, and safe live-read boundary.
-- [Deterministic deck categorization](docs/llms/plcs/planned/deterministic-deck-categorization/README.md): Proposed caller-configured tag-rule evaluation; implementation is not authorized.
+- [Deterministic deck categorization](docs/llms/plcs/completed/deterministic-deck-categorization/README.md): Implemented caller-configured tag-rule validation, preview, and guarded apply.
+- [Rewrite stabilization](docs/llms/plcs/in-progress/rewrite-stabilization-cutover/README.md): Active package, documentation, release, and rollback gates; no new capability.
 - [Potential features](docs/potential-features.md): Deferred ideas that are not stable rewrite scope.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
 
 ## Architecture
 
-- [Architecture](docs/architecture.md): Rewrite target summary plus explicitly labeled legacy implementation reference.
-- [Adapters](docs/adapters.md): Rewrite adapter boundary plus historical legacy operations.
+- [Architecture](docs/architecture.md): Current project, data, evidence, and write boundaries.
+- [Adapters](docs/adapters.md): Current Scryfall, Archidekt, Playgroup, and Moxfield boundaries.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
-- [Toolsets](docs/toolsets.md): Historical legacy groups and a pointer to the clean-break replacement.
+- [Toolsets](docs/toolsets.md): Static toolset selection, mode intersection, and workflow profiles.
 - [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
 
 ## Agent Planning
@@ -48,11 +49,3 @@ or public-surface docs as future design requirements.
 - [Plans](docs/llms/plans/README.md): Durable ordinary implementation plans.
 - [Plan-Led Changes](docs/llms/plcs/README.md): Requirements-backed PLC lifecycle and packet rules.
 - [Templates](docs/llms/templates/README.md): Reusable ordinary-plan and multi-file PLC templates.
-
-## Historical Legacy Reference
-
-- [Simulation profiles](docs/simulation-profiles.md): Removed legacy simulation and intent behavior.
-- [Stats Lab metrics](docs/stats-lab-metrics.md): Removed legacy sampled-analysis contracts.
-- [Observability](docs/observability.md): Legacy MCP logs, metrics, and diagnostics.
-- [Compatibility](docs/compatibility.md): Legacy MCP client and protocol coverage.
-- [Codex playbooks](.codex/README.md): Supplemental review and validation references.

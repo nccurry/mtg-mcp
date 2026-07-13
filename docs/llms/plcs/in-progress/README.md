@@ -5,11 +5,11 @@ Move a PLC packet here before implementation starts.
 Keep current phase, scope changes, decisions, deferred work, and validation
 evidence up to date as code lands.
 
-## Planning Programs
+## Active Packets
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | In progress; children 1–11 complete, child 12 remains | Govern the independently reviewable rewrite PLCs and final stabilization gate. |
+| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | In progress; release authorization pending | Validate the final surface, package, provider evidence, release, and rollback gates. |
 
-No rewrite child is currently active. The next child remains in `planned/`
-until it is independently reviewed and explicitly authorized.
+The active child adds no product capability. Stable publishing, tagging, and
+merging still require explicit release authority.

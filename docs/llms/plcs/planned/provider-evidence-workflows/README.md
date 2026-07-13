@@ -9,7 +9,7 @@
 > and [deterministic deck categorization](../../completed/deterministic-deck-categorization/README.md).
 > Popularity/tournament
 > sources remain in the program's
-> [post-cutover registry](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry).
+> [post-cutover registry](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry).
 > Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
 > authorized foundation implementation.
 > All transport and acquisition language elsewhere in this packet is historical

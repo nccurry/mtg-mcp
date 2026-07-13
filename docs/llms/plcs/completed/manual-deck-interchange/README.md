@@ -22,7 +22,7 @@ can apply from metadata that requires manual follow-up.
 
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
-- [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
+- [Rewrite program](../evidence-first-mcp-rewrite-program/README.md)
 
 ## Decisions
 

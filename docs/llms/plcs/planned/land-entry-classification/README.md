@@ -6,7 +6,7 @@
 > caller-supplied source capability masks and usable-turn constraints and never
 > parses oracle text. Preserve the phrase matrix only as documentation/example
 > input for callers or a future
-> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
 > PLC. Any future classifier output is `parser_derived`, never source fact.
 > Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
 > authorized foundation implementation.

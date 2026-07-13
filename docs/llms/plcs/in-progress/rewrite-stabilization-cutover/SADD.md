@@ -2,10 +2,10 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-06
+- Last updated: 2026-07-12
 - Related SRD: [SRD.md](SRD.md)
 
 ## Chosen Design

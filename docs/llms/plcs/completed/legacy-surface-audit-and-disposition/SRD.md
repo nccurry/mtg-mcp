@@ -9,7 +9,7 @@
 - Last updated: 2026-07-03
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
-- Parent program: [Evidence-First MCP Rewrite Program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
+- Parent program: [Evidence-First MCP Rewrite Program](../evidence-first-mcp-rewrite-program/README.md)
 
 ## Executive Summary
 

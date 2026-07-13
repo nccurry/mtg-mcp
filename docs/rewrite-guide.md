@@ -4,10 +4,8 @@ This document is the bridge between the currently shipped pre-rewrite server
 and the in-progress clean-break `0.9.0` server. It prevents current implementation
 documentation from being mistaken for the rewrite target.
 
-The rewrite foundation, local deck store, manual deck interchange, capability
-toolsets, Scryfall, Archidekt, Playgroup, pre-statistics hardening, and exact
-statistics children are complete. Accepted AMEND-005 defines their contracts;
-categorization and cutover remain planning-only.
+The eleven capability and foundation children are complete. The stabilization
+child is active. It validates the existing surface and adds no capability.
 
 ## Authority And Routing
 
@@ -18,7 +16,7 @@ Use these sources in order for the kind of question being answered:
 2. For repository-wide coding rules, use [AGENTS.md](../AGENTS.md) and the
    closest scoped `AGENTS.md`.
 3. For the rewrite's shared product and architecture constraints, use the
-   [umbrella PLC](llms/plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).
+   [umbrella PLC](llms/plcs/completed/evidence-first-mcp-rewrite-program/README.md).
 4. For one rewrite implementation, use only its independently approved child
    packet: README, SRD, SADD, implementation plan, and fixtures.
 5. Treat legacy implementation docs and code as reference evidence. Do not
@@ -35,7 +33,7 @@ another.
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | Currently 25 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, and 16 opt-in `playgroup_*` tools, one capability resource, and zero prompts; later approved children add their capability-prefixed tools |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | 28 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, and 16 opt-in `playgroup_*` tools, one capability resource, and zero prompts |
 | Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 32/54/54 and current `all` is 57/80/93 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, and Statistics |
@@ -74,12 +72,11 @@ The required planning sequence covers:
 Every stable tool belongs to one toolset. The default profile contains
 `decks`, `scryfall`, and `stats`; provider toolsets require explicit selection.
 Toolsets control relevance, modes control authority, and registration remains
-static for an MCP session. Each remaining PLC must pass its north-star workflow
-check in addition to endpoint and schema acceptance.
+static for an MCP session. Stabilization must pass its north-star workflow
+check in addition to schema, package, and release acceptance.
 
 Items 6 and 11 reflect accepted umbrella amendment AMEND-004. Item 9 reflects
-accepted AMEND-005 and is complete. Item 10 is active under its independently
-reviewed and owner-authorized packet.
+accepted AMEND-005. Items 1 through 11 are complete.
 
 Completed PLCs remain accurate evidence for the revision they implemented, but
 they do not override a later reviewed umbrella amendment for unfinished work.

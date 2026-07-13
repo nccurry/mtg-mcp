@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-12
@@ -55,8 +55,8 @@ Every child phase follows the same protocol:
 | 9 | Plan MCP contract and adapter hardening. | PROG-002 through PROG-025 | `mcp-contract-and-adapter-hardening` | Capability/batch schemas, exact identity workflow, adapter boundaries, and non-goals are decision-complete. | Completed; implementation accepted |
 | 10 | Implement exact deck statistics. | PROG-002 through PROG-025 | `exact-deck-statistics` | Exact functions, assumptions, `stats` assignment, and north-star acceptance pass all phase gates. | Completed; implementation accepted |
 | 11 | Reconcile deterministic deck categorization. | PROG-002 through PROG-025 | `deterministic-deck-categorization` | Explicit inline rules or a reviewed transparent `common-v1` preset, evidence-preserving preview, guarded apply, `decks` assignment, and north-star acceptance are decision-complete. | Completed; implementation accepted |
-| 12 | Reconcile stabilization and cutover. | PROG-002 through PROG-025 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Reconciled; prerequisite implementations pending |
-| 13 | Close the planning program. | PROG-011 through PROG-025 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Planned |
+| 12 | Reconcile stabilization and cutover. | PROG-002 through PROG-025 | `rewrite-stabilization-cutover` | Default/all manifests, cross-module gates, release, and rollback plan are decision-complete. | Completed; implementation authorized separately |
+| 13 | Close the planning program. | PROG-011 through PROG-025 | Umbrella packet | All approvals and evidence are recorded; umbrella moves to completed. | Completed |
 
 ## Phase Details
 
@@ -138,10 +138,10 @@ statistics and prevents statistics activation until that child completes.
 
 ## Completion Criteria
 
-- [ ] Every Must requirement appears in at least one phase.
+- [x] Every Must requirement appears in at least one phase.
 - [x] Each child was completed and validated before the next draft began.
-- [ ] Dependencies are recorded before subsequent drafting.
-- [ ] Every child remains independently approval-gated before implementation.
+- [x] Dependencies are recorded before subsequent drafting.
+- [x] Every child remains independently approval-gated before implementation.
 - [x] Every child has the standard five-file packet and approval record.
 - [x] Every child maps Must requirements to design and objective validation.
 - [x] Provider children include complete safety and fixture strategies.

@@ -33,9 +33,9 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `docs/`.
 - For Scryfall work, follow accepted AMEND-004 and the completed
   `scryfall-corpus-and-evidence` child. Do not revive separate Tagger-site
   scraping, storage, adapter, prefix, or toolset guidance.
-- Accepted AMEND-005 and the completed hardening and exact-statistics children
-  govern the current runtime. Categorization and cutover remain separately
-  review-gated and unauthorized.
+- Accepted AMEND-005 and the completed hardening, exact-statistics, and
+  categorization children govern the current runtime. The active stabilization
+  child may validate and package that runtime but may not add a capability.
 
 ## Generated And Reference Data
 

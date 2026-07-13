@@ -4,7 +4,7 @@
 > **Rewrite disposition: post-cutover experimental/reference-only — do not
 > implement this packet before `0.9.0`.** The stable rewrite removes simulation
 > profiles and MCP-owned decision automation. A future independently reviewed
-> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
 > PLC must decide feasibility first and explicitly absorb or reject this packet,
 > `simulation-profile-evidence`, `stats-lab-interaction-readiness`, and
 > `conservative-goldfish-v2`. Reviewed against the rewrite on 2026-07-03;

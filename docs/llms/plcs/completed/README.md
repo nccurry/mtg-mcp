@@ -22,3 +22,4 @@ checked-in configuration remain authoritative.
 | [mcp-contract-and-adapter-hardening](mcp-contract-and-adapter-hardening/README.md) | Added truthful capability/schema contracts, exact-only deck identity reconciliation, and behavior-preserving provider ownership boundaries. |
 | [exact-deck-statistics](exact-deck-statistics/README.md) | Added eight exact, provider-independent statistics tools over caller-defined raw or revisioned deck populations with no legality or recommendation behavior. |
 | [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Added explicit inline/common-v1 tag rules, evidence-bound category preview/apply, hierarchy and primary handling, and deterministic local deck mutations. |
+| [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | Approved all twelve rewrite packets and their shared guardrails; implementation and release lifecycle remain child-owned. |

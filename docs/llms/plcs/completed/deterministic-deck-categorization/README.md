@@ -26,7 +26,7 @@ acquisition, storage, hierarchy, and tag lookup belong to the unified
 
 ## Dependencies
 
-- [Accepted AMEND-004](../../in-progress/evidence-first-mcp-rewrite-program/README.md#program-amendments)
+- [Accepted AMEND-004](../evidence-first-mcp-rewrite-program/README.md#program-amendments)
 - [Completed local deck store](../../completed/local-deck-store/README.md)
 - [Scryfall Corpus And Evidence](../../completed/scryfall-corpus-and-evidence/README.md)
 - [Completed MCP capability toolsets](../../completed/mcp-capability-toolsets/README.md)

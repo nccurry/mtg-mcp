@@ -19,7 +19,7 @@ Tagger capability.
 
 ## Dependencies
 
-- Parent: [Evidence-First MCP Rewrite Program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
+- Parent: [Evidence-First MCP Rewrite Program](../evidence-first-mcp-rewrite-program/README.md)
 - Audit: [Legacy Surface Audit And Disposition](../../completed/legacy-surface-audit-and-disposition/README.md)
 
 ## Decision Snapshot

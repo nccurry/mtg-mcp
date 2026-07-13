@@ -23,7 +23,7 @@ Tagger evidence share storage and acquisition but remain separately labeled.
 
 ## Dependencies
 
-- [Accepted AMEND-004](../../in-progress/evidence-first-mcp-rewrite-program/README.md#program-amendments)
+- [Accepted AMEND-004](../evidence-first-mcp-rewrite-program/README.md#program-amendments)
 - [Completed rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Completed local deck store](../../completed/local-deck-store/README.md)
 - [Completed MCP capability toolsets](../../completed/mcp-capability-toolsets/README.md)

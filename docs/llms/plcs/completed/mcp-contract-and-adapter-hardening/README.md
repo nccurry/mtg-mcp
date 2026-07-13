@@ -20,7 +20,7 @@ changing their provider behavior.
 
 ## Dependencies
 
-- [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
+- [Rewrite program](../evidence-first-mcp-rewrite-program/README.md)
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [Scryfall Corpus And Evidence](../../completed/scryfall-corpus-and-evidence/README.md)

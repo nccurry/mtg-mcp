@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: `docs/llms/plcs/in-progress/evidence-first-mcp-rewrite-program/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/evidence-first-mcp-rewrite-program/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-12
-- Current phase: children 1–11 complete; child 12 stabilization remains
+- Current phase: all twelve child packets approved; planning program complete
 
 ## Summary
 
@@ -127,7 +127,7 @@ explicitly activated.
 | 9 | [`mcp-contract-and-adapter-hardening`](../../completed/mcp-contract-and-adapter-hardening/README.md) | Define capability/schema honesty, exact-only deck identity reconciliation, and cohesive Scryfall/Archidekt ownership before statistics. | Children 3, 5, 6, 7, and 8 | Repository-owner approval and authorization recorded | Approved; implementation completed |
 | 10 | [`exact-deck-statistics`](../../completed/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis over caller-supplied populations. | Local deck, toolset, and approved hardening contracts | Child 9 completion | Approved; implementation completed |
 | 11 | [`deterministic-deck-categorization`](../../completed/deterministic-deck-categorization/README.md) | Define explicit inline or transparent preset tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, toolset, and hardening contracts | Child 9 completion and child 10 review | Approved; implementation completed |
-| 12 | [`rewrite-stabilization-cutover`](../../planned/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Child 11 implementation completed | Drafted; implementation remains unauthorized |
+| 12 | [`rewrite-stabilization-cutover`](../../in-progress/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Repository-owner approval and authorization recorded | Approved; implementation in progress |
 
 Although some technical dependencies are narrower, drafting remains sequential
 so each packet is complete and validated before work begins on the next.
@@ -151,15 +151,14 @@ or authorized drafts. Their durable idea notes and promotion rules live in
 
 ## Project And Surface Impact
 
-The umbrella itself changes documentation only. The approved audit governed
-the now-completed foundation deletion/reuse work. Other planned children remain
-reference material and implementation-ineligible until separately approved and
-activated.
+The umbrella itself changes documentation only. Child implementations and the
+stable release retain independent lifecycle and approval records.
 
 ## Current Open Questions
 
 AMEND-005, hardening, exact statistics, and deterministic categorization are
-complete. Child 12 stabilization and cutover remains independently gated. The
+complete. Child 12 stabilization is active. Stable publication remains an
+independent release gate. The
 categorization implementation uses the deliberately small sane-default
 mechanism: each request chooses fully inline rules or explicitly selects the
 immutable, transparent `common-v1` preset and binds desired roles to existing
@@ -187,10 +186,10 @@ profile, or override language.
 - [x] Each original required child drafted sequentially as a separate packet.
 - [x] AMEND-003 toolset child drafted as a separate packet.
 - [x] Each child structurally validated before the next draft begins.
-- [ ] Each child independently reviewed before its implementation.
-- [ ] Registry and validation evidence updated after each approval.
-- [ ] All twelve required child packets exist and are approved after AMEND-005 acceptance.
-- [ ] Umbrella packet moved to `completed/` without implying code completion.
+- [x] Each child independently reviewed before its implementation.
+- [x] Registry and validation evidence updated after each approval.
+- [x] All twelve required child packets exist and are approved after AMEND-005 acceptance.
+- [x] Umbrella packet moved to `completed/` without implying code completion.
 
 ## Validation Evidence
 
@@ -234,10 +233,10 @@ profile, or override language.
 | 2026-07-09 | Exact-statistics independent review and activation | Passed | Structured bounded outcomes, explicit format-neutral deck selectors, caller numeric values, exact turn/mulligan/mana/package semantics, one request-wide work budget, schema descriptions, and the 90-tool post-child surface were locked. The owner authorized implementation and Phase 1 became active. |
 | 2026-07-09 | Exact-statistics implementation and lifecycle closure | Passed | All eight exact read tools, structured failure outcomes, explicit selector evidence, 30/51/51 default and 55/77/90 all surfaces, 630 offline tests, 96.27 percent Statistics line coverage, package/install smokes, dependency checks, audits, and the independent-formula 99-card workflow passed. Child 10 moved to completed; child 11 remains unauthorized pending independent review. |
 | 2026-07-12 | Deterministic categorization implementation and closure | Passed | Three `deck_*` tools, explicit inline/common-v1 sources, evidence-bound preview/apply, hierarchy and primary handling, 23 focused Core tests, updated 93-tool surfaces, full offline gates, and official-client surface/schema tests passed. Child 11 moved to completed; child 12 remains unauthorized. |
+| 2026-07-12 | Stabilization approval and planning-program closure | Passed | The repository owner authorized the no-capability stabilization work. All twelve packets are approved, child 12 moved to `in-progress/`, and this planning-only umbrella moved to `completed/`. Stable release authority remains separate. |
 
 ## Completion Notes
 
-Complete this packet when all twelve required child PLCs under accepted AMEND-005 have been authored and
-independently approved. Drafting all children leaves this umbrella in progress
-until those reviews occur. Child implementation and the `0.9.0` release have
-independent lifecycle and completion evidence.
+All twelve required child PLCs under accepted AMEND-005 are authored and
+approved. This completes the planning program only. Child implementation and
+the `0.9.0` release retain independent lifecycle and completion evidence.

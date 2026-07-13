@@ -4,7 +4,7 @@
 > **Rewrite disposition: superseded/post-cutover experimental design seed — do
 > not implement before `0.9.0` or before feasibility approval.** Stable cutover
 > removes every goldfish/simulation surface. A future
-> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
 > PLC must first decide whether a bounded simulation can be truthful and useful,
 > then explicitly absorb this packet with `configurable-decision-models`,
 > `simulation-profile-evidence`, and `stats-lab-interaction-readiness`. Reviewed

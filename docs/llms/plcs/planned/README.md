@@ -11,26 +11,11 @@ implementation work in these packets.
 
 ## Evidence-First Rewrite Children
 
-One rewrite child remains planned and independently reviewable. The
-[legacy audit](../completed/legacy-surface-audit-and-disposition/README.md) is
-approved/completed, and the
-[foundation child](../completed/rewrite-skeleton-foundation/README.md) is
-approved/completed, and the
-[local deck child](../completed/local-deck-store/README.md) is
-approved/completed, and the
-[capability-toolset child](../completed/mcp-capability-toolsets/README.md) is
-approved/completed, and the
-[Scryfall child](../completed/scryfall-corpus-and-evidence/README.md) is
-approved/completed, and the
-[Archidekt child](../completed/archidekt-deck-sync/README.md) is
-approved/completed, and the
-[Playgroup child](../completed/playgroup-public-api/README.md) is
-approved/completed. The governing program remains
-[in progress](../in-progress/evidence-first-mcp-rewrite-program/README.md).
-
-| Packet | Status | Summary |
-| --- | --- | --- |
-| [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Draft; blocked on all prerequisite children | Define cross-module acceptance, `0.9.0` release, rollback, and lifecycle gates. |
+No rewrite child remains planned. Children 1 through 11 are complete. The
+[stabilization child](../in-progress/rewrite-stabilization-cutover/README.md)
+is active, and the
+[umbrella planning program](../completed/evidence-first-mcp-rewrite-program/README.md)
+is complete.
 
 ## Product Foundation Follow-ups
 

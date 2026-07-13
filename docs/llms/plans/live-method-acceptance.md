@@ -2,42 +2,28 @@
 
 ## Purpose
 
-This acceptance verifies the packaged `0.9.0-preview.1` MCP through the
-official C# client. It covers the capability resource and every current public
-tool. It does not treat internal C# methods as public acceptance units.
+Verify the packaged `0.9.0-preview.1` MCP through the official C# client. The
+unit of acceptance is a public tool or resource, not an internal C# method.
 
-The fixed provider fixtures are:
+## Safety
 
-- Archidekt deck `24086044`, with snapshot-first mutation and verified content
-  restoration;
-- Playgroup `49295`, using authenticated reads only; and
-- a guarded scratch online backup of the retained Scryfall corpus.
+The runner requires:
 
-## Safety Boundary
+- `MTGMCP_RUN_LIVE_METHOD_ACCEPTANCE=1`;
+- an installed package command;
+- an explicitly selected scratch directory outside the repository and normal
+  application-data root; and
+- a clean worktree pinned to the installed package commit.
 
-The runner requires `MTGMCP_RUN_LIVE_METHOD_ACCEPTANCE=1`, an installed package
-command, and an explicitly created `MTGMCP_LIVE_ACCEPTANCE_DATA_DIR` outside
-both the repository and the normal application-data root. An empty root is
-marked on first use. A nonempty unmarked root is refused.
+Provider calls are sequential and use production pacing. The harness adds no
+retry. It records no credentials, identities, provider payloads, remote IDs, or
+local paths.
 
-The task also refuses a dirty worktree, resolves the exact tested commit, and
-binds every retained result to that commit and the installed package version.
-Changing either identity starts a new empty journal rather than reusing stale
-passes from an earlier build.
+The Archidekt workflow uses owner-authorized disposable state and verifies
+restore and cleanup. Playgroup writes are never invoked because the public API
+has no cleanup operation. Scryfall corpus work uses a guarded scratch copy.
 
-The scratch root owns a path-free JSON journal. It never contains credentials,
-account identities, provider payloads, game identifiers, disposable provider
-identifiers, or local paths. Provider calls are sequential and use production
-pacing. The harness adds no retries.
-
-The two Playgroup writes remain `fixture-only-owner-approved`: Public API
-1.0.0 exposes no delete, undo, close-session, or event-removal operation.
-
-## Running
-
-Set the broad opt-in and scratch root in the invoking process. The standard
-Archidekt and Playgroup credential files are discovered by the application.
-`MTGMCP__PLAYGROUP__API_KEY` remains an optional explicit override.
+## Run
 
 ```powershell
 $env:MTGMCP_RUN_LIVE_METHOD_ACCEPTANCE = '1'
@@ -45,43 +31,38 @@ $env:MTGMCP_LIVE_ACCEPTANCE_DATA_DIR = 'C:\path\outside\the\repository'
 task test:live:methods
 ```
 
-Set `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` when running the corpus lifecycle. If
-the provider has not advanced beyond the retained generation, the runner
-records `pending-provider-generation` and preserves only the guarded scratch
-copy for a later rerun.
+Set `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` to exercise corpus generations. When
+Scryfall has not published a second generation, rollback remains
+`pending-provider-generation`.
 
-## Required Result
+## Required surface
 
-| Capability | Registered | Required live passes | Accepted non-live |
-| --- | ---: | ---: | ---: |
-| Decks | 25 | 25 | 0 |
-| Scryfall | 18 | 18 | 0 |
-| Statistics | 8 | 8 | 0 |
-| Archidekt | 23 | 23 | 0 |
-| Playgroup | 16 | 14 | 2 |
-| **Total** | **90** | **88** | **2** |
+| Capability | Registered | Live | Fixture-backed | Pending generation | Fixture-only |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Decks | 28 | 28 | 0 | 0 | 0 |
+| Scryfall | 18 | 15 | 2 | 1 | 0 |
+| Statistics | 8 | 8 | 0 | 0 | 0 |
+| Archidekt | 23 | 23 | 0 | 0 | 0 |
+| Playgroup | 16 | 14 | 0 | 0 | 2 |
+| **Total** | **93** | **88** | **2** | **1** | **2** |
 
-Completion additionally requires one capability resource pass, exact
-`default`/`all`/`none` mode counts, exact Archidekt baseline restoration, no
-remaining disposable Archidekt resources, zero Playgroup writes, unchanged
-retained Scryfall bytes and timestamp, and successful rollback in both
-directions before scratch-corpus deletion.
+The run must also pass the capability resource; exact profile and mode counts;
+Archidekt restore and cleanup; zero Playgroup writes; and retained Scryfall
+database isolation.
 
-## Current Evidence
+## Current result
 
-- Playgroup packaged live baseline: `7d8a494` (2026-07-06).
-- Package version: `0.9.0-preview.1`.
-- Playgroup status: all 14 safe reads passed through the installed MCP package
-  against the owner-authorized playgroup. The run sent zero Playgroup writes.
-- Playgroup write status: both tools remain
-  `fixture-only-owner-approved`; the public API still exposes no cleanup.
-- Live finding resolved: the official all-commander turn-damage payload was
-  7,044,277 bytes and exceeded the generic evidence ceiling. The MCP now
-  requires an exact `commanderId`, bounds the aggregate fetch, and returns only
-  the unchanged matching provider row with the full-source checksum.
-- Full harness status: Playgroup is complete. A single exact-commit 88-method
-  combined run and the provider-generation-dependent corpus rollback gate
-  remain open; this segment result does not claim overall acceptance closure.
+The final packaged run passed on 2026-07-12 at
+`e0d68e7cf897430f9c43b4657307fd520469cbf7`.
 
-Update this section only from sanitized packaged-run evidence. A schema listing
-or adapter-only test is not a live pass.
+- Capability resource: passed.
+- Live tools: 88.
+- Fixture-backed Scryfall lifecycle tools: 2.
+- Scryfall rollback: `pending-provider-generation`.
+- Fixture-only Playgroup writes: 2.
+- Archidekt restore and cleanup: passed.
+- Playgroup writes sent: 0.
+- Retained Scryfall database changed: no.
+
+See the sanitized
+[cutover acceptance record](../plcs/in-progress/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).

@@ -6,7 +6,7 @@
 > packet extends a removed heuristic simulator and depends on superseded card-
 > snapshot and land-classifier mechanisms. Preserve only the disjoint failure
 > taxonomy and access-versus-sequencing distinction for a future
-> [`experimental-goldfish-feasibility`](../../in-progress/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
+> [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
 > PLC. Reviewed against the rewrite on 2026-07-03; lifecycle movement is
 > deferred to authorized foundation implementation.
 

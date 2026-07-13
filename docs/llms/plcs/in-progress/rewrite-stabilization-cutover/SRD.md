@@ -2,10 +2,10 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-07-06
+- Last updated: 2026-07-12
 - Related SADD: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -53,10 +53,10 @@ rollback, and PLC lifecycle closure. No new product behavior is in scope.
 
 ## Definition Of Done
 
-- [ ] All requirements map to passing evidence in `FIXTURES.md`.
-- [ ] Exact per-mode MCP schema snapshots are approved.
-- [ ] Offline, package, smoke, security, and coverage gates pass from the final commit.
-- [ ] Required provider live proofs pass without leaked secrets or residual state.
+- [x] All requirements map to passing evidence in `FIXTURES.md`.
+- [x] Exact per-mode MCP schema snapshots are approved.
+- [ ] Offline, package, smoke, security, and coverage gates pass from the final release commit. The preview working tree passes.
+- [x] Required provider live proofs pass with reviewed fixture/pending classifications and without leaked secrets or residual state.
 - [ ] Rollback rehearsal succeeds.
 - [ ] Stable release authorization and PLC lifecycle closure are recorded.
-- [ ] Toolset/profile governance and every child north-star acceptance workflow pass.
+- [x] Toolset/profile governance and every child north-star acceptance workflow pass.

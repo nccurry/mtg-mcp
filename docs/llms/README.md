@@ -6,9 +6,9 @@ configuration, `Taskfile.yml`, and [AGENTS.md](../../AGENTS.md).
 
 For evidence-first rewrite work, first read the
 [current-versus-target rewrite guide](../rewrite-guide.md) and the governing
-[umbrella PLC](plcs/in-progress/evidence-first-mcp-rewrite-program/README.md).
-Legacy implementation docs remain factual for current maintenance but are not
-the rewrite architecture.
+[umbrella PLC](plcs/completed/evidence-first-mcp-rewrite-program/README.md).
+Legacy implementation details remain in Git history. They are not current
+architecture.
 
 ## Contents
 

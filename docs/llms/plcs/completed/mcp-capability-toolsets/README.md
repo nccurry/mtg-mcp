@@ -19,7 +19,7 @@ runtime surface mutation, or compatibility alias is introduced.
 
 ## Dependencies
 
-- [AMEND-003 program guardrail](../../in-progress/evidence-first-mcp-rewrite-program/README.md#program-amendments)
+- [AMEND-003 program guardrail](../evidence-first-mcp-rewrite-program/README.md#program-amendments)
 - [Completed rewrite foundation](../../completed/rewrite-skeleton-foundation/README.md)
 - [Completed local deck store](../../completed/local-deck-store/README.md)
 - [Manual deck interchange](../manual-deck-interchange/README.md)

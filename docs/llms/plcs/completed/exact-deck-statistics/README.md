@@ -24,7 +24,7 @@ sampling.
 - [Local Deck Store](../../completed/local-deck-store/README.md)
 - [MCP Capability Toolsets](../../completed/mcp-capability-toolsets/README.md)
 - [MCP Contract And Adapter Hardening](../../completed/mcp-contract-and-adapter-hardening/README.md)
-- [Rewrite program](../../in-progress/evidence-first-mcp-rewrite-program/README.md)
+- [Rewrite program](../evidence-first-mcp-rewrite-program/README.md)
 
 ## Accepted Decisions
 
