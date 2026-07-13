@@ -127,7 +127,7 @@ explicitly activated.
 | 9 | [`mcp-contract-and-adapter-hardening`](../../completed/mcp-contract-and-adapter-hardening/README.md) | Define capability/schema honesty, exact-only deck identity reconciliation, and cohesive Scryfall/Archidekt ownership before statistics. | Children 3, 5, 6, 7, and 8 | Repository-owner approval and authorization recorded | Approved; implementation completed |
 | 10 | [`exact-deck-statistics`](../../completed/exact-deck-statistics/README.md) | Define provider-independent exact probability and composition analysis over caller-supplied populations. | Local deck, toolset, and approved hardening contracts | Child 9 completion | Approved; implementation completed |
 | 11 | [`deterministic-deck-categorization`](../../completed/deterministic-deck-categorization/README.md) | Define explicit inline or transparent preset tag rules, deterministic category preview, and guarded application. | Local deck, Scryfall corpus, toolset, and hardening contracts | Child 9 completion and child 10 review | Approved; implementation completed |
-| 12 | [`rewrite-stabilization-cutover`](../../in-progress/rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Repository-owner approval and authorization recorded | Approved; implementation in progress |
+| 12 | [`rewrite-stabilization-cutover`](../rewrite-stabilization-cutover/README.md) | Define cross-module stabilization, release, rollback, and PLC cleanup. | Children 1 through 11 | Repository-owner approval and authorization recorded | Approved; implementation and release completed |
 
 Although some technical dependencies are narrower, drafting remains sequential
 so each packet is complete and validated before work begins on the next.
@@ -157,8 +157,7 @@ stable release retain independent lifecycle and approval records.
 ## Current Open Questions
 
 AMEND-005, hardening, exact statistics, and deterministic categorization are
-complete. Child 12 stabilization is active. Stable publication remains an
-independent release gate. The
+complete. Child 12 stabilization and stable publication are complete. The
 categorization implementation uses the deliberately small sane-default
 mechanism: each request chooses fully inline rules or explicitly selects the
 immutable, transparent `common-v1` preset and binds desired roles to existing
@@ -234,6 +233,7 @@ profile, or override language.
 | 2026-07-09 | Exact-statistics implementation and lifecycle closure | Passed | All eight exact read tools, structured failure outcomes, explicit selector evidence, 30/51/51 default and 55/77/90 all surfaces, 630 offline tests, 96.27 percent Statistics line coverage, package/install smokes, dependency checks, audits, and the independent-formula 99-card workflow passed. Child 10 moved to completed; child 11 remains unauthorized pending independent review. |
 | 2026-07-12 | Deterministic categorization implementation and closure | Passed | Three `deck_*` tools, explicit inline/common-v1 sources, evidence-bound preview/apply, hierarchy and primary handling, 23 focused Core tests, updated 93-tool surfaces, full offline gates, and official-client surface/schema tests passed. Child 11 moved to completed; child 12 remains unauthorized. |
 | 2026-07-12 | Stabilization approval and planning-program closure | Passed | The repository owner authorized the no-capability stabilization work. All twelve packets are approved, child 12 moved to `in-progress/`, and this planning-only umbrella moved to `completed/`. Stable release authority remains separate. |
+| 2026-07-12 | Stable cutover closure | Passed | `0.9.0` passed local and remote release gates, published to NuGet, GitHub Releases, and the MCP Registry, completed prior-package rollback rehearsal, and moved child 12 to `completed/`. |
 
 ## Completion Notes
 

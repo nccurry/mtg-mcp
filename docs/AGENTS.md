@@ -34,8 +34,8 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `docs/`.
   `scryfall-corpus-and-evidence` child. Do not revive separate Tagger-site
   scraping, storage, adapter, prefix, or toolset guidance.
 - Accepted AMEND-005 and the completed hardening, exact-statistics, and
-  categorization children govern the current runtime. The active stabilization
-  child may validate and package that runtime but may not add a capability.
+  categorization children govern the current runtime. The completed
+  stabilization child records the `0.9.0` release boundary.
 
 ## Generated And Reference Data
 

@@ -65,4 +65,4 @@ The final packaged run passed on 2026-07-12 at
 - Retained Scryfall database changed: no.
 
 See the sanitized
-[cutover acceptance record](../plcs/in-progress/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).
+[cutover acceptance record](../plcs/completed/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).

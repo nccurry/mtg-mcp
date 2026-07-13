@@ -4,8 +4,8 @@ This document is the bridge between the currently shipped pre-rewrite server
 and the in-progress clean-break `0.9.0` server. It prevents current implementation
 documentation from being mistaken for the rewrite target.
 
-The eleven capability and foundation children are complete. The stabilization
-child is active. It validates the existing surface and adds no capability.
+All twelve rewrite children and the `0.9.0` cutover are complete. The
+stabilization child added no capability.
 
 ## Authority And Routing
 

@@ -2,12 +2,12 @@
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: `docs/llms/plcs/in-progress/rewrite-stabilization-cutover/`
+- Status: Completed
+- Folder: `docs/llms/plcs/completed/rewrite-stabilization-cutover/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
 - Last updated: 2026-07-12
-- Current phase: stable release authorized; tag pipeline and lifecycle closure pending
+- Current phase: `0.9.0` released and lifecycle closed
 
 ## Summary
 
@@ -101,7 +101,7 @@ capability.
 
 ## Planning Approval
 
-- Status: Approved; implementation in progress
+- Status: Approved; implementation and release completed
 - Reviewed by: Repository owner
 - Review date: 2026-07-12
 - Reviewed revision: `e0d68e7cf897430f9c43b4657307fd520469cbf7`

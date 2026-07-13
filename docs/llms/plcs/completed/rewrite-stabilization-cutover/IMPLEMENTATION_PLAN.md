@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-07-12
@@ -21,11 +21,11 @@ capability behavior opportunistically in this cutover.
 | --- | --- | --- | --- | --- |
 | 1 | Confirm child completion and final architecture. | CUT-001, CUT-002, CUT-014 | Dependency/revision ledger and module tests pass. | Completed |
 | 2 | Reconcile toolsets, the approved public surface, package metadata, and documentation. | CUT-003 through CUT-005, CUT-013, CUT-016, CUT-020, CUT-021 | Derived profile/mode manifests, capability snapshots, forbidden scans, docs review, and preview version checks pass. | Completed for preview |
-| 3 | Run complete offline, security, data-isolation, and coverage gates. | CUT-006 through CUT-008, CUT-012 | Final-commit offline evidence bundle passes. | Working-tree gates pass; release-commit rerun pending |
+| 3 | Run complete offline, security, data-isolation, and coverage gates. | CUT-006 through CUT-008, CUT-012 | Final-commit offline evidence bundle passes. | Completed locally and remotely |
 | 4 | Run provider-specific opt-in live acceptance. | CUT-009 through CUT-011 | Required live proof and cleanup gates pass with redacted evidence. | Completed with reviewed dispositions |
-| 5 | Integrate latest `main` and repeat phases 1 through 4. | CUT-015 | Conflict review and complete post-integration validation pass. | `origin/main` is an ancestor; release-commit rerun pending |
-| 6 | Build, install, smoke, and approve stable artifacts. | CUT-007, CUT-013, CUT-016 | Cross-platform packaged-server and documentation gates pass. | Release authorized; final pipeline pending |
-| 7 | Rehearse rollback and close release/PLC records. | CUT-017, CUT-018 | Rollback proof, approval record, release notes, and lifecycle updates pass. | Prior-package smoke passed; lifecycle closure pending release |
+| 5 | Integrate latest `main` and repeat phases 1 through 4. | CUT-015 | Conflict review and complete post-integration validation pass. | Completed by fast-forward merge and final validation |
+| 6 | Build, install, smoke, and approve stable artifacts. | CUT-007, CUT-013, CUT-016 | Cross-platform packaged-server and documentation gates pass. | Completed by local and remote release pipelines |
+| 7 | Rehearse rollback and close release/PLC records. | CUT-017, CUT-018 | Rollback proof, approval record, release notes, and lifecycle updates pass. | Completed |
 
 ## Execution Rules
 

@@ -127,9 +127,9 @@ Before implementation, the PLC must define and test:
 - schema descriptions and mode visibility; and
 - a realistic Spirit-versus-Bird and Pirate feature-count fixture.
 
-The capability should be implemented only after categorization and the
-stabilization child have closed, unless the owner explicitly reprioritizes it
-as a separate post-cutover capability.
+Categorization and stabilization are complete. This plan is eligible for
+independent review but remains unauthorized until the owner explicitly
+prioritizes it as a separate post-cutover capability.
 
 ## Explicit Non-Goals
 

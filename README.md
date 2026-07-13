@@ -24,7 +24,7 @@ the new surface.
 The packaged acceptance run passed 88 tools live. Two Scryfall corpus operations
 are fixture-backed, Scryfall rollback awaits a second provider generation, and
 two Playgroup writes remain fixture-only because the public API has no cleanup.
-See [live acceptance](docs/llms/plcs/in-progress/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).
+See [live acceptance](docs/llms/plcs/completed/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).
 
 ## Start the server
 

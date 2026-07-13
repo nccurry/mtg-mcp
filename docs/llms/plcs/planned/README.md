@@ -12,8 +12,8 @@ implementation work in these packets.
 ## Evidence-First Rewrite Children
 
 No rewrite child remains planned. Children 1 through 11 are complete. The
-[stabilization child](../in-progress/rewrite-stabilization-cutover/README.md)
-is active, and the
+[stabilization child](../completed/rewrite-stabilization-cutover/README.md)
+is complete, and the
 [umbrella planning program](../completed/evidence-first-mcp-rewrite-program/README.md)
 is complete.
 

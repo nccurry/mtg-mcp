@@ -30,7 +30,7 @@ or public-surface docs as future design requirements.
 - [Archidekt synchronization](docs/llms/plcs/completed/archidekt-deck-sync/README.md): Completed opt-in deck, folder, snapshot, pull/push, pacing, audits, and disposable live acceptance.
 - [Playgroup public API](docs/llms/plcs/completed/playgroup-public-api/README.md): Completed opt-in official operations, provider evidence, mode guards, fixture-only write safety, and safe live-read boundary.
 - [Deterministic deck categorization](docs/llms/plcs/completed/deterministic-deck-categorization/README.md): Implemented caller-configured tag-rule validation, preview, and guarded apply.
-- [Rewrite stabilization](docs/llms/plcs/in-progress/rewrite-stabilization-cutover/README.md): Active package, documentation, release, and rollback gates; no new capability.
+- [Rewrite stabilization](docs/llms/plcs/completed/rewrite-stabilization-cutover/README.md): Completed package, documentation, release, and rollback evidence for `0.9.0`.
 - [Potential features](docs/potential-features.md): Deferred ideas that are not stable rewrite scope.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
 

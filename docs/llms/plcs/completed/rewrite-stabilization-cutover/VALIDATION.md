@@ -2,8 +2,7 @@
 
 ## Result
 
-The 2026-07-12 preview closure pass is green. Stable release validation must be
-repeated from the final release commit.
+The 2026-07-12 local and remote `0.9.0` release gates passed.
 
 ## Commands
 
@@ -44,12 +43,14 @@ Relative links resolve across all tracked and new Markdown/text files. Stale
 current-guidance searches, encoding checks, debug-marker checks, and
 `git diff --check` pass.
 
-## Open release gates
+## Release publication
 
-- Approve and test stable artifacts on supported platforms.
-- Repeat all gates from the final release commit.
-- Record stable release authority, tag, package publication, and final PLC
-  lifecycle closure.
+- Final commit: `d9ce7913030ef9efbe994c1f773b63803833c105`.
+- CI: [passed](https://github.com/nccurry/mtg-mcp/actions/runs/29216122141).
+- Release pipeline: [passed](https://github.com/nccurry/mtg-mcp/actions/runs/29216122139).
+- GitHub release: [`0.9.0`](https://github.com/nccurry/mtg-mcp/releases/tag/0.9.0).
+- NuGet: `Nccurry.MtgMcp` version `0.9.0` installed and passed process smoke.
+- MCP Registry publication passed in the release pipeline.
 
 ## Rollback rehearsal
 
