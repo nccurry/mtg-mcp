@@ -18,6 +18,14 @@ internal static class ArchidektJsonContract
     };
 
     /// <summary>
+    /// Identifies provider fields retained as evidence but excluded from concurrency guards.
+    /// </summary>
+    private static readonly HashSet<string> VolatileDeckFingerprintFields = new(StringComparer.Ordinal)
+    {
+        "viewCount",
+    };
+
+    /// <summary>
     /// Maps one complete deck payload and fails closed when its identity or cards cannot be understood.
     /// </summary>
     internal static RemoteDeckSnapshot MapDeck(
@@ -62,7 +70,7 @@ internal static class ArchidektJsonContract
                 value.ProviderRelationId,
                 value.ProviderCardId,
             }),
-            extensions,
+            extensions = StableDeckExtensions(extensions),
         });
         ArchidektRetrievalEvidence evidence = Evidence(method, retrievedAtUtc, sourceChecksum);
         return new RemoteDeckSnapshot(
@@ -614,7 +622,7 @@ internal static class ArchidektJsonContract
                 value.ProviderRelationId,
                 value.ProviderCardId,
             }),
-            deck.Extensions,
+            extensions = StableDeckExtensions(deck.Extensions),
         });
         return deck with
         {
@@ -690,6 +698,24 @@ internal static class ArchidektJsonContract
         }
 
         return extensions;
+    }
+
+    /// <summary>
+    /// Returns provider extensions that can participate safely in a remote-state fingerprint.
+    /// </summary>
+    private static Dictionary<string, JsonElement> StableDeckExtensions(
+        IReadOnlyDictionary<string, JsonElement> extensions)
+    {
+        Dictionary<string, JsonElement> stable = new(StringComparer.Ordinal);
+        foreach ((string name, JsonElement value) in extensions)
+        {
+            if (!VolatileDeckFingerprintFields.Contains(name))
+            {
+                stable.Add(name, value);
+            }
+        }
+
+        return stable;
     }
 
     /// <summary>

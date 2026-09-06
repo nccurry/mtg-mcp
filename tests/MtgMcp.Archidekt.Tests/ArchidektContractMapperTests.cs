@@ -100,6 +100,40 @@ public sealed class ArchidektContractMapperTests
     }
 
     /// <summary>
+    /// Verifies a provider view counter remains observable without invalidating a content guard.
+    /// </summary>
+    [Fact]
+    public void MapDeck_ViewCountChangePreservesRemoteFingerprint()
+    {
+        const string marker = "\"customExtension\": { \"kept\": true },";
+        string firstJson = ArchidektTestPayloads.Deck.Replace(
+            marker,
+            "\"customExtension\": { \"kept\": true }, \"viewCount\": 1,",
+            StringComparison.Ordinal);
+        string secondJson = ArchidektTestPayloads.Deck.Replace(
+            marker,
+            "\"customExtension\": { \"kept\": true }, \"viewCount\": 2,",
+            StringComparison.Ordinal);
+        using JsonDocument firstDocument = JsonDocument.Parse(firstJson);
+        using JsonDocument secondDocument = JsonDocument.Parse(secondJson);
+
+        RemoteDeckSnapshot first = ArchidektDeckContractMapper.MapDeck(
+            firstDocument.RootElement,
+            firstJson,
+            DateTimeOffset.UtcNow,
+            "GET");
+        RemoteDeckSnapshot second = ArchidektDeckContractMapper.MapDeck(
+            secondDocument.RootElement,
+            secondJson,
+            DateTimeOffset.UtcNow,
+            "GET");
+
+        Assert.Contains("viewCount", first.Extensions.Keys);
+        Assert.Equal(first.ContentFingerprint, second.ContentFingerprint);
+        Assert.Equal(first.RemoteFingerprint, second.RemoteFingerprint);
+    }
+
+    /// <summary>
     /// Verifies a bounded deck page maps folders, counts, timestamps, and opaque continuation.
     /// </summary>
     [Fact]
