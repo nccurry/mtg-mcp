@@ -210,11 +210,14 @@ public static class ArchidektLocalMapper
         {
             baselineCategories.TryGetValue(localCategory.CategoryId, out RemoteDeckCategory? prior);
             string providerId = prior?.ProviderCategoryId ?? string.Empty;
+            bool isMaybeboard = localCategory.Name.Equals(
+                "maybeboard",
+                StringComparison.OrdinalIgnoreCase);
             categories.Add(new RemoteDeckCategory(
                 providerId,
                 localCategory.Name,
-                prior?.IncludedInDeck ?? true,
-                prior?.IncludedInPrice ?? true,
+                prior?.IncludedInDeck ?? !isMaybeboard,
+                prior?.IncludedInPrice ?? !isMaybeboard,
                 prior?.IsPremier ?? false,
                 localCategory.SortOrder));
         }

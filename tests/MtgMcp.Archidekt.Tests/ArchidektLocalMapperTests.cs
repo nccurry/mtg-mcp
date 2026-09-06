@@ -265,6 +265,36 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies a newly created Maybeboard category remains outside Archidekt deck and price totals.
+    /// </summary>
+    [Fact]
+    public void ToRemoteTarget_NewMaybeboardIsExcludedFromDeckAndPrice()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        DeckDocument local = new(
+            Guid.NewGuid(),
+            remote.Name,
+            remote.Description,
+            remote.Format,
+            Revision: 1,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            Entries: [],
+            Categories: [new DeckCategory(Guid.NewGuid(), "Maybeboard", null, 2)],
+            CategoryAssignments: [],
+            ProviderBindings: []);
+
+        RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(
+            local,
+            Baseline(remote, "local"),
+            remote);
+
+        RemoteDeckCategory maybeboard = Assert.Single(target.Categories);
+        Assert.Equal(false, maybeboard.IncludedInDeck);
+        Assert.Equal(false, maybeboard.IncludedInPrice);
+    }
+
+    /// <summary>
     /// Verifies model collections copy caller-owned mutable inputs.
     /// </summary>
     [Fact]
