@@ -6,6 +6,10 @@ implementation authorization. Before work starts, the idea needs its own narrow
 PLC, current provider/policy research, explicit evidence boundaries, and an
 independent review.
 
+The [evidence-first deckbuilding evolution PLC](llms/plcs/planned/evidence-first-deckbuilding-evolution/README.md)
+records the current planning roadmap. It remains planning-only; its individual
+children still require approval before implementation.
+
 ## Registered Post-Cutover Ideas
 
 ### Popularity and tournament evidence
