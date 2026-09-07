@@ -81,6 +81,13 @@ create avoidable merge risk.
 - Keep ArchidektService's public deck methods unchanged.
 - Exit: deck code no longer lives in ArchidektOperationContext; focused deck
   and service tests pass.
+- Result (2026-09-07): Complete. ArchidektDeckOperations now owns deck reads,
+  creation and deletion checks, target apply, plan execution, payload building,
+  card lookup, and deck-list verification. ArchidektOperationResults now maps
+  adapter failures to typed results, and ArchidektOperationBudget checks the
+  planned request limit. ArchidektService kept its public deck API. The offline
+  Archidekt and App projects passed 84 and 107 tests, `task lint` passed, and
+  the phase audit found no issues.
 
 ## Phase 4: Move Folder And Snapshot Workflows
 

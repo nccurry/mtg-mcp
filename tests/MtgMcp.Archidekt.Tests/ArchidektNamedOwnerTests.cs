@@ -87,8 +87,8 @@ public sealed class ArchidektNamedOwnerTests
     {
         ArchidektTestHttpHandler handler = new();
         handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
-        using ArchidektOperationContext context = new(CreateSession(handler, username: null, password: null), 150);
-        ArchidektDeckOperations decks = new(context);
+        using ArchidektSession session = CreateSession(handler, username: null, password: null);
+        ArchidektDeckOperations decks = new(new ArchidektDeckTransport(session), 150);
 
         RemoteDeckSnapshot deck = Success(await decks.GetAsync(
             "42",

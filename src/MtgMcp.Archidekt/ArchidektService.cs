@@ -18,6 +18,11 @@ internal sealed class ArchidektOperationContext : IDisposable
     private readonly ArchidektDeckTransport decks;
 
     /// <summary>
+    /// Gets deck workflows over the shared session and deck provider routes.
+    /// </summary>
+    internal ArchidektDeckOperations DeckOperations { get; }
+
+    /// <summary>
     /// Provides folder provider routes to the current workflow methods.
     /// </summary>
     private readonly ArchidektFolderTransport folders;
@@ -41,6 +46,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         options.Validate();
         session = new ArchidektSession(options, packageVersion);
         decks = new ArchidektDeckTransport(session);
+        DeckOperations = new ArchidektDeckOperations(decks, options.MaximumRequestsPerOperation);
         folders = new ArchidektFolderTransport(session);
         snapshots = new ArchidektSnapshotTransport(session);
         maximumRequestsPerOperation = options.MaximumRequestsPerOperation;
@@ -54,6 +60,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         this.session = session ?? throw new ArgumentNullException(nameof(session));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRequestsPerOperation);
         decks = new ArchidektDeckTransport(session);
+        DeckOperations = new ArchidektDeckOperations(decks, maximumRequestsPerOperation);
         folders = new ArchidektFolderTransport(session);
         snapshots = new ArchidektSnapshotTransport(session);
         this.maximumRequestsPerOperation = maximumRequestsPerOperation;
@@ -76,177 +83,12 @@ internal sealed class ArchidektOperationContext : IDisposable
     }
 
     /// <summary>
-    /// Lists one bounded authenticated page of the configured user's decks.
-    /// </summary>
-    public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
-        string? cursor,
-        int pageSize,
-        CancellationToken cancellationToken)
-    {
-        return ListDecksAsync(cursor, pageSize, BeginOperation(), cancellationToken);
-    }
-
-    /// <summary>
-    /// Lists one page while charging a caller-owned composed-operation budget.
-    /// </summary>
-    public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
-        string? cursor,
-        int pageSize,
-        ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(operationScope);
-        return ExecuteAsync(
-            operationScope.Budget,
-            budget => decks.ListAsync(cursor, pageSize, budget, cancellationToken));
-    }
-
-    /// <summary>
-    /// Gets one fresh public or authenticated remote deck observation.
-    /// </summary>
-    public Task<OperationResult<RemoteDeckSnapshot>> GetDeckAsync(
-        string deckId,
-        CancellationToken cancellationToken)
-    {
-        return GetDeckAsync(deckId, BeginOperation(), cancellationToken);
-    }
-
-    /// <summary>
-    /// Gets one remote deck while charging a caller-owned composed-operation budget.
-    /// </summary>
-    public Task<OperationResult<RemoteDeckSnapshot>> GetDeckAsync(
-        string deckId,
-        ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(operationScope);
-        return ExecuteAsync(
-            operationScope.Budget,
-            async budget =>
-            {
-                try
-                {
-                    return await decks.GetAsync(
-                        deckId,
-                        requireAuthentication: false,
-                        budget,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (ArchidektProviderException exception)
-                    when (exception.ReasonCode is
-                        "provider-forbidden" or
-                        "provider-request-rejected" or
-                        "provider-entity-not-found")
-                {
-                    return await decks.GetAsync(
-                        deckId,
-                        requireAuthentication: true,
-                        budget,
-                        cancellationToken).ConfigureAwait(false);
-                }
-            });
-    }
-
-    /// <summary>
-    /// Creates one private-by-default empty remote deck shell and verifies it by fresh read-back.
-    /// </summary>
-    public Task<OperationResult<RemoteDeckSnapshot>> CreateDeckAsync(
-        ArchidektDeckCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteAsync(
-            async budget =>
-            {
-                RemoteDeckSnapshot created = await decks.CreateAsync(
-                    request,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteDeckSnapshot verified = await decks.GetAsync(
-                    created.RemoteId,
-                    requireAuthentication: true,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                if (!string.Equals(created.Name, verified.Name, StringComparison.Ordinal) ||
-                    !string.Equals(created.Visibility, verified.Visibility, StringComparison.Ordinal))
-                {
-                    throw Conflict(
-                        "remote-verification-mismatch",
-                        "Archidekt created a deck whose verified state did not match the request.");
-                }
-
-                return verified;
-            });
-    }
-
-    /// <summary>
-    /// Deletes one unchanged exact remote deck and verifies absence through authenticated listing evidence.
-    /// </summary>
-    public Task<OperationResult<ArchidektApplyResult>> DeleteDeckAsync(
-        ArchidektDeckDeleteRequest request,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteAsync(
-            async budget =>
-            {
-                RequireConfirmation(request.Confirmation, $"delete {request.DeckId}");
-                RemoteDeckSnapshot current = await decks.GetAsync(
-                    request.DeckId,
-                    requireAuthentication: true,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedRemoteFingerprint,
-                    current.RemoteFingerprint,
-                    "remote-deck-changed");
-                try
-                {
-                    await decks.DeleteAsync(
-                        request.DeckId,
-                        budget,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (ArchidektProviderException exception)
-                    when (exception.Kind == ArchidektFailureKind.Unavailable)
-                {
-                    return PartialResult(
-                        request.DeckId,
-                        new ArchidektRemoteOperation(1, "deck-delete", request.DeckId, "Delete one exact deck."),
-                        exception.Message);
-                }
-
-                bool present = await DeckAppearsInAuthenticatedListingAsync(
-                    request.DeckId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                if (present)
-                {
-                    throw Conflict(
-                        "remote-delete-unverified",
-                        "Archidekt still lists the deck after deletion.");
-                }
-
-                return new ArchidektApplyResult(
-                    "applied",
-                    LocalDeckId: null,
-                    LocalRevision: null,
-                    request.DeckId,
-                    FinalRemoteFingerprint: null,
-                    [new ArchidektOperationStatus(
-                        1,
-                        "deck-delete",
-                        request.DeckId,
-                        "applied",
-                        "Verified absent from the authenticated deck listing.")]);
-            });
-    }
-
-    /// <summary>
     /// Lists the complete authenticated folder tree and its canonical fingerprint.
     /// </summary>
     public Task<OperationResult<RemoteFolderTree>> ListFoldersAsync(
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteFolderTree tree = await folders.ListAsync(
@@ -264,7 +106,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         string folderId,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteFolderTree tree = await folders.GetAsync(
@@ -283,7 +125,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektFolderCreateRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteFolderTree before = await folders.ListAsync(
@@ -312,7 +154,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektFolderUpdateRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteFolderTree before = await folders.ListAsync(
@@ -377,7 +219,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektFolderMoveRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteFolderTree before = await folders.ListAsync(
@@ -392,7 +234,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                 string destinationFolderId = ResolveProviderParent(before, request.DestinationFolderId);
                 ArchidektFolderMoveItem[] items = DeduplicateMoveItems(request.Items);
                 int deckCount = items.Count(value => value.Kind == "deck");
-                EnsureRequestBound(budget.RequestCount + (deckCount * 2) + 2);
+                budget.EnsureRequestBound(budget.RequestCount + (deckCount * 2) + 2);
                 foreach (ArchidektFolderMoveItem item in items)
                 {
                     if (item.Kind == "folder")
@@ -461,7 +303,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektFolderDeleteRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RequireConfirmation(request.Confirmation, $"delete folder {request.FolderId}");
@@ -535,7 +377,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         string deckId,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             budget => snapshots.ListAsync(deckId, budget, cancellationToken));
     }
 
@@ -547,7 +389,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         string snapshotId,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             budget => snapshots.GetAsync(deckId, snapshotId, budget, cancellationToken));
     }
 
@@ -558,7 +400,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektSnapshotCreateRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteDeckSnapshot deck = await decks.GetAsync(
@@ -598,7 +440,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektSnapshotUpdateRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RemoteNamedSnapshot current = await snapshots.GetAsync(
@@ -639,7 +481,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektSnapshotDeleteRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RequireConfirmation(request.Confirmation, $"delete snapshot {request.SnapshotId}");
@@ -694,7 +536,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         string snapshotId,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
@@ -704,7 +546,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     cancellationToken).ConfigureAwait(false);
                 RemoteDeckSnapshot target = CreateRestoreTarget(current, snapshot.Deck);
                 ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
-                EnsureRequestBound(plan.PredictedProviderRequests);
+                budget.EnsureRequestBound(plan.PredictedProviderRequests);
                 IReadOnlyList<ArchidektDifference> differences = ContentDifference(current, target, plan);
                 string previewFingerprint = RestorePreviewFingerprint(current, snapshot, plan);
                 return new ArchidektSnapshotRestorePreview(
@@ -727,7 +569,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektSnapshotRestoreApplyRequest request,
         CancellationToken cancellationToken)
     {
-        return ExecuteAsync(
+        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
                 RequireConfirmation(request.Confirmation, $"restore snapshot {request.SnapshotId}");
@@ -754,62 +596,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     request.PreviewFingerprint,
                     RestorePreviewFingerprint(current, snapshot, plan),
                     "restore-preview-changed");
-                return await ApplyPlanAsync(
-                    current,
-                    target,
-                    plan,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-            });
-    }
-
-    /// <summary>
-    /// Applies one caller-previewed remote target after refetching and replaying all provider guards.
-    /// </summary>
-    public Task<OperationResult<ArchidektApplyResult>> ApplyRemoteTargetAsync(
-        RemoteDeckSnapshot target,
-        string expectedRemoteFingerprint,
-        string expectedPlanFingerprint,
-        CancellationToken cancellationToken)
-    {
-        return ApplyRemoteTargetAsync(
-            target,
-            expectedRemoteFingerprint,
-            expectedPlanFingerprint,
-            BeginOperation(),
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Applies one remote target while charging a caller-owned composed-operation budget.
-    /// </summary>
-    public Task<OperationResult<ArchidektApplyResult>> ApplyRemoteTargetAsync(
-        RemoteDeckSnapshot target,
-        string expectedRemoteFingerprint,
-        string expectedPlanFingerprint,
-        ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(operationScope);
-        return ExecuteAsync(
-            operationScope.Budget,
-            async budget =>
-            {
-                RemoteDeckSnapshot current = await decks.GetAsync(
-                    target.RemoteId,
-                    requireAuthentication: true,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RequireFingerprint(
-                    expectedRemoteFingerprint,
-                    current.RemoteFingerprint,
-                    "remote-deck-changed");
-                ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
-                RequireFingerprint(
-                    expectedPlanFingerprint,
-                    plan.PlanFingerprint,
-                    "push-preview-changed");
-                return await ApplyPlanAsync(
+                return await DeckOperations.ApplyPlanAsync(
                     current,
                     target,
                     plan,
@@ -822,220 +609,6 @@ internal sealed class ArchidektOperationContext : IDisposable
     public void Dispose()
     {
         session.Dispose();
-    }
-
-    /// <summary>
-    /// Executes one primitive plan in stable order and reports partial/unknown state without retries.
-    /// </summary>
-    private async Task<ArchidektApplyResult> ApplyPlanAsync(
-        RemoteDeckSnapshot current,
-        RemoteDeckSnapshot target,
-        ArchidektRemotePlan plan,
-        ArchidektOperationBudget budget,
-        CancellationToken cancellationToken)
-    {
-        EnsureRequestBound(budget.RequestCount + plan.PredictedProviderRequests);
-        List<ArchidektOperationStatus> statuses = [];
-        Dictionary<string, string> resolvedCards = new(StringComparer.Ordinal);
-        for (int index = 0; index < plan.PlannedOperations.Count; index++)
-        {
-            ArchidektPlannedOperation operation = plan.PlannedOperations[index];
-            try
-            {
-                await ExecutePlannedOperationAsync(
-                    current.RemoteId,
-                    target,
-                    operation,
-                    resolvedCards,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                statuses.Add(Status(operation.Public, "applied", "Archidekt accepted the operation."));
-            }
-            catch (ArchidektProviderException exception)
-                when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
-            {
-                statuses.Add(Status(operation.Public, "unknown", exception.Message));
-                for (int remaining = index + 1; remaining < plan.PlannedOperations.Count; remaining++)
-                {
-                    statuses.Add(Status(
-                        plan.PlannedOperations[remaining].Public,
-                        "not-attempted",
-                        "A prior provider operation did not complete safely."));
-                }
-
-                return new ArchidektApplyResult(
-                    "partial",
-                    LocalDeckId: null,
-                    LocalRevision: null,
-                    current.RemoteId,
-                    FinalRemoteFingerprint: null,
-                    statuses);
-            }
-        }
-
-        RemoteDeckSnapshot verified = await decks.GetAsync(
-            current.RemoteId,
-            requireAuthentication: true,
-            budget,
-            cancellationToken).ConfigureAwait(false);
-        ArchidektRemotePlan residual = ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
-        if (residual.PlannedOperations.Count > 0)
-        {
-            return new ArchidektApplyResult(
-                "verification-mismatch",
-                LocalDeckId: null,
-                LocalRevision: null,
-                current.RemoteId,
-                verified.RemoteFingerprint,
-                statuses);
-        }
-
-        return new ArchidektApplyResult(
-            "applied",
-            LocalDeckId: null,
-            LocalRevision: null,
-            current.RemoteId,
-            verified.RemoteFingerprint,
-            statuses);
-    }
-
-    /// <summary>
-    /// Translates one planned primitive into its exact observed provider request.
-    /// </summary>
-    private async Task ExecutePlannedOperationAsync(
-        string deckId,
-        RemoteDeckSnapshot target,
-        ArchidektPlannedOperation operation,
-        IDictionary<string, string> resolvedCards,
-        ArchidektOperationBudget budget,
-        CancellationToken cancellationToken)
-    {
-        switch (operation.Public.Kind)
-        {
-            case "metadata-update":
-                await decks.SendMetadataAsync(
-                    deckId,
-                    new
-                    {
-                        name = target.Name,
-                        description = target.Description,
-                        deckFormat = ArchidektDeckTransport.MapFormatId(target.Format),
-                        @private = target.Visibility == "private",
-                        unlisted = target.Visibility == "unlisted",
-                        parentFolder = ArchidektProviderId.Parse(target.ParentFolderId),
-                    },
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case "category-create":
-                await decks.SendCategoryCreateAsync(
-                    CategoryPayload(deckId, operation.TargetCategory!),
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case "category-update":
-                await decks.SendCategoryUpdateAsync(
-                    operation.CurrentCategory!.ProviderCategoryId,
-                    CategoryPayload(deckId, operation.TargetCategory!),
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case "category-delete":
-                await decks.SendCategoryDeleteAsync(
-                    operation.CurrentCategory!.ProviderCategoryId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            case "entry-add":
-            case "entry-update":
-            case "entry-remove":
-                await ExecuteCardOperationAsync(
-                    deckId,
-                    operation,
-                    resolvedCards,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                break;
-            default:
-                throw new ArchidektProviderException(
-                    ArchidektFailureKind.Unsupported,
-                    "provider-contract-unsupported",
-                    "The remote operation kind is not supported.");
-        }
-    }
-
-    /// <summary>
-    /// Resolves and sends one exact single-card add, modify, or remove operation.
-    /// </summary>
-    private async Task ExecuteCardOperationAsync(
-        string deckId,
-        ArchidektPlannedOperation operation,
-        IDictionary<string, string> resolvedCards,
-        ArchidektOperationBudget budget,
-        CancellationToken cancellationToken)
-    {
-        RemoteDeckEntry entry = operation.TargetEntry ?? operation.CurrentEntry!;
-        string providerCardId = entry.ProviderCardId;
-        if (operation.Public.Kind == "entry-add" && string.IsNullOrWhiteSpace(providerCardId))
-        {
-            string key = $"{entry.PrintingId}:{entry.SetCode}:{entry.CollectorNumber}:{entry.CardName}";
-            if (!resolvedCards.TryGetValue(key, out providerCardId!))
-            {
-                providerCardId = await decks.ResolveCardIdAsync(
-                    entry,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                resolvedCards[key] = providerCardId;
-            }
-        }
-
-        string action = operation.Public.Kind switch
-        {
-            "entry-add" => "add",
-            "entry-update" => "modify",
-            "entry-remove" => "remove",
-            _ => throw new InvalidOperationException("Unsupported card operation kind."),
-        };
-        Dictionary<string, object?> payload = new(StringComparer.Ordinal)
-        {
-            ["action"] = action,
-            ["cardid"] = ArchidektProviderId.Parse(providerCardId),
-            ["patchId"] = ArchidektContract.StableGuid(
-                "patch",
-                $"{deckId}:{operation.Public.Sequence}:{operation.Public.Kind}:{operation.Public.Subject}").ToString("N"),
-            ["categories"] = ProviderCategories(entry),
-            ["modifications"] = new
-            {
-                quantity = action == "remove" ? 0 : entry.Quantity,
-                companion = false,
-                flippedDefault = false,
-                modifier = ProviderModifier(entry.Finish),
-            },
-        };
-        string? relationId = operation.CurrentEntry?.ProviderRelationId;
-        if (!string.IsNullOrWhiteSpace(relationId))
-        {
-            payload["deckRelationId"] = ArchidektProviderId.Parse(relationId);
-        }
-
-        await decks.SendCardMutationAsync(deckId, payload, budget, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Creates one exact category mutation payload.
-    /// </summary>
-    private static object CategoryPayload(string deckId, RemoteDeckCategory category)
-    {
-        return new
-        {
-            deck = ArchidektProviderId.Parse(deckId),
-            name = category.Name,
-            includedInDeck = category.IncludedInDeck ?? true,
-            includedInPrice = category.IncludedInPrice ?? true,
-            isPremier = category.IsPremier,
-            sortOrder = category.SortOrder,
-        };
     }
 
     /// <summary>
@@ -1119,34 +692,6 @@ internal sealed class ArchidektOperationContext : IDisposable
     }
 
     /// <summary>
-    /// Checks every authenticated deck-list page until the exact ID is found or the list ends.
-    /// </summary>
-    private async Task<bool> DeckAppearsInAuthenticatedListingAsync(
-        string deckId,
-        ArchidektOperationBudget budget,
-        CancellationToken cancellationToken)
-    {
-        string? cursor = null;
-        do
-        {
-            RemoteDeckPage page = await decks.ListAsync(
-                cursor,
-                100,
-                budget,
-                cancellationToken).ConfigureAwait(false);
-            if (page.Items.Any(value => string.Equals(value.RemoteId, deckId, StringComparison.Ordinal)))
-            {
-                return true;
-            }
-
-            cursor = page.NextCursor;
-        }
-        while (cursor is not null);
-
-        return false;
-    }
-
-    /// <summary>
     /// Joins owned-deck rows into a folder response because the observed tree omits deck children.
     /// </summary>
     private async Task<RemoteFolderTree> EnrichFolderDecksAsync(
@@ -1216,20 +761,6 @@ internal sealed class ArchidektOperationContext : IDisposable
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
             throw Conflict(reasonCode, "Provider evidence changed after the preview.");
-        }
-    }
-
-    /// <summary>
-    /// Enforces the conservative provider request upper bound before a remote apply begins.
-    /// </summary>
-    private void EnsureRequestBound(int predictedRequests)
-    {
-        if (predictedRequests > maximumRequestsPerOperation)
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "request-limit-exceeded",
-                "The preview exceeds the provider request limit; no remote writes were attempted.");
         }
     }
 
@@ -1392,35 +923,6 @@ internal sealed class ArchidektOperationContext : IDisposable
     }
 
     /// <summary>
-    /// Maps local finish vocabulary to Archidekt's observed modifier names.
-    /// </summary>
-    private static string ProviderModifier(string finish)
-    {
-        return finish switch
-        {
-            "foil" => "Foil",
-            "etched" => "Etched",
-            _ => "Normal",
-        };
-    }
-
-    /// <summary>
-    /// Orders category names with the explicit primary first because Archidekt promotes the first submitted category.
-    /// </summary>
-    private static IReadOnlyList<string> ProviderCategories(RemoteDeckEntry entry)
-    {
-        if (string.IsNullOrWhiteSpace(entry.PrimaryCategoryName))
-        {
-            return entry.CategoryNames;
-        }
-
-        List<string> ordered = [entry.PrimaryCategoryName];
-        ordered.AddRange(entry.CategoryNames.Where(value =>
-            !string.Equals(value, entry.PrimaryCategoryName, StringComparison.OrdinalIgnoreCase)));
-        return ordered;
-    }
-
-    /// <summary>
     /// Maps one safe operation descriptor into a final status row.
     /// </summary>
     private static ArchidektOperationStatus Status(
@@ -1481,65 +983,4 @@ internal sealed class ArchidektOperationContext : IDisposable
             message);
     }
 
-    /// <summary>
-    /// Executes one bounded adapter operation and maps every known failure into the shared result union.
-    /// </summary>
-    private async Task<OperationResult<T>> ExecuteAsync<T>(
-        Func<ArchidektOperationBudget, Task<T>> operation)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        ArchidektOperationBudget budget = new(maximumRequestsPerOperation);
-        return await ExecuteAsync(budget, operation).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Executes one adapter operation against an existing composed-operation budget.
-    /// </summary>
-    private static async Task<OperationResult<T>> ExecuteAsync<T>(
-        ArchidektOperationBudget budget,
-        Func<ArchidektOperationBudget, Task<T>> operation)
-    {
-        ArgumentNullException.ThrowIfNull(budget);
-        ArgumentNullException.ThrowIfNull(operation);
-        try
-        {
-            return new OperationSuccess<T>(await operation(budget).ConfigureAwait(false));
-        }
-        catch (ArchidektProviderException exception)
-        {
-            return exception.Kind switch
-            {
-                ArchidektFailureKind.InvalidInput => new OperationInvalidInput(
-                    exception.ReasonCode,
-                    exception.Message),
-                ArchidektFailureKind.NotFound => new OperationNotFound(
-                    exception.ReasonCode,
-                    exception.Message),
-                ArchidektFailureKind.Conflict => new OperationConflict(
-                    exception.ReasonCode,
-                    exception.Message),
-                ArchidektFailureKind.Unsupported => new OperationUnsupported(
-                    exception.ReasonCode,
-                    exception.Message),
-                ArchidektFailureKind.Unavailable => new OperationUnavailable(
-                    exception.ReasonCode,
-                    exception.Message),
-                _ => new OperationUnavailable(
-                    "provider-unavailable",
-                    "Archidekt could not complete the operation."),
-            };
-        }
-        catch (ArgumentException)
-        {
-            return new OperationInvalidInput(
-                "invalid-archidekt-input",
-                "The Archidekt operation input is invalid.");
-        }
-        catch (InvalidDataException)
-        {
-            return new OperationUnavailable(
-                "baseline-unavailable",
-                "The stored Archidekt synchronization baseline is unavailable.");
-        }
-    }
 }

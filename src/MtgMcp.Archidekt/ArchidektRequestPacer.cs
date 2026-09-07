@@ -33,6 +33,20 @@ internal sealed class ArchidektOperationBudget
     internal int RequestCount => Volatile.Read(ref requestCount);
 
     /// <summary>
+    /// Rejects a planned total that would exceed this operation's request ceiling before a remote write starts.
+    /// </summary>
+    internal void EnsureRequestBound(int predictedRequests)
+    {
+        if (predictedRequests > maximumRequests)
+        {
+            throw new ArchidektProviderException(
+                ArchidektFailureKind.InvalidInput,
+                "request-limit-exceeded",
+                "The preview exceeds the provider request limit; no remote writes were attempted.");
+        }
+    }
+
+    /// <summary>
     /// Reserves one request start or fails before another provider call can begin.
     /// </summary>
     internal void Reserve()

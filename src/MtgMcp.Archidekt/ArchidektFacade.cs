@@ -35,7 +35,7 @@ public sealed class ArchidektService : IDisposable
     private ArchidektService(ArchidektOperationContext context)
     {
         this.context = context;
-        decks = new ArchidektDeckOperations(context);
+        decks = context.DeckOperations;
         folders = new ArchidektFolderOperations(context);
         snapshots = new ArchidektSnapshotOperations(context);
     }
@@ -242,103 +242,6 @@ public sealed class ArchidektService : IDisposable
     public void Dispose()
     {
         context.Dispose();
-    }
-}
-
-/// <summary>
-/// Owns Archidekt deck reads, guarded writes, and primitive remote apply workflows.
-/// </summary>
-internal sealed class ArchidektDeckOperations
-{
-    /// <summary>Stores the shared transport and request-budget context.</summary>
-    private readonly ArchidektOperationContext context;
-
-    /// <summary>Creates deck operations around one shared context.</summary>
-    internal ArchidektDeckOperations(ArchidektOperationContext context)
-    {
-        this.context = context;
-    }
-
-    /// <summary>Lists one bounded authenticated deck page.</summary>
-    internal Task<OperationResult<RemoteDeckPage>> ListAsync(
-        string? cursor,
-        int pageSize,
-        CancellationToken cancellationToken)
-    {
-        return context.ListDecksAsync(cursor, pageSize, cancellationToken);
-    }
-
-    /// <summary>Lists one deck page under a caller-owned composed-operation budget.</summary>
-    internal Task<OperationResult<RemoteDeckPage>> ListAsync(
-        string? cursor,
-        int pageSize,
-        ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken)
-    {
-        return context.ListDecksAsync(cursor, pageSize, operationScope, cancellationToken);
-    }
-
-    /// <summary>Gets one fresh public or authenticated deck observation.</summary>
-    internal Task<OperationResult<RemoteDeckSnapshot>> GetAsync(
-        string deckId,
-        CancellationToken cancellationToken)
-    {
-        return context.GetDeckAsync(deckId, cancellationToken);
-    }
-
-    /// <summary>Gets one remote deck under a caller-owned composed-operation budget.</summary>
-    internal Task<OperationResult<RemoteDeckSnapshot>> GetAsync(
-        string deckId,
-        ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken)
-    {
-        return context.GetDeckAsync(deckId, operationScope, cancellationToken);
-    }
-
-    /// <summary>Creates and verifies one private-by-default remote deck.</summary>
-    internal Task<OperationResult<RemoteDeckSnapshot>> CreateAsync(
-        ArchidektDeckCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        return context.CreateDeckAsync(request, cancellationToken);
-    }
-
-    /// <summary>Deletes one unchanged exact remote deck and verifies absence.</summary>
-    internal Task<OperationResult<ArchidektApplyResult>> DeleteAsync(
-        ArchidektDeckDeleteRequest request,
-        CancellationToken cancellationToken)
-    {
-        return context.DeleteDeckAsync(request, cancellationToken);
-    }
-
-    /// <summary>Applies one caller-previewed remote target under an operation-local budget.</summary>
-    internal Task<OperationResult<ArchidektApplyResult>> ApplyTargetAsync(
-        RemoteDeckSnapshot target,
-        string expectedRemoteFingerprint,
-        string expectedPlanFingerprint,
-        CancellationToken cancellationToken)
-    {
-        return context.ApplyRemoteTargetAsync(
-            target,
-            expectedRemoteFingerprint,
-            expectedPlanFingerprint,
-            cancellationToken);
-    }
-
-    /// <summary>Applies one remote target under a caller-owned composed-operation budget.</summary>
-    internal Task<OperationResult<ArchidektApplyResult>> ApplyTargetAsync(
-        RemoteDeckSnapshot target,
-        string expectedRemoteFingerprint,
-        string expectedPlanFingerprint,
-        ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken)
-    {
-        return context.ApplyRemoteTargetAsync(
-            target,
-            expectedRemoteFingerprint,
-            expectedPlanFingerprint,
-            operationScope,
-            cancellationToken);
     }
 }
 
