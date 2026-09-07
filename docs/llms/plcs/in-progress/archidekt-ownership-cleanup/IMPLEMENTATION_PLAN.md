@@ -64,6 +64,12 @@ create avoidable merge risk.
 - Update test construction to use the session and named transports directly.
 - Exit: no provider route remains in a shared type; focused tests preserve the
   current request sequence and failures.
+- Result (2026-09-07): Complete. ArchidektSession now owns shared HTTP,
+  authentication, pacing, retries, request execution, and client disposal.
+  Deck, folder, and snapshot transport files own their routes. The old
+  ArchidektTransportContext and forwarding file are gone. The offline Archidekt
+  and App projects passed 84 and 107 tests, `task lint` passed, and the phase audit
+  found no changes to make after its two small clarity fixes.
 
 ## Phase 3: Move Deck Workflows
 

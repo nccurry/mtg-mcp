@@ -756,8 +756,8 @@ public sealed class ArchidektServiceTests
         {
             BaseAddress = options.BaseAddress,
         };
-        ArchidektTransport transport = new(client, ownsHttpClient: true, options);
-        return new ArchidektService(transport, maximumRequestsPerOperation);
+        ArchidektSession session = new(client, ownsHttpClient: true, options);
+        return new ArchidektService(session, maximumRequestsPerOperation);
     }
 
     /// <summary>

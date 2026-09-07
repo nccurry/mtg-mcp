@@ -25,9 +25,9 @@ public sealed class ArchidektService : IDisposable
     {
     }
 
-    /// <summary>Creates a deterministic service over an injected transport.</summary>
-    internal ArchidektService(ArchidektTransport transport, int maximumRequestsPerOperation)
-        : this(new ArchidektOperationContext(transport, maximumRequestsPerOperation))
+    /// <summary>Creates a deterministic service over an injected provider session.</summary>
+    internal ArchidektService(ArchidektSession session, int maximumRequestsPerOperation)
+        : this(new ArchidektOperationContext(session, maximumRequestsPerOperation))
     {
     }
 

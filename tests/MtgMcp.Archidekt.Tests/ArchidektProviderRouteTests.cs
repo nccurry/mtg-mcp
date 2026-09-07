@@ -4,9 +4,9 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.Archidekt.Tests;
 
 /// <summary>
-/// Exercises exact printing resolution, format mapping, and sanitized transport failure boundaries.
+/// Exercises exact deck-route behavior, format mapping, and sanitized provider failure boundaries.
 /// </summary>
-public sealed class ArchidektTransportTests
+public sealed class ArchidektProviderRouteTests
 {
     /// <summary>
     /// Verifies exact printing resolution accepts numeric IDs and rejects ambiguous name-only candidates.
@@ -20,7 +20,8 @@ public sealed class ArchidektTransportTests
             HttpMethod.Get,
             "api/cards/v2/?name=Island&pageSize=25",
             "{\"results\":[{\"id\":501,\"uid\":\"33333333-3333-3333-3333-333333333333\",\"setCode\":\"dmu\",\"collectorNumber\":\"278\",\"oracleCard\":{\"name\":\"Island\"}}]}");
-        using ArchidektTransport transport = CreateTransport(handler);
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektDeckTransport transport = new(session);
         RemoteDeckEntry exact = new(
             "",
             "",
@@ -50,7 +51,8 @@ public sealed class ArchidektTransportTests
             HttpMethod.Get,
             "api/cards/v2/?name=Island&pageSize=25",
             "[{\"id\":1,\"oracleCard\":{\"name\":\"Island\"}},{\"id\":2,\"oracleCard\":{\"name\":\"Island\"}}]");
-        using ArchidektTransport ambiguousTransport = CreateTransport(ambiguousHandler);
+        using ArchidektSession ambiguousSession = CreateSession(ambiguousHandler);
+        ArchidektDeckTransport ambiguousTransport = new(ambiguousSession);
         RemoteDeckEntry ambiguous = exact with { PrintingId = null, SetCode = null, CollectorNumber = null };
 
         ArchidektProviderException exception = await Assert.ThrowsAsync<ArchidektProviderException>(
@@ -78,10 +80,10 @@ public sealed class ArchidektTransportTests
     [InlineData("oathbreaker", 10)]
     public void MappingHelpers_PreserveSupportedProviderVocabulary(string format, int expectedId)
     {
-        Assert.Equal(expectedId, ArchidektTransport.MapFormatId(format));
-        Assert.Equal(42L, ArchidektTransport.ParseProviderId("42"));
-        Assert.Equal("opaque", ArchidektTransport.ParseProviderId("opaque"));
-        Assert.Null(ArchidektTransport.ParseProviderId(" "));
+        Assert.Equal(expectedId, ArchidektDeckTransport.MapFormatId(format));
+        Assert.Equal(42L, ArchidektProviderId.Parse("42"));
+        Assert.Equal("opaque", ArchidektProviderId.Parse("opaque"));
+        Assert.Null(ArchidektProviderId.Parse(" "));
     }
 
     /// <summary>
@@ -91,7 +93,7 @@ public sealed class ArchidektTransportTests
     public void MappingHelpers_RejectUnsupportedFormats()
     {
         ArchidektProviderException exception = Assert.Throws<ArchidektProviderException>(
-            () => ArchidektTransport.MapFormatId("custom"));
+            () => ArchidektDeckTransport.MapFormatId("custom"));
         Assert.Equal("unsupported-deck-format", exception.ReasonCode);
     }
 
@@ -170,9 +172,9 @@ public sealed class ArchidektTransportTests
     }
 
     /// <summary>
-    /// Creates an injected transport with zero-delay safety bounds.
+    /// Creates an injected provider session with zero-delay safety bounds.
     /// </summary>
-    private static ArchidektTransport CreateTransport(
+    private static ArchidektSession CreateSession(
         ArchidektTestHttpHandler handler,
         string? username = "user",
         string? password = "secret")
@@ -183,21 +185,21 @@ public sealed class ArchidektTransportTests
             MinimumRequestInterval = TimeSpan.Zero,
             MaximumRequestsPerWindow = 1_000,
         };
-        return new ArchidektTransport(
+        return new ArchidektSession(
             new HttpClient(handler) { BaseAddress = options.BaseAddress },
             ownsHttpClient: true,
             options);
     }
 
     /// <summary>
-    /// Creates a provider service over an injected transport.
+    /// Creates a provider service over an injected session.
     /// </summary>
     private static ArchidektService CreateService(
         ArchidektTestHttpHandler handler,
         string? username = "user",
         string? password = "secret")
     {
-        ArchidektTransport transport = CreateTransport(handler, username, password);
-        return new ArchidektService(transport, 150);
+        ArchidektSession session = CreateSession(handler, username, password);
+        return new ArchidektService(session, 150);
     }
 }

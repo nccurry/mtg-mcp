@@ -77,9 +77,11 @@ ownership cleanup, not a behavior change.
 | 2026-09-07 | Parent baseline | Passed | The full non-live Task suite, coverage gates, and MCP surface report passed before this child was planned. |
 | 2026-09-07 | Independent design review | Findings fixed | The review clarified that a session charges, but does not own, the public operation budget; added client-ownership disposal coverage; and made the temporary Phase 2 composition boundary explicit. |
 | 2026-09-07 | Phase 1 named-owner tests | Passed | Seven direct fake-HTTP tests cover deck, folder, and snapshot route and workflow owners plus owned-versus-borrowed client disposal. The offline Archidekt project passed 84 tests and `task lint` passed. |
+| 2026-09-07 | Phase 2 session and route split | Passed | ArchidektSession now owns shared HTTP, authentication, pacing, retries, and client disposal. Named transport files own provider routes. The offline Archidekt and App projects passed 84 and 107 tests; `task lint` passed. |
 
 ## Completion Notes
 
-Phase 1 complete. Direct named-owner tests now hold the current request,
-authentication, read-back, and client-disposal behavior in place before
-production ownership moves begin.
+Phases 1 and 2 complete. Direct named-owner tests hold current behavior in
+place. Shared HTTP work and provider routes now have named homes. Deck,
+folder, and snapshot workflows remain in the operation context until the next
+two phases move them.

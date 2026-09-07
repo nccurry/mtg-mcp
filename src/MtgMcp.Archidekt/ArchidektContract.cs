@@ -46,6 +46,23 @@ internal static class ArchidektContract
     }
 
     /// <summary>
+    /// Normalizes the explicit visibility values accepted by Archidekt.
+    /// </summary>
+    internal static string NormalizeVisibility(string value)
+    {
+        return Required(value, nameof(value)).ToLowerInvariant() switch
+        {
+            "private" => "private",
+            "unlisted" => "unlisted",
+            "public" => "public",
+            _ => throw new ArchidektProviderException(
+                ArchidektFailureKind.InvalidInput,
+                "invalid-visibility",
+                "Archidekt visibility must be private, unlisted, or public."),
+        };
+    }
+
+    /// <summary>
     /// Computes a lowercase SHA-256 checksum over exact UTF-8 text.
     /// </summary>
     internal static string Hash(string value)

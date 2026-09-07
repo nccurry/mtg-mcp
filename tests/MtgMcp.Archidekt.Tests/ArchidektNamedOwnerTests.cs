@@ -19,8 +19,8 @@ public sealed class ArchidektNamedOwnerTests
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", "{}", HttpStatusCode.Unauthorized);
         AddLogin(handler, "second-token");
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", ArchidektTestPayloads.DeckList);
-        using ArchidektTransportContext context = CreateTransportContext(handler);
-        ArchidektDeckTransport decks = new(context);
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektDeckTransport decks = new(session);
 
         RemoteDeckPage page = await decks.ListAsync(
             cursor: null,
@@ -43,8 +43,8 @@ public sealed class ArchidektNamedOwnerTests
         ArchidektTestHttpHandler handler = new();
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/folderTree/", ArchidektTestPayloads.FolderTree);
-        using ArchidektTransportContext context = CreateTransportContext(handler);
-        ArchidektFolderTransport folders = new(context);
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektFolderTransport folders = new(session);
 
         RemoteFolderTree tree = await folders.ListAsync(
             new ArchidektOperationBudget(10),
@@ -65,8 +65,8 @@ public sealed class ArchidektNamedOwnerTests
         ArchidektTestHttpHandler handler = new();
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/42/snapshots/", ArchidektTestPayloads.SnapshotList);
-        using ArchidektTransportContext context = CreateTransportContext(handler);
-        ArchidektSnapshotTransport snapshots = new(context);
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektSnapshotTransport snapshots = new(session);
 
         RemoteNamedSnapshotPage page = await snapshots.ListAsync(
             "42",
@@ -87,7 +87,7 @@ public sealed class ArchidektNamedOwnerTests
     {
         ArchidektTestHttpHandler handler = new();
         handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
-        using ArchidektOperationContext context = new(CreateTransport(handler, username: null, password: null), 150);
+        using ArchidektOperationContext context = new(CreateSession(handler, username: null, password: null), 150);
         ArchidektDeckOperations decks = new(context);
 
         RemoteDeckSnapshot deck = Success(await decks.GetAsync(
@@ -110,7 +110,7 @@ public sealed class ArchidektNamedOwnerTests
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/folderTree/", ArchidektTestPayloads.FolderTree);
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", ArchidektTestPayloads.DeckList);
-        using ArchidektOperationContext context = new(CreateTransport(handler), 150);
+        using ArchidektOperationContext context = new(CreateSession(handler), 150);
         ArchidektFolderOperations folders = new(context);
 
         RemoteFolderTree tree = Success(await folders.ListAsync(TestContext.Current.CancellationToken));
@@ -131,7 +131,7 @@ public sealed class ArchidektNamedOwnerTests
         ArchidektTestHttpHandler handler = new();
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/snapshots/77/", ArchidektTestPayloads.Snapshot);
-        using ArchidektOperationContext context = new(CreateTransport(handler), 150);
+        using ArchidektOperationContext context = new(CreateSession(handler), 150);
         ArchidektSnapshotOperations snapshots = new(context);
 
         RemoteNamedSnapshot snapshot = Success(await snapshots.GetAsync(
@@ -147,14 +147,14 @@ public sealed class ArchidektNamedOwnerTests
     }
 
     /// <summary>
-    /// Verifies the shared transport context disposes only HTTP clients it owns.
+    /// Verifies the shared session disposes only HTTP clients it owns.
     /// </summary>
     [Fact]
-    public async Task TransportContext_DisposesOnlyOwnedHttpClients()
+    public async Task Session_DisposesOnlyOwnedHttpClients()
     {
         ArchidektTestHttpHandler ownedHandler = new();
         HttpClient ownedClient = CreateHttpClient(ownedHandler);
-        using (ArchidektTransportContext context = new(ownedClient, ownsHttpClient: true, CreateOptions()))
+        using (ArchidektSession session = new(ownedClient, ownsHttpClient: true, CreateOptions()))
         {
         }
 
@@ -162,7 +162,7 @@ public sealed class ArchidektNamedOwnerTests
 
         ArchidektTestHttpHandler borrowedHandler = new();
         using HttpClient borrowedClient = CreateHttpClient(borrowedHandler);
-        using (ArchidektTransportContext context = new(borrowedClient, ownsHttpClient: false, CreateOptions()))
+        using (ArchidektSession session = new(borrowedClient, ownsHttpClient: false, CreateOptions()))
         {
         }
 
@@ -183,27 +183,15 @@ public sealed class ArchidektNamedOwnerTests
     }
 
     /// <summary>
-    /// Creates a current shared transport context over deterministic fake HTTP.
+    /// Creates a shared provider session over deterministic fake HTTP.
     /// </summary>
-    private static ArchidektTransportContext CreateTransportContext(
+    private static ArchidektSession CreateSession(
         ArchidektTestHttpHandler handler,
         string? username = "user",
         string? password = "secret")
     {
         ArchidektOptions options = CreateOptions(username, password);
-        return new ArchidektTransportContext(CreateHttpClient(handler), ownsHttpClient: true, options);
-    }
-
-    /// <summary>
-    /// Creates the current provider transport facade over deterministic fake HTTP.
-    /// </summary>
-    private static ArchidektTransport CreateTransport(
-        ArchidektTestHttpHandler handler,
-        string? username = "user",
-        string? password = "secret")
-    {
-        ArchidektOptions options = CreateOptions(username, password);
-        return new ArchidektTransport(CreateHttpClient(handler), ownsHttpClient: true, options);
+        return new ArchidektSession(CreateHttpClient(handler), ownsHttpClient: true, options);
     }
 
     /// <summary>

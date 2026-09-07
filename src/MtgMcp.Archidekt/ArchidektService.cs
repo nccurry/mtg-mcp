@@ -3,14 +3,29 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.Archidekt;
 
 /// <summary>
-/// Exposes guarded Archidekt evidence and workflow operations over the isolated provider transport.
+/// Exposes guarded Archidekt evidence and workflow operations over named provider routes.
 /// </summary>
 internal sealed class ArchidektOperationContext : IDisposable
 {
     /// <summary>
-    /// Owns every credential, HTTP, pacing, retry, and provider-route concern.
+    /// Owns shared credential, HTTP, pacing, retry, and client-lifetime state.
     /// </summary>
-    private readonly ArchidektTransport transport;
+    private readonly ArchidektSession session;
+
+    /// <summary>
+    /// Provides deck provider routes to the current workflow methods.
+    /// </summary>
+    private readonly ArchidektDeckTransport decks;
+
+    /// <summary>
+    /// Provides folder provider routes to the current workflow methods.
+    /// </summary>
+    private readonly ArchidektFolderTransport folders;
+
+    /// <summary>
+    /// Provides snapshot provider routes to the current workflow methods.
+    /// </summary>
+    private readonly ArchidektSnapshotTransport snapshots;
 
     /// <summary>
     /// Stores the hard provider request ceiling applied independently to every public call.
@@ -24,17 +39,23 @@ internal sealed class ArchidektOperationContext : IDisposable
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
-        transport = new ArchidektTransport(options, packageVersion);
+        session = new ArchidektSession(options, packageVersion);
+        decks = new ArchidektDeckTransport(session);
+        folders = new ArchidektFolderTransport(session);
+        snapshots = new ArchidektSnapshotTransport(session);
         maximumRequestsPerOperation = options.MaximumRequestsPerOperation;
     }
 
     /// <summary>
-    /// Creates a deterministic service over an injected transport.
+    /// Creates a deterministic service over an injected provider session.
     /// </summary>
-    internal ArchidektOperationContext(ArchidektTransport transport, int maximumRequestsPerOperation)
+    internal ArchidektOperationContext(ArchidektSession session, int maximumRequestsPerOperation)
     {
-        this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        this.session = session ?? throw new ArgumentNullException(nameof(session));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRequestsPerOperation);
+        decks = new ArchidektDeckTransport(session);
+        folders = new ArchidektFolderTransport(session);
+        snapshots = new ArchidektSnapshotTransport(session);
         this.maximumRequestsPerOperation = maximumRequestsPerOperation;
     }
 
@@ -43,7 +64,7 @@ internal sealed class ArchidektOperationContext : IDisposable
     /// </summary>
     public OperationResult<ArchidektAuthStatus> GetAuthStatus()
     {
-        return new OperationSuccess<ArchidektAuthStatus>(transport.GetAuthStatus());
+        return new OperationSuccess<ArchidektAuthStatus>(session.GetAuthStatus());
     }
 
     /// <summary>
@@ -77,7 +98,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArgumentNullException.ThrowIfNull(operationScope);
         return ExecuteAsync(
             operationScope.Budget,
-            budget => transport.ListDecksAsync(cursor, pageSize, budget, cancellationToken));
+            budget => decks.ListAsync(cursor, pageSize, budget, cancellationToken));
     }
 
     /// <summary>
@@ -105,7 +126,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             {
                 try
                 {
-                    return await transport.GetDeckAsync(
+                    return await decks.GetAsync(
                         deckId,
                         requireAuthentication: false,
                         budget,
@@ -117,7 +138,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                         "provider-request-rejected" or
                         "provider-entity-not-found")
                 {
-                    return await transport.GetDeckAsync(
+                    return await decks.GetAsync(
                         deckId,
                         requireAuthentication: true,
                         budget,
@@ -136,11 +157,11 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteDeckSnapshot created = await transport.CreateDeckAsync(
+                RemoteDeckSnapshot created = await decks.CreateAsync(
                     request,
                     budget,
                     cancellationToken).ConfigureAwait(false);
-                RemoteDeckSnapshot verified = await transport.GetDeckAsync(
+                RemoteDeckSnapshot verified = await decks.GetAsync(
                     created.RemoteId,
                     requireAuthentication: true,
                     budget,
@@ -168,7 +189,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             async budget =>
             {
                 RequireConfirmation(request.Confirmation, $"delete {request.DeckId}");
-                RemoteDeckSnapshot current = await transport.GetDeckAsync(
+                RemoteDeckSnapshot current = await decks.GetAsync(
                     request.DeckId,
                     requireAuthentication: true,
                     budget,
@@ -179,7 +200,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     "remote-deck-changed");
                 try
                 {
-                    await transport.DeleteDeckAsync(
+                    await decks.DeleteAsync(
                         request.DeckId,
                         budget,
                         cancellationToken).ConfigureAwait(false);
@@ -228,7 +249,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteFolderTree tree = await transport.ListFoldersAsync(
+                RemoteFolderTree tree = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 return await EnrichFolderDecksAsync(tree, budget, cancellationToken)
@@ -246,7 +267,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteFolderTree tree = await transport.GetFolderAsync(
+                RemoteFolderTree tree = await folders.GetAsync(
                     folderId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -265,15 +286,15 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteFolderTree before = await transport.ListFoldersAsync(
+                RemoteFolderTree before = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 string parentFolderId = ResolveProviderParent(before, request.ParentFolderId);
-                string createdFolderId = await transport.CreateFolderAsync(
+                string createdFolderId = await folders.CreateAsync(
                     request with { ParentFolderId = parentFolderId },
                     budget,
                     cancellationToken).ConfigureAwait(false);
-                RemoteFolderTree verified = await transport.ListFoldersAsync(
+                RemoteFolderTree verified = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 RemoteFolderRecord? match = verified.Items.FirstOrDefault(value =>
@@ -294,7 +315,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteFolderTree before = await transport.ListFoldersAsync(
+                RemoteFolderTree before = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 before = await EnrichFolderDecksAsync(before, budget, cancellationToken)
@@ -321,15 +342,15 @@ internal sealed class ArchidektOperationContext : IDisposable
                 {
                     name,
                     @private = visibility == "private",
-                    parentFolder = ArchidektTransport.ParseProviderId(
+                    parentFolder = ArchidektProviderId.Parse(
                         request.UpdateParent ? requestedParent : current.ParentFolderId),
                 };
-                await transport.SendFolderUpdateAsync(
+                await folders.SendUpdateAsync(
                     request.FolderId,
                     payload,
                     budget,
                     cancellationToken).ConfigureAwait(false);
-                RemoteFolderTree after = await transport.ListFoldersAsync(
+                RemoteFolderTree after = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 RemoteFolderRecord updated = FindFolder(after, request.FolderId);
@@ -359,7 +380,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteFolderTree before = await transport.ListFoldersAsync(
+                RemoteFolderTree before = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 before = await EnrichFolderDecksAsync(before, budget, cancellationToken)
@@ -380,7 +401,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                         continue;
                     }
 
-                    RemoteDeckSnapshot deck = await transport.GetDeckAsync(
+                    RemoteDeckSnapshot deck = await decks.GetAsync(
                         item.Id,
                         requireAuthentication: true,
                         budget,
@@ -393,16 +414,16 @@ internal sealed class ArchidektOperationContext : IDisposable
                     items = items.Select(value => new
                     {
                         type = value.Kind,
-                        id = ArchidektTransport.ParseProviderId(value.Id),
+                        id = ArchidektProviderId.Parse(value.Id),
                         patch = new
                         {
-                            parentFolder = ArchidektTransport.ParseProviderId(destinationFolderId),
+                            parentFolder = ArchidektProviderId.Parse(destinationFolderId),
                         },
                     }),
                 };
-                await transport.SendFolderMoveAsync(payload, budget, cancellationToken)
+                await folders.SendMoveAsync(payload, budget, cancellationToken)
                     .ConfigureAwait(false);
-                RemoteFolderTree after = await transport.ListFoldersAsync(
+                RemoteFolderTree after = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 List<ArchidektFolderMoveStatus> statuses = [];
@@ -410,7 +431,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                 {
                     string? finalParent = item.Kind == "folder"
                         ? FindFolder(after, item.Id).ParentFolderId
-                        : (await transport.GetDeckAsync(
+                        : (await decks.GetAsync(
                             item.Id,
                             requireAuthentication: true,
                             budget,
@@ -444,7 +465,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             async budget =>
             {
                 RequireConfirmation(request.Confirmation, $"delete folder {request.FolderId}");
-                RemoteFolderTree before = await transport.ListFoldersAsync(
+                RemoteFolderTree before = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 before = await EnrichFolderDecksAsync(before, budget, cancellationToken)
@@ -471,7 +492,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     "Delete one verified empty folder.");
                 try
                 {
-                    await transport.SendFolderDeleteAsync(
+                    await folders.SendDeleteAsync(
                         new
                         {
                             items = new[]
@@ -479,7 +500,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                                 new
                                 {
                                     type = "folder",
-                                    id = ArchidektTransport.ParseProviderId(request.FolderId),
+                                    id = ArchidektProviderId.Parse(request.FolderId),
                                 },
                             },
                         },
@@ -492,7 +513,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     return PartialResult(request.FolderId, operation, exception.Message);
                 }
 
-                RemoteFolderTree after = await transport.ListFoldersAsync(
+                RemoteFolderTree after = await folders.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 if (after.Items.Any(value =>
@@ -515,7 +536,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         CancellationToken cancellationToken)
     {
         return ExecuteAsync(
-            budget => transport.ListSnapshotsAsync(deckId, budget, cancellationToken));
+            budget => snapshots.ListAsync(deckId, budget, cancellationToken));
     }
 
     /// <summary>
@@ -527,7 +548,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         CancellationToken cancellationToken)
     {
         return ExecuteAsync(
-            budget => transport.GetSnapshotAsync(deckId, snapshotId, budget, cancellationToken));
+            budget => snapshots.GetAsync(deckId, snapshotId, budget, cancellationToken));
     }
 
     /// <summary>
@@ -540,7 +561,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteDeckSnapshot deck = await transport.GetDeckAsync(
+                RemoteDeckSnapshot deck = await decks.GetAsync(
                     request.DeckId,
                     requireAuthentication: true,
                     budget,
@@ -550,12 +571,12 @@ internal sealed class ArchidektOperationContext : IDisposable
                     deck.RemoteFingerprint,
                     "remote-deck-changed");
                 string name = ArchidektContract.Required(request.Name, nameof(request.Name));
-                await transport.SendSnapshotCreateAsync(
+                await snapshots.SendCreateAsync(
                     request.DeckId,
                     new { name, description = ArchidektContract.Optional(request.Description) },
                     budget,
                     cancellationToken).ConfigureAwait(false);
-                RemoteNamedSnapshotPage after = await transport.ListSnapshotsAsync(
+                RemoteNamedSnapshotPage after = await snapshots.ListAsync(
                     request.DeckId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -580,7 +601,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         return ExecuteAsync(
             async budget =>
             {
-                RemoteNamedSnapshot current = await transport.GetSnapshotAsync(
+                RemoteNamedSnapshot current = await snapshots.GetAsync(
                     request.DeckId,
                     request.SnapshotId,
                     budget,
@@ -590,12 +611,12 @@ internal sealed class ArchidektOperationContext : IDisposable
                     current.Summary.Checksum,
                     "snapshot-changed");
                 string name = ArchidektContract.Required(request.Name, nameof(request.Name));
-                await transport.SendSnapshotUpdateAsync(
+                await snapshots.SendUpdateAsync(
                     request.SnapshotId,
                     new { name },
                     budget,
                     cancellationToken).ConfigureAwait(false);
-                RemoteNamedSnapshot updated = await transport.GetSnapshotAsync(
+                RemoteNamedSnapshot updated = await snapshots.GetAsync(
                     request.DeckId,
                     request.SnapshotId,
                     budget,
@@ -622,7 +643,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             async budget =>
             {
                 RequireConfirmation(request.Confirmation, $"delete snapshot {request.SnapshotId}");
-                RemoteNamedSnapshot current = await transport.GetSnapshotAsync(
+                RemoteNamedSnapshot current = await snapshots.GetAsync(
                     request.DeckId,
                     request.SnapshotId,
                     budget,
@@ -638,7 +659,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     "Delete one exact named snapshot.");
                 try
                 {
-                    await transport.SendSnapshotDeleteAsync(
+                    await snapshots.SendDeleteAsync(
                         request.SnapshotId,
                         budget,
                         cancellationToken).ConfigureAwait(false);
@@ -649,7 +670,7 @@ internal sealed class ArchidektOperationContext : IDisposable
                     return PartialResult(request.DeckId, operation, exception.Message);
                 }
 
-                RemoteNamedSnapshotPage after = await transport.ListSnapshotsAsync(
+                RemoteNamedSnapshotPage after = await snapshots.ListAsync(
                     request.DeckId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -774,7 +795,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             operationScope.Budget,
             async budget =>
             {
-                RemoteDeckSnapshot current = await transport.GetDeckAsync(
+                RemoteDeckSnapshot current = await decks.GetAsync(
                     target.RemoteId,
                     requireAuthentication: true,
                     budget,
@@ -800,7 +821,7 @@ internal sealed class ArchidektOperationContext : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        transport.Dispose();
+        session.Dispose();
     }
 
     /// <summary>
@@ -852,7 +873,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             }
         }
 
-        RemoteDeckSnapshot verified = await transport.GetDeckAsync(
+        RemoteDeckSnapshot verified = await decks.GetAsync(
             current.RemoteId,
             requireAuthentication: true,
             budget,
@@ -892,36 +913,35 @@ internal sealed class ArchidektOperationContext : IDisposable
         switch (operation.Public.Kind)
         {
             case "metadata-update":
-                await transport.SendDeckMetadataAsync(
+                await decks.SendMetadataAsync(
                     deckId,
                     new
                     {
                         name = target.Name,
                         description = target.Description,
-                        deckFormat = ArchidektTransport.MapFormatId(target.Format),
+                        deckFormat = ArchidektDeckTransport.MapFormatId(target.Format),
                         @private = target.Visibility == "private",
                         unlisted = target.Visibility == "unlisted",
-                        parentFolder = ArchidektTransport.ParseProviderId(target.ParentFolderId),
+                        parentFolder = ArchidektProviderId.Parse(target.ParentFolderId),
                     },
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 break;
             case "category-create":
-                await transport.SendCategoryCreateAsync(
-                    deckId,
+                await decks.SendCategoryCreateAsync(
                     CategoryPayload(deckId, operation.TargetCategory!),
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 break;
             case "category-update":
-                await transport.SendCategoryUpdateAsync(
+                await decks.SendCategoryUpdateAsync(
                     operation.CurrentCategory!.ProviderCategoryId,
                     CategoryPayload(deckId, operation.TargetCategory!),
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 break;
             case "category-delete":
-                await transport.SendCategoryDeleteAsync(
+                await decks.SendCategoryDeleteAsync(
                     operation.CurrentCategory!.ProviderCategoryId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -961,7 +981,7 @@ internal sealed class ArchidektOperationContext : IDisposable
             string key = $"{entry.PrintingId}:{entry.SetCode}:{entry.CollectorNumber}:{entry.CardName}";
             if (!resolvedCards.TryGetValue(key, out providerCardId!))
             {
-                providerCardId = await transport.ResolveCardIdAsync(
+                providerCardId = await decks.ResolveCardIdAsync(
                     entry,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -979,7 +999,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         Dictionary<string, object?> payload = new(StringComparer.Ordinal)
         {
             ["action"] = action,
-            ["cardid"] = ArchidektTransport.ParseProviderId(providerCardId),
+            ["cardid"] = ArchidektProviderId.Parse(providerCardId),
             ["patchId"] = ArchidektContract.StableGuid(
                 "patch",
                 $"{deckId}:{operation.Public.Sequence}:{operation.Public.Kind}:{operation.Public.Subject}").ToString("N"),
@@ -995,10 +1015,10 @@ internal sealed class ArchidektOperationContext : IDisposable
         string? relationId = operation.CurrentEntry?.ProviderRelationId;
         if (!string.IsNullOrWhiteSpace(relationId))
         {
-            payload["deckRelationId"] = ArchidektTransport.ParseProviderId(relationId);
+            payload["deckRelationId"] = ArchidektProviderId.Parse(relationId);
         }
 
-        await transport.SendCardMutationAsync(deckId, payload, budget, cancellationToken)
+        await decks.SendCardMutationAsync(deckId, payload, budget, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -1009,7 +1029,7 @@ internal sealed class ArchidektOperationContext : IDisposable
     {
         return new
         {
-            deck = ArchidektTransport.ParseProviderId(deckId),
+            deck = ArchidektProviderId.Parse(deckId),
             name = category.Name,
             includedInDeck = category.IncludedInDeck ?? true,
             includedInPrice = category.IncludedInPrice ?? true,
@@ -1027,12 +1047,12 @@ internal sealed class ArchidektOperationContext : IDisposable
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        RemoteDeckSnapshot current = await transport.GetDeckAsync(
+        RemoteDeckSnapshot current = await decks.GetAsync(
             deckId,
             requireAuthentication: true,
             budget,
             cancellationToken).ConfigureAwait(false);
-        RemoteNamedSnapshot snapshot = await transport.GetSnapshotAsync(
+        RemoteNamedSnapshot snapshot = await snapshots.GetAsync(
             deckId,
             snapshotId,
             budget,
@@ -1109,7 +1129,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         string? cursor = null;
         do
         {
-            RemoteDeckPage page = await transport.ListDecksAsync(
+            RemoteDeckPage page = await decks.ListAsync(
                 cursor,
                 100,
                 budget,
@@ -1138,7 +1158,7 @@ internal sealed class ArchidektOperationContext : IDisposable
         string? cursor = null;
         do
         {
-            RemoteDeckPage page = await transport.ListDecksAsync(
+            RemoteDeckPage page = await this.decks.ListAsync(
                 cursor,
                 100,
                 budget,

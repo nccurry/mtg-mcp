@@ -380,7 +380,7 @@ public sealed class ArchidektCoordinatorTests
         };
         HttpClient client = new(handler) { BaseAddress = options.BaseAddress };
         return new ArchidektService(
-            new ArchidektTransport(client, ownsHttpClient: true, options),
+            new ArchidektSession(client, ownsHttpClient: true, options),
             options.MaximumRequestsPerOperation);
     }
 
