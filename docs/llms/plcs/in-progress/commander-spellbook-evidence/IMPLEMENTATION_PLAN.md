@@ -2,14 +2,14 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: In progress
 - PLC packet: [README.md](README.md)
-- Parent PLC: [Evidence-First Deckbuilding Evolution](../evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-3-commander-spellbook-evidence)
+- Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-3-commander-spellbook-evidence)
 - Owner: mtg-mcp
 - Last updated: 2026-09-07
 - Related requirements: [SRD.md](SRD.md)
 - Related design: [SADD.md](SADD.md)
-- Implementation authorized: No
+- Implementation authorized: Yes
 
 ## Strategy
 
@@ -32,16 +32,21 @@ public surface and one cache design.
 
 - Create `src/MtgMcp.Spellbook` and `tests/MtgMcp.Spellbook.Tests`.
 - Add only a Core project reference and the adapter-owned SQLite package.
-- Capture the official OpenAPI document in a checked-in fixture. Record its
-  version, byte count, SHA-256, date, and three chosen routes.
-- Add `SpellbookContract`, `SpellbookModels`, `SpellbookDatabase`,
-  `SpellbookCache`, `SpellbookRequestPacer`, `SpellbookTransport`, and
-  `SpellbookService` as separate concrete owners.
+- Capture a small checked-in contract snapshot from the official OpenAPI
+  schema. Record v6.3.3, the three chosen routes, their inputs, the deck
+  request fields, the paginated deck response layout, its checksum, and the
+  review date. Do not add a copy of the source's whole schema.
+- Add `SpellbookContract`, small request and evidence records in their own
+  files, `SpellbookDatabase`, `SpellbookCache`, `SpellbookRequestPacer`,
+  `SpellbookTransport`, and `SpellbookService` as separate concrete owners.
 - Use a fake `HttpMessageHandler`, a temporary SQLite database, and a
   controllable `TimeProvider` in normal tests.
 - Add response, error, cache, pace, cancellation, size, and redaction cases.
 - Prove that a raw query with quotes, whitespace, and parentheses is encoded
-  once without semantic rewriting.
+  once without semantic rewriting; reject whitespace-only input and always
+  send the chosen explicit page defaults.
+- Add the one fixed transport timeout. Prove that it becomes unavailable while
+  caller cancellation still propagates.
 - Prove cache identity includes the current contract checksum, so a contract
   change misses rather than relabeling an old response as current.
 - Prove two separately constructed pacer/database owners reserve starts with
@@ -52,7 +57,9 @@ Exit criteria:
 
 - Search, get, and find-my-combos work through fake HTTP.
 - No test uses a network connection.
-- The cache has no raw query or deck content.
+- The cache has no separate raw request or local-path fields, and tests cover
+  the documented provider-paging-link limitation.
+- Every success shows the current sent request without putting it in the cache.
 - One tool operation maps to one or zero upstream calls.
 - The adapter project clears its 90 percent coverage gate.
 
@@ -63,6 +70,8 @@ Exit criteria:
 - Add `CapabilityToolset.Spellbook` after `Playgroup` in the stable registry.
 - Keep `spellbook` out of the default profile.
 - Add the adapter project reference to `MtgMcp.App`.
+- Update the scoped App instructions so `spellbook` is an allowed stable
+  toolset alongside the existing provider toolsets.
 - Add the cache time setting to the configuration loader, public configuration
   status, capability resource, and documented configuration.
 - Add the service and deck-store composition to `FoundationHost`.
@@ -86,8 +95,9 @@ Exit criteria:
 
 ## Phase 3: Finish and Prove the Change
 
-- Update `docs/adapters.md`, `docs/toolsets.md`, the main README, and relevant
-  configuration examples.
+- Update `docs/adapters.md`, `docs/toolsets.md`, `docs/rewrite-guide.md`, the
+  main README, and relevant configuration examples so the documented stable
+  module and toolset lists match the code.
 - Add one live, read-only, bounded variant lookup with `Category=Live`.
 - Run focused adapter, App, architecture, and E2E tests first.
 - Run `task lint`, `task test`, `task coverage`, `task surface:report`, and

@@ -4,7 +4,7 @@
 
 | ID | Type | Proposed location | Purpose | Update rule |
 | --- | --- | --- | --- | --- |
-| CSB-FIX-001 | Public OpenAPI JSON | `src/MtgMcp.Spellbook/Fixtures/OpenApi/api-6.3.3.json` | Pins the routes and request shapes used by this adapter. | Fetch from the official schema, record date, byte count, SHA-256, and route inventory together. |
+| CSB-FIX-001 | Public API contract snapshot | `src/MtgMcp.Spellbook/Fixtures/OpenApi/api-6.3.3.json` | Pins only the routes and request shapes used by this adapter. | Review it against the official schema, record its source version, date, SHA-256, and route inventory together. Do not copy the source's whole schema. |
 
 The fixture must include or describe these routes:
 
@@ -19,14 +19,16 @@ POST /find-my-combos
 | ID | Scenario | Expected result |
 | --- | --- | --- |
 | CSB-FIX-002 | Variant search with quotes, whitespace, and parentheses. | The raw query characters are preserved semantically, URL-encoded once, and sent with page controls; source and unknown fields survive. |
+| CSB-FIX-031 | Variant search omits page controls or supplies only whitespace as its query. | Omitted controls send `limit=20`, `offset=0`, and `groupByCombo=true`. A whitespace-only query returns invalid input before HTTP. |
 | CSB-FIX-003 | Variant get for one source ID. | The source path is escaped and the full JSON returns. |
-| CSB-FIX-004 | Deck combo lookup with every source result group. | Group names such as `included`, `includedByChangingCommanders`, and `almostIncluded` remain source-owned. |
+| CSB-FIX-004 | Deck combo lookup with the v6.3.3 paginated wrapper and every source result group. | `results` stays an object, not a list, and keeps `included`, `includedByChangingCommanders`, `almostIncluded`, `almostIncludedByAddingColors`, `almostIncludedByChangingCommanders`, and `almostIncludedByAddingColorsAndChangingCommanders` unchanged. |
 | CSB-FIX-005 | Source 400 response. | The adapter returns invalid input without the body. |
 | CSB-FIX-006 | Source 404 response. | The adapter returns not found without the body. |
 | CSB-FIX-007 | Source 429 with `Retry-After`. | The adapter records a cooldown, sends no retry, and returns unavailable. |
 | CSB-FIX-008 | Source 5xx or network error. | The adapter returns unavailable after one request. |
 | CSB-FIX-009 | Malformed JSON. | The adapter returns unsupported. |
 | CSB-FIX-010 | JSON above 2 MiB. | The adapter returns unavailable before it parses an unbounded value. |
+| CSB-FIX-032 | The fake handler exceeds the fixed transport timeout, then a caller cancels an in-flight request. | The timeout returns unavailable; caller cancellation propagates unchanged. |
 
 ## Cache and Pacing Cases
 
@@ -35,7 +37,7 @@ POST /find-my-combos
 | CSB-FIX-011 | The first successful request. | The cache stores a hash, response JSON, source API version, contract checksum, response checksum, and retrieval time. |
 | CSB-FIX-012 | The same request inside 15 minutes. | The result uses the cache and sends no HTTP request. |
 | CSB-FIX-013 | The same request after 15 minutes. | The old row is removed and one new provider request occurs. |
-| CSB-FIX-014 | Read the cache database after a deck lookup. | No raw card name, query text, deck ID, or local path appears in the cache key columns. |
+| CSB-FIX-014 | Read the cache database after a deck lookup and a search with a source paging URL. | No separate raw request, deck ID, or local path appears in cache columns. The response JSON remains lossless even when the source `next` link repeats its query. |
 | CSB-FIX-015 | Two independently constructed pacer/database owners share one temporary data root. | Immediate transactions reserve starts at least one second apart. |
 | CSB-FIX-016 | A source cooldown is active, including after an earlier reservation. | The next request returns unavailable before HTTP and does not wait. |
 | CSB-FIX-028 | The checked-in contract checksum changes. | The old cache row misses and is never reported as current. |
@@ -47,9 +49,11 @@ POST /find-my-combos
 | CSB-FIX-017 | A deck has commander and main rows. | The source request separates those arrays and preserves quantities. |
 | CSB-FIX-018 | A deck repeats a card in two printing rows. | The source request sends one row with the summed quantity. |
 | CSB-FIX-019 | A deck has sideboard and maybeboard rows. | The tool skips them and lists them in local selection evidence. |
+| CSB-FIX-033 | A deck lookup succeeds from either the network or cache. | The result names all selected cards as `sentEntries`, includes the current query and page controls outside the cache, and says the source might not recognize every sent card. |
 | CSB-FIX-020 | A deck revision changes after the caller reads it. | The tool returns a revision conflict before HTTP. |
 | CSB-FIX-021 | A deck has no main or commander rows. | The tool returns invalid input before HTTP. |
 | CSB-FIX-022 | A deck has more source rows than the API allows. | The tool returns invalid input without truncation. |
+| CSB-FIX-030 | A selected card name exceeds the source's 256-character limit, or repeated quantities overflow when grouped. | The tool returns invalid input before HTTP. |
 
 ## MCP Cases
 

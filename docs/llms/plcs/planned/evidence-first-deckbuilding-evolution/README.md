@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-06
 - Last updated: 2026-09-07
-- Current phase: Phase 2: latest MCP and toolchain (planned)
+- Current phase: Phase 3: Commander Spellbook evidence
 - Implementation authorized: No
 
 ## Summary
@@ -49,8 +49,8 @@ It must not add a fourth verb: decide.
   inventory.
 - [Latest MCP and Toolchain child](../../completed/latest-mcp-and-toolchain/README.md): the
   current-only protocol and version-lock work for Phase 2.
-- [Commander Spellbook Evidence child](../commander-spellbook-evidence/README.md):
-  the proposed opt-in evidence adapter for Phase 3.
+- [Commander Spellbook Evidence child](../../in-progress/commander-spellbook-evidence/README.md):
+  the active opt-in evidence adapter for Phase 3.
 
 ## Decision Snapshot
 
@@ -63,7 +63,7 @@ It must not add a fourth verb: decide.
 | Treat advanced goldfish as a feasibility experiment, not a stable feature promise. | Proposed | A useful bounded model may be possible, but it must not masquerade as a Magic rules engine or a matchup predictor. | [SRD](SRD.md#scope-and-non-scope) |
 | Check every external source individually. | Proposed | “More sources” is valuable only when access, meaning, cache behavior, and provenance are clear. | [SADD](SADD.md#provider-check) |
 | Require the newest MCP protocol in a focused child. | Complete | The owner wants the newest design with no legacy support. | [Phase 2 child](../../completed/latest-mcp-and-toolchain/README.md) |
-| Add Commander Spellbook as a concrete evidence adapter. | Proposed | Its documented API serves the core combo-evidence workflow without making a recommendation. | [Phase 3 child](../commander-spellbook-evidence/README.md) |
+| Add Commander Spellbook as a concrete evidence adapter. | In progress | Its documented API serves the core combo-evidence workflow without making a recommendation. | [Phase 3 child](../../in-progress/commander-spellbook-evidence/README.md) |
 | Start with Scryfall card-data store ownership. | Complete | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md) |
 | Keep all card-data state in ScryfallCardDataStore. | Implemented | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../completed/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
 | Complete Archidekt ownership cleanup. | Complete | Shared session and named deck, folder, and snapshot owners now contain their code without changing provider or MCP behavior. | [Phase 1B child](../../completed/archidekt-ownership-cleanup/README.md) |
@@ -85,7 +85,7 @@ Future children may affect:
 
 The Phase 2 child also owns version locks, action SHA pins, and the
 Mise-managed MCP Registry publisher. The Phase 3 child adds one concrete
-provider project and three opt-in read-only tools if it receives authorization.
+provider project and three opt-in read-only tools under its active child packet.
 
 No child may introduce automatic legacy migration, a generic request router,
 automatic website scraping, MCP-owned recommendations, or an unbounded rules
@@ -152,7 +152,7 @@ amendment that removes or replaces it.
 | 2026-09-06 | Documentation validation | Passed | git diff --check, trailing-whitespace scan, and local Markdown-link resolution passed. |
 | 2026-09-07 | Phase 1A owner decision | Passed | The owner selected Scryfall store ownership first and kept all `corpus_state` operations in ScryfallCardDataStore. |
 | 2026-09-07 | Phase 1A independent review | Passed | The corrected child packet passed final independent review and Phase 1 is authorized. |
-| 2026-09-07 | Phase 2 and Phase 3 independent review | Passed after fixes | The new packets now name their exact version, pacing, cache, and process-test behavior. |
+| 2026-09-07 | Phase 2 and Phase 3 independent review | Passed after fixes | The new packets now name their exact version, pacing, cache, paging defaults, timeout, request facts, and process-test behavior. |
 | 2026-09-07 | Phase 1A characterization | Passed | The offline Scryfall suite passed 38 tests. A focused test review found no missing coverage in the changed paths. |
 | 2026-09-07 | Phase 1A close-out | Passed | The ownership boundary test, lint, all non-live tests, coverage gates, and MCP surface report passed. The final audit found no remaining blocking issue. |
 | 2026-09-07 | Phase 1B independent design review | Passed | The packet clarified budget charging, client disposal tests, and the temporary transition boundary. Implementation is authorized. |
@@ -162,5 +162,6 @@ amendment that removes or replaces it.
 
 ## Completion Notes
 
-Phase 1 ownership cleanup is complete. This packet remains a roadmap, not an
-implementation authorization. The remaining phases are planned only.
+Phase 1 ownership cleanup and Phase 2 are complete. This packet remains a
+roadmap, not an implementation authorization. Phase 3 has its own active child;
+later phases remain planned.

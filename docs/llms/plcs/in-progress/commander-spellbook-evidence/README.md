@@ -1,20 +1,19 @@
 # Commander Spellbook Evidence PLC Packet
 
 > [!IMPORTANT]
-> This packet plans a new provider. It does not authorize production edits.
-> An independent review and an explicit `Implementation authorized: Yes` are
-> required before code changes begin.
+> This packet owns the active Commander Spellbook implementation. Production
+> edits must stay inside its approved scope and acceptance criteria.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/commander-spellbook-evidence/`
-- Parent PLC: [Evidence-First Deckbuilding Evolution](../evidence-first-deckbuilding-evolution/README.md)
+- Status: In progress
+- Folder: `docs/llms/plcs/in-progress/commander-spellbook-evidence/`
+- Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Planning complete
-- Implementation authorized: No
+- Current phase: Phase 1: Build the provider adapter
+- Implementation authorized: Yes
 
 ## Summary
 
@@ -56,33 +55,48 @@ or change the deck.
 
 ```json
 {
-  "source": "Commander Spellbook",
-  "operation": "find-my-combos",
-  "cacheStatus": "network",
-  "retrievedAtUtc": "2026-09-07T02:00:00Z",
-  "sourceUrl": "https://commanderspellbook.com",
   "deck": {
     "deckId": "b1357522-1eb0-487b-8c6a-7a3bcad255b5",
     "revision": 12,
     "ignoredEntries": []
   },
-  "data": {
-    "count": 1,
-    "next": null,
-    "previous": null,
-    "results": [
-      {
+  "source": {
+    "name": "Commander Spellbook",
+    "operation": "find-my-combos",
+    "request": {
+      "sourceQuery": "legal:commander",
+      "limit": 20,
+      "offset": 0,
+      "groupByCombo": true
+    },
+    "cacheStatus": "network",
+    "retrievedAtUtc": "2026-09-07T02:00:00Z",
+    "sourceUrl": "https://commanderspellbook.com",
+    "data": {
+      "count": null,
+      "next": null,
+      "previous": null,
+      "results": {
+        "identity": "UBR",
         "included": [],
-        "almostIncluded": []
+        "includedByChangingCommanders": [],
+        "almostIncluded": [],
+        "almostIncludedByAddingColors": [],
+        "almostIncludedByChangingCommanders": [],
+        "almostIncludedByAddingColorsAndChangingCommanders": []
       }
-    ]
+    }
   }
 }
 ```
 
-The `data` object keeps the source's field names and values. Source combo
-groups are inside its `results` entries. The example is a proposal, not a
-current API.
+The `source.data` object keeps the source's field names and values. The local
+`deck` object stays separate from provider evidence. Source combo groups are
+inside one `results` object, not a list of result objects. The example mirrors
+the Commander Spellbook v6.3.3 response layout checked on 2026-09-07. The MCP
+still preserves fields that the source adds later. The `source.request` object
+shows this tool call's query and paging controls. It is made in memory for each
+result and is not written to the cache.
 
 ## Packet Contents
 
@@ -109,7 +123,7 @@ current API.
 The phase adds these areas:
 
 - `MtgMcp.Spellbook` for the HTTP client, pacing, cache, source contract, and
-  provider-shaped output.
+  unchanged Commander Spellbook responses.
 - `MtgMcp.App/Spellbook` for MCP tools and local-deck input mapping.
 - `MtgMcp.Spellbook.Tests` for fake HTTP, cache, pacing, and source fixtures.
 - App, E2E, architecture, Task, coverage, solution, and documentation updates.
@@ -145,5 +159,6 @@ scraped content, or source-data resale.
 | --- | --- | --- | --- |
 | 2026-09-07 | Public API root and OpenAPI schema | Passed | The source documents sparse use, a `User-Agent`, 429 handling, credit, variant routes, and `DeckRequest`. |
 | 2026-09-07 | Current API routes | Passed | `/variants/`, `/variants/{id}/`, and `/find-my-combos` are documented. |
+| 2026-09-07 | Bounded live response check | Passed | API v6.3.3 accepted the planned search and saved-deck requests. Deck lookup returned a paginated response whose `results` object has identity plus Commander Spellbook's six combo groups. |
 | 2026-09-07 | Repository architecture review | Passed | Existing Playgroup and Scryfall adapters show the required App/adapter split and offline fixture pattern. |
-| 2026-09-07 | Independent design review | Passed after fixes | Added explicit cache-contract invalidation, atomic SQLite pacing, and a real separate-server cache test. |
+| 2026-09-07 | Independent design review | Passed after fixes | Added explicit paging defaults, a fixed transport timeout, caller-visible sent-request facts, cache-contract invalidation, atomic SQLite pacing, and a real separate-server cache test. |

@@ -7,4 +7,6 @@ evidence up to date as code lands.
 
 ## Active Packets
 
-No PLC packet is currently in progress.
+| Packet | Current phase | Summary |
+| --- | --- | --- |
+| [commander-spellbook-evidence](commander-spellbook-evidence/README.md) | Provider adapter | Opt-in Commander Spellbook combo evidence with bounded source access and no advice. |

@@ -22,7 +22,6 @@ is complete.
 | Packet | Status | Summary |
 | --- | --- | --- |
 | [evidence-first-deckbuilding-evolution](evidence-first-deckbuilding-evolution/README.md) | Planning-only umbrella | Post-0.9 roadmap for real adapter ownership, source admission, exact deck analysis, and feasibility-gated goldfish work. |
-| [commander-spellbook-evidence](commander-spellbook-evidence/README.md) | Planned child | Opt-in Commander Spellbook combo evidence with bounded source access and no advice. |
 | [mcp-trust-evidence](mcp-trust-evidence/README.md) | Absorbed/reference-only | Evidence vocabulary rationale is owned by rewrite foundation/provider/statistics children; do not implement independently. |
 | [configurable-decision-models](configurable-decision-models/README.md) | Post-cutover reference | Seed for a future experimental feasibility PLC; not stable `0.9.0` scope. |
 | [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by the unified Scryfall, Archidekt, and Playgroup children. |
