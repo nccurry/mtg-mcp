@@ -6,19 +6,19 @@
 | --- | --- | --- | --- |
 | AOC-FIX-001 | Fake HTTP handler | tests/MtgMcp.Archidekt.Tests/ArchidektTestHttpHandler.cs | Exact queued response order, request captures, headers, and payloads. |
 | AOC-FIX-002 | Service behavior tests | tests/MtgMcp.Archidekt.Tests/ArchidektServiceTests.cs | Deck, folder, snapshot, confirmation, fingerprint, read-back, and typed-result behavior. |
-| AOC-FIX-003 | Transport tests | tests/MtgMcp.Archidekt.Tests/ArchidektTransportTests.cs | Authentication, retries, rate handling, route mapping, timeouts, and error redaction. |
+| AOC-FIX-003 | Transport tests | tests/MtgMcp.Archidekt.Tests/ArchidektProviderRouteTests.cs | Authentication, retries, rate handling, route mapping, timeouts, and error redaction. |
 | AOC-FIX-004 | Pacer tests | tests/MtgMcp.Archidekt.Tests/ArchidektRequestPacerTests.cs | Spacing, rolling window, cooldown, cancellation, and operation budgets. |
 | AOC-FIX-005 | App coordinator tests | tests/MtgMcp.App.Tests/ArchidektCoordinatorTests.cs | Existing internal service construction and tool-facing workflows. |
 | AOC-FIX-006 | Live tests | tests/MtgMcp.Archidekt.Tests/ArchidektLiveTests.cs | Opt-in provider contract checks; excluded from normal validation. |
 
-## Direct Named-Owner Cases To Add
+## Direct Named-Owner Cases
 
 | Case | Construction | Expected proof |
 | --- | --- | --- |
-| Session authentication retry and disposal | Before Phase 2: current transport context. After Phase 2: session plus fake HTTP. | One failed authenticated request refreshes once and keeps request-budget accounting. Owned clients are disposed; borrowed clients remain usable. |
-| Deck route and workflow | Before Phase 2: current contexts plus deck owners. After Phase 2: session, deck transport, deck operations. | Current routes, create/read-back, apply request order, and typed conflicts remain exact. |
-| Folder route and workflow | Before Phase 2: current contexts plus folder owners. After Phase 2: session, folder transport, folder operations. | Current tree, move/cycle, confirmation, and read-back behavior remains exact. |
-| Snapshot route and workflow | Before Phase 2: current contexts plus snapshot owners. After Phase 2: session, snapshot transport, snapshot operations. | Current snapshot mutation and restore guards remain exact. |
+| Session authentication retry and disposal | Session plus fake HTTP. | One failed authenticated request refreshes once and keeps request-budget accounting. Owned clients are disposed; borrowed clients remain usable. |
+| Deck route and workflow | Session, deck transport, and deck operations. | Current routes, create/read-back, apply request order, and typed conflicts remain exact. |
+| Folder route and workflow | Session, folder/deck transports, and folder operations. | Current tree, move/cycle, confirmation, and read-back behavior remains exact. |
+| Snapshot route and workflow | Session, snapshot/deck transports, deck operations, and snapshot operations. | Current snapshot mutation and restore guards remain exact. |
 | Boundary | Assembly reflection | ArchidektOperationContext and ArchidektTransportContext are absent after the move. |
 
 ## Requirement Matrix

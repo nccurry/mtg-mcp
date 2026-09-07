@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
@@ -130,12 +130,12 @@ Markdown-link inspection, `git diff --check`, and the bounded code audit.
 
 ## Definition Of Done
 
-- [ ] All Must requirements have passing evidence.
-- [ ] Deck, folder, and snapshot route code has a named home.
-- [ ] Deck, folder, and snapshot workflow code has a named home.
-- [ ] One small session owns shared HTTP and authentication state.
-- [ ] Both Context types and forwarding-only facade files are gone.
-- [ ] Current public behavior, MCP surface, and provider policy are unchanged.
-- [ ] Normal tests are offline and deterministic.
-- [ ] The stale 90-tool wording is corrected.
-- [ ] The parent and child packets record final validation.
+- [x] All Must requirements have passing evidence.
+- [x] Deck, folder, and snapshot route code has a named home.
+- [x] Deck, folder, and snapshot workflow code has a named home.
+- [x] One small session owns shared HTTP and authentication state.
+- [x] Both Context types and forwarding-only facade files are gone.
+- [x] Current public behavior, MCP surface, and provider policy are unchanged.
+- [x] Normal tests are offline and deterministic.
+- [x] The stale 90-tool wording is corrected.
+- [x] The parent and child packets record final validation.

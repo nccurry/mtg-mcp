@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1b-archidekt-ownership-extraction)
 - Owner: mtg-mcp
@@ -124,6 +124,12 @@ create avoidable merge risk.
   completed.
 - Exit: all Must requirements are verified, coverage gates pass, the surface is
   unchanged, and the aggregate audit passes.
+- Result (2026-09-07): Complete. `task lint`, `task test`, `task coverage`,
+  and `task surface:report` passed. Every production assembly cleared the 90%
+  line-coverage gate, with Archidekt at 91.07%. The tool surface remained 93
+  tools, one resource, and zero prompts. Link and diff checks passed, as did
+  the final code audit, which found no release blocker or follow-up worth
+  tracking. The parent record is updated and this packet is moved to completed.
 
 ## Risks
 
@@ -137,11 +143,11 @@ create avoidable merge risk.
 
 ## Completion Criteria
 
-- [ ] Every Must requirement has passing evidence.
-- [ ] ArchidektSession is the only shared HTTP/authentication owner.
-- [ ] Named transports contain provider routes.
-- [ ] Named operations contain guarded workflows.
-- [ ] Both Context types and forwarding-only facade files are gone.
-- [ ] No public contract or provider behavior changed.
-- [ ] Normal tests remain offline.
-- [ ] The parent and child PLC records are current.
+- [x] Every Must requirement has passing evidence.
+- [x] ArchidektSession is the only shared HTTP/authentication owner.
+- [x] Named transports contain provider routes.
+- [x] Named operations contain guarded workflows.
+- [x] Both Context types and forwarding-only facade files are gone.
+- [x] No public contract or provider behavior changed.
+- [x] Normal tests remain offline.
+- [x] The parent and child PLC records are current.

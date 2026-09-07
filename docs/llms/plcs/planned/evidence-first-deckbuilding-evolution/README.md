@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-06
 - Last updated: 2026-09-07
-- Current phase: Phase 1B: Archidekt ownership
+- Current phase: Phase 2: MCP SDK and toolchain compatibility (planned)
 - Implementation authorized: No
 
 ## Summary
@@ -61,13 +61,14 @@ It must not add a fourth verb: decide.
 | Upgrade the MCP SDK in a focused compatibility child. | Proposed | The installed SDK has a major update available; mixing it into an ownership refactor would hide regressions. | [Audit](AUDIT.md#findings) |
 | Start with Scryfall card-data store ownership. | Complete | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md) |
 | Keep all card-data state in ScryfallCardDataStore. | Implemented | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../completed/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
-| Continue with Archidekt ownership cleanup. | In progress | It removes forwarding-only Context layers without changing provider or MCP behavior. | [Phase 1B child](../../in-progress/archidekt-ownership-cleanup/README.md) |
+| Complete Archidekt ownership cleanup. | Complete | Shared session and named deck, folder, and snapshot owners now contain their code without changing provider or MCP behavior. | [Phase 1B child](../../completed/archidekt-ownership-cleanup/README.md) |
 
 ## Project And Surface Impact
 
-The selected first child affects MtgMcp.Scryfall, its focused tests,
-architecture tests, and documentation. It does not change tool names, schemas,
-operation modes, SQLite formats, or provider behavior.
+The completed Phase 1 children affected MtgMcp.Scryfall, MtgMcp.Archidekt,
+their focused tests, architecture tests, and documentation. They did not change
+tool names, schemas, operation modes, SQLite formats, provider behavior, or the
+MCP surface.
 
 Future children may affect:
 
@@ -144,9 +145,9 @@ amendment that removes or replaces it.
 | 2026-09-07 | Phase 1A characterization | Passed | The offline Scryfall suite passed 38 tests. A focused test review found no missing coverage in the changed paths. |
 | 2026-09-07 | Phase 1A close-out | Passed | The ownership boundary test, lint, all non-live tests, coverage gates, and MCP surface report passed. The final audit found no remaining blocking issue. |
 | 2026-09-07 | Phase 1B independent design review | Passed | The packet clarified budget charging, client disposal tests, and the temporary transition boundary. Implementation is authorized. |
+| 2026-09-07 | Phase 1B close-out | Passed | Named session, transport, and workflow owners replaced both Context layers. Full lint, test, coverage, and surface checks passed; Archidekt line coverage reached 91.07%, and the MCP surface stayed unchanged. |
 
 ## Completion Notes
 
-Not complete. This packet is deliberately a roadmap, not an implementation
-authorization. The first recommended child is adapter ownership cleanup because
-it reduces risk without changing product behavior.
+Phase 1 ownership cleanup is complete. This packet remains a roadmap, not an
+implementation authorization. The remaining phases are planned only.

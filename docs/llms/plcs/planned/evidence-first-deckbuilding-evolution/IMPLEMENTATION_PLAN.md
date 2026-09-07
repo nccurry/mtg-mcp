@@ -30,7 +30,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | --- | --- | --- | --- | --- | --- | --- |
 | 0 | Ratify the target and activate one narrow child. | EFD-001–013 | PLC/docs only | Review, link check, diff check | Owner selects a child and records implementation authority. | Complete |
 | 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change. The database owner only owns connection, schema, and disposal. | Complete |
-| 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | In progress |
+| 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | Complete |
 | 2 | Prove MCP SDK/toolchain compatibility before upgrades. | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, dependency docs | Process/client/schema/package checks | A version decision is evidence-backed and separately reviewable. | Planned |
 | 3 | Admit one high-value source, likely Commander Spellbook. | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Admission review, fake HTTP, surface/E2E checks | Opt-in evidence tools are attributable, bounded, and policy-compliant. | Planned |
 | 4 | Fill proven exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Independent formulas, surface/E2E, performance review if needed | New deterministic workflow answers a real declared-input question without inferred card roles. | Planned |
@@ -108,8 +108,8 @@ Archidekt decks/folders/snapshots without navigating a god class.
   - Expanded account/social/collaboration automation.
   - Changes to write authority, request budget, or remote conflict semantics.
 - Expected edits:
-  - Create or retain one small shared HTTP/session owner for auth, pacing,
-    retry, cooldown, request budget, and sanitized provider faults.
+- Create or retain one small shared HTTP/session owner for auth, pacing,
+  retry, cooldown, provider requests, and sanitized provider faults.
   - Move exact deck routes/workflows into deck transport/operations.
   - Move exact folder routes/workflows into folder transport/operations.
   - Move exact snapshot routes/workflows into snapshot transport/operations.
@@ -133,6 +133,12 @@ Archidekt decks/folders/snapshots without navigating a god class.
   contract are unchanged.
 - Cleanup: Remove pass-through contexts and correct the stale 90-tool test
   summary.
+- Result (2026-09-07): Complete. The shared session and named deck, folder,
+  and snapshot owners replaced both Context layers and the forwarding facade.
+  Direct fake-HTTP tests construct each owner and confirm the retired contexts
+  are absent. `task lint`, `task test`, `task coverage`, and
+  `task surface:report` passed; Archidekt line coverage reached 91.07%, and the
+  MCP surface did not change.
 
 ### Phase 2: MCP SDK and toolchain compatibility
 

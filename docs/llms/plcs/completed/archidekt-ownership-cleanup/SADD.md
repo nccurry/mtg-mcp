@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
@@ -15,8 +15,9 @@
 
 Keep one public ArchidektService facade. It creates one ArchidektSession and
 three named transport/operation pairs. The service owns the session lifetime.
-Each operation type receives only the transport type it needs and the configured
-per-operation request ceiling. Each transport receives only the shared session.
+Each operation type receives only the route and workflow owners it needs and
+the configured per-operation request ceiling. Each transport receives only the
+shared session.
 
 ```text
 ArchidektService
@@ -33,6 +34,9 @@ ArchidektService
 
 This is direct concrete composition inside one adapter project. It adds no
 interface, service locator, generic route dispatcher, or cross-provider layer.
+
+Snapshot restore reuses ArchidektDeckOperations only to run its already
+guarded deck plan.
 
 ## Archidekt Session
 
