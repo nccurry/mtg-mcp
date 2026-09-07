@@ -1,10 +1,11 @@
 using System.Net;
+using System.Reflection;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Archidekt.Tests;
 
 /// <summary>
-/// Locks the behavior of the current named Archidekt route and workflow owners before their code moves.
+/// Proves each named Archidekt route and workflow owner directly performs its assigned behavior.
 /// </summary>
 public sealed class ArchidektNamedOwnerTests
 {
@@ -110,8 +111,11 @@ public sealed class ArchidektNamedOwnerTests
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/folderTree/", ArchidektTestPayloads.FolderTree);
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", ArchidektTestPayloads.DeckList);
-        using ArchidektOperationContext context = new(CreateSession(handler), 150);
-        ArchidektFolderOperations folders = new(context);
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektFolderOperations folders = new(
+            new ArchidektFolderTransport(session),
+            new ArchidektDeckTransport(session),
+            150);
 
         RemoteFolderTree tree = Success(await folders.ListAsync(TestContext.Current.CancellationToken));
 
@@ -131,8 +135,13 @@ public sealed class ArchidektNamedOwnerTests
         ArchidektTestHttpHandler handler = new();
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/snapshots/77/", ArchidektTestPayloads.Snapshot);
-        using ArchidektOperationContext context = new(CreateSession(handler), 150);
-        ArchidektSnapshotOperations snapshots = new(context);
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektDeckTransport deckTransport = new(session);
+        ArchidektSnapshotOperations snapshots = new(
+            new ArchidektSnapshotTransport(session),
+            deckTransport,
+            new ArchidektDeckOperations(deckTransport, 150),
+            150);
 
         RemoteNamedSnapshot snapshot = Success(await snapshots.GetAsync(
             "42",
@@ -144,6 +153,18 @@ public sealed class ArchidektNamedOwnerTests
         Assert.Equal(
             ["api/rest-auth/login/", "api/decks/snapshots/77/"],
             handler.Requests.Select(request => request.Path));
+    }
+
+    /// <summary>
+    /// Verifies the retired shared context types are absent from the adapter assembly.
+    /// </summary>
+    [Fact]
+    public void RetiredContextTypes_AreAbsent()
+    {
+        Assembly assembly = typeof(ArchidektService).Assembly;
+
+        Assert.Null(assembly.GetType("MtgMcp.Archidekt.ArchidektOperationContext"));
+        Assert.Null(assembly.GetType("MtgMcp.Archidekt.ArchidektTransportContext"));
     }
 
     /// <summary>

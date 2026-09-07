@@ -102,6 +102,16 @@ create avoidable merge risk.
 - Correct the stale architecture-test summary that says ninety tools.
 - Exit: named operations contain their real workflows and both Context types
   are absent.
+- Result (2026-09-07): Complete. ArchidektFolderOperations now owns folder
+  reads, enrichment, create/update/move/delete, parent and cycle checks, and
+  read-back checks. ArchidektSnapshotOperations now owns snapshot reads and
+  writes, restore preview, restore guards, and restore-target construction.
+  ArchidektService is now the public entry point and composition root in
+  ArchidektService.cs. The old context and facade file are gone. Direct tests
+  construct every named operation owner and confirm both retired context types
+  are absent. The architecture-test summary now says ninety-three tools. The
+  offline Archidekt and App projects passed 85 and 107 tests, and `task lint`
+  and the phase audit passed.
 
 ## Phase 5: Close The Child
 

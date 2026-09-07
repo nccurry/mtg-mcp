@@ -79,10 +79,11 @@ ownership cleanup, not a behavior change.
 | 2026-09-07 | Phase 1 named-owner tests | Passed | Seven direct fake-HTTP tests cover deck, folder, and snapshot route and workflow owners plus owned-versus-borrowed client disposal. The offline Archidekt project passed 84 tests and `task lint` passed. |
 | 2026-09-07 | Phase 2 session and route split | Passed | ArchidektSession now owns shared HTTP, authentication, pacing, retries, and client disposal. Named transport files own provider routes. The offline Archidekt and App projects passed 84 and 107 tests; `task lint` passed. |
 | 2026-09-07 | Phase 3 deck workflow split | Passed | ArchidektDeckOperations now owns deck reads, guarded writes, plan execution, payload building, and deck-list verification. ArchidektOperationResults maps typed failures, and the request budget checks planned limits. The offline Archidekt and App projects passed 84 and 107 tests; `task lint` and the phase audit passed. |
+| 2026-09-07 | Phase 4 folder and snapshot workflow split | Passed | Folder and snapshot workflows now live in their named operation files. ArchidektService is the public entry point and composition root, and the old context and facade file are gone. Direct tests confirm both retired context types are absent. The offline Archidekt and App projects passed 85 and 107 tests; `task lint` and the phase audit passed. |
 
 ## Completion Notes
 
-Phases 1 through 3 complete. Direct named-owner tests hold current behavior in
-place. Shared HTTP work, provider routes, and deck workflows now have named
-homes. Folder and snapshot workflows remain in the operation context until
-Phase 4 moves them.
+Phases 1 through 4 complete. Direct named-owner tests hold current behavior in
+place. Shared HTTP work, provider routes, and deck, folder, and snapshot
+workflows now have named homes. The last phase runs the full validation and
+closes this PLC packet.

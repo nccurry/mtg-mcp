@@ -288,7 +288,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, ninety-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, ninety-three-tool, zero-prompt toolset-owned surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()

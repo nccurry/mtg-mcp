@@ -3,71 +3,78 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.Archidekt;
 
 /// <summary>
-/// Exposes guarded Archidekt evidence and workflow operations over named provider routes.
+/// Provides the stable public Archidekt API through deck, folder, and snapshot operation owners.
 /// </summary>
-internal sealed class ArchidektOperationContext : IDisposable
+public sealed class ArchidektService : IDisposable
 {
     /// <summary>
-    /// Owns shared credential, HTTP, pacing, retry, and client-lifetime state.
+    /// Owns shared HTTP, authentication, pacing, retry, and client-disposal state.
     /// </summary>
     private readonly ArchidektSession session;
 
     /// <summary>
-    /// Provides deck provider routes to the current workflow methods.
-    /// </summary>
-    private readonly ArchidektDeckTransport decks;
-
-    /// <summary>
-    /// Gets deck workflows over the shared session and deck provider routes.
-    /// </summary>
-    internal ArchidektDeckOperations DeckOperations { get; }
-
-    /// <summary>
-    /// Provides folder provider routes to the current workflow methods.
-    /// </summary>
-    private readonly ArchidektFolderTransport folders;
-
-    /// <summary>
-    /// Provides snapshot provider routes to the current workflow methods.
-    /// </summary>
-    private readonly ArchidektSnapshotTransport snapshots;
-
-    /// <summary>
-    /// Stores the hard provider request ceiling applied independently to every public call.
+    /// Stores the hard provider request ceiling for each composed operation scope.
     /// </summary>
     private readonly int maximumRequestsPerOperation;
 
     /// <summary>
+    /// Owns remote deck reads, writes, verification, and exact update plans.
+    /// </summary>
+    private readonly ArchidektDeckOperations decks;
+
+    /// <summary>
+    /// Owns folder tree, metadata, move, and deletion operations.
+    /// </summary>
+    private readonly ArchidektFolderOperations folders;
+
+    /// <summary>
+    /// Owns named snapshot reads, writes, preview, and restore operations.
+    /// </summary>
+    private readonly ArchidektSnapshotOperations snapshots;
+
+    /// <summary>
     /// Creates a production service over the configured Archidekt account.
     /// </summary>
-    internal ArchidektOperationContext(ArchidektOptions options, string packageVersion)
+    public ArchidektService(ArchidektOptions options, string packageVersion)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         session = new ArchidektSession(options, packageVersion);
-        decks = new ArchidektDeckTransport(session);
-        DeckOperations = new ArchidektDeckOperations(decks, options.MaximumRequestsPerOperation);
-        folders = new ArchidektFolderTransport(session);
-        snapshots = new ArchidektSnapshotTransport(session);
         maximumRequestsPerOperation = options.MaximumRequestsPerOperation;
+        ArchidektDeckTransport deckTransport = new(session);
+        ArchidektFolderTransport folderTransport = new(session);
+        ArchidektSnapshotTransport snapshotTransport = new(session);
+        decks = new ArchidektDeckOperations(deckTransport, maximumRequestsPerOperation);
+        folders = new ArchidektFolderOperations(folderTransport, deckTransport, maximumRequestsPerOperation);
+        snapshots = new ArchidektSnapshotOperations(
+            snapshotTransport,
+            deckTransport,
+            decks,
+            maximumRequestsPerOperation);
     }
 
     /// <summary>
     /// Creates a deterministic service over an injected provider session.
     /// </summary>
-    internal ArchidektOperationContext(ArchidektSession session, int maximumRequestsPerOperation)
+    internal ArchidektService(ArchidektSession session, int maximumRequestsPerOperation)
     {
         this.session = session ?? throw new ArgumentNullException(nameof(session));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRequestsPerOperation);
-        decks = new ArchidektDeckTransport(session);
-        DeckOperations = new ArchidektDeckOperations(decks, maximumRequestsPerOperation);
-        folders = new ArchidektFolderTransport(session);
-        snapshots = new ArchidektSnapshotTransport(session);
         this.maximumRequestsPerOperation = maximumRequestsPerOperation;
+        ArchidektDeckTransport deckTransport = new(session);
+        ArchidektFolderTransport folderTransport = new(session);
+        ArchidektSnapshotTransport snapshotTransport = new(session);
+        decks = new ArchidektDeckOperations(deckTransport, maximumRequestsPerOperation);
+        folders = new ArchidektFolderOperations(folderTransport, deckTransport, maximumRequestsPerOperation);
+        snapshots = new ArchidektSnapshotOperations(
+            snapshotTransport,
+            deckTransport,
+            decks,
+            maximumRequestsPerOperation);
     }
 
     /// <summary>
-    /// Reports redacted credential readiness without provider I/O.
+    /// Reports redacted local credential readiness without provider I/O.
     /// </summary>
     public OperationResult<ArchidektAuthStatus> GetAuthStatus()
     {
@@ -75,534 +82,197 @@ internal sealed class ArchidektOperationContext : IDisposable
     }
 
     /// <summary>
-    /// Begins one hard-bounded provider-request scope for a composed MCP tool invocation.
+    /// Begins one hard-bounded provider-request scope for a composed invocation.
     /// </summary>
     public ArchidektOperationScope BeginOperation()
     {
         return new ArchidektOperationScope(maximumRequestsPerOperation);
     }
 
-    /// <summary>
-    /// Lists the complete authenticated folder tree and its canonical fingerprint.
-    /// </summary>
-    public Task<OperationResult<RemoteFolderTree>> ListFoldersAsync(
+    /// <inheritdoc cref="ArchidektDeckOperations.ListAsync(string?, int, CancellationToken)"/>
+    public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
+        string? cursor,
+        int pageSize,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteFolderTree tree = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                return await EnrichFolderDecksAsync(tree, budget, cancellationToken)
-                    .ConfigureAwait(false);
-            });
+        return decks.ListAsync(cursor, pageSize, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets one authenticated folder detail and its direct contents.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektDeckOperations.ListAsync(string?, int, ArchidektOperationScope, CancellationToken)"/>
+    public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
+        string? cursor,
+        int pageSize,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        return decks.ListAsync(cursor, pageSize, operationScope, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektDeckOperations.GetAsync(string, CancellationToken)"/>
+    public Task<OperationResult<RemoteDeckSnapshot>> GetDeckAsync(
+        string deckId,
+        CancellationToken cancellationToken)
+    {
+        return decks.GetAsync(deckId, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektDeckOperations.GetAsync(string, ArchidektOperationScope, CancellationToken)"/>
+    public Task<OperationResult<RemoteDeckSnapshot>> GetDeckAsync(
+        string deckId,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        return decks.GetAsync(deckId, operationScope, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektDeckOperations.CreateAsync"/>
+    public Task<OperationResult<RemoteDeckSnapshot>> CreateDeckAsync(
+        ArchidektDeckCreateRequest request,
+        CancellationToken cancellationToken)
+    {
+        return decks.CreateAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektDeckOperations.DeleteAsync"/>
+    public Task<OperationResult<ArchidektApplyResult>> DeleteDeckAsync(
+        ArchidektDeckDeleteRequest request,
+        CancellationToken cancellationToken)
+    {
+        return decks.DeleteAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektDeckOperations.ApplyTargetAsync(RemoteDeckSnapshot, string, string, CancellationToken)"/>
+    public Task<OperationResult<ArchidektApplyResult>> ApplyRemoteTargetAsync(
+        RemoteDeckSnapshot target,
+        string expectedRemoteFingerprint,
+        string expectedPlanFingerprint,
+        CancellationToken cancellationToken)
+    {
+        return decks.ApplyTargetAsync(
+            target,
+            expectedRemoteFingerprint,
+            expectedPlanFingerprint,
+            cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektDeckOperations.ApplyTargetAsync(RemoteDeckSnapshot, string, string, ArchidektOperationScope, CancellationToken)"/>
+    public Task<OperationResult<ArchidektApplyResult>> ApplyRemoteTargetAsync(
+        RemoteDeckSnapshot target,
+        string expectedRemoteFingerprint,
+        string expectedPlanFingerprint,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        return decks.ApplyTargetAsync(
+            target,
+            expectedRemoteFingerprint,
+            expectedPlanFingerprint,
+            operationScope,
+            cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektFolderOperations.ListAsync"/>
+    public Task<OperationResult<RemoteFolderTree>> ListFoldersAsync(CancellationToken cancellationToken)
+    {
+        return folders.ListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc cref="ArchidektFolderOperations.GetAsync"/>
     public Task<OperationResult<RemoteFolderTree>> GetFolderAsync(
         string folderId,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteFolderTree tree = await folders.GetAsync(
-                    folderId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                return await EnrichFolderDecksAsync(tree, budget, cancellationToken)
-                    .ConfigureAwait(false);
-            });
+        return folders.GetAsync(folderId, cancellationToken);
     }
 
-    /// <summary>
-    /// Creates one folder under an exact parent and verifies it in a fresh tree.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektFolderOperations.CreateAsync"/>
     public Task<OperationResult<RemoteFolderRecord>> CreateFolderAsync(
         ArchidektFolderCreateRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteFolderTree before = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                string parentFolderId = ResolveProviderParent(before, request.ParentFolderId);
-                string createdFolderId = await folders.CreateAsync(
-                    request with { ParentFolderId = parentFolderId },
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteFolderTree verified = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteFolderRecord? match = verified.Items.FirstOrDefault(value =>
-                    string.Equals(value.FolderId, createdFolderId, StringComparison.Ordinal));
-                return match ?? throw Conflict(
-                    "folder-create-unverified",
-                    "Archidekt did not return the created folder in a fresh tree.");
-            });
+        return folders.CreateAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Updates allowlisted folder metadata only when the fresh tree still matches the caller guard.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektFolderOperations.UpdateAsync"/>
     public Task<OperationResult<RemoteFolderRecord>> UpdateFolderAsync(
         ArchidektFolderUpdateRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteFolderTree before = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                before = await EnrichFolderDecksAsync(before, budget, cancellationToken)
-                    .ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedTreeFingerprint,
-                    before.TreeFingerprint,
-                    "folder-tree-changed");
-                RemoteFolderRecord current = FindFolder(before, request.FolderId);
-                string? requestedParent = null;
-                if (request.UpdateParent)
-                {
-                    requestedParent = ResolveProviderParent(before, request.ParentFolderId);
-                    PreventFolderCycle(before, request.FolderId, requestedParent);
-                }
-
-                string name = request.Name is null
-                    ? current.Name
-                    : ArchidektContract.Required(request.Name, nameof(request.Name));
-                string visibility = request.Visibility is null
-                    ? current.Visibility
-                    : NormalizeVisibility(request.Visibility);
-                object payload = new
-                {
-                    name,
-                    @private = visibility == "private",
-                    parentFolder = ArchidektProviderId.Parse(
-                        request.UpdateParent ? requestedParent : current.ParentFolderId),
-                };
-                await folders.SendUpdateAsync(
-                    request.FolderId,
-                    payload,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteFolderTree after = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteFolderRecord updated = FindFolder(after, request.FolderId);
-                string? expectedParent = request.UpdateParent
-                    ? requestedParent
-                    : current.ParentFolderId;
-                if (!string.Equals(updated.Name, name, StringComparison.Ordinal) ||
-                    !string.Equals(updated.Visibility, visibility, StringComparison.Ordinal) ||
-                    !string.Equals(updated.ParentFolderId, expectedParent, StringComparison.Ordinal))
-                {
-                    throw Conflict(
-                        "folder-update-unverified",
-                        "Archidekt folder state did not match the requested update.");
-                }
-
-                return updated;
-            });
+        return folders.UpdateAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Moves exact typed folder items after stale-source, missing-item, and cycle preflight checks.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektFolderOperations.MoveItemsAsync"/>
     public Task<OperationResult<ArchidektFolderMoveResult>> MoveFolderItemsAsync(
         ArchidektFolderMoveRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteFolderTree before = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                before = await EnrichFolderDecksAsync(before, budget, cancellationToken)
-                    .ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedTreeFingerprint,
-                    before.TreeFingerprint,
-                    "folder-tree-changed");
-                string destinationFolderId = ResolveProviderParent(before, request.DestinationFolderId);
-                ArchidektFolderMoveItem[] items = DeduplicateMoveItems(request.Items);
-                int deckCount = items.Count(value => value.Kind == "deck");
-                budget.EnsureRequestBound(budget.RequestCount + (deckCount * 2) + 2);
-                foreach (ArchidektFolderMoveItem item in items)
-                {
-                    if (item.Kind == "folder")
-                    {
-                        ValidateFolderMoveItem(before, item, destinationFolderId);
-                        continue;
-                    }
-
-                    RemoteDeckSnapshot deck = await decks.GetAsync(
-                        item.Id,
-                        requireAuthentication: true,
-                        budget,
-                        cancellationToken).ConfigureAwait(false);
-                    RequireMoveParent(item.ExpectedParentFolderId, deck.ParentFolderId);
-                }
-
-                object payload = new
-                {
-                    items = items.Select(value => new
-                    {
-                        type = value.Kind,
-                        id = ArchidektProviderId.Parse(value.Id),
-                        patch = new
-                        {
-                            parentFolder = ArchidektProviderId.Parse(destinationFolderId),
-                        },
-                    }),
-                };
-                await folders.SendMoveAsync(payload, budget, cancellationToken)
-                    .ConfigureAwait(false);
-                RemoteFolderTree after = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                List<ArchidektFolderMoveStatus> statuses = [];
-                foreach (ArchidektFolderMoveItem item in items)
-                {
-                    string? finalParent = item.Kind == "folder"
-                        ? FindFolder(after, item.Id).ParentFolderId
-                        : (await decks.GetAsync(
-                            item.Id,
-                            requireAuthentication: true,
-                            budget,
-                            cancellationToken).ConfigureAwait(false)).ParentFolderId;
-                    string status = string.Equals(
-                        finalParent,
-                        destinationFolderId,
-                        StringComparison.Ordinal)
-                        ? "applied"
-                        : "unknown";
-                    statuses.Add(new ArchidektFolderMoveStatus(
-                        item.Kind,
-                        item.Id,
-                        item.ExpectedParentFolderId,
-                        finalParent,
-                        status));
-                }
-
-                return new ArchidektFolderMoveResult(statuses, after.TreeFingerprint);
-            });
+        return folders.MoveItemsAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Deletes one confirmed empty folder and verifies its absence from a fresh tree.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektFolderOperations.DeleteAsync"/>
     public Task<OperationResult<ArchidektApplyResult>> DeleteFolderAsync(
         ArchidektFolderDeleteRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RequireConfirmation(request.Confirmation, $"delete folder {request.FolderId}");
-                RemoteFolderTree before = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                before = await EnrichFolderDecksAsync(before, budget, cancellationToken)
-                    .ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedTreeFingerprint,
-                    before.TreeFingerprint,
-                    "folder-tree-changed");
-                RemoteFolderRecord folder = FindFolder(before, request.FolderId);
-                if (!string.Equals(folder.Name, request.ExpectedName, StringComparison.Ordinal))
-                {
-                    throw Conflict("folder-name-changed", "Archidekt folder name changed before deletion.");
-                }
-
-                if (folder.ChildFolderIds.Count > 0 || folder.Decks.Count > 0)
-                {
-                    throw Conflict("folder-not-empty", "Only an empty Archidekt folder can be deleted.");
-                }
-
-                ArchidektRemoteOperation operation = new(
-                    1,
-                    "folder-delete",
-                    request.FolderId,
-                    "Delete one verified empty folder.");
-                try
-                {
-                    await folders.SendDeleteAsync(
-                        new
-                        {
-                            items = new[]
-                            {
-                                new
-                                {
-                                    type = "folder",
-                                    id = ArchidektProviderId.Parse(request.FolderId),
-                                },
-                            },
-                        },
-                        budget,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (ArchidektProviderException exception)
-                    when (exception.Kind == ArchidektFailureKind.Unavailable)
-                {
-                    return PartialResult(request.FolderId, operation, exception.Message);
-                }
-
-                RemoteFolderTree after = await folders.ListAsync(
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                if (after.Items.Any(value =>
-                    string.Equals(value.FolderId, request.FolderId, StringComparison.Ordinal)))
-                {
-                    throw Conflict(
-                        "folder-delete-unverified",
-                        "Archidekt still lists the folder after deletion.");
-                }
-
-                return AppliedResult(request.FolderId, operation, finalFingerprint: after.TreeFingerprint);
-            });
+        return folders.DeleteAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Lists exact named snapshot metadata for one deck.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.ListAsync"/>
     public Task<OperationResult<RemoteNamedSnapshotPage>> ListSnapshotsAsync(
         string deckId,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            budget => snapshots.ListAsync(deckId, budget, cancellationToken));
+        return snapshots.ListAsync(deckId, cancellationToken);
     }
 
-    /// <summary>
-    /// Gets one complete saved snapshot and cross-checks its owning deck.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.GetAsync"/>
     public Task<OperationResult<RemoteNamedSnapshot>> GetSnapshotAsync(
         string deckId,
         string snapshotId,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            budget => snapshots.GetAsync(deckId, snapshotId, budget, cancellationToken));
+        return snapshots.GetAsync(deckId, snapshotId, cancellationToken);
     }
 
-    /// <summary>
-    /// Creates a named snapshot only when the source deck still matches its caller fingerprint.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.CreateAsync"/>
     public Task<OperationResult<RemoteNamedSnapshotSummary>> CreateSnapshotAsync(
         ArchidektSnapshotCreateRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteDeckSnapshot deck = await decks.GetAsync(
-                    request.DeckId,
-                    requireAuthentication: true,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedRemoteFingerprint,
-                    deck.RemoteFingerprint,
-                    "remote-deck-changed");
-                string name = ArchidektContract.Required(request.Name, nameof(request.Name));
-                await snapshots.SendCreateAsync(
-                    request.DeckId,
-                    new { name, description = ArchidektContract.Optional(request.Description) },
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteNamedSnapshotPage after = await snapshots.ListAsync(
-                    request.DeckId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteNamedSnapshotSummary[] matches = after.Items
-                    .Where(value => string.Equals(value.Name, name, StringComparison.Ordinal))
-                    .ToArray();
-                return matches.Length == 1
-                    ? matches[0]
-                    : throw Conflict(
-                        "snapshot-create-unverified",
-                        "Archidekt did not expose one unambiguous created snapshot.");
-            });
+        return snapshots.CreateAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Updates supported snapshot metadata only when its exact source checksum still matches.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.UpdateAsync"/>
     public Task<OperationResult<RemoteNamedSnapshotSummary>> UpdateSnapshotAsync(
         ArchidektSnapshotUpdateRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RemoteNamedSnapshot current = await snapshots.GetAsync(
-                    request.DeckId,
-                    request.SnapshotId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedChecksum,
-                    current.Summary.Checksum,
-                    "snapshot-changed");
-                string name = ArchidektContract.Required(request.Name, nameof(request.Name));
-                await snapshots.SendUpdateAsync(
-                    request.SnapshotId,
-                    new { name },
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteNamedSnapshot updated = await snapshots.GetAsync(
-                    request.DeckId,
-                    request.SnapshotId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                if (!string.Equals(updated.Summary.Name, name, StringComparison.Ordinal))
-                {
-                    throw Conflict(
-                        "snapshot-update-unverified",
-                        "Archidekt snapshot metadata did not match the requested update.");
-                }
-
-                return updated.Summary;
-            });
+        return snapshots.UpdateAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Deletes one unchanged confirmed snapshot and verifies collection absence.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.DeleteAsync"/>
     public Task<OperationResult<ArchidektApplyResult>> DeleteSnapshotAsync(
         ArchidektSnapshotDeleteRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RequireConfirmation(request.Confirmation, $"delete snapshot {request.SnapshotId}");
-                RemoteNamedSnapshot current = await snapshots.GetAsync(
-                    request.DeckId,
-                    request.SnapshotId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedChecksum,
-                    current.Summary.Checksum,
-                    "snapshot-changed");
-                ArchidektRemoteOperation operation = new(
-                    1,
-                    "snapshot-delete",
-                    request.SnapshotId,
-                    "Delete one exact named snapshot.");
-                try
-                {
-                    await snapshots.SendDeleteAsync(
-                        request.SnapshotId,
-                        budget,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (ArchidektProviderException exception)
-                    when (exception.Kind == ArchidektFailureKind.Unavailable)
-                {
-                    return PartialResult(request.DeckId, operation, exception.Message);
-                }
-
-                RemoteNamedSnapshotPage after = await snapshots.ListAsync(
-                    request.DeckId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                if (after.Items.Any(value =>
-                    string.Equals(value.SnapshotId, request.SnapshotId, StringComparison.Ordinal)))
-                {
-                    throw Conflict(
-                        "snapshot-delete-unverified",
-                        "Archidekt still lists the snapshot after deletion.");
-                }
-
-                return AppliedResult(request.DeckId, operation, after.CollectionChecksum);
-            });
+        return snapshots.DeleteAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    /// Previews an exact named snapshot restore against a fresh current remote deck.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.PreviewRestoreAsync"/>
     public Task<OperationResult<ArchidektSnapshotRestorePreview>> PreviewSnapshotRestoreAsync(
         string deckId,
         string snapshotId,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
-                    deckId,
-                    snapshotId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RemoteDeckSnapshot target = CreateRestoreTarget(current, snapshot.Deck);
-                ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
-                budget.EnsureRequestBound(plan.PredictedProviderRequests);
-                IReadOnlyList<ArchidektDifference> differences = ContentDifference(current, target, plan);
-                string previewFingerprint = RestorePreviewFingerprint(current, snapshot, plan);
-                return new ArchidektSnapshotRestorePreview(
-                    deckId,
-                    snapshotId,
-                    snapshot.Summary.Checksum,
-                    snapshot.Deck.ContentFingerprint,
-                    current.RemoteFingerprint,
-                    previewFingerprint,
-                    differences,
-                    plan.PublicOperations,
-                    plan.PredictedProviderRequests);
-            });
+        return snapshots.PreviewRestoreAsync(deckId, snapshotId, cancellationToken);
     }
 
-    /// <summary>
-    /// Restores one unchanged snapshot onto one unchanged remote deck after replaying every preview guard.
-    /// </summary>
+    /// <inheritdoc cref="ArchidektSnapshotOperations.ApplyRestoreAsync"/>
     public Task<OperationResult<ArchidektApplyResult>> ApplySnapshotRestoreAsync(
         ArchidektSnapshotRestoreApplyRequest request,
         CancellationToken cancellationToken)
     {
-        return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
-            async budget =>
-            {
-                RequireConfirmation(request.Confirmation, $"restore snapshot {request.SnapshotId}");
-                (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
-                    request.DeckId,
-                    request.SnapshotId,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                RequireFingerprint(
-                    request.ExpectedSnapshotChecksum,
-                    snapshot.Summary.Checksum,
-                    "snapshot-changed");
-                RequireFingerprint(
-                    request.ExpectedSnapshotContentFingerprint,
-                    snapshot.Deck.ContentFingerprint,
-                    "snapshot-content-changed");
-                RequireFingerprint(
-                    request.ExpectedRemoteFingerprint,
-                    current.RemoteFingerprint,
-                    "remote-deck-changed");
-                RemoteDeckSnapshot target = CreateRestoreTarget(current, snapshot.Deck);
-                ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
-                RequireFingerprint(
-                    request.PreviewFingerprint,
-                    RestorePreviewFingerprint(current, snapshot, plan),
-                    "restore-preview-changed");
-                return await DeckOperations.ApplyPlanAsync(
-                    current,
-                    target,
-                    plan,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-            });
+        return snapshots.ApplyRestoreAsync(request, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -610,377 +280,4 @@ internal sealed class ArchidektOperationContext : IDisposable
     {
         session.Dispose();
     }
-
-    /// <summary>
-    /// Fetches both immutable sources used by snapshot restore preview and apply.
-    /// </summary>
-    private async Task<(RemoteDeckSnapshot Current, RemoteNamedSnapshot Snapshot)> GetRestoreSourcesAsync(
-        string deckId,
-        string snapshotId,
-        ArchidektOperationBudget budget,
-        CancellationToken cancellationToken)
-    {
-        RemoteDeckSnapshot current = await decks.GetAsync(
-            deckId,
-            requireAuthentication: true,
-            budget,
-            cancellationToken).ConfigureAwait(false);
-        RemoteNamedSnapshot snapshot = await snapshots.GetAsync(
-            deckId,
-            snapshotId,
-            budget,
-            cancellationToken).ConfigureAwait(false);
-        return (current, snapshot);
-    }
-
-    /// <summary>
-    /// Computes the immutable snapshot restore preview identity.
-    /// </summary>
-    private static string RestorePreviewFingerprint(
-        RemoteDeckSnapshot current,
-        RemoteNamedSnapshot snapshot,
-        ArchidektRemotePlan plan)
-    {
-        return ArchidektContract.Fingerprint(new
-        {
-            current.RemoteFingerprint,
-            snapshot.Summary.Checksum,
-            snapshot.Deck.ContentFingerprint,
-            plan.PlanFingerprint,
-        });
-    }
-
-    /// <summary>
-    /// Preserves current folder placement because named deck snapshots do not own that account-level relationship.
-    /// </summary>
-    private static RemoteDeckSnapshot CreateRestoreTarget(
-        RemoteDeckSnapshot current,
-        RemoteDeckSnapshot snapshot)
-    {
-        return snapshot with
-        {
-            RemoteId = current.RemoteId,
-            RemoteUri = current.RemoteUri,
-            Name = current.Name,
-            Visibility = current.Visibility,
-            ParentFolderId = current.ParentFolderId,
-        };
-    }
-
-    /// <summary>
-    /// Produces one exact content difference when two remote observations are not equivalent.
-    /// </summary>
-    private static IReadOnlyList<ArchidektDifference> ContentDifference(
-        RemoteDeckSnapshot current,
-        RemoteDeckSnapshot target,
-        ArchidektRemotePlan plan)
-    {
-        if (plan.PlannedOperations.Count == 0)
-        {
-            return [];
-        }
-
-        return
-        [
-            new ArchidektDifference(
-                "/remote/content",
-                "changed",
-                BaselineValue: null,
-                current.ContentFingerprint,
-                target.ContentFingerprint),
-        ];
-    }
-
-    /// <summary>
-    /// Joins owned-deck rows into a folder response because the observed tree omits deck children.
-    /// </summary>
-    private async Task<RemoteFolderTree> EnrichFolderDecksAsync(
-        RemoteFolderTree tree,
-        ArchidektOperationBudget budget,
-        CancellationToken cancellationToken)
-    {
-        List<RemoteDeckSummary> decks = [];
-        string? cursor = null;
-        do
-        {
-            RemoteDeckPage page = await this.decks.ListAsync(
-                cursor,
-                100,
-                budget,
-                cancellationToken).ConfigureAwait(false);
-            decks.AddRange(page.Items);
-            cursor = page.NextCursor;
-        }
-        while (cursor is not null);
-
-        string? rootFolderId = tree.Items.Count(value => value.ParentFolderId is null) == 1
-            ? tree.Items.Single(value => value.ParentFolderId is null).FolderId
-            : null;
-        RemoteFolderRecord[] items = tree.Items.Select(folder => folder with
-        {
-            Decks = Array.AsReadOnly(decks
-                .Where(deck => string.Equals(
-                    deck.ParentFolderId ?? rootFolderId,
-                    folder.FolderId,
-                    StringComparison.Ordinal))
-                .OrderBy(deck => deck.RemoteId, StringComparer.Ordinal)
-                .ToArray()),
-        }).ToArray();
-        string fingerprint = ArchidektContract.Fingerprint(items.Select(value => new
-        {
-            value.FolderId,
-            value.Name,
-            value.Visibility,
-            value.ParentFolderId,
-            value.Path,
-            value.ChildFolderIds,
-            decks = value.Decks.Select(deck => deck.RemoteId),
-        }));
-        return new RemoteFolderTree(items, tree.Evidence, fingerprint);
-    }
-
-    /// <summary>
-    /// Requires an exact non-case-folded confirmation phrase.
-    /// </summary>
-    private static void RequireConfirmation(string actual, string expected)
-    {
-        if (!string.Equals(actual, expected, StringComparison.Ordinal))
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "confirmation-required",
-                "The exact confirmation phrase is required.");
-        }
-    }
-
-    /// <summary>
-    /// Requires one caller fingerprint to match freshly retrieved evidence.
-    /// </summary>
-    private static void RequireFingerprint(string expected, string actual, string reasonCode)
-    {
-        if (!string.Equals(expected, actual, StringComparison.Ordinal))
-        {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.");
-        }
-    }
-
-    /// <summary>
-    /// Requires an exact destination folder when one was supplied.
-    /// </summary>
-    private static void RequireFolderParent(RemoteFolderTree tree, string? parentFolderId)
-    {
-        if (parentFolderId is not null && !tree.Items.Any(value =>
-            string.Equals(value.FolderId, parentFolderId, StringComparison.Ordinal)))
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "folder-not-found",
-                "The requested Archidekt folder was not found.");
-        }
-    }
-
-    /// <summary>
-    /// Resolves an omitted logical parent to the account's one explicit provider root folder.
-    /// </summary>
-    private static string ResolveProviderParent(RemoteFolderTree tree, string? parentFolderId)
-    {
-        if (parentFolderId is not null)
-        {
-            RequireFolderParent(tree, parentFolderId);
-            return parentFolderId;
-        }
-
-        RemoteFolderRecord[] roots = tree.Items
-            .Where(value => value.ParentFolderId is null)
-            .ToArray();
-        if (roots.Length != 1)
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.Unsupported,
-                "root-folder-unavailable",
-                "Archidekt did not expose one unambiguous root folder.");
-        }
-
-        return roots[0].FolderId;
-    }
-
-    /// <summary>
-    /// Gets one exact folder or returns a structured not-found outcome.
-    /// </summary>
-    private static RemoteFolderRecord FindFolder(RemoteFolderTree tree, string folderId)
-    {
-        return tree.Items.FirstOrDefault(value =>
-            string.Equals(value.FolderId, folderId, StringComparison.Ordinal))
-            ?? throw new ArchidektProviderException(
-                ArchidektFailureKind.NotFound,
-                "folder-not-found",
-                "The requested Archidekt folder was not found.");
-    }
-
-    /// <summary>
-    /// Rejects a move that would place one folder beneath itself or a descendant.
-    /// </summary>
-    private static void PreventFolderCycle(
-        RemoteFolderTree tree,
-        string folderId,
-        string? destinationFolderId)
-    {
-        string? cursor = destinationFolderId;
-        while (cursor is not null)
-        {
-            if (string.Equals(cursor, folderId, StringComparison.Ordinal))
-            {
-                throw Conflict("folder-cycle", "The requested folder move would create a cycle.");
-            }
-
-            cursor = tree.Items.FirstOrDefault(value =>
-                string.Equals(value.FolderId, cursor, StringComparison.Ordinal))?.ParentFolderId;
-        }
-    }
-
-    /// <summary>
-    /// Deduplicates typed move items while rejecting incompatible duplicate identities.
-    /// </summary>
-    private static ArchidektFolderMoveItem[] DeduplicateMoveItems(
-        IReadOnlyList<ArchidektFolderMoveItem> items)
-    {
-        if (items.Count == 0)
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "move-items-required",
-                "At least one folder move item is required.");
-        }
-
-        Dictionary<string, ArchidektFolderMoveItem> unique = new(StringComparer.Ordinal);
-        foreach (ArchidektFolderMoveItem item in items)
-        {
-            string kind = item.Kind.ToLowerInvariant();
-            if (kind is not ("deck" or "folder"))
-            {
-                throw new ArchidektProviderException(
-                    ArchidektFailureKind.InvalidInput,
-                    "invalid-folder-item-kind",
-                    "Folder move item kind must be deck or folder.");
-            }
-
-            string id = ArchidektContract.Required(item.Id, nameof(item.Id));
-            string key = $"{kind}:{id}";
-            ArchidektFolderMoveItem normalized = item with { Kind = kind, Id = id };
-            if (unique.TryGetValue(key, out ArchidektFolderMoveItem? existing) &&
-                !Equals(existing, normalized))
-            {
-                throw new ArchidektProviderException(
-                    ArchidektFailureKind.InvalidInput,
-                    "conflicting-folder-items",
-                    "Duplicate folder move items disagree about their current parent.");
-            }
-
-            unique[key] = normalized;
-        }
-
-        return unique.Values.OrderBy(value => value.Kind).ThenBy(value => value.Id).ToArray();
-    }
-
-    /// <summary>
-    /// Validates one exact current parent and cycle boundary before a move request is sent.
-    /// </summary>
-    private static void ValidateFolderMoveItem(
-        RemoteFolderTree tree,
-        ArchidektFolderMoveItem item,
-        string? destinationFolderId)
-    {
-        RemoteFolderRecord folder = FindFolder(tree, item.Id);
-        RequireMoveParent(item.ExpectedParentFolderId, folder.ParentFolderId);
-        PreventFolderCycle(tree, item.Id, destinationFolderId);
-    }
-
-    /// <summary>
-    /// Requires one typed item to retain its exact caller-observed parent before mutation.
-    /// </summary>
-    private static void RequireMoveParent(string? expectedParent, string? actualParent)
-    {
-        if (!string.Equals(expectedParent, actualParent, StringComparison.Ordinal))
-        {
-            throw Conflict("folder-assignment-changed", "A folder item changed parents before apply.");
-        }
-    }
-
-    /// <summary>
-    /// Maps the explicit provider visibility vocabulary.
-    /// </summary>
-    private static string NormalizeVisibility(string value)
-    {
-        return ArchidektContract.Required(value, nameof(value)).ToLowerInvariant() switch
-        {
-            "private" => "private",
-            "public" => "public",
-            _ => throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "invalid-folder-visibility",
-                "Folder visibility must be private or public."),
-        };
-    }
-
-    /// <summary>
-    /// Maps one safe operation descriptor into a final status row.
-    /// </summary>
-    private static ArchidektOperationStatus Status(
-        ArchidektRemoteOperation operation,
-        string status,
-        string message)
-    {
-        return new ArchidektOperationStatus(
-            operation.Sequence,
-            operation.Kind,
-            operation.Subject,
-            status,
-            message);
-    }
-
-    /// <summary>
-    /// Creates a verified one-operation success result.
-    /// </summary>
-    private static ArchidektApplyResult AppliedResult(
-        string remoteId,
-        ArchidektRemoteOperation operation,
-        string? finalFingerprint)
-    {
-        return new ArchidektApplyResult(
-            "applied",
-            LocalDeckId: null,
-            LocalRevision: null,
-            remoteId,
-            finalFingerprint,
-            [Status(operation, "applied", "Provider absence was verified.")]);
-    }
-
-    /// <summary>
-    /// Creates a one-operation unknown-state result after an ambiguous mutation failure.
-    /// </summary>
-    private static ArchidektApplyResult PartialResult(
-        string remoteId,
-        ArchidektRemoteOperation operation,
-        string message)
-    {
-        return new ArchidektApplyResult(
-            "partial",
-            LocalDeckId: null,
-            LocalRevision: null,
-            remoteId,
-            FinalRemoteFingerprint: null,
-            [Status(operation, "unknown", message)]);
-    }
-
-    /// <summary>
-    /// Creates one provider-state conflict without transport details.
-    /// </summary>
-    private static ArchidektProviderException Conflict(string reasonCode, string message)
-    {
-        return new ArchidektProviderException(
-            ArchidektFailureKind.Conflict,
-            reasonCode,
-            message);
-    }
-
 }

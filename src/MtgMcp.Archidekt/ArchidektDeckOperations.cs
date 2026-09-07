@@ -339,7 +339,7 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Translates one planned primitive into its exact observed provider request.
+    /// Sends the provider request for one planned deck action.
     /// </summary>
     private async Task ExecutePlannedOperationAsync(
         string deckId,

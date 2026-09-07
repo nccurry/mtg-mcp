@@ -23,22 +23,24 @@ route changes easy to locate without changing any public behavior.
 - [Parent Phase 1B plan](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1b-archidekt-ownership-extraction)
 - [Parent architecture](../../planned/evidence-first-deckbuilding-evolution/SADD.md#building-blocks)
 - [Archidekt adapter instructions](../../../../../src/AGENTS.md)
-- [Current service facade](../../../../../src/MtgMcp.Archidekt/ArchidektFacade.cs)
-- [Current workflow owner](../../../../../src/MtgMcp.Archidekt/ArchidektService.cs)
-- [Current transport facade](../../../../../src/MtgMcp.Archidekt/ArchidektTransportFacade.cs)
-- [Current transport owner](../../../../../src/MtgMcp.Archidekt/ArchidektTransport.cs)
+- [Current public service](../../../../../src/MtgMcp.Archidekt/ArchidektService.cs)
+- [Current session](../../../../../src/MtgMcp.Archidekt/ArchidektSession.cs)
+- [Current deck operations](../../../../../src/MtgMcp.Archidekt/ArchidektDeckOperations.cs)
+- [Current folder operations](../../../../../src/MtgMcp.Archidekt/ArchidektFolderOperations.cs)
+- [Current snapshot operations](../../../../../src/MtgMcp.Archidekt/ArchidektSnapshotOperations.cs)
 - [Current fake-HTTP tests](../../../../../tests/MtgMcp.Archidekt.Tests/ArchidektServiceTests.cs)
 
-## Current State
+## Starting State
 
-ArchidektService exposes a stable public API. It creates three named operation
-classes, but those classes only forward into ArchidektOperationContext.
-ArchidektTransport does the same for three named route classes and
-ArchidektTransportContext. The two Context types hold the real code.
+When this child started, ArchidektService exposed a stable public API. It
+created three named operation classes, but those classes only forwarded into
+ArchidektOperationContext. ArchidektTransport did the same for three named
+route classes and ArchidektTransportContext. The two Context types held the
+real code.
 
-The workflow context holds deck creation and deletion, target application,
+The workflow context held deck creation and deletion, target application,
 folder reads and writes, snapshot restore, typed result conversion, request
-limits, confirmations, and read-back checks. The transport context holds every
+limits, confirmations, and read-back checks. The transport context held every
 provider route as well as the HTTP client, credentials, authentication lock,
 in-memory token, pacing, retries, error translation, and disposal.
 
