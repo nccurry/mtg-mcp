@@ -1,0 +1,40 @@
+{
+  "source": "https://backend.commanderspellbook.com/schema/",
+  "apiVersion": "6.3.3",
+  "reviewedAtUtc": "2026-09-07",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/variants/",
+      "query": ["q", "limit", "offset", "groupByCombo"]
+    },
+    {
+      "method": "GET",
+      "path": "/variants/{id}/",
+      "pathParameters": ["id"]
+    },
+    {
+      "method": "POST",
+      "path": "/find-my-combos",
+      "query": ["q", "limit", "offset", "groupByCombo"],
+      "request": {
+        "commanders": [{ "card": "string (1-256)", "quantity": "integer (minimum 1)" }],
+        "main": [{ "card": "string (1-256)", "quantity": "integer (minimum 1)" }]
+      },
+      "response": {
+        "count": "integer or null",
+        "next": "string or null",
+        "previous": "string or null",
+        "results": {
+          "identity": "string array",
+          "included": "variant array",
+          "includedByChangingCommanders": "variant array",
+          "almostIncluded": "variant array",
+          "almostIncludedByAddingColors": "variant array",
+          "almostIncludedByChangingCommanders": "variant array",
+          "almostIncludedByAddingColorsAndChangingCommanders": "variant array"
+        }
+      }
+    }
+  ]
+}
