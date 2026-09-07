@@ -76,8 +76,10 @@ ownership cleanup, not a behavior change.
 | 2026-09-07 | Existing test inspection | Passed | Offline tests cover fake HTTP routes, request counts, authentication retry, rate handling, confirmation, fingerprints, read-back verification, folder safety, snapshots, redaction, and typed failures. |
 | 2026-09-07 | Parent baseline | Passed | The full non-live Task suite, coverage gates, and MCP surface report passed before this child was planned. |
 | 2026-09-07 | Independent design review | Findings fixed | The review clarified that a session charges, but does not own, the public operation budget; added client-ownership disposal coverage; and made the temporary Phase 2 composition boundary explicit. |
+| 2026-09-07 | Phase 1 named-owner tests | Passed | Seven direct fake-HTTP tests cover deck, folder, and snapshot route and workflow owners plus owned-versus-borrowed client disposal. The offline Archidekt project passed 84 tests and `task lint` passed. |
 
 ## Completion Notes
 
-Active. Phase 1 adds direct named-owner characterization before production
-ownership moves begin.
+Phase 1 complete. Direct named-owner tests now hold the current request,
+authentication, read-back, and client-disposal behavior in place before
+production ownership moves begin.

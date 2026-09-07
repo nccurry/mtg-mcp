@@ -20,6 +20,11 @@ internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
     internal List<CapturedArchidektRequest> Requests { get; } = [];
 
     /// <summary>
+    /// Gets whether an owning HTTP client disposed this handler.
+    /// </summary>
+    internal bool IsDisposed { get; private set; }
+
+    /// <summary>
     /// Adds one JSON response for an exact route.
     /// </summary>
     internal void Add(
@@ -85,6 +90,17 @@ internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
     private static string Key(HttpMethod method, string path)
     {
         return $"{method.Method} {path.TrimStart('/')}";
+    }
+
+    /// <inheritdoc/>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            IsDisposed = true;
+        }
+
+        base.Dispose(disposing);
     }
 }
 
