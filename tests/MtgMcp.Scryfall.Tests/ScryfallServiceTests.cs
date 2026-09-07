@@ -1464,7 +1464,8 @@ public sealed class ScryfallServiceTests
         using TemporaryScryfallDirectory temporary = new();
         using (ScryfallDatabase database = new(temporary.Path))
         {
-            _ = await database.BeginGenerationAsync(
+            ScryfallCorpusStore store = new(database);
+            _ = await store.BeginGenerationAsync(
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
                 TestContext.Current.CancellationToken);
         }
@@ -1491,7 +1492,8 @@ public sealed class ScryfallServiceTests
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallDatabase database = new(temporary.Path);
-        Guid generationId = await database.BeginGenerationAsync(
+        ScryfallCorpusStore store = new(database);
+        Guid generationId = await store.BeginGenerationAsync(
             new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
             TestContext.Current.CancellationToken);
         string[] cards = Enumerable.Range(1, 500)
@@ -1521,7 +1523,7 @@ public sealed class ScryfallServiceTests
             raw.RootElement.Clone());
         await using MemoryStream stream = new(payload, writable: false);
 
-        ScryfallCorpusDatasetStatus imported = await database.ImportDatasetAsync(
+        ScryfallCorpusDatasetStatus imported = await store.ImportDatasetAsync(
             generationId,
             metadata,
             stream,
@@ -1531,13 +1533,13 @@ public sealed class ScryfallServiceTests
         Assert.Equal(payload.Length, imported.SourceBytes);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant(), imported.Checksum);
 
-        Guid oversizedGeneration = await database.BeginGenerationAsync(
+        Guid oversizedGeneration = await store.BeginGenerationAsync(
             new DateTimeOffset(2026, 7, 4, 12, 1, 0, TimeSpan.Zero),
             TestContext.Current.CancellationToken);
         ScryfallBulkData tinyDeclaration = metadata with { Size = 1 };
         byte[] oversizedPayload = Encoding.UTF8.GetBytes(new string('x', 1_048_578));
         await using MemoryStream oversized = new(oversizedPayload, writable: false);
-        await Assert.ThrowsAsync<InvalidDataException>(() => database.ImportDatasetAsync(
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.ImportDatasetAsync(
             oversizedGeneration,
             tinyDeclaration,
             oversized,

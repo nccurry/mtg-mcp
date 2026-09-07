@@ -25,8 +25,8 @@ split.
 
 | Phase | Goal | Requirements | Code areas | Validation | Exit criteria | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Characterize direct store behavior. | SSO-005 to SSO-007 | Scryfall tests | Focused non-Live Scryfall tests | Tests pass against the forwarding baseline. | In progress |
-| 2 | Move card-data ownership. | SSO-001, SSO-004, SSO-006 | Card-data store, database, tests | Focused card-data tests and audit | Card-data workflow code leaves the database. | Planned |
+| 1 | Characterize direct store behavior. | SSO-005 to SSO-007 | Scryfall tests | Focused non-Live Scryfall tests | Tests pass against the forwarding baseline. | Complete |
+| 2 | Move card-data ownership. | SSO-001, SSO-004, SSO-006 | Card-data store, database, tests | Focused card-data tests and audit | Card-data workflow code leaves the database. | In progress |
 | 3 | Move snapshot and coordination ownership. | SSO-002 to SSO-006 | Snapshot store, coordination store, database, tests | Focused snapshot and coordination tests | Workflow code leaves the database. | Planned |
 | 4 | Close the child. | SSO-001 to SSO-008 | Tests and PLC docs | Task gates and phase-close audit | The combined diff passes all declared gates. | Planned |
 

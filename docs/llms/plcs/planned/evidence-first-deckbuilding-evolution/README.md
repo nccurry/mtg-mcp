@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-06
 - Last updated: 2026-09-07
-- Current phase: Phase 1A: direct-store characterization
+- Current phase: Phase 1A: card-data ownership
 - Implementation authorized: No
 
 ## Summary
@@ -119,7 +119,7 @@ amendment that removes or replaces it.
 
 - [x] Select and create the first narrow child packet.
 - [x] Move only that approved child to in-progress.
-- [ ] Lock behavior with characterization fixtures before moving ownership.
+- [x] Lock behavior with characterization fixtures before moving ownership.
 - [ ] Update this umbrella if a cross-child guardrail changes.
 - [ ] Record focused and broad validation as each child completes.
 - [ ] Move this packet to completed only after every selected child is completed,
@@ -140,6 +140,7 @@ amendment that removes or replaces it.
 | 2026-09-06 | Documentation validation | Passed | git diff --check, trailing-whitespace scan, and local Markdown-link resolution passed. |
 | 2026-09-07 | Phase 1A owner decision | Passed | The owner selected Scryfall store ownership first and kept all `corpus_state` operations in ScryfallCardDataStore. |
 | 2026-09-07 | Phase 1A independent review | Passed | The corrected child packet passed final independent review and Phase 1 is authorized. |
+| 2026-09-07 | Phase 1A characterization | Passed | The offline Scryfall suite passed 38 tests. A focused test review found no missing coverage in the changed paths. |
 
 ## Completion Notes
 

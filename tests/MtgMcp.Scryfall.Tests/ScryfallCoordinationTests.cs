@@ -16,8 +16,10 @@ public sealed class ScryfallCoordinationTests
     public async Task Leases_CoordinateOwnersAndRecoverAfterExpiry()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallDatabase first = new(temporary.Path);
-        using ScryfallDatabase second = new(temporary.Path);
+        using ScryfallDatabase firstDatabase = new(temporary.Path);
+        using ScryfallDatabase secondDatabase = new(temporary.Path);
+        ScryfallRequestCoordinationStore first = new(firstDatabase);
+        ScryfallRequestCoordinationStore second = new(secondDatabase);
         DateTimeOffset now = new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
 
         Assert.True(await first.TryAcquireLeaseAsync(
@@ -54,8 +56,10 @@ public sealed class ScryfallCoordinationTests
     public async Task ProviderPacing_ReservesOneGlobalTimeline()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallDatabase first = new(temporary.Path);
-        using ScryfallDatabase second = new(temporary.Path);
+        using ScryfallDatabase firstDatabase = new(temporary.Path);
+        using ScryfallDatabase secondDatabase = new(temporary.Path);
+        ScryfallRequestCoordinationStore first = new(firstDatabase);
+        ScryfallRequestCoordinationStore second = new(secondDatabase);
         DateTimeOffset now = new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
         TimeSpan interval = TimeSpan.FromMilliseconds(500);
 
@@ -166,7 +170,8 @@ public sealed class ScryfallCoordinationTests
         using TemporaryScryfallDirectory temporary = new();
         using (ScryfallDatabase database = new(temporary.Path))
         {
-            await database.ReserveProviderStartAsync(
+            ScryfallRequestCoordinationStore store = new(database);
+            await store.ReserveProviderStartAsync(
                 new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
                 TimeSpan.FromMilliseconds(500),
                 TestContext.Current.CancellationToken);

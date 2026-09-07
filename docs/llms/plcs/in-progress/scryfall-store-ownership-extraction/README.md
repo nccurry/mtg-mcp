@@ -8,7 +8,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Phase 1: direct-store characterization
+- Current phase: Phase 2: card-data ownership
 - Owner selection: Phase 1A of the parent PLC
 - Owner authorization: Recorded from the request to implement the PLC phase by phase in main.
 - Independent design review: Passed. The final review confirmed the corrected service setup wording.
@@ -83,7 +83,7 @@ or a public contract choice.
 ## Implementation Checklist
 
 - [x] Move this packet to in-progress after the independent review passes.
-- [ ] Add behavior characterization before the physical move.
+- [x] Add behavior characterization before the physical move.
 - [ ] Move card-data ownership.
 - [ ] Move snapshot and coordination ownership.
 - [ ] Remove forwarding methods and the obsolete aggregate stores file.
@@ -97,6 +97,8 @@ or a public contract choice.
 | 2026-09-07 | Source and test inspection | Passed | ScryfallStores forwards 29 workflow calls to ScryfallDatabase. Existing tests cover card-data lifecycle, snapshots, leases, pacing, cancellation, and typed outcomes. |
 | 2026-09-07 | Public-surface inspection | Passed | This child has no tool, mode, configuration, provider, or persistence-format change. |
 | 2026-09-07 | Independent design review | Passed | The review found an atomic-state ownership problem, a shared tag-weight rule, incomplete state-test coverage, misplaced stored records, unclear internal names, and one service setup wording error. The fixes passed a final review. |
+| 2026-09-07 | Phase 1 focused tests | Passed | The offline Scryfall test suite passed 38 of 38 tests, including direct card-data and snapshot store coverage. |
+| 2026-09-07 | Phase 1 test review | Passed | The test review found no missing coverage in the changed paths. Existing service tests retain guard, failure, and cancellation coverage. |
 
 ## Completion Notes
 
