@@ -1464,7 +1464,7 @@ public sealed class ScryfallServiceTests
         using TemporaryScryfallDirectory temporary = new();
         using (ScryfallDatabase database = new(temporary.Path))
         {
-            ScryfallCorpusStore store = new(database);
+            ScryfallCardDataStore store = new(database);
             _ = await store.BeginGenerationAsync(
                 new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
                 TestContext.Current.CancellationToken);
@@ -1492,7 +1492,7 @@ public sealed class ScryfallServiceTests
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallDatabase database = new(temporary.Path);
-        ScryfallCorpusStore store = new(database);
+        ScryfallCardDataStore store = new(database);
         Guid generationId = await store.BeginGenerationAsync(
             new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
             TestContext.Current.CancellationToken);

@@ -17,7 +17,7 @@ public sealed class ScryfallStoreTests
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallDatabase database = new(temporary.Path);
-        ScryfallCorpusStore store = new(database);
+        ScryfallCardDataStore store = new(database);
         DateTimeOffset firstActivation = new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
         DateTimeOffset secondActivation = firstActivation.AddHours(1);
         DateTimeOffset metadataCheck = secondActivation.AddMinutes(30);
@@ -139,7 +139,7 @@ public sealed class ScryfallStoreTests
     /// Installs one complete fixture generation through the named card-data store.
     /// </summary>
     private static async Task<Guid> InstallGenerationAsync(
-        ScryfallCorpusStore store,
+        ScryfallCardDataStore store,
         int revision,
         DateTimeOffset activatedAtUtc,
         CancellationToken cancellationToken)

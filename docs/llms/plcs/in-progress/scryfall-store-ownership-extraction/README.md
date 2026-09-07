@@ -8,7 +8,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Phase 2: card-data ownership
+- Current phase: Phase 3: snapshot and request-coordination ownership
 - Owner selection: Phase 1A of the parent PLC
 - Owner authorization: Recorded from the request to implement the PLC phase by phase in main.
 - Independent design review: Passed. The final review confirmed the corrected service setup wording.
@@ -84,7 +84,7 @@ or a public contract choice.
 
 - [x] Move this packet to in-progress after the independent review passes.
 - [x] Add behavior characterization before the physical move.
-- [ ] Move card-data ownership.
+- [x] Move card-data ownership.
 - [ ] Move snapshot and coordination ownership.
 - [ ] Remove forwarding methods and the obsolete aggregate stores file.
 - [ ] Run the focused and broad validation gates.
@@ -99,6 +99,9 @@ or a public contract choice.
 | 2026-09-07 | Independent design review | Passed | The review found an atomic-state ownership problem, a shared tag-weight rule, incomplete state-test coverage, misplaced stored records, unclear internal names, and one service setup wording error. The fixes passed a final review. |
 | 2026-09-07 | Phase 1 focused tests | Passed | The offline Scryfall test suite passed 38 of 38 tests, including direct card-data and snapshot store coverage. |
 | 2026-09-07 | Phase 1 test review | Passed | The test review found no missing coverage in the changed paths. Existing service tests retain guard, failure, and cancellation coverage. |
+| 2026-09-07 | Phase 2 card-data ownership | Passed | Card-data SQL and its internal records now live in ScryfallCardDataStore. ScryfallDatabase has no card-data workflow method. |
+| 2026-09-07 | Phase 2 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The project-selected preview SDK is not available locally yet, so its normal run remains part of Phase 4 validation. |
+| 2026-09-07 | Phase 2 naming and ownership audit | Passed | Internal names now say card data. Public ScryfallCorpus names, corpus SQLite names, source values, and error codes stay unchanged for compatibility. |
 
 ## Completion Notes
 

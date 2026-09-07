@@ -11,9 +11,9 @@ namespace MtgMcp.Scryfall;
 internal sealed class ScryfallCardEvidenceOperations : IDisposable
 {
     /// <summary>
-    /// Defines the fixed official corpus profile in deterministic order.
+    /// Defines the fixed official card-data download set in deterministic order.
     /// </summary>
-    private static readonly string[] CorpusDatasetTypes =
+    private static readonly string[] CardDataDatasetTypes =
         ["all_cards", "rulings", "oracle_tags", "art_tags"];
 
     /// <summary>
@@ -42,14 +42,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    /// Stores the unified local persistence boundary.
+    /// Stores the local database.
     /// </summary>
     private readonly ScryfallDatabase database;
 
     /// <summary>
-    /// Owns corpus, card, ruling, and tag persistence operations.
+    /// Owns card, ruling, and tag persistence operations.
     /// </summary>
-    internal ScryfallCorpusStore CorpusStore { get; }
+    internal ScryfallCardDataStore CardDataStore { get; }
 
     /// <summary>
     /// Owns immutable request snapshot persistence operations.
@@ -62,7 +62,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     internal ScryfallRequestCoordinationStore CoordinationStore { get; }
 
     /// <summary>
-    /// Stores the bounded official provider boundary.
+    /// Stores the official Scryfall client.
     /// </summary>
     internal ScryfallProviderClient Provider { get; }
 
@@ -87,7 +87,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     internal string DataRoot { get; }
 
     /// <summary>
-    /// Creates the shared Scryfall capability with official production defaults.
+    /// Creates the Scryfall operations with official production defaults.
     /// </summary>
     internal ScryfallCardEvidenceOperations(
         string dataRoot,
@@ -110,7 +110,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         TimeProvider = timeProvider ?? System.TimeProvider.System;
         database = new ScryfallDatabase(dataRoot);
-        CorpusStore = new ScryfallCorpusStore(database);
+        CardDataStore = new ScryfallCardDataStore(database);
         SnapshotStore = new ScryfallSnapshotStore(database);
         CoordinationStore = new ScryfallRequestCoordinationStore(database);
         Provider = new ScryfallProviderClient(
@@ -199,7 +199,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Resolves one card from the active corpus before using an exact request snapshot or provider read.
+    /// Resolves one card from installed card data before using an exact request snapshot or provider read.
     /// </summary>
     public async Task<OperationResult<ScryfallCardResult>> GetCardAsync(
         ScryfallCardLookup lookup,
@@ -221,10 +221,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh && lookup.Kind != "fuzzy-name")
         {
-            StoredCorpusObject? stored = await CorpusStore.FindCardAsync(lookup, cancellationToken).ConfigureAwait(false);
+            StoredCardDataObject? stored = await CardDataStore.FindCardAsync(lookup, cancellationToken).ConfigureAwait(false);
             if (stored is not null)
             {
-                ScryfallCard card = await MapCorpusCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
+                ScryfallCard card = await MapStoredCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
                 return new OperationSuccess<ScryfallCardResult>(
                     new ScryfallCardResult(card, "corpus", null, stored.GenerationId));
             }
@@ -321,18 +321,18 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 cancellationToken).ConfigureAwait(false);
         }
 
-        Guid? corpusGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
+        Guid? cardDataGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
             ? null
-            : await CorpusStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
-        List<StoredCorpusObject?> corpusMatches = [];
+            : await CardDataStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
+        List<StoredCardDataObject?> cardDataMatches = [];
         List<(int Index, ScryfallCardLookup Lookup)> misses = [];
         for (int index = 0; index < lookups.Count; index++)
         {
             ScryfallCardLookup lookup = lookups[index];
-            StoredCorpusObject? stored = corpusGenerationId is Guid generationId
-                ? await CorpusStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
+            StoredCardDataObject? stored = cardDataGenerationId is Guid generationId
+                ? await CardDataStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
                 : null;
-            corpusMatches.Add(stored);
+            cardDataMatches.Add(stored);
             if (stored is null)
             {
                 misses.Add((index, lookup));
@@ -380,7 +380,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         CollectionResolution resolution = await BuildCollectionResolutionAsync(
             lookups,
-            corpusMatches,
+            cardDataMatches,
             acquired?.Stored,
             missStatus,
             includeRaw,
@@ -388,7 +388,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         ScryfallCollectionCursorState state = new(
             0,
             requestHash,
-            corpusGenerationId,
+            cardDataGenerationId,
             acquired?.Stored.Header.SnapshotId,
             acquired?.Stored.Header.Checksum,
             resolution.Checksum,
@@ -399,7 +399,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             state,
             pageSize,
             acquired is null ? null : SnapshotReference(acquired),
-            corpusGenerationId);
+            cardDataGenerationId);
     }
 
     /// <summary>
@@ -423,14 +423,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         IReadOnlyList<ScryfallEvidenceLookup> validatedLookups = lookups!;
-        Guid? corpusGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
+        Guid? cardDataGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
             ? null
-            : await CorpusStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
-        List<StoredCorpusObject?> corpusMatches = await LoadExactCorpusMatchesAsync(
+            : await CardDataStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
+        List<StoredCardDataObject?> cardDataMatches = await LoadExactCardDataMatchesAsync(
             validatedLookups,
-            corpusGenerationId,
+            cardDataGenerationId,
             cancellationToken).ConfigureAwait(false);
-        List<JsonElement> providerIdentifiers = BuildExactProviderIdentifiers(validatedLookups, corpusMatches);
+        List<JsonElement> providerIdentifiers = BuildExactProviderIdentifiers(validatedLookups, cardDataMatches);
         AcquiredSnapshot? acquired = null;
         if (providerIdentifiers.Count > 0)
         {
@@ -458,7 +458,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         CollectionResolution resolution = await BuildExactCollectionResolutionAsync(
             validatedLookups,
-            corpusMatches,
+            cardDataMatches,
             acquired?.Stored,
             includeRaw: false,
             cancellationToken).ConfigureAwait(false);
@@ -467,7 +467,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             new ScryfallExactCollectionEvidence(
                 resolution.Rows,
                 new ScryfallCollectionEvidenceBinding(
-                    corpusGenerationId,
+                    cardDataGenerationId,
                     snapshot,
                     resolution.Checksum)));
     }
@@ -489,7 +489,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         if (binding.CorpusGenerationId is Guid generationId &&
-            !await CorpusStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
+            !await CardDataStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
         {
             return IdentityEvidenceUnavailable("The required Scryfall corpus generation is no longer retained.");
         }
@@ -514,13 +514,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         IReadOnlyList<ScryfallEvidenceLookup> validatedLookups = lookups!;
-        List<StoredCorpusObject?> corpusMatches = await LoadExactCorpusMatchesAsync(
+        List<StoredCardDataObject?> cardDataMatches = await LoadExactCardDataMatchesAsync(
             validatedLookups,
             binding.CorpusGenerationId,
             cancellationToken).ConfigureAwait(false);
         CollectionResolution resolution = await BuildExactCollectionResolutionAsync(
             validatedLookups,
-            corpusMatches,
+            cardDataMatches,
             snapshot,
             includeRaw: false,
             cancellationToken).ConfigureAwait(false);
@@ -581,16 +581,16 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Loads exact candidates from one retained generation, including printing language when supplied.
     /// </summary>
-    private async Task<List<StoredCorpusObject?>> LoadExactCorpusMatchesAsync(
+    private async Task<List<StoredCardDataObject?>> LoadExactCardDataMatchesAsync(
         IReadOnlyList<ScryfallEvidenceLookup> lookups,
-        Guid? corpusGenerationId,
+        Guid? cardDataGenerationId,
         CancellationToken cancellationToken)
     {
-        List<StoredCorpusObject?> matches = [];
+        List<StoredCardDataObject?> matches = [];
         foreach (ScryfallEvidenceLookup lookup in lookups)
         {
-            StoredCorpusObject? stored = corpusGenerationId is Guid generationId
-                ? await CorpusStore.FindCardInGenerationAsync(
+            StoredCardDataObject? stored = cardDataGenerationId is Guid generationId
+                ? await CardDataStore.FindCardInGenerationAsync(
                     lookup.Lookup,
                     generationId,
                     lookup.RequiredLanguage,
@@ -607,14 +607,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// </summary>
     private static List<JsonElement> BuildExactProviderIdentifiers(
         IReadOnlyList<ScryfallEvidenceLookup> lookups,
-        IReadOnlyList<StoredCorpusObject?> corpusMatches)
+        IReadOnlyList<StoredCardDataObject?> cardDataMatches)
     {
         List<JsonElement> identifiers = [];
         HashSet<string> keys = new(StringComparer.Ordinal);
         for (int index = 0; index < lookups.Count; index++)
         {
             ScryfallEvidenceLookup evidenceLookup = lookups[index];
-            if (corpusMatches[index] is not null ||
+            if (cardDataMatches[index] is not null ||
                 evidenceLookup.RequiredLanguage is not null && evidenceLookup.RequiredLanguage != "en")
             {
                 continue;
@@ -634,7 +634,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// </summary>
     private async Task<CollectionResolution> BuildExactCollectionResolutionAsync(
         IReadOnlyList<ScryfallEvidenceLookup> lookups,
-        IReadOnlyList<StoredCorpusObject?> corpusMatches,
+        IReadOnlyList<StoredCardDataObject?> cardDataMatches,
         StoredSnapshot? snapshot,
         bool includeRaw,
         CancellationToken cancellationToken)
@@ -653,15 +653,15 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         for (int index = 0; index < lookups.Count; index++)
         {
             ScryfallEvidenceLookup evidenceLookup = lookups[index];
-            StoredCorpusObject? stored = corpusMatches[index];
+            StoredCardDataObject? stored = cardDataMatches[index];
             string languageKey = evidenceLookup.RequiredLanguage ?? "-";
             if (stored is not null)
             {
-                ScryfallCard card = await MapCorpusCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
+                ScryfallCard card = await MapStoredCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
                 rows.Add(new ScryfallCollectionRow(index, evidenceLookup.Lookup, "found", "corpus", card, null));
                 checksumMembers.Add(
                     $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|corpus|" +
-                    $"{stored.GenerationId:D}|{ScryfallDatabase.Hash(stored.RawJson)}");
+                    $"{stored.GenerationId:D}|{ScryfallHash.Compute(stored.RawJson)}");
                 continue;
             }
 
@@ -680,7 +680,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     null));
                 checksumMembers.Add(
                     $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|request-snapshot|" +
-                    $"{snapshot!.Header.SnapshotId:D}|{ScryfallDatabase.Hash(found.Raw)}");
+                    $"{snapshot!.Header.SnapshotId:D}|{ScryfallHash.Compute(found.Raw)}");
                 continue;
             }
 
@@ -694,7 +694,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             checksumMembers.Add($"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|{status}");
         }
 
-        return new CollectionResolution(rows, ScryfallDatabase.Hash(string.Join('\n', checksumMembers)));
+        return new CollectionResolution(rows, ScryfallHash.Compute(string.Join('\n', checksumMembers)));
     }
 
     /// <summary>
@@ -706,7 +706,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Replays one collection continuation from its exact retained corpus and provider evidence.
+    /// Replays one collection continuation from its exact retained card data and provider evidence.
     /// </summary>
     private async Task<OperationResult<ScryfallCollectionResult>> ContinueCollectionAsync(
         IReadOnlyList<ScryfallCardLookup> lookups,
@@ -724,7 +724,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         if (state.CorpusGenerationId is Guid generationId &&
-            !await CorpusStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
+            !await CardDataStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
         {
             return new OperationUnavailable(
                 "collection-cursor-evidence-unavailable",
@@ -749,13 +749,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
-        List<StoredCorpusObject?> corpusMatches = await LoadCollectionCorpusMatchesAsync(
+        List<StoredCardDataObject?> cardDataMatches = await LoadCollectionCardDataMatchesAsync(
             lookups,
             state.CorpusGenerationId,
             cancellationToken).ConfigureAwait(false);
         CollectionResolution resolution = await BuildCollectionResolutionAsync(
             lookups,
-            corpusMatches,
+            cardDataMatches,
             snapshot,
             state.MissStatus,
             includeRaw,
@@ -806,16 +806,16 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Loads collection candidates from one exact retained generation without consulting current state.
     /// </summary>
-    private async Task<List<StoredCorpusObject?>> LoadCollectionCorpusMatchesAsync(
+    private async Task<List<StoredCardDataObject?>> LoadCollectionCardDataMatchesAsync(
         IReadOnlyList<ScryfallCardLookup> lookups,
-        Guid? corpusGenerationId,
+        Guid? cardDataGenerationId,
         CancellationToken cancellationToken)
     {
-        List<StoredCorpusObject?> matches = [];
+        List<StoredCardDataObject?> matches = [];
         foreach (ScryfallCardLookup lookup in lookups)
         {
-            StoredCorpusObject? stored = corpusGenerationId is Guid generationId
-                ? await CorpusStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
+            StoredCardDataObject? stored = cardDataGenerationId is Guid generationId
+                ? await CardDataStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
                 : null;
             matches.Add(stored);
         }
@@ -828,7 +828,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// </summary>
     private async Task<CollectionResolution> BuildCollectionResolutionAsync(
         IReadOnlyList<ScryfallCardLookup> lookups,
-        IReadOnlyList<StoredCorpusObject?> corpusMatches,
+        IReadOnlyList<StoredCardDataObject?> cardDataMatches,
         StoredSnapshot? snapshot,
         string missStatus,
         bool includeRaw,
@@ -848,13 +848,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         for (int index = 0; index < lookups.Count; index++)
         {
             ScryfallCardLookup lookup = lookups[index];
-            StoredCorpusObject? stored = corpusMatches[index];
+            StoredCardDataObject? stored = cardDataMatches[index];
             if (stored is not null)
             {
-                ScryfallCard card = await MapCorpusCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
+                ScryfallCard card = await MapStoredCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
                 rows.Add(new ScryfallCollectionRow(index, lookup, "found", "corpus", card, null));
                 checksumMembers.Add(
-                    $"{index}|{CollectionKey(lookup)}|corpus|{stored.GenerationId:D}|{ScryfallDatabase.Hash(stored.RawJson)}");
+                    $"{index}|{CollectionKey(lookup)}|corpus|{stored.GenerationId:D}|{ScryfallHash.Compute(stored.RawJson)}");
                 continue;
             }
 
@@ -865,7 +865,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 rows.Add(new ScryfallCollectionRow(index, lookup, "found", "request-snapshot", found.Card, null));
                 checksumMembers.Add(
                     $"{index}|{CollectionKey(lookup)}|request-snapshot|{snapshot!.Header.SnapshotId:D}|" +
-                    ScryfallDatabase.Hash(found.Raw));
+                    ScryfallHash.Compute(found.Raw));
                 continue;
             }
 
@@ -876,7 +876,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             checksumMembers.Add($"{index}|{CollectionKey(lookup)}|{missStatus}");
         }
 
-        return new CollectionResolution(rows, ScryfallDatabase.Hash(string.Join('\n', checksumMembers)));
+        return new CollectionResolution(rows, ScryfallHash.Compute(string.Join('\n', checksumMembers)));
     }
 
     /// <summary>
@@ -887,7 +887,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         ScryfallCollectionCursorState state,
         int pageSize,
         ScryfallSnapshotReference? snapshot,
-        Guid? corpusGenerationId)
+        Guid? cardDataGenerationId)
     {
         if (state.Offset > rows.Count)
         {
@@ -902,11 +902,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             new ScryfallCollectionResult(
                 new ScryfallPage<ScryfallCollectionRow>(items, rows.Count, next),
                 snapshot,
-                corpusGenerationId));
+                cardDataGenerationId));
     }
 
     /// <summary>
-    /// Returns every printing for one Oracle identity, preferring the active corpus.
+    /// Returns every printing for one Oracle identity, preferring installed card data.
     /// </summary>
     public async Task<OperationResult<ScryfallPrintsResult>> GetPrintsAsync(
         Guid oracleId,
@@ -930,20 +930,20 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
         {
-            StoredCorpusCollection? stored = await CorpusStore.GetPrintsAsync(oracleId, cancellationToken).ConfigureAwait(false);
+            StoredCardDataCollection? stored = await CardDataStore.GetPrintsAsync(oracleId, cancellationToken).ConfigureAwait(false);
             if (stored is not null && stored.Items.Count > 0)
             {
-                OperationResult<ScryfallPage<ScryfallCard>> corpusPage = MapCorpusCardPage(
+                OperationResult<ScryfallPage<ScryfallCard>> cardDataPage = MapStoredCardPage(
                     stored,
                     cursor,
                     pageSize,
                     includeRaw);
-                return corpusPage switch
+                return cardDataPage switch
                 {
                     OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                         new OperationSuccess<ScryfallPrintsResult>(
                             new ScryfallPrintsResult(value.Data, null, stored.GenerationId)),
-                    _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(corpusPage),
+                    _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(cardDataPage),
                 };
             }
         }
@@ -1004,20 +1004,20 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
         {
-            StoredCorpusCollection? stored = await CorpusStore.GetRulingsAsync(oracleId, cancellationToken).ConfigureAwait(false);
+            StoredCardDataCollection? stored = await CardDataStore.GetRulingsAsync(oracleId, cancellationToken).ConfigureAwait(false);
             if (stored is not null && stored.Items.Count > 0)
             {
-                OperationResult<ScryfallPage<ScryfallRuling>> corpusPage = MapCorpusRulingPage(
+                OperationResult<ScryfallPage<ScryfallRuling>> cardDataPage = MapStoredRulingPage(
                     stored,
                     cursor,
                     pageSize,
                     includeRaw);
-                return corpusPage switch
+                return cardDataPage switch
                 {
                     OperationSuccess<ScryfallPage<ScryfallRuling>> value =>
                         new OperationSuccess<ScryfallRulingsResult>(
                             new ScryfallRulingsResult(value.Data, null, stored.GenerationId)),
-                    _ => ForwardFailure<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(corpusPage),
+                    _ => ForwardFailure<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(cardDataPage),
                 };
             }
         }
@@ -1228,15 +1228,15 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             using JsonDocument document = JsonDocument.Parse(raw);
             ScryfallBulkData dataset = ScryfallMapper.BulkData(document.RootElement);
-            if (CorpusDatasetTypes.Contains(dataset.Type, StringComparer.Ordinal))
+            if (CardDataDatasetTypes.Contains(dataset.Type, StringComparer.Ordinal))
             {
                 datasets.Add(dataset);
             }
         }
 
-        datasets.Sort(static (left, right) => Array.IndexOf(CorpusDatasetTypes, left.Type)
-            .CompareTo(Array.IndexOf(CorpusDatasetTypes, right.Type)));
-        if (datasets.Count != CorpusDatasetTypes.Length)
+        datasets.Sort(static (left, right) => Array.IndexOf(CardDataDatasetTypes, left.Type)
+            .CompareTo(Array.IndexOf(CardDataDatasetTypes, right.Type)));
+        if (datasets.Count != CardDataDatasetTypes.Length)
         {
             return new OperationUnavailable("incomplete-scryfall-bulk-profile", "Scryfall bulk metadata omitted a required corpus dataset.");
         }
@@ -1264,7 +1264,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw);
         return failure is null
-            ? CorpusStore.SearchTagsAsync(query.Trim(), tagType, includeRaw, cursor, pageSize, cancellationToken)
+            ? CardDataStore.SearchTagsAsync(query.Trim(), tagType, includeRaw, cursor, pageSize, cancellationToken)
             : Task.FromResult<OperationResult<ScryfallPage<ScryfallTag>>>(failure);
     }
 
@@ -1283,7 +1283,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     {
         if (string.IsNullOrWhiteSpace(tagIdentity) ||
             !AllowedValue(tagType, "oracle", "art") ||
-            ScryfallDatabase.WeightRank(minimumWeight) < 0)
+            ScryfallTagWeight.Rank(minimumWeight) < 0)
         {
             return new OperationInvalidInput("invalid-scryfall-tag-selector", "Tag selector is invalid.");
         }
@@ -1294,7 +1294,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             return pageFailure;
         }
 
-        OperationResult<StoredCardsByTag> result = await CorpusStore.GetCardsByTagAsync(
+        OperationResult<StoredCardsByTag> result = await CardDataStore.GetCardsByTagAsync(
             tagIdentity.Trim(),
             tagType,
             includeDescendants,
@@ -1308,7 +1308,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         using JsonDocument tagDocument = JsonDocument.Parse(success.Data.TagJson);
         ScryfallTag tag = ScryfallMapper.Tag(tagDocument.RootElement, success.Data.GenerationId, includeRaw);
         string scope = $"tag-cards:{success.Data.GenerationId:D}:{tag.Id:D}:{includeDescendants}:{minimumWeight}";
-        string checksum = ScryfallDatabase.Hash(string.Join('|', success.Data.Assignments.Select(value => value.CardJson)));
+        string checksum = ScryfallHash.Compute(string.Join('|', success.Data.Assignments.Select(value => value.CardJson)));
         if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
         {
             return new OperationInvalidInput("invalid-cursor", "The card-by-tag cursor is invalid for this request.");
@@ -1382,7 +1382,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         string requestJson = JsonSerializer.Serialize(request, SerializerOptions);
-        string fingerprint = ScryfallDatabase.Hash(requestJson);
+        string fingerprint = ScryfallHash.Compute(requestJson);
         DateTimeOffset now = TimeProvider.GetUtcNow();
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
         {
@@ -1472,10 +1472,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Maps one corpus card and its direct community-tag evidence.
+    /// Maps one installed card and its direct community-tag evidence.
     /// </summary>
-    private async Task<ScryfallCard> MapCorpusCardAsync(
-        StoredCorpusObject stored,
+    private async Task<ScryfallCard> MapStoredCardAsync(
+        StoredCardDataObject stored,
         bool includeRaw,
         CancellationToken cancellationToken)
     {
@@ -1500,7 +1500,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
-        IReadOnlyList<ScryfallTagEvidence> tags = await CorpusStore.GetDirectTagsInGenerationAsync(
+        IReadOnlyList<ScryfallTagEvidence> tags = await CardDataStore.GetDirectTagsInGenerationAsync(
             stored.GenerationId,
             oracleId,
             illustrationIds,
@@ -1563,16 +1563,16 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Maps a corpus printing page and its generation-bound cursor.
+    /// Maps an installed card-data printing page and its generation-bound cursor.
     /// </summary>
-    private OperationResult<ScryfallPage<ScryfallCard>> MapCorpusCardPage(
-        StoredCorpusCollection stored,
+    private OperationResult<ScryfallPage<ScryfallCard>> MapStoredCardPage(
+        StoredCardDataCollection stored,
         string? cursor,
         int pageSize,
         bool includeRaw)
     {
         string scope = $"corpus-cards:{stored.GenerationId:D}";
-        string checksum = ScryfallDatabase.Hash(string.Join('|', stored.Items));
+        string checksum = ScryfallHash.Compute(string.Join('|', stored.Items));
         if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
         {
             return new OperationInvalidInput("invalid-cursor", "The Scryfall corpus cursor is invalid.");
@@ -1599,16 +1599,16 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Maps a corpus ruling page and its generation-bound cursor.
+    /// Maps an installed card-data ruling page and its generation-bound cursor.
     /// </summary>
-    private static OperationResult<ScryfallPage<ScryfallRuling>> MapCorpusRulingPage(
-        StoredCorpusCollection stored,
+    private static OperationResult<ScryfallPage<ScryfallRuling>> MapStoredRulingPage(
+        StoredCardDataCollection stored,
         string? cursor,
         int pageSize,
         bool includeRaw)
     {
         string scope = $"corpus-rulings:{stored.GenerationId:D}";
-        string checksum = ScryfallDatabase.Hash(string.Join('|', stored.Items));
+        string checksum = ScryfallHash.Compute(string.Join('|', stored.Items));
         if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
         {
             return new OperationInvalidInput("invalid-cursor", "The Scryfall corpus cursor is invalid.");
@@ -1798,7 +1798,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Validates that one metadata response contains each fixed corpus dataset exactly once.
+    /// Validates that one metadata response contains each required card-data dataset exactly once.
     /// </summary>
     private static void ValidateBulkMembers(IReadOnlyList<string> members)
     {
@@ -1807,7 +1807,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             using JsonDocument document = JsonDocument.Parse(raw);
             string type = ScryfallMapper.RequiredString(document.RootElement, "type");
-            if (!CorpusDatasetTypes.Contains(type, StringComparer.Ordinal))
+            if (!CardDataDatasetTypes.Contains(type, StringComparer.Ordinal))
             {
                 continue;
             }
@@ -1819,7 +1819,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
-        if (fixedTypes.Count != CorpusDatasetTypes.Length)
+        if (fixedTypes.Count != CardDataDatasetTypes.Length)
         {
             throw new InvalidDataException("Scryfall did not return the complete fixed bulk metadata profile.");
         }
@@ -1915,11 +1915,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Fingerprints the complete ordered semantic lookup list independently of pagination and output detail.
+    /// Fingerprints the complete ordered lookup list independently of page size and raw-data detail.
     /// </summary>
     private static string CollectionRequestHash(IReadOnlyList<ScryfallCardLookup> lookups)
     {
-        return ScryfallDatabase.Hash(string.Join('\n', lookups.Select(CollectionKey)));
+        return ScryfallHash.Compute(string.Join('\n', lookups.Select(CollectionKey)));
     }
 
     /// <summary>

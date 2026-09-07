@@ -187,7 +187,8 @@ public sealed class ScryfallCoordinationTests
         }
 
         using ScryfallDatabase reopened = new(temporary.Path);
-        await Assert.ThrowsAsync<InvalidDataException>(() => reopened.GetCorpusStatusAsync(
+        ScryfallCardDataStore cardData = new(reopened);
+        await Assert.ThrowsAsync<InvalidDataException>(() => cardData.GetStatusAsync(
             new DateTimeOffset(2026, 7, 4, 12, 0, 1, TimeSpan.Zero),
             TimeSpan.FromHours(24),
             TestContext.Current.CancellationToken));

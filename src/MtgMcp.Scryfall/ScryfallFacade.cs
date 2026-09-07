@@ -7,7 +7,7 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.Scryfall;
 
 /// <summary>
-/// Provides the stable public Scryfall API while routing work to concrete capability owners.
+/// Provides the public Scryfall API by delegating work to the class that owns each operation.
 /// </summary>
 public sealed class ScryfallService : IDisposable
 {
@@ -17,9 +17,9 @@ public sealed class ScryfallService : IDisposable
     private readonly ScryfallCardEvidenceOperations cards;
 
     /// <summary>
-    /// Owns explicit corpus synchronization and generation lifecycle operations.
+    /// Owns explicit card-data synchronization and generation lifecycle operations.
     /// </summary>
-    private readonly ScryfallCorpusLifecycleOperations corpus;
+    private readonly ScryfallCardDataLifecycleOperations cardData;
 
     /// <summary>
     /// Owns immutable request-snapshot inventory, replay, and deletion operations.
@@ -27,7 +27,7 @@ public sealed class ScryfallService : IDisposable
     private readonly ScryfallSnapshotOperations snapshots;
 
     /// <summary>
-    /// Creates the shared Scryfall capability with official production defaults.
+    /// Creates the Scryfall service with official production defaults.
     /// </summary>
     public ScryfallService(
         string dataRoot,
@@ -46,7 +46,7 @@ public sealed class ScryfallService : IDisposable
             freshnessTtl,
             timeProvider,
             handler);
-        corpus = new ScryfallCorpusLifecycleOperations(cards);
+        cardData = new ScryfallCardDataLifecycleOperations(cards);
         snapshots = new ScryfallSnapshotOperations(cards);
     }
 
@@ -253,43 +253,43 @@ public sealed class ScryfallService : IDisposable
             cancellationToken);
     }
 
-    /// <inheritdoc cref="ScryfallCorpusLifecycleOperations.GetStatusAsync"/>
+    /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.GetStatusAsync"/>
     public Task<OperationResult<ScryfallCorpusStatus>> GetCorpusStatusAsync(
         CancellationToken cancellationToken = default)
     {
-        return corpus.GetStatusAsync(cancellationToken);
+        return cardData.GetStatusAsync(cancellationToken);
     }
 
-    /// <inheritdoc cref="ScryfallCorpusLifecycleOperations.SyncAsync"/>
+    /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.SyncAsync"/>
     public Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusAsync(
         string metadataPolicy = "default",
         Guid? expectedActiveGeneration = null,
         CancellationToken cancellationToken = default)
     {
-        return corpus.SyncAsync(metadataPolicy, expectedActiveGeneration, cancellationToken);
+        return cardData.SyncAsync(metadataPolicy, expectedActiveGeneration, cancellationToken);
     }
 
-    /// <inheritdoc cref="ScryfallCorpusLifecycleOperations.RollbackAsync"/>
+    /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.RollbackAsync"/>
     public Task<OperationResult<ScryfallCorpusMutationResult>> RollbackCorpusAsync(
         Guid expectedActiveGeneration,
         Guid expectedPreviousGeneration,
         bool acknowledgeActivationChange,
         CancellationToken cancellationToken = default)
     {
-        return corpus.RollbackAsync(
+        return cardData.RollbackAsync(
             expectedActiveGeneration,
             expectedPreviousGeneration,
             acknowledgeActivationChange,
             cancellationToken);
     }
 
-    /// <inheritdoc cref="ScryfallCorpusLifecycleOperations.DeleteAsync"/>
+    /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.DeleteAsync"/>
     public Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
         Guid expectedActiveGeneration,
         bool acknowledgeDataLoss,
         CancellationToken cancellationToken = default)
     {
-        return corpus.DeleteAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken);
+        return cardData.DeleteAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallSnapshotOperations.ListAsync"/>
@@ -341,29 +341,29 @@ public sealed class ScryfallService : IDisposable
 }
 
 /// <summary>
-/// Owns explicit corpus synchronization, rollback, status, and deletion operations.
+/// Owns explicit card-data synchronization, rollback, status, and deletion operations.
 /// </summary>
-internal sealed class ScryfallCorpusLifecycleOperations
+internal sealed class ScryfallCardDataLifecycleOperations
 {
     /// <summary>Stores card metadata acquisition and the shared provider runtime.</summary>
     private readonly ScryfallCardEvidenceOperations cards;
 
-    /// <summary>Creates corpus lifecycle operations around the shared provider runtime.</summary>
-    internal ScryfallCorpusLifecycleOperations(ScryfallCardEvidenceOperations cards)
+    /// <summary>Creates card-data lifecycle operations around the shared provider runtime.</summary>
+    internal ScryfallCardDataLifecycleOperations(ScryfallCardEvidenceOperations cards)
     {
         this.cards = cards;
     }
 
-    /// <summary>Reports installed corpus state without network access.</summary>
+    /// <summary>Reports installed card-data state without network access.</summary>
     internal Task<OperationResult<ScryfallCorpusStatus>> GetStatusAsync(CancellationToken cancellationToken)
     {
-        return cards.CorpusStore.GetStatusAsync(
+        return cards.CardDataStore.GetStatusAsync(
             cards.TimeProvider.GetUtcNow(),
             cards.FreshnessTtl,
             cancellationToken);
     }
 
-    /// <summary>Synchronizes the complete fixed corpus atomically.</summary>
+    /// <summary>Synchronizes the complete fixed card-data set atomically.</summary>
     internal async Task<OperationResult<ScryfallCorpusSyncResult>> SyncAsync(
         string metadataPolicy, Guid? expectedActiveGeneration, CancellationToken cancellationToken)
     {
@@ -396,7 +396,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
 
         try
         {
-            await cards.CorpusStore.RemoveAbandonedStagingGenerationsAsync(cancellationToken)
+            await cards.CardDataStore.RemoveAbandonedStagingGenerationsAsync(cancellationToken)
                 .ConfigureAwait(false);
             return await SyncUnderLeaseAsync(
                 metadataPolicy,
@@ -418,7 +418,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
         CancellationToken cancellationToken)
     {
         return cards.AllowLocalWrites
-            ? cards.CorpusStore.RollbackAsync(
+            ? cards.CardDataStore.RollbackAsync(
                 expectedActiveGeneration,
                 expectedPreviousGeneration,
                 acknowledgeActivationChange,
@@ -426,12 +426,12 @@ internal sealed class ScryfallCorpusLifecycleOperations
             : Task.FromResult(LocalWriteRequired<ScryfallCorpusMutationResult>());
     }
 
-    /// <summary>Deletes installed corpus generations under an exact active-generation guard.</summary>
+    /// <summary>Deletes installed card-data generations under an exact active-generation guard.</summary>
     internal Task<OperationResult<ScryfallCorpusMutationResult>> DeleteAsync(
         Guid expectedActiveGeneration, bool acknowledgeDataLoss, CancellationToken cancellationToken)
     {
         return cards.AllowLocalWrites
-            ? cards.CorpusStore.DeleteAsync(
+            ? cards.CardDataStore.DeleteAsync(
                 expectedActiveGeneration,
                 acknowledgeDataLoss,
                 cancellationToken)
@@ -468,10 +468,10 @@ internal sealed class ScryfallCorpusLifecycleOperations
         }
 
         DateTimeOffset now = cards.TimeProvider.GetUtcNow();
-        if (await cards.CorpusStore.ActiveMetadataMatchesAsync(metadata.Data.Datasets, cancellationToken)
+        if (await cards.CardDataStore.ActiveMetadataMatchesAsync(metadata.Data.Datasets, cancellationToken)
                 .ConfigureAwait(false))
         {
-            await cards.CorpusStore.RecordMetadataCheckAsync(now, cancellationToken).ConfigureAwait(false);
+            await cards.CardDataStore.RecordMetadataCheckAsync(now, cancellationToken).ConfigureAwait(false);
             OperationResult<ScryfallCorpusStatus> currentResult = await GetStatusAsync(cancellationToken)
                 .ConfigureAwait(false);
             if (currentResult is not OperationSuccess<ScryfallCorpusStatus> current)
@@ -492,7 +492,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
             return spaceFailure;
         }
 
-        Guid generationId = await cards.CorpusStore.BeginGenerationAsync(now, cancellationToken)
+        Guid generationId = await cards.CardDataStore.BeginGenerationAsync(now, cancellationToken)
             .ConfigureAwait(false);
         string stage = "initialization";
         string? datasetType = null;
@@ -510,7 +510,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
                     download.Stream,
                     CompressionMode.Decompress,
                     leaveOpen: true);
-                await cards.CorpusStore.ImportDatasetAsync(
+                await cards.CardDataStore.ImportDatasetAsync(
                     generationId,
                     dataset,
                     decompressed,
@@ -519,12 +519,12 @@ internal sealed class ScryfallCorpusLifecycleOperations
 
             datasetType = null;
             stage = "activation";
-            return await cards.CorpusStore.ActivateGenerationAsync(generationId, now, cancellationToken)
+            return await cards.CardDataStore.ActivateGenerationAsync(generationId, now, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            await cards.CorpusStore.DeleteGenerationAsync(generationId, CancellationToken.None)
+            await cards.CardDataStore.DeleteGenerationAsync(generationId, CancellationToken.None)
                 .ConfigureAwait(false);
             throw;
         }
@@ -532,7 +532,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
             exception is InvalidDataException or JsonException or IOException or
                 ScryfallProviderException or SqliteException)
         {
-            await cards.CorpusStore.DeleteGenerationAsync(generationId, CancellationToken.None)
+            await cards.CardDataStore.DeleteGenerationAsync(generationId, CancellationToken.None)
                 .ConfigureAwait(false);
             string subject = datasetType is null ? "corpus" : $"{datasetType} dataset";
             return exception switch
@@ -558,7 +558,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
         }
     }
 
-    /// <summary>Performs a conservative free-space preflight before corpus synchronization.</summary>
+    /// <summary>Performs a conservative free-space preflight before card-data synchronization.</summary>
     private OperationUnavailable? CheckDiskSpace(IReadOnlyList<ScryfallBulkData> datasets)
     {
         try
@@ -582,7 +582,7 @@ internal sealed class ScryfallCorpusLifecycleOperations
         }
     }
 
-    /// <summary>Returns the uniform read-only failure for corpus mutations.</summary>
+    /// <summary>Returns the uniform read-only failure for card-data mutations.</summary>
     private static OperationResult<T> LocalWriteRequired<T>()
     {
         return new OperationUnavailable(
