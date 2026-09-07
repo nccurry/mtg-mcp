@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
@@ -20,6 +20,7 @@
 | 2026-09-07 | mtg-mcp | The owner kept all `corpus_state` operations in ScryfallCardDataStore. |
 | 2026-09-07 | mtg-mcp | The owner approved clear internal card-data names and record ownership. |
 | 2026-09-07 | mtg-mcp | Independent review passed. Phase 1 direct-store characterization is authorized. |
+| 2026-09-07 | mtg-mcp | Implementation, final validation, and the ownership audit completed. |
 
 ## Executive Summary
 
@@ -29,9 +30,9 @@ Three concrete stores receive that database owner and contain their own domain
 SQL.
 
 The refactor removes indirection instead of adding it. No interface, repository,
-or generic data-access layer sits between a store and SQLite. The only shared
-helper is a small internal value-codec type when several stores need identical
-UUID or UTC SQLite representations.
+or generic data-access layer sits between a store and SQLite. Small helpers
+share only fixed values: SQLite UUID and UTC conversion, stable hashes, and
+the fixed Scryfall tag-weight order.
 
 ## Goals, Non-Goals, And Design Drivers
 
@@ -63,11 +64,11 @@ ScryfallProviderClient. ScryfallService creates
 ScryfallCardEvidenceOperations plus the lifecycle and snapshot operation
 classes. Those operation classes receive ScryfallCardEvidenceOperations.
 
-The present ScryfallStores.cs file exposes 29 forwarding workflow methods.
-ScryfallDatabase implements card-data, snapshot, and coordination SQL in the same
-class as schema and connection work.
+Before this child, ScryfallStores.cs exposed 29 forwarding workflow methods.
+ScryfallDatabase implemented card-data, snapshot, and coordination SQL in the
+same class as schema and connection work.
 
-This child moves the existing code only within MtgMcp.Scryfall. It does not
+This child moved the existing code only within MtgMcp.Scryfall. It did not
 change a project reference, exported type, HTTP contract, or MCP registration.
 
 ## Constraints
@@ -111,16 +112,15 @@ dependency, not a general persistence API.
 
 ### Shared SQLite Values
 
-Create ScryfallSql only if more than one store needs a common representation.
-It can contain fixed UUID and UTC formatting and parsing. It cannot contain
-domain SQL, SqliteCommand use, reader access, repositories, or connection
-creation.
+ScryfallSql holds the shared UUID and UTC formatting and parsing. It does not
+contain domain SQL, SqliteCommand use, reader access, repositories, or
+connection creation.
 
-Create ScryfallHash for the current UTF-8, lowercase SHA-256 value. Card-data,
+ScryfallHash holds the current UTF-8, lowercase SHA-256 value. Card-data,
 snapshot, and evidence operations use this helper. It has no database
 dependency.
 
-Create ScryfallTagWeight for the fixed Scryfall tag-weight order. Card-data and
+ScryfallTagWeight holds the fixed Scryfall tag-weight order. Card-data and
 evidence operations use this helper. It has no SQLite dependency. It accepts
 weak, median, strong, very_strong, and very-strong. It rejects other values.
 
@@ -136,8 +136,8 @@ CardDataStore.RecordMetadataCheckAsync.
 
 ### Unused Convenience Method
 
-The current ScryfallDatabase.GetDirectTagsAsync method has no source caller.
-Remove it after a source reference check. The retained
+The old ScryfallDatabase.GetDirectTagsAsync method had no source caller and was
+removed after a source reference check. The retained
 GetDirectTagsInGenerationAsync method is the actual store contract used for
 stable generation-bound evidence.
 

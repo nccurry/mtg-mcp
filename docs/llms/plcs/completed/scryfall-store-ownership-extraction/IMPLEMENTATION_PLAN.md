@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1a-scryfall-ownership-extraction)
 - Owner: mtg-mcp
@@ -28,7 +28,7 @@ split.
 | 1 | Characterize direct store behavior. | SSO-005 to SSO-007 | Scryfall tests | Focused non-Live Scryfall tests | Tests pass against the forwarding baseline. | Complete |
 | 2 | Move card-data ownership. | SSO-001, SSO-004, SSO-006 | Card-data store, database, tests | Focused card-data tests and audit | Card-data workflow code leaves the database. | Complete |
 | 3 | Move snapshot and coordination ownership. | SSO-002 to SSO-006 | Snapshot store, coordination store, database, tests | Focused snapshot and coordination tests | Workflow code leaves the database. | Complete |
-| 4 | Close the child. | SSO-001 to SSO-008 | Tests and PLC docs | Task gates and phase-close audit | The combined diff passes all declared gates. | In progress |
+| 4 | Close the child. | SSO-001 to SSO-008 | Tests and PLC docs | Task gates and phase-close audit | The combined diff passes all declared gates. | Complete |
 
 ## Phase Details
 
@@ -135,11 +135,11 @@ split.
 
 ## Completion Criteria
 
-- [ ] Each Must requirement has passing evidence.
-- [ ] The child has no unreviewed architecture finding.
-- [ ] Each named store contains its real SQLite workflow code.
-- [ ] ScryfallDatabase contains only infrastructure support.
-- [ ] No generic persistence abstraction was added.
-- [ ] No provider, MCP, configuration, package, or database format changed.
-- [ ] All normal tests remain offline.
-- [ ] The parent Phase 1A status and child completion notes are current.
+- [x] Each Must requirement has passing evidence.
+- [x] The child has no unreviewed architecture finding.
+- [x] Each named store contains its real SQLite workflow code.
+- [x] ScryfallDatabase contains only infrastructure support.
+- [x] No generic persistence abstraction was added.
+- [x] No provider, MCP, configuration, package, or database format changed.
+- [x] All normal tests remain offline.
+- [x] The parent Phase 1A status and child completion notes are current.

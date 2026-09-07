@@ -21,7 +21,7 @@ it is useful baseline evidence but not a review of those user changes.
 | Coverage | Passed. Each production assembly is above 90% line coverage. |
 | MCP surface | Passed. 93 statically registered tools, one capability resource, zero prompts. |
 | Core boundaries | Strong. Core has no adapter/host references; Statistics remains provider-independent. |
-| Adapter ownership | Needs rework. Scryfall and Archidekt have named owners that mostly forward to large context/database classes. |
+| Adapter ownership | Scryfall is complete. Archidekt still has named owners that forward to large context classes. |
 | Reliability review | No P0 or P1 defect found in the audited scope. Existing operation modes, typed outcomes, explicit write guards, and fixture-backed tests are good foundations. |
 | Dependencies | No known vulnerabilities. Several package updates, including a major MCP SDK update, need a focused compatibility review. |
 
@@ -30,26 +30,19 @@ it is useful baseline evidence but not a review of those user changes.
 ### ARCH-001 — Scryfall persistence ownership is nominal, not physical
 
 - Severity: P2
-- Status: Open
+- Status: Complete
 - Affected area: MtgMcp.Scryfall
 
-The completed hardening design assigns connection/schema work to
+At the time of this audit, the named stores forwarded to one large database
+class. The completed hardening design assigns connection/schema work to
 [ScryfallDatabase](../../completed/mcp-contract-and-adapter-hardening/SADD.md#scryfall-building-blocks)
-and corpus, snapshot, and coordination work to separate stores. In the current
-source, [ScryfallStores.cs](../../../../../src/MtgMcp.Scryfall/ScryfallStores.cs)
-only forwards calls to
-[ScryfallDatabase.cs](../../../../../src/MtgMcp.Scryfall/ScryfallDatabase.cs).
-That one class still owns corpus reads and imports, snapshots, cross-process
-coordination, SQL helpers, and schema work.
+and card data, snapshots, and coordination work to separate stores.
 
-The result is extra navigation without a real seam. A corpus change, snapshot
-change, or pacing change all modifies the same large owner. The current tests
-protect behavior, but the design makes future changes harder to isolate.
-
-Planned disposition: keep one concrete SQLite connection/schema owner; move the
-real corpus, snapshot, and coordination SQL operations into the named stores;
-remove the forwarding bodies. Do not add a repository interface solely to
-perform this move.
+This was resolved in the
+[completed Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md).
+ScryfallDatabase now owns only the path, connections, schema, and disposal.
+The three named stores own their SQLite workflows, and a narrow reflection test
+prevents the database from adding a domain method again.
 
 ### ARCH-002 — Archidekt’s domain owners are forwarding layers around two god contexts
 

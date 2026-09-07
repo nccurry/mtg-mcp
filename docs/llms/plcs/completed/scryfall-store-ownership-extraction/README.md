@@ -2,13 +2,13 @@
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: docs/llms/plcs/in-progress/scryfall-store-ownership-extraction/
+- Status: Completed
+- Folder: docs/llms/plcs/completed/scryfall-store-ownership-extraction/
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Phase 4: child close-out
+- Current phase: All phases completed
 - Owner selection: Phase 1A of the parent PLC
 - Owner authorization: Recorded from the request to implement the PLC phase by phase in main.
 - Independent design review: Passed. The final review confirmed the corrected service setup wording.
@@ -16,9 +16,9 @@
 
 ## Summary
 
-This child makes the Scryfall card-data, snapshot, and request-coordination
-stores own their SQLite work. Today, each named store forwards every call to
-one large ScryfallDatabase class.
+This child made the Scryfall card-data, snapshot, and request-coordination
+stores own their SQLite work. Before this child, each named store forwarded
+every call to one large ScryfallDatabase class.
 
 The refactor keeps the current database file and all observable behavior. It
 does not add a tool, change a tool, call a new Scryfall endpoint, or migrate
@@ -59,11 +59,11 @@ one persistence domain without navigating unrelated domains.
 | scryfall.db, SchemaVersion, SchemaChecksum, tables, indexes, and data retention | No change. |
 | Configuration, package references, and Core/App project boundaries | No change. |
 
-## Current Open Questions
+## Resolved Design Decision
 
-No owner decision blocks this child. The owner approved this rule: the card-data
+No owner decision blocked this child. The owner approved this rule: the card-data
 store owns every `corpus_state` field, including the metadata-check time. This
-keeps activation and deletion atomic. The selected design keeps direct concrete
+keeps activation and deletion atomic. The selected design uses direct concrete
 SQLite dependencies within MtgMcp.Scryfall. It does not require a new interface
 or a public contract choice.
 
@@ -86,9 +86,9 @@ or a public contract choice.
 - [x] Add behavior characterization before the physical move.
 - [x] Move card-data ownership.
 - [x] Move snapshot and coordination ownership.
-- [ ] Remove forwarding methods and the obsolete aggregate stores file.
-- [ ] Run the focused and broad validation gates.
-- [ ] Run the phase-close audit and record its result.
+- [x] Remove forwarding methods and the obsolete aggregate stores file.
+- [x] Run the focused and broad validation gates.
+- [x] Run the phase-close audit and record its result.
 
 ## Validation Evidence
 
@@ -100,13 +100,19 @@ or a public contract choice.
 | 2026-09-07 | Phase 1 focused tests | Passed | The offline Scryfall test suite passed 38 of 38 tests, including direct card-data and snapshot store coverage. |
 | 2026-09-07 | Phase 1 test review | Passed | The test review found no missing coverage in the changed paths. Existing service tests retain guard, failure, and cancellation coverage. |
 | 2026-09-07 | Phase 2 card-data ownership | Passed | Card-data SQL and its internal records now live in ScryfallCardDataStore. ScryfallDatabase has no card-data workflow method. |
-| 2026-09-07 | Phase 2 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The project-selected preview SDK is not available locally yet, so its normal run remains part of Phase 4 validation. |
+| 2026-09-07 | Phase 2 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The pinned SDK validation later passed in Phase 4. |
 | 2026-09-07 | Phase 2 naming and ownership audit | Passed | Internal names now say card data. Public ScryfallCorpus names, corpus SQLite names, source labels, and error codes stay unchanged for compatibility. |
 | 2026-09-07 | Phase 3 snapshot and coordination ownership | Passed | Snapshot and coordination SQL now live in their named stores. ScryfallDatabase has no snapshot or request-coordination workflow method. |
-| 2026-09-07 | Phase 3 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The project-selected preview SDK is not available locally yet, so its normal run remains part of Phase 4 validation. |
+| 2026-09-07 | Phase 3 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The pinned SDK validation later passed in Phase 4. |
 | 2026-09-07 | Phase 3 naming and ownership audit | Passed | Each named store has one source file and uses ScryfallDatabase only to open SQLite connections and validate the schema. No forwarding store remains. |
+| 2026-09-07 | Ownership boundary test | Passed | ScryfallOwnershipTests prevents ScryfallDatabase from declaring anything beyond connection, schema, and disposal methods. |
+| 2026-09-07 | Phase 4 task gates | Passed | `task lint`, `task test`, `task coverage`, and `task surface:report` passed with the pinned .NET 11 preview SDK. All normal tests stayed offline, and every production assembly cleared the 90 percent coverage gate. |
+| 2026-09-07 | Documentation checks | Passed | `git diff --check` and the local Markdown-link inspection passed. |
+| 2026-09-07 | Final code audit | Passed | The audit found the missing ownership boundary test above and no remaining blocking design, reliability, code-quality, test-quality, dead-code, or performance issue. |
 
 ## Completion Notes
 
-Not complete. The parent PLC remains the cross-child guardrail. This child only
-addresses physical Scryfall persistence ownership.
+Complete. Card data, request snapshots, and request coordination now have
+named SQLite owners. ScryfallDatabase now only owns the database path,
+connections, schema, and disposal. The public API and SQLite schema keep their
+existing `Corpus` names for compatibility; new internal names use "card data."

@@ -29,7 +29,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | Phase | Goal | Requirements | Code areas | Validation | Exit criteria | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 0 | Ratify the target and activate one narrow child. | EFD-001–013 | PLC/docs only | Review, link check, diff check | Owner selects a child and records implementation authority. | Complete |
-| 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change. The database owner only owns connection, schema, and disposal. | In progress |
+| 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change. The database owner only owns connection, schema, and disposal. | Complete |
 | 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | Planned |
 | 2 | Prove MCP SDK/toolchain compatibility before upgrades. | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, dependency docs | Process/client/schema/package checks | A version decision is evidence-backed and separately reviewable. | Planned |
 | 3 | Admit one high-value source, likely Commander Spellbook. | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Admission review, fake HTTP, surface/E2E checks | Opt-in evidence tools are attributable, bounded, and policy-compliant. | Planned |

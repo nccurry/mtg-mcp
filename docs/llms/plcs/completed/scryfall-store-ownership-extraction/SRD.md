@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
@@ -20,12 +20,14 @@
 | 2026-09-07 | mtg-mcp | The owner assigned all `corpus_state` reads and writes to ScryfallCardDataStore after independent review. |
 | 2026-09-07 | mtg-mcp | The owner approved clear internal card-data names and record ownership. |
 | 2026-09-07 | mtg-mcp | Independent review passed. Phase 1 direct-store characterization is authorized. |
+| 2026-09-07 | mtg-mcp | Implementation, final validation, and the ownership audit completed. |
 
 ## Executive Summary
 
-MtgMcp.Scryfall has named stores, but they do not own their declared behavior.
-Every store forwards to ScryfallDatabase. This child moves the current SQLite
-work into those stores without changing the service, MCP contract, or database.
+Before this child, MtgMcp.Scryfall had named stores that did not own their
+declared behavior. Every store forwarded to ScryfallDatabase. This completed
+child moved the SQLite work into those stores without changing the service,
+MCP contract, or database.
 
 The result is a real internal boundary. Card-data changes stay in
 ScryfallCardDataStore. Snapshot changes stay in ScryfallSnapshotStore. Request
@@ -43,8 +45,10 @@ needs familiarity with the evidence-first rewrite and the Scryfall adapter.
 - [Parent architecture](../../planned/evidence-first-deckbuilding-evolution/SADD.md#building-blocks)
 - [Rewrite guide](../../../../rewrite-guide.md)
 - [Scryfall adapter instructions](../../../../../src/MtgMcp.Scryfall/AGENTS.md)
-- [Current database owner](../../../../../src/MtgMcp.Scryfall/ScryfallDatabase.cs)
-- [Current forwarding stores](../../../../../src/MtgMcp.Scryfall/ScryfallStores.cs)
+- [Database owner](../../../../../src/MtgMcp.Scryfall/ScryfallDatabase.cs)
+- [Card-data store](../../../../../src/MtgMcp.Scryfall/ScryfallCardDataStore.cs)
+- [Snapshot store](../../../../../src/MtgMcp.Scryfall/ScryfallSnapshotStore.cs)
+- [Request-coordination store](../../../../../src/MtgMcp.Scryfall/ScryfallRequestCoordinationStore.cs)
 - [Current Scryfall test fixture](../../../../../tests/MtgMcp.Scryfall.Tests/ScryfallTestFixture.cs)
 
 ## User And Maintainer Outcomes
@@ -62,8 +66,9 @@ needs familiarity with the evidence-first rewrite and the Scryfall adapter.
 ScryfallCardEvidenceOperations creates one ScryfallDatabase, three named
 stores, and the provider client. ScryfallService creates
 ScryfallCardEvidenceOperations plus lifecycle and snapshot operation classes.
-Those operation classes receive ScryfallCardEvidenceOperations. The stores
-currently delegate every operation to the database owner.
+Those operation classes receive ScryfallCardEvidenceOperations. Each store
+contains its own SQLite workflow code and uses the database owner only for
+connections and schema validation.
 
 This child keeps that setup. It changes where the existing SQL and domain
 helpers live. MtgMcp.Core, MtgMcp.App, and all MCP registration stay out of
@@ -207,7 +212,7 @@ This child changes only internal classes in MtgMcp.Scryfall.
 | --- | --- | --- | --- | --- |
 | SQL helpers can move with the wrong data domain. | Risk | A future change can again cross unrelated files. | Implementer | Move each helper with its only caller. Use ScryfallSql only for shared value codecs. |
 | The metadata-check timestamp lives in corpus_state. | Resolved decision | A split owner can break atomic card-data state changes. | Owner | Keep every `corpus_state` read and write in ScryfallCardDataStore. |
-| Existing tests call database workflow methods directly. | Risk | Tests can preserve the wrong boundary. | Implementer | Rewrite those tests to call the named store. |
+| Existing tests call database workflow methods directly. | Resolved | Tests can preserve the wrong boundary. | Implementer | Tests now construct the named store around the database owner. |
 | A source-only ownership test can become too brittle. | Risk | Refactors can fail without a behavior defect. | Implementer | Assert only the declared method boundary. Keep behavior tests as the primary proof. |
 | Technical decision needed | Resolved | None remain. | Owner | The owner approved the concrete-store design and the `corpus_state` boundary. |
 
@@ -224,10 +229,10 @@ Run the focused Scryfall test project after each move. Then run:
 
 ## Definition Of Done
 
-- [ ] All Must requirements have passing objective evidence.
-- [ ] ScryfallDatabase has no card-data, snapshot, or coordination workflow implementation.
-- [ ] The three stores own their declared SQL domains.
-- [ ] No public surface or persisted data format changed.
-- [ ] Normal tests remain deterministic and offline.
-- [ ] The phase-close audit passes.
-- [ ] The parent and child documentation record final validation and disposition.
+- [x] All Must requirements have passing objective evidence.
+- [x] ScryfallDatabase has no card-data, snapshot, or coordination workflow implementation.
+- [x] The three stores own their declared SQL domains.
+- [x] No public surface or persisted data format changed.
+- [x] Normal tests remain deterministic and offline.
+- [x] The phase-close audit passes.
+- [x] The parent and child documentation record final validation and disposition.

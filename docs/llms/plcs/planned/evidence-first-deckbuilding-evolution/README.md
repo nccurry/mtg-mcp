@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-06
 - Last updated: 2026-09-07
-- Current phase: Phase 1A: card-data ownership
+- Current phase: Phase 1B planning: Archidekt ownership
 - Implementation authorized: No
 
 ## Summary
@@ -59,8 +59,8 @@ It must not add a fourth verb: decide.
 | Treat advanced goldfish as a feasibility experiment, not a stable feature promise. | Proposed | A useful bounded model may be possible, but it must not masquerade as a Magic rules engine or a matchup predictor. | [SRD](SRD.md#scope-and-non-scope) |
 | Admit every external source individually. | Proposed | “More sources” is valuable only when access, meaning, retention, and provenance are reliable. | [SADD](SADD.md#provider-admission) |
 | Upgrade the MCP SDK in a focused compatibility child. | Proposed | The installed SDK has a major update available; mixing it into an ownership refactor would hide regressions. | [Audit](AUDIT.md#findings) |
-| Start with Scryfall card-data store ownership. | In progress | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../in-progress/scryfall-store-ownership-extraction/README.md) |
-| Keep all card-data state in ScryfallCardDataStore. | Owner approved | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../in-progress/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
+| Start with Scryfall card-data store ownership. | Complete | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md) |
+| Keep all card-data state in ScryfallCardDataStore. | Implemented | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../completed/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
 
 ## Project And Surface Impact
 
@@ -141,6 +141,7 @@ amendment that removes or replaces it.
 | 2026-09-07 | Phase 1A owner decision | Passed | The owner selected Scryfall store ownership first and kept all `corpus_state` operations in ScryfallCardDataStore. |
 | 2026-09-07 | Phase 1A independent review | Passed | The corrected child packet passed final independent review and Phase 1 is authorized. |
 | 2026-09-07 | Phase 1A characterization | Passed | The offline Scryfall suite passed 38 tests. A focused test review found no missing coverage in the changed paths. |
+| 2026-09-07 | Phase 1A close-out | Passed | The ownership boundary test, lint, all non-live tests, coverage gates, and MCP surface report passed. The final audit found no remaining blocking issue. |
 
 ## Completion Notes
 

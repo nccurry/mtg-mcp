@@ -19,7 +19,7 @@
 | SSO-001 | SSO-FIX-001, SSO-FIX-003, SSO-FIX-007 | Card-data behavior and atomic state remain unchanged after SQL moves. | Direct-store and service tests. |
 | SSO-002 | SSO-FIX-004 | Snapshot order, checksums, replay, and deletion guards remain unchanged. | Direct-store and service tests. |
 | SSO-003 | SSO-FIX-005 | Lease and pacing results retain the existing order and owner rules. | Coordination tests. |
-| SSO-004 | Source ownership scenario | Database type exposes no domain workflow method. | Architecture or reflection test. |
+| SSO-004 | ScryfallOwnershipTests.Database_DeclaresOnlyConnectionSchemaAndDisposalMethods | Database type exposes no domain workflow method. | Reflection test. |
 | SSO-005 | SSO-FIX-006 and surface report | Existing databases open. MCP surface matches pre-change report. | Schema test and task surface:report. |
 | SSO-006 | SSO-FIX-003 through SSO-FIX-007 | Typed outcomes, atomicity, and cancellation remain unchanged. | Focused Scryfall tests. |
 | SSO-007 | All fixture entries | Normal tests use fake HTTP and temporary files only. | Test code inspection and non-Live test run. |
@@ -37,6 +37,7 @@
 | Snapshot deletion | ScryfallSnapshotStore | Incorrect acknowledgement or checksum gives the current typed failure. |
 | Lease ownership | ScryfallRequestCoordinationStore | A different owner cannot release or acquire an active lease. |
 | Provider pacing | ScryfallRequestCoordinationStore | Two database instances reserve the current global timeline. |
+| Database boundary | ScryfallDatabase | It exposes only connection, schema, and disposal methods. |
 | Shared values | ScryfallHash and ScryfallTagWeight | The known hash remains unchanged. Tag-weight tests accept weak, median, strong, very_strong, and very-strong. They reject an unknown value. |
 
 ## MCP Surface Checks
