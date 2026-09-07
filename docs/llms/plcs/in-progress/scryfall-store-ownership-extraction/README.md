@@ -8,7 +8,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Phase 3: snapshot and request-coordination ownership
+- Current phase: Phase 4: child close-out
 - Owner selection: Phase 1A of the parent PLC
 - Owner authorization: Recorded from the request to implement the PLC phase by phase in main.
 - Independent design review: Passed. The final review confirmed the corrected service setup wording.
@@ -85,7 +85,7 @@ or a public contract choice.
 - [x] Move this packet to in-progress after the independent review passes.
 - [x] Add behavior characterization before the physical move.
 - [x] Move card-data ownership.
-- [ ] Move snapshot and coordination ownership.
+- [x] Move snapshot and coordination ownership.
 - [ ] Remove forwarding methods and the obsolete aggregate stores file.
 - [ ] Run the focused and broad validation gates.
 - [ ] Run the phase-close audit and record its result.
@@ -101,7 +101,10 @@ or a public contract choice.
 | 2026-09-07 | Phase 1 test review | Passed | The test review found no missing coverage in the changed paths. Existing service tests retain guard, failure, and cancellation coverage. |
 | 2026-09-07 | Phase 2 card-data ownership | Passed | Card-data SQL and its internal records now live in ScryfallCardDataStore. ScryfallDatabase has no card-data workflow method. |
 | 2026-09-07 | Phase 2 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The project-selected preview SDK is not available locally yet, so its normal run remains part of Phase 4 validation. |
-| 2026-09-07 | Phase 2 naming and ownership audit | Passed | Internal names now say card data. Public ScryfallCorpus names, corpus SQLite names, source values, and error codes stay unchanged for compatibility. |
+| 2026-09-07 | Phase 2 naming and ownership audit | Passed | Internal names now say card data. Public ScryfallCorpus names, corpus SQLite names, source labels, and error codes stay unchanged for compatibility. |
+| 2026-09-07 | Phase 3 snapshot and coordination ownership | Passed | Snapshot and coordination SQL now live in their named stores. ScryfallDatabase has no snapshot or request-coordination workflow method. |
+| 2026-09-07 | Phase 3 focused tests | Passed | The installed .NET 11 preview 6 built the targeted project, and the offline Scryfall suite passed 45 of 45 tests. The project-selected preview SDK is not available locally yet, so its normal run remains part of Phase 4 validation. |
+| 2026-09-07 | Phase 3 naming and ownership audit | Passed | Each named store has one source file and uses ScryfallDatabase only to open SQLite connections and validate the schema. No forwarding store remains. |
 
 ## Completion Notes
 
