@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: product owner, Core maintainer, adapter maintainer, MCP contract maintainer
-- Last updated: 2026-09-06
+- Last updated: 2026-09-07
 - Related design: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - Implementation authorized: No
@@ -48,10 +48,10 @@ the current 0.9 release is an evidence-first clean break.
 - [Performance Ratchet](../../../../performance-ratchet.md)
 - [Current Scryfall/Archidekt hardening design](../../completed/mcp-contract-and-adapter-hardening/SADD.md)
 
-### External sources checked on 2026-09-06
+### External sources checked through 2026-09-07
 
-- [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
-- [MCP tasks specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks)
+- [MCP C# server options](https://csharp.sdk.modelcontextprotocol.io/api/ModelContextProtocol.Server.McpServerOptions.html)
+- [MCP C# client options](https://csharp.sdk.modelcontextprotocol.io/api/ModelContextProtocol.Client.McpClientOptions.html)
 - [C# union types](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/union)
 - [.NET exception guidance](https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions)
 - [Scryfall API FAQ](https://scryfall.com/docs/faqs/i-m-having-trouble-accessing-the-scryfall-api-or-i-m-blocked-17)
@@ -81,9 +81,10 @@ The present server has the right top-level split:
 | --- | --- | --- |
 | MtgMcp.Core | Shared evidence, IDs, outcomes, and small provider-neutral rules | No host, adapter, HTTP, SQLite, or provider transport reference. |
 | MtgMcp.Decks | Local decks, persistence, backups, interchange, and local workflow facts | Own local persistence/interchange; do not become a provider hub. |
-| MtgMcp.Scryfall | Official cards, rulings, community tags, corpus, snapshots, and pacing | Own official acquisition and its data, with real internal store boundaries. |
+| MtgMcp.Scryfall | Official cards, rulings, community tags, card data, snapshots, and pacing | Own official acquisition and its data, with real internal store boundaries. |
 | MtgMcp.Archidekt | Remote deck, folder, snapshot, and sync workflows | Own observed provider contract and all provider safety details. |
 | MtgMcp.Playgroup | Official playgroup observations | Remain a separate provider population. |
+| MtgMcp.Spellbook | Planned Commander Spellbook evidence adapter | Own source HTTP, cache, pace, and source-shaped output; remain opt-in. |
 | MtgMcp.Statistics | Exact, caller-supplied mathematics | Stay BCL-only, legality-free, and provider-independent. |
 | MtgMcp.App | MCP registration, configuration, operation modes, schemas, and composition | Stay a thin, static composition root. |
 
@@ -105,8 +106,8 @@ passes the admission and feasibility gates in this PLC.
 - A commander deck usually has a 100-card construction constraint, but
   Statistics must remain caller-supplied and format-neutral unless a future
   workflow explicitly opts into Commander evidence.
-- External source terms and APIs can change. A research result is not a
-  perpetual implementation approval.
+- Provider APIs and access rules can change. Recheck the published rules before
+  a child begins or releases.
 - Tool annotations are useful hints, not an authorization boundary. The server
   must continue enforcing local and remote mode guards in code.
 
@@ -118,8 +119,8 @@ passes the admission and feasibility gates in this PLC.
 | CASE-002 | A player asks what cards are likely to be in hand, drawn, or available by a turn. | The MCP returns an exact calculation from explicit card groups and assumptions; it does not infer the deck’s plan. |
 | CASE-003 | A player edits a local deck or requests an Archidekt sync. | The MCP exposes a preview/apply workflow with revision/fingerprint checks and typed conflict outcomes. |
 | CASE-004 | A player asks whether an existing deck contains known documented combo pieces. | A future opt-in provider returns Commander Spellbook source evidence, prerequisites, steps, and source identity; it does not say that the combo should be added. |
-| CASE-005 | A player asks what a named community discussion says about a card or archetype. | A future Reddit workflow returns only policy-compliant, attributed, bounded source material after explicit authorization. |
-| CASE-006 | A player asks what is common in a source-defined deck cohort. | A future permissioned provider returns the cohort, denominator, distribution, and source bias; it never converts popularity into a deck-quality score. |
+| CASE-005 | A player asks what a named community discussion says about a card or archetype. | A future Reddit workflow returns attributed, bounded source material only when its published API supports that exact use. |
+| CASE-006 | A player asks what is common in a source-defined deck cohort. | A future official provider returns the cohort, denominator, distribution, and source bias; it never converts popularity into a deck-quality score. |
 | CASE-007 | A player explicitly asks for a bounded goldfish estimate. | A future experimental tool returns sampled traces and model limits, never a claimed real-game win rate. |
 
 ## Scope And Non-Scope
@@ -162,7 +163,7 @@ decision, updated capability evidence, and process-level MCP tests.
   and Playgroup workflows.
 - Existing SQLite stores, caches, immutable snapshots, and package install path.
 - Scryfall, Archidekt, Playgroup, potential Commander Spellbook, Reddit, and
-  future permissioned population providers.
+  future official population providers.
 - MCP clients that depend on static tool discovery and JSON schemas.
 - Unit, integration, architecture, end-to-end, coverage, package, and live
   acceptance suites.
@@ -172,11 +173,11 @@ decision, updated capability evidence, and process-level MCP tests.
 | ID | Priority | Type | Requirement | Rationale | Acceptance criteria |
 | --- | --- | --- | --- | --- | --- |
 | EFD-001 | Must | Product | The server shall return evidence, calculations, and explicit workflows without selecting deckbuilding choices for the caller. | This is the core product promise. | Tool descriptions, outputs, and tests contain no recommendation, weak-card, replacement, or inferred-intent result. |
-| EFD-002 | Must | Architecture | Named internal owners shall contain the behavior their names claim to own. | Forwarding owners hide the true change boundary. | Scryfall corpus/snapshot/coordination and Archidekt deck/folder/snapshot classes own their code; temporary contexts are removed. |
+| EFD-002 | Must | Architecture | Named internal owners shall contain the behavior their names claim to own. | Forwarding owners hide the true change boundary. | Scryfall card-data, snapshot, and coordination classes own their code; temporary contexts are removed. |
 | EFD-003 | Must | Architecture | Core shall remain dependency-light and provider-neutral; App shall remain MCP composition only. | Keeps data contracts stable despite provider churn. | Project-reference and source architecture tests pass; no provider DTO or HTTP client enters Core. |
 | EFD-004 | Must | Reliability | Expected operational states shall use the existing typed OperationResult union; exceptions shall remain for invalid programmer use, cancellation, and unrecoverable boundary faults. | Clients need inspectable, safe outcomes. | Boundary tests cover success, not found, unavailable, unsupported, conflict, invalid input, and cancellation without leaked secrets. |
 | EFD-005 | Must | MCP | Stable tool registration shall remain static for a session, schema-backed, bounded, and assigned to exactly one toolset. | MCP clients need predictable discovery. | Surface, schema, mode, and capability-resource tests agree for every changed tool. |
-| EFD-006 | Must | Provider safety | Every new external source shall pass a documented admission review before production acquisition code is written. | API availability alone does not establish permitted, useful, or durable use. | The child packet contains a completed admission record covering access, terms, data meaning, auth, pacing, cache/retention, fixtures, failure behavior, and evidence label. |
+| EFD-006 | Must | Provider safety | Every new external source shall pass a short source check before production acquisition code is written. | API availability alone does not establish a useful, durable workflow. | The child packet records supported access, data meaning, auth, pacing, cache expiry, fixtures, failure behavior, and the evidence label. |
 | EFD-007 | Must | Evidence | Source results shall preserve provider identity, retrieval time, source reference, freshness/cache state, population/denominator when available, and unknown state when absent. | This prevents popularity, discussion, and source facts from blending into false certainty. | Provider fixtures and output schemas retain the required provenance; missing source fields are not guessed. |
 | EFD-008 | Must | Statistics | Deterministic “what is available by turn” workflows shall use declared groups and exact mathematics before any sampled estimate. | Card draws are finite sampling without replacement; exact answers are clearer than simulation when possible. | Independent-formula tests validate representative 60- and 99-card cases, mulligans, and declared assumptions. |
 | EFD-009 | Must | Simulation | No sampled goldfish capability shall become stable until an approved feasibility child defines its model boundary, caller policy, unsupported mechanics, replay metadata, uncertainty, and stop criteria. | A deterministic seed does not make a heuristic game model factual. | The feasibility child records an accept/defer/reject decision backed by toy-deck traces and calibration cases. |
@@ -219,10 +220,10 @@ remain hidden unless explicitly enabled.
 | --- | --- | --- | --- |
 | 0 | Approve the roadmap and select the first narrow child. | EFD-001 to EFD-013 | Owner approves scope and names an active child; no production code changes occur under this umbrella alone. |
 | 1 | Make Scryfall and Archidekt ownership real. | EFD-002 to EFD-005, EFD-010, EFD-013 | Behavior and surface are unchanged; characterization and broad gates pass. |
-| 2 | Review the MCP SDK/toolchain upgrade separately. | EFD-005, EFD-010, EFD-012, EFD-013 | Target SDK/client contract is proven before package versions change. |
-| 3 | Add a first admitted read-only evidence provider, likely Commander Spellbook. | EFD-001, EFD-003 to EFD-007, EFD-010, EFD-013 | Admission record, fixtures, boundaries, and opt-in surface pass. |
+| 2 | [Pin latest MCP and toolchain inputs](../../completed/latest-mcp-and-toolchain/README.md). | EFD-005, EFD-010, EFD-012, EFD-013 | Current protocol, exact pins, lock files, and package smoke checks pass. |
+| 3 | [Add Commander Spellbook evidence](../commander-spellbook-evidence/README.md). | EFD-001, EFD-003 to EFD-007, EFD-010, EFD-013 | Source contract, fixtures, boundaries, and opt-in surface pass. |
 | 4 | Add declarative exact deck-analysis workflows only where current tools leave a real gap. | EFD-001, EFD-003 to EFD-005, EFD-008, EFD-010, EFD-011, EFD-013 | Exact results and selected-card evidence are independently verified. |
-| 5 | Research community and cohort sources without scraping. | EFD-006, EFD-007, EFD-010, EFD-013 | Each source receives an explicit admit/defer/reject record; Reddit requires policy clearance. |
+| 5 | Research community and cohort sources without scraping. | EFD-006, EFD-007, EFD-010, EFD-013 | Each source receives an explicit admit/defer/reject record; Reddit needs a documented API path. |
 | 6 | Decide goldfish feasibility. | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | A documented accept/defer/reject decision exists before any stable tool promise. |
 
 ## Traceability
@@ -234,7 +235,7 @@ remain hidden unless explicitly enabled.
 | EFD-003 | [Project boundaries](SADD.md#project-boundaries) | Project-reference/source checks | Architecture test suite |
 | EFD-004 | [Error handling](SADD.md#error-handling-and-failure-modes) | Unit and adapter failure tests | EFD-FIX-004 |
 | EFD-005 | [MCP surface](SADD.md#mcp-surface-schemas-and-diagnostics) | Surface, schema, mode, process tests | EFD-FIX-001 |
-| EFD-006–007 | [Provider admission](SADD.md#provider-admission) | Admission checklist and fixture tests | EFD-FIX-005 to EFD-FIX-007 |
+| EFD-006–007 | [Provider check](SADD.md#provider-check) | Source-check list and fixture tests | EFD-FIX-005 to EFD-FIX-007 |
 | EFD-008 | [Exact analysis](SADD.md#exact-analysis-and-simulation) | Independent math tests | EFD-FIX-008 |
 | EFD-009 | [Goldfish feasibility](SADD.md#exact-analysis-and-simulation) | Trace, calibration, policy review | EFD-FIX-009 to EFD-FIX-011 |
 | EFD-010–013 | [Test architecture](SADD.md#test-architecture) | Task and documentation validation | Child validation ledger |
@@ -244,8 +245,8 @@ remain hidden unless explicitly enabled.
 | Item | Type | Impact | Owner | Resolution plan |
 | --- | --- | --- | --- | --- |
 | Extracting provider ownership changes behavior accidentally. | Risk | Remote/local data or writes regress. | Adapter maintainer | Characterize current behavior first; move one domain at a time; retain public facade. |
-| An external source changes terms or endpoint behavior. | Risk | Unsupported acquisition or stale output. | Provider child owner | Admission record, fixture drift tests, source-specific cache/pacing, explicit defer path. |
-| Reddit content use has policy ambiguity. | Risk | Privacy and license breach. | Product owner | Do not write an adapter until policy review approves the exact workflow. |
+| An external source changes access rules or endpoint behavior. | Risk | Unsupported acquisition or stale output. | Provider child owner | Source check, fixture drift tests, source-specific cache/pacing, explicit defer path. |
+| Reddit use is unclear. | Risk | An unreliable or unsupported workflow. | Product owner | Do not write an adapter until its published API supports the exact workflow. |
 | Goldfish scope grows into a rules engine. | Risk | Unbounded cost and misleading claims. | Simulation child owner | Closed capability/model list, toy fixtures, stop criteria, and owner review. |
 | A package major upgrade shifts MCP wire behavior. | Risk | Client compatibility break. | MCP child owner | Isolate version upgrade and run package/client/schema tests. |
 | A refactor creates a generic abstraction to reduce file count. | Risk | More coupling and less legible ownership. | Reviewers | Reject generic provider/repository/router designs unless a concrete duplication case proves it. |
@@ -278,7 +279,7 @@ provider child defines an independently safe mutation acceptance path.
   criteria.
 - [ ] The evidence/advice boundary remains visible in code, schemas, and docs.
 - [ ] Architecture owners match their actual responsibilities.
-- [ ] Every admitted provider has current terms/contract evidence and fixtures.
+- [ ] Every added provider has current API/access evidence and fixtures.
 - [ ] Exact and sampled outputs remain visibly different.
 - [ ] Broad validation and any applicable package/client smoke evidence are
   recorded.

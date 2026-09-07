@@ -18,6 +18,7 @@ exposed through `Taskfile.yml`.
 ```bash
 task setup
 task restore
+task deps:check
 task build
 task lint
 task test
@@ -34,6 +35,10 @@ task clean
 
 `task test` runs non-live tests. Use `task test:live` only when live provider
 validation is explicitly requested and safe.
+
+`task restore` verifies the committed NuGet graph. After an approved package
+change, use `task restore:lock` to refresh that graph and `task tools:lock` to
+refresh the committed Mise download records. Review both lock-file changes.
 
 ## Adding A Task
 

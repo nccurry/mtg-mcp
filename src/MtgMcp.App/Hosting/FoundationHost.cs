@@ -23,6 +23,11 @@ namespace MtgMcp.App.Hosting;
 internal static class FoundationHost
 {
     /// <summary>
+    /// Identifies the only MCP wire revision the server accepts.
+    /// </summary>
+    private const string SupportedProtocolVersion = "2026-07-28";
+
+    /// <summary>
     /// Runs one stdio session until the client disconnects or cancellation is requested.
     /// </summary>
     internal static async Task RunAsync(
@@ -57,6 +62,7 @@ internal static class FoundationHost
         IMcpServerBuilder mcpBuilder = builder.Services
             .AddMcpServer(options =>
             {
+                options.ProtocolVersion = SupportedProtocolVersion;
                 options.ServerInfo = new Implementation
                 {
                     Name = FoundationServerIdentity.Name,

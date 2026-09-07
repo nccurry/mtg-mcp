@@ -16,6 +16,10 @@ From a fresh checkout, bootstrap local prerequisites first:
 
 On Windows, use `.\bootstrap.ps1`.
 
+The server requires MCP `2026-07-28`. Do not add a fallback for older
+initialize-based clients. `task restore` verifies the committed package graph;
+use `task restore:lock` only after an approved package-version change.
+
 Docs-only changes follow the validation guidance in `AGENTS.md` and do not need
 a .NET build.
 

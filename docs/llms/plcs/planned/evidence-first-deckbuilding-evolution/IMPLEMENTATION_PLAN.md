@@ -31,10 +31,10 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | 0 | Ratify the target and activate one narrow child. | EFD-001–013 | PLC/docs only | Review, link check, diff check | Owner selects a child and records implementation authority. | Complete |
 | 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change. The database owner only owns connection, schema, and disposal. | Complete |
 | 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | Complete |
-| 2 | Prove MCP SDK/toolchain compatibility before upgrades. | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, dependency docs | Process/client/schema/package checks | A version decision is evidence-backed and separately reviewable. | Planned |
-| 3 | Admit one high-value source, likely Commander Spellbook. | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Admission review, fake HTTP, surface/E2E checks | Opt-in evidence tools are attributable, bounded, and policy-compliant. | Planned |
+| 2 | [Pin the current MCP and toolchain](../../completed/latest-mcp-and-toolchain/README.md). | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, version and lock files | Process/client/schema/package checks | The current-only protocol and reproducible toolchain pass. | Complete |
+| 3 | [Add Commander Spellbook evidence](../commander-spellbook-evidence/README.md). | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Source contract, fake HTTP, surface/E2E checks | Opt-in source evidence is attributable, bounded, and readable. | Planned |
 | 4 | Fill proven exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Independent formulas, surface/E2E, performance review if needed | New deterministic workflow answers a real declared-input question without inferred card roles. | Planned |
-| 5 | Decide community and cohort source feasibility. | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if admitted | Current terms/contract review | Each source is explicitly admitted, deferred, or rejected. | Planned |
+| 5 | Decide community and cohort source feasibility. | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Planned |
 | 6 | Decide goldfish feasibility before implementing a simulator. | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New feasibility packet; no stable surface initially | Toy traces, calibration, policy review | Owner records accept/defer/reject with evidence. | Planned |
 | 7 | Stabilize selected completed children. | All selected requirements | Docs, release, validation | Full gates, audits, release review | Contracts, docs, deferred items, and follow-ups are accurate. | Planned |
 
@@ -59,8 +59,8 @@ Archidekt decks/folders/snapshots without navigating a god class.
 
 ### Phase 1A: Scryfall ownership extraction
 
-- Problems solved: The current ScryfallCorpusStore (renamed
-  ScryfallCardDataStore in this child), ScryfallSnapshotStore, and
+- Problems solved: The earlier `ScryfallCorpusStore` (renamed
+  `ScryfallCardDataStore` in this child), ScryfallSnapshotStore, and
   ScryfallRequestCoordinationStore currently forward every operation to one
   oversized ScryfallDatabase.
 - Included requirements: EFD-002, EFD-003, EFD-004, EFD-005, EFD-010,
@@ -71,7 +71,8 @@ Archidekt decks/folders/snapshots without navigating a god class.
   - Local Scryfall query engine.
   - New tags or any tagger-site acquisition.
 - Expected edits:
-  - Move card-data SQL behavior, including every `corpus_state` field, into
+  - Move card-data SQL behavior, including every card-data-state
+    (`corpus_state`) field, into
     ScryfallCardDataStore.
   - Move snapshot SQL behavior into ScryfallSnapshotStore.
   - Move lease and pacing SQL behavior into ScryfallRequestCoordinationStore.
@@ -89,7 +90,8 @@ Archidekt decks/folders/snapshots without navigating a god class.
 - Exit criteria:
   - Tool schemas, modes, outputs, cache behavior, database format, and source
     semantics are unchanged.
-  - ScryfallDatabase no longer contains corpus/snapshot/coordination workflow
+  - ScryfallDatabase no longer contains card-data, snapshot, or coordination
+    workflow
     implementations.
   - No repository interface or generic persistence framework was introduced.
 - Rollback/fallback: Revert only the extraction child; existing facade and
@@ -140,67 +142,17 @@ Archidekt decks/folders/snapshots without navigating a god class.
   `task surface:report` passed; Archidekt line coverage reached 91.07%, and the
   MCP surface did not change.
 
-### Phase 2: MCP SDK and toolchain compatibility
+### Phase 2: Latest MCP and toolchain
 
-- Problems solved: Package updates exist, including a major
-  ModelContextProtocol version change, but the compatibility impact is unknown.
-- Included requirements: EFD-005, EFD-010, EFD-012, EFD-013.
-- Out of scope: New deck/product behavior or provider work.
-- Expected edits:
-  - Decide target SDK/protocol version from current official documentation.
-  - Update a minimal package set in a dedicated branch/child.
-  - Adapt static tool registration and structured-result code only where
-    required.
-  - Update analyzer/test packages only after the core MCP compatibility result
-    is stable.
-- Tests added:
-  - Current and target official-client initialization.
-  - JSON-schema/structured-content validation.
-  - Installed package and process smoke coverage.
-- Validation:
-  - task lint, task test, task coverage, task surface:report.
-  - task pack, task smoke:process, task smoke:mcp, and release:tool-smoke when
-    package changes warrant them.
-  - task deps:check and a vulnerable-package check.
-- Exit criteria:
-  - Exact toolset/mode surface is preserved unless the child explicitly approves
-    a contract version change.
-  - Client and package smoke paths pass.
-- Rollback/fallback: Keep the pinned versions; do not force an SDK major bump
-  merely because it exists.
-- Cleanup: Remove compatibility shims that are not needed by the selected SDK.
+This completed phase is detailed in the [latest MCP and toolchain child](../../completed/latest-mcp-and-toolchain/README.md).
+It added exact direct pins, lock files, action SHA pins, the Mise-managed registry
+publisher, and the current-only MCP protocol test path.
 
-### Phase 3: First admitted provider evidence
+### Phase 3: Commander Spellbook evidence
 
-- Problems solved: The stable server needs a safe route to richer factual
-  context without a generic web scraper.
-- Included requirements: EFD-001, EFD-003 through EFD-007, EFD-010, EFD-013.
-- Candidate: Commander Spellbook, because it publicly documents combo search
-  syntax and an API contract. It is a candidate, not approval.
-- Out of scope:
-  - Ranking cards, suggesting additions, or treating combo popularity as quality.
-  - Cross-source popularity blending.
-- Expected edits:
-  - Complete provider-admission record.
-  - Add one concrete source project with source DTOs, transport, mapper,
-    pacing, bounded cache/retention, and typed failures.
-  - Add a small opt-in toolset with source-specific output contracts.
-- Tests added:
-  - Sanitized search/detail/empty/error fixtures.
-  - Ordering, pagination, provenance, freshness, redaction, and output-bound
-    tests.
-  - Process/surface tests for opt-in visibility and read-only mode.
-- Validation:
-  - Provider admission review.
-  - Fake-HTTP and App/E2E tests.
-  - task lint, task test, task coverage, and task surface:report.
-- Exit criteria:
-  - Every returned row says what source it came from and what it means.
-  - No source data is converted into a recommendation.
-  - Normal tests remain network-free.
-- Rollback/fallback: Disable the opt-in toolset and remove the isolated module;
-  no unrelated provider changes.
-- Cleanup: None beyond temporary fixture helpers.
+This phase is fully detailed in the [Commander Spellbook evidence child](../commander-spellbook-evidence/README.md).
+It owns one concrete adapter, source fixtures, a small opt-in toolset, and a
+saved-deck combo lookup that returns source groups without advice.
 
 ### Phase 4: Declarative exact deck analysis
 
@@ -238,18 +190,18 @@ Archidekt decks/folders/snapshots without navigating a god class.
 ### Phase 5: Community and cohort source feasibility
 
 - Problems solved: Players want discussions and popularity context, but those
-  sources have material policy and population differences.
+  sources have different access and population rules.
 - Included requirements: EFD-006, EFD-007, EFD-010, EFD-013.
 - Out of scope: Implementing a source merely because it is popular.
 - Expected edits:
-  - One admission/defer/reject record per researched source.
-  - A Reddit-specific policy review before code; source-specific child only if
-    approved.
-  - A permissioned cohort-provider evaluation for EDHREC-style questions.
-- Tests added: None until a source is admitted.
+  - One add/defer/reject record per researched source.
+  - A Reddit-specific API-access check before code; source-specific child only
+    if supported.
+  - An official-API cohort-provider evaluation for EDHREC-style questions.
+- Tests added: None until a source is selected.
 - Validation:
-  - Re-check current terms and official documentation.
-  - Review use, display, retention/deletion, attribution, rate limits, and
+  - Re-check current API documentation and access rules.
+  - Review source meaning, cache expiry, attribution, rate limits, and
     downstream model handling.
 - Exit criteria:
   - Each candidate has a durable decision and rationale.
@@ -315,7 +267,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | --- | --- | --- | --- |
 | A behavior-preserving refactor changes a provider edge case. | 1A, 1B | Characterize first, move one domain at a time, keep public facades, use fake HTTP/SQLite fixtures. | Adapter child owner |
 | Public contract changes hide inside a package upgrade. | 2 | Isolate upgrade and run exact surface/schema/client/package tests. | MCP child owner |
-| A source is technically reachable but not permitted or meaningful. | 3, 5 | Require admission record and current terms review before code. | Product/provider owner |
+| A source is technically reachable but not supported or meaningful. | 3, 5 | Require a source check and current API/access review before code. | Product/provider owner |
 | Exact analysis grows role inference. | 4 | Require caller-declared groups and selected-card evidence. | Statistics child owner |
 | Goldfish scope turns into rules-engine work. | 6 | Closed model, toy fixtures, explicit stop decision, no stable tool before approval. | Simulation child owner |
 | Coverage hides semantic gaps. | All | Use characterization, independent formulas, E2E, and fixture quality review alongside coverage. | Reviewers |
@@ -332,7 +284,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
   the completed phase still meets its exit criteria.
 - [ ] Phase 1A and 1B preserve the current public surface and provider
   behavior while removing forwarding ownership.
-- [ ] Each new provider is admitted or explicitly deferred before code starts.
+- [ ] Each new provider is selected or explicitly deferred before code starts.
 - [ ] Exact and sampled analysis remain visibly distinct.
 - [ ] No generic provider framework, scraper, rules engine, or recommendation
   system appears.

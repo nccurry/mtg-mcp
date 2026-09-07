@@ -19,10 +19,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Mise tools
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: "2026.9.1"
 
       - name: Install Linux native dependencies
         run: bash scripts/install-linux-native-deps.sh
@@ -61,7 +63,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
@@ -80,19 +82,11 @@ jobs:
             server.json > server.tmp
           mv server.tmp server.json
 
-      - name: Install mcp-publisher
-        shell: bash
-        run: |
-          publisher_archive="mcp-publisher.tar.gz"
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" -o "${publisher_archive}"
-          tar -xzf "${publisher_archive}" mcp-publisher
-          chmod +x mcp-publisher
-
       - name: Validate MCP Registry metadata
-        run: ./mcp-publisher validate
+        run: task registry:validate
 
       - name: Authenticate to MCP Registry
-        run: ./mcp-publisher login github-oidc
+        run: task registry:login
 
       - name: Publish to MCP Registry
-        run: ./mcp-publisher publish
+        run: task registry:publish

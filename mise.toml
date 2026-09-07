@@ -2,9 +2,20 @@ min_version = "2026.9.1"
 
 [settings]
 idiomatic_version_file_enable_tools = ["dotnet"]
+lockfile = true
 # Use the SDK selected by global.json instead of a machine-wide shared SDK root.
 dotnet.isolated = true
+
+[tool_config]
+locked = true
+
+[tool_alias]
+mcp-publisher = "github:modelcontextprotocol/registry"
 
 [tools]
 task = "3.53.1"
 powershell = "7.6.5"
+
+[tools.mcp-publisher]
+version = "1.8.1"
+matching = "mcp-publisher_"

@@ -8,6 +8,11 @@ namespace MtgMcp.E2E.Tests;
 internal sealed class McpProcessSession : IAsyncDisposable
 {
     /// <summary>
+    /// Identifies the only protocol revision supported by the test server and client.
+    /// </summary>
+    private const string CurrentProtocolVersion = "2026-07-28";
+
+    /// <summary>
     /// Stores the isolated working directory removed when the session closes.
     /// </summary>
     private readonly DirectoryInfo workingDirectory;
@@ -53,7 +58,12 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string? toolsets,
         CancellationToken cancellationToken)
     {
-        return await StartAsync(mode, toolsets, null, cancellationToken).ConfigureAwait(false);
+        return await StartIsolatedAsync(
+            mode,
+            toolsets,
+            null,
+            CurrentProtocolVersion,
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -65,6 +75,43 @@ internal sealed class McpProcessSession : IAsyncDisposable
         Func<string, CancellationToken, Task>? seedDataRoot,
         CancellationToken cancellationToken)
     {
+        return await StartIsolatedAsync(
+            mode,
+            toolsets,
+            seedDataRoot,
+            CurrentProtocolVersion,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Starts an isolated server session with an explicit protocol revision for a protocol-boundary test.
+    /// </summary>
+    internal static async Task<McpProcessSession> StartWithProtocolAsync(
+        string? mode,
+        string? toolsets,
+        string protocolVersion,
+        CancellationToken cancellationToken)
+    {
+        return await StartIsolatedAsync(
+            mode,
+            toolsets,
+            null,
+            protocolVersion,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Starts an isolated server process and connects an official client at the requested protocol revision.
+    /// </summary>
+    private static async Task<McpProcessSession> StartIsolatedAsync(
+        string? mode,
+        string? toolsets,
+        Func<string, CancellationToken, Task>? seedDataRoot,
+        string protocolVersion,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(protocolVersion);
+
         string repositoryRoot = FindRepositoryRoot();
         DirectoryInfo workingDirectory = Directory.CreateTempSubdirectory("mtg-mcp-e2e-");
         string dataRoot = Path.Combine(workingDirectory.FullName, "private-data");
@@ -83,10 +130,10 @@ internal sealed class McpProcessSession : IAsyncDisposable
                 await seedDataRoot(dataRoot, cancellationToken).ConfigureAwait(false);
             }
 
-            StdioClientTransport transport = new(options);
-            McpClient client = await McpClient.CreateAsync(
-                transport,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            McpClient client = await CreateClientAsync(
+                options,
+                protocolVersion,
+                cancellationToken).ConfigureAwait(false);
             return new McpProcessSession(client, workingDirectory, dataRoot);
         }
         catch
@@ -121,10 +168,10 @@ internal sealed class McpProcessSession : IAsyncDisposable
 
         try
         {
-            StdioClientTransport transport = new(options);
-            McpClient client = await McpClient.CreateAsync(
-                transport,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            McpClient client = await CreateClientAsync(
+                options,
+                CurrentProtocolVersion,
+                cancellationToken).ConfigureAwait(false);
             return new McpProcessSession(client, workingDirectory, Path.GetFullPath(dataRoot));
         }
         catch
@@ -146,6 +193,27 @@ internal sealed class McpProcessSession : IAsyncDisposable
         {
             workingDirectory.Delete(recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Connects one official client that explicitly requires the requested protocol revision.
+    /// </summary>
+    private static async Task<McpClient> CreateClientAsync(
+        StdioClientTransportOptions options,
+        string protocolVersion,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(protocolVersion);
+
+        StdioClientTransport transport = new(options);
+        return await McpClient.CreateAsync(
+            transport,
+            new McpClientOptions
+            {
+                ProtocolVersion = protocolVersion,
+            },
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -16,6 +16,16 @@ public sealed class FoundationMcpTests
     private const string CapabilityUri = "mtg://server/capabilities";
 
     /// <summary>
+    /// Identifies the only MCP wire revision the server accepts.
+    /// </summary>
+    private const string CurrentProtocolVersion = "2026-07-28";
+
+    /// <summary>
+    /// Identifies the newest initialize-based MCP wire revision used to prove rejection.
+    /// </summary>
+    private const string LegacyInitializeProtocolVersion = "2025-11-25";
+
+    /// <summary>
     /// Lists the path-free legacy inspection states permitted by the public contract.
     /// </summary>
     private static readonly string[] LegacyDataStates =
@@ -219,6 +229,9 @@ public sealed class FoundationMcpTests
         Assert.Equal("io.github.nccurry/mtg-mcp", session.Client.ServerInfo.Name);
         Assert.Equal("mtg-mcp", session.Client.ServerInfo.Title);
         Assert.Equal(expectedVersion, session.Client.ServerInfo.Version);
+        Assert.Equal(
+            CurrentProtocolVersion,
+            session.Client.NegotiatedProtocolVersion);
         Assert.Null(session.Client.ServerInstructions);
         Assert.NotNull(session.Client.ServerCapabilities.Resources);
         Assert.NotNull(session.Client.ServerCapabilities.Tools);
@@ -275,7 +288,7 @@ public sealed class FoundationMcpTests
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
-            session.Client.NegotiatedProtocolVersion,
+            CurrentProtocolVersion,
             root.GetProperty("server").GetProperty("protocolVersion").GetString());
         Assert.Equal(expectedMode, root.GetProperty("operationMode").GetString());
         AssertSurface(root.GetProperty("surface"), expectedToolCount);
@@ -297,6 +310,24 @@ public sealed class FoundationMcpTests
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
         Assert.False(Directory.Exists(session.DataRoot));
+    }
+
+    /// <summary>
+    /// Verifies that an older initialize-based client cannot obtain a fallback session.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task OlderProtocolClient_IsRejected()
+    {
+        await Assert.ThrowsAsync<UnsupportedProtocolVersionException>(
+            async () =>
+            {
+                await McpProcessSession.StartWithProtocolAsync(
+                    "local",
+                    null,
+                    LegacyInitializeProtocolVersion,
+                    TestContext.Current.CancellationToken).ConfigureAwait(false);
+            }).ConfigureAwait(false);
     }
 
     /// <summary>

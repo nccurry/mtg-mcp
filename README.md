@@ -16,12 +16,12 @@ the new surface.
 | Capability | Tools | Default | Writes |
 | --- | ---: | --- | --- |
 | Local decks and interchange | 28 | Yes | Local |
-| Scryfall evidence | 18 | Yes | Local cache and corpus |
+| Scryfall evidence | 18 | Yes | Local cache and card data |
 | Exact statistics | 8 | Yes | No |
 | Archidekt | 23 | No | Remote |
 | Playgroup | 16 | No | Remote |
 
-The packaged acceptance run passed 88 tools live. Two Scryfall corpus operations
+The packaged acceptance run passed 88 tools live. Two Scryfall card-data download operations
 are fixture-backed, Scryfall rollback awaits a second provider generation, and
 two Playgroup writes remain fixture-only because the public API has no cleanup.
 See [live acceptance](docs/llms/plcs/completed/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).
@@ -47,6 +47,11 @@ Bootstrap installs Mise when needed. Mise installs Task and PowerShell from
 After bootstrap, run `task <command>` normally. The Taskfile invokes Mise for
 .NET; if a fresh shell cannot find Task, activate Mise or temporarily use
 `mise exec -- task <command>`.
+
+Committed Mise and NuGet lock files keep setup repeatable. Version pins live in
+`mise.toml`, `global.json`, `Directory.Packages.props`, and `dotnet-tools.json`.
+Use `task deps:check` to inspect available updates. Use `task deps:update` only
+when you intend to review the related pin and lock-file changes.
 
 Use `mtg-mcp` as the MCP command. The default invocation is equivalent to:
 
@@ -177,15 +182,16 @@ in the native companion and are omitted from provider text.
 
 The `scryfall` toolset supports search, exact card lookup, collection lookup,
 prints, rulings, sets, catalogs, autocomplete, bulk metadata, tag evidence,
-immutable snapshots, and explicit corpus lifecycle operations.
+immutable snapshots, and explicit card-data download operations.
 
-The local corpus contains All Cards, Rulings, Oracle Tags, and Art Tags. Corpus
-sync is explicit. It never runs at startup or in the background.
+The local card-data store contains All Cards, Rulings, Oracle Tags, and Art
+Tags. Card-data downloads are explicit. They never run at startup or in the
+background.
 
 Freshness policies are `default`, `cache-only`, and `refresh`. The default TTL
 is 24 hours. Immutable snapshots do not expire.
 
-`scryfall_card_collection` accepts 150 ordered lookup rows. It uses local corpus
+`scryfall_card_collection` accepts 150 ordered lookup rows. It uses local card-data
 hits first, deduplicates provider misses, and sends provider batches of at most
 75. Results use stable cursor pagination.
 
@@ -282,7 +288,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 | --- | --- |
 | `MtgMcp.Core` | Provider-neutral contracts and evidence |
 | `MtgMcp.Decks` | Local SQLite decks and interchange |
-| `MtgMcp.Scryfall` | Official transport, corpus, snapshots, and pacing |
+| `MtgMcp.Scryfall` | Official transport, card data, snapshots, and pacing |
 | `MtgMcp.Archidekt` | Observed provider contract and synchronization |
 | `MtgMcp.Playgroup` | Pinned official API evidence |
 | `MtgMcp.Statistics` | BCL-only exact calculations |

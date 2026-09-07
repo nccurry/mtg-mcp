@@ -24,3 +24,4 @@ checked-in configuration remain authoritative.
 | [deterministic-deck-categorization](deterministic-deck-categorization/README.md) | Added explicit inline/common-v1 tag rules, evidence-bound category preview/apply, hierarchy and primary handling, and deterministic local deck mutations. |
 | [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | Approved all twelve rewrite packets and their shared guardrails; implementation and release lifecycle remain child-owned. |
 | [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Validated, packaged, and released the clean-break `0.9.0` surface with rollback and provider evidence. |
+| [latest-mcp-and-toolchain](latest-mcp-and-toolchain/README.md) | Pinned the current MCP protocol and toolchain, added reproducible locks, SHA-pinned actions, and a managed registry publisher. |

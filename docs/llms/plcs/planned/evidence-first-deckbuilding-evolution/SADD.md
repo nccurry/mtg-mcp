@@ -107,12 +107,12 @@ that an experimental simulation will ship.
 | --- | --- | --- | --- | --- |
 | Full rewrite | Replace all projects and surfaces at once. | Can redraw every boundary. | Discards a strong 545-test baseline and risks a large behavior regression. | Rejected |
 | Targeted owner extraction | Move real behavior into existing named owners while preserving facades and contracts. | Small reviewable steps, protects behavior, fixes the actual seams. | Requires disciplined characterization tests. | Chosen |
-| Generic provider interface/framework | Give every source the same request/result interface. | Looks uniform at first. | Hides auth, retention, data meaning, and mutation differences; adds a leaky abstraction. | Rejected |
+| Generic provider interface/framework | Give every source the same request/result interface. | Looks uniform at first. | Hides access, cache, data-meaning, and mutation differences; adds a leaky abstraction. | Rejected |
 | Concrete provider modules | Each source owns its transport, mapping, cache, evidence model, and tests. | Honest contracts and clear failures. | Some deliberate local duplication. | Chosen |
 | Third-party Result library | Replace existing native result union. | Familiar pattern to some developers. | Adds dependency/churn without solving a current problem. | Rejected |
 | Existing native unions | Keep closed typed outcomes and evidence cases. | Exhaustive matching, no package, current schemas preserved. | Requires deliberate case additions. | Chosen |
 | Broad scraper/browser adapter | Query any popular MTG website. | Maximum apparent coverage. | Unreliable, often disallowed, hard to attribute and test. | Rejected |
-| Source admission plus supported adapters | Add only sources with a usable contract and documented limits. | Reliable, reviewable, aligned with evidence-first. | Some desired sources stay deferred. | Chosen |
+| Source check plus supported adapters | Add only sources with documented access and limits. | Reliable, reviewable, aligned with evidence-first. | Some desired sources stay deferred. | Chosen |
 | Full rules engine | Simulate arbitrary Magic games. | Broad theoretical coverage. | Open-ended rules scope and misleading partial behavior. | Rejected |
 | Bounded goldfish feasibility study | Test a narrow caller-declared model after exact analysis. | Can answer a limited question honestly. | May be rejected if it cannot meet the evidence bar. | Chosen as a future experiment only |
 
@@ -161,7 +161,7 @@ Every result belongs to one visible category:
 | Exact derivation | Mathematics applied to declared values. | Chance of at least one land by turn four. |
 | Parser classification | Deterministic output of a versioned parser. | An interchange parse result. |
 | Sampled estimate | A model run with replay metadata and uncertainty. | A future goldfish frequency estimate. |
-| Unknown / unavailable / unsupported | A value the server cannot honestly provide. | Unavailable source, missing corpus, unsupported model mechanic. |
+| Unknown / unavailable / unsupported | A value the server cannot honestly provide. | Unavailable source, missing card data, unsupported model mechanic. |
 
 The server may format evidence for clarity but may not turn it into “therefore
 play this card.” A client LLM can make that connection in conversation with the
@@ -173,10 +173,10 @@ player.
 
 - decks.db remains the local deck, binding, baseline, backup, and interchange
   store.
-- scryfall.db remains the official card/ruling/community-tag corpus, snapshots,
+- scryfall.db remains the official card/ruling/community-tag data, snapshots,
   metadata, leases, and pacing store.
 - Existing data formats are preserved during the first owner-extraction child.
-- New provider caches require their own lifecycle and retention decision. They
+- New provider caches require their own lifetime and expiry decision. They
   do not enter scryfall.db or decks.db merely for convenience.
 
 ### Evidence metadata
@@ -191,16 +191,16 @@ simulation-specific provenance record that includes:
 - caller-declared policy;
 - per-metric confidence interval or a documented reason it does not apply;
 - supported and unsupported mechanic coverage;
-- retrieval/corpus generation identity for card facts used by the model.
+- retrieval/card-data generation identity for card facts used by the model.
 
 The child must show why shared Core metadata is needed before changing Core.
-Do not put provider-specific cache, endpoint, or policy data there.
+Do not put provider-specific cache, endpoint, or source-rule data there.
 
-### Ordering, limits, and retention
+### Ordering, limits, and cache age
 
 Every list has a stable ordering and a bound. A response states pagination or
 omitted count when it cannot return every row. Provider caches use
-source-specific freshness and retention; a missing cache remains “not cached,”
+source-specific freshness and expiry; a missing cache remains “not cached,”
 not an empty source result.
 
 ## Building Blocks
@@ -213,7 +213,7 @@ not an empty source result.
 | Scryfall card-data store | Card-data generations, cards, rulings, tags, import/activation/rollback, and all `corpus_state` fields | Card-data SQL operations | Internal concrete store | Database owner | Card-data fixtures |
 | Scryfall snapshot store | Exact-request snapshot lookup, storage, replay, listing, deletion | Snapshot SQL operations | Internal concrete store | Database owner | Snapshot fixtures |
 | Scryfall coordination store | Leases and provider-start reservations | Coordination SQL operations | Internal concrete store | Database owner | Multi-process/pacing fixtures |
-| Scryfall operations | Official API/bulk acquisition and evidence workflows | Provider client/cache policy | ScryfallService facade | Concrete stores | Fake HTTP, corpus, and App tests |
+| Scryfall operations | Official API/bulk acquisition and evidence workflows | Provider client/cache policy | ScryfallService facade | Concrete stores | Fake HTTP, card-data, and App tests |
 | Shared Archidekt HTTP/session owner | HttpClient lifetime, auth, pacing, retries, cooldown, request budget, sanitized provider faults | One session per Archidekt service | Internal support | HTTP/BCL | HTTP/pacing/error tests |
 | Archidekt deck transport and operations | Deck routes, payloads, normalization, validation, read-back, guarded apply | Deck workflow state | ArchidektService delegation | Shared session, Core | Fixture and workflow tests |
 | Archidekt folder transport and operations | Folder routes, tree handling, validation, guarded writes | Folder workflow state | ArchidektService delegation | Shared session, Core | Fixture and workflow tests |
@@ -221,7 +221,7 @@ not an empty source result.
 | MtgMcp.Playgroup | Pinned official observation contract | Provider client/cache policy | Playgroup facade | Core/HTTP | Fixture tests |
 | MtgMcp.Statistics | Exact math from caller-provided values | No provider/persistence state | Statistics operations | BCL/Core contracts only | Independent formula tests |
 | MtgMcp.App | Static MCP registration, modes, schemas, composition | Process/configuration lifetime | Tool/resource handlers | All capability projects | App, surface, E2E tests |
-| Future concrete source module | One admitted source’s transport, mapping, cache, evidence behavior | Source-specific | Opt-in toolset only | Core/HTTP as needed | Sanitized fake-HTTP fixtures |
+| Future concrete source module | One selected source’s transport, mapping, cache, evidence behavior | Source-specific | Opt-in toolset only | Core/HTTP as needed | Sanitized fake-HTTP fixtures |
 | Future simulation-lab module | Explicit bounded model, policies, traces, estimates | Experiment-local model state | Experimental opt-in only | Core/Deck contracts, approved card facts | Toy-deck/calibration tests |
 
 No provider-wide IRepository, ISourceAdapter, generic transport router, or
@@ -248,10 +248,10 @@ OperationResult, BCL HTTP primitives, and App composition.
 5. Conflict, unavailable, and invalid input stay typed; no automatic conflict
    resolution occurs.
 
-### Future provider admission
+### Future provider check
 
-1. Research the source contract and current terms.
-2. Write the admission record and narrow child PLC.
+1. Read the source API and current access rules.
+2. Write the source check and narrow child PLC.
 3. Capture sanitized fixtures and expected error cases.
 4. Implement one concrete module with pacing, cache, and evidence metadata.
 5. Expose a small opt-in toolset only after contract and MCP tests pass.
@@ -286,22 +286,23 @@ For later public changes:
   capability.
 - No tool name/prefix is reserved for a future simulation until the feasibility
   child owns the complete toolset, mode, and versioning decision.
-- Long-running task support is not assumed. The 2025-11-25 MCP task protocol is
-  experimental and has evolved; any adoption needs a compatibility spike with
-  the target SDK and client. Until then, operations are synchronously bounded.
+- Long-running task support is not part of this roadmap. Any future use needs a
+  separate current-protocol design and bounded behavior tests.
 
-## Provider Admission
+## Provider Check
 
-Every new source must have a provider-admission record before code begins.
+Every new source must have a short source check before code begins. This is not
+a legal review. It records the practical API and cache rules needed for a
+reliable adapter.
 
 | Gate | Required evidence |
 | --- | --- |
 | Supported access | Official API, published OpenAPI/SDK, or written provider permission; no guessed endpoint. |
 | Meaning | What each field/population proves and what it does not prove. |
-| Terms and privacy | Current terms, attribution, authorization, user-content use, retention/deletion, and commercial restrictions. |
+| Access and privacy | Published API access, attribution, user-content handling, and what the cache may keep. |
 | Auth and secrets | How tokens are supplied, redacted, rotated, and kept out of fixtures/logs. |
 | Pacing and retries | Published limits where available; conservative defaults and explicit 429 behavior otherwise. |
-| Cache and retention | What can be stored, how long, freshness semantics, and how deletion is handled. |
+| Cache and expiry | What the local cache stores, how long it is fresh, and when it is removed. |
 | Contract drift | Sanitized fixture captures and a defined response to unsupported/new fields. |
 | Failure behavior | Typed unavailable/not found/unsupported/permission outcomes, without invented fallback. |
 | MCP exposure | Toolset, modes, schemas, output bounds, source reference, and live-test boundary. |
@@ -310,13 +311,13 @@ Every new source must have a provider-admission record before code begins.
 
 | Source | Status | Product meaning | Design rule |
 | --- | --- | --- | --- |
-| Scryfall | Stable | Official card/ruling facts and separately labeled community-tag evidence | Continue official API/bulk contract; use bulk data for corpus-scale work. |
+| Scryfall | Stable | Official card/ruling facts and separately labeled community-tag evidence | Continue official API/bulk contract; use bulk data for large card-data work. |
 | Archidekt | Stable observed adapter | User-authorized deck/folder/snapshot state and explicit workflows | Preserve fixture-tested contract and write safeguards; do not broaden casually. |
 | Playgroup | Stable official adapter | Provider-shaped playgroup observations | Keep source population separate from deck-quality judgments. |
-| Commander Spellbook | Candidate | Documented combo variants, prerequisites, steps, and results | First likely new provider after an admission record and fixture review; returns evidence, not “add this combo.” |
-| Reddit | Feasibility only | Attributed community discussion, not source fact | Current terms require registered authorized access and restrict user-content use/retention. Obtain policy approval before implementation; never scrape or train on content. |
-| EDHREC-style aggregate source | Deferred | Source-defined popularity/cohort evidence | No public developer contract was confirmed in this audit. Require official contract or written permission. |
-| Moxfield | Rejected for automation | Manual interchange remains valid | Current terms prohibit robots, spiders, automatic access, and manual monitoring/copying without approval. |
+| Commander Spellbook | Planned child | Documented combo variants and deck combo groups | [Use the narrow child](../commander-spellbook-evidence/README.md); return source evidence, not “add this combo.” |
+| Reddit | Feasibility only | Attributed community discussion, not source fact | Build nothing until the published API supports the exact workflow. Never scrape or train on content. |
+| EDHREC-style aggregate source | Deferred | Source-defined popularity/cohort evidence | No public developer API was confirmed in this audit. Use an official API if one becomes available. |
+| Moxfield | Rejected for automation | Manual interchange remains valid | Its published site rules do not support the automation this project would need. |
 
 ## Error Handling And Failure Modes
 
@@ -362,14 +363,14 @@ The study must be willing to end with “defer” or “reject.”
 ### Tag ownership
 
 The server does not invent its own card-tag taxonomy. It continues to use the
-Scryfall-provided community tag corpus already stored in scryfall.db. Oracle
+Scryfall-provided community tag data already stored in scryfall.db. Oracle
 facts, community tags, parser classifications, and any caller-defined groups
 stay visibly separate.
 
 ### Performance
 
 Do not add performance work because a file is long. Add a measurement when a
-child adds a real hot path: full corpus operation, high-volume provider page,
+child adds a real hot path: full card-data operation, high-volume provider page,
 large deck batch, or sampled model run. Use deterministic representative input,
 record the machine/runtime, and state whether the budget is informational or a
 hard gate.
@@ -408,7 +409,7 @@ hard gate.
 | EFD-003 | Preserve one-way project references and isolated adapters. | Architecture tests. |
 | EFD-004 | Keep closed typed outcomes; catch expected external faults only at boundaries. | Failure, redaction, and cancellation tests. |
 | EFD-005 | Static startup-selected toolsets with schema-backed structured results. | Surface, mode, schema, process, and official-client tests. |
-| EFD-006–007 | Provider admission record and source-specific module/policy. | Review checklist and fake-HTTP fixtures. |
+| EFD-006–007 | Source check and source-specific module rules. | Review checklist and fake-HTTP fixtures. |
 | EFD-008 | Exact finite-population models separate from provider card semantics. | Independent-formula tests. |
 | EFD-009 | Experimental model is closed, versioned, replayable, bounded, and caveated. | Toy-deck traces, calibration, and feasibility decision. |
 | EFD-010–013 | Child-level characterization, Task gates, and documentation ownership. | Validation ledger and diff/link checks. |
@@ -437,20 +438,18 @@ child and a current validation baseline.
 
 - MCP tools should expose valid schemas and structured output. The current
   static registration model fits this well.
-- The MCP tasks feature in the 2025-11-25 revision is experimental. Recent
-  protocol/SDK evolution makes it unsuitable as an assumed foundation for a
-  first simulation experiment.
+- The current MCP policy is owned by the [completed latest MCP child](../../completed/latest-mcp-and-toolchain/README.md).
+  This roadmap does not assume task support for a simulation experiment.
 - .NET 11/C# 15 native unions support a closed result/evidence vocabulary and
   exhaustive matching. The existing union approach is appropriate.
 - .NET guidance distinguishes common/expected conditions from exceptional
   faults. That matches typed operation outcomes plus boundary exception mapping.
 - Scryfall’s supported bulk/API model is the evidence acquisition foundation.
-- Commander Spellbook’s documented query syntax and public API make it a better
-  candidate than an undocumented popularity endpoint, subject to admission.
-- Reddit is not a general search corpus. Its Data API terms require authorized
-  access, restrict retention and content use, and require a current policy
-  decision before any MCP integration.
-- Moxfield automation is out of scope under its current terms.
+- Commander Spellbook’s documented query syntax and public API make it a good
+  first evidence source. Its narrow adapter design remains owner-approved work.
+- Reddit is not a general search database. Do not add an MCP integration until
+  its published API access rules support the exact workflow.
+- Moxfield automation is out of scope under its published site rules.
 
 ## Decisions, Risks, And Deferred Work
 
@@ -459,9 +458,9 @@ child and a current validation baseline.
 | Preserve public facades while extracting owners. | Decision | Limits client churn. | Retain ScryfallService and ArchidektService contracts in Phase 1. |
 | Do not create a generic provider framework. | Decision | Avoids leaky abstractions. | Use concrete source modules and only proven shared primitives. |
 | Treat old simulation packets as reference-only. | Decision | Prevents retired advisor/rules assumptions returning accidentally. | Feasibility child reviews small useful pieces only. |
-| Source terms may change. | Risk | A candidate can become unavailable. | Re-check terms at child activation and release. |
+| Source rules may change. | Risk | A provider can become unavailable. | Re-check published rules at child activation and release. |
 | C# union syntax is preview. | Risk | Toolchain updates may affect code/formatters/serializers. | Keep version work isolated and fully smoke-tested. |
-| Popularity source may never be admitted. | Deferred | Cohort feature may remain unavailable. | Return no data rather than use undocumented/scraped source. |
+| Popularity source may never be available. | Deferred | Cohort feature may remain unavailable. | Return no data rather than use undocumented/scraped source. |
 | Goldfish may fail feasibility. | Deferred | No sampled deck flow ships. | Exact analysis remains useful independently. |
 
 ## Glossary
@@ -473,6 +472,6 @@ child and a current validation baseline.
 | Source evidence | Attributed observation that is not a universal fact. |
 | Exact analysis | A mathematically exact result from declared finite inputs. |
 | Sampled estimate | A result from finite model trials; it carries uncertainty and replay metadata. |
-| Admission record | The provider-specific proof that a source can be safely and honestly integrated. |
+| Source check | The short provider-specific record of the API, cache, and evidence rules for an integration. |
 | Characterization test | A test that locks current behavior before a refactor moves code. |
 | Goldfish | A bounded unopposed deck model, not a full Magic game or matchup predictor. |

@@ -6,11 +6,13 @@ It does not carry the released legacy surface forward.
 ## Current Rewrite Status
 
 The completed foundation, local deck capability, offline interchange surface,
-unified Scryfall evidence capability, and opt-in Archidekt and Playgroup capabilities
-use official C# SDK 1.4.0 stdio hosting and client APIs. Official-client E2E tests prove standard initialization in `read-only`,
-`local`, and `remote` modes, negotiated protocol reporting, resource listing
-and reading, unknown-resource errors, sanitized pre-transport failures, and
-clean process termination when stdin closes.
+unified Scryfall evidence capability, and opt-in Archidekt and Playgroup
+capabilities use the official C# SDK selected in `Directory.Packages.props`.
+The server requires MCP `2026-07-28`; it does not support older
+initialize-based clients. Official-client E2E tests prove current-protocol
+connections in `read-only`, `local`, and `remote` modes, protocol reporting,
+resource listing and reading, unknown-resource errors, sanitized pre-transport
+failures, and clean process termination when stdin closes.
 
 The current public surface is exactly:
 

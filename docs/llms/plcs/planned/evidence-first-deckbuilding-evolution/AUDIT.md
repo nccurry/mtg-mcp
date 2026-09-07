@@ -44,50 +44,43 @@ ScryfallDatabase now owns only the path, connections, schema, and disposal.
 The three named stores own their SQLite workflows, and a narrow reflection test
 prevents the database from adding a domain method again.
 
-### ARCH-002 — Archidekt’s domain owners are forwarding layers around two god contexts
+### ARCH-002 — Archidekt domain owners were forwarding layers around two large contexts
 
 - Severity: P2
-- Status: Open
+- Status: Complete
 - Affected area: MtgMcp.Archidekt
 
-The current public facade correctly presents deck, folder, and snapshot
-operations. However,
-[ArchidektDeckOperations, ArchidektFolderOperations, and ArchidektSnapshotOperations](../../../../../src/MtgMcp.Archidekt/ArchidektFacade.cs)
-all delegate to
-[ArchidektOperationContext](../../../../../src/MtgMcp.Archidekt/ArchidektService.cs).
-The same pattern appears in the transport layer:
-[the named transports](../../../../../src/MtgMcp.Archidekt/ArchidektTransportFacade.cs)
-forward to
-[ArchidektTransportContext](../../../../../src/MtgMcp.Archidekt/ArchidektTransport.cs).
+At audit time, the public facade presented deck, folder, and snapshot
+operations while forwarding their behavior through two large context classes.
+The same pattern existed in the transport layer.
 
 This misses the intended boundary documented in the completed hardening packet:
 shared HTTP/pacing state should be one owner, while deck, folder, and snapshot
 transport and workflow classes should own their actual behavior.
 
-Planned disposition: retain ArchidektService as the stable public facade.
-Replace the two contexts with one small shared HTTP/session owner and concrete
-deck, folder, and snapshot transport/workflow classes containing their own
-logic. Preserve the operation budget, authentication, retries, read-back
-verification, and write safeguards exactly.
+The completed Phase 1B child retained `ArchidektService` as the stable public
+facade. [ArchidektSession](../../../../../src/MtgMcp.Archidekt/ArchidektSession.cs)
+now owns shared HTTP and pacing state. The named deck, folder, and snapshot
+transport and operation classes own their routes and workflows. The old
+contexts and forwarding layers are gone.
 
 ### DOC-001 — One architecture-test summary is stale
 
 - Severity: P3
-- Status: Open
+- Status: Complete
 - Affected area: test documentation
 
 [FoundationArchitectureTests.cs](../../../../../tests/MtgMcp.Architecture.Tests/FoundationArchitectureTests.cs)
-says “ninety-tool” in its summary while the test correctly asserts 93 tools.
-The test itself passes, so this is documentation drift rather than a contract
-failure.
+used to say “ninety-tool” while the test correctly asserted 93 tools. The
+completed Phase 1B child corrected that text.
 
-Planned disposition: correct the summary in the first cleanup child and add
-surface-count/documentation review to every future public-surface change.
+Future public-surface changes still require a surface-count and documentation
+review.
 
 ### DEP-001 — Package updates need a compatibility plan, not a bulk bump
 
 - Severity: P3
-- Status: Deferred to a focused child
+- Status: Planned in a focused child
 - Affected area: App, E2E tests, analyzers, test tooling
 
 The dependency check reports ModelContextProtocol 2.2.0, ModelContextProtocol.Core
@@ -98,25 +91,24 @@ The MCP SDK is a major version change, while the current server has a carefully
 tested static surface and installed-package smoke path. A bulk update alongside
 the ownership refactor would make failures difficult to attribute.
 
-Planned disposition: create an MCP SDK and toolchain compatibility child after
-the ownership cleanup. It must pin target protocol behavior, run process and
-official-client smoke tests, validate JSON schemas, and preserve the exact
-toolset/mode contract before changing package versions.
+The [latest MCP and toolchain child](../../completed/latest-mcp-and-toolchain/README.md)
+completed this work. It pinned the current protocol, version locks, test path,
+and package checks without mixing them with a provider change.
 
-### POLICY-001 — External-source expansion needs an admission gate
+### SOURCE-001 — External-source expansion needs a clear source check
 
 - Severity: P2 for future expansion; not a defect in the current stable release
 - Status: Open design requirement
 
 The existing adapters are bounded and documented. New source requests are
-different: each has its own license, API shape, data meaning, cache rights, and
-privacy requirements. Adding a generic “web research” adapter would make it
-too easy to turn a question into unsupported scraping or blend unlike data.
+different: each has its own API shape, data meaning, cache behavior, and
+privacy needs. Adding a generic “web research” adapter would make it too easy
+to turn a question into unsupported scraping or blend unlike data.
 
-Planned disposition: require an admission record and a narrow child PLC for
-each provider. The record must prove supported access, source semantics,
-retention/deletion rules, credential handling, pacing, fixture strategy, and
-the evidence label shown to the client.
+Planned disposition: require a short source check and a narrow child PLC for
+each provider. The record names supported access, source meaning, cache expiry,
+credential handling, pacing, fixture strategy, and the evidence label shown to
+the client.
 
 ## What To Keep
 
@@ -133,12 +125,12 @@ the evidence label shown to the client.
 
 | Action | Target | Reason |
 | --- | --- | --- |
-| Refactor | ScryfallDatabase and ScryfallStores | Give corpus, snapshot, and coordination stores real ownership. |
+| Refactor | ScryfallDatabase and ScryfallStores | Give card-data, snapshot, and coordination stores real ownership. |
 | Refactor | ArchidektOperationContext and ArchidektTransportContext | Move deck, folder, and snapshot behavior into actual domain owners. |
 | Remove after extraction | Forwarding context methods and duplicate wrappers | They add indirection without a responsibility boundary. |
 | Correct | Stale surface-count wording | Keep human documentation as accurate as the passing assertion. |
 | Add | Characterization fixtures before owner movement | Prove unchanged results, SQL state, errors, pacing, and write guards. |
-| Add later | One provider-admission record per external source | Make expansion safe, attributable, and reviewable. |
+| Add later | One source check per external source | Make expansion safe, attributable, and reviewable. |
 | Add only after feasibility | Isolated simulation-lab project and calibration fixtures | Keep sampled policy behavior out of Core and exact Statistics. |
 | Do not add | Generic provider framework, scraper, rules engine, result library, or recommendation engine | They add abstraction cost or violate the product boundary. |
 

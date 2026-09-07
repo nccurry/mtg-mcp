@@ -9,6 +9,7 @@ vars:
   MISE: mise
   DOTNET: '{{.MISE}} exec -- dotnet'
   POWERSHELL: '{{.MISE}} exec -- pwsh -NoProfile -ExecutionPolicy Bypass'
+  PUBLISHER: '{{.MISE}} exec -- mcp-publisher'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
   VERSION: ''
@@ -56,6 +57,7 @@ tasks:
     cmds:
       - '{{.DOTNET}} --version'
       - '{{.MISE}} exec -- pwsh --version'
+      - '{{.PUBLISHER}} --version'
       - '{{.DOTNET}} tool list --local'
 
   tools:restore:
@@ -64,9 +66,34 @@ tasks:
       - '{{.DOTNET}} tool restore'
 
   restore:
-    desc: Restore NuGet packages
+    desc: Restore the committed NuGet package graph
     cmds:
-      - '{{.DOTNET}} restore {{.SOLUTION}} -m:{{.MSBUILD_MAXCPUCOUNT}}'
+      - '{{.DOTNET}} restore {{.SOLUTION}} --locked-mode -m:{{.MSBUILD_MAXCPUCOUNT}}'
+
+  restore:lock:
+    desc: Refresh committed NuGet package lock files after an approved package change
+    cmds:
+      - '{{.DOTNET}} restore {{.SOLUTION}} --use-lock-file -p:RestoreLockedMode=false -m:{{.MSBUILD_MAXCPUCOUNT}}'
+
+  tools:lock:
+    desc: Refresh the committed Mise lock file for supported desktop platforms
+    cmds:
+      - '{{.MISE}} lock --platform linux-x64,macos-arm64,windows-x64'
+
+  registry:validate:
+    desc: Validate MCP Registry metadata with the managed publisher
+    cmds:
+      - '{{.PUBLISHER}} validate'
+
+  registry:login:
+    desc: Authenticate the managed publisher with GitHub OIDC
+    cmds:
+      - '{{.PUBLISHER}} login github-oidc'
+
+  registry:publish:
+    desc: Publish MCP Registry metadata with the managed publisher
+    cmds:
+      - '{{.PUBLISHER}} publish'
 
   build:
     desc: Build the solution
@@ -406,10 +433,11 @@ tasks:
     cmds:
       - '{{.MISE}} upgrade --bump'
       - task: deps:update:sdk
+      - task: tools:lock
       - '{{.MISE}} install'
       - '{{.DOTNET}} tool update --all'
       - '{{.DOTNET}} package update --project {{.SOLUTION}}'
-      - task: restore
+      - task: restore:lock
 
   deps:update:sdk:
     desc: Update the SDK version in global.json
