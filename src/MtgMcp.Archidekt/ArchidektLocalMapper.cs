@@ -373,7 +373,7 @@ public static class ArchidektLocalMapper
             return (names, primary);
         }
 
-        foreach (DeckCategoryAssignment assignment in values.OrderBy(value => value.CategoryId))
+        foreach (DeckCategoryAssignment assignment in values)
         {
             if (!categoryNames.TryGetValue(assignment.CategoryId, out string? categoryName))
             {

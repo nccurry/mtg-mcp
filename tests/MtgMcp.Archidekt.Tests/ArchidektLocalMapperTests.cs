@@ -295,6 +295,86 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies an unchanged pull retains Archidekt's primary-first category order instead of
+    /// normalizing it by the opaque local category identifier.
+    /// </summary>
+    [Fact]
+    public void ToRemoteTarget_PreservesStoredCategoryAssignmentOrder()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckCategory first = parsed.Categories[0] with
+        {
+            Name = "Primary",
+            SortOrder = 0,
+        };
+        RemoteDeckCategory second = parsed.Categories[1] with
+        {
+            Name = "Secondary",
+            SortOrder = 1,
+        };
+        Guid firstId = ArchidektContract.StableGuid("category", first.ProviderCategoryId);
+        Guid secondId = ArchidektContract.StableGuid("category", second.ProviderCategoryId);
+        string[] categoryNames = firstId.CompareTo(secondId) < 0
+            ? [second.Name, first.Name]
+            : [first.Name, second.Name];
+        RemoteDeckEntry entry = parsed.Entries[0] with
+        {
+            CategoryNames = categoryNames,
+            PrimaryCategoryName = categoryNames[0],
+        };
+        RemoteDeckSnapshot remote = parsed with
+        {
+            Categories = [first, second],
+            Entries = [entry],
+        };
+        DeckProviderBinding binding = new(
+            Guid.Parse("55555555-5555-5555-5555-555555555555"),
+            "archidekt",
+            remote.RemoteId,
+            remote.RemoteUri,
+            remote.Evidence.ContractVersion,
+            remote.RemoteFingerprint,
+            DateTimeOffset.UtcNow,
+            null);
+        DeckCreateRequest request = ArchidektLocalMapper.ToCreateRequest(remote, binding);
+        DeckDocument local = new(
+            Guid.NewGuid(),
+            remote.Name,
+            remote.Description,
+            remote.Format,
+            Revision: 1,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            request.Entries!.Select(value => new DeckEntry(
+                value.EntryId!.Value,
+                value.Quantity,
+                value.CardName,
+                value.OracleId,
+                value.PrintingId,
+                value.SetCode,
+                value.CollectorNumber,
+                value.Language,
+                value.Finish,
+                value.Zone,
+                value.SortOrder)).ToArray(),
+            request.Categories!.Select(value => new DeckCategory(
+                value.CategoryId!.Value,
+                value.Name,
+                value.Color,
+                value.SortOrder)).ToArray(),
+            request.CategoryAssignments!,
+            [binding]);
+        ArchidektSyncBaseline baseline = ArchidektLocalMapper.ParseBaseline(
+            ArchidektLocalMapper.CreateBaseline(request, remote));
+
+        RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(local, baseline, remote);
+
+        RemoteDeckEntry mapped = Assert.Single(target.Entries);
+        Assert.Equal(categoryNames, mapped.CategoryNames);
+        Assert.Equal(categoryNames[0], mapped.PrimaryCategoryName);
+    }
+
+    /// <summary>
     /// Verifies model collections copy caller-owned mutable inputs.
     /// </summary>
     [Fact]
