@@ -170,7 +170,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
                     "MTGMCP_E2E_COMMAND must identify the installed package command for live acceptance.");
             }
 
-            command = ResolveDotnetHost(repositoryRoot);
+            command = ResolveDotnetHost();
             arguments = [ResolveApplicationPath(repositoryRoot)];
         }
         else
@@ -237,20 +237,17 @@ internal sealed class McpProcessSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Resolves the repository-local .NET host used by the build.
+    /// Resolves the .NET host supplied by the test runner or the Mise environment.
     /// </summary>
-    private static string ResolveDotnetHost(string repositoryRoot)
+    private static string ResolveDotnetHost()
     {
-        string executableName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
-        string repositoryHost = Path.Combine(repositoryRoot, ".dotnet", executableName);
-        if (!File.Exists(repositoryHost))
+        string? testHost = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
+        if (!string.IsNullOrWhiteSpace(testHost))
         {
-            return "dotnet";
+            return testHost;
         }
 
-        return OperatingSystem.IsWindows()
-            ? Path.Combine(".dotnet", executableName)
-            : repositoryHost;
+        return "dotnet";
     }
 
     /// <summary>

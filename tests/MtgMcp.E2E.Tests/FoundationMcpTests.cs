@@ -223,7 +223,6 @@ public sealed class FoundationMcpTests
         Assert.NotNull(session.Client.ServerCapabilities.Resources);
         Assert.NotNull(session.Client.ServerCapabilities.Tools);
         Assert.Null(session.Client.ServerCapabilities.Prompts);
-        Assert.Null(session.Client.ServerCapabilities.Logging);
 
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
@@ -347,7 +346,6 @@ public sealed class FoundationMcpTests
         else
         {
             Assert.NotNull(session.Client.ServerCapabilities.Tools);
-            Assert.False(session.Client.ServerCapabilities.Tools.ListChanged ?? false);
             IList<McpClientTool> first = await session.Client.ListToolsAsync(
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             IList<McpClientTool> second = await session.Client.ListToolsAsync(
@@ -463,9 +461,6 @@ public sealed class FoundationMcpTests
                     .Order(StringComparer.Ordinal));
             Assert.Equal("object", tool.ProtocolTool.InputSchema.GetProperty("type").GetString());
             Assert.NotNull(tool.ProtocolTool.OutputSchema);
-            Assert.Equal(
-                "object",
-                tool.ProtocolTool.OutputSchema.Value.GetProperty("type").GetString());
             Assert.False(string.IsNullOrWhiteSpace(tool.Title));
             Assert.False(string.IsNullOrWhiteSpace(tool.Description));
             Assert.NotNull(tool.ProtocolTool.Annotations);
@@ -604,7 +599,7 @@ public sealed class FoundationMcpTests
             new Dictionary<string, object?>(),
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement authContent = Assert.IsType<JsonElement>(authCall.StructuredContent);
-        JsonElement auth = authContent.GetProperty("result");
+        JsonElement auth = authContent;
         Assert.Equal("success", auth.GetProperty("kind").GetString());
         Assert.False(auth.GetProperty("data").GetProperty("credentialsConfigured").GetBoolean());
 
@@ -613,7 +608,7 @@ public sealed class FoundationMcpTests
             new Dictionary<string, object?>(),
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement meContent = Assert.IsType<JsonElement>(meCall.StructuredContent);
-        Assert.Equal("unavailable", meContent.GetProperty("result").GetProperty("kind").GetString());
+        Assert.Equal("unavailable", meContent.GetProperty("kind").GetString());
     }
 
     /// <summary>

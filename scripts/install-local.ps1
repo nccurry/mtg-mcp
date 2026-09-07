@@ -60,33 +60,12 @@ function Get-DotnetCliHome {
 }
 
 function Get-DotnetCommand {
-    $localName = if ($IsWindows) { "dotnet.exe" } else { "dotnet" }
-    $localPath = Join-Path (Join-Path (Get-Location).ProviderPath ".dotnet") $localName
-    if (Test-Path -LiteralPath $localPath) {
-        return $localPath
-    }
-
     $command = Get-Command dotnet -ErrorAction SilentlyContinue
     if ($null -ne $command) {
         return $command.Source
     }
 
-    throw "Could not find dotnet. Run task setup or install the .NET SDK listed in global.json."
-}
-
-function Use-LocalDotnetRootForAppHosts {
-    $localName = if ($IsWindows) { "dotnet.exe" } else { "dotnet" }
-    $localRoot = Join-Path (Get-Location).ProviderPath ".dotnet"
-    $localDotnet = Join-Path $localRoot $localName
-    if (-not (Test-Path -LiteralPath $localDotnet)) {
-        return
-    }
-
-    $env:DOTNET_ROOT = $localRoot
-
-    if ($IsWindows) {
-        $env:DOTNET_ROOT_X64 = $localRoot
-    }
+    throw "Could not find dotnet. Run task setup or mise install."
 }
 
 function Get-CodexConfigPath {
@@ -439,7 +418,6 @@ catch [System.IO.IOException] {
 }
 
 Write-Host "Smoke-testing global tool shim"
-Use-LocalDotnetRootForAppHosts
 if (-not $script:GlobalToolSmokeEnabled) {
     Write-Host "Skipping global tool shim smoke because the existing global tool could not be refreshed."
 }

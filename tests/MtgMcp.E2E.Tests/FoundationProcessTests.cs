@@ -125,7 +125,7 @@ public sealed class FoundationProcessTests
         {
             ProcessStartInfo startInfo = new()
             {
-                FileName = ResolveDotnetHost(repositoryRoot),
+                FileName = ResolveDotnetHost(),
                 RedirectStandardError = true,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
@@ -177,9 +177,9 @@ public sealed class FoundationProcessTests
     }
 
     /// <summary>
-    /// Finds the dotnet host used by the test runner or the repository toolchain.
+    /// Finds the dotnet host supplied by the test runner or the Mise environment.
     /// </summary>
-    private static string ResolveDotnetHost(string repositoryRoot)
+    private static string ResolveDotnetHost()
     {
         string? testHost = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
         if (!string.IsNullOrWhiteSpace(testHost))
@@ -187,9 +187,7 @@ public sealed class FoundationProcessTests
             return testHost;
         }
 
-        string executableName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
-        string repositoryHost = Path.Combine(repositoryRoot, ".dotnet", executableName);
-        return File.Exists(repositoryHost) ? repositoryHost : "dotnet";
+        return "dotnet";
     }
 
     /// <summary>

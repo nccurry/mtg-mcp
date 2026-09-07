@@ -605,7 +605,7 @@ public sealed class StatisticsMcpTests
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
-        return content.GetProperty("result");
+        return content;
     }
 
     /// <summary>

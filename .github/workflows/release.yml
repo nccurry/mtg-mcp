@@ -13,11 +13,6 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository_owner }}/mtg-mcp-ci-builder:main
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         shell: bash
@@ -26,21 +21,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Use image .NET for Taskfile
-        run: |
-          mkdir -p .dotnet
-          ln -sf "$(command -v dotnet)" .dotnet/dotnet
+      - name: Set up Mise tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
-      - name: Use image PowerShell for Taskfile
-        run: |
-          mkdir -p .tools/bin
-          ln -sf "$(command -v pwsh)" .tools/bin/pwsh
+      - name: Install Linux native dependencies
+        run: bash scripts/install-linux-native-deps.sh
 
       - name: Validate release tag
-        shell: pwsh
         run: |
-          ./scripts/release.ps1 ValidateVersion -Version "${env:GITHUB_REF_NAME}"
-          "VERSION=${env:GITHUB_REF_NAME}" >> "${env:GITHUB_ENV}"
+          task release:validate-version VERSION="${GITHUB_REF_NAME}"
+          echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
       - name: Verify release artifacts
         run: task release:verify VERSION="${VERSION}"
@@ -49,7 +39,7 @@ jobs:
         shell: bash
         run: |
           for package in artifacts/packages/*.nupkg; do
-            dotnet nuget push "${package}" --api-key "${NUGET_API_KEY}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+            mise exec -- dotnet nuget push "${package}" --api-key "${NUGET_API_KEY}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
           done
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

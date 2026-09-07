@@ -1,16 +1,14 @@
 version: '3'
 
-dotenv:
-  - versions.env
-
 vars:
   SOLUTION: mtg-mcp.slnx
   APP_PROJECT: src/MtgMcp.App/MtgMcp.App.csproj
   CONFIGURATION: Release
   # The pinned .NET preview SDK intermittently fails solution restore/build with parallel MSBuild.
   MSBUILD_MAXCPUCOUNT: 1
-  DOTNET: '{{if eq OS "windows"}}.dotnet/dotnet.exe{{else}}./.dotnet/dotnet{{end}}'
-  POWERSHELL: '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass{{else}}{{.TASKFILE_DIR}}/.tools/bin/pwsh -NoProfile{{end}}'
+  MISE: mise
+  DOTNET: '{{.MISE}} exec -- dotnet'
+  POWERSHELL: '{{.MISE}} exec -- pwsh -NoProfile -ExecutionPolicy Bypass'
   RUNTIME_ARCH: '{{if eq ARCH "amd64"}}x64{{else}}{{ARCH}}{{end}}'
   RUNTIME: '{{if eq OS "windows"}}win-{{.RUNTIME_ARCH}}{{else if eq OS "darwin"}}osx-{{.RUNTIME_ARCH}}{{else}}linux-{{.RUNTIME_ARCH}}{{end}}'
   VERSION: ''
@@ -27,29 +25,21 @@ vars:
 env:
   DOTNET_NOLOGO: '1'
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
-  PATH: '{{if eq OS "windows"}}{{.TASKFILE_DIR}}/.dotnet;{{.TASKFILE_DIR}}/.tools/bin;{{.PATH}}{{else}}{{.TASKFILE_DIR}}/.dotnet:{{.TASKFILE_DIR}}/.tools/bin:{{.PATH}}{{end}}'
-  Path: '{{if eq OS "windows"}}{{.TASKFILE_DIR}}/.dotnet;{{.TASKFILE_DIR}}/.tools/bin;{{.PATH}}{{else}}{{.PATH}}{{end}}'
 
 tasks:
   setup:
     desc: Install local development dependencies and restore the repo
     cmds:
-      - task: setup:powershell
-      - task: setup:dotnet
+      - '{{.MISE}} install'
       - task: tools:restore
       - task: restore
       - task: setup:verify
 
-  deps:sync:
-    desc: Sync derived version references from the authored sources (global.json, versions.env)
-    deps: [setup:powershell]
-    cmds:
-      - '{{.POWERSHELL}} -File scripts/sync-versions.ps1 {{.CLI_ARGS}}'
-
   setup:linux:
     desc: Install local Linux prerequisites and restore the repo
     cmds:
-      - bash scripts/setup-linux.sh
+      - bash scripts/install-linux-native-deps.sh
+      - task: setup
 
   setup:windows:
     desc: Install local Windows development dependencies and restore the repo
@@ -61,120 +51,20 @@ tasks:
     cmds:
       - task: setup
 
-  setup:powershell:
-    desc: Install the pinned PowerShell under .tools when missing
-    cmds:
-      - cmd: echo "Windows uses the built-in PowerShell; nothing to install."
-        platforms: [windows]
-      - cmd: |
-          expected="{{.POWERSHELL_VERSION}}"
-          tools_dir="{{.TASKFILE_DIR}}/.tools"
-          tools_bin="$tools_dir/bin"
-          mkdir -p "$tools_bin"
-
-          if [ -x "$tools_bin/pwsh" ] \
-            && [ "$("$tools_bin/pwsh" -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null)" = "$expected" ]; then
-            echo "PowerShell $expected is already installed under $tools_dir."
-            exit 0
-          fi
-
-          if command -v pwsh >/dev/null 2>&1 \
-            && [ "$(pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null)" = "$expected" ]; then
-            ln -sfn "$(command -v pwsh)" "$tools_bin/pwsh"
-            echo "Linked system PowerShell $expected into $tools_bin."
-            exit 0
-          fi
-
-          case "$(uname -s)" in
-            Linux) platform=linux ;;
-            Darwin) platform=osx ;;
-            *) echo "Unsupported operating system: $(uname -s)" >&2; exit 1 ;;
-          esac
-          case "$(uname -m)" in
-            x86_64 | amd64) arch=x64 ;;
-            arm64 | aarch64) arch=arm64 ;;
-            *) echo "Unsupported processor architecture: $(uname -m)" >&2; exit 1 ;;
-          esac
-
-          install_dir="$tools_dir/powershell-$expected-$platform-$arch"
-          if [ -x "$install_dir/pwsh" ] \
-            && [ "$("$install_dir/pwsh" -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null)" = "$expected" ]; then
-            ln -sfn "$install_dir/pwsh" "$tools_bin/pwsh"
-            echo "PowerShell $expected is already present under $install_dir."
-            exit 0
-          fi
-
-          archive="$tools_dir/powershell-$expected-$platform-$arch.tar.gz"
-          url="https://github.com/PowerShell/PowerShell/releases/download/v$expected/powershell-$expected-$platform-$arch.tar.gz"
-
-          echo "Installing PowerShell $expected into $install_dir."
-          rm -rf "$install_dir"
-          mkdir -p "$install_dir"
-          if command -v curl >/dev/null 2>&1; then
-            curl -fsSL "$url" -o "$archive"
-          elif command -v wget >/dev/null 2>&1; then
-            wget -q "$url" -O "$archive"
-          else
-            echo "curl or wget is required to install PowerShell." >&2
-            exit 1
-          fi
-
-          tar -xzf "$archive" -C "$install_dir"
-          chmod +x "$install_dir/pwsh"
-          ln -sfn "$install_dir/pwsh" "$tools_bin/pwsh"
-          echo "PowerShell $expected installed under $install_dir."
-        platforms: [linux, darwin]
-
-  setup:dotnet:
-    desc: Install the .NET SDK pinned in global.json under .dotnet when missing
-    cmds:
-      - cmd: '{{.POWERSHELL}} -File scripts/install-dotnet.ps1 -JsonFile "global.json" -InstallDir ".dotnet"'
-        platforms: [windows]
-      - cmd: |
-          install_dir=".dotnet"
-          dotnet_path="$install_dir/dotnet"
-          expected="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' global.json | head -n 1)"
-
-          if [ -n "$expected" ] && [ -x "$dotnet_path" ]; then
-            if "$dotnet_path" --list-sdks 2>/dev/null | grep -q "^$expected "; then
-              echo ".NET SDK $expected is already installed under $install_dir."
-              exit 0
-            fi
-          fi
-
-          mkdir -p "$install_dir"
-          installer="$(mktemp)"
-          if command -v curl >/dev/null 2>&1; then
-            curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$installer"
-          elif command -v wget >/dev/null 2>&1; then
-            wget -q https://dot.net/v1/dotnet-install.sh -O "$installer"
-          else
-            echo "curl or wget is required to install the .NET SDK." >&2
-            exit 1
-          fi
-
-          chmod +x "$installer"
-          "$installer" --jsonfile global.json --install-dir "$install_dir" --no-path
-          rm -f "$installer"
-          echo ".NET SDK from global.json installed under $install_dir."
-        platforms: [linux, darwin]
-
   setup:verify:
     desc: Verify the bootstrapped development tools
-    deps: [setup:dotnet]
     cmds:
       - '{{.DOTNET}} --version'
+      - '{{.MISE}} exec -- pwsh --version'
       - '{{.DOTNET}} tool list --local'
 
   tools:restore:
     desc: Restore local .NET tools
-    deps: [setup:dotnet]
     cmds:
       - '{{.DOTNET}} tool restore'
 
   restore:
     desc: Restore NuGet packages
-    deps: [setup:dotnet]
     cmds:
       - '{{.DOTNET}} restore {{.SOLUTION}} -m:{{.MSBUILD_MAXCPUCOUNT}}'
 
@@ -188,65 +78,68 @@ tasks:
     desc: Run all non-live tests
     deps: [build]
     cmds:
-      - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build --filter "Category!=Live"'
+      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter "Category!=Live"'
 
   test:unit:
     desc: Run application and Core unit tests
     deps: [restore]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
       - >
-        {{.DOTNET}} test tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
       - >
-        {{.DOTNET}} test tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
 
   test:integration:
     desc: Run architecture and local deck integration tests
     deps: [restore]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
       - >
-        {{.DOTNET}} test tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
       - >
-        {{.DOTNET}} test tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
       - >
-        {{.DOTNET}} test tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
       - >
-        {{.DOTNET}} test tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
 
   test:e2e:
     desc: Run foundation process end-to-end tests
     deps: [build]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "Category=E2E"
+        -- --filter "Category=E2E"
 
   test:live:
     desc: Run bounded live-provider tests; full corpus and Archidekt mutations require explicit opt-in
     deps: [restore]
     cmds:
-      - '{{.DOTNET}} test {{.SOLUTION}} --configuration {{.CONFIGURATION}} --filter "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
 
   test:live:methods:
     desc: Install the package and run explicitly enabled method-by-method live acceptance
@@ -270,10 +163,10 @@ tasks:
         --settings CodeCoverage.runsettings
         --output {{.COVERAGE_DIR}}/codecov.cobertura.xml
         --output-format cobertura
-        {{.DOTNET}} test {{.SOLUTION}}
+        dotnet test --solution {{.SOLUTION}}
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "Category!=Live"
+        -- --filter "Category!=Live"
 
   coverage:gates:
     desc: Enforce 90 percent line coverage for every production assembly
@@ -324,13 +217,11 @@ tasks:
 
   format:
     desc: Format source
-    deps: [setup:dotnet]
     cmds:
       - '{{.DOTNET}} format {{.SOLUTION}}'
 
   format:check:
     desc: Verify source formatting without changing files
-    deps: [setup:dotnet]
     cmds:
       - '{{.DOTNET}} format {{.SOLUTION}} --verify-no-changes'
 
@@ -351,11 +242,10 @@ tasks:
     deps: [build]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
-        --logger "console;verbosity=detailed"
+        -- --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
 
   ci:
     desc: Run the CI validation suite
@@ -378,10 +268,10 @@ tasks:
     deps: [build]
     cmds:
       - >
-        {{.DOTNET}} test tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~StatisticsMcpTests"
+        -- --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~StatisticsMcpTests"
 
   install:
     desc: Install the current branch on this workstation
@@ -390,10 +280,7 @@ tasks:
 
   install:local:
     desc: Pack, globally install, publish, and copy the current branch to the configured local MCP command path
-    deps: [setup:dotnet, setup:powershell, restore]
-    env:
-      DOTNET_ROOT: '{{.TASKFILE_DIR}}/.dotnet'
-      DOTNET_ROOT_X64: '{{.TASKFILE_DIR}}/.dotnet'
+    deps: [restore]
     cmds:
       - >
         {{.POWERSHELL}} -File scripts/install-local.ps1
@@ -434,7 +321,6 @@ tasks:
 
   publish:runtime:
     desc: Publish a single self-contained binary for RUNTIME
-    deps: [setup:dotnet]
     cmds:
       - >
         {{.DOTNET}} publish {{.APP_PROJECT}}
@@ -507,20 +393,30 @@ tasks:
       - task: release:tool-smoke
 
   deps:check:
-    desc: List outdated NuGet packages
+    desc: Report outdated tools and outdated, vulnerable, or deprecated NuGet packages
     deps: [restore]
     cmds:
-      - '{{.DOTNET}} list {{.SOLUTION}} package --outdated'
+      - '{{.MISE}} outdated'
+      - '{{.DOTNET}} package list --project {{.SOLUTION}} --outdated --include-prerelease --include-transitive'
+      - '{{.DOTNET}} package list --project {{.SOLUTION}} --vulnerable --include-transitive'
+      - '{{.DOTNET}} package list --project {{.SOLUTION}} --deprecated --include-transitive'
 
   deps:update:
-    desc: Bump pinned tool and SDK versions to the latest and sync derived files
-    deps: [setup:powershell]
+    desc: Update configured tools, the SDK, and NuGet packages
     cmds:
-      - '{{.POWERSHELL}} -File scripts/update-versions.ps1 {{.CLI_ARGS}}'
-      - task: deps:sync
+      - '{{.MISE}} upgrade --bump'
+      - task: deps:update:sdk
+      - '{{.MISE}} install'
+      - '{{.DOTNET}} tool update --all'
+      - '{{.DOTNET}} package update --project {{.SOLUTION}}'
+      - task: restore
+
+  deps:update:sdk:
+    desc: Update the SDK version in global.json
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/update-dotnet-sdk.ps1 {{.CLI_ARGS}}'
 
   clean:
     desc: Remove build outputs
-    deps: [setup:dotnet]
     cmds:
       - '{{.DOTNET}} clean {{.SOLUTION}}'

@@ -1,9 +1,11 @@
 {
   "sdk": {
-    "version": "11.0.100-preview.5.26302.115",
+    "version": "11.0.100-preview.7.26381.103",
     "allowPrerelease": true,
-    "rollForward": "latestFeature",
-    "paths": [".dotnet", "$host$"],
-    "errorMessage": "Required .NET SDK not found. Run ./bootstrap.sh, ./bootstrap.ps1, or install the .NET 11 preview SDK listed in global.json."
+    "rollForward": "disable",
+    "errorMessage": "Required .NET SDK not found. Run ./bootstrap.sh, ./bootstrap.ps1, or mise install."
+  },
+  "test": {
+    "runner": "Microsoft.Testing.Platform"
   }
 }

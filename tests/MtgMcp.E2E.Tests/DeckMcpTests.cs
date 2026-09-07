@@ -431,7 +431,7 @@ public sealed class DeckMcpTests
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         Assert.NotEqual(true, result.IsError);
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
-        return structured.GetProperty("result");
+        return structured;
     }
 
     /// <summary>

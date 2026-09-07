@@ -120,7 +120,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         Assert.NotEqual(true, result.IsError);
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
-        JsonElement operation = structured.GetProperty("result");
+        JsonElement operation = structured;
         Assert.Equal("success", operation.GetProperty("kind").GetString());
         return operation.GetProperty("data");
     }

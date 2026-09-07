@@ -13,11 +13,6 @@ permissions:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository_owner }}/mtg-mcp-ci-builder:main
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         shell: bash
@@ -28,18 +23,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Trust repository for container Git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Set up Mise tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
-      - name: Use image .NET for Taskfile
-        run: |
-          mkdir -p .dotnet
-          ln -sf "$(command -v dotnet)" .dotnet/dotnet
-
-      - name: Use image PowerShell for Taskfile
-        run: |
-          mkdir -p .tools/bin
-          ln -sf "$(command -v pwsh)" .tools/bin/pwsh
+      - name: Install Linux native dependencies
+        run: bash scripts/install-linux-native-deps.sh
 
       - name: Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v3

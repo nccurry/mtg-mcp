@@ -1,0 +1,10 @@
+min_version = "2026.9.1"
+
+[settings]
+idiomatic_version_file_enable_tools = ["dotnet"]
+# Use the SDK selected by global.json instead of a machine-wide shared SDK root.
+dotnet.isolated = true
+
+[tools]
+task = "3.53.1"
+powershell = "7.6.5"

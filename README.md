@@ -42,6 +42,12 @@ On Linux or macOS:
 task smoke:mcp
 ```
 
+Bootstrap installs Mise when needed. Mise installs Task and PowerShell from
+`mise.toml` and the .NET SDK from `global.json` in an isolated tool directory.
+After bootstrap, run `task <command>` normally. The Taskfile invokes Mise for
+.NET; if a fresh shell cannot find Task, activate Mise or temporarily use
+`mise exec -- task <command>`.
+
 Use `mtg-mcp` as the MCP command. The default invocation is equivalent to:
 
 ```text
