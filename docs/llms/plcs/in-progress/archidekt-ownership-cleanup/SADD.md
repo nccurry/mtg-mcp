@@ -128,7 +128,9 @@ to forward domain methods to another type.
 ## Test Design
 
 Keep the existing fake HTTP handler, test options, and deterministic pacer.
-Add direct named-owner tests before moving code:
+Before the move, direct tests construct the current Context plus its named
+owner. After the move, the same tests construct ArchidektSession plus that
+named owner. This locks behavior while the construction boundary changes.
 
 | Area | Required proof |
 | --- | --- |

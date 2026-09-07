@@ -33,8 +33,9 @@ create avoidable merge risk.
 
 ## Phase 1: Characterize Named-Owner Behavior
 
-- Add direct fake-HTTP tests that construct ArchidektSession plus the relevant
-  named transport and operation owner.
+- Add direct fake-HTTP tests that construct the current Context plus the
+  relevant named transport and operation owner. In Phase 2, update the same
+  tests to construct ArchidektSession instead.
 - Preserve existing service tests as public-behavior coverage.
 - Add a narrow ownership test plan: after the move it will reject both Context
   types and the stale forwarding files.

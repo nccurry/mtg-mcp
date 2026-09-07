@@ -15,10 +15,10 @@
 
 | Case | Construction | Expected proof |
 | --- | --- | --- |
-| Session authentication retry and disposal | Session plus fake HTTP | One failed authenticated request refreshes once and keeps request-budget accounting. Owned clients are disposed; borrowed clients remain usable. |
-| Deck route and workflow | Session, deck transport, deck operations | Current routes, create/read-back, apply request order, and typed conflicts remain exact. |
-| Folder route and workflow | Session, folder transport, folder operations | Current tree, move/cycle, confirmation, and read-back behavior remains exact. |
-| Snapshot route and workflow | Session, snapshot transport, snapshot operations | Current snapshot mutation and restore guards remain exact. |
+| Session authentication retry and disposal | Before Phase 2: current transport context. After Phase 2: session plus fake HTTP. | One failed authenticated request refreshes once and keeps request-budget accounting. Owned clients are disposed; borrowed clients remain usable. |
+| Deck route and workflow | Before Phase 2: current contexts plus deck owners. After Phase 2: session, deck transport, deck operations. | Current routes, create/read-back, apply request order, and typed conflicts remain exact. |
+| Folder route and workflow | Before Phase 2: current contexts plus folder owners. After Phase 2: session, folder transport, folder operations. | Current tree, move/cycle, confirmation, and read-back behavior remains exact. |
+| Snapshot route and workflow | Before Phase 2: current contexts plus snapshot owners. After Phase 2: session, snapshot transport, snapshot operations. | Current snapshot mutation and restore guards remain exact. |
 | Boundary | Assembly reflection | ArchidektOperationContext and ArchidektTransportContext are absent after the move. |
 
 ## Requirement Matrix
