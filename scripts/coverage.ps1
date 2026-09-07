@@ -36,6 +36,7 @@ function Invoke-VerifyGates {
         "MtgMcp.Decks",
         "MtgMcp.Playgroup",
         "MtgMcp.Scryfall",
+        "MtgMcp.Spellbook",
         "MtgMcp.Statistics"
     )
 

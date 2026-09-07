@@ -30,6 +30,11 @@ internal enum CapabilityToolset
     /// </summary>
     Playgroup,
 
+    /// <summary>
+    /// Covers bounded Commander Spellbook variant and local-deck evidence.
+    /// </summary>
+    Spellbook,
+
 }
 
 /// <summary>
@@ -91,6 +96,7 @@ internal static class CapabilityToolsetPolicy
             CapabilityToolset.Stats => "stats",
             CapabilityToolset.Archidekt => "archidekt",
             CapabilityToolset.Playgroup => "playgroup",
+            CapabilityToolset.Spellbook => "spellbook",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(toolset),
                 toolset,
@@ -106,7 +112,7 @@ internal static class CapabilityToolsetPolicy
         return toolset switch
         {
             CapabilityToolset.Decks or CapabilityToolset.Scryfall or CapabilityToolset.Stats => true,
-            CapabilityToolset.Archidekt or CapabilityToolset.Playgroup => false,
+            CapabilityToolset.Archidekt or CapabilityToolset.Playgroup or CapabilityToolset.Spellbook => false,
             _ => false,
         };
     }

@@ -63,4 +63,5 @@ internal sealed record FoundationDataSchemas(
     [property: JsonPropertyName("deckInterchange")] string DeckInterchange,
     [property: JsonPropertyName("scryfall")] string Scryfall,
     [property: JsonPropertyName("archidekt")] string Archidekt,
-    [property: JsonPropertyName("playgroup")] string Playgroup);
+    [property: JsonPropertyName("playgroup")] string Playgroup,
+    [property: JsonPropertyName("spellbook")] string Spellbook);

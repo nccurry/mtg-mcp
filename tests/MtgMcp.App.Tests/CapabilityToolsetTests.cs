@@ -21,10 +21,10 @@ public sealed class CapabilityToolsetTests
         CapabilityToolset[] toolsets = Enum.GetValues<CapabilityToolset>();
 
         Assert.Equal(
-            ["decks", "scryfall", "stats", "archidekt", "playgroup"],
+            ["decks", "scryfall", "stats", "archidekt", "playgroup", "spellbook"],
             toolsets.Select(CapabilityToolsetPolicy.Format));
         Assert.Equal(
-            [true, true, true, false, false],
+            [true, true, true, false, false, false],
             toolsets.Select(CapabilityToolsetPolicy.IsDefaultEnabled));
         Assert.Equal("stable", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Stable));
         Assert.Equal("experimental", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Experimental));
@@ -123,15 +123,16 @@ public sealed class CapabilityToolsetTests
     /// Verifies reserved and explicit selections resolve against only implemented descriptors.
     /// </summary>
     [Theory]
-    [InlineData(null, "default", true, true, true, false, false)]
-    [InlineData("default", "default", true, true, true, false, false)]
-    [InlineData("all", "all", true, true, true, true, true)]
-    [InlineData("none", "none", false, false, false, false, false)]
-    [InlineData("decks", "explicit", true, false, false, false, false)]
-    [InlineData("scryfall", "explicit", false, true, false, false, false)]
-    [InlineData("stats", "explicit", false, false, true, false, false)]
-    [InlineData("archidekt", "explicit", false, false, false, true, false)]
-    [InlineData("playgroup", "explicit", false, false, false, false, true)]
+    [InlineData(null, "default", true, true, true, false, false, false)]
+    [InlineData("default", "default", true, true, true, false, false, false)]
+    [InlineData("all", "all", true, true, true, true, true, true)]
+    [InlineData("none", "none", false, false, false, false, false, false)]
+    [InlineData("decks", "explicit", true, false, false, false, false, false)]
+    [InlineData("scryfall", "explicit", false, true, false, false, false, false)]
+    [InlineData("stats", "explicit", false, false, true, false, false, false)]
+    [InlineData("archidekt", "explicit", false, false, false, true, false, false)]
+    [InlineData("playgroup", "explicit", false, false, false, false, true, false)]
+    [InlineData("spellbook", "explicit", false, false, false, false, false, true)]
     public void Parser_ResolvesCurrentProfiles(
         string? value,
         string expectedSelection,
@@ -139,7 +140,8 @@ public sealed class CapabilityToolsetTests
         bool scryfallEnabled,
         bool statsEnabled,
         bool archidektEnabled,
-        bool playgroupEnabled)
+        bool playgroupEnabled,
+        bool spellbookEnabled)
     {
         CapabilityToolsetSelection selection = RequireSuccess(
             CapabilityToolsetSelectionParser.Parse(value, CapabilityToolsetRegistry.Implemented));
@@ -150,6 +152,7 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(statsEnabled, selection.Includes(CapabilityToolset.Stats));
         Assert.Equal(archidektEnabled, selection.Includes(CapabilityToolset.Archidekt));
         Assert.Equal(playgroupEnabled, selection.Includes(CapabilityToolset.Playgroup));
+        Assert.Equal(spellbookEnabled, selection.Includes(CapabilityToolset.Spellbook));
         List<CapabilityToolset> expected = [];
         if (decksEnabled)
         {
@@ -174,6 +177,11 @@ public sealed class CapabilityToolsetTests
         if (playgroupEnabled)
         {
             expected.Add(CapabilityToolset.Playgroup);
+        }
+
+        if (spellbookEnabled)
+        {
+            expected.Add(CapabilityToolset.Spellbook);
         }
         Assert.Equal(expected, selection.EnabledToolsets);
     }
@@ -298,12 +306,13 @@ public sealed class CapabilityToolsetTests
     [Fact]
     public void Registry_AssignsCurrentSurfaceToImplementedToolsets()
     {
-        Assert.Equal(5, CapabilityToolsetRegistry.Implemented.Length);
+        Assert.Equal(6, CapabilityToolsetRegistry.Implemented.Length);
         CapabilityToolsetDescriptor decks = CapabilityToolsetRegistry.Implemented[0];
         CapabilityToolsetDescriptor scryfall = CapabilityToolsetRegistry.Implemented[1];
         CapabilityToolsetDescriptor stats = CapabilityToolsetRegistry.Implemented[2];
         CapabilityToolsetDescriptor archidekt = CapabilityToolsetRegistry.Implemented[3];
         CapabilityToolsetDescriptor playgroup = CapabilityToolsetRegistry.Implemented[4];
+        CapabilityToolsetDescriptor spellbook = CapabilityToolsetRegistry.Implemented[5];
         CapabilityToolsetSelection defaultSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve(null));
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
@@ -327,14 +336,19 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(16, playgroup.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(CapabilityToolset.Spellbook, spellbook.Toolset);
+        Assert.False(spellbook.DefaultEnabled);
+        Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(32, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
         Assert.Equal(54, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
         Assert.Equal(54, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
         Assert.Equal(0, CapabilityToolsetRegistry.CountVisibleTools(noneSelection, OperationMode.Local));
         CapabilityToolsetSelection allSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("all"));
-        Assert.Equal(57, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
-        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
-        Assert.Equal(93, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
+        Assert.Equal(60, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
+        Assert.Equal(83, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
+        Assert.Equal(96, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
     }
 
     /// <summary>
@@ -359,6 +373,9 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(
             ("not-required", null),
             FoundationResources.GetCredentialProjection(configured, CapabilityToolset.Stats));
+        Assert.Equal(
+            ("not-required", null),
+            FoundationResources.GetCredentialProjection(configured, CapabilityToolset.Spellbook));
         Assert.Equal(
             ("not-configured", "archidekt_auth_status"),
             FoundationResources.GetCredentialProjection(absent, CapabilityToolset.Archidekt));
@@ -402,6 +419,7 @@ public sealed class CapabilityToolsetTests
             OperationMode.Local,
             RequireSuccess(CapabilityToolsetRegistry.Resolve("default")),
             TimeSpan.FromHours(24),
+            TimeSpan.FromMinutes(15),
             Path.Combine(Path.GetTempPath(), "mtg-mcp-capability-test"),
             DataRootState.NotCreated,
             false,

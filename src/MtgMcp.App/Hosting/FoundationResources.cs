@@ -72,7 +72,7 @@ internal sealed class FoundationResources
         }
 
         FoundationCapabilityDocument document = new(
-            6,
+            7,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
@@ -89,7 +89,8 @@ internal sealed class FoundationResources
                 "mtg-mcp.deck/v1",
                 "v1",
                 "observed-2026-07-04",
-                "public-api-1.0.0"),
+                "public-api-1.0.0",
+                "api-6.3.3"),
             configuration.ToPublicStatus());
         return JsonSerializer.Serialize(document, SerializerOptions);
     }
@@ -105,7 +106,8 @@ internal sealed class FoundationResources
 
         return toolset switch
         {
-            CapabilityToolset.Decks or CapabilityToolset.Scryfall or CapabilityToolset.Stats =>
+            CapabilityToolset.Decks or CapabilityToolset.Scryfall or CapabilityToolset.Stats or
+                CapabilityToolset.Spellbook =>
                 ("not-required", null),
             CapabilityToolset.Archidekt => (
                 IsArchidektConfigured(configuration) ? "configured-unverified" : "not-configured",

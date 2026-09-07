@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Phase 1: Build the provider adapter
+- Current phase: Phase 3: Finish and prove the change
 - Implementation authorized: Yes
 
 ## Summary
@@ -162,3 +162,4 @@ scraped content, or source-data resale.
 | 2026-09-07 | Bounded live response check | Passed | API v6.3.3 accepted the planned search and saved-deck requests. Deck lookup returned a paginated response whose `results` object has identity plus Commander Spellbook's six combo groups. |
 | 2026-09-07 | Repository architecture review | Passed | Existing Playgroup and Scryfall adapters show the required App/adapter split and offline fixture pattern. |
 | 2026-09-07 | Independent design review | Passed after fixes | Added explicit paging defaults, a fixed transport timeout, caller-visible sent-request facts, cache-contract invalidation, atomic SQLite pacing, and a real separate-server cache test. |
+| 2026-09-07 | Phase 2 App and process checks | Passed | The opt-in toolset, local deck bridge, configuration, architecture checks, normal tests, and coverage gates pass. |

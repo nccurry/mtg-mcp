@@ -32,6 +32,7 @@ internal static class FoundationConfigurationLoader
             ["--mode"] = "MODE",
             ["--toolsets"] = "TOOLSETS",
             ["--scryfall-ttl-hours"] = "SCRYFALL_TTL_HOURS",
+            ["--spellbook-ttl-minutes"] = "SPELLBOOK:TTL_MINUTES",
         };
 
     /// <summary>
@@ -118,6 +119,14 @@ internal static class FoundationConfigurationLoader
             return ForwardFailure(ttlResult);
         }
 
+        string? spellbookTtlValue = configuration["SPELLBOOK:TTL_MINUTES"] ??
+            configuration["SPELLBOOK_TTL_MINUTES"];
+        OperationResult<TimeSpan> spellbookTtlResult = ParseSpellbookTtl(spellbookTtlValue);
+        if (spellbookTtlResult is not OperationSuccess<TimeSpan> spellbookTtl)
+        {
+            return ForwardFailure(spellbookTtlResult);
+        }
+
         string? configuredDataRoot = configuration["DATA_DIR"];
         OperationResult<DataRootResolution> dataRootResult = DataRootResolver.Resolve(
             configuredDataRoot,
@@ -149,6 +158,7 @@ internal static class FoundationConfigurationLoader
                 mode.Data,
                 toolsets.Data,
                 ttl.Data,
+                spellbookTtl.Data,
                 dataRoot.Data.Path,
                 dataRoot.Data.State,
                 !string.IsNullOrWhiteSpace(configuredDataRoot),
@@ -229,6 +239,29 @@ internal static class FoundationConfigurationLoader
             : new OperationInvalidInput(
                 "invalid-scryfall-ttl",
                 "Scryfall freshness hours must be a positive number no greater than 8760.");
+    }
+
+    /// <summary>
+    /// Parses the Commander Spellbook cache TTL as a whole number of minutes.
+    /// </summary>
+    private static OperationResult<TimeSpan> ParseSpellbookTtl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new OperationSuccess<TimeSpan>(TimeSpan.FromMinutes(15));
+        }
+
+        bool valid = int.TryParse(
+            value,
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out int minutes) &&
+            minutes is >= 1 and <= 1_440;
+        return valid
+            ? new OperationSuccess<TimeSpan>(TimeSpan.FromMinutes(minutes))
+            : new OperationInvalidInput(
+                "invalid-spellbook-ttl",
+                "Commander Spellbook cache minutes must be a whole number from 1 through 1440.");
     }
 
     /// <summary>

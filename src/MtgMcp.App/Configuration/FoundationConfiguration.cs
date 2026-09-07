@@ -11,6 +11,7 @@ internal sealed record FoundationConfiguration(
     OperationMode Mode,
     CapabilityToolsetSelection Toolsets,
     TimeSpan ScryfallFreshnessTtl,
+    TimeSpan SpellbookCacheTtl,
     string DataRoot,
     DataRootState DataRootState,
     bool DataRootConfigured,
@@ -42,7 +43,8 @@ internal sealed record FoundationConfiguration(
                 _ => "inspection-unavailable",
             },
             LegacyData.Message,
-            ScryfallFreshnessTtl.TotalHours);
+            ScryfallFreshnessTtl.TotalHours,
+            SpellbookCacheTtl.TotalMinutes);
     }
 }
 
@@ -54,4 +56,5 @@ internal sealed record FoundationConfigurationStatus(
     string DataRootState,
     string LegacyDataState,
     string MigrationBoundary,
-    double ScryfallFreshnessHours);
+    double ScryfallFreshnessHours,
+    double SpellbookCacheTtlMinutes);

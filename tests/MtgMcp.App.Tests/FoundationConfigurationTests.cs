@@ -37,6 +37,7 @@ public sealed class FoundationConfigurationTests
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Decks));
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Scryfall));
         Assert.Equal(TimeSpan.FromHours(24), resolved.ScryfallFreshnessTtl);
+        Assert.Equal(TimeSpan.FromMinutes(15), resolved.SpellbookCacheTtl);
         Assert.Equal(expectedPath, resolved.DataRoot);
         Assert.Equal(DataRootState.NotCreated, resolved.DataRootState);
         Assert.False(resolved.DataRootConfigured);
@@ -162,11 +163,13 @@ public sealed class FoundationConfigurationTests
                 ["MODE"] = "remote",
                 ["DATA_DIR"] = jsonDataRoot,
                 ["TOOLSETS"] = "none",
+                ["SPELLBOOK_TTL_MINUTES"] = "30",
             }));
         FoundationConfiguration jsonResolved;
         using (new EnvironmentVariableScope("MTGMCP__MODE", null))
         using (new EnvironmentVariableScope("MTGMCP__DATA_DIR", null))
         using (new EnvironmentVariableScope("MTGMCP__TOOLSETS", null))
+        using (new EnvironmentVariableScope("MTGMCP__SPELLBOOK__TTL_MINUTES", null))
         {
             jsonResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load([], configurationFile, temporary.Path, string.Empty));
@@ -177,12 +180,13 @@ public sealed class FoundationConfigurationTests
         using (new EnvironmentVariableScope("MTGMCP__MODE", "read-only"))
         using (new EnvironmentVariableScope("MTGMCP__DATA_DIR", environmentDataRoot))
         using (new EnvironmentVariableScope("MTGMCP__TOOLSETS", "all"))
+        using (new EnvironmentVariableScope("MTGMCP__SPELLBOOK__TTL_MINUTES", "40"))
         {
             environmentResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load([], configurationFile, temporary.Path, string.Empty));
             commandLineResolved = RequireSuccess(
                 FoundationConfigurationLoader.Load(
-                    ["--mode=local", $"--data-dir={commandLineDataRoot}", "--toolsets=decks", "--scryfall-ttl-hours=6.5"],
+                    ["--mode=local", $"--data-dir={commandLineDataRoot}", "--toolsets=decks", "--scryfall-ttl-hours=6.5", "--spellbook-ttl-minutes=45"],
                     configurationFile,
                     temporary.Path,
                     string.Empty));
@@ -191,13 +195,16 @@ public sealed class FoundationConfigurationTests
         Assert.Equal(OperationMode.Remote, jsonResolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.None, jsonResolved.Toolsets.Kind);
         Assert.Equal(jsonDataRoot, jsonResolved.DataRoot);
+        Assert.Equal(TimeSpan.FromMinutes(30), jsonResolved.SpellbookCacheTtl);
         Assert.Equal(OperationMode.ReadOnly, environmentResolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.All, environmentResolved.Toolsets.Kind);
         Assert.Equal(environmentDataRoot, environmentResolved.DataRoot);
+        Assert.Equal(TimeSpan.FromMinutes(40), environmentResolved.SpellbookCacheTtl);
         Assert.Equal(OperationMode.Local, commandLineResolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.Explicit, commandLineResolved.Toolsets.Kind);
         Assert.Equal(commandLineDataRoot, commandLineResolved.DataRoot);
         Assert.Equal(TimeSpan.FromHours(6.5), commandLineResolved.ScryfallFreshnessTtl);
+        Assert.Equal(TimeSpan.FromMinutes(45), commandLineResolved.SpellbookCacheTtl);
     }
 
     /// <summary>
@@ -276,6 +283,32 @@ public sealed class FoundationConfigurationTests
         Assert.Equal("invalid-scryfall-ttl", invalid.ReasonCode);
         Assert.Equal(
             "Scryfall freshness hours must be a positive number no greater than 8760.",
+            invalid.Message);
+    }
+
+    /// <summary>
+    /// Verifies Commander Spellbook cache minutes require a whole value inside the supported range.
+    /// </summary>
+    [Theory]
+    [InlineData("invalid")]
+    [InlineData("0")]
+    [InlineData("1.5")]
+    [InlineData("1441")]
+    public void Resolve_InvalidSpellbookTtl_ReturnsStructuredInvalidInput(string configuredValue)
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["SPELLBOOK:TTL_MINUTES"] = configuredValue,
+            })
+            .Build();
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(
+            FoundationConfigurationLoader.Resolve(configuration, "unused", string.Empty).Value);
+
+        Assert.Equal("invalid-spellbook-ttl", invalid.ReasonCode);
+        Assert.Equal(
+            "Commander Spellbook cache minutes must be a whole number from 1 through 1440.",
             invalid.Message);
     }
 
@@ -464,6 +497,7 @@ public sealed class FoundationConfigurationTests
             Assert.IsType<OperationSuccess<CapabilityToolsetSelection>>(
                 CapabilityToolsetRegistry.Resolve(null).Value).Data,
             TimeSpan.FromHours(24),
+            TimeSpan.FromMinutes(15),
             "private-path",
             DataRootState.NotCreated,
             false,

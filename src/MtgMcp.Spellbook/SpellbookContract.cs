@@ -41,17 +41,17 @@ internal static class SpellbookContract
     /// <summary>
     /// Caps one source card name before a deck request leaves the process.
     /// </summary>
-    internal const int MaximumCardNameLength = 256;
+    internal const int MaximumCardNameLength = SpellbookDeckRequestLimits.MaximumCardNameLength;
 
     /// <summary>
     /// Caps Commander Spellbook commander request rows.
     /// </summary>
-    internal const int MaximumCommanderEntries = 12;
+    internal const int MaximumCommanderEntries = SpellbookDeckRequestLimits.MaximumCommanderEntries;
 
     /// <summary>
     /// Caps Commander Spellbook main-deck request rows.
     /// </summary>
-    internal const int MaximumMainEntries = 600;
+    internal const int MaximumMainEntries = SpellbookDeckRequestLimits.MaximumMainEntries;
 
     /// <summary>
     /// Uses a small page size that avoids source defaults intended for interactive browsing.

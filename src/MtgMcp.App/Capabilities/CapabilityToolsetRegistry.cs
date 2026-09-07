@@ -4,6 +4,7 @@ using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
 using MtgMcp.App.Scryfall;
+using MtgMcp.App.Spellbook;
 using MtgMcp.App.Statistics;
 using MtgMcp.Core.Results;
 
@@ -24,6 +25,7 @@ internal static class CapabilityToolsetRegistry
             StatisticsToolsetManifest.Descriptor,
             ArchidektToolsetManifest.Descriptor,
             PlaygroupToolsetManifest.Descriptor,
+            SpellbookToolsetManifest.Descriptor,
         ];
 
     /// <summary>

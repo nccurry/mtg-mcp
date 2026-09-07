@@ -8,11 +8,13 @@ using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
 using MtgMcp.App.Scryfall;
+using MtgMcp.App.Spellbook;
 using MtgMcp.App.Statistics;
 using MtgMcp.Archidekt;
 using MtgMcp.Decks;
 using MtgMcp.Playgroup;
 using MtgMcp.Scryfall;
+using MtgMcp.Spellbook;
 using MtgMcp.Statistics;
 
 namespace MtgMcp.App.Hosting;
@@ -39,7 +41,8 @@ internal static class FoundationHost
         bool decksEnabled = configuration.Toolsets.Includes(CapabilityToolset.Decks);
         bool archidektEnabled = configuration.Toolsets.Includes(CapabilityToolset.Archidekt);
         bool statisticsEnabled = configuration.Toolsets.Includes(CapabilityToolset.Stats);
-        using SqliteDeckStore? deckStore = decksEnabled || archidektEnabled || statisticsEnabled
+        bool spellbookEnabled = configuration.Toolsets.Includes(CapabilityToolset.Spellbook);
+        using SqliteDeckStore? deckStore = decksEnabled || archidektEnabled || statisticsEnabled || spellbookEnabled
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
         bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
@@ -56,6 +59,11 @@ internal static class FoundationHost
         bool playgroupEnabled = configuration.Toolsets.Includes(CapabilityToolset.Playgroup);
         using PlaygroupService? playgroupService = playgroupEnabled
             ? new PlaygroupService(configuration.Playgroup, FoundationServerIdentity.PackageVersion)
+            : null;
+        using SpellbookService? spellbookService = spellbookEnabled
+            ? new SpellbookService(
+                SpellbookOptions.CreateDefault(configuration.DataRoot, configuration.SpellbookCacheTtl),
+                FoundationServerIdentity.PackageVersion)
             : null;
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
@@ -104,6 +112,11 @@ internal static class FoundationHost
         if (playgroupService is not null)
         {
             PlaygroupToolsetManifest.Register(mcpBuilder, playgroupService, configuration.Mode);
+        }
+
+        if (spellbookService is not null && deckStore is not null)
+        {
+            SpellbookToolsetManifest.Register(mcpBuilder, spellbookService, deckStore);
         }
 
         using IHost host = builder.Build();

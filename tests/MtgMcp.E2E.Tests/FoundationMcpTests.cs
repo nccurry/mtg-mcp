@@ -207,6 +207,16 @@ public sealed class FoundationMcpTests
     ];
 
     /// <summary>
+    /// Lists the bounded Commander Spellbook reads available in every operation mode.
+    /// </summary>
+    private static readonly string[] SpellbookReadToolNames =
+    [
+        "spellbook_deck_combos_find",
+        "spellbook_variant_get",
+        "spellbook_variant_search",
+    ];
+
+    /// <summary>
     /// Verifies initialization, discovery, and capability content in every supported mode.
     /// </summary>
     [Theory]
@@ -276,15 +286,17 @@ public sealed class FoundationMcpTests
             "deckInterchange",
             "scryfall",
             "archidekt",
-            "playgroup");
+            "playgroup",
+            "spellbook");
         AssertPropertyOrder(
             root.GetProperty("configuration"),
             "dataRootConfigured",
             "dataRootState",
             "legacyDataState",
             "migrationBoundary",
-            "scryfallFreshnessHours");
-        Assert.Equal(6, root.GetProperty("schemaVersion").GetInt32());
+            "scryfallFreshnessHours",
+            "spellbookCacheTtlMinutes");
+        Assert.Equal(7, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("io.github.nccurry/mtg-mcp", root.GetProperty("server").GetProperty("name").GetString());
         Assert.Equal(expectedVersion, root.GetProperty("server").GetProperty("packageVersion").GetString());
         Assert.Equal(
@@ -307,6 +319,9 @@ public sealed class FoundationMcpTests
         Assert.Equal(
             "public-api-1.0.0",
             root.GetProperty("dataSchemas").GetProperty("playgroup").GetString());
+        Assert.Equal(
+            "api-6.3.3",
+            root.GetProperty("dataSchemas").GetProperty("spellbook").GetString());
         AssertConfiguration(root.GetProperty("configuration"));
         Assert.DoesNotContain(session.DataRoot, content.Text, StringComparison.OrdinalIgnoreCase);
         Assert.False(Directory.Exists(session.DataRoot));
@@ -338,9 +353,9 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "default", "default", 32)]
     [InlineData("local", "default", "default", 54)]
     [InlineData("remote", "default", "default", 54)]
-    [InlineData("read-only", "all", "all", 57)]
-    [InlineData("local", "all", "all", 80)]
-    [InlineData("remote", "all", "all", 93)]
+    [InlineData("read-only", "all", "all", 60)]
+    [InlineData("local", "all", "all", 83)]
+    [InlineData("remote", "all", "all", 96)]
     [InlineData("read-only", "decks", "explicit", 10)]
     [InlineData("local", "decks", "explicit", 28)]
     [InlineData("remote", "decks", "explicit", 28)]
@@ -356,6 +371,9 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "playgroup", "explicit", 14)]
     [InlineData("local", "playgroup", "explicit", 14)]
     [InlineData("remote", "playgroup", "explicit", 16)]
+    [InlineData("read-only", "spellbook", "explicit", 3)]
+    [InlineData("local", "spellbook", "explicit", 3)]
+    [InlineData("remote", "spellbook", "explicit", 3)]
     [InlineData("read-only", "none", "none", 0)]
     [InlineData("local", "none", "none", 0)]
     [InlineData("remote", "none", "none", 0)]
@@ -744,12 +762,13 @@ public sealed class FoundationMcpTests
             "Toolsets control relevance; operation mode controls authority.",
             toolsets.GetProperty("authorityBoundary").GetString());
         JsonElement[] descriptors = toolsets.GetProperty("items").EnumerateArray().ToArray();
-        Assert.Equal(5, descriptors.Length);
+        Assert.Equal(6, descriptors.Length);
         bool decksEnabled = configuredToolsets is "default" or "all" or "decks";
         bool scryfallEnabled = configuredToolsets is "default" or "all" or "scryfall";
         bool statsEnabled = configuredToolsets is "default" or "all" or "stats";
         bool archidektEnabled = configuredToolsets is "all" or "archidekt";
         bool playgroupEnabled = configuredToolsets is "all" or "playgroup";
+        bool spellbookEnabled = configuredToolsets is "all" or "spellbook";
         AssertDescriptor(
             descriptors[0],
             "decks",
@@ -790,6 +809,12 @@ public sealed class FoundationMcpTests
             descriptors[4].GetProperty("unsupportedOperations")
                 .EnumerateArray()
                 .Select(value => value.GetString()));
+        AssertDescriptor(
+            descriptors[5],
+            "spellbook",
+            spellbookEnabled,
+            defaultEnabled: false,
+            spellbookEnabled ? 3 : 0);
         Assert.Contains(
             "operation mode separately controls local writes",
             descriptors[0].GetProperty("description").GetString(),
@@ -820,7 +845,7 @@ public sealed class FoundationMcpTests
             "unsupportedOperations");
         Assert.Equal(name, descriptor.GetProperty("name").GetString());
         Assert.Equal("implemented", descriptor.GetProperty("implementationStatus").GetString());
-        if (name is "decks" or "scryfall" or "stats")
+        if (name is "decks" or "scryfall" or "stats" or "spellbook")
         {
             Assert.Equal("not-required", descriptor.GetProperty("credentialState").GetString());
             Assert.Equal(JsonValueKind.Null, descriptor.GetProperty("authenticationStatusTool").ValueKind);
@@ -887,6 +912,11 @@ public sealed class FoundationMcpTests
             names = names.Concat(mode == "remote" ? PlaygroupAllToolNames : PlaygroupReadToolNames);
         }
 
+        if (toolsets is "all" or "spellbook")
+        {
+            names = names.Concat(SpellbookReadToolNames);
+        }
+
         return names.Order(StringComparer.Ordinal).ToArray();
     }
 
@@ -917,6 +947,7 @@ public sealed class FoundationMcpTests
             configuration.GetProperty("migrationBoundary").GetString(),
             StringComparison.OrdinalIgnoreCase);
         Assert.Equal(24, configuration.GetProperty("scryfallFreshnessHours").GetDouble());
+        Assert.Equal(15, configuration.GetProperty("spellbookCacheTtlMinutes").GetDouble());
     }
 
     /// <summary>
