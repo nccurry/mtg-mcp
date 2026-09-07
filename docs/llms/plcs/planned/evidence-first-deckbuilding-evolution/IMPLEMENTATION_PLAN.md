@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-09-06
+- Last updated: 2026-09-07
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 - Implementation authorized: No
@@ -21,15 +21,15 @@ source, and a new public tool in one change. Each of those has a different
 failure mode and should have a separate validation story.
 
 The recommended first child is adapter ownership cleanup. It is the smallest
-useful outcome: a maintainer can safely change Scryfall corpus/snapshots or
+useful outcome: a maintainer can safely change Scryfall card data/snapshots or
 Archidekt decks/folders/snapshots without navigating a god class.
 
 ## Phase Summary
 
 | Phase | Goal | Requirements | Code areas | Validation | Exit criteria | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Ratify the target and activate one narrow child. | EFD-001–013 | PLC/docs only | Review, link check, diff check | Owner selects a child and records implementation authority. | Planned |
-| 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change; database owner only owns connection/schema/composition. | Planned |
+| 0 | Ratify the target and activate one narrow child. | EFD-001–013 | PLC/docs only | Review, link check, diff check | Owner selects a child and records implementation authority. | Complete |
+| 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change. The database owner only owns connection, schema, and disposal. | In progress |
 | 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | Planned |
 | 2 | Prove MCP SDK/toolchain compatibility before upgrades. | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, dependency docs | Process/client/schema/package checks | A version decision is evidence-backed and separately reviewable. | Planned |
 | 3 | Admit one high-value source, likely Commander Spellbook. | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Admission review, fake HTTP, surface/E2E checks | Opt-in evidence tools are attributable, bounded, and policy-compliant. | Planned |
@@ -59,21 +59,23 @@ Archidekt decks/folders/snapshots without navigating a god class.
 
 ### Phase 1A: Scryfall ownership extraction
 
-- Problems solved: ScryfallCorpusStore, ScryfallSnapshotStore, and
+- Problems solved: The current ScryfallCorpusStore (renamed
+  ScryfallCardDataStore in this child), ScryfallSnapshotStore, and
   ScryfallRequestCoordinationStore currently forward every operation to one
   oversized ScryfallDatabase.
 - Included requirements: EFD-002, EFD-003, EFD-004, EFD-005, EFD-010,
   EFD-013.
 - Out of scope:
   - New Scryfall tools or schema fields.
-  - New corpus formats or migration.
+  - New card-data formats or migration.
   - Local Scryfall query engine.
   - New tags or any tagger-site acquisition.
 - Expected edits:
-  - Move corpus SQL behavior into ScryfallCorpusStore.
+  - Move card-data SQL behavior, including every `corpus_state` field, into
+    ScryfallCardDataStore.
   - Move snapshot SQL behavior into ScryfallSnapshotStore.
-  - Move lease/pacing/metadata SQL behavior into ScryfallRequestCoordinationStore.
-  - Leave the database owner with path, connection, schema, and composition.
+  - Move lease and pacing SQL behavior into ScryfallRequestCoordinationStore.
+  - Leave the database owner with path, connection, schema, and disposal.
   - Remove forwarding methods as real methods arrive.
 - Tests added:
   - Pre-move characterization of result ordering, cache/snapshot state, import

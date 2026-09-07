@@ -209,10 +209,10 @@ not an empty source result.
 | --- | --- | --- | --- | --- | --- |
 | MtgMcp.Core | Shared IDs, typed outcomes, evidence taxonomy, provider-neutral contracts | No transport/persistence state | Core records/unions | BCL only | Core unit and architecture tests |
 | MtgMcp.Decks | Local deck persistence, versions, backups, interchange | decks.db and local files | Deck workflows/contracts | Core, SQLite | Decks unit/integration tests |
-| Scryfall database owner | Database path, connection creation, schema bootstrap/validation, composition | scryfall.db connection policy | Internal concrete support | SQLite | Schema/connection tests |
-| Scryfall corpus store | Corpus generations, cards, rulings, tags, import/activation/rollback | Corpus SQL operations | Internal concrete store | Database owner | Corpus fixtures |
+| Scryfall database owner | Database path, connection creation, schema bootstrap/validation, disposal | scryfall.db connection policy | Internal concrete support | SQLite | Schema/connection tests |
+| Scryfall card-data store | Card-data generations, cards, rulings, tags, import/activation/rollback, and all `corpus_state` fields | Card-data SQL operations | Internal concrete store | Database owner | Card-data fixtures |
 | Scryfall snapshot store | Exact-request snapshot lookup, storage, replay, listing, deletion | Snapshot SQL operations | Internal concrete store | Database owner | Snapshot fixtures |
-| Scryfall coordination store | Leases, metadata timestamps, provider-start reservations | Coordination SQL operations | Internal concrete store | Database owner | Multi-process/pacing fixtures |
+| Scryfall coordination store | Leases and provider-start reservations | Coordination SQL operations | Internal concrete store | Database owner | Multi-process/pacing fixtures |
 | Scryfall operations | Official API/bulk acquisition and evidence workflows | Provider client/cache policy | ScryfallService facade | Concrete stores | Fake HTTP, corpus, and App tests |
 | Shared Archidekt HTTP/session owner | HttpClient lifetime, auth, pacing, retries, cooldown, request budget, sanitized provider faults | One session per Archidekt service | Internal support | HTTP/BCL | HTTP/pacing/error tests |
 | Archidekt deck transport and operations | Deck routes, payloads, normalization, validation, read-back, guarded apply | Deck workflow state | ArchidektService delegation | Shared session, Core | Fixture and workflow tests |

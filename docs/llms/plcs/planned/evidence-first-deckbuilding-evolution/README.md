@@ -11,8 +11,8 @@
 - Folder: docs/llms/plcs/planned/evidence-first-deckbuilding-evolution/
 - Owner: mtg-mcp
 - Created: 2026-09-06
-- Last updated: 2026-09-06
-- Current phase: planning review
+- Last updated: 2026-09-07
+- Current phase: Phase 1A: direct-store characterization
 - Implementation authorized: No
 
 ## Summary
@@ -59,10 +59,12 @@ It must not add a fourth verb: decide.
 | Treat advanced goldfish as a feasibility experiment, not a stable feature promise. | Proposed | A useful bounded model may be possible, but it must not masquerade as a Magic rules engine or a matchup predictor. | [SRD](SRD.md#scope-and-non-scope) |
 | Admit every external source individually. | Proposed | “More sources” is valuable only when access, meaning, retention, and provenance are reliable. | [SADD](SADD.md#provider-admission) |
 | Upgrade the MCP SDK in a focused compatibility child. | Proposed | The installed SDK has a major update available; mixing it into an ownership refactor would hide regressions. | [Audit](AUDIT.md#findings) |
+| Start with Scryfall card-data store ownership. | In progress | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../in-progress/scryfall-store-ownership-extraction/README.md) |
+| Keep all card-data state in ScryfallCardDataStore. | Owner approved | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../in-progress/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
 
 ## Project And Surface Impact
 
-The first child affects MtgMcp.Scryfall, MtgMcp.Archidekt, their focused tests,
+The selected first child affects MtgMcp.Scryfall, its focused tests,
 architecture tests, and documentation. It does not change tool names, schemas,
 operation modes, SQLite formats, or provider behavior.
 
@@ -110,13 +112,13 @@ amendment that removes or replaces it.
 - [x] Exact mathematics and sampled estimates have separate contracts.
 - [x] Each proposed delivery phase has an exit criterion.
 - [x] Existing retired simulation and provider packets are treated as reference-only.
-- [ ] The owner has selected the first implementation child.
-- [ ] The selected child has independent approval and implementation authorization.
+- [x] The owner has selected the first implementation child.
+- [x] The selected child has independent approval and implementation authorization.
 
 ## Implementation Checklist
 
-- [ ] Select and create the first narrow child packet.
-- [ ] Move only that approved child to in-progress.
+- [x] Select and create the first narrow child packet.
+- [x] Move only that approved child to in-progress.
 - [ ] Lock behavior with characterization fixtures before moving ownership.
 - [ ] Update this umbrella if a cross-child guardrail changes.
 - [ ] Record focused and broad validation as each child completes.
@@ -136,6 +138,8 @@ amendment that removes or replaces it.
 | 2026-09-06 | Source and document audit | Completed | The two P2 ownership findings and one P3 documentation drift are recorded in [AUDIT.md](AUDIT.md). |
 | 2026-09-06 | Independent packet review | Findings fixed | Corrected the dependency diagram, deferral control, volatile line-count claims, and an internal link. |
 | 2026-09-06 | Documentation validation | Passed | git diff --check, trailing-whitespace scan, and local Markdown-link resolution passed. |
+| 2026-09-07 | Phase 1A owner decision | Passed | The owner selected Scryfall store ownership first and kept all `corpus_state` operations in ScryfallCardDataStore. |
+| 2026-09-07 | Phase 1A independent review | Passed | The corrected child packet passed final independent review and Phase 1 is authorized. |
 
 ## Completion Notes
 

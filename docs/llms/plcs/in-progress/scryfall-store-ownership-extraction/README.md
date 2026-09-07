@@ -1,24 +1,24 @@
-# Scryfall Store Ownership Extraction PLC Packet
+# Scryfall Card Data Store Ownership Extraction PLC Packet
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/scryfall-store-ownership-extraction/
-- Parent PLC: [Evidence-First Deckbuilding Evolution](../evidence-first-deckbuilding-evolution/README.md)
+- Status: In progress
+- Folder: docs/llms/plcs/in-progress/scryfall-store-ownership-extraction/
+- Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Planning review
+- Current phase: Phase 1: direct-store characterization
 - Owner selection: Phase 1A of the parent PLC
 - Owner authorization: Recorded from the request to implement the PLC phase by phase in main.
-- Independent design review: Pending
-- Implementation authorized: No. This value changes to Yes only after the independent review passes.
+- Independent design review: Passed. The final review confirmed the corrected service setup wording.
+- Implementation authorized: Yes. The independent review passed on 2026-09-07.
 
 ## Summary
 
-This child makes the Scryfall corpus, snapshot, and coordination stores own
-their SQLite work. Today, each named store forwards every call to one large
-ScryfallDatabase class.
+This child makes the Scryfall card-data, snapshot, and request-coordination
+stores own their SQLite work. Today, each named store forwards every call to
+one large ScryfallDatabase class.
 
 The refactor keeps the current database file and all observable behavior. It
 does not add a tool, change a tool, call a new Scryfall endpoint, or migrate
@@ -37,9 +37,12 @@ one persistence domain without navigating unrelated domains.
 | Decision | Status | Rationale | Detail |
 | --- | --- | --- | --- |
 | Keep ScryfallDatabase as a concrete connection and schema owner. | Proposed | It already owns the file path, SQLite initialization, and schema validation. | [SADD](SADD.md#chosen-design) |
-| Put corpus SQL in ScryfallCorpusStore. | Proposed | Corpus generations, cards, rulings, and tags are one data domain. | [SADD](SADD.md#building-blocks) |
+| Put all card-data SQL in ScryfallCardDataStore. | Owner approved | Card-data generations, cards, rulings, tags, and the full `corpus_state` row have one lifecycle. | [SADD](SADD.md#building-blocks) |
 | Put immutable request-snapshot SQL in ScryfallSnapshotStore. | Proposed | Snapshot lookup, storage, replay, listing, and deletion have one lifecycle. | [SADD](SADD.md#building-blocks) |
-| Put leases, pacing, and metadata-check writes in ScryfallRequestCoordinationStore. | Proposed | These rows coordinate acquisition across processes. | [SADD](SADD.md#building-blocks) |
+| Put leases and provider-start pacing in ScryfallRequestCoordinationStore. | Owner approved | These rows coordinate provider requests across processes. | [SADD](SADD.md#building-blocks) |
+| Add ScryfallHash for shared stable hashes. | Proposed | Card data, snapshots, and evidence operations use the same UTF-8 SHA-256 value. | [SADD](SADD.md#shared-sqlite-values) |
+| Limit ScryfallSql to value conversion. | Proposed | A helper that runs queries would become another hidden data owner. | [SADD](SADD.md#shared-sqlite-values) |
+| Add ScryfallTagWeight for shared tag-weight rules. | Proposed | The service and the card-data store both use the same fixed Scryfall tag-weight order. | [SADD](SADD.md#shared-sqlite-values) |
 | Add no repository interface or provider-wide persistence framework. | Proposed | The stores use direct concrete SQLite access inside one adapter project. | [SADD](SADD.md#alternatives-considered) |
 | Preserve the schema byte-for-byte. | Proposed | This child changes code ownership, not persisted data or compatibility. | [SRD](SRD.md#scope-and-non-scope) |
 
@@ -47,9 +50,10 @@ one persistence domain without navigating unrelated domains.
 
 | Area | Impact |
 | --- | --- |
-| MtgMcp.Scryfall | Refactor ScryfallDatabase and split ScryfallStores into type-owned source files. |
+| MtgMcp.Scryfall | Refactor ScryfallDatabase and split ScryfallStores into one source file per store. |
 | MtgMcp.Scryfall.Tests | Add direct-store characterization tests. Update tests that call database workflow methods. |
 | MtgMcp.Architecture.Tests | Add a focused ownership assertion if the existing adapter tests cannot state the boundary clearly. |
+| Internal names | Rename ScryfallCorpusStore, CorpusStore, ScryfallCorpusLifecycleOperations, and their source names to clear card-data names. Public `ScryfallCorpus*` result types and `corpus_*` SQLite names stay unchanged. |
 | MCP tools, resources, prompts, and operation modes | No change. The post-change surface report must match the pre-change report. |
 | Scryfall provider contract, headers, pacing policy, cache policy, and retries | No change. |
 | scryfall.db, SchemaVersion, SchemaChecksum, tables, indexes, and data retention | No change. |
@@ -57,7 +61,9 @@ one persistence domain without navigating unrelated domains.
 
 ## Current Open Questions
 
-No owner decision blocks this child. The selected design keeps direct concrete
+No owner decision blocks this child. The owner approved this rule: the card-data
+store owns every `corpus_state` field, including the metadata-check time. This
+keeps activation and deletion atomic. The selected design keeps direct concrete
 SQLite dependencies within MtgMcp.Scryfall. It does not require a new interface
 or a public contract choice.
 
@@ -72,13 +78,13 @@ or a public contract choice.
 - [x] The provider contract, offline fixture rule, and cancellation rule remain unchanged.
 - [x] The implementation plan has ordered phase exits.
 - [x] Deferred work is visible and not required for this child.
-- [ ] The independent design review has passed.
+- [x] The independent design review has passed.
 
 ## Implementation Checklist
 
-- [ ] Move this packet to in-progress after the independent review passes.
+- [x] Move this packet to in-progress after the independent review passes.
 - [ ] Add behavior characterization before the physical move.
-- [ ] Move corpus ownership.
+- [ ] Move card-data ownership.
 - [ ] Move snapshot and coordination ownership.
 - [ ] Remove forwarding methods and the obsolete aggregate stores file.
 - [ ] Run the focused and broad validation gates.
@@ -88,9 +94,9 @@ or a public contract choice.
 
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
-| 2026-09-07 | Source and test inspection | Passed | ScryfallStores forwards 27 workflow calls to ScryfallDatabase. Existing tests cover corpus lifecycle, snapshots, leases, pacing, cancellation, and typed outcomes. |
+| 2026-09-07 | Source and test inspection | Passed | ScryfallStores forwards 29 workflow calls to ScryfallDatabase. Existing tests cover card-data lifecycle, snapshots, leases, pacing, cancellation, and typed outcomes. |
 | 2026-09-07 | Public-surface inspection | Passed | This child has no tool, mode, configuration, provider, or persistence-format change. |
-| 2026-09-07 | Independent design review | Pending | The review must finish before the packet becomes implementation authority. |
+| 2026-09-07 | Independent design review | Passed | The review found an atomic-state ownership problem, a shared tag-weight rule, incomplete state-test coverage, misplaced stored records, unclear internal names, and one service setup wording error. The fixes passed a final review. |
 
 ## Completion Notes
 
