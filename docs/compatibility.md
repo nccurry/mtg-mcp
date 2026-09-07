@@ -6,8 +6,9 @@ It does not carry the released legacy surface forward.
 ## Current Rewrite Status
 
 The completed foundation, local deck capability, offline interchange surface,
-unified Scryfall evidence capability, and opt-in Archidekt and Playgroup
-capabilities use the official C# SDK selected in `Directory.Packages.props`.
+unified Scryfall evidence capability, and opt-in Archidekt, Playgroup, and
+Commander Spellbook capabilities use the official C# SDK selected in
+`Directory.Packages.props`.
 The server requires MCP `2026-07-28`; it does not support older
 initialize-based clients. Official-client E2E tests prove current-protocol
 connections in `read-only`, `local`, and `remote` modes, protocol reporting,
@@ -19,16 +20,17 @@ The current public surface is exactly:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- a default profile of 32/54/54 tools and complete `all` profile of 57/80/93
+- a default profile of 32/54/54 tools and complete `all` profile of 60/83/96
   tools by mode, plus zero prompts;
 - static `default`, `all`, `none`, and explicit implemented-toolset selection,
-  with capability schema version 6; and
+  with capability schema version 7; and
 - no logging, subscription, or list-changed capability advertisement.
 
 `task smoke:process` is only a one-shot startup/configuration probe.
 `task smoke:mcp` establishes a real MCP session, reads the resource, verifies
-the deck, Scryfall, Archidekt, and Playgroup schemas/annotations, and runs local workflows, while
-`task release:tool-smoke` repeats both checks against the installed package.
+the deck, Scryfall, Spellbook, Archidekt, and Playgroup schemas and annotations,
+and runs local workflows. `task release:tool-smoke` repeats those checks against
+the installed package.
 `task surface:report` enforces the exact source registration boundary.
 
 ## `0.9.0` Rewrite Boundary

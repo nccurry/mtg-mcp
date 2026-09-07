@@ -588,6 +588,22 @@ public sealed class FoundationArchitectureTests
             "ToolsetNorthStarMcpTests",
             File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
             StringComparison.Ordinal);
+        Assert.Contains(
+            "MtgMcp.Spellbook.Tests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "coverage:spellbook",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SpellbookMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SpellbookMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
+            StringComparison.Ordinal);
     }
 
     /// <summary>

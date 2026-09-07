@@ -141,6 +141,10 @@ tasks:
         --configuration {{.CONFIGURATION}}
         -- --filter "Category!=Live"
       - >
+        {{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        -- --filter "Category!=Live"
+      - >
         {{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
         -- --filter "Category!=Live"
@@ -166,6 +170,7 @@ tasks:
       - '{{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
 
   test:live:methods:
@@ -223,6 +228,12 @@ tasks:
     deps: [coverage:report]
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Scryfall'
+
+  coverage:spellbook:
+    desc: Enforce 90 percent line coverage for the Commander Spellbook adapter using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Spellbook'
 
   coverage:archidekt:
     desc: Enforce 90 percent line coverage for the Archidekt adapter using the Codecov report
@@ -298,7 +309,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~StatisticsMcpTests"
+        -- --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
 
   install:
     desc: Install the current branch on this workstation

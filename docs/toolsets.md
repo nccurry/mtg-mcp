@@ -9,13 +9,14 @@ Set `--toolsets`, `MTGMCP__TOOLSETS`, or `TOOLSETS` in `mtg-mcp.json`.
 ```text
 mtg-mcp --toolsets=default
 mtg-mcp --toolsets=decks,stats
+mtg-mcp --toolsets=spellbook
 mtg-mcp --toolsets=none
 ```
 
 | Value | Enabled toolsets |
 | --- | --- |
 | Omitted or `default` | `decks,scryfall,stats` |
-| `all` | `decks,scryfall,stats,archidekt,playgroup` |
+| `all` | `decks,scryfall,stats,archidekt,playgroup,spellbook` |
 | `none` | None |
 | Exact comma-separated list | Only the named toolsets |
 
@@ -30,7 +31,7 @@ mode.
 | Profile | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
 | `default` | 32 | 54 | 54 |
-| `all` | 57 | 80 | 93 |
+| `all` | 60 | 83 | 96 |
 | `none` | 0 | 0 | 0 |
 
 `read-only` allows reads only. `local` adds local writes. `remote` adds remote
@@ -45,9 +46,13 @@ writes. A toolset cannot widen these permissions.
 | Exact probabilities and summaries | `stats` |
 | Archidekt synchronization | `decks,scryfall,archidekt` |
 | Playgroup evidence | `playgroup` |
+| Commander Spellbook variants or combo evidence for an existing local deck | `spellbook` |
 
 The default profile supports local deckbuilding without loading provider-account
-tools. Enable Archidekt or Playgroup only for those workflows.
+tools. Enable Archidekt, Playgroup, or Spellbook only for those workflows.
+
+The three `spellbook` tools are read-only in every mode. They return Commander
+Spellbook evidence, not a recommendation about a deck or combo.
 
 Read `mtg://server/capabilities` to inspect the active selection and exact tool
 count.

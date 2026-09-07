@@ -2,7 +2,7 @@
 
 ## Document Control
 
-- Lifecycle status: In progress
+- Lifecycle status: Complete
 - PLC packet: [README.md](README.md)
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
@@ -121,9 +121,9 @@ query. It does not infer one from the local deck format.
 ## Definition of Done
 
 - [x] The owner approved the saved-deck-only first interface on 2026-09-07.
-- [ ] All Must requirements have passing test evidence.
-- [ ] The provider adds no recommendation, ranking, estimate, or write surface.
-- [ ] Normal tests remain offline and each production assembly remains at least
+- [x] All Must requirements have passing test evidence.
+- [x] The provider adds no recommendation, ranking, estimate, or write surface.
+- [x] Normal tests remain offline and each production assembly remains at least
       90 percent line covered.
-- [ ] The source API and request guidance are rechecked before the live test.
-- [ ] `task ci` and the package smoke path pass.
+- [x] The source API and request guidance are rechecked before the live test.
+- [x] `task ci` and the package smoke path pass.

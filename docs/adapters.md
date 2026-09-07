@@ -64,6 +64,32 @@ Configure `MTGMCP__PLAYGROUP__API_KEY`, or use
 `~/.mtg-mcp/playgroup.json`. The two public writes remain fixture-only in live
 acceptance because the provider exposes no cleanup.
 
+## Commander Spellbook
+
+`MtgMcp.Spellbook` uses the documented public API for variant and saved-deck
+combo evidence. It has no account or write operation.
+
+- It uses only `GET /variants/`, `GET /variants/{id}/`, and
+  `POST /find-my-combos` at the fixed public origin.
+- It sends the caller's source query unchanged apart from URL escaping.
+- It makes at most one upstream request per tool call and never follows a
+  provider paging link.
+- Starts are at least one second apart across processes that share a data root.
+- It has no automatic retries. A `429` records a cooldown of at most 60 seconds
+  for later calls.
+- It uses a fixed 15-second timeout and a 2 MiB response limit.
+- `spellbook.db` stores successful exact-response cache entries for 15 minutes
+  by default. It stores a request hash, not a separate deck list or query
+  column.
+
+Configure the cache with `--spellbook-ttl-minutes`,
+`MTGMCP__SPELLBOOK__TTL_MINUTES`, or `SPELLBOOK_TTL_MINUTES` in
+`mtg-mcp.json`. Valid values are whole minutes from 1 through 1,440.
+
+The adapter names Commander Spellbook and links to its public site in each
+successful result. It returns source evidence and never ranks cards, evaluates
+a deck, or recommends a combo.
+
 ## Moxfield
 
 There is no Moxfield network adapter. `MtgMcp.Decks` generates manual Bulk Edit

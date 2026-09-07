@@ -39,18 +39,20 @@
   reviewable and must say `Implementation authorized: Yes` before production
   edits begin for that child.
 - Accepted AMEND-005 plus the completed hardening, statistics, and
-  categorization children define the current 93-tool baseline. Statistics
-  remains exact, caller-supplied, provider-independent, and legality-free.
-  The stabilization child and `0.9.0` release are complete.
+  categorization children define the original 93-tool rewrite baseline. The
+  completed Commander Spellbook evidence child adds three opt-in tools, so the
+  `all` profile now exposes 96 tools. Statistics remains exact, caller-supplied,
+  provider-independent, and legality-free. The stabilization child and `0.9.0`
+  release are complete.
 - Stable `0.9.0` returns evidence, provider data, explicit workflow operations,
   and exact mathematics. The client LLM makes deckbuilding decisions.
 - Do not carry advisor prompts, intent inference, recommendations, weak-card
   judgments, blended quality scores, or strategic simulation into the stable
   rewrite.
 - Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
-  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, and `stats_*`
-  prefixes. Accepted AMEND-004 removes the separate Tagger prefix, adapter,
-  toolset, and database; do not implement the superseded design.
+  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `spellbook_*`,
+  and `stats_*` prefixes. Accepted AMEND-004 removes the separate Tagger prefix,
+  adapter, toolset, and database; do not implement the superseded design.
 - Assign every stable tool to exactly one capability toolset. Toolset selection
   controls which relevant tools an LLM sees; operation mode remains the sole
   authority boundary. Registration is fixed for an MCP session, the default

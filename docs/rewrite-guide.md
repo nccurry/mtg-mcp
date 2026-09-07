@@ -33,11 +33,11 @@ another.
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | 28 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, and 16 opt-in `playgroup_*` tools, one capability resource, and zero prompts |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 32/54/54 and current `all` is 57/80/93 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | 28 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, 16 opt-in `playgroup_*`, and 3 opt-in `spellbook_*` tools, one capability resource, and zero prompts |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 32/54/54 and current `all` is 60/83/96 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
-| Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, and Statistics |
-| Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db` and unified `scryfall.db` stores |
+| Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Spellbook, and Statistics |
+| Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, unified `scryfall.db`, and short-lived `spellbook.db` response cache |
 | Compatibility | Existing pre-1.0 deprecation policy | Intentional clean break with no automatic legacy data, config, or tool-schema migration |
 | Moxfield | Automated unofficial import adapter | Manual interchange artifacts only; no network automation |
 | Community tags | Curated `otag`/`atag` evidence remains distinct from card facts | Official Scryfall bulk tags join the unified corpus; no separate Tagger adapter, database, toolset, or website acquisition |
@@ -50,7 +50,7 @@ to preserve or invent tools.
 
 ## Stable Rewrite Capabilities
 
-The required planning sequence covers:
+The original required planning sequence covers:
 
 1. legacy surface audit and disposition;
 2. repository foundation and minimal MCP host;
@@ -76,7 +76,12 @@ static for an MCP session. Stabilization must pass its north-star workflow
 check in addition to schema, package, and release acceptance.
 
 Items 6 and 11 reflect accepted umbrella amendment AMEND-004. Item 9 reflects
-accepted AMEND-005. Items 1 through 11 are complete.
+accepted AMEND-005. All twelve original rewrite children are complete.
+
+The separately approved Commander Spellbook evidence child adds an opt-in
+provider surface after the rewrite cutover. It returns bounded source evidence
+only; it does not reopen the original rewrite's removed recommendation or
+simulation features.
 
 Completed PLCs remain accurate evidence for the revision they implemented, but
 they do not override a later reviewed umbrella amendment for unfinished work.

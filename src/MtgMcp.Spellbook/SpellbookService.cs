@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Spellbook;
@@ -336,6 +337,19 @@ public sealed class SpellbookService : IDisposable
                     exception.Message),
                 _ => new OperationUnavailable("source-unavailable", "Commander Spellbook could not satisfy the request."),
             };
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode is 5 or 6)
+        {
+            return new OperationUnavailable(
+                "spellbook-cache-busy",
+                "The Commander Spellbook local cache is busy.");
+        }
+        catch (Exception exception) when (
+            exception is InvalidDataException or SqliteException or IOException or UnauthorizedAccessException)
+        {
+            return new OperationUnavailable(
+                "spellbook-cache-unavailable",
+                "The Commander Spellbook local cache is unavailable.");
         }
     }
 

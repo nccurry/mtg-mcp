@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-06
 - Last updated: 2026-09-07
-- Current phase: Phase 3: Commander Spellbook evidence
+- Current phase: Phase 4 is planned; no child is active.
 - Implementation authorized: No
 
 ## Summary
@@ -49,8 +49,8 @@ It must not add a fourth verb: decide.
   inventory.
 - [Latest MCP and Toolchain child](../../completed/latest-mcp-and-toolchain/README.md): the
   current-only protocol and version-lock work for Phase 2.
-- [Commander Spellbook Evidence child](../../in-progress/commander-spellbook-evidence/README.md):
-  the active opt-in evidence adapter for Phase 3.
+- [Commander Spellbook Evidence child](../../completed/commander-spellbook-evidence/README.md):
+  the completed opt-in evidence adapter for Phase 3.
 
 ## Decision Snapshot
 
@@ -63,7 +63,7 @@ It must not add a fourth verb: decide.
 | Treat advanced goldfish as a feasibility experiment, not a stable feature promise. | Proposed | A useful bounded model may be possible, but it must not masquerade as a Magic rules engine or a matchup predictor. | [SRD](SRD.md#scope-and-non-scope) |
 | Check every external source individually. | Proposed | “More sources” is valuable only when access, meaning, cache behavior, and provenance are clear. | [SADD](SADD.md#provider-check) |
 | Require the newest MCP protocol in a focused child. | Complete | The owner wants the newest design with no legacy support. | [Phase 2 child](../../completed/latest-mcp-and-toolchain/README.md) |
-| Add Commander Spellbook as a concrete evidence adapter. | In progress | Its documented API serves the core combo-evidence workflow without making a recommendation. | [Phase 3 child](../../in-progress/commander-spellbook-evidence/README.md) |
+| Add Commander Spellbook as a concrete evidence adapter. | Complete | Its documented API serves the core combo-evidence workflow without making a recommendation. | [Phase 3 child](../../completed/commander-spellbook-evidence/README.md) |
 | Start with Scryfall card-data store ownership. | Complete | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md) |
 | Keep all card-data state in ScryfallCardDataStore. | Implemented | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../completed/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
 | Complete Archidekt ownership cleanup. | Complete | Shared session and named deck, folder, and snapshot owners now contain their code without changing provider or MCP behavior. | [Phase 1B child](../../completed/archidekt-ownership-cleanup/README.md) |
@@ -84,8 +84,8 @@ Future children may affect:
 - test fixtures, source documentation, package compatibility, and Task tasks.
 
 The Phase 2 child also owns version locks, action SHA pins, and the
-Mise-managed MCP Registry publisher. The Phase 3 child adds one concrete
-provider project and three opt-in read-only tools under its active child packet.
+Mise-managed MCP Registry publisher. The completed Phase 3 child added one
+concrete provider project and three opt-in read-only tools.
 
 No child may introduce automatic legacy migration, a generic request router,
 automatic website scraping, MCP-owned recommendations, or an unbounded rules
@@ -144,7 +144,7 @@ amendment that removes or replaces it.
 | 2026-09-06 | task lint | Passed | Formatting check and strict build passed with the pinned .NET 11 preview SDK. |
 | 2026-09-06 | task test | Passed | 545 non-live tests passed across nine test assemblies. |
 | 2026-09-06 | task coverage | Passed | Every production assembly cleared the 90% line-coverage gate. |
-| 2026-09-06 | task surface:report | Passed | The current static surface has 93 tools, one resource, and zero prompts. |
+| 2026-09-06 | task surface:report | Passed | The then-current static surface had 93 tools, one resource, and zero prompts. |
 | 2026-09-06 | task deps:check | Passed with follow-up | No failed check; ModelContextProtocol 2.2.0 and several analyzer/test packages are available. |
 | 2026-09-06 | dotnet list package --vulnerable --include-transitive | Passed | NuGet reported no known vulnerable packages. |
 | 2026-09-06 | Source and document audit | Completed | The two P2 ownership findings and one P3 documentation drift are recorded in [AUDIT.md](AUDIT.md). |
@@ -156,6 +156,7 @@ amendment that removes or replaces it.
 | 2026-09-07 | Phase 1A characterization | Passed | The offline Scryfall suite passed 38 tests. A focused test review found no missing coverage in the changed paths. |
 | 2026-09-07 | Phase 1A close-out | Passed | The ownership boundary test, lint, all non-live tests, coverage gates, and MCP surface report passed. The final audit found no remaining blocking issue. |
 | 2026-09-07 | Phase 1B independent design review | Passed | The packet clarified budget charging, client disposal tests, and the temporary transition boundary. Implementation is authorized. |
+| 2026-09-07 | Phase 3 close-out | Passed | The completed child added three opt-in Spellbook tools. The current `all` profile has 96 tools, and CI, coverage, live, and package smoke checks passed. |
 | 2026-09-07 | Phase 1B close-out | Passed | Named session, transport, and workflow owners replaced both Context layers. Full lint, test, coverage, and surface checks passed; Archidekt line coverage reached 91.07%, and the MCP surface stayed unchanged. |
 | 2026-09-07 | Current toolchain report | Passed | The direct SDK, NuGet, Mise, and local tool pins are current. The report lists only transitive package updates. |
 | 2026-09-07 | Phase 2 and Phase 3 packet drafting | Passed | The current-only MCP and Commander Spellbook designs have scoped requirements, test cases, and owner decisions. |

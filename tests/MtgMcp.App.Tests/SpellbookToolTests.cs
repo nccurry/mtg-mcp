@@ -117,6 +117,79 @@ public sealed class SpellbookToolTests
     }
 
     /// <summary>
+    /// Verifies the source's fixed main-deck row limit is checked from the local selection.
+    /// </summary>
+    [Fact]
+    public async Task DeckResolver_TooManyMainEntries_FailsBeforeSourceWork()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckEntryDraft[] entries = Enumerable.Range(0, SpellbookDeckRequestLimits.MaximumMainEntries + 1)
+            .Select(index => new DeckEntryDraft(1, $"Main {index}", Zone: "main"))
+            .ToArray();
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Too many main entries", Entries: entries),
+            TestContext.Current.CancellationToken));
+        SpellbookDeckInputResolver resolver = new(store);
+
+        OperationResult<SpellbookDeckComboSelection> result = await resolver.ResolveAsync(
+            deck.DeckId,
+            deck.Revision,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            "invalid-spellbook-deck-selection",
+            Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies local source-entry validation rejects a long card name and a grouped quantity overflow.
+    /// </summary>
+    [Fact]
+    public async Task DeckResolver_InvalidSourceEntryLimits_FailBeforeSourceWork()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckDocument longName = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest(
+                "Long card name",
+                Entries:
+                [
+                    new DeckEntryDraft(
+                        1,
+                        new string('x', SpellbookDeckRequestLimits.MaximumCardNameLength + 1),
+                        Zone: "main"),
+                ]),
+            TestContext.Current.CancellationToken));
+        DeckDocument overflow = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest(
+                "Quantity overflow",
+                Entries:
+                [
+                    new DeckEntryDraft(int.MaxValue, "Repeated card", Zone: "main"),
+                    new DeckEntryDraft(1, "Repeated card", Zone: "main"),
+                ]),
+            TestContext.Current.CancellationToken));
+        SpellbookDeckInputResolver resolver = new(store);
+
+        OperationResult<SpellbookDeckComboSelection> longNameResult = await resolver.ResolveAsync(
+            longName.DeckId,
+            longName.Revision,
+            TestContext.Current.CancellationToken);
+        OperationResult<SpellbookDeckComboSelection> overflowResult = await resolver.ResolveAsync(
+            overflow.DeckId,
+            overflow.Revision,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            "invalid-spellbook-deck-selection",
+            Assert.IsType<OperationInvalidInput>(longNameResult.Value).ReasonCode);
+        Assert.Equal(
+            "invalid-spellbook-deck-selection",
+            Assert.IsType<OperationInvalidInput>(overflowResult.Value).ReasonCode);
+    }
+
+    /// <summary>
     /// Verifies invalid public inputs fail locally rather than calling Commander Spellbook.
     /// </summary>
     [Fact]

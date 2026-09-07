@@ -1,29 +1,29 @@
 # Commander Spellbook Evidence PLC Packet
 
 > [!IMPORTANT]
-> This packet owns the active Commander Spellbook implementation. Production
-> edits must stay inside its approved scope and acceptance criteria.
+> This packet records the completed Commander Spellbook implementation and its
+> validation evidence.
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: `docs/llms/plcs/in-progress/commander-spellbook-evidence/`
+- Status: Complete
+- Folder: `docs/llms/plcs/completed/commander-spellbook-evidence/`
 - Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Created: 2026-09-07
 - Last updated: 2026-09-07
-- Current phase: Phase 3: Finish and prove the change
+- Current phase: Complete
 - Implementation authorized: Yes
 
 ## Summary
 
 Commander Spellbook has a public, documented API for combo variants and deck
-combo lookup. This phase adds it as an opt-in `spellbook` toolset.
+combo lookup. This completed phase added it as an opt-in `spellbook` toolset.
 
 The MCP returns Commander Spellbook's data. It does not select a combo, judge a
 combo, estimate a deck's power, or tell a player to add or remove cards.
 
-The first version has three read-only tools:
+The shipped version has three read-only tools:
 
 | Tool | Input | Output |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ or change the deck.
 
 ## What the Deck Tool Looks Like
 
-**Proposed request:**
+**Request:**
 
 ```json
 {
@@ -51,23 +51,26 @@ or change the deck.
 }
 ```
 
-**Proposed response shape:**
+**Response shape:**
 
 ```json
 {
   "deck": {
     "deckId": "b1357522-1eb0-487b-8c6a-7a3bcad255b5",
     "revision": 12,
-    "ignoredEntries": []
+    "sentEntries": [],
+    "skippedEntries": []
   },
   "source": {
     "name": "Commander Spellbook",
     "operation": "find-my-combos",
     "request": {
       "sourceQuery": "legal:commander",
-      "limit": 20,
-      "offset": 0,
-      "groupByCombo": true
+      "page": {
+        "limit": 20,
+        "offset": 0,
+        "groupByCombo": true
+      }
     },
     "cacheStatus": "network",
     "retrievedAtUtc": "2026-09-07T02:00:00Z",
@@ -109,14 +112,14 @@ result and is not written to the cache.
 
 | Decision | Status | Reason | Detail |
 | --- | --- | --- | --- |
-| Add an opt-in `spellbook` toolset. | Proposed | Provider data is useful but not part of the small default surface. | [SADD](SADD.md#mcp-surface) |
-| Start with search, get, and saved-deck lookup. | Accepted | These complete the evidence workflow without a generic provider router. | [SADD](SADD.md#mcp-surface) |
-| Pass source query text through unchanged. | Proposed | Commander Spellbook owns its query language. | [SADD](SADD.md#request-design) |
-| Use a local exact-response cache only. | Proposed | It reduces repeated provider calls without keeping a deck database or activity history. | [SADD](SADD.md#cache-design) |
-| Cache for 15 minutes by default. | Proposed | The data can change, but repeated agent calls must not create needless traffic. | [SADD](SADD.md#cache-design) |
-| Make one upstream request per tool call. | Proposed | The source asks clients to make sparse requests. | [SADD](SADD.md#provider-stewardship) |
-| Do not expose bracket estimates. | Accepted | A qualitative provider score does not fit this first evidence-only slice. | [SADD](SADD.md#non-goals) |
-| Do not use the bulk data export. | Accepted | The first slice needs small live evidence, not a full local copy. | [SADD](SADD.md#non-goals) |
+| Add an opt-in `spellbook` toolset. | Implemented | Provider data is useful but not part of the small default surface. | [SADD](SADD.md#mcp-surface) |
+| Start with search, get, and saved-deck lookup. | Implemented | These complete the evidence workflow without a generic provider router. | [SADD](SADD.md#mcp-surface) |
+| Pass source query text through unchanged. | Implemented | Commander Spellbook owns its query language. | [SADD](SADD.md#request-design) |
+| Use a local exact-response cache only. | Implemented | It reduces repeated provider calls without keeping a deck database or activity history. | [SADD](SADD.md#cache-design) |
+| Cache for 15 minutes by default. | Implemented | The data can change, but repeated agent calls must not create needless traffic. | [SADD](SADD.md#cache-design) |
+| Make one upstream request per tool call. | Implemented | The source asks clients to make sparse requests. | [SADD](SADD.md#provider-stewardship) |
+| Do not expose bracket estimates. | Implemented | A qualitative provider score does not fit this first evidence-only slice. | [SADD](SADD.md#non-goals) |
+| Do not use the bulk data export. | Implemented | The first slice needs small live evidence, not a full local copy. | [SADD](SADD.md#non-goals) |
 
 ## Project and Surface Impact
 
@@ -148,7 +151,7 @@ scraped content, or source-data resale.
 - [x] The source's request guidance and credit request were recorded.
 - [x] The adapter and App boundaries are clear.
 - [x] The cache purpose, duration, and retained data are clear.
-- [x] The three proposed tools have distinct inputs and outputs.
+- [x] The three tools have distinct inputs and outputs.
 - [x] The test, Task, coverage, and documentation changes are named.
 - [x] The owner approved the saved-deck-only first interface on 2026-09-07.
 - [x] An independent design review has examined this packet and its findings are fixed.
@@ -163,3 +166,11 @@ scraped content, or source-data resale.
 | 2026-09-07 | Repository architecture review | Passed | Existing Playgroup and Scryfall adapters show the required App/adapter split and offline fixture pattern. |
 | 2026-09-07 | Independent design review | Passed after fixes | Added explicit paging defaults, a fixed transport timeout, caller-visible sent-request facts, cache-contract invalidation, atomic SQLite pacing, and a real separate-server cache test. |
 | 2026-09-07 | Phase 2 App and process checks | Passed | The opt-in toolset, local deck bridge, configuration, architecture checks, normal tests, and coverage gates pass. |
+| 2026-09-07 | Bounded live variant lookup | Passed | The `Category=Live` test made one bounded `GET /variants/` request and accepted the source response. |
+| 2026-09-07 | Phase 3 validation | Passed | `task ci`, `task test`, `task test:integration`, `task coverage:spellbook`, `task pack VERSION=0.9.0`, and `task release:tool-smoke VERSION=0.9.0` passed. Spellbook line coverage was 94.63%. |
+| 2026-09-07 | Final reviews | Passed after fixes | Code-quality, correctness, test, structure, and plain-language reviews found no remaining P1 or P2 issue. The implementation now returns a typed error for a corrupt or unavailable cache, tests local deck bounds, and uses clearer public wording. |
+
+## Deferred Work
+
+None for this child. Broader raw deck input, bulk exports, and any new source
+surface need separate approval and a separate packet.

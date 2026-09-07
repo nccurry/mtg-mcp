@@ -32,7 +32,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | 1A | Give Scryfall stores real ownership. | EFD-002–005, EFD-010, EFD-013 | Scryfall, focused tests, architecture docs | Characterization, focused tests, lint/test/coverage | No behavior or surface change. The database owner only owns connection, schema, and disposal. | Complete |
 | 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | Complete |
 | 2 | [Pin the current MCP and toolchain](../../completed/latest-mcp-and-toolchain/README.md). | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, version and lock files | Process/client/schema/package checks | The current-only protocol and reproducible toolchain pass. | Complete |
-| 3 | [Add Commander Spellbook evidence](../../in-progress/commander-spellbook-evidence/README.md). | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Source contract, fake HTTP, surface/E2E checks | Opt-in source evidence is attributable, bounded, and readable. | In progress |
+| 3 | [Add Commander Spellbook evidence](../../completed/commander-spellbook-evidence/README.md). | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Source contract, fake HTTP, surface/E2E checks | Opt-in source evidence is attributable, bounded, and readable. | Complete |
 | 4 | Fill proven exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Independent formulas, surface/E2E, performance review if needed | New deterministic workflow answers a real declared-input question without inferred card roles. | Planned |
 | 5 | Decide community and cohort source feasibility. | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Planned |
 | 6 | Decide goldfish feasibility before implementing a simulator. | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New feasibility packet; no stable surface initially | Toy traces, calibration, policy review | Owner records accept/defer/reject with evidence. | Planned |
@@ -150,8 +150,8 @@ publisher, and the current-only MCP protocol test path.
 
 ### Phase 3: Commander Spellbook evidence
 
-This phase is fully detailed in the [Commander Spellbook evidence child](../../in-progress/commander-spellbook-evidence/README.md).
-It owns one concrete adapter, source fixtures, a small opt-in toolset, and a
+This completed phase is detailed in the [Commander Spellbook evidence child](../../completed/commander-spellbook-evidence/README.md).
+It added one concrete adapter, source fixtures, a small opt-in toolset, and a
 saved-deck combo lookup that returns source groups without advice.
 
 ### Phase 4: Declarative exact deck analysis

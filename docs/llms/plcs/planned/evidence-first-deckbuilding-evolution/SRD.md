@@ -150,7 +150,7 @@ passes the admission and feasibility gates in this PLC.
 
 ### Compatibility target
 
-The first ownership-cleanup child must preserve all current 93 tool names,
+The first ownership-cleanup child must preserve all then-current 93 tool names,
 schemas, descriptions, toolsets, operation-mode visibility, SQLite files,
 provider behavior, and existing success/failure semantics.
 
@@ -221,7 +221,7 @@ remain hidden unless explicitly enabled.
 | 0 | Approve the roadmap and select the first narrow child. | EFD-001 to EFD-013 | Owner approves scope and names an active child; no production code changes occur under this umbrella alone. |
 | 1 | Make Scryfall and Archidekt ownership real. | EFD-002 to EFD-005, EFD-010, EFD-013 | Behavior and surface are unchanged; characterization and broad gates pass. |
 | 2 | [Pin latest MCP and toolchain inputs](../../completed/latest-mcp-and-toolchain/README.md). | EFD-005, EFD-010, EFD-012, EFD-013 | Current protocol, exact pins, lock files, and package smoke checks pass. |
-| 3 | [Add Commander Spellbook evidence](../../in-progress/commander-spellbook-evidence/README.md). | EFD-001, EFD-003 to EFD-007, EFD-010, EFD-013 | Source contract, fixtures, boundaries, and opt-in surface pass. |
+| 3 | [Add Commander Spellbook evidence](../../completed/commander-spellbook-evidence/README.md). | EFD-001, EFD-003 to EFD-007, EFD-010, EFD-013 | Source contract, fixtures, boundaries, and opt-in surface pass. |
 | 4 | Add declarative exact deck-analysis workflows only where current tools leave a real gap. | EFD-001, EFD-003 to EFD-005, EFD-008, EFD-010, EFD-011, EFD-013 | Exact results and selected-card evidence are independently verified. |
 | 5 | Research community and cohort sources without scraping. | EFD-006, EFD-007, EFD-010, EFD-013 | Each source receives an explicit admit/defer/reject record; Reddit needs a documented API path. |
 | 6 | Decide goldfish feasibility. | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | A documented accept/defer/reject decision exists before any stable tool promise. |

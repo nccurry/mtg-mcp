@@ -269,7 +269,7 @@ from deck tags or prose.
 
 ## MCP Surface, Schemas, And Diagnostics
 
-The current 93-tool surface remains static in the first cleanup child. It
+The then-current 93-tool surface remained static in the first cleanup child. It
 continues to expose one capability resource and zero prompts.
 
 For later public changes:
@@ -314,7 +314,7 @@ reliable adapter.
 | Scryfall | Stable | Official card/ruling facts and separately labeled community-tag evidence | Continue official API/bulk contract; use bulk data for large card-data work. |
 | Archidekt | Stable observed adapter | User-authorized deck/folder/snapshot state and explicit workflows | Preserve fixture-tested contract and write safeguards; do not broaden casually. |
 | Playgroup | Stable official adapter | Provider-shaped playgroup observations | Keep source population separate from deck-quality judgments. |
-| Commander Spellbook | Active child | Documented combo variants and deck combo groups | [Use the narrow child](../../in-progress/commander-spellbook-evidence/README.md); return source evidence, not “add this combo.” |
+| Commander Spellbook | Stable evidence adapter | Documented combo variants and deck combo groups | [Use the completed child](../../completed/commander-spellbook-evidence/README.md); return source evidence, not “add this combo.” |
 | Reddit | Feasibility only | Attributed community discussion, not source fact | Build nothing until the published API supports the exact workflow. Never scrape or train on content. |
 | EDHREC-style aggregate source | Deferred | Source-defined popularity/cohort evidence | No public developer API was confirmed in this audit. Use an official API if one becomes available. |
 | Moxfield | Rejected for automation | Manual interchange remains valid | Its published site rules do not support the automation this project would need. |

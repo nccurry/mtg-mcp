@@ -10,6 +10,7 @@ checked-in configuration remain authoritative.
 
 | Packet | Outcome |
 | --- | --- |
+| [commander-spellbook-evidence](commander-spellbook-evidence/README.md) | Added an opt-in Commander Spellbook adapter with three bounded, read-only evidence tools, a short-lived local cache, a live check, and package smoke coverage. |
 | [agent-quality-foundation](agent-quality-foundation/README.md) | Added north-star guidance, tiered agent files, PLC templates, strict analyzers, 90 percent assembly coverage gates, and plan-mode defaults. |
 | [legacy-surface-audit-and-disposition](legacy-surface-audit-and-disposition/README.md) | Approved the authoritative legacy deletion/rebuild/fixture dispositions and handed them to the rewrite foundation. |
 | [rewrite-skeleton-foundation](rewrite-skeleton-foundation/README.md) | Replaced the legacy branch implementation with the validated Core/App foundation, exact resources-only MCP host, clean-break configuration, and preview package workflow. |

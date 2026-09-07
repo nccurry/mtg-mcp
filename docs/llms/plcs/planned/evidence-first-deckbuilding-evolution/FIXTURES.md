@@ -46,7 +46,7 @@ fill this table.
 
 | Surface | Mode | Expected visibility | Notes |
 | --- | --- | --- | --- |
-| Existing 93 tools | Existing read-only/local/remote matrix | Unchanged | Phase 1A/1B are internal ownership refactors only. |
+| Phase 1 baseline (93 tools) | Existing read-only/local/remote matrix | Unchanged | Phase 1A/1B are internal ownership refactors only. |
 | mtg://server/capabilities | All existing profiles | Unchanged | Continues to describe static implementation and selected toolsets. |
 | Prompts | All | None | Do not introduce an advisor prompt as part of cleanup. |
 

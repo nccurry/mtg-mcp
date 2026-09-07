@@ -4,7 +4,7 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-The clean-break `0.9.0` server uses stdio. It exposes 93 tools, one
+The clean-break `0.9.0` server uses stdio. It exposes 96 tools, one
 capability resource, and no prompts. It does not migrate `0.8.x` data or tool
 schemas.
 
@@ -13,17 +13,20 @@ schemas.
 The evidence-first rewrite is complete. `0.9.0` is the first stable release of
 the new surface.
 
-| Capability | Tools | Default | Writes |
+| Capability | Tools | Default | Storage or writes |
 | --- | ---: | --- | --- |
 | Local decks and interchange | 28 | Yes | Local |
 | Scryfall evidence | 18 | Yes | Local cache and card data |
 | Exact statistics | 8 | Yes | No |
 | Archidekt | 23 | No | Remote |
 | Playgroup | 16 | No | Remote |
+| Commander Spellbook evidence | 3 | No | Local cache only |
 
-The packaged acceptance run passed 88 tools live. Two Scryfall card-data download operations
-are fixture-backed, Scryfall rollback awaits a second provider generation, and
-two Playgroup writes remain fixture-only because the public API has no cleanup.
+The packaged acceptance run before the Spellbook addition passed 88 tool calls.
+Two Scryfall card-data download operations are fixture-backed, Scryfall rollback
+awaits a second provider generation, and two Playgroup writes remain fixture-only
+because the public API has no cleanup. Commander Spellbook has its own bounded,
+read-only live check.
 See [live acceptance](docs/llms/plcs/completed/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).
 
 ## Start the server
@@ -76,6 +79,10 @@ Modes control authority.
 pacing and evidence persistence. In `read-only`, those misses return
 `local-write-required` before HTTP.
 
+Commander Spellbook reads are available in all three modes. They never change a
+deck or make a write request to the source. Successful responses use a short-lived
+local cache so repeated exact requests do not create needless provider traffic.
+
 ## Choose toolsets
 
 Toolsets control relevance. They do not grant authority.
@@ -87,13 +94,13 @@ Toolsets control relevance. They do not grant authority.
 | `none` | Expose no tools |
 | Comma-separated list | Enable the exact named toolsets |
 
-Available toolsets are `decks`, `scryfall`, `stats`, `archidekt`, and
-`playgroup`. Selection is fixed for the MCP session.
+Available toolsets are `decks`, `scryfall`, `stats`, `archidekt`, `playgroup`,
+and `spellbook`. Selection is fixed for the MCP session.
 
 | Profile | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
 | `default` | 32 | 54 | 54 |
-| `all` | 57 | 80 | 93 |
+| `all` | 60 | 83 | 96 |
 | `none` | 0 | 0 | 0 |
 
 Read `mtg://server/capabilities` to inspect the active mode, toolsets, counts,
@@ -112,6 +119,7 @@ environment values. Environment values win over JSON.
 | Toolsets | `--toolsets` | `MTGMCP__TOOLSETS` | `TOOLSETS` |
 | Data root | `--data-dir` | `MTGMCP__DATA_DIR` | `DATA_DIR` |
 | Scryfall TTL | `--scryfall-ttl-hours` | `MTGMCP__SCRYFALL_TTL_HOURS` | `SCRYFALL_TTL_HOURS` |
+| Commander Spellbook TTL | `--spellbook-ttl-minutes` | `MTGMCP__SPELLBOOK__TTL_MINUTES` | `SPELLBOOK_TTL_MINUTES` |
 
 The default data root is the platform application-data directory under
 `mtg-mcp/v0.9`. All MCP processes that use the same root reuse `decks.db` and
@@ -198,6 +206,22 @@ hits first, deduplicates provider misses, and sends provider batches of at most
 Arbitrary Scryfall queries remain provider-authoritative. The cache reuses only
 the exact same request. Card facts and community tags remain separate evidence
 classes.
+
+## Read Commander Spellbook evidence
+
+Enable the `spellbook` toolset for three source-evidence tools:
+
+- `spellbook_variant_search` returns one bounded page for an exact Commander
+  Spellbook query.
+- `spellbook_variant_get` returns one exact source variant by ID.
+- `spellbook_deck_combos_find` sends only the `commander` and `main` entries
+  from one exact saved deck revision, then reports the entries it skipped.
+
+The tools preserve Commander Spellbook JSON and name the source, request,
+retrieval time, cache state, checksum, and limits. They do not rank results,
+infer card roles, or recommend a combo or card change. The cache lasts 15
+minutes by default; configure it with a whole number from 1 through 1,440
+minutes.
 
 ## Calculate exact statistics
 
@@ -291,6 +315,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 | `MtgMcp.Scryfall` | Official transport, card data, snapshots, and pacing |
 | `MtgMcp.Archidekt` | Observed provider contract and synchronization |
 | `MtgMcp.Playgroup` | Pinned official API evidence |
+| `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
 | `MtgMcp.App` | MCP host, configuration, composition, and schemas |
 

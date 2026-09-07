@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Spellbook.Tests;
@@ -229,6 +230,39 @@ public sealed class SpellbookServiceTests
 
         Assert.IsType<OperationUnsupported>(malformed.Value);
         Assert.IsType<OperationUnavailable>(oversized.Value);
+    }
+
+    /// <summary>
+    /// Verifies a corrupt local cache returns a safe result without a second source request.
+    /// </summary>
+    [Fact]
+    public async Task CorruptCache_ReturnsUnavailableWithoutCallingSourceAgain()
+    {
+        SpellbookTestHttpHandler handler = new();
+        handler.AddJson("{\"results\":[]}");
+        using TemporarySpellbookDirectory directory = new();
+        MutableTimeProvider clock = new(new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero));
+        using SpellbookService service = SpellbookTestFactory.CreateService(handler, directory, clock);
+        SpellbookVariantSearchRequest request = new("Sol Ring");
+
+        Assert.IsType<OperationSuccess<SpellbookEvidence>>((await service.SearchVariantsAsync(
+            request,
+            TestContext.Current.CancellationToken).ConfigureAwait(false)).Value);
+        using SpellbookDatabase database = new(directory.Path);
+        await using (SqliteConnection connection = await database.OpenWriteAsync(TestContext.Current.CancellationToken))
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE response_cache SET response_checksum = 'corrupt';";
+            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+        }
+
+        OperationResult<SpellbookEvidence> result = await service.SearchVariantsAsync(
+            request,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        OperationUnavailable failure = Assert.IsType<OperationUnavailable>(result.Value);
+        Assert.Equal("spellbook-cache-unavailable", failure.ReasonCode);
+        Assert.Single(handler.Requests);
     }
 
     /// <summary>

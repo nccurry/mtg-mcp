@@ -2,7 +2,7 @@
 
 ## Contract Fixture
 
-| ID | Type | Proposed location | Purpose | Update rule |
+| ID | Type | Fixture location | Purpose | Update rule |
 | --- | --- | --- | --- | --- |
 | CSB-FIX-001 | Public API contract snapshot | `src/MtgMcp.Spellbook/Fixtures/OpenApi/api-6.3.3.json` | Pins only the routes and request shapes used by this adapter. | Review it against the official schema, record its source version, date, SHA-256, and route inventory together. Do not copy the source's whole schema. |
 
