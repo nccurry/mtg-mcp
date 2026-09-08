@@ -12,7 +12,7 @@
 - Owner: mtg-mcp
 - Created: 2026-09-06
 - Last updated: 2026-09-07
-- Current phase: Phase 4 is planned; no child is active.
+- Current phase: Phase 4 is deferred. Phase 4A is complete.
 - Implementation authorized: No
 
 ## Summary
@@ -24,8 +24,10 @@ LLM and player decide what a deck should do.
 This program makes that boundary easier to maintain and expands it carefully.
 The first delivery is structural: make the Scryfall and Archidekt owners real
 instead of forwarding wrappers around large context classes. Later, separately
-reviewed children may add more reliable evidence sources, stronger exact deck
-analysis, and a tightly bounded goldfish experiment.
+reviewed children may repair the existing official-tag grouping path, add more
+reliable evidence sources, and test a tightly bounded goldfish experiment. A
+new exact-analysis tool remains possible only if a future review shows a real
+gap in the current tools.
 
 The product can be described in three verbs:
 
@@ -67,6 +69,9 @@ It must not add a fourth verb: decide.
 | Start with Scryfall card-data store ownership. | Complete | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md) |
 | Keep all card-data state in ScryfallCardDataStore. | Implemented | The active generation, previous generation, and metadata-check time must change together. | [Phase 1A design](../../completed/scryfall-store-ownership-extraction/SADD.md#explicit-metadata-check-ownership) |
 | Complete Archidekt ownership cleanup. | Complete | Shared session and named deck, folder, and snapshot owners now contain their code without changing provider or MCP behavior. | [Phase 1B child](../../completed/archidekt-ownership-cleanup/README.md) |
+| Do not add a duplicate exact-analysis tool. | Deferred | The current Statistics and deck-selection workflows already answer the questions reviewed for this phase. | [Phase 4 record](IMPLEMENTATION_PLAN.md#phase-4-exact-analysis-gap-review-deferred) |
+| Use only official Scryfall community tags when grouping deck cards. | Implemented | The server evaluates source evidence but does not create a second tag system or fetch from the Tagger website. | [Phase 4A child](../../completed/official-scryfall-tag-grouping-reliability/README.md#decision-snapshot) |
+| Correct `common-v1` in place. | Implemented | The preset mapping now uses reviewed exact source IDs under the existing preset ID. | [Phase 4A design](../../completed/official-scryfall-tag-grouping-reliability/SADD.md#common-v1-correction) |
 
 ## Project And Surface Impact
 
@@ -74,6 +79,12 @@ The completed Phase 1 children affected MtgMcp.Scryfall, MtgMcp.Archidekt,
 their focused tests, architecture tests, and documentation. They did not change
 tool names, schemas, operation modes, SQLite formats, provider behavior, or the
 MCP surface.
+
+The completed Phase 4A child affected the existing category-rule models, Scryfall
+tag reads, deck categorization composition, and focused tests. It adds no MCP
+tool, resource, prompt, operation mode, toolset, configuration key, database,
+or tag provider. Existing category-rule results may correctly return different
+matches, exact source tag IDs, and validation errors after the repair.
 
 Future children may affect:
 
@@ -95,7 +106,6 @@ engine.
 
 | Question | Impact | Owner | Resolution plan |
 | --- | --- | --- | --- |
-| Does the saved-deck-only Spellbook interface fit the first workflow? | Public input contract | mtg-mcp | Approved on 2026-09-07. A raw-deck input needs a separate design later. |
 | Does Reddit have a documented API path that fits a small, attributed MCP read? | Provider reliability | mtg-mcp | Do not build it until the published access and use rules support the exact workflow. |
 | Is there a public deck-population API for EDHREC-style cohort analysis? | Product scope | mtg-mcp | Use an official public API only. Do not consume undocumented endpoints. |
 | Can a small goldfish model be honest and useful? | Experimental scope | mtg-mcp | Run a feasibility child with toy decks, fixed policies, traces, and a stop decision before any public tool. |
@@ -107,9 +117,52 @@ durable record in its owning child and a summary here. The record must name the
 scope being deferred, rationale, owner, activation or review trigger, affected
 acceptance criteria, and why the active phase still meets its exit criteria.
 
+When a phase ends before a child exists, its phase section in this umbrella is
+the owning record.
+
 A currently authorized child cannot close an in-scope Must requirement by
 calling it deferred. It must verify the requirement or obtain an approved
 amendment that removes or replaces it.
+
+## Deferred Work
+
+### Phase 4: Exact-analysis gap review
+
+- Scope: Do not add a new exact deck-analysis MCP tool that only packages deck
+  selection, Scryfall data, and Statistics into one call.
+- Rationale: The eight existing `stats_*` tools already cover exact draw,
+  mulligan, mana, package, copy-count, and deck-summary questions. Deck-backed
+  selection already accepts explicit entry IDs, zones, and categories. A new
+  wrapper would tie those parts together but would not return a new answer.
+- Owner: mtg-mcp.
+- Reopen trigger: A player or agent names one question with fully stated inputs
+  and a result that the current `deck_*`, `scryfall_*`, and `stats_*` workflows
+  cannot return.
+- Affected acceptance criteria: EFD-008 remains satisfied by the completed
+  [exact deck statistics child](../../completed/exact-deck-statistics/README.md).
+  The other Phase 4 criteria apply only if a distinct public tool is proposed.
+- Why the phase exit still holds: Phase 4 required a demonstrated gap before a
+  new tool. The review found none, so there is no code, test, or public API work
+  to complete.
+
+## Completed Work
+
+### Phase 4A: Official Scryfall tag grouping repair
+
+- Scope completed: Category rules now resolve and match only installed official
+  Scryfall `oracle_tags` and `art_tags` data.
+- Results: Direct child tags retain all source parents, malformed selectors fail
+  before a preview, and `common-v1` keeps its ID while using reviewed source
+  tag IDs.
+- Child: [Official Scryfall Tag Grouping Reliability](../../completed/official-scryfall-tag-grouping-reliability/README.md).
+- Validation: Focused tests, full Task checks, coverage gates, surface checks,
+  documentation checks, and final audits passed.
+
+## Planned Next Work
+
+The source-feasibility, goldfish-feasibility, and stabilization phases remain
+planned. Phase 4 remains deferred because the existing exact statistics and
+explicit deck workflows cover the reviewed questions.
 
 ## Planning Readiness Checklist
 
@@ -124,8 +177,9 @@ amendment that removes or replaces it.
 - [x] Existing retired simulation and provider packets are treated as reference-only.
 - [x] The owner has selected the first implementation child.
 - [x] The selected child has independent approval and implementation authorization.
-- [x] Phase 2 and Phase 3 each have a narrow planned child.
-- [x] An independent reviewer has checked the two new child packets and the findings are fixed.
+- [x] Phase 2 and Phase 3 each completed through a narrow child.
+- [x] An independent reviewer checked the completed child packets and fixed the findings.
+- [x] Phase 4A has a narrow repair packet with source, boundary, and test rules.
 
 ## Implementation Checklist
 
@@ -133,7 +187,7 @@ amendment that removes or replaces it.
 - [x] Move only that approved child to in-progress.
 - [x] Lock behavior with characterization fixtures before moving ownership.
 - [ ] Update this umbrella if a cross-child guardrail changes.
-- [ ] Record focused and broad validation as each child completes.
+- [x] Record focused and broad validation as each child completes.
 - [ ] Move this packet to completed only after every selected child is completed,
   explicitly deferred, or superseded with a recorded reason.
 
@@ -160,9 +214,11 @@ amendment that removes or replaces it.
 | 2026-09-07 | Phase 1B close-out | Passed | Named session, transport, and workflow owners replaced both Context layers. Full lint, test, coverage, and surface checks passed; Archidekt line coverage reached 91.07%, and the MCP surface stayed unchanged. |
 | 2026-09-07 | Current toolchain report | Passed | The direct SDK, NuGet, Mise, and local tool pins are current. The report lists only transitive package updates. |
 | 2026-09-07 | Phase 2 and Phase 3 packet drafting | Passed | The current-only MCP and Commander Spellbook designs have scoped requirements, test cases, and owner decisions. |
+| 2026-09-07 | Phase 4 exact-analysis gap review | Deferred | Existing Statistics, explicit deck selection, and category workflows cover the proposed contract; no distinct tool is justified. |
+| 2026-09-07 | Phase 4A tag-grouping repair | Passed | The completed child preserves all source parents, rejects malformed or missing selectors, corrects `common-v1` in place, and adds no MCP surface. Focused tests, full Task checks, coverage gates, surface checks, documentation checks, and final audits passed. |
 
 ## Completion Notes
 
-Phase 1 ownership cleanup and Phase 2 are complete. This packet remains a
-roadmap, not an implementation authorization. Phase 3 has its own active child;
-later phases remain planned.
+Phases 1 through 3 and Phase 4A are complete. This packet remains a roadmap,
+not an implementation authorization. Phase 4 is deferred; later source and
+feasibility phases remain planned.

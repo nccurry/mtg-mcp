@@ -45,13 +45,13 @@ public sealed record CategoryEntryEvidence(
     IReadOnlyList<CategoryTagEvidence> Tags,
     bool IsComplete = true);
 
-/// <summary>Provides one normalized tag assignment and hierarchy path.</summary>
+/// <summary>Provides one normalized direct tag assignment and its source ancestors.</summary>
 public sealed record CategoryTagEvidence(
     Guid TagId,
     string TagType,
     string Slug,
     string Weight,
-    IReadOnlyList<Guid> HierarchyPath);
+    IReadOnlyList<Guid> AncestorTagIds);
 
 /// <summary>Reports one category decision for one entry.</summary>
 public sealed record CategoryDecision(
@@ -193,11 +193,8 @@ public static class DeckCategorizationEvaluator
             return false;
         }
 
-        bool identity = selector.TagId is Guid id
-            ? tag.TagId == id || (selector.IncludeDescendants && tag.HierarchyPath.Contains(id))
-            : !string.IsNullOrWhiteSpace(selector.ExactSlug) &&
-              string.Equals(tag.Slug, selector.ExactSlug, StringComparison.Ordinal);
-        return identity;
+        return selector.TagId is Guid id &&
+            (tag.TagId == id || (selector.IncludeDescendants && tag.AncestorTagIds.Contains(id)));
     }
 
     /// <summary>Compares the closed evidence weight vocabulary.</summary>

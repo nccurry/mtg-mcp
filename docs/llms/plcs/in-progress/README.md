@@ -7,4 +7,4 @@ evidence up to date as code lands.
 
 ## Active Packets
 
-There are no active packets.
+No PLC packet is currently in progress.

@@ -133,6 +133,7 @@ passes the admission and feasibility gates in this PLC.
 - An admission process for every new external source.
 - A roadmap for exact deck-analysis orchestration that remains distinct from
   provider data and sampled estimates.
+- A reliability repair for the existing source-tag deck grouping workflow.
 - A feasibility-first route for experimental goldfish analysis.
 - Focused MCP SDK/toolchain compatibility work.
 
@@ -147,6 +148,8 @@ passes the admission and feasibility gates in this PLC.
 - Automatic migration of legacy databases, config, or tool schemas.
 - A generic provider abstraction or generic tool router.
 - A blanket performance benchmark project before a concrete hot path needs one.
+- A local card-tag database, a separate Tagger adapter, or direct Tagger-site
+  acquisition.
 
 ### Compatibility target
 
@@ -185,6 +188,7 @@ decision, updated capability evidence, and process-level MCP tests.
 | EFD-011 | Should | Performance | A child shall add a performance measurement only for a named, meaningful hot path with deterministic representative inputs. | Avoids benchmark theater while protecting real regressions. | A documented case has a baseline, machine/runtime metadata, and either a review budget or justified CI gate. |
 | EFD-012 | Should | Dependencies | Major SDK or analyzer upgrades shall be isolated from behavior refactors and verified through installed-package and MCP client tests. | Makes failures attributable. | Compatibility child passes process, client, schema, package, and broad validation before version changes land. |
 | EFD-013 | Must | Documentation | Every affected tool count, provider boundary, source limitation, and experimental status shall be updated with its code change. | Passing tests alone do not prevent misleading humans. | Documentation links render, audit wording is accurate, and git diff --check passes. |
+| EFD-014 | Must | Tag grouping | Category rules shall resolve and match only exact identities and ancestry from one installed official Scryfall tag-data generation. They shall not create card tags, assignments, aliases, or hierarchy outside that source. | Source evidence must remain inspectable and must not become a local tag system. | A child proves parent/child matching, source-ID resolution, explicit missing/ambiguous failures, unchanged source boundaries, and no new Tagger acquisition path. |
 
 ## Interfaces, Data, States, And Modes
 
@@ -202,6 +206,10 @@ outputs are materially distinct from existing tools. Future sampled tools must
 be separately tagged as experimental, use a separate capability toolset, and
 remain hidden unless explicitly enabled.
 
+The existing category-rule tools remain in the `decks` toolset. Phase 4A may
+correct their returned rules and matches, but it adds no tool, resource, prompt,
+mode, or local tag-management surface.
+
 ## Quality Attributes
 
 | Attribute | Scenario | Measure |
@@ -211,6 +219,7 @@ remain hidden unless explicitly enabled.
 | Reproducibility | A sampled experiment repeats. | Model version, seed, input fingerprint, policy, and sample count reproduce the trace/result within documented limits. |
 | Safety | A caller requests a write without the right mode or a stale fingerprint. | The operation is rejected before mutation. |
 | Provider discipline | A provider is rate-limited or changes contract. | Pacing/backoff and typed safe failure apply; fixtures reveal supported contract drift. |
+| Source-tag fidelity | A category selector names a source parent tag. | The active Scryfall data generation resolves it to an exact ID and every direct child assignment can match it only when descendants are allowed. |
 | Maintainability | A developer changes a provider family. | The change is localized to the real provider/domain owner and focused tests. |
 | Output usability | A large source or trace is requested. | Pagination/detail-level caps expose omitted counts and source references. |
 
@@ -222,7 +231,8 @@ remain hidden unless explicitly enabled.
 | 1 | Make Scryfall and Archidekt ownership real. | EFD-002 to EFD-005, EFD-010, EFD-013 | Behavior and surface are unchanged; characterization and broad gates pass. |
 | 2 | [Pin latest MCP and toolchain inputs](../../completed/latest-mcp-and-toolchain/README.md). | EFD-005, EFD-010, EFD-012, EFD-013 | Current protocol, exact pins, lock files, and package smoke checks pass. |
 | 3 | [Add Commander Spellbook evidence](../../completed/commander-spellbook-evidence/README.md). | EFD-001, EFD-003 to EFD-007, EFD-010, EFD-013 | Source contract, fixtures, boundaries, and opt-in surface pass. |
-| 4 | Add declarative exact deck-analysis workflows only where current tools leave a real gap. | EFD-001, EFD-003 to EFD-005, EFD-008, EFD-010, EFD-011, EFD-013 | Exact results and selected-card evidence are independently verified. |
+| 4 | Review declarative exact deck-analysis gaps. **Deferred 2026-09-07:** current tools cover the proposed work. | EFD-001, EFD-003 to EFD-005, EFD-008, EFD-010, EFD-011, EFD-013 | EFD-008 remains met by completed exact Statistics. Reopen only for a question with stated inputs that current workflows cannot answer. |
+| 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003 to EFD-005, EFD-007, EFD-010, EFD-013, EFD-014 | Source hierarchy, selector validation, one-generation consistency, and the in-place `common-v1` correction pass without a new tag system. |
 | 5 | Research community and cohort sources without scraping. | EFD-006, EFD-007, EFD-010, EFD-013 | Each source receives an explicit admit/defer/reject record; Reddit needs a documented API path. |
 | 6 | Decide goldfish feasibility. | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | A documented accept/defer/reject decision exists before any stable tool promise. |
 
@@ -239,6 +249,7 @@ remain hidden unless explicitly enabled.
 | EFD-008 | [Exact analysis](SADD.md#exact-analysis-and-simulation) | Independent math tests | EFD-FIX-008 |
 | EFD-009 | [Goldfish feasibility](SADD.md#exact-analysis-and-simulation) | Trace, calibration, policy review | EFD-FIX-009 to EFD-FIX-011 |
 | EFD-010–013 | [Test architecture](SADD.md#test-architecture) | Task and documentation validation | Child validation ledger |
+| EFD-014 | [Tag ownership](SADD.md#tag-ownership) | Source-tag fixture, hierarchy and selector tests, boundary review | EFD-FIX-014 |
 
 ## Risks, Assumptions, And Open Questions
 

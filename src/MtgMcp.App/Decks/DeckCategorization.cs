@@ -42,20 +42,21 @@ internal sealed record DeckCategoryRulesPreview(
 [ExcludeFromCodeCoverage(Justification = "Provider composition is verified through App and official-client integration tests; deterministic evaluation is covered in Core.")]
 internal sealed class DeckCategorizationCoordinator
 {
-    /// <summary>Identifies the immutable checked-in common-v1 preset artifact.</summary>
-    private const string CommonPresetChecksum = "common-v1-ramp-draw-removal-recursion";
     /// <summary>Uses deterministic web JSON for fingerprints.</summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     /// <summary>Owns revisioned local deck mutations.</summary>
     private readonly SqliteDeckStore deckStore;
-    /// <summary>Owns shared Scryfall evidence reads.</summary>
+    /// <summary>Reads generation-bound Scryfall tag evidence for deck entries.</summary>
     private readonly ScryfallService scryfall;
+    /// <summary>Expands and resolves category rules against installed Scryfall tag data.</summary>
+    private readonly DeckCategoryRuleResolver ruleResolver;
 
     /// <summary>Creates the categorization coordinator.</summary>
     internal DeckCategorizationCoordinator(SqliteDeckStore deckStore, ScryfallService scryfall)
     {
         this.deckStore = deckStore;
         this.scryfall = scryfall;
+        ruleResolver = new DeckCategoryRuleResolver(scryfall);
     }
 
     /// <summary>Validates and expands a rule source without mutating the deck.</summary>
@@ -112,7 +113,7 @@ internal sealed class DeckCategorizationCoordinator
 
         if (preview.Data.CorpusGenerationId != expectedCorpusGeneration)
         {
-            return new OperationConflict("category-corpus-conflict", "The Scryfall corpus generation changed after preview.");
+            return new OperationConflict("category-corpus-conflict", "The Scryfall card-data generation changed after preview.");
         }
 
         if (!preview.Data.IsComplete)
@@ -140,11 +141,6 @@ internal sealed class DeckCategorizationCoordinator
         string freshnessPolicy,
         CancellationToken cancellationToken)
     {
-        if (source is null)
-        {
-            return new OperationInvalidInput("invalid-category-rule-source", "A rule source is required.");
-        }
-
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deck)
         {
@@ -156,138 +152,87 @@ internal sealed class DeckCategorizationCoordinator
             return new OperationConflict("deck-revision-conflict", "The local deck revision changed before categorization.");
         }
 
-        OperationResult<CategoryRuleSet> expanded = Expand(source, deck.Data);
-        if (expanded is not OperationSuccess<CategoryRuleSet> rules)
+        OperationResult<ResolvedDeckCategoryRules> resolution = await ruleResolver.ResolveAsync(
+            source,
+            deck.Data,
+            freshnessPolicy,
+            cancellationToken).ConfigureAwait(false);
+        if (resolution is not OperationSuccess<ResolvedDeckCategoryRules> resolvedRules)
         {
-            return ForwardFailure<CategoryRuleSet, DeckCategoryRulesPreview>(expanded);
+            return ForwardFailure<ResolvedDeckCategoryRules, DeckCategoryRulesPreview>(resolution);
         }
 
         List<CategoryEntryEvidence> evidence = [];
-        Guid? generation = null;
-        bool complete = true;
-        foreach (DeckEntry entry in deck.Data.Entries.OrderBy(value => value.SortOrder).ThenBy(value => value.EntryId))
+        IReadOnlyList<DeckEntry> entries = deck.Data.Entries.OrderBy(value => value.SortOrder).ThenBy(value => value.EntryId).ToArray();
+        if (resolvedRules.Data.ScryfallGenerationId is not Guid generation)
         {
-            ScryfallCardLookup lookup = entry.PrintingId is Guid printing
-                ? new ScryfallCardLookup("scryfall-id", printing.ToString("D"))
-                : entry.OracleId is Guid oracle
-                    ? new ScryfallCardLookup("oracle-id", oracle.ToString("D"))
-                    : new ScryfallCardLookup("exact-name", entry.CardName);
-            OperationResult<ScryfallCardResult> cardResult = await scryfall.GetCardAsync(
-                lookup, freshnessPolicy, false, cancellationToken).ConfigureAwait(false);
-            if (cardResult is not OperationSuccess<ScryfallCardResult> card)
+            foreach (DeckEntry entry in entries)
             {
-                complete = false;
-                evidence.Add(new CategoryEntryEvidence(entry.EntryId, [], false));
-                continue;
+                evidence.Add(new CategoryEntryEvidence(entry.EntryId, []));
+            }
+        }
+        else
+        {
+            OperationResult<ScryfallDeckTagEvidence> sourceEvidence = await scryfall.ReadDeckTagEvidenceAsync(
+                generation,
+                entries.Select(CreateLookup).ToArray(),
+                cancellationToken).ConfigureAwait(false);
+            if (sourceEvidence is not OperationSuccess<ScryfallDeckTagEvidence> tags)
+            {
+                return ForwardFailure<ScryfallDeckTagEvidence, DeckCategoryRulesPreview>(sourceEvidence);
             }
 
-            generation ??= card.Data.CorpusGenerationId;
-            evidence.Add(new CategoryEntryEvidence(
-                entry.EntryId,
-                card.Data.Card.Tags.Select(value => new CategoryTagEvidence(
-                    value.TagId,
-                    value.TagType,
-                    value.Slug,
-                    value.Weight,
-                    value.HierarchyPath)).ToArray(),
-                string.Equals(card.Data.Card.TagCoverage, "complete-direct", StringComparison.Ordinal)));
+            if (tags.Data.Entries.Count != entries.Count || tags.Data.GenerationId != generation)
+            {
+                return new OperationUnavailable(
+                    "scryfall-tag-evidence-mismatch",
+                    "Scryfall returned incomplete category-rule tag evidence.");
+            }
+
+            for (int index = 0; index < entries.Count; index++)
+            {
+                ScryfallDeckTagEntryEvidence entryEvidence = tags.Data.Entries[index];
+                evidence.Add(new CategoryEntryEvidence(
+                    entries[index].EntryId,
+                    entryEvidence.Tags.Select(tag => new CategoryTagEvidence(
+                        tag.TagId,
+                        tag.TagType,
+                        tag.Slug,
+                        tag.Weight,
+                        tag.AncestorTagIds)).ToArray(),
+                    entryEvidence.IsComplete));
+            }
         }
 
         CategoryEvaluation evaluation = DeckCategorizationEvaluator.Evaluate(
-            rules.Data,
+            resolvedRules.Data.Rules,
             evidence,
             deck.Data.CategoryAssignments);
-        complete &= evaluation.Decisions.All(value => value.Status != "unknown");
+        bool complete = evaluation.Decisions.All(value => value.Status != "unknown");
         string fingerprint = Hash(JsonSerializer.Serialize(new
         {
             deckId,
             revision = deck.Data.Revision,
             source,
-            rules = rules.Data,
+            rules = resolvedRules.Data.Rules,
             decisions = evaluation.Decisions,
-            generation,
+            generation = resolvedRules.Data.ScryfallGenerationId,
         }, SerializerOptions));
         string token = Hash(JsonSerializer.Serialize(new { deckId, expectedRevision = deck.Data.Revision, previewFingerprint = fingerprint }, SerializerOptions));
-        int? presetSchemaVersion = source is CommonPresetCategoryRuleSource ? 1 : null;
-        string? presetChecksum = source is CommonPresetCategoryRuleSource ? CommonPresetChecksum : null;
         return new OperationSuccess<DeckCategoryRulesPreview>(new DeckCategoryRulesPreview(
-            deckId, deck.Data.Revision, source, rules.Data, evaluation.Decisions,
-            complete, fingerprint, token, generation, presetSchemaVersion, presetChecksum));
+            deckId, deck.Data.Revision, source, resolvedRules.Data.Rules, evaluation.Decisions,
+            complete, fingerprint, token, resolvedRules.Data.ScryfallGenerationId,
+            resolvedRules.Data.PresetSchemaVersion, resolvedRules.Data.PresetChecksum));
     }
 
-    /// <summary>Expands inline rules or the immutable common preset.</summary>
-    private static OperationResult<CategoryRuleSet> Expand(CategoryRuleSource source, DeckDocument deck)
+    /// <summary>Creates the strongest stable local lookup for one deck entry.</summary>
+    private static ScryfallCardLookup CreateLookup(DeckEntry entry)
     {
-        if (source is InlineCategoryRuleSource inline)
-        {
-            return ValidateRules(inline.RuleSet, deck);
-        }
-
-        if (source is not CommonPresetCategoryRuleSource preset ||
-            !string.Equals(preset.PresetId, "common-v1", StringComparison.Ordinal) ||
-            preset.Bindings is null || preset.Bindings.Count == 0 ||
-            preset.Bindings.Select(value => value.RoleKey).Distinct(StringComparer.Ordinal).Count() != preset.Bindings.Count)
-        {
-            return new OperationInvalidInput("invalid-category-preset", "Only common-v1 with category bindings is supported.");
-        }
-
-        CategoryRule[] catalog =
-        [
-            new CategoryRule(Guid.Empty, [Selector("ramp")], [], [], null),
-            new CategoryRule(Guid.Empty, [Selector("card-draw")], [], [], null),
-            new CategoryRule(Guid.Empty, [Selector("removal")], [], [], null),
-            new CategoryRule(Guid.Empty, [Selector("recursion")], [], [], null),
-        ];
-        List<CategoryRule> rules = [];
-        foreach (CategoryRoleBinding binding in preset.Bindings)
-        {
-            if (binding.CategoryId == Guid.Empty || rules.Any(value => value.CategoryId == binding.CategoryId))
-            {
-                return new OperationInvalidInput("invalid-category-binding", "Preset bindings require unique existing category IDs.");
-            }
-
-            int index = binding.RoleKey switch
-            {
-                "ramp" => 0,
-                "card-draw" => 1,
-                "removal" => 2,
-                "recursion" => 3,
-                _ => -1,
-            };
-            if (index < 0)
-            {
-                return new OperationInvalidInput("invalid-category-role", "The preset role key is not supported.");
-            }
-
-            CategoryRule template = catalog[index];
-            rules.Add(template with { CategoryId = binding.CategoryId, PrimaryPriority = binding.PrimaryPriority });
-        }
-
-        return ValidateRules(new CategoryRuleSet(preset.AssignmentMode, rules), deck);
-    }
-
-    /// <summary>Validates closed rule vocabulary and category ownership.</summary>
-    private static OperationResult<CategoryRuleSet> ValidateRules(CategoryRuleSet? rules, DeckDocument deck)
-    {
-        if (rules is null || rules.AssignmentMode is not ("add-only" or "synchronize-listed-categories") || rules.Rules is null || rules.Rules.Count == 0)
-        {
-            return new OperationInvalidInput("invalid-category-rules", "Rules require a closed assignment mode and at least one category rule.");
-        }
-
-        HashSet<Guid> categories = deck.Categories.Select(value => value.CategoryId).ToHashSet();
-        if (rules.Rules.Any(value => value.CategoryId == Guid.Empty || !categories.Contains(value.CategoryId)) ||
-            rules.Rules.Select(value => value.CategoryId).Distinct().Count() != rules.Rules.Count)
-        {
-            return new OperationInvalidInput("invalid-category-rule-category", "Every rule must name one unique existing category.");
-        }
-
-        return new OperationSuccess<CategoryRuleSet>(rules);
-    }
-
-    /// <summary>Creates one exact slug selector in the Oracle tag namespace.</summary>
-    private static CategoryTagSelector Selector(string slug)
-    {
-        return new CategoryTagSelector("oracle", ExactSlug: slug, MinimumWeight: "weak");
+        return entry.PrintingId is Guid printing
+            ? new ScryfallCardLookup("scryfall-id", printing.ToString("D"))
+            : entry.OracleId is Guid oracle
+                ? new ScryfallCardLookup("oracle-id", oracle.ToString("D"))
+                : new ScryfallCardLookup("exact-name", entry.CardName);
     }
 
     /// <summary>Builds the minimal ordered assignment mutation set.</summary>
@@ -403,7 +348,7 @@ internal sealed class DeckCategorizationWriteTools
     internal Task<OperationResult<DeckDocument>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
-        [Description("Scryfall corpus generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
+        [Description("Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
         [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
         [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy,
         [Description("Fingerprint returned by deck_category_rules_preview.")] string previewFingerprint,

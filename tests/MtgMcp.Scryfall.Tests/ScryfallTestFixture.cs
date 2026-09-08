@@ -66,9 +66,14 @@ internal static class ScryfallTestFixture
     internal static readonly Guid RedIllustrationId = Guid.Parse("44444444-4444-4444-8444-444444444444");
 
     /// <summary>
-    /// Identifies the parent creature-role tag.
+    /// Identifies the first parent tag for the fixture's child tag.
     /// </summary>
     internal static readonly Guid AggroTagId = Guid.Parse("55555555-5555-4555-8555-555555555555");
+
+    /// <summary>
+    /// Identifies the second parent tag for the fixture's child tag.
+    /// </summary>
+    internal static readonly Guid CreatureTagId = Guid.Parse("88888888-8888-4888-8888-888888888888");
 
     /// <summary>
     /// Identifies the child white-weenie tag.
@@ -177,6 +182,19 @@ internal static class ScryfallTestFixture
             aliases = BeatdownAliases,
             taggings = Array.Empty<object>(),
         });
+        string secondParentTag = JsonSerializer.Serialize(new
+        {
+            @object = "tag",
+            id = CreatureTagId,
+            label = "Creature",
+            slug = "creature",
+            type = "oracle",
+            description = "Creature cards.",
+            parent_ids = Array.Empty<Guid>(),
+            child_ids = new[] { WeenieTagId },
+            aliases = Array.Empty<string>(),
+            taggings = Array.Empty<object>(),
+        });
         string childTag = JsonSerializer.Serialize(new
         {
             @object = "tag",
@@ -185,7 +203,7 @@ internal static class ScryfallTestFixture
             slug = "white-weenie",
             type = "oracle",
             description = "Small white attackers.",
-            parent_ids = new[] { AggroTagId },
+            parent_ids = new[] { AggroTagId, CreatureTagId },
             child_ids = Array.Empty<Guid>(),
             aliases = WeenieAliases,
             taggings = new[]
@@ -210,7 +228,7 @@ internal static class ScryfallTestFixture
         {
             ["all_cards"] = GzipLines([WhiteCard(whiteName), RedCard()]),
             ["rulings"] = GzipLines([ruling, emptyCommentRuling]),
-            ["oracle_tags"] = GzipLines([parentTag, childTag]),
+            ["oracle_tags"] = GzipLines([parentTag, secondParentTag, childTag]),
             ["art_tags"] = GzipLines([artTag]),
         };
     }

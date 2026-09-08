@@ -349,6 +349,193 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
+    /// Resolves exact tag identities in the active installed card-data generation.
+    /// </summary>
+    internal async Task<OperationResult<ScryfallTagResolution>> ResolveTagIdentitiesAsync(
+        IReadOnlyList<ScryfallTagIdentity>? identities,
+        CancellationToken cancellationToken)
+    {
+        if (identities is null || identities.Count == 0)
+        {
+            return new OperationInvalidInput(
+                "invalid-scryfall-tag-identity",
+                "At least one exact Scryfall tag identity is required.");
+        }
+
+        await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null)
+        {
+            return CardDataMissing();
+        }
+
+        Guid? generationId = await ReadStateGuidAsync(connection, "active_generation_id", cancellationToken)
+            .ConfigureAwait(false);
+        if (generationId is null || !await ContainsCompleteGenerationOnConnectionAsync(
+                connection,
+                generationId.Value,
+                cancellationToken).ConfigureAwait(false))
+        {
+            return CardDataMissing();
+        }
+
+        List<Guid> resolved = [];
+        foreach (ScryfallTagIdentity identity in identities)
+        {
+            OperationInvalidInput? failure = ValidateTagIdentity(identity);
+            if (failure is not null)
+            {
+                return failure;
+            }
+
+            IReadOnlyList<Guid> matches = await FindExactTagIdsAsync(
+                connection,
+                generationId.Value,
+                identity,
+                cancellationToken).ConfigureAwait(false);
+            if (matches.Count == 0)
+            {
+                return new OperationNotFound(
+                    "scryfall-tag-not-found",
+                    "An exact Scryfall tag used by the category rule was not found.");
+            }
+
+            if (matches.Count > 1)
+            {
+                return new OperationUnavailable(
+                    "scryfall-tag-ambiguous",
+                    "An exact Scryfall tag used by the category rule matched more than one installed tag.");
+            }
+
+            resolved.Add(matches[0]);
+        }
+
+        return new OperationSuccess<ScryfallTagResolution>(new ScryfallTagResolution(generationId.Value, resolved));
+    }
+
+    /// <summary>
+    /// Reads direct tag assignments and all source ancestors for ordered deck card lookups.
+    /// </summary>
+    internal async Task<OperationResult<ScryfallDeckTagEvidence>> ReadDeckTagEvidenceAsync(
+        Guid generationId,
+        IReadOnlyList<ScryfallCardLookup>? lookups,
+        CancellationToken cancellationToken)
+    {
+        if (lookups is null)
+        {
+            return new OperationInvalidInput("invalid-card-lookup", "Deck card lookups are required.");
+        }
+
+        foreach (ScryfallCardLookup lookup in lookups)
+        {
+            OperationInvalidInput? failure = ScryfallCardEvidenceOperations.ValidateLookup(lookup);
+            if (failure is not null)
+            {
+                return failure;
+            }
+        }
+
+        await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null || !await ContainsCompleteGenerationOnConnectionAsync(
+                connection,
+                generationId,
+                cancellationToken).ConfigureAwait(false))
+        {
+            return CardDataMissing();
+        }
+
+        List<(bool IsComplete, IReadOnlyList<ScryfallTagEvidence> Tags)> directEvidence = [];
+        HashSet<Guid> directTagIds = [];
+        foreach (ScryfallCardLookup lookup in lookups)
+        {
+            StoredCardDataObject? card = await FindCardOnConnectionAsync(
+                connection,
+                generationId,
+                lookup,
+                null,
+                cancellationToken).ConfigureAwait(false);
+            if (card is null)
+            {
+                directEvidence.Add((false, []));
+                continue;
+            }
+
+            using JsonDocument document = JsonDocument.Parse(card.RawJson);
+            ScryfallTagTargets targets = ReadTagTargets(document.RootElement);
+            IReadOnlyList<ScryfallTagEvidence> tags = await GetDirectTagsOnConnectionAsync(
+                connection,
+                generationId,
+                targets.OracleId,
+                targets.IllustrationIds,
+                card.RetrievedAtUtc,
+                cancellationToken).ConfigureAwait(false);
+            List<ScryfallTagEvidence> strongestByTag = tags
+                .GroupBy(value => value.TagId)
+                .Select(group => group
+                    .OrderByDescending(value => ScryfallTagWeight.Rank(value.Weight))
+                    .ThenBy(value => value.TagType, StringComparer.Ordinal)
+                    .ThenBy(value => value.Slug, StringComparer.Ordinal)
+                    .First())
+                .OrderBy(value => value.TagType, StringComparer.Ordinal)
+                .ThenBy(value => value.Slug, StringComparer.Ordinal)
+                .ThenBy(value => value.TagId)
+                .ToList();
+            foreach (ScryfallTagEvidence tag in strongestByTag)
+            {
+                directTagIds.Add(tag.TagId);
+            }
+
+            directEvidence.Add((true, strongestByTag));
+        }
+
+        IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> ancestors = await GetAncestorTagIdsAsync(
+            connection,
+            generationId,
+            directTagIds,
+            cancellationToken).ConfigureAwait(false);
+        List<ScryfallDeckTagEntryEvidence> entries = [];
+        foreach ((bool isComplete, IReadOnlyList<ScryfallTagEvidence> tags) in directEvidence)
+        {
+            entries.Add(new ScryfallDeckTagEntryEvidence(
+                isComplete,
+                tags.Select(tag => new ScryfallDirectTagEvidence(
+                    tag.TagId,
+                    tag.TagType,
+                    tag.Slug,
+                    tag.Weight,
+                    ancestors[tag.TagId])).ToArray()));
+        }
+
+        return new OperationSuccess<ScryfallDeckTagEvidence>(new ScryfallDeckTagEvidence(generationId, entries));
+    }
+
+    /// <summary>
+    /// Reads one card's Oracle and illustration identities from its source object.
+    /// </summary>
+    internal static ScryfallTagTargets ReadTagTargets(JsonElement raw)
+    {
+        Guid? oracleId = ScryfallMapper.OptionalGuid(raw, "oracle_id");
+        List<Guid> illustrationIds = [];
+        if (ScryfallMapper.OptionalGuid(raw, "illustration_id") is Guid illustrationId)
+        {
+            illustrationIds.Add(illustrationId);
+        }
+
+        if (raw.TryGetProperty("card_faces", out JsonElement faces) && faces.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement face in faces.EnumerateArray())
+            {
+                if (ScryfallMapper.OptionalGuid(face, "illustration_id") is Guid faceIllustrationId &&
+                    !illustrationIds.Contains(faceIllustrationId))
+                {
+                    illustrationIds.Add(faceIllustrationId);
+                }
+            }
+        }
+
+        return new ScryfallTagTargets(oracleId, illustrationIds);
+    }
+
+    /// <summary>
     /// Reads direct community tags using one already opened database connection.
     /// </summary>
     private static async Task<IReadOnlyList<ScryfallTagEvidence>> GetDirectTagsOnConnectionAsync(
@@ -1242,6 +1429,132 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
+    /// Reports whether a complete generation remains available through an already opened connection.
+    /// </summary>
+    private static async Task<bool> ContainsCompleteGenerationOnConnectionAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT 1 FROM corpus_generations WHERE generation_id = $generation AND status = 'complete' LIMIT 1;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null;
+    }
+
+    /// <summary>
+    /// Finds exact tag identifiers without label or alias matching.
+    /// </summary>
+    private static async Task<IReadOnlyList<Guid>> FindExactTagIdsAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        ScryfallTagIdentity identity,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        bool usesId = identity.TagId is Guid;
+        command.CommandText = usesId
+            ? "SELECT tag_id FROM tags WHERE generation_id = $generation AND tag_type = $type AND tag_id = $value ORDER BY tag_id LIMIT 2;"
+            : "SELECT tag_id FROM tags WHERE generation_id = $generation AND tag_type = $type AND slug = $value ORDER BY tag_id LIMIT 2;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$type", identity.TagType);
+        command.Parameters.AddWithValue(
+            "$value",
+            usesId ? ScryfallSql.FormatGuid(identity.TagId!.Value) : identity.ExactSlug!);
+        List<Guid> matches = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            matches.Add(ScryfallSql.ParseGuid(reader.GetString(0)));
+        }
+
+        return matches;
+    }
+
+    /// <summary>
+    /// Returns every source parent reachable from each direct tag in deterministic order.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetAncestorTagIdsAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        IEnumerable<Guid> directTagIds,
+        CancellationToken cancellationToken)
+    {
+        List<Guid> requestedTagIds = directTagIds.Distinct().ToList();
+        requestedTagIds.Sort();
+        Dictionary<Guid, List<Guid>> ancestors = requestedTagIds.ToDictionary(value => value, _ => new List<Guid>());
+        if (ancestors.Count == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<Guid>>();
+        }
+
+        await using SqliteCommand command = connection.CreateCommand();
+        string[] values = requestedTagIds.Select((_, index) => $"($tag{index})").ToArray();
+        command.CommandText =
+            "WITH RECURSIVE requested(tag_id) AS (VALUES " + string.Join(", ", values) + "), " +
+            "ancestors(direct_tag_id, ancestor_tag_id) AS (" +
+            "SELECT requested.tag_id, relation.parent_tag_id " +
+            "FROM requested JOIN tag_relations relation " +
+            "ON relation.generation_id = $generation AND relation.child_tag_id = requested.tag_id " +
+            "UNION " +
+            "SELECT ancestors.direct_tag_id, relation.parent_tag_id " +
+            "FROM ancestors JOIN tag_relations relation " +
+            "ON relation.generation_id = $generation AND relation.child_tag_id = ancestors.ancestor_tag_id" +
+            ") SELECT direct_tag_id, ancestor_tag_id FROM ancestors " +
+            "ORDER BY direct_tag_id, ancestor_tag_id;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        int parameterIndex = 0;
+        foreach (Guid tagId in requestedTagIds)
+        {
+            command.Parameters.AddWithValue($"$tag{parameterIndex++}", ScryfallSql.FormatGuid(tagId));
+        }
+
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            Guid directTagId = ScryfallSql.ParseGuid(reader.GetString(0));
+            ancestors[directTagId].Add(ScryfallSql.ParseGuid(reader.GetString(1)));
+        }
+
+        Dictionary<Guid, IReadOnlyList<Guid>> result = [];
+        foreach (KeyValuePair<Guid, List<Guid>> entry in ancestors)
+        {
+            entry.Value.Sort();
+            result.Add(entry.Key, entry.Value);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Validates one exact source tag identity.
+    /// </summary>
+    private static OperationInvalidInput? ValidateTagIdentity(ScryfallTagIdentity? identity)
+    {
+        if (identity is null || identity.TagType is not ("oracle" or "art"))
+        {
+            return new OperationInvalidInput("invalid-scryfall-tag-identity", "Scryfall tag type must be oracle or art.");
+        }
+
+        bool hasId = identity.TagId is Guid id && id != Guid.Empty;
+        bool hasSlug = !string.IsNullOrWhiteSpace(identity.ExactSlug);
+        return hasId == hasSlug
+            ? new OperationInvalidInput(
+                "invalid-scryfall-tag-identity",
+                "A Scryfall tag identity requires exactly one non-empty tag ID or exact slug.")
+            : null;
+    }
+
+    /// <summary>
+    /// Returns the common installed-card-data failure without implying a provider lookup occurred.
+    /// </summary>
+    private static OperationNotCached CardDataMissing()
+    {
+        return new OperationNotCached("scryfall-corpus-missing", "Scryfall card data is not installed.");
+    }
+
+    /// <summary>
     /// Deletes generation-owned rows, optionally inside an existing transaction.
     /// </summary>
     private static async Task DeleteGenerationOnConnectionAsync(
@@ -1451,3 +1764,10 @@ internal sealed record StoredCardsByTag(
     DateTimeOffset ProviderUpdatedAtUtc,
     string TagJson,
     IReadOnlyList<StoredTagAssignment> Assignments);
+
+/// <summary>
+/// Carries the source identities needed to find direct Oracle and artwork tag assignments.
+/// </summary>
+internal sealed record ScryfallTagTargets(
+    Guid? OracleId,
+    IReadOnlyList<Guid> IllustrationIds);

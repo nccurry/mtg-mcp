@@ -1614,7 +1614,7 @@ public sealed class ScryfallServiceTests
         string tag = JsonSerializer.Serialize(new
         {
             @object = "tag",
-            id = Guid.Parse("88888888-8888-4888-8888-888888888888"),
+            id = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
             label = "Dangling Fixture",
             slug = "dangling-fixture",
             type = dataset == "art_tags" ? "illustration" : "oracle",

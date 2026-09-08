@@ -28,9 +28,9 @@ public sealed class DeckCategorizationTests
         Assert.Equal("invalid-category-rule-category", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
     }
 
-    /// <summary>Preserves an explicit not-cached outcome when local card evidence is absent.</summary>
+    /// <summary>Requires installed source tags before resolving a category selector.</summary>
     [Fact]
-    public async Task Preview_CacheOnlyMissingCard_ReturnsIncompleteEvidence()
+    public async Task Preview_MissingInstalledSourceTags_ReturnsNotCached()
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
@@ -50,9 +50,7 @@ public sealed class DeckCategorizationTests
             "cache-only",
             TestContext.Current.CancellationToken);
 
-        DeckCategoryRulesPreview preview = RequireSuccess(result);
-        Assert.False(preview.IsComplete);
-        Assert.Contains(preview.Decisions, value => value.Status == "unknown");
+        Assert.Equal("scryfall-corpus-missing", Assert.IsType<OperationNotCached>(result.Value).ReasonCode);
     }
 
     /// <summary>Rejects malformed preset role and duplicate binding requests.</summary>

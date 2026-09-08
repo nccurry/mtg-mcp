@@ -1480,30 +1480,12 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         CancellationToken cancellationToken)
     {
         using JsonDocument document = JsonDocument.Parse(stored.RawJson);
-        Guid? oracleId = ScryfallMapper.OptionalGuid(document.RootElement, "oracle_id");
-        List<Guid> illustrationIds = [];
-        if (ScryfallMapper.OptionalGuid(document.RootElement, "illustration_id") is Guid illustrationId)
-        {
-            illustrationIds.Add(illustrationId);
-        }
-
-        if (document.RootElement.TryGetProperty("card_faces", out JsonElement faces) &&
-            faces.ValueKind == JsonValueKind.Array)
-        {
-            foreach (JsonElement face in faces.EnumerateArray())
-            {
-                if (ScryfallMapper.OptionalGuid(face, "illustration_id") is Guid faceIllustrationId &&
-                    !illustrationIds.Contains(faceIllustrationId))
-                {
-                    illustrationIds.Add(faceIllustrationId);
-                }
-            }
-        }
+        ScryfallTagTargets targets = ScryfallCardDataStore.ReadTagTargets(document.RootElement);
 
         IReadOnlyList<ScryfallTagEvidence> tags = await CardDataStore.GetDirectTagsInGenerationAsync(
             stored.GenerationId,
-            oracleId,
-            illustrationIds,
+            targets.OracleId,
+            targets.IllustrationIds,
             stored.RetrievedAtUtc,
             cancellationToken).ConfigureAwait(false);
         return ScryfallMapper.Card(
@@ -1844,7 +1826,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Validates one card lookup as exactly one supported case.
     /// </summary>
-    private static OperationInvalidInput? ValidateLookup(ScryfallCardLookup? lookup)
+    internal static OperationInvalidInput? ValidateLookup(ScryfallCardLookup? lookup)
     {
         if (lookup is null)
         {

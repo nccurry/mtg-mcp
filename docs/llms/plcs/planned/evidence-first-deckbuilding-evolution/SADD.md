@@ -362,10 +362,18 @@ The study must be willing to end with “defer” or “reject.”
 
 ### Tag ownership
 
-The server does not invent its own card-tag taxonomy. It continues to use the
+The server does not invent its own card-tag system. It continues to use the
 Scryfall-provided community tag data already stored in scryfall.db. Oracle
 facts, community tags, parser classifications, and any caller-defined groups
 stay visibly separate.
+
+The completed Phase 4A repair keeps that rule intact. It uses the installed
+official Scryfall `oracle_tags` and `art_tags` datasets as the only source for
+tag identity, direct assignments, and parent/child relationships. The existing
+`common-v1` role keys are only caller-facing bindings to local deck categories;
+they do not create card tags. Each role must resolve to exact source tag IDs
+before it can group cards. There is no direct Tagger-site acquisition, separate
+Tagger adapter, local tag store, or inferred tag assignment.
 
 ### Performance
 
@@ -413,6 +421,7 @@ hard gate.
 | EFD-008 | Exact finite-population models separate from provider card semantics. | Independent-formula tests. |
 | EFD-009 | Experimental model is closed, versioned, replayable, bounded, and caveated. | Toy-deck traces, calibration, and feasibility decision. |
 | EFD-010–013 | Child-level characterization, Task gates, and documentation ownership. | Validation ledger and diff/link checks. |
+| EFD-014 | Scryfall resolves source tag IDs and ancestry; Core evaluates already-resolved evidence; App joins it to local decks. | Source fixture, hierarchy, invalid-input, and architecture tests. |
 
 ## Implementation Phases
 

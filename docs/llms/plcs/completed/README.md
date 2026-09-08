@@ -26,3 +26,4 @@ checked-in configuration remain authoritative.
 | [evidence-first-mcp-rewrite-program](evidence-first-mcp-rewrite-program/README.md) | Approved all twelve rewrite packets and their shared guardrails; implementation and release lifecycle remain child-owned. |
 | [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Validated, packaged, and released the clean-break `0.9.0` surface with rollback and provider evidence. |
 | [latest-mcp-and-toolchain](latest-mcp-and-toolchain/README.md) | Pinned the current MCP protocol and toolchain, added reproducible locks, SHA-pinned actions, and a managed registry publisher. |
+| [official-scryfall-tag-grouping-reliability](official-scryfall-tag-grouping-reliability/README.md) | Repaired deck grouping from installed official Scryfall tags: exact source IDs, all-parent ancestry, strict rule validation, and the in-place `common-v1` correction. |

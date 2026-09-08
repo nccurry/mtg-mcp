@@ -21,6 +21,7 @@ fill this table.
 | EFD-FIX-010 | Unsupported-mechanic toy deck | Simulation-lab test project, if feasibility is approved | Prove unsupported text contributes no fabricated effect and is reported. | Simulation child owner | Update only when support is deliberately added. |
 | EFD-FIX-011 | Sampled replay/calibration matrix | Simulation-lab test project, if feasibility is approved | Verify same seed/input/policy replay, bounds, uncertainty, and cancellation. | Simulation child owner | Version with model/policy change. |
 | EFD-FIX-012 | Performance case | Child-specific benchmark/report, if justified | Protect one named hot path with deterministic representative input. | Child owner | Record environment and why the case matters. |
+| EFD-FIX-014 | Official Scryfall tag-grouping matrix | [Phase 4A child](../../completed/official-scryfall-tag-grouping-reliability/FIXTURES.md) | Verify exact source-ID resolution, all-parent ancestry, invalid-selector safety, and the repaired `common-v1` mapping. | Tag-grouping child owner | Update only after an explicit official Scryfall source-contract review. |
 
 ## Acceptance Matrix
 
@@ -39,6 +40,7 @@ fill this table.
 | EFD-011 | EFD-FIX-012 | Performance work has a named scenario and declared review/CI budget. | Child performance report |
 | EFD-012 | EFD-FIX-001 plus package/client smoke | SDK upgrade preserves or explicitly versions the contract. | Package/process/client tests |
 | EFD-013 | Documentation scenario | Counts, boundaries, source limits, and status match code. | Link/render review and git diff --check |
+| EFD-014 | EFD-FIX-014 | Existing grouping uses only source tag identity/ancestry and rejects invalid source selectors. | Core/Scryfall/App fixture and boundary tests |
 
 ## MCP Surface Checks
 
@@ -64,7 +66,7 @@ fill this table.
 
 | Provider | Fixture | Scenario | Sanitization and policy notes |
 | --- | --- | --- | --- |
-| Scryfall | EFD-FIX-002 | Card data, snapshot, tag, lease, pacing, unavailable states | Continue using official, sanitized fixture data; no background card-data download. |
+| Scryfall | EFD-FIX-002 and EFD-FIX-014 | Card data, snapshot, tag, lease, pacing, unavailable states; exact tag grouping | Continue using official, sanitized fixture data; no background card-data download or Tagger website acquisition. |
 | Archidekt | EFD-FIX-003 | Deck/folder/snapshot reads, writes, retries, conflicts, redaction | No real mutation in normal tests; never preserve credentials/cookies. |
 | Playgroup | Existing fixture suite | Provider-shaped reads and permitted write fixtures | Retain existing provider-specific contract. |
 | Commander Spellbook | EFD-FIX-006 | Search/detail/empty/rate/failure after source check | Use short, bounded API examples and follow the source's published request guidance. |

@@ -33,7 +33,8 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | 1B | Give Archidekt domains real ownership. | EFD-002–005, EFD-010, EFD-013 | Archidekt, focused tests, architecture docs | Characterization, fake HTTP, lint/test/coverage | No behavior or surface change; shared session and named domains own their code. | Complete |
 | 2 | [Pin the current MCP and toolchain](../../completed/latest-mcp-and-toolchain/README.md). | EFD-005, EFD-010, EFD-012, EFD-013 | App, E2E, packaging, version and lock files | Process/client/schema/package checks | The current-only protocol and reproducible toolchain pass. | Complete |
 | 3 | [Add Commander Spellbook evidence](../../completed/commander-spellbook-evidence/README.md). | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Source contract, fake HTTP, surface/E2E checks | Opt-in source evidence is attributable, bounded, and readable. | Complete |
-| 4 | Fill proven exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Independent formulas, surface/E2E, performance review if needed | New deterministic workflow answers a real declared-input question without inferred card roles. | Planned |
+| 4 | Review exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Current-tool review and existing formula tests | Current tools cover the questions reviewed; the record says when to reopen this phase. | Deferred |
+| 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003–005, EFD-007, EFD-010, EFD-013–014 | Core, Scryfall, App, focused tests/docs | Official-shaped fixture, hierarchy/validation tests, Task checks, surface check | Existing grouping follows source hierarchy and rejects bad source selectors without adding a tag system. | Complete |
 | 5 | Decide community and cohort source feasibility. | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Planned |
 | 6 | Decide goldfish feasibility before implementing a simulator. | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New feasibility packet; no stable surface initially | Toy traces, calibration, policy review | Owner records accept/defer/reject with evidence. | Planned |
 | 7 | Stabilize selected completed children. | All selected requirements | Docs, release, validation | Full gates, audits, release review | Contracts, docs, deferred items, and follow-ups are accurate. | Planned |
@@ -56,6 +57,60 @@ Archidekt decks/folders/snapshots without navigating a god class.
   - The child is moved to in-progress only after authorization.
 - Rollback/fallback: Leave this roadmap planned and defer all code work.
 - Cleanup: None.
+
+### Phase 4A: Official Scryfall tag grouping repair
+
+- Problems solved:
+  - A direct tag on a card currently reaches the rule evaluator with only its
+    own ID, so a parent selector cannot match the child even when
+    `includeDescendants` is true.
+  - The current validator checks deck category ownership but does not reject a
+    selector with both or neither identity, an invalid tag type or weight, or
+    duplicate primary priorities. Such a selector can behave as an ordinary
+    non-match during synchronize mode.
+  - `common-v1` uses `card-draw`, while the historical source snapshot contains
+    `draw` and shows that `draw`, `removal`, and `recursion` are parent tags with
+    no direct assignments. The final mapping must be rechecked against current
+    official Scryfall data before it is committed.
+- Included requirements: EFD-001, EFD-003 through EFD-005, EFD-007, EFD-010,
+  EFD-013, EFD-014.
+- Out of scope:
+  - Any local card-tag system, tag assignment, alias, or hierarchy.
+  - Tagger-site scraping, a Tagger adapter/store/toolset, or a new MCP tool.
+  - A recommendation, inferred category meaning, or automatic category apply.
+  - A new `common-v2`, compatibility alias, migration, or fallback mapping.
+- Expected edits:
+  - Add a narrow source-tag repair child with a pure rule grammar check in
+    Core, source-ID and ancestry reads in Scryfall, and deck composition in
+    App.
+  - Correct `common-v1` in place using reviewed source tag IDs and declared
+    descendant settings.
+  - Split responsibilities if needed so MCP tool wrappers, source resolution,
+    and pure rule evaluation do not accumulate in one file.
+- Tests added:
+  - Parent/child tag hierarchy tests using an official-shaped offline fixture.
+  - Invalid selector, missing/ambiguous source tag, bad weight/type, and
+    synchronize-no-removal tests.
+  - `common-v1` source mapping and preset-to-inline equivalence tests.
+  - Existing-surface and no-new-source-boundary checks.
+- Validation:
+  - Focused Core, Scryfall, and App tests first; then `task lint`, `task test`,
+    `task coverage`, and the affected MCP surface checks.
+  - Recheck current official Scryfall tag metadata/data before choosing the
+    checked-in source IDs. Keep that external check out of normal offline tests.
+- Exit criteria:
+  - A direct child tag matches a selected parent only when descendants are
+    allowed, across every source parent relationship.
+  - Bad selectors fail explicitly before a preview or apply can change a deck.
+  - `common-v1` has the same ID and role keys but uses only verified official
+    source tags and produces visible source-based evidence.
+  - No separate tag system or public MCP surface is introduced.
+- Rollback/fallback: Keep the existing tools and source data. If current source
+  data cannot support a reviewed preset mapping, leave that role unavailable and
+  stop for an owner decision; do not guess a substitute tag.
+- Cleanup: Remove duplicate or misleading selector logic and stale wording that
+  describes the preset as immutable when this owner-approved defect correction
+  changes it in place.
 
 ### Phase 1A: Scryfall ownership extraction
 
@@ -154,38 +209,32 @@ This completed phase is detailed in the [Commander Spellbook evidence child](../
 It added one concrete adapter, source fixtures, a small opt-in toolset, and a
 saved-deck combo lookup that returns source groups without advice.
 
-### Phase 4: Declarative exact deck analysis
+### Phase 4: Exact-analysis gap review (deferred)
 
-- Problems solved: Existing exact Statistics is intentionally caller-supplied.
-  A new workflow is justified only if a player cannot reasonably express a
-  useful deck question with current tools.
-- Included requirements: EFD-001, EFD-003 through EFD-005, EFD-008,
-  EFD-010, EFD-011, EFD-013.
-- Out of scope:
-  - Auto-tagging card roles.
-  - Legality decisions.
-  - Strategic play choice or sampled goldfish.
-- Expected edits:
-  - Define a small explicit input contract for deck selection/grouping.
-  - Resolve selected-card evidence transparently.
-  - Delegate math to provider-independent Statistics.
-  - Add only materially distinct tool(s), if needed.
-- Tests added:
-  - Independent formula cases for 60- and 99-card populations.
-  - Explicit category/group selection, draw/mulligan assumptions, and unknown
-    card evidence cases.
-  - Surface/E2E tests for result labels and bounds.
-- Validation:
-  - Focused exact math tests, task lint, task test, task coverage.
-  - task surface:report if a tool is added.
-  - A performance measurement only if the selected-card workflow proves hot.
-- Exit criteria:
-  - Results are exact, declared-input, and explainable.
-  - No automatic role inference appears.
-- Rollback/fallback: Defer the tool if the proposed contract duplicates existing
-  stats operations.
-- Cleanup: Remove duplicate calculation/presentation paths if the new workflow
-  replaces one.
+- Decision: Deferred on 2026-09-07. No child packet or production change is
+  authorized.
+- Scope deferred: A new MCP tool that packages saved-deck selection, Scryfall
+  data, and exact Statistics without returning a new answer.
+- Review finding:
+  - The eight existing `stats_*` tools already cover exact draw, turn,
+    mulligan, mana, package, copy-count, and deck-summary calculations.
+  - Deck-backed statistics already select caller-named entry IDs, zones, and
+    categories, while retaining the selected and excluded entries as evidence.
+  - Direct Scryfall tag evidence can be used through caller-owned category
+    rules; no automatic role inference is required.
+- Affected requirements: EFD-008 is already met by the completed exact deck
+  statistics child. EFD-001, EFD-003 through EFD-005, EFD-010, EFD-011, and
+  EFD-013 remain rules for any later distinct tool.
+- Owner: mtg-mcp.
+- Reopen trigger: A player or agent supplies one exact question with fully
+  stated inputs, a requested result, and a concrete reason the existing
+  `deck_*`, `scryfall_*`, and `stats_*` workflows cannot return it.
+- Validation: Compare the proposal with current tool contracts and the completed
+  exact-statistics test evidence. This deferral needs only documentation checks
+  because it adds no executable behavior.
+- Exit criteria: The deferral record states the scope, rationale, owner,
+  affected acceptance criteria, reopen trigger, and why EFD-008 remains met.
+- Cleanup: None.
 
 ### Phase 5: Community and cohort source feasibility
 

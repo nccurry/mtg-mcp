@@ -27,6 +27,11 @@ public sealed class ScryfallService : IDisposable
     private readonly ScryfallSnapshotOperations snapshots;
 
     /// <summary>
+    /// Owns installed tag reads used by deck categorization.
+    /// </summary>
+    private readonly ScryfallDeckTagOperations deckTags;
+
+    /// <summary>
     /// Creates the Scryfall service with official production defaults.
     /// </summary>
     public ScryfallService(
@@ -48,6 +53,7 @@ public sealed class ScryfallService : IDisposable
             handler);
         cardData = new ScryfallCardDataLifecycleOperations(cards);
         snapshots = new ScryfallSnapshotOperations(cards);
+        deckTags = new ScryfallDeckTagOperations(cards.CardDataStore);
     }
 
     /// <inheritdoc cref="ScryfallCardEvidenceOperations.SearchAsync"/>
@@ -251,6 +257,28 @@ public sealed class ScryfallService : IDisposable
             pageSize,
             includeRaw,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves exact installed Scryfall tag identities for deck categorization.
+    /// </summary>
+    internal Task<OperationResult<ScryfallTagResolution>> ResolveDeckTagIdentitiesAsync(
+        IReadOnlyList<ScryfallTagIdentity>? identities,
+        string freshnessPolicy,
+        CancellationToken cancellationToken)
+    {
+        return deckTags.ResolveTagIdentitiesAsync(identities, freshnessPolicy, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads direct installed tag assignments and all source parents for deck card lookups.
+    /// </summary>
+    internal Task<OperationResult<ScryfallDeckTagEvidence>> ReadDeckTagEvidenceAsync(
+        Guid generationId,
+        IReadOnlyList<ScryfallCardLookup>? lookups,
+        CancellationToken cancellationToken)
+    {
+        return deckTags.ReadDeckTagEvidenceAsync(generationId, lookups, cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.GetStatusAsync"/>
