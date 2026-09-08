@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-09-07
+- Last updated: 2026-09-08
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 - Implementation authorized: No
@@ -35,7 +35,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | 3 | [Add Commander Spellbook evidence](../../completed/commander-spellbook-evidence/README.md). | EFD-001, EFD-003–007, EFD-010, EFD-013 | New concrete adapter, App, fixtures/docs | Source contract, fake HTTP, surface/E2E checks | Opt-in source evidence is attributable, bounded, and readable. | Complete |
 | 4 | Review exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Current-tool review and existing formula tests | Current tools cover the questions reviewed; the record says when to reopen this phase. | Deferred |
 | 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003–005, EFD-007, EFD-010, EFD-013–014 | Core, Scryfall, App, focused tests/docs | Official-shaped fixture, hierarchy/validation tests, Task checks, surface check | Existing grouping follows source hierarchy and rejects bad source selectors without adding a tag system. | Complete |
-| 5 | Decide community and cohort source feasibility. | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Planned |
+| 5 | [Decide community and deck-group source feasibility](SOURCE_FEASIBILITY.md). | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Complete |
 | 6 | Decide goldfish feasibility before implementing a simulator. | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New feasibility packet; no stable surface initially | Toy traces, calibration, policy review | Owner records accept/defer/reject with evidence. | Planned |
 | 7 | Stabilize selected completed children. | All selected requirements | Docs, release, validation | Full gates, audits, release review | Contracts, docs, deferred items, and follow-ups are accurate. | Planned |
 
@@ -236,7 +236,7 @@ saved-deck combo lookup that returns source groups without advice.
   affected acceptance criteria, reopen trigger, and why EFD-008 remains met.
 - Cleanup: None.
 
-### Phase 5: Community and cohort source feasibility
+### Phase 5: Community and deck-group source feasibility
 
 - Problems solved: Players want discussions and popularity context, but those
   sources have different access and population rules.
@@ -246,7 +246,7 @@ saved-deck combo lookup that returns source groups without advice.
   - One add/defer/reject record per researched source.
   - A Reddit-specific API-access check before code; source-specific child only
     if supported.
-  - An official-API cohort-provider evaluation for EDHREC-style questions.
+  - An official-API deck-group-provider evaluation for EDHREC-style questions.
 - Tests added: None until a source is selected.
 - Validation:
   - Re-check current API documentation and access rules.
@@ -258,6 +258,12 @@ saved-deck combo lookup that returns source groups without advice.
 - Rollback/fallback: Record defer/reject; exact and existing evidence workflows
   remain useful.
 - Cleanup: Remove only research scaffolding that is no longer authoritative.
+- Result (2026-09-08): Complete. The [source-feasibility record](SOURCE_FEASIBILITY.md)
+  admits no new source. Reddit is deferred until it approves the exact
+  read-only workflow. Direct EDHREC, Moxfield, and public Archidekt collection
+  automation are rejected, and the current Playgroup API cannot provide the
+  complete card entries needed for deck-group analysis. No source code, MCP
+  tool, provider cache, configuration, credential, or fixture was added.
 
 ### Phase 6: Experimental goldfish feasibility
 

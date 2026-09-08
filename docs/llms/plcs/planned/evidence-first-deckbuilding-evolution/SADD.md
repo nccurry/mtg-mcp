@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: product owner, Core maintainer, adapter maintainer, MCP contract maintainer
-- Last updated: 2026-09-06
+- Last updated: 2026-09-08
 - Related SRD: [SRD.md](SRD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - Implementation authorized: No
@@ -16,6 +16,7 @@
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-09-06 | mtg-mcp | Initial target architecture and delivery guardrails. |
+| 2026-09-08 | mtg-mcp | Recorded Phase 5 provider decisions; no new source module is designed. |
 
 ## Executive Summary
 
@@ -309,15 +310,20 @@ reliable adapter.
 
 ### Current source disposition
 
+Rows marked "existing workflow" describe shipped behavior. The other rows are
+separate uses checked in Phase 5.
+
 | Source | Status | Product meaning | Design rule |
 | --- | --- | --- | --- |
 | Scryfall | Stable | Official card/ruling facts and separately labeled community-tag evidence | Continue official API/bulk contract; use bulk data for large card-data work. |
-| Archidekt | Stable observed adapter | User-authorized deck/folder/snapshot state and explicit workflows | Preserve fixture-tested contract and write safeguards; do not broaden casually. |
-| Playgroup | Stable official adapter | Provider-shaped playgroup observations | Keep source population separate from deck-quality judgments. |
+| Archidekt (existing workflow) | Stable observed adapter | User-authorized deck/folder/snapshot state and explicit workflows | Preserve fixture-tested contract and write safeguards; do not broaden casually. |
+| Playgroup (existing workflow) | Stable official adapter | Provider-shaped playgroup observations | Keep source population separate from deck-quality judgments. |
 | Commander Spellbook | Stable evidence adapter | Documented combo variants and deck combo groups | [Use the completed child](../../completed/commander-spellbook-evidence/README.md); return source evidence, not “add this combo.” |
-| Reddit | Feasibility only | Attributed community discussion, not source fact | Build nothing until the published API supports the exact workflow. Never scrape or train on content. |
-| EDHREC-style aggregate source | Deferred | Source-defined popularity/cohort evidence | No public developer API was confirmed in this audit. Use an official API if one becomes available. |
-| Moxfield | Rejected for automation | Manual interchange remains valid | Its published site rules do not support the automation this project would need. |
+| Reddit | Deferred | Attributed community discussion, not source fact | Reddit must approve the exact workflow before a source-specific child begins. Never scrape or train on content. |
+| EDHREC website | Rejected for direct automation | Source-defined popularity and deck-group evidence | Its terms prohibit automatic queries and no public developer API was found. |
+| Moxfield | Rejected for direct automation | Manual interchange remains valid | Its terms do not support the needed automatic collection. |
+| Public Archidekt deck collection | Not admitted | A deck group beyond a player's authorized decks | Do not extend the existing authorized-sync adapter into public collection. Its terms do not support automatic queries. |
+| Playgroup (deck-group analysis) | Not suitable | Provider-shaped playgroup observations | The current official contract has no complete deck entries or global deck-group route. |
 
 ## Error Handling And Failure Modes
 
@@ -457,8 +463,11 @@ child and a current validation baseline.
 - Commander Spellbook’s documented query syntax and public API make it a good
   first evidence source. Its narrow adapter design remains owner-approved work.
 - Reddit is not a general search database. Do not add an MCP integration until
-  its published API access rules support the exact workflow.
-- Moxfield automation is out of scope under its published site rules.
+  Reddit explicitly approves the exact workflow.
+- Direct EDHREC, Moxfield, and public Archidekt collection automation are out
+  of scope under their current site rules. The current Playgroup contract is
+  not a substitute for card-use analysis. See the
+  [source-feasibility record](SOURCE_FEASIBILITY.md).
 
 ## Decisions, Risks, And Deferred Work
 
@@ -468,6 +477,7 @@ child and a current validation baseline.
 | Do not create a generic provider framework. | Decision | Avoids leaky abstractions. | Use concrete source modules and only proven shared primitives. |
 | Treat old simulation packets as reference-only. | Decision | Prevents retired advisor/rules assumptions returning accidentally. | Feasibility child reviews small useful pieces only. |
 | Source rules may change. | Risk | A provider can become unavailable. | Re-check published rules at child activation and release. |
+| No community/deck-group source is admitted. | Decision | The project returns no new source data in this area. | Reopen only through a narrow provider child after the documented source conditions change. |
 | C# union syntax is preview. | Risk | Toolchain updates may affect code/formatters/serializers. | Keep version work isolated and fully smoke-tested. |
 | Popularity source may never be available. | Deferred | Cohort feature may remain unavailable. | Return no data rather than use undocumented/scraped source. |
 | Goldfish may fail feasibility. | Deferred | No sampled deck flow ships. | Exact analysis remains useful independently. |

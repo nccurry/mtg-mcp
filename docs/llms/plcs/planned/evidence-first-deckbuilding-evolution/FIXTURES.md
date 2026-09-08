@@ -15,7 +15,7 @@ fill this table.
 | EFD-FIX-004 | Operation-result/error matrix | Core and adapter tests | Verify expected states map to typed outcomes and cancellation is not swallowed. | Core/adapter child | Add a row for every new public failure state. |
 | EFD-FIX-005 | Provider access record | Child PLC packet | Record the supported API access, source meaning, request rules, cache behavior, fixture source, and output label before implementation. | Provider child owner | Re-check when the source rules or workflow change. |
 | EFD-FIX-006 | Commander Spellbook response fixtures | New provider test project, if selected | Cover bounded search/detail/empty/error cases and source provenance. | Spellbook child owner | Use sanitized API examples that follow the source's request guidance. |
-| EFD-FIX-007 | Source access-and-use record | Child PLC packet | Record admit/defer/reject for Reddit, EDHREC-style cohorts, and other candidates. | Product owner | Re-check when source rules or the proposed workflow change. |
+| EFD-FIX-007 | Source access-and-use record | [Phase 5 source-feasibility record](SOURCE_FEASIBILITY.md) | Records the current defer/reject decisions for Reddit and deck-group candidates. | Product owner | Re-check when source rules or the proposed workflow change. |
 | EFD-FIX-008 | Exact-analysis reference matrix | Statistics/deck-analysis tests | Independently verify finite-population probabilities and declared assumptions. | Statistics child owner | Add cases only for new exact behavior. |
 | EFD-FIX-009 | Goldfish toy deck | Simulation-lab test project, if feasibility is approved | Prove a closed supported mechanic and a transparent trace. | Simulation child owner | Immutable after calibration baseline; version a replacement. |
 | EFD-FIX-010 | Unsupported-mechanic toy deck | Simulation-lab test project, if feasibility is approved | Prove unsupported text contributes no fabricated effect and is reported. | Simulation child owner | Update only when support is deliberately added. |
@@ -70,9 +70,9 @@ fill this table.
 | Archidekt | EFD-FIX-003 | Deck/folder/snapshot reads, writes, retries, conflicts, redaction | No real mutation in normal tests; never preserve credentials/cookies. |
 | Playgroup | Existing fixture suite | Provider-shaped reads and permitted write fixtures | Retain existing provider-specific contract. |
 | Commander Spellbook | EFD-FIX-006 | Search/detail/empty/rate/failure after source check | Use short, bounded API examples and follow the source's published request guidance. |
-| Reddit | EFD-FIX-007 first | API-access feasibility only | No post/comment fixture until the published API supports the exact workflow. |
-| EDHREC-style cohort provider | EFD-FIX-007 first | Official-API availability decision | No undocumented JSON endpoint or scraped response fixture. |
-| Moxfield | EFD-FIX-007 | Rejected automation record | Manual user-provided interchange remains the supported workflow. |
+| Reddit | [EFD-FIX-007](SOURCE_FEASIBILITY.md) | Deferred pending explicit API approval | No post/comment fixture until the provider approves the exact workflow. |
+| EDHREC-style deck-group provider | [EFD-FIX-007](SOURCE_FEASIBILITY.md) | No admitted source | No undocumented JSON endpoint or scraped response fixture. |
+| Moxfield | [EFD-FIX-007](SOURCE_FEASIBILITY.md) | Rejected automation record | Manual user-provided interchange remains the supported workflow. |
 
 ## Calibration Or Performance Cases
 

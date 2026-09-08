@@ -23,6 +23,13 @@ Open research includes EDH/Commander aggregates, sanctioned or permissioned
 tournament feeds, price-provider usage data, and whether source licenses permit
 local snapshots and redistribution.
 
+Phase 5 checked Reddit, EDHREC, Moxfield, public Archidekt deck collection,
+and Playgroup. It admitted no source: Reddit needs explicit approval, the
+website terms do not support direct EDHREC, Moxfield, or public Archidekt
+automation, and the current Playgroup API cannot supply complete deck entries
+for card-use analysis. See the
+[Phase 5 source-feasibility record](llms/plcs/planned/evidence-first-deckbuilding-evolution/SOURCE_FEASIBILITY.md).
+
 #### Deck-population composition evidence
 
 The future `popularity-evidence-sources` PLC must include this representative

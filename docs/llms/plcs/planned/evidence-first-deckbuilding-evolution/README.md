@@ -11,8 +11,9 @@
 - Folder: docs/llms/plcs/planned/evidence-first-deckbuilding-evolution/
 - Owner: mtg-mcp
 - Created: 2026-09-06
-- Last updated: 2026-09-07
-- Current phase: Phase 4 is deferred. Phase 4A is complete.
+- Last updated: 2026-09-08
+- Current phase: Phase 6 is planned next. Phase 4 is deferred; Phases 4A and 5
+  are complete.
 - Implementation authorized: No
 
 ## Summary
@@ -49,6 +50,8 @@ It must not add a fourth verb: decide.
   delivery sequence.
 - [FIXTURES.md](FIXTURES.md): future fixture, contract, and calibration
   inventory.
+- [SOURCE_FEASIBILITY.md](SOURCE_FEASIBILITY.md): Phase 5 source decisions and
+  current provider-access evidence.
 - [Latest MCP and Toolchain child](../../completed/latest-mcp-and-toolchain/README.md): the
   current-only protocol and version-lock work for Phase 2.
 - [Commander Spellbook Evidence child](../../completed/commander-spellbook-evidence/README.md):
@@ -72,6 +75,7 @@ It must not add a fourth verb: decide.
 | Do not add a duplicate exact-analysis tool. | Deferred | The current Statistics and deck-selection workflows already answer the questions reviewed for this phase. | [Phase 4 record](IMPLEMENTATION_PLAN.md#phase-4-exact-analysis-gap-review-deferred) |
 | Use only official Scryfall community tags when grouping deck cards. | Implemented | The server evaluates source evidence but does not create a second tag system or fetch from the Tagger website. | [Phase 4A child](../../completed/official-scryfall-tag-grouping-reliability/README.md#decision-snapshot) |
 | Correct `common-v1` in place. | Implemented | The preset mapping now uses reviewed exact source IDs under the existing preset ID. | [Phase 4A design](../../completed/official-scryfall-tag-grouping-reliability/SADD.md#common-v1-correction) |
+| Do not add Reddit or public deck-group acquisition now. | Complete | Reddit needs explicit approval; EDHREC, Moxfield, and public Archidekt collection do not currently support this automation. | [Phase 5 source record](SOURCE_FEASIBILITY.md) |
 
 ## Project And Surface Impact
 
@@ -106,9 +110,16 @@ engine.
 
 | Question | Impact | Owner | Resolution plan |
 | --- | --- | --- | --- |
-| Does Reddit have a documented API path that fits a small, attributed MCP read? | Provider reliability | mtg-mcp | Do not build it until the published access and use rules support the exact workflow. |
-| Is there a public deck-population API for EDHREC-style cohort analysis? | Product scope | mtg-mcp | Use an official public API only. Do not consume undocumented endpoints. |
 | Can a small goldfish model be honest and useful? | Experimental scope | mtg-mcp | Run a feasibility child with toy decks, fixed policies, traces, and a stop decision before any public tool. |
+
+## Phase 5 Source Decisions
+
+Phase 5 is complete. Reddit is deferred until it explicitly approves the exact
+workflow. Direct EDHREC, Moxfield, and public Archidekt deck-group automation
+are rejected. The current Playgroup contract cannot supply complete deck entries
+for card-use analysis. No source code or MCP surface was added. See the
+[source-feasibility record](SOURCE_FEASIBILITY.md) for the source pages, scope,
+and reopen triggers.
 
 ## Deferral Rule
 
@@ -158,11 +169,23 @@ amendment that removes or replaces it.
 - Validation: Focused tests, full Task checks, coverage gates, surface checks,
   documentation checks, and final audits passed.
 
+### Phase 5: Community and deck-group source feasibility
+
+- Scope completed: Recorded the access and data-meaning decisions for Reddit,
+  EDHREC, Moxfield, public Archidekt deck collection, and the current Playgroup
+  API.
+- Results: No source is admitted. Reddit is deferred pending explicit approval;
+  direct EDHREC and Moxfield automation are rejected; the current Playgroup API
+  cannot supply complete card lists for a defined deck group.
+- Record: [Phase 5 Source Feasibility](SOURCE_FEASIBILITY.md).
+- Validation: Current source-policy review, local API-contract review, link
+  inspection, and documentation checks.
+
 ## Planned Next Work
 
-The source-feasibility, goldfish-feasibility, and stabilization phases remain
-planned. Phase 4 remains deferred because the existing exact statistics and
-explicit deck workflows cover the reviewed questions.
+The goldfish-feasibility and stabilization phases remain planned. Phase 4
+remains deferred because the existing exact statistics and explicit deck
+workflows cover the reviewed questions.
 
 ## Planning Readiness Checklist
 
@@ -180,6 +203,7 @@ explicit deck workflows cover the reviewed questions.
 - [x] Phase 2 and Phase 3 each completed through a narrow child.
 - [x] An independent reviewer checked the completed child packets and fixed the findings.
 - [x] Phase 4A has a narrow repair packet with source, boundary, and test rules.
+- [x] Phase 5 has a current source access-and-use record with explicit outcomes.
 
 ## Implementation Checklist
 
@@ -216,9 +240,10 @@ explicit deck workflows cover the reviewed questions.
 | 2026-09-07 | Phase 2 and Phase 3 packet drafting | Passed | The current-only MCP and Commander Spellbook designs have scoped requirements, test cases, and owner decisions. |
 | 2026-09-07 | Phase 4 exact-analysis gap review | Deferred | Existing Statistics, explicit deck selection, and category workflows cover the proposed contract; no distinct tool is justified. |
 | 2026-09-07 | Phase 4A tag-grouping repair | Passed | The completed child preserves all source parents, rejects malformed or missing selectors, corrects `common-v1` in place, and adds no MCP surface. Focused tests, full Task checks, coverage gates, surface checks, documentation checks, and final audits passed. |
+| 2026-09-08 | Phase 5 source feasibility | Passed | Current official source pages support no new integration: Reddit is deferred pending approval, direct EDHREC and Moxfield automation are rejected, and no suitable public deck-group API was found. |
 
 ## Completion Notes
 
-Phases 1 through 3 and Phase 4A are complete. This packet remains a roadmap,
-not an implementation authorization. Phase 4 is deferred; later source and
-feasibility phases remain planned.
+Phases 1 through 3, Phase 4A, and Phase 5 are complete. This packet remains a
+roadmap, not an implementation authorization. Phase 4 is deferred; goldfish
+feasibility and stabilization remain planned.

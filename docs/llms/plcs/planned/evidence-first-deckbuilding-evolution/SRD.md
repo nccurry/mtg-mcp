@@ -6,7 +6,7 @@
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: product owner, Core maintainer, adapter maintainer, MCP contract maintainer
-- Last updated: 2026-09-07
+- Last updated: 2026-09-08
 - Related design: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - Implementation authorized: No
@@ -16,6 +16,7 @@
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-09-06 | mtg-mcp | Initial post-0.9 cleanup and product-evolution roadmap. |
+| 2026-09-08 | mtg-mcp | Completed Phase 5 source decisions; no new community or deck-group source is admitted. |
 
 ## Executive Summary
 
@@ -48,7 +49,7 @@ the current 0.9 release is an evidence-first clean break.
 - [Performance Ratchet](../../../../performance-ratchet.md)
 - [Current Scryfall/Archidekt hardening design](../../completed/mcp-contract-and-adapter-hardening/SADD.md)
 
-### External sources checked through 2026-09-07
+### External sources checked through 2026-09-08
 
 - [MCP C# server options](https://csharp.sdk.modelcontextprotocol.io/api/ModelContextProtocol.Server.McpServerOptions.html)
 - [MCP C# client options](https://csharp.sdk.modelcontextprotocol.io/api/ModelContextProtocol.Client.McpClientOptions.html)
@@ -56,8 +57,12 @@ the current 0.9 release is an evidence-first clean break.
 - [.NET exception guidance](https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions)
 - [Scryfall API FAQ](https://scryfall.com/docs/faqs/i-m-having-trouble-accessing-the-scryfall-api-or-i-m-blocked-17)
 - [Commander Spellbook syntax guide](https://commanderspellbook.com/syntax-guide/)
-- [Reddit Data API Terms](https://redditinc.com/policies/data-api-terms)
+- [Reddit Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy)
+- [Reddit Data API guide](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)
+- [EDHREC Terms](https://edhrec.com/terms)
+- [EDHREC About](https://edhrec.com/about-us)
 - [Moxfield Terms of Service](https://moxfield.com/help/terms)
+- [Archidekt Terms of Service](https://archidekt.com/terms)
 - [Magic comprehensive rules landing page](https://magic.wizards.com/en/rules)
 - [Official Commander rules](https://mtgcommander.net/index.php/rules/)
 - [NIST hypergeometric distribution reference](https://www.itl.nist.gov/div898/software/dataplot/refman2/ch8/hypppf.pdf)
@@ -233,7 +238,7 @@ mode, or local tag-management surface.
 | 3 | [Add Commander Spellbook evidence](../../completed/commander-spellbook-evidence/README.md). | EFD-001, EFD-003 to EFD-007, EFD-010, EFD-013 | Source contract, fixtures, boundaries, and opt-in surface pass. |
 | 4 | Review declarative exact deck-analysis gaps. **Deferred 2026-09-07:** current tools cover the proposed work. | EFD-001, EFD-003 to EFD-005, EFD-008, EFD-010, EFD-011, EFD-013 | EFD-008 remains met by completed exact Statistics. Reopen only for a question with stated inputs that current workflows cannot answer. |
 | 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003 to EFD-005, EFD-007, EFD-010, EFD-013, EFD-014 | Source hierarchy, selector validation, one-generation consistency, and the in-place `common-v1` correction pass without a new tag system. |
-| 5 | Research community and cohort sources without scraping. | EFD-006, EFD-007, EFD-010, EFD-013 | Each source receives an explicit admit/defer/reject record; Reddit needs a documented API path. |
+| 5 | [Research community and deck-group sources without scraping](SOURCE_FEASIBILITY.md). **Complete 2026-09-08:** no new source is admitted. | EFD-006, EFD-007, EFD-010, EFD-013 | Reddit is deferred pending explicit approval; direct EDHREC and Moxfield automation are rejected; public Archidekt collection and current Playgroup do not supply a usable deck group. |
 | 6 | Decide goldfish feasibility. | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | A documented accept/defer/reject decision exists before any stable tool promise. |
 
 ## Traceability
@@ -257,7 +262,8 @@ mode, or local tag-management surface.
 | --- | --- | --- | --- | --- |
 | Extracting provider ownership changes behavior accidentally. | Risk | Remote/local data or writes regress. | Adapter maintainer | Characterize current behavior first; move one domain at a time; retain public facade. |
 | An external source changes access rules or endpoint behavior. | Risk | Unsupported acquisition or stale output. | Provider child owner | Source check, fixture drift tests, source-specific cache/pacing, explicit defer path. |
-| Reddit use is unclear. | Risk | An unreliable or unsupported workflow. | Product owner | Do not write an adapter until its published API supports the exact workflow. |
+| Reddit needs explicit approval. | Risk | An unsupported workflow or retained user content. | Product owner | Do not write an adapter until Reddit approves the exact workflow and a source-specific child defines deletion, pacing, attribution, and cache rules. |
+| No deck-group source is admitted. | Deferred | Card-use distribution cannot be returned. | Product owner | Reopen only when a provider permits a bounded deck group with complete card entries and clear population rules. |
 | Goldfish scope grows into a rules engine. | Risk | Unbounded cost and misleading claims. | Simulation child owner | Closed capability/model list, toy fixtures, stop criteria, and owner review. |
 | A package major upgrade shifts MCP wire behavior. | Risk | Client compatibility break. | MCP child owner | Isolate version upgrade and run package/client/schema tests. |
 | A refactor creates a generic abstraction to reduce file count. | Risk | More coupling and less legible ownership. | Reviewers | Reject generic provider/repository/router designs unless a concrete duplication case proves it. |
