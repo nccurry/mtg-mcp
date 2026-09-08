@@ -13,8 +13,8 @@ Root `AGENTS.md` remains authoritative. This file adds defaults for `docs/`.
 
 - Put durable ordinary implementation plans under `docs/llms/plans/`.
 - Put larger Plan-Led Change packets under `docs/llms/plcs/`.
-- Start reusable plans and PLCs from `docs/llms/templates/`; keep templates out
-  of lifecycle folders.
+- Start ordinary implementation plans from
+  `docs/llms/templates/IMPLEMENTATION_PLAN.md`.
 - Keep PLC packets in `planned/`, `in-progress/`, or `completed/` according to their lifecycle.
 - Treat completed PLCs as historical context; current code and tests still win.
 

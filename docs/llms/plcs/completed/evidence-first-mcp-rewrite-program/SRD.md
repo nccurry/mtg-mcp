@@ -51,7 +51,6 @@ It does not define detailed child APIs and does not authorize production code.
 - [Design goals](../../../../design-goals.md)
 - [Heuristic model boundaries](../../../../heuristic-models.md)
 - [PLC lifecycle guidance](../../README.md)
-- [PLC packet template](../../../templates/plc/README.md)
 - [Playgroup.gg public API](https://playgroup.gg/api-docs/index.html)
 - [Moxfield terms](https://moxfield.com/help/terms)
 - [Scryfall terms](https://scryfall.com/docs/terms)

@@ -12,7 +12,7 @@ than runtime payload fixtures.
 | FIX-CHILD-CHECKLIST | Review checklist | [Child packet acceptance checklist](#child-packet-acceptance-checklist) | Makes child review consistent and objective. | Child reviewer | Amend with the umbrella if a shared requirement changes. |
 | FIX-PROVIDER-CHECKLIST | Provider review checklist | [Provider child checklist](#provider-child-checklist) | Prevents provider safety and evidence gaps. | Provider child reviewer | Update when shared provider policy changes. |
 | FIX-APPROVAL-RECORD | Approval schema | [SADD review state](SADD.md#review-and-approval-state) | Separates planning approval from implementation authority. | Child reviewer | Keep schema stable across required children. |
-| FIX-PLC-TEMPLATE | Packet template | [PLC template](../../../templates/plc/README.md) | Supplies the required five-file shape. | mtg-mcp | Follow repository template updates. |
+| FIX-PACKET-STRUCTURE | Packet structure | README, SRD, SADD, implementation plan, and fixtures | Records the five documents used by this packet. | mtg-mcp | Preserve as historical context. |
 | FIX-TOOLSET-GUARDRAILS | Surface-governance baseline | [SADD capability toolsets](SADD.md#capability-toolset-governance) | Defines static selection, exact assignment, mode intersection, and capability reporting. | Repository owner | Change only through an approved umbrella amendment. |
 | FIX-NORTH-STAR-CHECKLIST | Product acceptance checklist | [SADD north-star gate](SADD.md#north-star-acceptance-gate) | Prevents endpoint coverage from replacing useful evidence workflows. | Child reviewer | Apply to every remaining capability child. |
 
@@ -122,7 +122,7 @@ payload baselines.
 
 ## Documentation Validation
 
-- Confirm packet structure against `docs/llms/templates/plc/`.
+- Confirm README, SRD, SADD, IMPLEMENTATION_PLAN, and FIXTURES are present.
 - Search the packet for unresolved angle-bracket placeholders and generic
   template field labels.
 - Resolve every relative Markdown link.

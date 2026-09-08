@@ -21,25 +21,8 @@ delivery.
   outcome, or superseded. Completed packets are historical context, not a
   stronger source of truth than current code and tests.
 
-The PLC root is for lifecycle guidance and templates. Active PLC packets belong
-in the lifecycle folders.
-
-## Packet Shape
-
-Create each new PLC as a folder named with a short kebab-case slug:
-
-```text
-docs/llms/plcs/planned/<feature-slug>/
-  README.md
-  SRD.md
-  SADD.md
-  IMPLEMENTATION_PLAN.md
-  FIXTURES.md
-```
-
-Copy the packet from [`../templates/plc/`](../templates/plc/) as the starting
-point. Delete sections that truly do not apply, but do not remove lifecycle
-status, scope, traceability, validation, or completion notes.
+The PLC root is for lifecycle guidance. Active PLC packets belong in the
+lifecycle folders.
 
 ## Planning Readiness
 
@@ -84,19 +67,3 @@ The evidence-first rewrite additionally follows
 [`docs/rewrite-guide.md`](../../rewrite-guide.md): legacy code is reference
 evidence, the umbrella owns cross-child guardrails, and only the active approved
 child may direct implementation.
-
-## Template Basis
-
-The templates combine lightweight product, requirements, and architecture
-practices:
-
-- Requirements docs should capture purpose, scope, system overview, functional
-  and quality requirements, interfaces, data, verification, validation, and
-  maintenance.
-- Architecture docs should capture design decisions, decomposition, interfaces,
-  runtime/data flow, quality attributes, rationale, and traceability.
-- Durable design docs should put audience, scope/non-scope, key decisions,
-  alternatives, tradeoffs, and validation evidence up front.
-
-Reusable templates live outside lifecycle folders so planned and active
-packets contain only real change documents.
