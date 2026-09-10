@@ -5,10 +5,11 @@ by supplying grounded evidence. The MCP gathers and computes; the calling LLM
 connects that evidence to a player's goals and makes the judgment.
 
 For stable `0.9.0`, this means provider data, exact cached evidence, explicit
-deck/provider workflow operations, and exact mathematics. It does not include
-advisor prompts, inferred deck intent, weak-card judgments, replacement
-recommendations, blended quality scores, or strategic automation. Those legacy
-features are removal targets, not abstractions to preserve.
+deck/provider workflow operations, exact mathematics, and one bounded sampled
+on-curve estimate. It does not include advisor prompts, inferred deck intent,
+weak-card judgments, replacement recommendations, blended quality scores, or
+strategic automation. Those legacy features are removal targets, not
+abstractions to preserve.
 
 ## Product Outcome
 
@@ -38,9 +39,9 @@ not need to reason over every integration merely because the server supports it.
    sources require separately approved future PLCs.
 3. **Derived mathematics**: counts, exact probabilities, and reproducible
    statistics calculated from declared inputs.
-4. **Sampled estimates**: a post-cutover experimental category that would need
-   model version, seed, sample count, confidence interval, assumptions, and
-   input fingerprints.
+4. **Sampled estimates**: `deck_on_curve_estimate` is the approved bounded
+   example. It shows its model version, seed, sample count, confidence interval,
+   assumptions, and input fingerprint. It is not a general game simulator.
 5. **Parser-derived and heuristic evidence**: a separately labeled category,
    not source fact and not authority for an MCP-owned deckbuilding choice.
 6. **Blended model scores**: excluded from stable `0.9.0`; any future experiment
@@ -56,9 +57,9 @@ output can still be heuristic.
 
 - Do not invent facts to fill provider or card-data gaps.
 - Do not claim popularity proves card quality or deck fit.
-- Do not ship simulation in the stable rewrite without a separately approved
-  post-cutover feasibility PLC, and never present an estimate as a real matchup
-  win rate.
+- Do not add a broad or strategic simulation to the stable rewrite. The one
+  approved sampled estimate is land-only and bounded; never present it as a
+  real matchup win rate.
 - Do not make the MCP a comprehensive Magic rules engine.
 - Do not make deck changes without explicit authority for the affected local or
   remote operation and the workflow safeguards defined by its approved PLC.

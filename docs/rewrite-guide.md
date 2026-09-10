@@ -31,12 +31,12 @@ another.
 
 | Concern | Released legacy server | Clean-break `0.9.0` target |
 | --- | --- | --- |
-| Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, and exact mathematics; the client LLM decides |
+| Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, exact mathematics, and one bounded sampled estimate; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | 28 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, 16 opt-in `playgroup_*`, and 3 opt-in `spellbook_*` tools, one capability resource, and zero prompts |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 32/54/54 and current `all` is 60/83/96 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
+| Public surface | Legacy workspace-oriented tools, resources, and prompts | 29 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, 16 opt-in `playgroup_*`, and 3 opt-in `spellbook_*` tools, one capability resource, and zero prompts |
+| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 33/55/55 and current `all` is 61/84/97 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
-| Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Spellbook, and Statistics |
+| Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Spellbook, Statistics, and OnCurve |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, unified `scryfall.db`, and short-lived `spellbook.db` response cache |
 | Compatibility | Existing pre-1.0 deprecation policy | Intentional clean break with no automatic legacy data, config, or tool-schema migration |
 | Moxfield | Automated unofficial import adapter | Manual interchange artifacts only; no network automation |

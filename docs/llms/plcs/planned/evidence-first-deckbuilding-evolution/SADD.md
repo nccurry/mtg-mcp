@@ -27,8 +27,9 @@ one clear owner.
 
 The selected design keeps a small Core, concrete vertical provider modules, a
 static App composition root, and exact Statistics. New sources enter only
-through source-specific modules after an admission review. A future simulator,
-if it survives feasibility, lives beside exact Statistics rather than inside it.
+through source-specific modules after an admission review. The planned OnCurve
+calculation lives beside exact Statistics rather than inside it after
+independent review and owner authorization.
 
 The most important rejected alternative is a generic provider or rules-engine
 framework. It would make unlike contracts look alike and turn a cleanup into an
@@ -115,7 +116,7 @@ that an experimental simulation will ship.
 | Broad scraper/browser adapter | Query any popular MTG website. | Maximum apparent coverage. | Unreliable, often disallowed, hard to attribute and test. | Rejected |
 | Source check plus supported adapters | Add only sources with documented access and limits. | Reliable, reviewable, aligned with evidence-first. | Some desired sources stay deferred. | Chosen |
 | Full rules engine | Simulate arbitrary Magic games. | Broad theoretical coverage. | Open-ended rules scope and misleading partial behavior. | Rejected |
-| Bounded goldfish feasibility study | Test a narrow caller-declared model after exact analysis. | Can answer a limited question honestly. | May be rejected if it cannot meet the evidence bar. | Chosen as a future experiment only |
+| Deck mana and on-curve estimate | Test whether one real-deck target can be cast by a turn under caller land rules. | Can answer one useful question with direct facts and visible limits. | Broader game simulation still needs its own approved PLC. | Complete in the authorized Phase 6 child |
 
 ## Chosen Design
 
@@ -161,7 +162,7 @@ Every result belongs to one visible category:
 | Source evidence | Attributed observation with a source-specific meaning. | Scryfall community tag, combo listing, community post, or cohort row. |
 | Exact derivation | Mathematics applied to declared values. | Chance of at least one land by turn four. |
 | Parser classification | Deterministic output of a versioned parser. | An interchange parse result. |
-| Sampled estimate | A model run with replay metadata and uncertainty. | A future goldfish frequency estimate. |
+| Sampled estimate | A model run with replay metadata and uncertainty. | The bounded deck mana and on-curve estimate. |
 | Unknown / unavailable / unsupported | A value the server cannot honestly provide. | Unavailable source, missing card data, unsupported model mechanic. |
 
 The server may format evidence for clarity but may not turn it into “therefore
@@ -183,13 +184,14 @@ player.
 ### Evidence metadata
 
 Keep the existing EvidenceDescriptor union. A future sampled result must either
-extend the shared sampled descriptor compatibly or carry a
-simulation-specific provenance record that includes:
+extend the shared sampled descriptor compatibly or carry an on-curve estimate
+record that includes:
 
 - model version;
 - seed and sample count;
 - immutable input/deck fingerprint;
 - caller-declared policy;
+- direct source facts and caller land rules;
 - per-metric confidence interval or a documented reason it does not apply;
 - supported and unsupported mechanic coverage;
 - retrieval/card-data generation identity for card facts used by the model.
@@ -223,7 +225,7 @@ not an empty source result.
 | MtgMcp.Statistics | Exact math from caller-provided values | No provider/persistence state | Statistics operations | BCL/Core contracts only | Independent formula tests |
 | MtgMcp.App | Static MCP registration, modes, schemas, composition | Process/configuration lifetime | Tool/resource handlers | All capability projects | App, surface, E2E tests |
 | Future concrete source module | One selected source’s transport, mapping, cache, evidence behavior | Source-specific | Opt-in toolset only | Core/HTTP as needed | Sanitized fake-HTTP fixtures |
-| Future simulation-lab module | Explicit bounded model, policies, traces, estimates | Experiment-local model state | Experimental opt-in only | Core/Deck contracts, approved card facts | Toy-deck/calibration tests |
+| MtgMcp.OnCurve | Bounded land mana, target castability, replay, traces, and sampled estimates | Per-request calculation state | One read-only decks tool after authorization | Core only; App supplies resolved deck and Scryfall facts | Sanitized saved-deck, calibration, and replay tests |
 
 No provider-wide IRepository, ISourceAdapter, generic transport router, or
 common cache abstraction is planned. The common pieces are small: Core evidence,
@@ -257,16 +259,22 @@ OperationResult, BCL HTTP primitives, and App composition.
 4. Implement one concrete module with pacing, cache, and evidence metadata.
 5. Expose a small opt-in toolset only after contract and MCP tests pass.
 
-### Future sampled goldfish
+### Deck mana and on-curve estimate
 
-1. The caller explicitly chooses a supported model and policy.
-2. The module resolves a frozen deck/card input identity.
-3. It runs a bounded number of sampled trials with a supplied seed.
-4. It returns aggregate estimates, intervals, coverage, and selected traces.
-5. Unsupported mechanics are recorded and contribute no invented outcome.
+1. App reads one saved deck and resolves its target and land facts exactly.
+2. The caller gives every candidate land a simple stated rule or marks it
+   not-modeled.
+3. The Core-only OnCurve project runs a bounded number of shuffled hands with
+   the fixed target-first-v1 land rule.
+4. It returns sampled counts, a Wilson interval, land-rule coverage, failure
+   labels, and selected traces.
+5. App returns one read-only deck tool with deck revision and Scryfall source
+   details.
+6. Unsupported cost symbols, missing facts, and missing rules return clear
+   typed outcomes before sampling.
 
-The model never asks an LLM to pick a play line and never silently infers one
-from deck tags or prose.
+The calculation never asks an LLM to pick a play line and never silently infers
+one from Oracle text, deck tags, or prose.
 
 ## MCP Surface, Schemas, And Diagnostics
 
@@ -285,8 +293,9 @@ For later public changes:
   the session.
 - A provider tool is opt-in unless its workflow is a small coherent default
   capability.
-- No tool name/prefix is reserved for a future simulation until the feasibility
-  child owns the complete toolset, mode, and versioning decision.
+- The planned deck_on_curve_estimate tool belongs only to the decks toolset
+  after the child is independently reviewed and authorized. It is read-only
+  and visibly sampled; it does not need a new experimental toolset.
 - Long-running task support is not part of this roadmap. Any future use needs a
   separate current-protocol design and bounded behavior tests.
 
@@ -344,7 +353,7 @@ unbounded upstream response body.
 
 ## Cross-Cutting Concepts
 
-### Exact analysis and simulation
+### Exact analysis and sampled estimates
 
 “Simulation” should not be the default name for a card-draw calculation.
 Normal questions such as “what is the chance of seeing one of these cards by
@@ -360,11 +369,12 @@ Statistics returns the math and assumptions. It does not classify cards as
 lands, interaction, synergy, or keepable unless the caller supplies a
 transparent group/predicate and the selected-card evidence is shown.
 
-Goldfish is a different category. A future feasibility study may model only a
-closed set of mechanics and caller-declared policy choices. It starts with one
-player, no opponent board, no priority/stack/layer model, no arbitrary
-expressions, no inferred strategy, and no claim about real matchup win rate.
-The study must be willing to end with “defer” or “reject.”
+A deck mana and on-curve estimate is a different category. It uses a real saved
+deck but models only seven-card draws, one stated land play per turn, direct
+source colors, a target's simple printed cost, and one fixed land-play rule. It
+has one player, no opponent board, no priority, stack, layer, card-text rule,
+or inferred strategy. It makes no real-game win-rate claim. It must be
+deferred if those limits are not clear enough to users.
 
 ### Tag ownership
 
@@ -398,7 +408,7 @@ hard gate.
 | Decks owns local persistence/interchange, not remote provider transport. | Project boundaries and workflow tests. |
 | Statistics remains exact, caller-supplied, provider-independent, and legality-free. | Project references and independent-formula tests. |
 | App owns static MCP registration/composition, not provider logic. | Source/surface test and code review. |
-| A simulation experiment does not contaminate exact Statistics or stable Core prematurely. | New project boundary and explicit feasibility approval. |
+| The sampled on-curve calculation does not contaminate exact Statistics or Core. | MtgMcp.OnCurve references Core only; App owns the resolved deck/Scryfall join and public tool. |
 
 ## Readability And Documentation
 
@@ -425,7 +435,7 @@ hard gate.
 | EFD-005 | Static startup-selected toolsets with schema-backed structured results. | Surface, mode, schema, process, and official-client tests. |
 | EFD-006–007 | Source check and source-specific module rules. | Review checklist and fake-HTTP fixtures. |
 | EFD-008 | Exact finite-population models separate from provider card semantics. | Independent-formula tests. |
-| EFD-009 | Experimental model is closed, versioned, replayable, bounded, and caveated. | Toy-deck traces, calibration, and feasibility decision. |
+| EFD-009 | Actual-deck on-curve model is land-only, versioned, replayable, bounded, and clearly limited. | Source-rule, replay, calibration, and public-tool checks. |
 | EFD-010–013 | Child-level characterization, Task gates, and documentation ownership. | Validation ledger and diff/link checks. |
 | EFD-014 | Scryfall resolves source tag IDs and ancestry; Core evaluates already-resolved evidence; App joins it to local decks. | Source fixture, hierarchy, invalid-input, and architecture tests. |
 
@@ -454,7 +464,8 @@ child and a current validation baseline.
 - MCP tools should expose valid schemas and structured output. The current
   static registration model fits this well.
 - The current MCP policy is owned by the [completed latest MCP child](../../completed/latest-mcp-and-toolchain/README.md).
-  This roadmap does not assume task support for a simulation experiment.
+  This roadmap does not assume long-running MCP task support for the on-curve
+  estimate.
 - .NET 11/C# 15 native unions support a closed result/evidence vocabulary and
   exhaustive matching. The existing union approach is appropriate.
 - .NET guidance distinguishes common/expected conditions from exceptional
@@ -475,12 +486,12 @@ child and a current validation baseline.
 | --- | --- | --- | --- |
 | Preserve public facades while extracting owners. | Decision | Limits client churn. | Retain ScryfallService and ArchidektService contracts in Phase 1. |
 | Do not create a generic provider framework. | Decision | Avoids leaky abstractions. | Use concrete source modules and only proven shared primitives. |
-| Treat old simulation packets as reference-only. | Decision | Prevents retired advisor/rules assumptions returning accidentally. | Feasibility child reviews small useful pieces only. |
+| Treat old simulation packets as reference-only. | Decision | Prevents retired advisor/rules assumptions returning accidentally. | The on-curve child uses only ideas that fit its written land-only boundary. |
 | Source rules may change. | Risk | A provider can become unavailable. | Re-check published rules at child activation and release. |
 | No community/deck-group source is admitted. | Decision | The project returns no new source data in this area. | Reopen only through a narrow provider child after the documented source conditions change. |
 | C# union syntax is preview. | Risk | Toolchain updates may affect code/formatters/serializers. | Keep version work isolated and fully smoke-tested. |
 | Popularity source may never be available. | Deferred | Cohort feature may remain unavailable. | Return no data rather than use undocumented/scraped source. |
-| Goldfish may fail feasibility. | Deferred | No sampled deck flow ships. | Exact analysis remains useful independently. |
+| The narrow on-curve estimate is complete; broader game simulation remains out of scope. | Decision | Prevents a partial rules engine from quietly growing. | Require a separate approved PLC for any broader simulation. |
 
 ## Glossary
 
@@ -493,4 +504,4 @@ child and a current validation baseline.
 | Sampled estimate | A result from finite model trials; it carries uncertainty and replay metadata. |
 | Source check | The short provider-specific record of the API, cache, and evidence rules for an integration. |
 | Characterization test | A test that locks current behavior before a refactor moves code. |
-| Goldfish | A bounded unopposed deck model, not a full Magic game or matchup predictor. |
+| On-curve estimate | A bounded sampled check of whether one target card can be cast by a turn under stated land rules; not a full Magic game or matchup predictor. |

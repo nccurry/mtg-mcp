@@ -85,6 +85,7 @@ public sealed class ScryfallContractTests
         Assert.Equal(cardId, card.Id);
         Assert.Null(card.ManaCost);
         Assert.Null(card.OracleText);
+        Assert.IsType<ScryfallProducedManaMissing>(card.ProducedMana.Value);
         Assert.Empty(card.ImageUris);
         Assert.Equal(2, card.Faces.Count);
         Assert.Equal(faceIllustration, card.Faces[0].IllustrationId);
@@ -93,6 +94,67 @@ public sealed class ScryfallContractTests
         SourceFactDescriptor evidence = Assert.IsType<SourceFactDescriptor>(card.Evidence.Value);
         Assert.Equal(retrieved, evidence.RetrievedAtUtc);
         Assert.Equal("snapshot-1", evidence.SnapshotId);
+    }
+
+    /// <summary>
+    /// Verifies missing, null, and listed produced-mana source states stay distinct.
+    /// </summary>
+    [Fact]
+    public void ProducedManaMapper_PreservesSourceStatesAndJsonRoundTrips()
+    {
+        using JsonDocument missingDocument = JsonDocument.Parse("{}");
+        using JsonDocument nullDocument = JsonDocument.Parse("{\"produced_mana\":null}");
+        using JsonDocument emptyDocument = JsonDocument.Parse("{\"produced_mana\":[]}");
+        using JsonDocument valuesDocument = JsonDocument.Parse("{\"produced_mana\":[\"G\",\"C\"]}");
+
+        ScryfallProducedMana missing = ScryfallMapper.ProducedMana(missingDocument.RootElement);
+        ScryfallProducedMana nullValue = ScryfallMapper.ProducedMana(nullDocument.RootElement);
+        ScryfallProducedMana empty = ScryfallMapper.ProducedMana(emptyDocument.RootElement);
+        ScryfallProducedMana values = ScryfallMapper.ProducedMana(valuesDocument.RootElement);
+
+        Assert.IsType<ScryfallProducedManaMissing>(missing.Value);
+        Assert.IsType<ScryfallProducedManaNull>(nullValue.Value);
+        Assert.Empty(Assert.IsType<ScryfallProducedManaValues>(empty.Value).Colors);
+        Assert.Equal(["G", "C"], Assert.IsType<ScryfallProducedManaValues>(values.Value).Colors);
+
+        string json = JsonSerializer.Serialize(values);
+        ScryfallProducedMana roundTripped = JsonSerializer.Deserialize<ScryfallProducedMana>(json);
+        Assert.Equal(["G", "C"], Assert.IsType<ScryfallProducedManaValues>(roundTripped.Value).Colors);
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScryfallProducedMana>("{}"));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScryfallProducedMana>("{\"kind\":\"other\"}"));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScryfallProducedMana>("{\"kind\":\"values\"}"));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScryfallProducedMana>("{\"kind\":\"values\",\"colors\":null}"));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScryfallProducedMana>("{\"kind\":\"values\",\"colors\":[\"G\",1]}"));
+        Assert.Throws<JsonException>(() => JsonSerializer.Serialize(default(ScryfallProducedMana)));
+    }
+
+    /// <summary>
+    /// Verifies listed produced-mana values reject null input and do not retain a mutable caller list.
+    /// </summary>
+    [Fact]
+    public void ProducedManaValues_RejectsNullAndCopiesColors()
+    {
+        List<string> colors = ["G"];
+        ScryfallProducedManaValues values = new(colors);
+
+        colors[0] = "U";
+
+        Assert.Equal(["G"], values.Colors);
+        Assert.Throws<ArgumentNullException>(() => new ScryfallProducedManaValues(null!));
+    }
+
+    /// <summary>
+    /// Verifies malformed produced-mana source fields fail rather than silently dropping values.
+    /// </summary>
+    [Fact]
+    public void ProducedManaMapper_RejectsMalformedSourceFields()
+    {
+        using JsonDocument nonArray = JsonDocument.Parse("{\"produced_mana\":\"G\"}");
+        using JsonDocument nonStringValue = JsonDocument.Parse("{\"produced_mana\":[\"G\",1]}");
+
+        Assert.Throws<InvalidDataException>(() => ScryfallMapper.ProducedMana(nonArray.RootElement));
+        Assert.Throws<InvalidDataException>(() => ScryfallMapper.ProducedMana(nonStringValue.RootElement));
     }
 
     /// <summary>

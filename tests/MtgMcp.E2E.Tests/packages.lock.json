@@ -246,6 +246,14 @@
       "mtgmcp.core": {
         "type": "Project"
       },
+      "mtgmcp.decks": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.Sqlite": "[11.0.0-preview.7.26381.103, )",
+          "MtgMcp.Core": "[1.0.0, )",
+          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
+        }
+      },
       "mtgmcp.scryfall": {
         "type": "Project",
         "dependencies": {

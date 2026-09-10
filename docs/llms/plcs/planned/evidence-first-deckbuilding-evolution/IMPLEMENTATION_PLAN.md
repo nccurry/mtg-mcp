@@ -5,7 +5,7 @@
 - Lifecycle status: Planned
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-09-08
+- Last updated: 2026-09-10
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
 - Implementation authorized: No
@@ -36,7 +36,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | 4 | Review exact-analysis gaps. | EFD-001, EFD-003–005, EFD-008, EFD-010–011, EFD-013 | Statistics and/or explicit deck analysis, App/tests | Current-tool review and existing formula tests | Current tools cover the questions reviewed; the record says when to reopen this phase. | Deferred |
 | 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003–005, EFD-007, EFD-010, EFD-013–014 | Core, Scryfall, App, focused tests/docs | Official-shaped fixture, hierarchy/validation tests, Task checks, surface check | Existing grouping follows source hierarchy and rejects bad source selectors without adding a tag system. | Complete |
 | 5 | [Decide community and deck-group source feasibility](SOURCE_FEASIBILITY.md). | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Complete |
-| 6 | Decide goldfish feasibility before implementing a simulator. | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New feasibility packet; no stable surface initially | Toy traces, calibration, policy review | Owner records accept/defer/reject with evidence. | Planned |
+| 6 | [Build the authorized bounded deck mana and on-curve estimate](../../completed/deck-mana-on-curve-simulation/README.md). | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New OnCurve project and one read-only deck tool | Real-deck fixtures, replay, calibration, policy review | A clear public estimate is implemented and validated. | Complete |
 | 7 | Stabilize selected completed children. | All selected requirements | Docs, release, validation | Full gates, audits, release review | Contracts, docs, deferred items, and follow-ups are accurate. | Planned |
 
 ## Phase Details
@@ -265,36 +265,50 @@ saved-deck combo lookup that returns source groups without advice.
   complete card entries needed for deck-group analysis. No source code, MCP
   tool, provider cache, configuration, credential, or fixture was added.
 
-### Phase 6: Experimental goldfish feasibility
+### Phase 6: Deck mana and on-curve estimate
 
-- Problems solved: Establish whether a limited game-flow model can be useful
-  without misleading a player or becoming a rules engine.
+- Problems solved: Answer one useful real-deck castability question without
+  pretending to run a full Magic game or make a deckbuilding choice.
 - Included requirements: EFD-001, EFD-003 through EFD-005, EFD-009 through
   EFD-011, EFD-013.
 - Out of scope:
-  - Stable default toolset.
-  - Multiplayer rules engine, stack/priority/layers, opponent decisions, deck
-    recommendations, and hidden play-policy inference.
+  - A rules engine, general goldfish player, automatic behavior parser, or
+    recommendation system.
+  - Multiplayer, opponents, stack, priority, combat, commander rules, mana
+    creatures, mana rocks, hidden play-policy inference, and card-text rules.
 - Expected edits:
-  - A standalone feasibility PLC with a closed model/policy vocabulary.
-  - Toy decks with deliberately supported and unsupported mechanics.
-  - Replay trace, coverage, seed, input fingerprint, and interval contract.
-  - An explicit accept/defer/reject decision point before public implementation.
+  - The [Deck Mana and On-Curve Estimate child](../../completed/deck-mana-on-curve-simulation/README.md).
+  - Direct Scryfall produced-mana facts, a Core-only OnCurve project, and one
+    read-only deck tool under the authorized child.
+  - Sanitized actual-deck fixtures, caller-supplied land rules, seeded replay,
+    source facts, failure labels, traces, and a Wilson interval.
+  - Updated App tool registration, tool count, capability record, Task checks,
+    coverage, and benchmark baseline.
 - Tests added:
-  - Same-seed replay.
-  - Policy/trace determinism.
-  - Unsupported mechanic has no fabricated effect.
-  - Output caps, cancellation, and uncertainty tests.
+  - Exact deck and printing resolution without fuzzy matching.
+  - Missing source facts and missing caller rules return clear typed outcomes.
+  - Same-seed replay, land-play tie breaks, mana/color checks, and no inferred
+    card behavior.
+  - Output caps, cancellation, uncertainty, read-only mode, and end-to-end
+    tool checks.
 - Validation:
-  - Offline toy fixtures and calibration review.
-  - Independent review of assumptions and claimed meaning.
-  - Performance measurement for a bounded named run if implementation proceeds.
+  - Completed independent review record and offline saved-deck and source-fact
+    fixtures.
+  - Offline saved-deck and source-fact fixtures.
+  - Full Task checks, tool inventory, MCP smoke check, documentation review,
+    and a bounded named benchmark after correctness is proven.
 - Exit criteria:
-  - The owner accepts, defers, or rejects the experiment with documented
-    evidence.
-  - No stable simulation tool exists before acceptance.
-- Rollback/fallback: Reject the experiment and keep exact analysis only.
-- Cleanup: Do not revive old simulation architecture wholesale.
+  - The owner authorizes the revised child after independent review.
+  - The public result is visibly a sampled estimate with stated facts, rules,
+    uncertainty, and limits.
+  - No hidden card interpreter, tag behavior, or recommendation appears.
+- Rollback/fallback: Defer the tool and keep exact analysis only.
+- Cleanup: Do not revive the old broad simulator design or toy-card prototype.
+- Result (2026-09-10): Complete. The completed child added direct
+  produced-mana facts, a Core-only OnCurve calculation, and one read-only decks
+  tool with source facts, caller rules, replay details, uncertainty, limits,
+  cache-only reads, and all-mode process coverage. Full Task validation and the
+  fixed 99-card Release benchmark passed.
 
 ### Phase 7: Stabilize and release selected work
 
@@ -324,7 +338,7 @@ saved-deck combo lookup that returns source groups without advice.
 | Public contract changes hide inside a package upgrade. | 2 | Isolate upgrade and run exact surface/schema/client/package tests. | MCP child owner |
 | A source is technically reachable but not supported or meaningful. | 3, 5 | Require a source check and current API/access review before code. | Product/provider owner |
 | Exact analysis grows role inference. | 4 | Require caller-declared groups and selected-card evidence. | Statistics child owner |
-| Goldfish scope turns into rules-engine work. | 6 | Closed model, toy fixtures, explicit stop decision, no stable tool before approval. | Simulation child owner |
+| The on-curve estimate grows into a rules engine or hides card-behavior guesses. | 6 | Model lands only, require caller land rules, use direct source facts, reject unsupported costs, and stop before adding a parser or tag behavior. | OnCurve child owner |
 | Coverage hides semantic gaps. | All | Use characterization, independent formulas, E2E, and fixture quality review alongside coverage. | Reviewers |
 | Dirty user changes overlap a child. | 1B | Rebase scope after the user’s mapper work is finalized; do not overwrite it. | Implementer |
 
@@ -334,7 +348,7 @@ saved-deck combo lookup that returns source groups without advice.
 - [ ] A currently authorized child verifies every in-scope Must requirement or
   has an approved amendment that removes or replaces it; a deferral alone does
   not close the requirement.
-- [ ] Every deferred future child or feasibility outcome records its rationale,
+- [ ] Every deferred future child or child outcome records its rationale,
   owner, activation or review trigger, affected acceptance criteria, and why
   the completed phase still meets its exit criteria.
 - [ ] Phase 1A and 1B preserve the current public surface and provider

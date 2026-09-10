@@ -105,24 +105,28 @@ tasks:
     desc: Run all non-live tests
     deps: [build]
     cmds:
-      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter "Category!=Live"'
+      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter "Category!=Live&Category!=Benchmark"'
 
   test:unit:
-    desc: Run application and Core unit tests
+    desc: Run application, Core, Statistics, and OnCurve unit tests
     deps: [restore]
     cmds:
       - >
         {{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
+      - >
+        {{.DOTNET}} test --project tests/MtgMcp.OnCurve.Tests/MtgMcp.OnCurve.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        -- --filter "Category!=Live&Category!=Benchmark"
 
   test:integration:
     desc: Run architecture and local deck integration tests
@@ -131,27 +135,27 @@ tasks:
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
 
   test:e2e:
     desc: Run foundation process end-to-end tests
@@ -179,6 +183,17 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/release.ps1 LiveAcceptance -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Configuration "{{.CONFIGURATION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
 
+  benchmark:oncurve:
+    desc: Run the repeatable on-curve Release benchmark
+    deps: [build]
+    cmds:
+      - >
+        {{.DOTNET}} test --project tests/MtgMcp.OnCurve.Tests/MtgMcp.OnCurve.Tests.csproj
+        --configuration {{.CONFIGURATION}}
+        --no-build
+        --no-restore
+        -- --filter "Category=Benchmark" --output Detailed --show-stdout All
+
   coverage:
     desc: Run coverage gates and generate the Codecov report
     cmds:
@@ -198,7 +213,7 @@ tasks:
         dotnet test --solution {{.SOLUTION}}
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "Category!=Live"
+        -- --filter "Category!=Live&Category!=Benchmark"
 
   coverage:gates:
     desc: Enforce 90 percent line coverage for every production assembly
@@ -222,6 +237,12 @@ tasks:
     deps: [coverage:report]
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Decks'
+
+  coverage:oncurve:
+    desc: Enforce 90 percent line coverage for the on-curve calculation using the Codecov report
+    deps: [coverage:report]
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.OnCurve'
 
   coverage:scryfall:
     desc: Enforce 90 percent line coverage for the Scryfall adapter using the Codecov report

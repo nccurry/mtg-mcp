@@ -17,9 +17,9 @@ fill this table.
 | EFD-FIX-006 | Commander Spellbook response fixtures | New provider test project, if selected | Cover bounded search/detail/empty/error cases and source provenance. | Spellbook child owner | Use sanitized API examples that follow the source's request guidance. |
 | EFD-FIX-007 | Source access-and-use record | [Phase 5 source-feasibility record](SOURCE_FEASIBILITY.md) | Records the current defer/reject decisions for Reddit and deck-group candidates. | Product owner | Re-check when source rules or the proposed workflow change. |
 | EFD-FIX-008 | Exact-analysis reference matrix | Statistics/deck-analysis tests | Independently verify finite-population probabilities and declared assumptions. | Statistics child owner | Add cases only for new exact behavior. |
-| EFD-FIX-009 | Goldfish toy deck | Simulation-lab test project, if feasibility is approved | Prove a closed supported mechanic and a transparent trace. | Simulation child owner | Immutable after calibration baseline; version a replacement. |
-| EFD-FIX-010 | Unsupported-mechanic toy deck | Simulation-lab test project, if feasibility is approved | Prove unsupported text contributes no fabricated effect and is reported. | Simulation child owner | Update only when support is deliberately added. |
-| EFD-FIX-011 | Sampled replay/calibration matrix | Simulation-lab test project, if feasibility is approved | Verify same seed/input/policy replay, bounds, uncertainty, and cancellation. | Simulation child owner | Version with model/policy change. |
+| EFD-FIX-009 | Real-deck on-curve case | [Phase 6 fixture plan](../../completed/deck-mana-on-curve-simulation/FIXTURES.md) | Prove exact deck and printing facts, caller land rules, a simple cast, and a transparent trace. | OnCurve child owner | Keep the sanitized input stable after the first reference result. |
+| EFD-FIX-010 | Missing-rule and unsupported-cost cases | [Phase 6 fixture plan](../../completed/deck-mana-on-curve-simulation/FIXTURES.md) | Prove missing land rules and unsupported target costs do not create invented behavior. | OnCurve child owner | Change only when deliberate supported behavior changes. |
+| EFD-FIX-011 | Sampled replay/calibration matrix | [Phase 6 fixture plan](../../completed/deck-mana-on-curve-simulation/FIXTURES.md) | Verify same seed/input/policy replay, source facts, bounds, uncertainty, and cancellation. | OnCurve child owner | Version with model, policy, or random change. |
 | EFD-FIX-012 | Performance case | Child-specific benchmark/report, if justified | Protect one named hot path with deterministic representative input. | Child owner | Record environment and why the case matters. |
 | EFD-FIX-014 | Official Scryfall tag-grouping matrix | [Phase 4A child](../../completed/official-scryfall-tag-grouping-reliability/FIXTURES.md) | Verify exact source-ID resolution, all-parent ancestry, invalid-selector safety, and the repaired `common-v1` mapping. | Tag-grouping child owner | Update only after an explicit official Scryfall source-contract review. |
 
@@ -35,7 +35,7 @@ fill this table.
 | EFD-006 | EFD-FIX-005 | No provider code starts without a complete source-specific source check. | PLC review |
 | EFD-007 | EFD-FIX-005 and provider fixtures | Results retain source/reference/time/freshness/population and explicit unknowns. | Schema and fixture tests |
 | EFD-008 | EFD-FIX-008 | Exact answers match independent formulas for declared populations. | Statistics tests |
-| EFD-009 | EFD-FIX-009 through EFD-FIX-011 | A feasibility study proves or rejects the narrow model before a stable tool exists. | Calibration and review |
+| EFD-009 | EFD-FIX-009 through EFD-FIX-011 | A public sampled estimate shows its actual-deck facts, caller rules, and limits before it is accepted. | Calibration, review, and end-to-end tool check |
 | EFD-010 | EFD-FIX-002 through EFD-FIX-011 | Behavior moves or source adapters remain deterministic and network-free in normal tests. | Focused tests plus task test/coverage |
 | EFD-011 | EFD-FIX-012 | Performance work has a named scenario and declared review/CI budget. | Child performance report |
 | EFD-012 | EFD-FIX-001 plus package/client smoke | SDK upgrade preserves or explicitly versions the contract. | Package/process/client tests |
@@ -58,7 +58,7 @@ fill this table.
 | --- | --- | --- |
 | New source evidence tool | Read-only; source-specific opt-in toolset | Name, schema, bound, provenance, and policy are child-owned. |
 | Exact analysis tool | Read-only; Statistics/default only if it is a coherent small workflow | Declared inputs and exact-derivation metadata required. |
-| Simulation experiment | Read-only; separate experimental opt-in toolset | No surface exists until feasibility and versioning are approved. |
+| Deck mana and on-curve estimate | Read-only; existing decks toolset | One sampled deck_* result with direct source facts, caller land rules, and visible limits. |
 | Local deck write | Local/remote as current workflow requires | OperationModeGuard and revision/fingerprint behavior stay explicit. |
 | Provider write | Remote only | Requires source-specific safe mutation contract and separate approval. |
 
@@ -82,6 +82,6 @@ fill this table.
 | Archidekt owner extraction | Existing fake HTTP deck/folder/snapshot fixtures | Same request count, payload, typed result, and redaction before/after movement | Characterization test; no timing gate |
 | Exact draw analysis | 60- and 99-card finite populations; declared success quantities, hand/draw/mulligan assumptions | Matches independent hypergeometric or enumerated result exactly | Independent formula test |
 | Future source query | Bounded sanitized request/page fixture | Stable ordering, provenance, output cap, and typed source error | Provider fixture test |
-| Future goldfish replay | Toy deck, fixed model/policy, seed, sample count, turn cap | Same trace/fingerprint; supported/unsupported coverage visible | Feasibility test |
-| Future sampled estimate | Toy deck with known outcome distribution | Reported interval method and result match fixture tolerance | Calibration test |
+| On-curve replay | Sanitized saved deck, direct Scryfall facts, caller land rules, fixed model/policy, seed, sample count, turn cap | Same trace/fingerprint; modeled and not-modeled land coverage visible | Replay test |
+| On-curve sampled estimate | Sanitized actual deck with a known ordered-hand reference | Reported interval method and result match independent fixture tolerance | Calibration test |
 | Future hot path | Named deck/workload, Release, pinned settings | Review budget only after baseline is recorded | Child-specific report |

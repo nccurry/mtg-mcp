@@ -72,6 +72,7 @@ internal static class ScryfallMapper
             OptionalString(raw, "type_line"),
             OptionalString(raw, "oracle_text"),
             Strings(raw, "colors"),
+            ProducedMana(raw),
             Strings(raw, "color_identity"),
             Strings(raw, "keywords"),
             StringMap(raw, "legalities"),
@@ -291,6 +292,40 @@ internal static class ScryfallMapper
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Preserves Scryfall's distinct missing, null, and listed produced-mana states.
+    /// </summary>
+    internal static ScryfallProducedMana ProducedMana(JsonElement element)
+    {
+        if (!element.TryGetProperty("produced_mana", out JsonElement value))
+        {
+            return new ScryfallProducedManaMissing();
+        }
+
+        if (value.ValueKind == JsonValueKind.Null)
+        {
+            return new ScryfallProducedManaNull();
+        }
+
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("Scryfall field 'produced_mana' is not an array or null.");
+        }
+
+        List<string> colors = [];
+        foreach (JsonElement color in value.EnumerateArray())
+        {
+            if (color.ValueKind != JsonValueKind.String || color.GetString() is not string text)
+            {
+                throw new InvalidDataException("Scryfall field 'produced_mana' contains a non-string value.");
+            }
+
+            colors.Add(text);
+        }
+
+        return new ScryfallProducedManaValues(colors);
     }
 
     /// <summary>

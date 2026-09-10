@@ -376,6 +376,12 @@
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
         }
       },
+      "mtgmcp.oncurve": {
+        "type": "Project",
+        "dependencies": {
+          "MtgMcp.Core": "[1.0.0, )"
+        }
+      },
       "mtgmcp.playgroup": {
         "type": "Project",
         "dependencies": {
@@ -415,6 +421,7 @@
           "MtgMcp.Archidekt": "[1.0.0, )",
           "MtgMcp.Core": "[1.0.0, )",
           "MtgMcp.Decks": "[1.0.0, )",
+          "MtgMcp.OnCurve": "[1.0.0, )",
           "MtgMcp.Playgroup": "[1.0.0, )",
           "MtgMcp.Scryfall": "[1.0.0, )",
           "MtgMcp.Spellbook": "[1.0.0, )",

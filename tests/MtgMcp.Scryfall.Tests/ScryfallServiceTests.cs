@@ -15,6 +15,38 @@ namespace MtgMcp.Scryfall.Tests;
 public sealed class ScryfallServiceTests
 {
     /// <summary>
+    /// Verifies a listed produced-mana value survives a local card-data sync and cache-only read.
+    /// </summary>
+    [Fact]
+    public async Task CardDataSync_PreservesProducedManaValuesInCachedCard()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        JsonObject whiteCard = JsonNode.Parse(ScryfallTestFixture.WhiteCard())!.AsObject();
+        whiteCard["produced_mana"] = new JsonArray { "W", "C" };
+        byte[] allCards = ScryfallTestFixture.GzipLines(
+            [whiteCard.ToJsonString(), ScryfallTestFixture.RedCard()]);
+        RecordingHandler handler = ScryfallTestFixture.Provider(
+            intercept: request => request.RequestUri!.AbsolutePath == "/download/all_cards.jsonl.gz"
+                ? ScryfallTestFixture.Bytes(allCards)
+                : null);
+        using ScryfallService service = CreateService(temporary.Path, handler);
+
+        _ = RequireSuccess(await service.SyncCorpusAsync(
+            "refresh",
+            null,
+            TestContext.Current.CancellationToken));
+        int requestsAfterSync = handler.Requests.Count;
+
+        ScryfallCardResult card = RequireSuccess(await service.GetCardAsync(
+            new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D")),
+            "cache-only",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(["W", "C"], Assert.IsType<ScryfallProducedManaValues>(card.Card.ProducedMana.Value).Colors);
+        Assert.Equal(requestsAfterSync, handler.Requests.Count);
+    }
+
+    /// <summary>
     /// Verifies explicit sync atomically installs all four datasets and serves identity/tag reads without HTTP.
     /// </summary>
     [Fact]

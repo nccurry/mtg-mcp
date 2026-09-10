@@ -39,7 +39,7 @@ Scryfall has not published a second generation, rollback remains
 
 | Capability | Registered | Live | Fixture-backed | Pending generation | Fixture-only |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Decks | 28 | 28 | 0 | 0 | 0 |
+| Decks | 29 | 29 | 0 | 0 | 0 |
 | Scryfall | 18 | 15 | 2 | 1 | 0 |
 | Statistics | 8 | 8 | 0 | 0 | 0 |
 | Archidekt | 23 | 23 | 0 | 0 | 0 |

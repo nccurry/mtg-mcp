@@ -67,9 +67,9 @@
 - Heuristic recommendations, blended scores, and simulation are not stable
   rewrite capabilities. Do not preserve the legacy model/profile architecture
   merely because it exists.
-- If a post-cutover PLC approves sampled or heuristic evidence, version it,
-  bound it, preserve inputs/seeds/assumptions/warnings, and label it separately
-  from provider facts and exact mathematics.
+- The approved `deck_on_curve_estimate` follows this rule: it is versioned,
+  bounded, replayable, and visibly separate from provider facts and exact
+  mathematics. Any future sampled or heuristic evidence must meet the same bar.
 - Never add a generic rules engine or arbitrary expression language.
 
 See [Evidence-First Rewrite Guide](rewrite-guide.md) for current-versus-target

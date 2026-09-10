@@ -2189,12 +2189,12 @@ public sealed class LiveMethodAcceptanceTests
     {
         (string Mode, string Toolsets, int Count)[] cases =
         [
-            ("read-only", "default", 32),
-            ("local", "default", 54),
-            ("remote", "default", 54),
-            ("read-only", "all", 57),
-            ("local", "all", 80),
-            ("remote", "all", 93),
+            ("read-only", "default", 33),
+            ("local", "default", 55),
+            ("remote", "default", 55),
+            ("read-only", "all", 61),
+            ("local", "all", 84),
+            ("remote", "all", 97),
             ("read-only", "none", 0),
             ("local", "none", 0),
             ("remote", "none", 0),

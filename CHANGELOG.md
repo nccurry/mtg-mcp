@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Added the read-only `deck_on_curve_estimate` tool. It samples one bounded
+  land-only cast-by-turn model for a saved deck using direct installed Scryfall
+  facts and caller-supplied land rules. Results include source facts, replay
+  details, uncertainty, miss counts, and clear limits; they do not recommend a
+  deck change or predict real games.
+- Added the Core-only `MtgMcp.OnCurve` calculation project, offline replay and
+  MCP process tests, and the separate `task benchmark:oncurve` Release
+  measurement for a fixed sanitized 99-card fixture.
+
 ## 0.9.0 - 2026-07-12
 
 - Removed the audited legacy product implementation from the isolated rewrite

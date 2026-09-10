@@ -30,8 +30,8 @@ mode.
 
 | Profile | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
-| `default` | 32 | 54 | 54 |
-| `all` | 60 | 83 | 96 |
+| `default` | 33 | 55 | 55 |
+| `all` | 61 | 84 | 97 |
 | `none` | 0 | 0 | 0 |
 
 `read-only` allows reads only. `local` adds local writes. `remote` adds remote

@@ -4,7 +4,7 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-The clean-break `0.9.0` server uses stdio. It exposes 96 tools, one
+The clean-break `0.9.0` server uses stdio. It exposes 97 tools, one
 capability resource, and no prompts. It does not migrate `0.8.x` data or tool
 schemas.
 
@@ -15,7 +15,7 @@ the new surface.
 
 | Capability | Tools | Default | Storage or writes |
 | --- | ---: | --- | --- |
-| Local decks and interchange | 28 | Yes | Local |
+| Local decks and interchange | 29 | Yes | Local |
 | Scryfall evidence | 18 | Yes | Local cache and card data |
 | Exact statistics | 8 | Yes | No |
 | Archidekt | 23 | No | Remote |
@@ -99,8 +99,8 @@ and `spellbook`. Selection is fixed for the MCP session.
 
 | Profile | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
-| `default` | 32 | 54 | 54 |
-| `all` | 60 | 83 | 96 |
+| `default` | 33 | 55 | 55 |
+| `all` | 61 | 84 | 97 |
 | `none` | 0 | 0 | 0 |
 
 Read `mtg://server/capabilities` to inspect the active mode, toolsets, counts,
@@ -157,7 +157,8 @@ The `decks` toolset supports:
 - native JSON and generic text import and export;
 - Archidekt and Moxfield manual artifacts;
 - exact Scryfall identity reconciliation; and
-- deterministic tag-rule categorization.
+- deterministic tag-rule categorization; and
+- fact-backed on-curve estimates with caller-supplied land rules.
 
 Every existing-deck mutation requires `expectedRevision`. The store is
 format-neutral. Validation checks structure, not Commander legality, card
@@ -171,6 +172,19 @@ Use `deck_category_rules_validate`, `deck_category_rules_preview`, and
 `deck_category_rules_apply` to evaluate caller-owned tag rules. Rules can be
 inline or use the transparent `common-v1` preset. The MCP does not decide what a
 category means.
+
+### Estimate mana on curve
+
+Use `deck_on_curve_estimate` to sample how often one mainboard card can be cast
+by a chosen turn. Supply the saved deck ID and current revision, the target
+entry ID, one rule for each eligible land, a turn limit, and optionally a seed
+and sample count. The result includes the exact installed Scryfall facts used,
+the caller rules, a replay seed, a 95% Wilson interval, miss counts, and up to
+two sample traces.
+
+Version 1 models only simple printed costs and caller-described single-faced
+lands. It does not read card text, infer land behavior, model other mana
+sources, choose plays, rate the deck, or predict real games.
 
 ## Import and export decks
 
@@ -295,6 +309,7 @@ Use Task as the command menu:
 task --list
 task lint
 task test
+task benchmark:oncurve
 task surface:report
 task coverage
 task pack
@@ -304,6 +319,7 @@ task release:tool-smoke
 ```
 
 Normal tests are deterministic and offline. Live tests require explicit opt-in.
+`task benchmark:oncurve` runs the separate fixed 99-card Release measurement.
 Each production assembly must maintain at least 90 percent line coverage.
 
 ## Architecture
@@ -317,6 +333,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 | `MtgMcp.Playgroup` | Pinned official API evidence |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
+| `MtgMcp.OnCurve` | Pure repeatable sampled cast-by-turn calculation |
 | `MtgMcp.App` | MCP host, configuration, composition, and schemas |
 
 Read [North Star](docs/north-star.md), [Design Goals](docs/design-goals.md), and

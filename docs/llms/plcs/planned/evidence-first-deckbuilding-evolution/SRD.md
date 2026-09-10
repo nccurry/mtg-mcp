@@ -27,8 +27,7 @@ should make missing data, source bias, assumptions, and uncertainty visible.
 
 This PLC turns that product statement into an incremental roadmap. First it
 makes existing module ownership real. Then it provides a disciplined path for
-new source evidence and, only if it proves useful, a bounded sampled goldfish
-experiment.
+new source evidence and one bounded, sampled deck mana and on-curve estimate.
 
 ## Audience
 
@@ -76,7 +75,7 @@ the current 0.9 release is an evidence-first clean break.
 | A player can change a deck safely. | Local/remote authority, preview, fingerprints, conflicts, and final applied state are visible. | The server never silently chooses a conflict winner. |
 | A source-backed claim can be checked. | Responses show source, retrieval time, source reference, cache/freshness state, and applicable population. | Popularity and discussion are evidence, not quality scores. |
 | A maintainer can alter a provider family without changing unrelated families. | Behavior lives in the named owner, with fixture-backed tests and architecture tests. | This is the first cleanup priority. |
-| A future goldfish result is honest about its limits. | It includes model version, seed, sample count, input fingerprint, policy, unsupported mechanics, traces, and uncertainty. | Only applies after feasibility approval. |
+| A deck mana and on-curve estimate is honest about its limits. | It includes source facts, caller land rules, model version, seed, sample count, input fingerprint, policy, traces, and uncertainty. | The authorized child implements the stated limits phase by phase. |
 
 ## System Overview
 
@@ -89,12 +88,14 @@ The present server has the right top-level split:
 | MtgMcp.Scryfall | Official cards, rulings, community tags, card data, snapshots, and pacing | Own official acquisition and its data, with real internal store boundaries. |
 | MtgMcp.Archidekt | Remote deck, folder, snapshot, and sync workflows | Own observed provider contract and all provider safety details. |
 | MtgMcp.Playgroup | Official playgroup observations | Remain a separate provider population. |
-| MtgMcp.Spellbook | Planned Commander Spellbook evidence adapter | Own source HTTP, cache, pace, and source-shaped output; remain opt-in. |
+| MtgMcp.Spellbook | Bounded Commander Spellbook evidence adapter | Own source HTTP, cache, pace, and source-shaped output; remain opt-in. |
 | MtgMcp.Statistics | Exact, caller-supplied mathematics | Stay BCL-only, legality-free, and provider-independent. |
+| MtgMcp.OnCurve | Pure sampled cast-by-turn calculation | Reference Core only; use resolved facts and caller rules only. |
 | MtgMcp.App | MCP registration, configuration, operation modes, schemas, and composition | Stay a thin, static composition root. |
 
-Future provider and simulation modules are additive only when their contract
-passes the admission and feasibility gates in this PLC.
+Future provider modules are additive only when their child contract passes the
+admission and review gates in this PLC. The completed on-curve calculation
+follows the same boundary.
 
 ## Assumptions, Dependencies, And Constraints
 
@@ -126,7 +127,7 @@ passes the admission and feasibility gates in this PLC.
 | CASE-004 | A player asks whether an existing deck contains known documented combo pieces. | A future opt-in provider returns Commander Spellbook source evidence, prerequisites, steps, and source identity; it does not say that the combo should be added. |
 | CASE-005 | A player asks what a named community discussion says about a card or archetype. | A future Reddit workflow returns attributed, bounded source material only when its published API supports that exact use. |
 | CASE-006 | A player asks what is common in a source-defined deck cohort. | A future official provider returns the cohort, denominator, distribution, and source bias; it never converts popularity into a deck-quality score. |
-| CASE-007 | A player explicitly asks for a bounded goldfish estimate. | A future experimental tool returns sampled traces and model limits, never a claimed real-game win rate. |
+| CASE-007 | A player asks whether a named card can be cast by a named turn from a saved deck. | A read-only tool returns direct source facts, caller land rules, sampled traces, uncertainty, and model limits; it never claims a real-game win rate. |
 
 ## Scope And Non-Scope
 
@@ -139,7 +140,7 @@ passes the admission and feasibility gates in this PLC.
 - A roadmap for exact deck-analysis orchestration that remains distinct from
   provider data and sampled estimates.
 - A reliability repair for the existing source-tag deck grouping workflow.
-- A feasibility-first route for experimental goldfish analysis.
+- A reviewed route for a real-deck mana and on-curve estimate.
 - Focused MCP SDK/toolchain compatibility work.
 
 ### Out of scope
@@ -188,7 +189,7 @@ decision, updated capability evidence, and process-level MCP tests.
 | EFD-006 | Must | Provider safety | Every new external source shall pass a short source check before production acquisition code is written. | API availability alone does not establish a useful, durable workflow. | The child packet records supported access, data meaning, auth, pacing, cache expiry, fixtures, failure behavior, and the evidence label. |
 | EFD-007 | Must | Evidence | Source results shall preserve provider identity, retrieval time, source reference, freshness/cache state, population/denominator when available, and unknown state when absent. | This prevents popularity, discussion, and source facts from blending into false certainty. | Provider fixtures and output schemas retain the required provenance; missing source fields are not guessed. |
 | EFD-008 | Must | Statistics | Deterministic “what is available by turn” workflows shall use declared groups and exact mathematics before any sampled estimate. | Card draws are finite sampling without replacement; exact answers are clearer than simulation when possible. | Independent-formula tests validate representative 60- and 99-card cases, mulligans, and declared assumptions. |
-| EFD-009 | Must | Simulation | No sampled goldfish capability shall become stable until an approved feasibility child defines its model boundary, caller policy, unsupported mechanics, replay metadata, uncertainty, and stop criteria. | A deterministic seed does not make a heuristic game model factual. | The feasibility child records an accept/defer/reject decision backed by toy-deck traces and calibration cases. |
+| EFD-009 | Must | Sampled estimate | No deck mana and on-curve tool shall be added until an approved child defines its actual-deck boundary, caller land rules, unsupported mechanics, replay details, uncertainty, and stop criteria. | A deterministic seed does not make a modeled game flow factual. | The approved child proves direct source facts, caller-rule coverage, replay, calibration, and public-tool wording with sanitized real-deck fixtures. |
 | EFD-010 | Must | Testability | Each refactor or provider child shall add characterization tests before moving behavior and keep normal tests offline. | Existing coverage is strong; behavior must remain locked while ownership moves. | Focused tests pass before and after movement; task lint, task test, and task coverage pass for the child. |
 | EFD-011 | Should | Performance | A child shall add a performance measurement only for a named, meaningful hot path with deterministic representative inputs. | Avoids benchmark theater while protecting real regressions. | A documented case has a baseline, machine/runtime metadata, and either a review budget or justified CI gate. |
 | EFD-012 | Should | Dependencies | Major SDK or analyzer upgrades shall be isolated from behavior refactors and verified through installed-package and MCP client tests. | Makes failures attributable. | Compatibility child passes process, client, schema, package, and broad validation before version changes land. |
@@ -207,9 +208,9 @@ No new public tool is authorized by this umbrella. The existing mode rules stay:
 
 Future sources are read-only and opt-in by default. Future exact analysis belongs
 in a clearly named Statistics or deck-analysis workflow only if its inputs and
-outputs are materially distinct from existing tools. Future sampled tools must
-be separately tagged as experimental, use a separate capability toolset, and
-remain hidden unless explicitly enabled.
+outputs are materially distinct from existing tools. The completed Phase 6
+sampled estimate is in the existing decks toolset and remains visibly sampled
+and bounded. Any other sampled tool needs its own separate review.
 
 The existing category-rule tools remain in the `decks` toolset. Phase 4A may
 correct their returned rules and matches, but it adds no tool, resource, prompt,
@@ -221,7 +222,7 @@ mode, or local tag-management surface.
 | --- | --- | --- |
 | Honesty | A source omits a count, a rule, or a card fact. | Output uses unknown, unsupported, unavailable, or not cached; it never invents a value. |
 | Determinism | The same exact-analysis request repeats. | Inputs, ordering, calculation, and result are identical. |
-| Reproducibility | A sampled experiment repeats. | Model version, seed, input fingerprint, policy, and sample count reproduce the trace/result within documented limits. |
+| Reproducibility | A sampled on-curve estimate repeats. | Model version, seed, input fingerprint, caller land rules, policy, and sample count reproduce the trace/result within documented limits. |
 | Safety | A caller requests a write without the right mode or a stale fingerprint. | The operation is rejected before mutation. |
 | Provider discipline | A provider is rate-limited or changes contract. | Pacing/backoff and typed safe failure apply; fixtures reveal supported contract drift. |
 | Source-tag fidelity | A category selector names a source parent tag. | The active Scryfall data generation resolves it to an exact ID and every direct child assignment can match it only when descendants are allowed. |
@@ -239,7 +240,7 @@ mode, or local tag-management surface.
 | 4 | Review declarative exact deck-analysis gaps. **Deferred 2026-09-07:** current tools cover the proposed work. | EFD-001, EFD-003 to EFD-005, EFD-008, EFD-010, EFD-011, EFD-013 | EFD-008 remains met by completed exact Statistics. Reopen only for a question with stated inputs that current workflows cannot answer. |
 | 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003 to EFD-005, EFD-007, EFD-010, EFD-013, EFD-014 | Source hierarchy, selector validation, one-generation consistency, and the in-place `common-v1` correction pass without a new tag system. |
 | 5 | [Research community and deck-group sources without scraping](SOURCE_FEASIBILITY.md). **Complete 2026-09-08:** no new source is admitted. | EFD-006, EFD-007, EFD-010, EFD-013 | Reddit is deferred pending explicit approval; direct EDHREC and Moxfield automation are rejected; public Archidekt collection and current Playgroup do not supply a usable deck group. |
-| 6 | Decide goldfish feasibility. | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | A documented accept/defer/reject decision exists before any stable tool promise. |
+| 6 | [Build the authorized deck mana and on-curve estimate](../../completed/deck-mana-on-curve-simulation/README.md). | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | One read-only tool reports actual-deck source facts, caller land rules, a sampled result, and stated limits. |
 
 ## Traceability
 
@@ -251,8 +252,8 @@ mode, or local tag-management surface.
 | EFD-004 | [Error handling](SADD.md#error-handling-and-failure-modes) | Unit and adapter failure tests | EFD-FIX-004 |
 | EFD-005 | [MCP surface](SADD.md#mcp-surface-schemas-and-diagnostics) | Surface, schema, mode, process tests | EFD-FIX-001 |
 | EFD-006–007 | [Provider check](SADD.md#provider-check) | Source-check list and fixture tests | EFD-FIX-005 to EFD-FIX-007 |
-| EFD-008 | [Exact analysis](SADD.md#exact-analysis-and-simulation) | Independent math tests | EFD-FIX-008 |
-| EFD-009 | [Goldfish feasibility](SADD.md#exact-analysis-and-simulation) | Trace, calibration, policy review | EFD-FIX-009 to EFD-FIX-011 |
+| EFD-008 | [Exact analysis](SADD.md#exact-analysis-and-sampled-estimates) | Independent math tests | EFD-FIX-008 |
+| EFD-009 | [Deck mana and on-curve estimate](SADD.md#exact-analysis-and-sampled-estimates) | Source-rule, trace, calibration, and tool review | EFD-FIX-009 to EFD-FIX-011 |
 | EFD-010–013 | [Test architecture](SADD.md#test-architecture) | Task and documentation validation | Child validation ledger |
 | EFD-014 | [Tag ownership](SADD.md#tag-ownership) | Source-tag fixture, hierarchy and selector tests, boundary review | EFD-FIX-014 |
 
@@ -264,7 +265,7 @@ mode, or local tag-management surface.
 | An external source changes access rules or endpoint behavior. | Risk | Unsupported acquisition or stale output. | Provider child owner | Source check, fixture drift tests, source-specific cache/pacing, explicit defer path. |
 | Reddit needs explicit approval. | Risk | An unsupported workflow or retained user content. | Product owner | Do not write an adapter until Reddit approves the exact workflow and a source-specific child defines deletion, pacing, attribution, and cache rules. |
 | No deck-group source is admitted. | Deferred | Card-use distribution cannot be returned. | Product owner | Reopen only when a provider permits a bounded deck group with complete card entries and clear population rules. |
-| Goldfish scope grows into a rules engine. | Risk | Unbounded cost and misleading claims. | Simulation child owner | Closed capability/model list, toy fixtures, stop criteria, and owner review. |
+| On-curve scope grows into a rules engine. | Risk | Unbounded cost and misleading claims. | OnCurve child owner | Land-only model, caller land rules, direct source facts, unsupported-cost refusal, and owner review. |
 | A package major upgrade shifts MCP wire behavior. | Risk | Client compatibility break. | MCP child owner | Isolate version upgrade and run package/client/schema tests. |
 | A refactor creates a generic abstraction to reduce file count. | Risk | More coupling and less legible ownership. | Reviewers | Reject generic provider/repository/router designs unless a concrete duplication case proves it. |
 
@@ -290,7 +291,7 @@ provider child defines an independently safe mutation acceptance path.
   currently authorized child cannot close a Must requirement by merely calling
   it deferred; the owner must verify it or approve an amendment that removes
   or replaces it.
-- [ ] Any deferred future child or feasibility outcome has a record that names
+- [ ] Any deferred future child or child outcome has a record that names
   its rationale, owner, activation or review trigger, affected acceptance
   criteria, and confirmation that the active phase still meets its exit
   criteria.

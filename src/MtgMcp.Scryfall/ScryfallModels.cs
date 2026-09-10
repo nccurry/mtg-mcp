@@ -107,6 +107,7 @@ public sealed record ScryfallCard(
     [property: JsonPropertyName("typeLine")] string? TypeLine,
     [property: JsonPropertyName("oracleText")] string? OracleText,
     [property: JsonPropertyName("colors")] IReadOnlyList<string> Colors,
+    [property: JsonPropertyName("producedMana")] ScryfallProducedMana ProducedMana,
     [property: JsonPropertyName("colorIdentity")] IReadOnlyList<string> ColorIdentity,
     [property: JsonPropertyName("keywords")] IReadOnlyList<string> Keywords,
     [property: JsonPropertyName("legalities")] IReadOnlyDictionary<string, string> Legalities,

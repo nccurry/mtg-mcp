@@ -79,18 +79,18 @@ future PLC may split deck-population acquisition from composition analysis if
 provider research shows they need independent ownership, but this end-to-end
 question remains an acceptance gate.
 
-### Goldfish and multiplayer simulation feasibility
+### Deck mana and on-curve estimate
 
-Determine whether useful seeded simulations are possible without presenting the
-MCP as a comprehensive Magic rules engine. The first deliverable is a
-feasibility PLC, not a simulator. It must define the supported rules subset,
-unsupported mechanics, deterministic seed/model version, player policy inputs,
-sample/error reporting, and the line between factual game state and heuristic
-play choices.
+Phase 6 added one read-only estimate for an actual saved deck: whether a named
+card can be cast by a named turn under caller-supplied simple land rules. It
+uses direct installed Scryfall facts, a repeatable seed, a visible land-play
+rule, sampled-result reporting, and a clear line between source facts and
+modeled choices. The estimate is not an exact probability or a real-game
+prediction.
 
-Existing reference seeds include the planned `simulation-profile-evidence`,
-`stats-lab-interaction-readiness`, and `conservative-goldfish-v2` packets. They
-remain reference material until the feasibility decision is approved.
+Broad multiplayer or full-game simulation remains deferred. The planned
+old simulation packets are historical reference material, not instructions to
+add a rules engine or automatic card behavior.
 
 ### Deck-weakness evidence
 

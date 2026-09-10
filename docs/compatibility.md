@@ -20,7 +20,7 @@ The current public surface is exactly:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- a default profile of 32/54/54 tools and complete `all` profile of 60/83/96
+- a default profile of 33/55/55 tools and complete `all` profile of 61/84/97
   tools by mode, plus zero prompts;
 - static `default`, `all`, `none`, and explicit implemented-toolset selection,
   with capability schema version 7; and

@@ -3,8 +3,8 @@
 ## Purpose
 
 `mtg-mcp` is an evidence and workflow server. It returns card facts, provider
-evidence, exact mathematics, and guarded operations. The client LLM decides how
-to build the deck.
+evidence, exact mathematics, one bounded sampled estimate, and guarded
+operations. The client LLM decides how to build the deck.
 
 ## Projects
 
@@ -15,7 +15,9 @@ to build the deck.
 | `MtgMcp.Scryfall` | Official API transport, corpus, snapshots, and pacing |
 | `MtgMcp.Archidekt` | Observed provider contract and synchronization |
 | `MtgMcp.Playgroup` | Pinned official Public API contract |
+| `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
+| `MtgMcp.OnCurve` | Pure, repeatable sampled cast-by-turn calculation |
 | `MtgMcp.App` | MCP host, configuration, composition, modes, and schemas |
 
 Core references no adapter or host. Provider adapters do not reference one
@@ -25,11 +27,12 @@ another. App is the composition root.
 
 The server uses stdio and registers static tools for one session. It exposes:
 
-- 28 `deck_*` tools;
+- 29 `deck_*` tools;
 - 18 `scryfall_*` tools;
 - 8 `stats_*` tools;
 - 23 opt-in `archidekt_*` tools;
 - 16 opt-in `playgroup_*` tools;
+- 3 opt-in `spellbook_*` tools;
 - `mtg://server/capabilities`; and
 - zero prompts.
 
@@ -69,6 +72,11 @@ Client LLM judgment
 Provider facts, community evidence, exact derivations, parser classifications,
 heuristics, and sampled estimates remain distinct. Unknown, unavailable,
 unsupported, and empty results are not interchangeable.
+
+`deck_on_curve_estimate` is the only sampled estimate. App reads the saved deck
+and installed Scryfall facts, then passes a resolved request to `MtgMcp.OnCurve`.
+The calculation uses only caller-supplied land rules and returns its seed,
+uncertainty range, and limits. It does not parse card text or make a deck choice.
 
 ## Write flow
 

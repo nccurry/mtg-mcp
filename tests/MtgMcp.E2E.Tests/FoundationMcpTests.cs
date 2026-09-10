@@ -51,6 +51,7 @@ public sealed class FoundationMcpTests
         "deck_import_preview",
         "deck_interchange_formats",
         "deck_list",
+        "deck_on_curve_estimate",
         "deck_validate",
     ];
 
@@ -85,6 +86,7 @@ public sealed class FoundationMcpTests
         "deck_import_preview",
         "deck_interchange_formats",
         "deck_list",
+        "deck_on_curve_estimate",
         "deck_update",
         "deck_validate",
     ];
@@ -221,10 +223,10 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "local", 54)]
-    [InlineData("read-only", "read-only", 32)]
-    [InlineData("local", "local", 54)]
-    [InlineData("remote", "remote", 54)]
+    [InlineData(null, "local", 55)]
+    [InlineData("read-only", "read-only", 33)]
+    [InlineData("local", "local", 55)]
+    [InlineData("remote", "remote", 55)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -350,15 +352,15 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("read-only", "default", "default", 32)]
-    [InlineData("local", "default", "default", 54)]
-    [InlineData("remote", "default", "default", 54)]
-    [InlineData("read-only", "all", "all", 60)]
-    [InlineData("local", "all", "all", 83)]
-    [InlineData("remote", "all", "all", 96)]
-    [InlineData("read-only", "decks", "explicit", 10)]
-    [InlineData("local", "decks", "explicit", 28)]
-    [InlineData("remote", "decks", "explicit", 28)]
+    [InlineData("read-only", "default", "default", 33)]
+    [InlineData("local", "default", "default", 55)]
+    [InlineData("remote", "default", "default", 55)]
+    [InlineData("read-only", "all", "all", 61)]
+    [InlineData("local", "all", "all", 84)]
+    [InlineData("remote", "all", "all", 97)]
+    [InlineData("read-only", "decks", "explicit", 11)]
+    [InlineData("local", "decks", "explicit", 29)]
+    [InlineData("remote", "decks", "explicit", 29)]
     [InlineData("read-only", "scryfall", "explicit", 14)]
     [InlineData("local", "scryfall", "explicit", 18)]
     [InlineData("remote", "scryfall", "explicit", 18)]
@@ -480,6 +482,7 @@ public sealed class FoundationMcpTests
             ["deck_import_preview"] = ["content", "formatId", "options"],
             ["deck_interchange_formats"] = [],
             ["deck_list"] = ["cursor", "pageSize"],
+            ["deck_on_curve_estimate"] = ["deckId", "expectedRevision", "landRules", "onThePlay", "sampleCount", "seed", "targetEntryId", "turnLimit"],
             ["deck_update"] = ["deckId", "description", "expectedRevision", "format", "name"],
             ["deck_validate"] = ["deckId"],
         };
@@ -774,7 +777,7 @@ public sealed class FoundationMcpTests
             "decks",
             decksEnabled,
             defaultEnabled: true,
-            decksEnabled ? (mode == "read-only" ? 10 : 28) : 0);
+            decksEnabled ? (mode == "read-only" ? 11 : 29) : 0);
         AssertDescriptor(
             descriptors[1],
             "scryfall",

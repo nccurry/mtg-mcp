@@ -131,7 +131,7 @@ the client.
 | Correct | Stale surface-count wording | Keep human documentation as accurate as the passing assertion. |
 | Add | Characterization fixtures before owner movement | Prove unchanged results, SQL state, errors, pacing, and write guards. |
 | Add later | One source check per external source | Make expansion safe, attributable, and reviewable. |
-| Add only after feasibility | Isolated simulation-lab project and calibration fixtures | Keep sampled policy behavior out of Core and exact Statistics. |
+| Add only after independent review and owner authorization | Isolated MtgMcp.OnCurve project, real-deck fixtures, and one read-only deck tool | Keep sampled land rules out of Core and exact Statistics. |
 | Do not add | Generic provider framework, scraper, rules engine, result library, or recommendation engine | They add abstraction cost or violate the product boundary. |
 
 ## Audit Lenses

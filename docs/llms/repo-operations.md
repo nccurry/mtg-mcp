@@ -25,6 +25,7 @@ task test
 task test:unit
 task test:integration
 task test:e2e
+task benchmark:oncurve
 task coverage
 task smoke:process
 task smoke:mcp
@@ -33,8 +34,9 @@ task pack
 task clean
 ```
 
-`task test` runs non-live tests. Use `task test:live` only when live provider
-validation is explicitly requested and safe.
+`task test` runs non-live, non-benchmark tests. Use `task benchmark:oncurve`
+for the separate fixed Release measurement. Use `task test:live` only when live
+provider validation is explicitly requested and safe.
 
 `task restore` verifies the committed NuGet graph. After an approved package
 change, use `task restore:lock` to refresh that graph and `task tools:lock` to

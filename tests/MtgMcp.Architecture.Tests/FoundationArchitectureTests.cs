@@ -15,7 +15,7 @@ public sealed class FoundationArchitectureTests
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
     /// <summary>
-    /// Verifies that only the eight currently approved production projects exist.
+    /// Verifies that only the currently approved production projects exist.
     /// </summary>
     [Fact]
     public void ProductionProjects_ContainOnlyApprovedImplementedModules()
@@ -33,6 +33,7 @@ public sealed class FoundationArchitectureTests
                 "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj",
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
                 "src/MtgMcp.Decks/MtgMcp.Decks.csproj",
+                "src/MtgMcp.OnCurve/MtgMcp.OnCurve.csproj",
                 "src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj",
                 "src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj",
                 "src/MtgMcp.Spellbook/MtgMcp.Spellbook.csproj",
@@ -73,7 +74,7 @@ public sealed class FoundationArchitectureTests
             .ToArray();
 
         Assert.Equal(
-            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj", "../MtgMcp.Spellbook/MtgMcp.Spellbook.csproj", "../MtgMcp.Statistics/MtgMcp.Statistics.csproj"],
+            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.OnCurve/MtgMcp.OnCurve.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj", "../MtgMcp.Spellbook/MtgMcp.Spellbook.csproj", "../MtgMcp.Statistics/MtgMcp.Statistics.csproj"],
             references);
         Assert.Equal(
             [
@@ -184,6 +185,39 @@ public sealed class FoundationArchitectureTests
         Assert.DoesNotContain("ModelContextProtocol", source, StringComparison.Ordinal);
         Assert.DoesNotContain("MtgMcp.Decks", source, StringComparison.Ordinal);
         Assert.DoesNotContain("MtgMcp.Scryfall", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies OnCurve contains only resolved-data calculation work over Core result types.
+    /// </summary>
+    [Fact]
+    public void OnCurveProject_ReferencesOnlyCoreAndBcl()
+    {
+        XDocument project = LoadProject("src/MtgMcp.OnCurve/MtgMcp.OnCurve.csproj");
+        string[] references = project
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
+            .OfType<string>()
+            .ToArray();
+
+        Assert.Equal(["../MtgMcp.Core/MtgMcp.Core.csproj"], references);
+        Assert.Empty(project.Descendants("PackageReference"));
+
+        string source = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(
+                    Path.Combine(RepositoryRoot, "src", "MtgMcp.OnCurve"),
+                    "*.cs",
+                    SearchOption.AllDirectories)
+                .Where(IsAuthoredSource)
+                .Select(File.ReadAllText));
+        Assert.DoesNotContain("HttpClient", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.Data.Sqlite", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModelContextProtocol", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MtgMcp.App", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MtgMcp.Decks", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MtgMcp.Scryfall", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MtgMcp.Statistics", source, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -338,9 +372,9 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Spellbook", "SpellbookToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(96, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(97, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(18, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(19, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -399,6 +433,7 @@ public sealed class FoundationArchitectureTests
                 "deck_import_preview",
                 "deck_interchange_formats",
                 "deck_list",
+                "deck_on_curve_estimate",
                 "deck_update",
                 "deck_validate",
                 "playgroup_auth_status",
@@ -463,7 +498,7 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(toolNames, assignedToolNames);
         Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
-        Assert.Equal(9, Regex.Count(deckManifestSource, @"\.WithTools\("));
+        Assert.Equal(10, Regex.Count(deckManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
         Assert.Equal(2, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithTools\("));
@@ -537,6 +572,8 @@ public sealed class FoundationArchitectureTests
             "MtgMcp.Decks",
             "MtgMcp.Decks.Tests",
             "MtgMcp.E2E.Tests",
+            "MtgMcp.OnCurve",
+            "MtgMcp.OnCurve.Tests",
             "MtgMcp.Playgroup",
             "MtgMcp.Playgroup.Tests",
             "MtgMcp.Scryfall",
@@ -590,6 +627,14 @@ public sealed class FoundationArchitectureTests
             StringComparison.Ordinal);
         Assert.Contains(
             "MtgMcp.Spellbook.Tests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "MtgMcp.OnCurve.Tests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "coverage:oncurve",
             File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
             StringComparison.Ordinal);
         Assert.Contains(

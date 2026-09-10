@@ -10,6 +10,7 @@ checked-in configuration remain authoritative.
 
 | Packet | Outcome |
 | --- | --- |
+| [deck-mana-on-curve-simulation](deck-mana-on-curve-simulation/README.md) | Added one read-only, fact-backed deck mana and on-curve estimate with caller land rules, repeatable sampling, clear limits, broad validation, and a Release benchmark baseline. |
 | [commander-spellbook-evidence](commander-spellbook-evidence/README.md) | Added an opt-in Commander Spellbook adapter with three bounded, read-only evidence tools, a short-lived local cache, a live check, and package smoke coverage. |
 | [agent-quality-foundation](agent-quality-foundation/README.md) | Added north-star guidance, tiered agent files, PLC templates, strict analyzers, 90 percent assembly coverage gates, and plan-mode defaults. |
 | [legacy-surface-audit-and-disposition](legacy-surface-audit-and-disposition/README.md) | Approved the authoritative legacy deletion/rebuild/fixture dispositions and handed them to the rewrite foundation. |
