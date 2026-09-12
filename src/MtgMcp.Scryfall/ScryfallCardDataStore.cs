@@ -157,6 +157,40 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
+    /// Finds ordered installed cards from one retained generation through one read connection.
+    /// </summary>
+    internal async Task<List<StoredCardDataObject?>> FindCardsInGenerationAsync(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        Guid generationId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lookups);
+        List<StoredCardDataObject?> matches = new(lookups.Count);
+        await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null)
+        {
+            for (int index = 0; index < lookups.Count; index++)
+            {
+                matches.Add(null);
+            }
+
+            return matches;
+        }
+
+        foreach (ScryfallEvidenceLookup lookup in lookups)
+        {
+            matches.Add(await FindCardOnConnectionAsync(
+                connection,
+                generationId,
+                lookup.Lookup,
+                lookup.RequiredLanguage,
+                cancellationToken).ConfigureAwait(false));
+        }
+
+        return matches;
+    }
+
+    /// <summary>
     /// Reports whether one complete card-data generation remains available for cursor replay.
     /// </summary>
     internal async Task<bool> ContainsCompleteGenerationAsync(
@@ -773,7 +807,7 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
-    /// Imports one compressed-JSONL dataset into generation-owned staging rows with bounded memory.
+    /// Imports one JSONL dataset into generation-owned staging rows with bounded memory.
     /// </summary>
     internal async Task<ScryfallCorpusDatasetStatus> ImportDatasetAsync(
         Guid generationId,
@@ -788,7 +822,6 @@ internal sealed class ScryfallCardDataStore
         using StreamReader reader = new(jsonlStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         long count = 0;
         long bytes = 0;
-        long maximumBytes = metadata.Size + Math.Max(1_048_576, metadata.Size / 10);
         string? line;
         while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
         {
@@ -802,11 +835,6 @@ internal sealed class ScryfallCardDataStore
             hash.AppendData(lineBytes);
             hash.AppendData("\n"u8);
             bytes += lineBytes.Length + 1;
-            if (bytes > maximumBytes)
-            {
-                throw new InvalidDataException("The bulk dataset exceeded its bounded declared-size allowance.");
-            }
-
             using JsonDocument document = JsonDocument.Parse(line);
             await InsertCardDataObjectAsync(
                 connection,
@@ -1263,7 +1291,7 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
-    /// Validates fixed dataset completeness, joins, and hierarchy acyclicity.
+    /// Validates fixed dataset completeness and hierarchy acyclicity among present tags.
     /// </summary>
     private static async Task<string?> ValidateGenerationAsync(
         SqliteConnection connection,
@@ -1289,29 +1317,14 @@ internal sealed class ScryfallCardDataStore
             }
         }
 
-        string[] danglingQueries =
-        [
-            "SELECT 1 FROM rulings r LEFT JOIN card_objects c ON c.generation_id = r.generation_id AND c.oracle_id = r.oracle_id WHERE r.generation_id = $generation AND c.card_id IS NULL LIMIT 1;",
-            "SELECT 1 FROM tag_relations x LEFT JOIN tags p ON p.generation_id = x.generation_id AND p.tag_id = x.parent_tag_id LEFT JOIN tags c ON c.generation_id = x.generation_id AND c.tag_id = x.child_tag_id WHERE x.generation_id = $generation AND (p.tag_id IS NULL OR c.tag_id IS NULL) LIMIT 1;",
-            "SELECT 1 FROM tag_assignments a WHERE a.generation_id = $generation AND a.target_type = 'oracle' AND NOT EXISTS (SELECT 1 FROM card_objects c WHERE c.generation_id = a.generation_id AND c.oracle_id = a.target_id) LIMIT 1;",
-            "SELECT 1 FROM tag_assignments a WHERE a.generation_id = $generation AND a.target_type = 'art' AND NOT EXISTS (SELECT 1 FROM card_objects c WHERE c.generation_id = a.generation_id AND c.illustration_id = a.target_id) AND NOT EXISTS (SELECT 1 FROM card_faces f WHERE f.generation_id = a.generation_id AND f.illustration_id = a.target_id) LIMIT 1;",
-        ];
-        foreach (string query in danglingQueries)
-        {
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = query;
-            command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
-            if (await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null)
-            {
-                return "The Scryfall corpus contains a dangling identity relationship.";
-            }
-        }
-
         Dictionary<Guid, List<Guid>> graph = [];
         await using (SqliteCommand edges = connection.CreateCommand())
         {
             edges.CommandText =
-                "SELECT parent_tag_id, child_tag_id FROM tag_relations WHERE generation_id = $generation;";
+                "SELECT relation.parent_tag_id, relation.child_tag_id FROM tag_relations relation " +
+                "JOIN tags parent ON parent.generation_id = relation.generation_id AND parent.tag_id = relation.parent_tag_id " +
+                "JOIN tags child ON child.generation_id = relation.generation_id AND child.tag_id = relation.child_tag_id " +
+                "WHERE relation.generation_id = $generation;";
             edges.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
             await using SqliteDataReader reader = await edges.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -1497,10 +1510,12 @@ internal sealed class ScryfallCardDataStore
             "SELECT requested.tag_id, relation.parent_tag_id " +
             "FROM requested JOIN tag_relations relation " +
             "ON relation.generation_id = $generation AND relation.child_tag_id = requested.tag_id " +
+            "JOIN tags parent ON parent.generation_id = relation.generation_id AND parent.tag_id = relation.parent_tag_id " +
             "UNION " +
             "SELECT ancestors.direct_tag_id, relation.parent_tag_id " +
             "FROM ancestors JOIN tag_relations relation " +
-            "ON relation.generation_id = $generation AND relation.child_tag_id = ancestors.ancestor_tag_id" +
+            "ON relation.generation_id = $generation AND relation.child_tag_id = ancestors.ancestor_tag_id " +
+            "JOIN tags parent ON parent.generation_id = relation.generation_id AND parent.tag_id = relation.parent_tag_id" +
             ") SELECT direct_tag_id, ancestor_tag_id FROM ancestors " +
             "ORDER BY direct_tag_id, ancestor_tag_id;";
         command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
@@ -1609,8 +1624,10 @@ internal sealed class ScryfallCardDataStore
         Dictionary<Guid, List<Guid>> edges = [];
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
-            "SELECT parent_tag_id, child_tag_id FROM tag_relations WHERE generation_id = $generation " +
-            "ORDER BY parent_tag_id, child_tag_id;";
+            "SELECT relation.parent_tag_id, relation.child_tag_id FROM tag_relations relation " +
+            "JOIN tags parent ON parent.generation_id = relation.generation_id AND parent.tag_id = relation.parent_tag_id " +
+            "JOIN tags child ON child.generation_id = relation.generation_id AND child.tag_id = relation.child_tag_id " +
+            "WHERE relation.generation_id = $generation ORDER BY relation.parent_tag_id, relation.child_tag_id;";
         command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

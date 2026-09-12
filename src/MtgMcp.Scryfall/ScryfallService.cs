@@ -586,17 +586,18 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         Guid? cardDataGenerationId,
         CancellationToken cancellationToken)
     {
-        List<StoredCardDataObject?> matches = [];
-        foreach (ScryfallEvidenceLookup lookup in lookups)
+        if (cardDataGenerationId is Guid generationId)
         {
-            StoredCardDataObject? stored = cardDataGenerationId is Guid generationId
-                ? await CardDataStore.FindCardInGenerationAsync(
-                    lookup.Lookup,
-                    generationId,
-                    lookup.RequiredLanguage,
-                    cancellationToken).ConfigureAwait(false)
-                : null;
-            matches.Add(stored);
+            return await CardDataStore.FindCardsInGenerationAsync(
+                lookups,
+                generationId,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        List<StoredCardDataObject?> matches = new(lookups.Count);
+        for (int index = 0; index < lookups.Count; index++)
+        {
+            matches.Add(null);
         }
 
         return matches;

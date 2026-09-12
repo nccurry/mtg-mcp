@@ -413,7 +413,14 @@ public sealed class ScryfallServiceTests
             "refresh",
             TestContext.Current.CancellationToken));
         Assert.Equal(4, bulk.Datasets.Count);
-        Assert.All(bulk.Datasets, dataset => Assert.True(dataset.Raw.TryGetProperty("fixture_extension", out _)));
+        Assert.All(bulk.Datasets, dataset =>
+        {
+            Assert.True(dataset.CompressedSize > 0);
+            Assert.EndsWith(".jsonl.gz", dataset.JsonlDownloadUri, StringComparison.Ordinal);
+            Assert.False(dataset.Raw.TryGetProperty("size", out _));
+            Assert.False(dataset.Raw.TryGetProperty("download_uri", out _));
+            Assert.True(dataset.Raw.TryGetProperty("fixture_extension", out _));
+        });
         Assert.IsType<OperationInvalidInput>((await service.SyncCorpusAsync(
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -739,7 +746,7 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
-    /// Verifies corrupt and cancelled bulk streams leave the previously active generation unchanged.
+    /// Verifies corrupt, cyclic, and cancelled bulk streams leave the previously active generation unchanged.
     /// </summary>
     [Fact]
     public async Task FailedCorpusSyncAndCancellation_LeaveActiveGenerationAtomic()
@@ -786,32 +793,6 @@ public sealed class ScryfallServiceTests
                 RequireSuccess(await service.GetCorpusStatusAsync(TestContext.Current.CancellationToken)).Active!.GenerationId);
         }
 
-        string danglingRuling = JsonSerializer.Serialize(new
-        {
-            @object = "ruling",
-            oracle_id = Guid.Parse("99999999-9999-4999-8999-999999999999"),
-            source = "wotc",
-            published_at = "2026-07-04",
-            comment = "Dangling fixture ruling.",
-        });
-        RecordingHandler dangling = ScryfallTestFixture.Provider(
-            4,
-            "Dangling Knight",
-            request => request.RequestUri!.AbsolutePath == "/download/rulings.jsonl.gz"
-                ? ScryfallTestFixture.Bytes(ScryfallTestFixture.GzipLines([danglingRuling]))
-                : null);
-        using (ScryfallService service = CreateService(temporary.Path, dangling))
-        {
-            OperationUnavailable failure = Assert.IsType<OperationUnavailable>((await service.SyncCorpusAsync(
-                "refresh",
-                active.GenerationId,
-                TestContext.Current.CancellationToken)).Value);
-            Assert.Equal("invalid-scryfall-corpus", failure.ReasonCode);
-            Assert.Equal(
-                active.GenerationId,
-                RequireSuccess(await service.GetCorpusStatusAsync(TestContext.Current.CancellationToken)).Active!.GenerationId);
-        }
-
         using CancellationTokenSource cancellation = new();
         IReadOnlyDictionary<string, byte[]> corpus = ScryfallTestFixture.CompressedCorpus("Cancelled Knight");
         RecordingHandler cancelled = ScryfallTestFixture.Provider(
@@ -838,10 +819,10 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
-    /// Verifies each index-backed tag relationship check rejects evidence whose referenced identity is absent.
+    /// Verifies unmatched tag references do not block a corpus and do not appear in card lookups.
     /// </summary>
     [Fact]
-    public async Task DanglingTagRelationships_RejectHierarchyOracleAndArtTargets()
+    public async Task DanglingTagRelationships_AllowCorpusAndHideUnmatchedTargets()
     {
         using TemporaryScryfallDirectory temporary = new();
         ScryfallCorpusSyncResult active = await SyncRevisionAsync(temporary.Path, 1, "Stable Knight");
@@ -863,16 +844,53 @@ public sealed class ScryfallServiceTests
                     : null);
             using ScryfallService service = CreateService(temporary.Path, handler);
 
-            OperationUnavailable failure = Assert.IsType<OperationUnavailable>((await service.SyncCorpusAsync(
+            ScryfallCorpusSyncResult updated = RequireSuccess(await service.SyncCorpusAsync(
                 "refresh",
                 active.GenerationId,
-                TestContext.Current.CancellationToken)).Value);
+                TestContext.Current.CancellationToken));
 
-            Assert.Equal("invalid-scryfall-corpus", failure.ReasonCode);
-            Assert.Equal(
-                active.GenerationId,
-                RequireSuccess(await service.GetCorpusStatusAsync(TestContext.Current.CancellationToken)).Active!.GenerationId);
+            Assert.NotEqual(active.GenerationId, updated.GenerationId);
+            ScryfallCardsByTagResult cards = RequireSuccess(await service.GetCardsByTagAsync(
+                "dangling-fixture",
+                dataset == "art_tags" ? "art" : "oracle",
+                includeDescendants: true,
+                cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Empty(cards.Page.Items);
+            Assert.Empty(cards.Assignments);
+            active = updated;
         }
+    }
+
+    /// <summary>
+    /// Verifies a ruling outside the installed card set does not block corpus activation.
+    /// </summary>
+    [Fact]
+    public async Task CorpusSync_AllowsRulingsOutsideInstalledCardSet()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        string ruling = JsonSerializer.Serialize(new
+        {
+            @object = "ruling",
+            oracle_id = Guid.Parse("99999999-9999-4999-8999-999999999999"),
+            source = "wotc",
+            published_at = "2026-07-04",
+            comment = "Fixture ruling outside the card set.",
+        });
+        RecordingHandler handler = ScryfallTestFixture.Provider(
+            intercept: request => request.RequestUri!.AbsolutePath == "/download/rulings.jsonl.gz"
+                ? ScryfallTestFixture.Bytes(ScryfallTestFixture.GzipLines([ruling]))
+                : null);
+        using ScryfallService service = CreateService(temporary.Path, handler);
+
+        ScryfallCorpusSyncResult sync = RequireSuccess(await service.SyncCorpusAsync(
+            "refresh",
+            null,
+            TestContext.Current.CancellationToken));
+        ScryfallCorpusStatus status = RequireSuccess(await service.GetCorpusStatusAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal("activated", sync.Outcome);
+        Assert.Equal(sync.GenerationId, status.Active!.GenerationId);
     }
 
     /// <summary>
@@ -1203,6 +1221,40 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
+    /// Verifies ordered exact evidence reads every installed card without a provider request.
+    /// </summary>
+    [Fact]
+    public async Task ExactCollectionEvidence_ResolvesMultipleInstalledCardsFromTheCorpus()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = ScryfallTestFixture.Provider();
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        _ = RequireSuccess(await service.SyncCorpusAsync(
+            "refresh",
+            null,
+            TestContext.Current.CancellationToken));
+        int requestCount = handler.Requests.Count;
+        ScryfallEvidenceLookup[] lookups =
+        [
+            new(new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D"))),
+            new(new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.RedCardId.ToString("D"))),
+            new(new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D"))),
+        ];
+
+        ScryfallExactCollectionEvidence evidence = RequireSuccess(await service.ResolveExactCollectionAsync(
+            lookups,
+            "cache-only",
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(["found", "found", "found"], evidence.Rows.Select(value => value.Status));
+        Assert.Equal(["corpus", "corpus", "corpus"], evidence.Rows.Select(value => value.Origin));
+        Assert.Equal(
+            ["Venerable Knight", "Monastery Swiftspear", "Venerable Knight"],
+            evidence.Rows.Select(value => value.Card!.Name));
+        Assert.Equal(requestCount, handler.Requests.Count);
+    }
+
+    /// <summary>
     /// Verifies exact identity acquisition retains the 150-row MCP bound and 75-identifier provider batches.
     /// </summary>
     [Fact]
@@ -1517,10 +1569,10 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
-    /// Verifies line-oriented corpus import hashes a large synthetic stream and rejects its declared-size bound.
+    /// Verifies line-oriented corpus import hashes a large synthetic stream and records its observed size.
     /// </summary>
     [Fact]
-    public async Task CorpusImport_StreamsLargeInputAndEnforcesSizeBound()
+    public async Task CorpusImport_StreamsLargeInputAndRecordsObservedSize()
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallDatabase database = new(temporary.Path);
@@ -1548,9 +1600,6 @@ public sealed class ScryfallServiceTests
             "Synthetic streaming fixture.",
             new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero),
             payload.Length,
-            "application/json",
-            "gzip",
-            "https://fixture.test/all.json",
             "https://fixture.test/all.jsonl.gz",
             raw.RootElement.Clone());
         await using MemoryStream stream = new(payload, writable: false);
@@ -1565,17 +1614,6 @@ public sealed class ScryfallServiceTests
         Assert.Equal(payload.Length, imported.SourceBytes);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant(), imported.Checksum);
 
-        Guid oversizedGeneration = await store.BeginGenerationAsync(
-            new DateTimeOffset(2026, 7, 4, 12, 1, 0, TimeSpan.Zero),
-            TestContext.Current.CancellationToken);
-        ScryfallBulkData tinyDeclaration = metadata with { Size = 1 };
-        byte[] oversizedPayload = Encoding.UTF8.GetBytes(new string('x', 1_048_578));
-        await using MemoryStream oversized = new(oversizedPayload, writable: false);
-        await Assert.ThrowsAsync<InvalidDataException>(() => store.ImportDatasetAsync(
-            oversizedGeneration,
-            tinyDeclaration,
-            oversized,
-            TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -1631,7 +1669,7 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
-    /// Builds one well-shaped tag dataset containing the selected missing relationship target.
+    /// Builds one well-shaped tag dataset containing the selected unmatched relationship target.
     /// </summary>
     private static byte[] DanglingTagDataset(string dataset, string kind)
     {

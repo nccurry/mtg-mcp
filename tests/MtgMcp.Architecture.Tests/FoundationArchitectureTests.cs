@@ -88,6 +88,20 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
+    /// Verifies single-file releases include native SQLite dependencies when the application starts.
+    /// </summary>
+    [Fact]
+    public void AppProject_SingleFileReleaseExtractsNativeLibraries()
+    {
+        XDocument project = LoadProject("src/MtgMcp.App/MtgMcp.App.csproj");
+
+        Assert.Equal("true", Assert.Single(project.Descendants("PublishSingleFile")).Value);
+        Assert.Equal(
+            "true",
+            Assert.Single(project.Descendants("IncludeNativeLibrariesForSelfExtract")).Value);
+    }
+
+    /// <summary>
     /// Verifies Decks depends only on Core and the approved SQLite packages.
     /// </summary>
     [Fact]
@@ -343,6 +357,23 @@ public sealed class FoundationArchitectureTests
             Assert.Single(manifest.RootElement.GetProperty("packages").EnumerateArray())
                 .GetProperty("version")
                 .GetString());
+    }
+
+    /// <summary>
+    /// Verifies routine and release test commands use the xUnit Microsoft Testing Platform filters.
+    /// </summary>
+    [Fact]
+    public void TestCommands_UseMicrosoftTestingPlatformFilters()
+    {
+        string taskfile = File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml"));
+        string releaseScript = File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1"));
+
+        Assert.DoesNotContain("-- --filter \"", taskfile, StringComparison.Ordinal);
+        Assert.Contains("--filter-not-trait", taskfile, StringComparison.Ordinal);
+        Assert.Contains("--filter-trait", taskfile, StringComparison.Ordinal);
+        Assert.Contains("--filter-query", taskfile, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"--filter\"", releaseScript, StringComparison.Ordinal);
+        Assert.Contains("\"--filter-query\"", releaseScript, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -185,10 +185,7 @@ internal static class ScryfallMapper
             RequiredString(raw, "name"),
             RequiredString(raw, "description"),
             RequiredDateTimeOffset(raw, "updated_at"),
-            RequiredLong(raw, "size"),
-            RequiredString(raw, "content_type"),
-            RequiredString(raw, "content_encoding"),
-            RequiredString(raw, "download_uri"),
+            RequiredLong(raw, "compressed_size"),
             RequiredString(raw, "jsonl_download_uri"),
             raw.Clone());
     }

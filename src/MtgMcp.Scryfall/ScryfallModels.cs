@@ -147,7 +147,7 @@ public sealed record ScryfallSet(
     [property: JsonPropertyName("raw"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Raw);
 
 /// <summary>
-/// Describes one official bulk dataset without exposing a local path.
+/// Describes one official compressed JSONL bulk dataset without exposing a local path.
 /// </summary>
 public sealed record ScryfallBulkData(
     [property: JsonPropertyName("id")] Guid Id,
@@ -155,10 +155,7 @@ public sealed record ScryfallBulkData(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("description")] string Description,
     [property: JsonPropertyName("updatedAtUtc")] DateTimeOffset UpdatedAtUtc,
-    [property: JsonPropertyName("size")] long Size,
-    [property: JsonPropertyName("contentType")] string ContentType,
-    [property: JsonPropertyName("contentEncoding")] string ContentEncoding,
-    [property: JsonPropertyName("downloadUri")] string DownloadUri,
+    [property: JsonPropertyName("compressedSize")] long CompressedSize,
     [property: JsonPropertyName("jsonlDownloadUri")] string JsonlDownloadUri,
     [property: JsonPropertyName("raw")] JsonElement Raw);
 

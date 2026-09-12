@@ -121,11 +121,8 @@ internal static class DeckOnCurveSourceFixture
                 name = datasetType.Replace('_', ' '),
                 description = "On-curve source fixture.",
                 updated_at = "2026-09-10T00:00:00+00:00",
-                size = 1024,
-                content_type = "application/json",
-                content_encoding = "gzip",
+                compressed_size = 1024,
                 uri = $"https://on-curve.fixture/bulk-data/{datasetType}",
-                download_uri = $"https://on-curve.fixture/download/{datasetType}.json",
                 jsonl_download_uri = $"https://on-curve.fixture/download/{datasetType}.jsonl.gz",
             }).ToArray();
             return JsonSerializer.Serialize(new { @object = "list", has_more = false, data });

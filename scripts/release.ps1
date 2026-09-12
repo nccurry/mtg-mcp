@@ -322,8 +322,8 @@ function Invoke-ToolSmoke {
             $Configuration `
             "--no-build" `
             "--" `
-            "--filter" `
-            "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~DeckOnCurveMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
+            "--filter-query" `
+            "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(DeckOnCurveMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)"
     }
     finally {
         $env:MTGMCP_E2E_COMMAND = $previousCommand
@@ -380,8 +380,8 @@ function Invoke-LiveAcceptance {
             $Configuration `
             "--no-build" `
             "--" `
-            "--filter" `
-            "FullyQualifiedName~LiveMethodAcceptanceTests"
+            "--filter-query" `
+            "/*/*/LiveMethodAcceptanceTests"
         $dataRoot = $env:MTGMCP_LIVE_ACCEPTANCE_DATA_DIR
         if ([string]::IsNullOrWhiteSpace($dataRoot)) {
             throw "MTGMCP_LIVE_ACCEPTANCE_DATA_DIR is required."

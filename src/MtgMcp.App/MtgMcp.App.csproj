@@ -21,6 +21,7 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <PublishSingleFile>true</PublishSingleFile>
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
         <PublishTrimmed>false</PublishTrimmed>
         <IsPackable>true</IsPackable>
         <PackAsTool>true</PackAsTool>

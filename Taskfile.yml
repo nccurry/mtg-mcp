@@ -105,7 +105,7 @@ tasks:
     desc: Run all non-live tests
     deps: [build]
     cmds:
-      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter "Category!=Live&Category!=Benchmark"'
+      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter-not-trait "Category=Live" "Category=Benchmark"'
 
   test:unit:
     desc: Run application, Core, Statistics, and OnCurve unit tests
@@ -114,19 +114,19 @@ tasks:
       - >
         {{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.OnCurve.Tests/MtgMcp.OnCurve.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
   test:integration:
     desc: Run architecture and local deck integration tests
@@ -135,27 +135,27 @@ tasks:
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
   test:e2e:
     desc: Run foundation process end-to-end tests
@@ -165,17 +165,17 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "Category=E2E"
+        -- --filter-trait "Category=E2E"
 
   test:live:
     desc: Run bounded live-provider tests; full corpus and Archidekt mutations require explicit opt-in
     deps: [restore]
     cmds:
-      - '{{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
-      - '{{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
-      - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
-      - '{{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
-      - '{{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
 
   test:live:methods:
     desc: Install the package and run explicitly enabled method-by-method live acceptance
@@ -192,7 +192,7 @@ tasks:
         --configuration {{.CONFIGURATION}}
         --no-build
         --no-restore
-        -- --filter "Category=Benchmark" --output Detailed --show-stdout All
+        -- --filter-trait "Category=Benchmark" --output Detailed --show-stdout All
 
   coverage:
     desc: Run coverage gates and generate the Codecov report
@@ -213,7 +213,7 @@ tasks:
         dotnet test --solution {{.SOLUTION}}
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "Category!=Live&Category!=Benchmark"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
   coverage:gates:
     desc: Enforce 90 percent line coverage for every production assembly
@@ -304,7 +304,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "FullyQualifiedName~FoundationArchitectureTests.SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
+        -- --filter-query "/*/*/FoundationArchitectureTests/SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
 
   ci:
     desc: Run the CI validation suite
@@ -330,7 +330,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~DeckOnCurveMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
+        -- --filter-query "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(DeckOnCurveMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)"
 
   install:
     desc: Install the current branch on this workstation

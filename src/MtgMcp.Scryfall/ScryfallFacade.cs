@@ -373,6 +373,11 @@ public sealed class ScryfallService : IDisposable
 /// </summary>
 internal sealed class ScryfallCardDataLifecycleOperations
 {
+    /// <summary>
+    /// Reserves working space for decompressed JSONL data and the indexed SQLite corpus.
+    /// </summary>
+    private const long RequiredCorpusSpaceMultiplier = 24;
+
     /// <summary>Stores card metadata acquisition and the shared provider runtime.</summary>
     private readonly ScryfallCardEvidenceOperations cards;
 
@@ -586,15 +591,15 @@ internal sealed class ScryfallCardDataLifecycleOperations
         }
     }
 
-    /// <summary>Performs a conservative free-space preflight before card-data synchronization.</summary>
+    /// <summary>Checks free space against Scryfall's compressed sizes and an import working-space allowance.</summary>
     private OperationUnavailable? CheckDiskSpace(IReadOnlyList<ScryfallBulkData> datasets)
     {
         try
         {
             string root = Path.GetPathRoot(Path.GetFullPath(cards.DataRoot))!;
             DriveInfo drive = new(root);
-            long sourceBytes = datasets.Sum(value => value.Size);
-            long required = checked(sourceBytes * 3);
+            long compressedBytes = datasets.Sum(value => value.CompressedSize);
+            long required = checked(compressedBytes * RequiredCorpusSpaceMultiplier);
             return drive.AvailableFreeSpace >= required
                 ? null
                 : new OperationUnavailable(

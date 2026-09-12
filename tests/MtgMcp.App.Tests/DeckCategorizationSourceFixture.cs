@@ -97,11 +97,8 @@ internal static class DeckCategorizationSourceFixture
             name = type.Replace('_', ' '),
             description = "Category-rule source fixture.",
             updated_at = "2026-09-07T21:00:33+00:00",
-            size = 1024,
-            content_type = "application/json",
-            content_encoding = "gzip",
+            compressed_size = 1024,
             uri = $"https://category.fixture/bulk-data/{type}",
-            download_uri = $"https://category.fixture/download/{type}.json",
             jsonl_download_uri = $"https://category.fixture/download/{type}.jsonl.gz",
         }).ToArray();
         return JsonSerializer.Serialize(new { @object = "list", has_more = false, data });

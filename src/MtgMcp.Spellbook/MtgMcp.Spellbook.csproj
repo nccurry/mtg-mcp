@@ -6,7 +6,4 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
-  <ItemGroup>
-    <None Update="Fixtures\OpenApi\api-6.3.3.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
 </Project>

@@ -117,6 +117,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string dataRoot = Path.Combine(workingDirectory.FullName, "private-data");
         StdioClientTransportOptions options = CreateTransportOptions(
             repositoryRoot,
+            workingDirectory,
             dataRoot,
             mode,
             toolsets,
@@ -160,6 +161,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
         DirectoryInfo workingDirectory = Directory.CreateTempSubdirectory("mtg-mcp-live-e2e-");
         StdioClientTransportOptions options = CreateTransportOptions(
             repositoryRoot,
+            workingDirectory,
             Path.GetFullPath(dataRoot),
             mode,
             toolsets,
@@ -221,6 +223,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
     /// </summary>
     private static StdioClientTransportOptions CreateTransportOptions(
         string repositoryRoot,
+        DirectoryInfo workingDirectory,
         string dataRoot,
         string? mode,
         string? toolsets,
@@ -243,9 +246,14 @@ internal sealed class McpProcessSession : IAsyncDisposable
         }
         else
         {
-            command = ResolveInstalledCommand(repositoryRoot, installedCommand.Trim());
+            command = installedCommand.Trim();
             arguments = [];
         }
+
+        (string launchCommand, string[] launchArguments, string launchWorkingDirectory) =
+            OperatingSystem.IsWindows()
+                ? CreateWindowsLaunch(workingDirectory, command, arguments)
+                : (command, arguments, repositoryRoot);
 
         Dictionary<string, string?> environment = new(StringComparer.Ordinal)
         {
@@ -275,9 +283,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
         return new StdioClientTransportOptions
         {
             Name = "mtg-mcp-foundation-e2e",
-            Command = command,
-            Arguments = arguments,
-            WorkingDirectory = repositoryRoot,
+            Command = launchCommand,
+            Arguments = launchArguments,
+            WorkingDirectory = launchWorkingDirectory,
             EnvironmentVariables = environment,
             ShutdownTimeout = requireInstalledCommand
                 ? TimeSpan.FromSeconds(10)
@@ -319,19 +327,42 @@ internal sealed class McpProcessSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Uses a repository-relative Windows command so the SDK launcher preserves paths containing spaces.
+    /// Writes a short Windows batch launcher so the MCP transport can start commands whose paths contain spaces.
     /// </summary>
-    private static string ResolveInstalledCommand(string repositoryRoot, string command)
+    private static (string Command, string[] Arguments, string WorkingDirectory) CreateWindowsLaunch(
+        DirectoryInfo workingDirectory,
+        string command,
+        IReadOnlyList<string> arguments)
     {
-        if (!OperatingSystem.IsWindows() || !Path.IsPathRooted(command))
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        const string launcherName = "mtg-mcp-server.cmd";
+        string launcherPath = Path.Combine(workingDirectory.FullName, launcherName);
+        List<string> quotedParts = [QuoteForBatch(command)];
+        foreach (string argument in arguments)
         {
-            return command;
+            quotedParts.Add(QuoteForBatch(argument));
         }
 
-        string relative = Path.GetRelativePath(repositoryRoot, command);
-        return relative.StartsWith("..", StringComparison.Ordinal)
-            ? command
-            : relative;
+        string commandLine = string.Join(" ", quotedParts);
+        File.WriteAllLines(launcherPath, ["@echo off", commandLine]);
+        return ("cmd.exe", ["/d", "/c", launcherName], workingDirectory.FullName);
+    }
+
+    /// <summary>
+    /// Quotes one command or argument for the private batch launcher.
+    /// </summary>
+    private static string QuoteForBatch(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        if (value.IndexOfAny(['\r', '\n', '"']) >= 0)
+        {
+            throw new ArgumentException("A process path or argument contains unsupported characters.", nameof(value));
+        }
+
+        return $"\"{value}\"";
     }
 
     /// <summary>

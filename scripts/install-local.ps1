@@ -132,6 +132,59 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-ServerStartupProbe {
+    param([Parameter(Mandatory = $true)][string] $Command)
+
+    $probeName = "mtg-mcp-startup-probe-$([Guid]::NewGuid().ToString('N'))"
+    $probeDirectory = Join-Path ([System.IO.Path]::GetTempPath()) $probeName
+    [System.IO.Directory]::CreateDirectory($probeDirectory) | Out-Null
+    try {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $Command
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardInput = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.ArgumentList.Add("--mode")
+        $startInfo.ArgumentList.Add("read-only")
+        $startInfo.ArgumentList.Add("--toolsets")
+        $startInfo.ArgumentList.Add("scryfall")
+        $startInfo.ArgumentList.Add("--data-dir")
+        $startInfo.ArgumentList.Add($probeDirectory)
+
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+        if ($null -eq $process) {
+            throw "The installed MCP command could not be started."
+        }
+
+        try {
+            $process.StandardInput.Close()
+            $outputTask = $process.StandardOutput.ReadToEndAsync()
+            $errorTask = $process.StandardError.ReadToEndAsync()
+            if (-not $process.WaitForExit(10000)) {
+                $process.Kill($true)
+                throw "The installed MCP command did not stop after its input closed."
+            }
+
+            $output = $outputTask.GetAwaiter().GetResult()
+            $error = $errorTask.GetAwaiter().GetResult()
+            if ($process.ExitCode -ne 0 -or
+                -not [string]::IsNullOrEmpty($output) -or
+                -not [string]::IsNullOrEmpty($error)) {
+                throw "The installed MCP command could not start a Scryfall-enabled server."
+            }
+        }
+        finally {
+            $process.Dispose()
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $probeDirectory) {
+            Remove-Item -LiteralPath $probeDirectory -Recurse -Force
+        }
+    }
+}
+
 function Get-EvaluatedProjectVersion {
     $dotnetCommand = Get-DotnetCommand
     $projectPath = Resolve-RepoPath $Project
@@ -382,7 +435,6 @@ Invoke-Checked $DotnetCommand `
     "--self-contained" "true" `
     "--output" $publishOutput `
     "-p:Version=$Version" `
-    "-p:PublishSingleFile=true" `
     "-p:PublishTrimmed=false"
 
 $publishedName = if ($IsWindows) { "mtg-mcp.exe" } else { "mtg-mcp" }
@@ -397,7 +449,13 @@ if (-not (Test-Path -LiteralPath $publishedExecutable)) {
 }
 
 $globalToolDirectory = Join-Path (Join-Path (Get-DotnetCliHome) ".dotnet") "tools"
-$globalToolPath = Join-Path $globalToolDirectory $publishedName
+$globalToolName = [System.IO.Path]::GetFileNameWithoutExtension($publishedName)
+$globalToolPath = if ($IsWindows) {
+    Join-Path $globalToolDirectory "$globalToolName.cmd"
+}
+else {
+    Join-Path $globalToolDirectory $globalToolName
+}
 
 $installedCommandPath = $installPathFull
 try {
@@ -430,6 +488,9 @@ else {
 
 Write-Host "Smoke-testing installed command path"
 Invoke-Checked $installedCommandPath "--smoke"
+
+Write-Host "Starting the installed command with Scryfall enabled"
+Invoke-ServerStartupProbe $installedCommandPath
 
 Write-Host "Installed $PackageId $Version"
 Write-Host "Global tool: $globalToolPath"

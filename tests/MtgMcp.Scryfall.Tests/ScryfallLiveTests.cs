@@ -40,7 +40,7 @@ public sealed class ScryfallLiveTests
             metadata.Datasets.Select(value => value.Type));
         Assert.All(metadata.Datasets, value =>
         {
-            Assert.Equal("gzip", value.ContentEncoding);
+            Assert.True(value.CompressedSize > 0);
             Assert.EndsWith(".jsonl.gz", value.JsonlDownloadUri, StringComparison.Ordinal);
         });
         Assert.Equal("Venerable Knight", card.Card.Name);

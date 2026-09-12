@@ -65,6 +65,10 @@ mtg-mcp --mode=local --toolsets=default
 Use `--smoke` for a one-shot configuration check. It does not start an MCP
 session.
 
+`task install` also starts an isolated, read-only Scryfall-enabled MCP server
+and stops it. That catches single-file packaging problems that `--smoke` cannot
+see.
+
 ## Choose a mode
 
 Modes control authority.

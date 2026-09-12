@@ -248,11 +248,8 @@ internal static class ScryfallTestFixture
             uri = $"https://fixture.test/bulk-data/{type}",
             name = type.Replace('_', ' '),
             description = $"Fixture {type} dataset.",
-            size = 4096,
-            download_uri = $"https://fixture.test/download/{type}.json",
+            compressed_size = 4096,
             jsonl_download_uri = $"https://fixture.test/download/{type}.jsonl.gz",
-            content_type = "application/json",
-            content_encoding = "gzip",
             fixture_extension = revision,
         }).ToArray();
         return JsonSerializer.Serialize(new { @object = "list", has_more = false, data = datasets });
