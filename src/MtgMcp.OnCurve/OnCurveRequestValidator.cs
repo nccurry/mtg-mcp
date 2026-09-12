@@ -18,31 +18,6 @@ internal static class OnCurveRequestValidator
     internal const int MaximumMainboardCopies = 500;
 
     /// <summary>
-    /// Defines the largest mainboard entry count supported by one exact Scryfall lookup.
-    /// </summary>
-    internal const int MaximumMainboardEntries = 150;
-
-    /// <summary>
-    /// Defines the first supported modeled turn.
-    /// </summary>
-    internal const int MinimumTurnLimit = 1;
-
-    /// <summary>
-    /// Defines the last supported modeled turn.
-    /// </summary>
-    internal const int MaximumTurnLimit = 12;
-
-    /// <summary>
-    /// Defines the smallest supported number of sampled hands.
-    /// </summary>
-    internal const int MinimumSampleCount = 100;
-
-    /// <summary>
-    /// Defines the largest supported number of sampled hands.
-    /// </summary>
-    internal const int MaximumSampleCount = 100_000;
-
-    /// <summary>
     /// Returns the request when its resolved entries, source values, rules, and bounds are complete.
     /// </summary>
     internal static OperationResult<OnCurveRequest> Validate(OnCurveRequest? request)
@@ -60,7 +35,7 @@ internal static class OnCurveRequestValidator
             return Invalid("request.target must name an entry, a printing, and a mana cost.");
         }
 
-        if (request.Mainboard is null || request.Mainboard.Count is < 1 or > MaximumMainboardEntries)
+        if (request.Mainboard is null || request.Mainboard.Count is < 1 or > OnCurveEstimate.MaximumMainboardEntries)
         {
             return Invalid("request.mainboard must contain 1 through 150 entries.");
         }
@@ -70,13 +45,12 @@ internal static class OnCurveRequestValidator
             return Invalid("request.candidateLandEntryIds and request.landRules are required.");
         }
 
-        if (request.TurnLimit is < MinimumTurnLimit or > MaximumTurnLimit ||
-            request.SampleCount is < MinimumSampleCount or > MaximumSampleCount)
+        if (!OnCurveEstimate.HasSupportedRunSettings(request.TurnLimit, request.SampleCount))
         {
             return Invalid("request turnLimit or sampleCount is outside the supported bounds.");
         }
 
-        if (!OnCurveSeed.TryParse(request.Seed, out _))
+        if (!OnCurveEstimate.IsValidReplaySeed(request.Seed))
         {
             return Invalid("request seed must contain exactly 16 hexadecimal characters.");
         }

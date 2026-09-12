@@ -618,6 +618,14 @@ public sealed class FoundationArchitectureTests
             File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
             StringComparison.Ordinal);
         Assert.Contains(
+            "DeckOnCurveMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "DeckOnCurveMcpTests",
+            File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
+            StringComparison.Ordinal);
+        Assert.Contains(
             "ToolsetNorthStarMcpTests",
             File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
             StringComparison.Ordinal);

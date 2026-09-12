@@ -62,6 +62,16 @@ function Get-DotnetCommand {
     throw "Could not find dotnet. Run task setup or mise install."
 }
 
+function Get-InstalledToolCommand {
+    param([Parameter(Mandatory = $true)][string] $ToolPath)
+
+    if ($IsWindows) {
+        return Join-Path $ToolPath "mtg-mcp.cmd"
+    }
+
+    return Join-Path $ToolPath "mtg-mcp"
+}
+
 function Resolve-PackageVersion {
     if (-not [string]::IsNullOrWhiteSpace($Version)) {
         return $Version.Trim()
@@ -291,12 +301,7 @@ function Invoke-ToolSmoke {
     $dotnetCommand = Get-DotnetCommand
     Invoke-Checked $dotnetCommand "tool" "install" $PackageId "--tool-path" $toolPath "--add-source" $packageSource "--version" $Version
 
-    $toolExecutable = if ($IsWindows) {
-        Join-Path $toolPath "mtg-mcp.exe"
-    }
-    else {
-        Join-Path $toolPath "mtg-mcp"
-    }
+    $toolExecutable = Get-InstalledToolCommand $toolPath
 
     if (-not (Test-Path -LiteralPath $toolExecutable)) {
         throw "Installed tool executable not found: $toolExecutable"
@@ -318,7 +323,7 @@ function Invoke-ToolSmoke {
             "--no-build" `
             "--" `
             "--filter" `
-            "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
+            "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~DeckOnCurveMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
     }
     finally {
         $env:MTGMCP_E2E_COMMAND = $previousCommand
@@ -352,12 +357,7 @@ function Invoke-LiveAcceptance {
     $dotnetCommand = Get-DotnetCommand
     Invoke-Checked $dotnetCommand "tool" "install" $PackageId "--tool-path" $toolPath "--add-source" $packageSource "--version" $Version
 
-    $toolExecutable = if ($IsWindows) {
-        Join-Path $toolPath "mtg-mcp.exe"
-    }
-    else {
-        Join-Path $toolPath "mtg-mcp"
-    }
+    $toolExecutable = Get-InstalledToolCommand $toolPath
 
     if (-not (Test-Path -LiteralPath $toolExecutable)) {
         throw "Installed tool executable not found: $toolExecutable"

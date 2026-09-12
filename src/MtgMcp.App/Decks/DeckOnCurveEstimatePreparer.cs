@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
@@ -313,8 +312,7 @@ internal static class DeckOnCurveEstimatePreparer
     /// </summary>
     private static string CreateSeed()
     {
-        byte[] bytes = RandomNumberGenerator.GetBytes(sizeof(ulong));
-        return OnCurveSeed.Format(BinaryPrimitives.ReadUInt64LittleEndian(bytes));
+        return Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(sizeof(ulong)));
     }
 
     /// <summary>

@@ -330,7 +330,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
+        -- --filter "FullyQualifiedName~FoundationMcpTests|FullyQualifiedName~DeckMcpTests|FullyQualifiedName~DeckInterchangeMcpTests|FullyQualifiedName~DeckOnCurveMcpTests|FullyQualifiedName~ToolsetNorthStarMcpTests|FullyQualifiedName~ScryfallMcpTests|FullyQualifiedName~SpellbookMcpTests|FullyQualifiedName~StatisticsMcpTests"
 
   install:
     desc: Install the current branch on this workstation
@@ -361,7 +361,7 @@ tasks:
         {{if eq .LOCAL_CLEANUP_DRY_RUN "true"}}-DryRun{{end}}
 
   pack:
-    desc: Pack the application as a NuGet dotnet tool
+    desc: Pack the application as a NuGet tool for supported runtimes
     deps: [restore]
     cmds:
       - >
@@ -370,8 +370,6 @@ tasks:
         --output {{.PACKAGE_DIR}}
         {{if ne .VERSION ""}}-p:Version={{.VERSION}}{{end}}
         -p:ContinuousIntegrationBuild=true
-        -p:IncludeSymbols=true
-        -p:SymbolPackageFormat=snupkg
 
   publish:
     desc: Publish a single self-contained binary for the current runtime
@@ -388,8 +386,6 @@ tasks:
         --self-contained true
         --output {{.PUBLISH_DIR}}/{{.RUNTIME}}
         {{if ne .VERSION ""}}-p:Version={{.VERSION}}{{end}}
-        -p:PublishSingleFile=true
-        -p:PublishTrimmed=false
 
   publish:all:
     desc: Publish common desktop runtimes

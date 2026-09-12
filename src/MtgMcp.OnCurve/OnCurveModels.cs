@@ -3,7 +3,7 @@ namespace MtgMcp.OnCurve;
 /// <summary>
 /// States how the calculation may use one caller-identified land.
 /// </summary>
-internal enum OnCurveLandRule
+public enum OnCurveLandRule
 {
     /// <summary>
     /// Allows the land to provide one listed mana color on the turn it is played.
@@ -24,7 +24,7 @@ internal enum OnCurveLandRule
 /// <summary>
 /// Names the one mutually exclusive reason a completed modeled hand did not cast the target.
 /// </summary>
-internal enum OnCurveMissReason
+public enum OnCurveMissReason
 {
     /// <summary>
     /// The target was not in hand by the final modeled turn.
@@ -55,7 +55,7 @@ internal enum OnCurveMissReason
 /// <summary>
 /// Names one bounded event in a captured modeled hand.
 /// </summary>
-internal enum OnCurveTraceEventKind
+public enum OnCurveTraceEventKind
 {
     /// <summary>
     /// A card entered the modeled hand.
@@ -86,22 +86,22 @@ internal enum OnCurveTraceEventKind
 /// <summary>
 /// Records that the resolved card source did not contain a produced-mana field.
 /// </summary>
-internal sealed record OnCurveProducedManaMissing;
+public sealed record OnCurveProducedManaMissing;
 
 /// <summary>
 /// Records that the resolved card source explicitly set produced-mana to null.
 /// </summary>
-internal sealed record OnCurveProducedManaNull;
+public sealed record OnCurveProducedManaNull;
 
 /// <summary>
 /// Records the ordered produced-mana values from one resolved card source.
 /// </summary>
-internal sealed record OnCurveProducedManaValues
+public sealed record OnCurveProducedManaValues
 {
     /// <summary>
     /// Creates one direct list of resolved produced-mana values.
     /// </summary>
-    internal OnCurveProducedManaValues(IReadOnlyList<string> colors)
+    public OnCurveProducedManaValues(IReadOnlyList<string> colors)
     {
         ArgumentNullException.ThrowIfNull(colors);
         Colors = Array.AsReadOnly(colors.ToArray());
@@ -110,13 +110,13 @@ internal sealed record OnCurveProducedManaValues
     /// <summary>
     /// Gets an immutable copy of the resolved produced-mana values.
     /// </summary>
-    internal IReadOnlyList<string> Colors { get; }
+    public IReadOnlyList<string> Colors { get; }
 }
 
 /// <summary>
 /// Preserves whether a resolved card source omitted, nullified, or listed mana colors.
 /// </summary>
-internal readonly union OnCurveProducedMana(
+public readonly union OnCurveProducedMana(
     OnCurveProducedManaMissing,
     OnCurveProducedManaNull,
     OnCurveProducedManaValues);
@@ -124,7 +124,7 @@ internal readonly union OnCurveProducedMana(
 /// <summary>
 /// Identifies the selected target and its exact printed mana cost.
 /// </summary>
-internal sealed record OnCurveTarget(
+public sealed record OnCurveTarget(
     Guid EntryId,
     Guid PrintingId,
     string? ManaCost);
@@ -132,7 +132,7 @@ internal sealed record OnCurveTarget(
 /// <summary>
 /// Identifies one resolved mainboard entry, its copy count, and its source fact.
 /// </summary>
-internal sealed record OnCurveDeckEntry(
+public sealed record OnCurveDeckEntry(
     Guid EntryId,
     Guid PrintingId,
     int Quantity,
@@ -141,14 +141,14 @@ internal sealed record OnCurveDeckEntry(
 /// <summary>
 /// Associates one eligible land with the caller's stated model rule.
 /// </summary>
-internal sealed record OnCurveLandRuleInput(
+public sealed record OnCurveLandRuleInput(
     Guid EntryId,
     OnCurveLandRule Rule);
 
 /// <summary>
 /// Holds only the resolved values needed for one future on-curve calculation.
 /// </summary>
-internal sealed record OnCurveRequest(
+public sealed record OnCurveRequest(
     Guid DeckId,
     long DeckRevision,
     OnCurveTarget? Target,
@@ -163,14 +163,14 @@ internal sealed record OnCurveRequest(
 /// <summary>
 /// Records one source used to pay one target-cost symbol in a captured trace.
 /// </summary>
-internal sealed record OnCurvePaymentSource(
+public sealed record OnCurvePaymentSource(
     Guid EntryId,
     string PaidFor);
 
 /// <summary>
 /// Records one bounded event from a modeled hand trace.
 /// </summary>
-internal sealed record OnCurveTraceEvent(
+public sealed record OnCurveTraceEvent(
     OnCurveTraceEventKind Kind,
     int Turn,
     Guid? EntryId = null,
@@ -181,7 +181,7 @@ internal sealed record OnCurveTraceEvent(
 /// <summary>
 /// Records one successful or unsuccessful modeled hand without changing later random values.
 /// </summary>
-internal sealed record OnCurveTrace(
+public sealed record OnCurveTrace(
     int TrialNumber,
     bool Succeeded,
     IReadOnlyList<OnCurveTraceEvent> Events,
@@ -190,21 +190,21 @@ internal sealed record OnCurveTrace(
 /// <summary>
 /// Records the lower and upper bounds of one two-sided Wilson interval.
 /// </summary>
-internal sealed record OnCurveWilsonInterval(
+public sealed record OnCurveWilsonInterval(
     double LowerBound,
     double UpperBound);
 
 /// <summary>
 /// Records the number of modeled misses with one stable final reason.
 /// </summary>
-internal sealed record OnCurveFailureCount(
+public sealed record OnCurveFailureCount(
     OnCurveMissReason Reason,
     int Count);
 
 /// <summary>
 /// Returns one complete repeatable sampled result from resolved deck and source facts.
 /// </summary>
-internal sealed record OnCurveRunReport(
+public sealed record OnCurveRunReport(
     string ModelVersion,
     string PolicyId,
     string RandomVersion,

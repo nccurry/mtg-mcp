@@ -49,9 +49,8 @@ internal sealed class DeckOnCurveEstimateCoordinator
             return Invalid("The deck ID, expected revision, target entry ID, and landRules are required.");
         }
 
-        if (request!.TurnLimit is < OnCurveRequestValidator.MinimumTurnLimit or > OnCurveRequestValidator.MaximumTurnLimit ||
-            request.SampleCount is < OnCurveRequestValidator.MinimumSampleCount or > OnCurveRequestValidator.MaximumSampleCount ||
-            request.Seed is not null && !OnCurveSeed.TryParse(request.Seed, out _))
+        if (!OnCurveEstimate.HasSupportedRunSettings(request!.TurnLimit, request.SampleCount) ||
+            (request.Seed is not null && !OnCurveEstimate.IsValidReplaySeed(request.Seed)))
         {
             return Invalid("The turn limit, sample count, or replay seed is outside the supported bounds.");
         }
@@ -95,7 +94,7 @@ internal sealed class DeckOnCurveEstimateCoordinator
             return ForwardFailure<DeckOnCurvePreparedEstimate, DeckOnCurveEstimateResult>(preparation);
         }
 
-        OperationResult<OnCurveRunReport> calculation = OnCurveCalculator.Calculate(
+        OperationResult<OnCurveRunReport> calculation = OnCurveEstimate.Calculate(
             prepared.Data.Request,
             cancellationToken);
         return calculation switch
@@ -155,7 +154,7 @@ internal sealed class DeckOnCurveEstimateCoordinator
             return Invalid<DeckOnCurveDeckSelection>("The selected target entry must be in the deck mainboard.");
         }
 
-        if (mainboard.Count is < 1 or > OnCurveRequestValidator.MaximumMainboardEntries)
+        if (mainboard.Count is < 1 or > OnCurveEstimate.MaximumMainboardEntries)
         {
             return Invalid<DeckOnCurveDeckSelection>("The deck mainboard must contain 1 through 150 entries.");
         }

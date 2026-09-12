@@ -66,3 +66,28 @@ Statistics remains exact. The revised packet is ready for Phase 1.
   named benchmark. The normal suite stays offline and excludes the benchmark.
 - The final validation and performance baseline are recorded in
   [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#phase-4-completion-record).
+
+## Post-Completion Boundary Repair
+
+- Date: 2026-09-12.
+- Removed App access to OnCurve internals. `OnCurveEstimate` is now the small
+  public entry point for published limits, replay-seed checks, and calculation.
+  The calculator, validator, random source, and sampling helpers remain
+  internal.
+- The request and report data needed by the public calculation are public.
+  This lets App prepare facts and call the estimate without reaching into
+  OnCurve implementation details.
+- Added `DeckOnCurveMcpTests` to both the source smoke test and the
+  installed-package smoke test.
+- Release packaging now locks Windows, Linux, and macOS dependencies before a
+  release build. The App project owns its single-file publish settings. The
+  package task keeps the current .NET layout: one small selector package and
+  one implementation package for each supported platform.
+- The installed-package checks use the Windows `.cmd` launcher created by the
+  current .NET tool installer. The same helper is used for release smoke and
+  live acceptance.
+- Validation: `task ci` passed with 753 tests and every coverage gate.
+  `task release:archives VERSION=0.9.0-preview.0` built all three platform
+  archives, and `task release:checksums` passed. `task pack` built version
+  0.9.0. `task release:tool-smoke` temporarily installed that package and
+  passed all 53 MCP tests.

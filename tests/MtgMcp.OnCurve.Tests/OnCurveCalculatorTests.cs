@@ -8,6 +8,31 @@ namespace MtgMcp.OnCurve.Tests;
 public sealed class OnCurveCalculatorTests
 {
     /// <summary>
+    /// Verifies App callers can use the public estimate entry point without friend-assembly access.
+    /// </summary>
+    [Fact]
+    public void PublicEstimate_WithCompleteRequest_ReturnsReport()
+    {
+        OperationResult<OnCurveRunReport> result = OnCurveEstimate.Calculate(MixedRequest("0123456789abcdef"));
+
+        OnCurveRunReport report = Assert.IsType<OperationSuccess<OnCurveRunReport>>(result.Value).Data;
+        Assert.Equal("on-curve-v1", report.ModelVersion);
+        Assert.Equal(100, report.CompletedTrialCount);
+    }
+
+    /// <summary>
+    /// Verifies the public estimate requires a replay seed after its caller has prepared the request.
+    /// </summary>
+    [Fact]
+    public void PublicEstimate_WithMissingReplaySeed_ReturnsInvalidInput()
+    {
+        OperationResult<OnCurveRunReport> result = OnCurveEstimate.Calculate(MixedRequest(null!));
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal("invalid-on-curve-request", invalid.ReasonCode);
+    }
+
+    /// <summary>
     /// Verifies one seed and one complete resolved request always produce the same report.
     /// </summary>
     [Fact]
