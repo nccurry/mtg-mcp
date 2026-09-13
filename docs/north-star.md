@@ -5,7 +5,7 @@ by supplying grounded evidence. The MCP gathers and computes; the calling LLM
 connects that evidence to a player's goals and makes the judgment.
 
 For stable `0.9.0`, this means provider data, exact cached evidence, explicit
-deck/provider workflow operations, exact mathematics, and one bounded sampled
+deck/provider operations, exact mathematics, and one bounded sampled
 on-curve estimate. It does not include advisor prompts, inferred deck intent,
 weak-card judgments, replacement recommendations, blended quality scores, or
 strategic automation. Those legacy features are removal targets, not
@@ -24,11 +24,11 @@ An LLM using `mtg-mcp` should be able to explain:
 - Which deck changes are only proposed and which require explicit permission to
   apply locally or through Archidekt.
 
-It should also be able to discover a small, coherent set of tools for the
-workflow at hand. Stable tools belong to exactly one capability toolset. The
-default session exposes local decks, official card evidence, and exact
-statistics; provider-specific surfaces are enabled deliberately. An LLM should
-not need to reason over every integration merely because the server supports it.
+It should also be able to find a focused set of tools for the current task.
+Stable tools belong to exactly one toolset. The default session exposes local
+decks, official card evidence, and exact statistics; provider-specific tools
+require deliberate enablement. An LLM should not need to reason about every
+integration merely because the server supports it.
 
 ## Evidence Order
 
@@ -45,7 +45,7 @@ not need to reason over every integration merely because the server supports it.
 5. **Parser-derived and heuristic evidence**: a separately labeled category,
    not source fact and not authority for an MCP-owned deckbuilding choice.
 6. **Blended model scores**: excluded from stable `0.9.0`; any future experiment
-   must expose components and meaning and remain outside the factual surface.
+   must expose components and meaning and remain outside the factual results.
 7. **Unsupported or unknown**: an explicit state, never an invitation to invent
    a value.
 
@@ -65,8 +65,8 @@ output can still be heuristic.
   remote operation and the workflow safeguards defined by its approved PLC.
 - Do not replace the player's goals or the LLM's final reasoning with one opaque
   power score.
-- Do not make the model-visible surface an undifferentiated inventory of every
-  supported operation. Do not hide that inventory behind a generic router or
+- Do not show an LLM one undifferentiated list of every supported operation. Do
+  not hide that list behind a generic router or
   inferred-intent dispatcher either.
 
 See the [rewrite guide](rewrite-guide.md), [design goals](design-goals.md),

@@ -14,10 +14,10 @@ State the problem, intended outcome, audience, and smallest useful change.
 - Non-goals: <nearby work intentionally excluded>
 - Constraints: <architecture, compatibility, security, or delivery limits>
 
-## Affected Surfaces
+## Affected Areas
 
 List affected projects, public APIs, MCP tools/resources/prompts, configuration,
-data formats, docs, generated artifacts, and downstream users.
+data formats, docs, generated files, and downstream users.
 
 ## Implementation Order
 

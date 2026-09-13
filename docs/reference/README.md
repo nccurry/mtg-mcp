@@ -1,19 +1,24 @@
 # Reference Data
 
-This folder stores source snapshots and bounded local fixtures used for deterministic offline behavior.
+This folder holds historical source snapshots and bounded fixtures. Current
+code and tests, not these files, define the runtime.
 
-Reference data does not authorize a production capability. The rewrite audit
-and active child PLC decide whether each fixture is retained, transformed, or
-used only as historical test evidence. In particular, local combo patterns and
-Commander Spellbook preference do not imply a stable `0.9.0` combo adapter or
-recommendation surface.
+Reference data does not justify adding a production feature. The completed
+rewrite records explain why each snapshot was retained. In particular, local
+combo patterns do not justify recommendations or a current fallback data path.
 
-## Scryfall Tagger
+## Historical Scryfall Tagger Snapshot
 
-`scryfall-tagger-tags-2026-05-23.json` is a snapshot of the full mixed Scryfall Tagger tag directory retrieved from `https://tagger.scryfall.com/` on 2026-05-23.
+`scryfall-tagger-tags-2026-05-23.json` is a historical snapshot of the mixed
+Scryfall Tagger directory retrieved from `https://tagger.scryfall.com/` on
+2026-05-23. The current server does not download or query that website.
 
-The snapshot includes artwork, oracle-card, and print tags. Use `namespace = "card"` or `type = "ORACLE_CARD_TAG"` when selecting deckbuilding evidence. Artwork-only tags, print tags, visual descriptors, creature species, set cycles, and flavor labels should not drive Commander card recommendations.
+The snapshot includes artwork, Oracle-card, and print tags. It is historic
+research only. The current server gets tag evidence from the official Scryfall
+bulk data and keeps it separate from card facts.
 
-## Local Combos
+## Historical Local Combos
 
-`local-combos.json` is a small, checked-in fallback dataset for no-catalog combo analysis. It is embedded into `MtgMcp.Core` at build time and remains clearly labeled as `local-pattern` evidence; Commander Spellbook catalog rows remain preferred when a catalog is configured and available.
+`local-combos.json` is not embedded or read by the current server. It remains
+as historical reference data. Current combo evidence comes from the optional
+Commander Spellbook adapter and never becomes a card recommendation.

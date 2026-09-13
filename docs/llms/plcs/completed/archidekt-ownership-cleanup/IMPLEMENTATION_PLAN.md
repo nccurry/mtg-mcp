@@ -4,7 +4,7 @@
 
 - Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
-- Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1b-archidekt-ownership-extraction)
+- Parent PLC: [Evidence-First Deckbuilding Evolution](../../completed/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1b-archidekt-ownership-extraction)
 - Owner: mtg-mcp
 - Last updated: 2026-09-07
 - Related SRD: [SRD.md](SRD.md)

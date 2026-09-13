@@ -10,7 +10,7 @@ the stable MCP returns the available evidence and explicit unknowns. The client
 LLM makes the judgment. Any future heuristic model requires its own approved
 PLC and must remain configurable, repeatable, and visibly different from facts.
 
-## Model Contract
+## What Every Model Must State
 
 Every model or profile that makes a choice or estimate should define:
 
@@ -31,12 +31,11 @@ untrusted code.
 
 ## Rules-Engine Lessons Without A Rules Engine
 
-If experimental work is approved, useful rules-engine practices include
-named/versioned workflows, schema validation, explicit facts, priority,
-deterministic conflict resolution, explainable results, and cached fact
-evaluation. Apply those ideas through the smallest typed policies justified by
-that future PLC; do not adopt the legacy simulation-profile architecture by
-default.
+If experimental work is approved, useful rules-engine practices include named,
+versioned operations; schema validation; explicit facts; priority; repeatable
+conflict resolution; explainable results; and cached fact evaluation. Use the
+smallest typed policies the future PLC needs. Do not adopt the old
+simulation-profile architecture by default.
 
 It should not implement stack handling, priority exchange, layers, replacement
 effects, comprehensive card scripting, or general forward chaining. Unsupported

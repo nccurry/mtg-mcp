@@ -8,11 +8,11 @@ operations. The client LLM decides how to build the deck.
 
 ## Projects
 
-| Project | Ownership |
+| Project | Responsible for |
 | --- | --- |
 | `MtgMcp.Core` | Provider-neutral contracts, failures, and evidence types |
 | `MtgMcp.Decks` | Revisioned local decks, SQLite, backups, and interchange |
-| `MtgMcp.Scryfall` | Official API transport, corpus, snapshots, and pacing |
+| `MtgMcp.Scryfall` | Official API transport, installed card data, snapshots, and pacing |
 | `MtgMcp.Archidekt` | Observed provider contract and synchronization |
 | `MtgMcp.Playgroup` | Pinned official Public API contract |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
@@ -21,9 +21,9 @@ operations. The client LLM decides how to build the deck.
 | `MtgMcp.App` | MCP host, configuration, composition, modes, and schemas |
 
 Core references no adapter or host. Provider adapters do not reference one
-another. App is the composition root.
+another. App wires the server together.
 
-## Runtime surface
+## Available tools
 
 The server uses stdio and registers static tools for one session. It exposes:
 
@@ -36,8 +36,8 @@ The server uses stdio and registers static tools for one session. It exposes:
 - `mtg://server/capabilities`; and
 - zero prompts.
 
-Toolsets control relevance. Modes control authority. See
-[Toolsets](toolsets.md).
+Toolsets choose which tools appear. Modes control what the server may change.
+See [Toolsets](toolsets.md).
 
 ## Data
 
@@ -45,11 +45,11 @@ The `v0.9` application-data root contains independent stores:
 
 - `decks.db` for local decks, provider bindings, and sync baselines; and
 - `scryfall.db` for card facts, rulings, community tags, request snapshots,
-  leases, and corpus generations.
+  leases, and versions of installed card data.
 
 The server does not migrate or modify legacy data. Multiple MCP processes reuse
-the same stores. SQLite coordinates Scryfall pacing and corpus activation across
-processes.
+the same stores. SQLite coordinates Scryfall pacing and activation of a
+completed card-data version across processes.
 
 ## Evidence flow
 
@@ -60,7 +60,7 @@ Provider or local store
 Owning adapter or deck store
         |
         v
-Provider-neutral result and evidence contracts
+Shared result and evidence types
         |
         v
 MCP tool output
@@ -101,8 +101,8 @@ Stable `0.9.0` does not provide:
 
 ## Validation
 
-Architecture tests enforce project references, exact surface registration,
-toolset membership, operation-mode visibility, and forbidden legacy surfaces.
+Architecture tests enforce project references, exact tool registration, toolset
+membership, operation-mode visibility, and absence of forbidden legacy tools.
 Each production assembly must maintain at least 90 percent line coverage.
 
 Read [North Star](north-star.md), [Design Goals](design-goals.md), and the

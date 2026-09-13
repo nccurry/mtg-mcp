@@ -1,9 +1,12 @@
 # MCP Output Control
 
-> Historical reference: these removed legacy presenter aliases are not a rewrite
-> compatibility requirement. Each approved child PLC owns its bounded output
-> and schema; stable `0.9.0` does not carry `compact` or workspace compatibility
-> aliases merely to preserve the old surface.
+> Historical reference: these removed legacy short-output aliases are not a
+> rewrite compatibility requirement. Each approved child PLC defines its output
+> limits and schema; stable `0.9.0` does not carry `compact` or workspace
+> compatibility aliases just to preserve the old API.
+
+Current tools use the `summary`, `normal`, and `full` values below when they
+offer `detailLevel`.
 
 Tools that expose `detailLevel` use one shared vocabulary:
 

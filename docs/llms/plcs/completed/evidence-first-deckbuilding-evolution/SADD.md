@@ -2,14 +2,14 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: product owner, Core maintainer, adapter maintainer, MCP contract maintainer
-- Last updated: 2026-09-08
+- Last updated: 2026-09-12
 - Related SRD: [SRD.md](SRD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
-- Implementation authorized: No
+- Implementation authorization: Closed
 
 ## Revision History
 
@@ -27,9 +27,9 @@ one clear owner.
 
 The selected design keeps a small Core, concrete vertical provider modules, a
 static App composition root, and exact Statistics. New sources enter only
-through source-specific modules after an admission review. The planned OnCurve
-calculation lives beside exact Statistics rather than inside it after
-independent review and owner authorization.
+through source-specific modules after an admission review. The implemented
+OnCurve calculation lives beside exact Statistics rather than inside it, as
+approved in the completed Phase 6 child.
 
 The most important rejected alternative is a generic provider or rules-engine
 framework. It would make unlike contracts look alike and turn a cleanup into an
@@ -225,10 +225,10 @@ not an empty source result.
 | MtgMcp.Statistics | Exact math from caller-provided values | No provider/persistence state | Statistics operations | BCL/Core contracts only | Independent formula tests |
 | MtgMcp.App | Static MCP registration, modes, schemas, composition | Process/configuration lifetime | Tool/resource handlers | All capability projects | App, surface, E2E tests |
 | Future concrete source module | One selected source’s transport, mapping, cache, evidence behavior | Source-specific | Opt-in toolset only | Core/HTTP as needed | Sanitized fake-HTTP fixtures |
-| MtgMcp.OnCurve | Bounded land mana, target castability, replay, traces, and sampled estimates | Per-request calculation state | One read-only decks tool after authorization | Core only; App supplies resolved deck and Scryfall facts | Sanitized saved-deck, calibration, and replay tests |
+| MtgMcp.OnCurve | Bounded land mana, target castability, replay, traces, and sampled estimates | Per-request calculation state | One read-only decks tool | Core only; App supplies resolved deck and Scryfall facts | Sanitized saved-deck, calibration, and replay tests |
 
 No provider-wide IRepository, ISourceAdapter, generic transport router, or
-common cache abstraction is planned. The common pieces are small: Core evidence,
+common cache abstraction was added. The common pieces are small: Core evidence,
 OperationResult, BCL HTTP primitives, and App composition.
 
 ## Runtime And Data Flow
@@ -293,8 +293,8 @@ For later public changes:
   the session.
 - A provider tool is opt-in unless its workflow is a small coherent default
   capability.
-- The planned deck_on_curve_estimate tool belongs only to the decks toolset
-  after the child is independently reviewed and authorized. It is read-only
+- The implemented `deck_on_curve_estimate` tool belongs only to the decks toolset.
+  It is read-only
   and visibly sampled; it does not need a new experimental toolset.
 - Long-running task support is not part of this roadmap. Any future use needs a
   separate current-protocol design and bounded behavior tests.

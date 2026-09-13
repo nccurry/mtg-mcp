@@ -1,20 +1,19 @@
 # Evidence-First Deckbuilding Evolution PLC Packet
 
-> [!IMPORTANT]
-> This is an umbrella planning packet. It does not authorize production edits.
-> Each implementation child needs independent review, an explicit owner decision,
-> and its own “Implementation authorized: Yes” before code changes begin.
+> [!NOTE]
+> This completed umbrella records the follow-on delivery work. It does not
+> authorize new edits; future work needs a new approved PLC.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/evidence-first-deckbuilding-evolution/
+- Status: Completed
+- Folder: docs/llms/plcs/completed/evidence-first-deckbuilding-evolution/
 - Owner: mtg-mcp
 - Created: 2026-09-06
-- Last updated: 2026-09-10
-- Current phase: Phase 6 is complete. Phase 4 is deferred; Phases 4A and 5 are
-  complete. Stabilization remains planned.
-- Implementation authorized: No
+- Last updated: 2026-09-12
+- Current phase: Complete. Phase 4 remains intentionally deferred; every
+  selected delivery phase is complete.
+- Implementation authorization: Closed
 
 ## Summary
 
@@ -22,13 +21,12 @@ Stable 0.9 already has the right product boundary: mtg-mcp gathers evidence,
 calculates declared mathematics, and performs explicit guarded workflows. The
 LLM and player decide what a deck should do.
 
-This program makes that boundary easier to maintain and expands it carefully.
-The first delivery is structural: make the Scryfall and Archidekt owners real
-instead of forwarding wrappers around large context classes. Later, separately
-reviewed children may repair the existing official-tag grouping path, add more
-reliable evidence sources, and add a narrowly bounded deck mana and on-curve
-estimate. A new exact-analysis tool remains possible only if a future review
-shows a real gap in the current tools.
+This program made that boundary easier to maintain and expanded it carefully.
+The first delivery made the Scryfall and Archidekt owners real instead of
+forwarding wrappers around large context classes. Later completed children
+repaired official-tag grouping, added Commander Spellbook evidence, and added
+a narrowly bounded deck mana and on-curve estimate. The Phase 4 review found
+no gap that justified a duplicate exact-analysis tool.
 
 The product can be described in three verbs:
 
@@ -48,7 +46,7 @@ It must not add a fourth verb: decide.
   sampled-estimate boundary.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): independently reviewable
   delivery sequence.
-- [FIXTURES.md](FIXTURES.md): future fixture, contract, and calibration
+- [FIXTURES.md](FIXTURES.md): fixture, contract, and calibration
   inventory.
 - [SOURCE_FEASIBILITY.md](SOURCE_FEASIBILITY.md): Phase 5 source decisions and
   current provider-access evidence.
@@ -64,11 +62,11 @@ It must not add a fourth verb: decide.
 | Decision | Status | Rationale | Detail |
 | --- | --- | --- | --- |
 | Preserve evidence before advice. | Inherited | It is the current north star and the right product boundary. | [SRD](SRD.md#requirements) |
-| Refactor ownership before expanding sources. | Proposed | A new provider or simulation on top of forwarding contexts would compound the hardest maintenance problem. | [Audit](AUDIT.md#findings) |
-| Keep vertical provider modules; do not add a generic provider framework. | Proposed | Scryfall, Archidekt, Playgroup, combo data, and community discussion have different contracts and safety rules. | [SADD](SADD.md#alternatives-considered) |
+| Refactor ownership before expanding sources. | Implemented | A new provider or simulation on top of forwarding contexts would compound the hardest maintenance problem. | [Audit](AUDIT.md#findings) |
+| Keep vertical provider modules; do not add a generic provider framework. | Adopted | Scryfall, Archidekt, Playgroup, combo data, and community discussion have different contracts and safety rules. | [SADD](SADD.md#alternatives-considered) |
 | Keep Statistics exact and provider-independent. | Inherited | A deck statistic is reliable only when its population and assumptions are explicit. | [SADD](SADD.md#exact-analysis-and-sampled-estimates) |
 | Add one bounded deck mana and on-curve estimate. | Complete | The result explains stated land rules and sampled castability without masquerading as a Magic rules engine or a matchup predictor. | [Phase 6 child](../../completed/deck-mana-on-curve-simulation/README.md) |
-| Check every external source individually. | Proposed | “More sources” is valuable only when access, meaning, cache behavior, and provenance are clear. | [SADD](SADD.md#provider-check) |
+| Check every external source individually. | Adopted | “More sources” is valuable only when access, meaning, cache behavior, and provenance are clear. | [SADD](SADD.md#provider-check) |
 | Require the newest MCP protocol in a focused child. | Complete | The owner wants the newest design with no legacy support. | [Phase 2 child](../../completed/latest-mcp-and-toolchain/README.md) |
 | Add Commander Spellbook as a concrete evidence adapter. | Complete | Its documented API serves the core combo-evidence workflow without making a recommendation. | [Phase 3 child](../../completed/commander-spellbook-evidence/README.md) |
 | Start with Scryfall card-data store ownership. | Complete | It is a small internal refactor with no public behavior change. | [Phase 1A child](../../completed/scryfall-store-ownership-extraction/README.md) |
@@ -98,14 +96,9 @@ produced-mana facts, one read-only `deck_on_curve_estimate` tool, focused tests,
 and a separate Release benchmark. It added no generic simulator, rules engine,
 tag system, or source-provider behavior.
 
-Future children may affect:
-
-- MtgMcp.App static tool registrations and capability metadata;
-- one new concrete provider project at a time;
-- exact Statistics workflows without provider references;
-- a new isolated OnCurve calculation project and one read-only deck tool under
-  the authorized Phase 6 child;
-- test fixtures, source documentation, package compatibility, and Task tasks.
+The selected children affected only their named projects, tests, package
+checks, and documentation. Any new provider, analysis, or simulation work now
+needs a separate PLC.
 
 The Phase 2 child also owns version locks, action SHA pins, and the
 Mise-managed MCP Registry publisher. The completed Phase 3 child added one
@@ -184,10 +177,11 @@ amendment that removes or replaces it.
 - Validation: Current source-policy review, local API-contract review, link
   inspection, and documentation checks.
 
-## Planned Next Work
+## Future Work Outside This Packet
 
-Stabilization remains planned. Phase 4 remains deferred because the existing
-exact statistics and explicit deck workflows cover the reviewed questions.
+Phase 4 remains deferred because the existing exact statistics and explicit
+deck workflows cover the reviewed questions. Other future ideas belong in
+[Potential Features](../../../../potential-features.md) and need a new PLC.
 
 ## Planning Readiness Checklist
 
@@ -215,9 +209,9 @@ exact statistics and explicit deck workflows cover the reviewed questions.
 - [x] Select and create the first narrow child packet.
 - [x] Move only that approved child to in-progress.
 - [x] Lock behavior with characterization fixtures before moving ownership.
-- [ ] Update this umbrella if a cross-child guardrail changes.
+- [x] Keep this umbrella current when a cross-child guardrail changes.
 - [x] Record focused and broad validation as each child completes.
-- [ ] Move this packet to completed only after every selected child is completed,
+- [x] Move this packet to completed after every selected child is completed,
   explicitly deferred, or superseded with a recorded reason.
 
 ## Validation Evidence
@@ -249,9 +243,10 @@ exact statistics and explicit deck workflows cover the reviewed questions.
 | 2026-09-08 | Phase 6 plan reset | Completed | The owner rejected the toy-card prototype and selected a real-deck, read-only mana and on-curve estimate. The revised packet needs a fresh independent review and authorization. |
 | 2026-09-10 | Phase 6 independent review | Passed after fixes | Seven review findings clarified source-data states, cache-only reads, fingerprints, seed text, request bounds, multi-face cards, and miss labels. The owner authorized Phase 1. |
 | 2026-09-10 | Phase 6 close-out | Passed | The completed child added one read-only decks tool, direct produced-mana facts, pure replayable calculation, all-mode MCP tests, coverage, surface and smoke checks, clear public docs, and a recorded Release benchmark. |
+| 2026-09-12 | Phase 7 close-out | Passed | Documentation, lifecycle links, tool counts, and package/startup validation were reconciled. The current `all` remote profile has 97 tools; Phase 4 remains intentionally deferred. |
 
 ## Completion Notes
 
-Phases 1 through 3, Phase 4A, Phase 5, and Phase 6 are complete. This packet
-remains a roadmap, not an implementation authorization. Phase 4 is deferred and
-stabilization remains planned.
+Phases 1 through 3, Phase 4A, Phase 5, Phase 6, and Phase 7 are complete.
+Phase 4 is intentionally deferred with a clear reopen trigger. This packet is
+a completed record, not authorization for new implementation work.

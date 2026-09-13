@@ -7,14 +7,15 @@
 - Related future capability: `local-scryfall-query-engine`
 - Current runtime: no cohort-analysis tools
 
-This document records a narrowly bounded future capability for deterministic
-cross-card questions over the shared Scryfall corpus. It is not a PLC, does not
-change the `0.9.0` cutover, and does not authorize implementation.
+This document describes a limited future feature for repeatable questions about
+a defined group of cards in installed Scryfall card data. It is not a PLC, does
+not change the `0.9.0` release, and does not authorize implementation. In this
+document, a “cohort” means that defined group of cards.
 
 ## Problem
 
 The MCP already exposes structured Scryfall cards, Oracle/art tags, immutable
-corpus generations, exact card queries, and exact statistics. An LLM can use
+versions of installed card data, exact card queries, and exact statistics. An LLM can use
 those primitives to answer individual questions, but it must currently perform
 large joins and feature counts itself. That makes recurring questions about
 tribes, tags, and card behavior unnecessarily expensive and difficult to audit.
@@ -44,7 +45,7 @@ The caller/LLM must explicitly provide:
 - whether multi-typed and changeling cards count;
 - feature families to inspect;
 - distinct-card versus quantity counting; and
-- the active corpus generation or freshness policy.
+- the active card-data version or freshness policy.
 
 "Synergy" is never a hidden score. Results expose separate evidence families:
 exact subtype references, Oracle/art tags, keywords, type-line components, and
@@ -54,8 +55,8 @@ explicit Oracle-text predicates. The LLM may interpret those facts.
 
 ```text
 CohortDefinition
-  source: local-corpus
-  corpusGenerationId
+  source: local-card-data
+  cardDataGenerationId
   cardPredicate
     colors | colorIdentity
     typeLine components
@@ -73,7 +74,7 @@ CohortResult
   optional quantity total
   denominator
   feature rows: value, count, proportion, supporting card IDs
-  evidence origin and corpus generation
+  evidence origin and card-data version
 
 CohortComparison
   left and right fingerprints
@@ -82,14 +83,14 @@ CohortComparison
   explicit zero/unknown/unavailable states
 ```
 
-The first useful implementation should support local corpus reads and bounded
+The first useful implementation should support local card-data reads and bounded
 feature grouping. It should not attempt to reproduce all Scryfall query syntax
 until the separate local query-engine PLC proves each supported construct by
 differential testing against Scryfall.
 
-## Candidate Surface
+## Possible Tool Design
 
-The exact surface belongs to a future PLC. A likely minimal boundary is:
+The exact tool design belongs to a future PLC. A likely small first version is:
 
 1. A cohort query/preview operation that validates and fingerprints an explicit
    local population.
@@ -103,14 +104,14 @@ legality assumptions, popularity scoring, or category assignments.
 
 ## Determinism And Provenance
 
-- Corpus generation, normalized predicate, feature definition, and schema
+- Card-data version, normalized predicate, feature definition, and schema
   version are part of every fingerprint.
 - Results use stable ordering and exact integer counts.
 - Percentages are derived from explicit denominators and documented rounding.
 - Empty, unresolved, unsupported, and unavailable states remain distinct.
 - Card evidence retains Oracle ID, printing identity where relevant, source
-  origin, and corpus generation.
-- Different corpus generations produce different evidence fingerprints.
+  origin, and card-data version.
+- Different card-data versions produce different evidence fingerprints.
 - No provider request is hidden inside a local cohort read.
 
 ## Required Future PLC Gates
@@ -123,7 +124,7 @@ Before implementation, the PLC must define and test:
 - exact versus quantity counts and denominator semantics;
 - text-feature extraction limits and parser-derived evidence labels;
 - bounded result sizes and pagination;
-- cache/corpus generation replay;
+- cache/card-data version replay;
 - schema descriptions and mode visibility; and
 - a realistic Spirit-versus-Bird and Pirate feature-count fixture.
 

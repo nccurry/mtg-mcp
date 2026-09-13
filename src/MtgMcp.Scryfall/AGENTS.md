@@ -8,7 +8,7 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - Use only the official Scryfall API and bulk-data contracts. Do not add
   Tagger-site HTML, CSRF, GraphQL, or browser automation.
 - Keep arbitrary search expressions provider-authoritative. Exact request
-  snapshots may be reused, but the partial local corpus must never approximate
+  snapshots may be reused, but partial local card data must never approximate
   Scryfall query membership or ordering.
 - Send honest product/version and Accept headers, coordinate starts through
   the shared SQLite pacing table, stop immediately on 403 or 429, and retain
@@ -19,14 +19,14 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 
 ## Evidence And Persistence
 
-- Keep card facts, community tags, prices/ranks, corpus generations, and exact
+- Keep card facts, community tags, prices/ranks, installed card-data versions, and exact
   request snapshots visibly distinct even though they share `scryfall.db`.
 - Preserve raw provider objects and explicit absent-versus-empty projections.
   Use the provider dataset timestamp, not merely local download time, when
   deciding whether bulk price/rank evidence is stale.
-- Corpus synchronization is explicit. Ordinary reads and process startup must
+- Full card-data synchronization is explicit. Ordinary reads and process startup must
   never initiate bulk downloads or background refresh.
-- Preserve active-plus-previous corpus activation, immutable content-addressed
+- Preserve the active and previous card-data versions, immutable content-addressed
   snapshots, schema checksum validation, crash-expiring leases, and atomic
   failure behavior.
 - Tag coverage labels must describe what was actually joined. Never present a
@@ -36,7 +36,7 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 ## Validation
 
 - Keep normal tests offline with fake HTTP, clocks, compressed JSONL, and
-  temporary databases. Mark bounded provider and full-corpus checks `Live`.
+  temporary databases. Mark bounded provider and full-card-data checks `Live`.
 - Test current official contract changes with sanitized fixtures before
-  accepting them. Full-corpus acceptance requires an explicit retained data
+  accepting them. Full-card-data acceptance requires an explicit retained data
   directory and must never run as part of ordinary CI.

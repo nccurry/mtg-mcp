@@ -9,7 +9,7 @@
 
 - Status: Completed
 - Folder: docs/llms/plcs/completed/deck-mana-on-curve-simulation/
-- Parent: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
+- Parent: [Evidence-First Deckbuilding Evolution](../../completed/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Created: 2026-09-08
 - Last updated: 2026-09-10

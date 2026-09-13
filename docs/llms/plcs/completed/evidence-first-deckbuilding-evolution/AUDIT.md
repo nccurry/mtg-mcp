@@ -80,7 +80,7 @@ review.
 ### DEP-001 — Package updates need a compatibility plan, not a bulk bump
 
 - Severity: P3
-- Status: Planned in a focused child
+- Status: Complete
 - Affected area: App, E2E tests, analyzers, test tooling
 
 The dependency check reports ModelContextProtocol 2.2.0, ModelContextProtocol.Core
@@ -105,7 +105,7 @@ different: each has its own API shape, data meaning, cache behavior, and
 privacy needs. Adding a generic “web research” adapter would make it too easy
 to turn a question into unsupported scraping or blend unlike data.
 
-Planned disposition: require a short source check and a narrow child PLC for
+Current rule: require a short source check and a narrow child PLC for
 each provider. The record names supported access, source meaning, cache expiry,
 credential handling, pacing, fixture strategy, and the evidence label shown to
 the client.
@@ -145,7 +145,7 @@ the client.
 | Dead code | No confirmed authored production dead code was found. Ignored legacy build directories are not deletion targets. |
 | Test coverage and quality | Strong baseline: 545 passing offline tests and seven production coverage gates. Refactor children still need behavior-first characterization tests. |
 | Performance | No current measured hot-path regression was found. Add a benchmark only when a child introduces a meaningful risk, per the existing performance-ratchet policy. |
-| Dependency health | No known vulnerable package. Updates exist and need a narrow compatibility effort. |
+| Dependency health | No known vulnerable package. The completed toolchain child owns the current pins and compatibility evidence. |
 | Over-engineering | Do not respond to two oversized owners with a generic repository/service hierarchy. Use concrete vertical ownership instead. |
 
 ## Validation Evidence
@@ -161,8 +161,7 @@ the client.
 
 ## Audit Verdict
 
-No emergency rewrite is warranted. The project has a sound product boundary,
-healthy behavior checks, and good test coverage. It does need planned
-structural rework before adding more provider or simulation complexity:
-ownership must be real, source admission must be explicit, and experiments must
-remain outside the factual core.
+No emergency rewrite was warranted. The selected structural work is complete:
+ownership is real, source admission is explicit, and the bounded on-curve
+estimate remains outside the factual core. Future providers or broader
+simulation still need their own review and PLC.

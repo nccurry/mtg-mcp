@@ -17,8 +17,8 @@ Use this checklist before handing off broad or risky changes.
 
 ## Abstractions And Dead Code
 
-- New abstractions pay rent through real duplication removal, clearer ownership,
-  or an established local pattern.
+- Add an abstraction only when it removes real duplication, makes ownership
+  clearer, or follows an established local pattern.
 - Pass-through layers, one-implementation interfaces, speculative factories, and
   broad helpers are removed or avoided.
 - Replaced code paths, compatibility shims, old projections, and unused wrappers

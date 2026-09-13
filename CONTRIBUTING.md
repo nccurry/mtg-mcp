@@ -26,20 +26,18 @@ a .NET build.
 Keep future adapters isolated from Core domain logic. Normal tests must remain
 offline and must not mutate provider state.
 
-Public MCP surface changes must update `README.md`, `CHANGELOG.md`, and surface
-tests. During the clean-break rewrite, the approved active PLC defines the
-surface and compatibility boundary; otherwise follow `docs/versioning.md`.
+Public MCP tool or API changes must update `README.md`, `CHANGELOG.md`, and the
+related tests. The clean-break rewrite is complete; use its completed records as
+design evidence and follow `docs/versioning.md` for current-server changes.
 
 ## Evidence-First Rewrite
 
-Read [`docs/rewrite-guide.md`](docs/rewrite-guide.md) before rewrite work. The
-legacy implementation remains reference evidence in Git history, but its
-workspace, plan, recommendation, intent, scoring, prompt, simulation, and
-provider abstractions are not the rewrite foundation.
+Read [`docs/rewrite-guide.md`](docs/rewrite-guide.md) before work that touches
+the released `0.9.0` boundaries. The legacy implementation remains reference
+evidence in Git history, but its workspace, plan, recommendation, intent,
+scoring, prompt, simulation, and provider abstractions are not the foundation.
 
-Do not implement a rewrite child until its independent review is recorded, its
-README says `Implementation authorized: Yes`, and it has moved to
-`in-progress/`. The approved umbrella and active child packet then replace the
-ordinary pre-1.0 compatibility policy for that clean-break scope. Docs-only
-guidance changes require `git diff --check` and link/Markdown inspection, not a
-.NET build.
+Do not treat a completed rewrite child as authorization for new work. Create a
+new PLC when a change spans several modules or public APIs, changes a provider
+contract or storage, or needs phases. Docs-only guidance changes require `git diff
+--check` and link/Markdown inspection, not a .NET build.

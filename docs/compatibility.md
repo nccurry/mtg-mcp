@@ -1,44 +1,49 @@
 # MCP Compatibility
 
-This document records compatibility evidence for the current rewrite branch.
-It does not carry the released legacy surface forward.
+This document records compatibility evidence for the released `0.9.0` server.
+It does not carry the released legacy API forward.
 
-## Current Rewrite Status
+## Current `0.9.0` Status
 
-The completed foundation, local deck capability, offline interchange surface,
-unified Scryfall evidence capability, and opt-in Archidekt, Playgroup, and
-Commander Spellbook capabilities use the official C# SDK selected in
-`Directory.Packages.props`.
+The local deck store, manual deck-file support, Scryfall tools, and optional
+Archidekt, Playgroup, and Commander Spellbook tools use the official C# SDK
+selected in `Directory.Packages.props`.
 The server requires MCP `2026-07-28`; it does not support older
 initialize-based clients. Official-client E2E tests prove current-protocol
 connections in `read-only`, `local`, and `remote` modes, protocol reporting,
 resource listing and reading, unknown-resource errors, sanitized pre-transport
 failures, and clean process termination when stdin closes.
 
-The current public surface is exactly:
+The current public MCP contract is:
 
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
 - a default profile of 33/55/55 tools and complete `all` profile of 61/84/97
   tools by mode, plus zero prompts;
-- static `default`, `all`, `none`, and explicit implemented-toolset selection,
-  with capability schema version 7; and
-- no logging, subscription, or list-changed capability advertisement.
+- fixed `default`, `all`, `none`, and explicit toolset selection, with version 7
+  of the capabilities-resource schema; and
+- no logging, subscription, or changing-tool-list feature advertisement.
 
 `task smoke:process` is only a one-shot startup/configuration probe.
 `task smoke:mcp` establishes a real MCP session, reads the resource, verifies
 the deck, Scryfall, Spellbook, Archidekt, and Playgroup schemas and annotations,
 and runs local workflows. `task release:tool-smoke` repeats those checks against
 the installed package.
-`task surface:report` enforces the exact source registration boundary.
+`task install` adds a separate local-install check: after publishing the
+self-contained command, it starts and stops a read-only server with the
+Scryfall toolset enabled. This catches native SQLite and Scryfall startup
+failures that `--smoke` cannot reach.
+`task surface:report` checks that the source registers exactly those tools.
 
 ## `0.9.0` Rewrite Boundary
 
-The evidence-first rewrite is an approved clean break. It does not carry legacy
-tools, prompts, resources, mode names, configuration, or data formats through
-compatibility aliases or automatic migration. Compatibility testing will prove
-the approved new manifest, not preservation of the historical 118-tool surface.
+The evidence-first rewrite intentionally starts fresh. It does not carry legacy
+tools, prompts, resources, mode names, configuration, or data formats forward
+through compatibility aliases or automatic migration. Compatibility tests prove
+the new tool list; they do not preserve the historical 118-tool server.
 
 Maintenance of released legacy versions follows [Versioning](versioning.md).
-Rewrite work follows the [Rewrite Guide](rewrite-guide.md) and active child PLC.
+The completed rewrite records remain useful design evidence. New work that
+spans several modules or public APIs needs its own approved PLC; it does not
+reopen a completed rewrite child.

@@ -1,26 +1,25 @@
 # Evidence-First Deckbuilding Evolution Fixtures And Acceptance Matrix
 
-This is a planning inventory. A child creates a checked-in fixture only when it
-has an approved contract and a clear owner. Do not capture credentials, cookies,
-private deck data, Reddit user content, or unlicensed source payloads merely to
-fill this table.
+This completed delivery record lists the fixtures and checks used by the
+selected children. Do not capture credentials, cookies, private deck data,
+Reddit user content, or unlicensed source payloads merely to fill this table.
 
 ## Fixture Inventory
 
-| ID | Type | Planned location | Purpose | Owner | Update rule |
+| ID | Type | Location | Purpose | Owner | Update rule |
 | --- | --- | --- | --- | --- | --- |
 | EFD-FIX-001 | MCP surface inventory | Existing architecture/App/E2E tests | Lock exact tool names, resource, zero prompts, toolsets, and modes before a public change. | App | Update only with approved surface change. |
 | EFD-FIX-002 | Scryfall SQLite characterization | MtgMcp.Scryfall.Tests fixtures | Lock card-data generation, tag/ruling/card rows, snapshots, leases, pacing reservation, ordering, and typed failure behavior before owner movement. | Scryfall | Freeze before Phase 1A; change only with approved behavior change. |
 | EFD-FIX-003 | Archidekt fake-HTTP characterization | MtgMcp.Archidekt.Tests fixtures | Lock deck/folder/snapshot routes, request counts, auth fallback, redaction, confirmations, fingerprints, read-back, and error mapping before owner movement. | Archidekt | Freeze before Phase 1B; sanitize all payloads. |
 | EFD-FIX-004 | Operation-result/error matrix | Core and adapter tests | Verify expected states map to typed outcomes and cancellation is not swallowed. | Core/adapter child | Add a row for every new public failure state. |
 | EFD-FIX-005 | Provider access record | Child PLC packet | Record the supported API access, source meaning, request rules, cache behavior, fixture source, and output label before implementation. | Provider child owner | Re-check when the source rules or workflow change. |
-| EFD-FIX-006 | Commander Spellbook response fixtures | New provider test project, if selected | Cover bounded search/detail/empty/error cases and source provenance. | Spellbook child owner | Use sanitized API examples that follow the source's request guidance. |
+| EFD-FIX-006 | Commander Spellbook response fixtures | `tests/MtgMcp.Spellbook.Tests` | Cover bounded search/detail/empty/error cases and source provenance. | Spellbook child owner | Use sanitized API examples that follow the source's request guidance. |
 | EFD-FIX-007 | Source access-and-use record | [Phase 5 source-feasibility record](SOURCE_FEASIBILITY.md) | Records the current defer/reject decisions for Reddit and deck-group candidates. | Product owner | Re-check when source rules or the proposed workflow change. |
 | EFD-FIX-008 | Exact-analysis reference matrix | Statistics/deck-analysis tests | Independently verify finite-population probabilities and declared assumptions. | Statistics child owner | Add cases only for new exact behavior. |
 | EFD-FIX-009 | Real-deck on-curve case | [Phase 6 fixture plan](../../completed/deck-mana-on-curve-simulation/FIXTURES.md) | Prove exact deck and printing facts, caller land rules, a simple cast, and a transparent trace. | OnCurve child owner | Keep the sanitized input stable after the first reference result. |
 | EFD-FIX-010 | Missing-rule and unsupported-cost cases | [Phase 6 fixture plan](../../completed/deck-mana-on-curve-simulation/FIXTURES.md) | Prove missing land rules and unsupported target costs do not create invented behavior. | OnCurve child owner | Change only when deliberate supported behavior changes. |
 | EFD-FIX-011 | Sampled replay/calibration matrix | [Phase 6 fixture plan](../../completed/deck-mana-on-curve-simulation/FIXTURES.md) | Verify same seed/input/policy replay, source facts, bounds, uncertainty, and cancellation. | OnCurve child owner | Version with model, policy, or random change. |
-| EFD-FIX-012 | Performance case | Child-specific benchmark/report, if justified | Protect one named hot path with deterministic representative input. | Child owner | Record environment and why the case matters. |
+| EFD-FIX-012 | Performance case | `task benchmark:oncurve` | Protect the on-curve calculation with a deterministic 99-card Release measurement. | OnCurve child owner | Record environment and why the case matters. |
 | EFD-FIX-014 | Official Scryfall tag-grouping matrix | [Phase 4A child](../../completed/official-scryfall-tag-grouping-reliability/FIXTURES.md) | Verify exact source-ID resolution, all-parent ancestry, invalid-selector safety, and the repaired `common-v1` mapping. | Tag-grouping child owner | Update only after an explicit official Scryfall source-contract review. |
 
 ## Acceptance Matrix
@@ -52,13 +51,13 @@ fill this table.
 | mtg://server/capabilities | All existing profiles | Unchanged | Continues to describe static implementation and selected toolsets. |
 | Prompts | All | None | Do not introduce an advisor prompt as part of cleanup. |
 
-### Future child rules
+### Current and future surface rules
 
 | Surface type | Mode/toolset expectation | Notes |
 | --- | --- | --- |
 | New source evidence tool | Read-only; source-specific opt-in toolset | Name, schema, bound, provenance, and policy are child-owned. |
 | Exact analysis tool | Read-only; Statistics/default only if it is a coherent small workflow | Declared inputs and exact-derivation metadata required. |
-| Deck mana and on-curve estimate | Read-only; existing decks toolset | One sampled deck_* result with direct source facts, caller land rules, and visible limits. |
+| Deck mana and on-curve estimate | Read-only; existing decks toolset | The implemented `deck_on_curve_estimate` returns direct source facts, caller land rules, and visible limits. |
 | Local deck write | Local/remote as current workflow requires | OperationModeGuard and revision/fingerprint behavior stay explicit. |
 | Provider write | Remote only | Requires source-specific safe mutation contract and separate approval. |
 

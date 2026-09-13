@@ -10,7 +10,7 @@ Plans should include:
 
 - Problem or opportunity.
 - Goals and non-goals.
-- Affected projects, public surfaces, docs, and tests.
+- Affected projects, public tools and APIs, docs, and tests.
 - Implementation order.
 - Validation commands.
 - Risks, assumptions, and deferred work.

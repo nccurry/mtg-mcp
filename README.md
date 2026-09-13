@@ -4,16 +4,18 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-The clean-break `0.9.0` server uses stdio. It exposes 97 tools, one
-capability resource, and no prompts. It does not migrate `0.8.x` data or tool
+Version `0.9.0` is a fresh stdio server design. Its full `all` profile in
+`remote` mode exposes 97 tools, one `mtg://server/capabilities` resource, and
+no prompts. The focused default profile exposes 33 tools in `read-only` mode
+and 55 in `local` or `remote` mode. It does not migrate `0.8.x` data or tool
 schemas.
 
 ## Status
 
 The evidence-first rewrite is complete. `0.9.0` is the first stable release of
-the new surface.
+the new server.
 
-| Capability | Tools | Default | Storage or writes |
+| Feature | Tools | Default | Storage or writes |
 | --- | ---: | --- | --- |
 | Local decks and interchange | 29 | Yes | Local |
 | Scryfall evidence | 18 | Yes | Local cache and card data |
@@ -22,10 +24,11 @@ the new surface.
 | Playgroup | 16 | No | Remote |
 | Commander Spellbook evidence | 3 | No | Local cache only |
 
-The packaged acceptance run before the Spellbook addition passed 88 tool calls.
-Two Scryfall card-data download operations are fixture-backed, Scryfall rollback
-awaits a second provider generation, and two Playgroup writes remain fixture-only
-because the public API has no cleanup. Commander Spellbook has its own bounded,
+The packaged acceptance run before the Spellbook addition made 88 safe tool
+calls. It uses saved test data for the two Scryfall card-data download tools and
+the two Playgroup write tools because a live cleanup route is unavailable.
+Scryfall rollback needs Scryfall to publish another data version; until then,
+the check reports that it is waiting. Commander Spellbook has its own limited,
 read-only live check.
 See [live acceptance](docs/llms/plcs/completed/rewrite-stabilization-cutover/LIVE_ACCEPTANCE.md).
 
@@ -65,9 +68,9 @@ mtg-mcp --mode=local --toolsets=default
 Use `--smoke` for a one-shot configuration check. It does not start an MCP
 session.
 
-`task install` also starts an isolated, read-only Scryfall-enabled MCP server
-and stops it. That catches single-file packaging problems that `--smoke` cannot
-see.
+`task install` also starts and stops an isolated, read-only server with the
+Scryfall toolset enabled. That catches packaged SQLite and Scryfall startup
+problems that `--smoke` cannot see.
 
 ## Choose a mode
 
@@ -79,9 +82,9 @@ Modes control authority.
 | `local` | Yes | Yes | No |
 | `remote` | Yes | Yes | Yes |
 
-`local` is the default. Scryfall cache misses can require a local write for
-pacing and evidence persistence. In `read-only`, those misses return
-`local-write-required` before HTTP.
+`local` is the default. A Scryfall cache miss can need a local write to record
+the response and rate-limit timing. In `read-only`, that miss returns
+`local-write-required` before any HTTP request.
 
 Commander Spellbook reads are available in all three modes. They never change a
 deck or make a write request to the source. Successful responses use a short-lived
@@ -89,7 +92,8 @@ local cache so repeated exact requests do not create needless provider traffic.
 
 ## Choose toolsets
 
-Toolsets control relevance. They do not grant authority.
+Toolsets control which tools the session can see. They do not grant permission
+to write.
 
 | Value | Result |
 | --- | --- |
@@ -107,9 +111,9 @@ and `spellbook`. Selection is fixed for the MCP session.
 | `all` | 61 | 84 | 97 |
 | `none` | 0 | 0 | 0 |
 
-Read `mtg://server/capabilities` to inspect the active mode, toolsets, counts,
-credential state, package version, and data-store state. Reading the resource
-does not contact a provider.
+Read `mtg://server/capabilities` to see the active mode, toolsets, tool counts,
+credential state, package version, and local data state. It does not contact a
+provider.
 
 ## Configure the server
 
@@ -159,14 +163,14 @@ The `decks` toolset supports:
 - atomic ordered batches;
 - guarded backup, restore, and delete;
 - native JSON and generic text import and export;
-- Archidekt and Moxfield manual artifacts;
-- exact Scryfall identity reconciliation; and
-- deterministic tag-rule categorization; and
-- fact-backed on-curve estimates with caller-supplied land rules.
+- manual import and export files for Archidekt and Moxfield;
+- exact Scryfall identity reconciliation;
+- tag-rule grouping with repeatable results; and
+- on-curve estimates based on card data and caller-supplied land rules.
 
-Every existing-deck mutation requires `expectedRevision`. The store is
-format-neutral. Validation checks structure, not Commander legality, card
-quality, or strategic fit.
+Every change to an existing deck requires `expectedRevision`. The local store
+is not tied to one import format. Validation checks structure, not Commander
+legality, card quality, or strategic fit.
 
 Use `deck_identity_reconcile_preview` before apply. Resolution uses printing ID,
 set and collector number, Oracle ID, then exact name. It never uses fuzzy
@@ -201,8 +205,8 @@ Use `deck_interchange_formats` to inspect preservation limits.
 | `archidekt-text-v1` | Manual import plus native/category companions |
 | `moxfield-bulk-edit-v1` | Bulk Edit text plus native/tag companions |
 
-Provider artifacts do not perform network automation. Excluded entries remain
-in the native companion and are omitted from provider text.
+These provider export files do not contact a provider. Excluded entries remain
+in the native companion file and are omitted from provider text.
 
 ## Query Scryfall
 
@@ -214,6 +218,19 @@ The local card-data store contains All Cards, Rulings, Oracle Tags, and Art
 Tags. Card-data downloads are explicit. They never run at startup or in the
 background.
 
+### Optional: install full Scryfall card data
+
+A full install contains card records, rulings, Oracle tags, and art tags. It
+does not contain card images. It is useful for local tag and card-data
+workflows; ordinary card lookups can use the provider and small local cache
+without it.
+
+The download is multi-gigabyte and an update needs temporary working space.
+Start it only through the explicit full-data tools in `local` or `remote` mode.
+The public names `scryfall_corpus_status`, `scryfall_corpus_sync`,
+`scryfall_corpus_rollback`, and `scryfall_corpus_delete` are existing API
+names for inspecting and managing that installed card data.
+
 Freshness policies are `default`, `cache-only`, and `refresh`. The default TTL
 is 24 hours. Immutable snapshots do not expire.
 
@@ -221,13 +238,14 @@ is 24 hours. Immutable snapshots do not expire.
 hits first, deduplicates provider misses, and sends provider batches of at most
 75. Results use stable cursor pagination.
 
-Arbitrary Scryfall queries remain provider-authoritative. The cache reuses only
-the exact same request. Card facts and community tags remain separate evidence
-classes.
+For arbitrary queries, Scryfall remains the source of truth. The cache reuses
+only the exact same request. Card facts and community tags stay separate kinds
+of information.
 
 ## Read Commander Spellbook evidence
 
-Enable the `spellbook` toolset for three source-evidence tools:
+Enable the `spellbook` toolset for three tools that return Commander Spellbook
+data:
 
 - `spellbook_variant_search` returns one bounded page for an exact Commander
   Spellbook query.
@@ -279,7 +297,7 @@ provider-controlled numeric rank.
 
 ## Read Playgroup evidence
 
-Enable the `playgroup` toolset. It exposes the pinned Public API 1.0.0 surface.
+Enable the `playgroup` toolset. It exposes tools for the pinned Public API 1.0.0.
 All modes include 14 safe read tools. `remote` adds two write tools.
 
 Results preserve provider JSON and include operation, API version, retrieval
@@ -292,7 +310,7 @@ public API provides no cleanup operation.
 
 ## Evidence and safety
 
-The server keeps these output classes distinct:
+The server labels these kinds of result separately:
 
 - provider facts;
 - provider evidence;
@@ -328,7 +346,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 
 ## Architecture
 
-| Project | Ownership |
+| Project | Responsible for |
 | --- | --- |
 | `MtgMcp.Core` | Provider-neutral contracts and evidence |
 | `MtgMcp.Decks` | Local SQLite decks and interchange |

@@ -9,6 +9,10 @@ Ideas intentionally deferred beyond the rewrite live in the
 [potential-features registry](../../../potential-features.md), not as implied
 implementation work in these packets.
 
+Reference-only packets may retain names and terms from the old server. In those
+records, `corpus` means installed full Scryfall card data; it is not a separate
+current feature.
+
 ## Evidence-First Rewrite Children
 
 No rewrite child remains planned. Children 1 through 11 are complete. The
@@ -21,7 +25,6 @@ is complete.
 
 | Packet | Status | Summary |
 | --- | --- | --- |
-| [evidence-first-deckbuilding-evolution](evidence-first-deckbuilding-evolution/README.md) | Planning-only umbrella | Post-0.9 roadmap for real adapter ownership, source admission, exact deck analysis, and a bounded deck mana and on-curve estimate. |
 | [mcp-trust-evidence](mcp-trust-evidence/README.md) | Absorbed/reference-only | Evidence vocabulary rationale is owned by rewrite foundation/provider/statistics children; do not implement independently. |
 | [configurable-decision-models](configurable-decision-models/README.md) | Post-cutover reference | Seed for a future experimental feasibility PLC; not stable `0.9.0` scope. |
 | [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by the unified Scryfall, Archidekt, and Playgroup children. |

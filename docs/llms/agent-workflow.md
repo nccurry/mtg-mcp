@@ -7,9 +7,10 @@
 3. Prefer existing project boundaries, models, helpers, and naming.
 4. Make the smallest coherent change that satisfies the request.
 
-For the clean-break rewrite, read [`../rewrite-guide.md`](../rewrite-guide.md)
-before step 1. Prefer existing abstractions only for current-server maintenance;
-the approved audit and active child PLC decide what the rewrite may reuse.
+For work that touches the `0.9.0` redesign, read
+[`../rewrite-guide.md`](../rewrite-guide.md) before step 1. The completed
+rewrite records define lasting limits; a new approved PLC defines work that
+spans several modules or public APIs.
 
 ## Planning
 
@@ -20,14 +21,13 @@ the approved audit and active child PLC decide what the rewrite may reuse.
   affects persistence formats, or needs phased delivery.
 - Keep ignored `/plans/` for local scratch only.
 - Start durable plans and PLC packets from `docs/llms/templates/`.
-- A drafted child is not implementation authority. Rewrite production edits
-  require recorded independent approval, explicit owner authorization,
-  `Implementation authorized: Yes`, and an `in-progress/` packet.
+- A drafted PLC is not implementation authority. Production work needs the
+  recorded review and owner authorization required by its packet.
 
 ## Editing
 
 - Keep dependency-light behavior in `MtgMcp.Core`.
-- Keep MCP host and tool surface behavior in `MtgMcp.App`.
+- Keep MCP host and public tool behavior in `MtgMcp.App`.
 - Keep third-party HTTP contracts in adapter projects.
 - Guard mutating MCP tools with `OperationModeGuard`.
 - Avoid unrelated formatting churn.

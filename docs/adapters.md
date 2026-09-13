@@ -2,8 +2,8 @@
 
 ## Rules
 
-Each adapter owns its provider transport, authentication, pacing, retries,
-payloads, and evidence mapping. Core contains no provider transport type.
+Each adapter owns its provider HTTP calls, authentication, rate limits, retries,
+payloads, and evidence mapping. Core contains no provider HTTP type.
 
 Adapters must:
 
@@ -22,9 +22,9 @@ Adapters must:
 - API starts share a cross-process 500-millisecond minimum interval.
 - `403` and `429` stop immediately.
 - Transient transport and 5xx failures retry at most twice.
-- Arbitrary searches remain provider-authoritative.
+- For arbitrary searches, Scryfall remains the source of truth.
 - Exact request snapshots are immutable.
-- Corpus sync is explicit and never runs in the background.
+- Full card-data download is explicit and never runs in the background.
 - All Cards, Rulings, Oracle Tags, and Art Tags share `scryfall.db` but retain
   separate evidence classes.
 
@@ -93,7 +93,7 @@ a deck, or recommends a combo.
 ## Moxfield
 
 There is no Moxfield network adapter. `MtgMcp.Decks` generates manual Bulk Edit
-and tag artifacts with explicit preservation limits.
+and tag files with clear limits on what they keep.
 
 ## Tests
 

@@ -1,36 +1,38 @@
 # mtg-mcp
 
 > A C# MCP server that gives LLMs grounded Magic: The Gathering card, deck,
-> source, and statistical evidence plus safe deck-planning workflows.
+> source, and statistical evidence plus safe deck-planning operations.
 
 Current code, tests, project files, checked-in configuration, and `AGENTS.md`
 are authoritative. This file is a compact orientation index, not a second
 instruction file.
 
-This branch contains the completed foundation, revisioned local deck/SQLite capability, implemented offline manual deck interchange, unified Scryfall evidence, opt-in guarded Archidekt synchronization, and the opt-in documented Playgroup public API of the clean-break rewrite.
-The shipped legacy server remains available through Git history and its release,
-but its production code is no longer present here. Read
-[Rewrite guide](docs/rewrite-guide.md) before treating historical architecture
-or public-surface docs as future design requirements.
+This branch contains the finished `0.9.0` server: local decks in SQLite, manual
+deck imports and exports, Scryfall evidence, optional guarded Archidekt sync,
+and the optional documented Playgroup public API. The old server remains in Git
+history and released packages, but its production code is not in this branch.
+Read the [rewrite guide](docs/rewrite-guide.md) before using historical design
+or API documents to plan new work.
 
 ## Start Here
 
 - [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
-- [README](README.md): Current deck, Scryfall, Archidekt, and Playgroup surfaces, configuration, product direction, and development commands.
+- [README](README.md): Current deck, Scryfall, Archidekt, and Playgroup tools, configuration, product direction, and development commands.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
-- [Rewrite guide](docs/rewrite-guide.md): Current-versus-target routing, rewrite guardrails, and implementation entry gate.
-- [Rewrite program](docs/llms/plcs/completed/evidence-first-mcp-rewrite-program/README.md): Approved `0.9.0` umbrella guardrails and child registry.
-- [Capability toolsets](docs/llms/plcs/completed/mcp-capability-toolsets/README.md): Implemented startup-selected surface governance and static profiles.
+- [Rewrite guide](docs/rewrite-guide.md): The released `0.9.0` boundary, lasting rules, and how to start new work without reopening the rewrite.
+- [Rewrite program](docs/llms/plcs/completed/evidence-first-mcp-rewrite-program/README.md): The approved overall `0.9.0` rules and child-packet list.
+- [Capability toolsets](docs/llms/plcs/completed/mcp-capability-toolsets/README.md): The startup-selected tool groups and fixed profiles.
 - [Local deck store](docs/llms/plcs/completed/local-deck-store/README.md): Implemented deck contracts, SQLite lifecycle, tools, and acceptance evidence.
-- [Manual deck interchange](docs/llms/plcs/completed/manual-deck-interchange/README.md): Completed native JSON, generic text, and UI-accepted provider artifacts with explicit preservation limits and confirmed cleanup.
-- [Pre-statistics hardening](docs/llms/plcs/completed/mcp-contract-and-adapter-hardening/README.md): Completed AMEND-005 contracts, exact identity reconciliation, and adapter-boundary hardening.
-- [Exact deck statistics](docs/llms/plcs/completed/exact-deck-statistics/README.md): Implemented eight exact-mathematics tools over caller-defined populations and assumptions, with no legality or recommendations.
-- [Scryfall corpus and evidence](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md): Completed unified official corpus, authoritative API, cache, replay, and tag-evidence capability with retained full-corpus acceptance.
-- [Archidekt synchronization](docs/llms/plcs/completed/archidekt-deck-sync/README.md): Completed opt-in deck, folder, snapshot, pull/push, pacing, audits, and disposable live acceptance.
-- [Playgroup public API](docs/llms/plcs/completed/playgroup-public-api/README.md): Completed opt-in official operations, provider evidence, mode guards, fixture-only write safety, and safe live-read boundary.
+- [Manual deck interchange](docs/llms/plcs/completed/manual-deck-interchange/README.md): Native JSON, plain text, and manual provider export files, with clear limits on what each format keeps.
+- [Pre-statistics hardening](docs/llms/plcs/completed/mcp-contract-and-adapter-hardening/README.md): AMEND-005 work: exact identity matching and clearer adapter boundaries.
+- [Exact deck statistics](docs/llms/plcs/completed/exact-deck-statistics/README.md): Eight exact-math tools with caller-defined populations and assumptions; no legality checks or recommendations.
+- [Scryfall card data and evidence](docs/llms/plcs/completed/scryfall-corpus-and-evidence/README.md): Official card-data install, API cache, replay, and tag evidence.
+- [Archidekt synchronization](docs/llms/plcs/completed/archidekt-deck-sync/README.md): Optional deck, folder, snapshot, pull/push, pacing, and safe live checks.
+- [Playgroup public API](docs/llms/plcs/completed/playgroup-public-api/README.md): Optional documented operations, provider evidence, mode guards, safe write tests, and limited live reads.
 - [Deterministic deck categorization](docs/llms/plcs/completed/deterministic-deck-categorization/README.md): Implemented caller-configured tag-rule validation, preview, and guarded apply.
 - [Rewrite stabilization](docs/llms/plcs/completed/rewrite-stabilization-cutover/README.md): Completed package, documentation, release, and rollback evidence for `0.9.0`.
+- [Deckbuilding evolution](docs/llms/plcs/completed/evidence-first-deckbuilding-evolution/README.md): Completed ownership cleanup, current toolchain update, source decisions, tag repair, and on-curve estimate.
 - [Potential features](docs/potential-features.md): Deferred ideas that are not stable rewrite scope.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
 
@@ -39,7 +41,7 @@ or public-surface docs as future design requirements.
 - [Architecture](docs/architecture.md): Current project, data, evidence, and write boundaries.
 - [Adapters](docs/adapters.md): Current Scryfall, Archidekt, Playgroup, and Moxfield boundaries.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
-- [Toolsets](docs/toolsets.md): Static toolset selection, mode intersection, and workflow profiles.
+- [Toolsets](docs/toolsets.md): Fixed tool-group selection, modes, and common profiles.
 - [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
 
 ## Agent Planning

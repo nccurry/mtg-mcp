@@ -1,9 +1,14 @@
 # Live Method Acceptance
 
+> Historical acceptance record for the `0.9.0` cutover. The counts and package
+> version below are not a current release checklist. Use `task --list` and the
+> current release tasks for a new release.
+
 ## Purpose
 
-Verify the packaged `0.9.0-preview.1` MCP through the official C# client. The
-unit of acceptance is a public tool or resource, not an internal C# method.
+This record verified the packaged `0.9.0-preview.1` MCP through the official
+C# client. The unit of acceptance was a public tool or resource, not an
+internal C# method.
 
 ## Safety
 
@@ -21,7 +26,7 @@ local paths.
 
 The Archidekt workflow uses owner-authorized disposable state and verifies
 restore and cleanup. Playgroup writes are never invoked because the public API
-has no cleanup operation. Scryfall corpus work uses a guarded scratch copy.
+has no cleanup operation. Full Scryfall card-data work uses a guarded scratch copy.
 
 ## Run
 
@@ -31,13 +36,13 @@ $env:MTGMCP_LIVE_ACCEPTANCE_DATA_DIR = 'C:\path\outside\the\repository'
 task test:live:methods
 ```
 
-Set `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` to exercise corpus generations. When
+Set `MTGMCP_RUN_FULL_SCRYFALL_CORPUS=1` to exercise installed card-data versions. When
 Scryfall has not published a second generation, rollback remains
 `pending-provider-generation`.
 
-## Required surface
+## Required tools
 
-| Capability | Registered | Live | Fixture-backed | Pending generation | Fixture-only |
+| Feature | Registered | Live | Saved test data | Waiting for new data | No live write |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Decks | 29 | 29 | 0 | 0 | 0 |
 | Scryfall | 18 | 15 | 2 | 1 | 0 |
@@ -46,20 +51,20 @@ Scryfall has not published a second generation, rollback remains
 | Playgroup | 16 | 14 | 0 | 0 | 2 |
 | **Total** | **93** | **88** | **2** | **1** | **2** |
 
-The run must also pass the capability resource; exact profile and mode counts;
-Archidekt restore and cleanup; zero Playgroup writes; and retained Scryfall
-database isolation.
+The run also verifies the capabilities resource, exact profile and mode counts,
+Archidekt restore and cleanup, zero Playgroup writes, and Scryfall database
+isolation.
 
 ## Current result
 
 The final packaged run passed on 2026-07-12 at
 `e0d68e7cf897430f9c43b4657307fd520469cbf7`.
 
-- Capability resource: passed.
+- Capabilities resource: passed.
 - Live tools: 88.
-- Fixture-backed Scryfall lifecycle tools: 2.
+- Scryfall lifecycle tools using saved test data: 2.
 - Scryfall rollback: `pending-provider-generation`.
-- Fixture-only Playgroup writes: 2.
+- Playgroup writes with no live write test: 2.
 - Archidekt restore and cleanup: passed.
 - Playgroup writes sent: 0.
 - Retained Scryfall database changed: no.

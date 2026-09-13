@@ -1,13 +1,17 @@
-# Performance Ratchet
+# Performance Baseline
 
-> Historical reference: the legacy role-classification and Stats Lab timing
-> ratchets were removed with their product implementations in Foundation Phase
-> 2. Their benchmark tasks and report artifact are not present on this branch.
+> Historical reference: the old role-classification and Stats Lab performance
+> checks were removed with their product implementations in Foundation Phase 2.
+> Their benchmark tasks and reports are not present on this branch.
 
-The repository may add performance measurements when an approved child
-introduces a production path with a meaningful performance risk. New ratchets
-must name the behavior they protect, use representative deterministic inputs,
-and distinguish informational review budgets from hard CI gates.
+The repository has one current measurement: `task benchmark:oncurve` runs a
+fixed 99-card Release benchmark for `deck_on_curve_estimate`. It is a
+repeatable review baseline, not a hard CI gate.
 
-Legacy benchmark code and report conventions remain available in Git history
-as design evidence; they are not reusable product abstractions by default.
+The repository may add a performance measurement when an approved child adds a
+production path with meaningful performance risk. Each measurement must name
+the behavior it protects, use representative repeatable inputs, and say whether
+it is a review guide or a hard CI gate.
+
+Old benchmark code and report conventions remain in Git history as design
+evidence. Do not reuse their product abstractions by default.

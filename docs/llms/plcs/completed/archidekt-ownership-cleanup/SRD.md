@@ -4,7 +4,7 @@
 
 - Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
-- Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
+- Parent PLC: [Evidence-First Deckbuilding Evolution](../../completed/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Last updated: 2026-09-07
 - Related design: [SADD.md](SADD.md)
@@ -19,9 +19,9 @@ route changes easy to locate without changing any public behavior.
 
 ## References
 
-- [Parent requirements](../../planned/evidence-first-deckbuilding-evolution/SRD.md#requirements)
-- [Parent Phase 1B plan](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1b-archidekt-ownership-extraction)
-- [Parent architecture](../../planned/evidence-first-deckbuilding-evolution/SADD.md#building-blocks)
+- [Parent requirements](../../completed/evidence-first-deckbuilding-evolution/SRD.md#requirements)
+- [Parent Phase 1B plan](../../completed/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1b-archidekt-ownership-extraction)
+- [Parent architecture](../../completed/evidence-first-deckbuilding-evolution/SADD.md#building-blocks)
 - [Archidekt adapter instructions](../../../../../src/AGENTS.md)
 - [Current public service](../../../../../src/MtgMcp.Archidekt/ArchidektService.cs)
 - [Current session](../../../../../src/MtgMcp.Archidekt/ArchidektSession.cs)
@@ -109,7 +109,7 @@ in-memory token, pacing, retries, error translation, and disposal.
 | AOC-006 | [Compatibility](SADD.md#compatibility) | Surface report and source review. |
 | AOC-007 | [Test design](SADD.md#test-design) | Test fixture review and non-Live Task run. |
 | AOC-008 | [File ownership](SADD.md#file-ownership) | Reflection boundary test and source audit. |
-| AOC-009 | [Documentation](SADD.md#documentation) | Architecture test source inspection. |
+| AOC-009 | [Documentation](README.md#selected-design) | Architecture test source inspection. |
 | AOC-010 | [Validation](IMPLEMENTATION_PLAN.md#phase-5-close-the-child) | Link and diff checks. |
 
 ## Risks And Controls

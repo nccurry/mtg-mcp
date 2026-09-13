@@ -2,13 +2,13 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
-- Last updated: 2026-09-10
+- Last updated: 2026-09-12
 - Related SRD: [SRD.md](SRD.md)
 - Related SADD: [SADD.md](SADD.md)
-- Implementation authorized: No
+- Implementation authorization: Closed
 
 ## Implementation Strategy
 
@@ -20,7 +20,7 @@ Do not mix a provider extraction, a major MCP SDK upgrade, a new external
 source, and a new public tool in one change. Each of those has a different
 failure mode and should have a separate validation story.
 
-The recommended first child is adapter ownership cleanup. It is the smallest
+The selected first child was adapter ownership cleanup. It was the smallest
 useful outcome: a maintainer can safely change Scryfall card data/snapshots or
 Archidekt decks/folders/snapshots without navigating a god class.
 
@@ -37,7 +37,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
 | 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003–005, EFD-007, EFD-010, EFD-013–014 | Core, Scryfall, App, focused tests/docs | Official-shaped fixture, hierarchy/validation tests, Task checks, surface check | Existing grouping follows source hierarchy and rejects bad source selectors without adding a tag system. | Complete |
 | 5 | [Decide community and deck-group source feasibility](SOURCE_FEASIBILITY.md). | EFD-006–007, EFD-010, EFD-013 | Research/docs; source-specific child only if supported | Current API and access-rule check | Each source is explicitly added, deferred, or rejected. | Complete |
 | 6 | [Build the authorized bounded deck mana and on-curve estimate](../../completed/deck-mana-on-curve-simulation/README.md). | EFD-001, EFD-003–005, EFD-009–011, EFD-013 | New OnCurve project and one read-only deck tool | Real-deck fixtures, replay, calibration, policy review | A clear public estimate is implemented and validated. | Complete |
-| 7 | Stabilize selected completed children. | All selected requirements | Docs, release, validation | Full gates, audits, release review | Contracts, docs, deferred items, and follow-ups are accurate. | Planned |
+| 7 | Stabilize selected completed children. | All selected requirements | Docs, release, validation | Full gates, audits, release review | Contracts, docs, deferred items, and follow-ups are accurate. | Complete |
 
 ## Phase Details
 
@@ -55,7 +55,7 @@ Archidekt decks/folders/snapshots without navigating a god class.
   - The owner chooses one child, normally Phase 1A.
   - The child states its exact public-surface and persistence impact.
   - The child is moved to in-progress only after authorization.
-- Rollback/fallback: Leave this roadmap planned and defer all code work.
+- Historical fallback: Leave this roadmap planned and defer all code work.
 - Cleanup: None.
 
 ### Phase 4A: Official Scryfall tag grouping repair
@@ -329,6 +329,9 @@ saved-deck combo lookup that returns source groups without advice.
 - Rollback/fallback: Keep the release queued until all selected criteria pass.
 - Cleanup: Remove obsolete tests, code, fixtures, and docs only after their
   replacements prove behavior.
+- Result (2026-09-12): Complete. The selected children, explicit Phase 4
+  deferral, current tool counts, package/startup checks, and documentation
+  records are reconciled. No temporary forwarding or compatibility code remains.
 
 ## Cross-Phase Risks
 
@@ -344,18 +347,18 @@ saved-deck combo lookup that returns source groups without advice.
 
 ## Completion Criteria
 
-- [ ] Every selected Must requirement appears in an authorized child.
-- [ ] A currently authorized child verifies every in-scope Must requirement or
+- [x] Every selected Must requirement appears in an authorized child.
+- [x] A currently authorized child verifies every in-scope Must requirement or
   has an approved amendment that removes or replaces it; a deferral alone does
   not close the requirement.
-- [ ] Every deferred future child or child outcome records its rationale,
+- [x] Every deferred future child or child outcome records its rationale,
   owner, activation or review trigger, affected acceptance criteria, and why
   the completed phase still meets its exit criteria.
-- [ ] Phase 1A and 1B preserve the current public surface and provider
+- [x] Phase 1A and 1B preserve the current public surface and provider
   behavior while removing forwarding ownership.
-- [ ] Each new provider is selected or explicitly deferred before code starts.
-- [ ] Exact and sampled analysis remain visibly distinct.
-- [ ] No generic provider framework, scraper, rules engine, or recommendation
+- [x] Each new provider is selected or explicitly deferred before code starts.
+- [x] Exact and sampled analysis remain visibly distinct.
+- [x] No generic provider framework, scraper, rules engine, or recommendation
   system appears.
-- [ ] Every completed child records focused and broad validation.
-- [ ] Documentation, source limits, tool counts, and deferred work are current.
+- [x] Every completed child records focused and broad validation.
+- [x] Documentation, source limits, tool counts, and deferred work are current.

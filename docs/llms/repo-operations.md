@@ -1,7 +1,7 @@
 # Repository Operations
 
-`mtg-mcp` follows a Task-based workflow. Every common operation should be
-exposed through `Taskfile.yml`.
+`mtg-mcp` uses Task as its command entry point. Every common operation should
+be available through `Taskfile.yml`.
 
 ## Rules
 
@@ -31,6 +31,7 @@ task smoke:process
 task smoke:mcp
 task ci
 task pack
+task install
 task clean
 ```
 
@@ -42,6 +43,10 @@ provider validation is explicitly requested and safe.
 change, use `task restore:lock` to refresh that graph and `task tools:lock` to
 refresh the committed Mise download records. Review both lock-file changes.
 
+`task install` changes the local workstation: it packs the current branch,
+installs the command, and verifies a self-contained Scryfall-enabled server
+can start. Use it for a real local install, not as a routine test command.
+
 ## Adding A Task
 
 When adding a task:
@@ -50,4 +55,4 @@ When adding a task:
 2. Give the task a clear `desc`.
 3. Keep platform-specific commands under `platforms`.
 4. Prefer artifact output under `artifacts/`.
-5. Update docs when it becomes a supported workflow.
+5. Update docs when it becomes a supported command.

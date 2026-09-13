@@ -5,6 +5,9 @@
 > local domain is the revisioned format-neutral deck store; a future collection
 > capability would require its own PLC. See [rewrite-guide.md](rewrite-guide.md).
 
+> The commands and examples below describe the removed legacy server. They are
+> not available in the current `0.9.0` server.
+
 The legacy server could keep a workstation-local card collection under
 `MTGMCP__DATA_DIR/collection`. The first version tracks card name and quantity
 only, so it is useful for deck ownership checks without requiring a vendor

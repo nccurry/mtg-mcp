@@ -11,7 +11,7 @@
 - Prefer inspectable counts, rows, exact derivations, and explicit unavailable
   states. The calling LLM explains tradeoffs and makes deckbuilding choices.
 - Stable `0.9.0` contains no recommendation, intent, weak-card, replacement,
-  blended-score, advisor-prompt, or strategic-automation surface.
+  blended-score, advisor-prompt, or strategic-automation feature.
 
 ## Small Stable Core
 
@@ -33,7 +33,7 @@
 - Keep normal tests deterministic, offline, and free of real provider mutation.
 - Maintain at least 90 percent line coverage per production assembly with tests
   that prove observable behavior and failure handling.
-- Keep analyzer, architecture, surface, calibration, and performance checks as
+- Keep analyzer, architecture, tool/API, calibration, and performance checks as
   complementary evidence; coverage alone is not correctness.
 
 ## MCP-Native Safety
@@ -46,20 +46,20 @@
 - Redact credentials and sensitive local paths from logs, errors, resources,
   test data, and configuration output.
 
-## Surface Discipline
+## Clear Tool Groups
 
-- Assign every stable tool to exactly one capability toolset. Toolsets express
-  relevance; operation modes continue to express authority.
-- Keep registration static for the MCP session. Select toolsets at startup and
-  advertise the resulting exact surface without dynamic list-change claims.
-- Make `decks`, `scryfall`, and `stats` the smallest coherent default. Require
-  explicit enablement for `archidekt` and `playgroup`.
+- Assign every stable tool to exactly one toolset. Toolsets decide which tools a
+  client sees; operation modes decide what it may change.
+- Keep registration fixed for the MCP session. Select toolsets at startup and
+  report the resulting tool list without claiming it can change dynamically.
+- Make `decks`, `scryfall`, and `stats` the focused default profile. Require
+  explicit enablement for `archidekt`, `playgroup`, and `spellbook`.
 - Support `default`, `all`, `none`, and explicit toolset lists so clients and
-  tests can request a predictable surface.
-- Add a tool only when its distinct input/output contract advances a complete
-  LLM workflow. Prefer one catalog tool over parallel discovery tools that
-  return the same domain facts.
-- Do not replace a large explicit surface with a generic router, intent
+  tests can request a predictable tool list.
+- Add a tool only when its distinct input/output contract completes a useful LLM
+  task. Prefer one catalog tool over parallel discovery tools that return the
+  same facts.
+- Do not replace a large explicit tool list with a generic router, intent
   inference, per-tool allowlists, or compatibility aliases.
 
 ## Deferred Experimental Estimation
@@ -72,5 +72,5 @@
   mathematics. Any future sampled or heuristic evidence must meet the same bar.
 - Never add a generic rules engine or arbitrary expression language.
 
-See [Evidence-First Rewrite Guide](rewrite-guide.md) for current-versus-target
-routing and implementation authority.
+See [Evidence-First Rewrite Guide](rewrite-guide.md) for what the server does
+now, what remains only a plan, and who may authorize implementation.

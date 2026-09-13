@@ -10,6 +10,14 @@
 - Added the Core-only `MtgMcp.OnCurve` calculation project, offline replay and
   MCP process tests, and the separate `task benchmark:oncurve` Release
   measurement for a fixed sanitized 99-card fixture.
+- Fixed full Scryfall card-data imports to read current official bulk metadata
+  and accept supported tag and ruling records that refer to a card row not
+  present in the installed data.
+- Fixed self-contained packages to include the native SQLite runtime. `task
+  install` now starts a read-only Scryfall-enabled server after installation to
+  catch packaged startup failures.
+- Fixed the Task and release test filters for .NET 11 and xUnit MTP so a
+  focused check cannot report success after running zero tests.
 
 ## 0.9.0 - 2026-07-12
 
@@ -46,9 +54,9 @@
   `none`, and explicit profiles, exact mode intersection, schema-v3 capability
   metadata, and no dynamic tool-list advertisement.
 - Added `MtgMcp.Scryfall` with eighteen typed tools for official API evidence,
-  exact-request snapshot replay, explicit four-dataset corpus lifecycle, and
+  exact-request snapshot replay, an explicit four-dataset card-data lifecycle, and
   separately labeled Oracle/art community tags in one `scryfall.db`.
-- Added configurable 24-hour evidence reuse, current-plus-previous corpus
+- Added configurable 24-hour evidence reuse, current-plus-previous card-data
   generations, cross-process SQLite leases and conservative 500-millisecond
   pacing, fail-fast blocking responses, bounded retry, and offline/live
   acceptance suites.
@@ -73,7 +81,7 @@
   cursor pages that never reacquire during continuation.
 - Added a bounded official-client Red/White Weenies workflow that proves local
   deck creation, structural validation, batch card resolution, evidence
-  persistence, and immutable replay without bulk corpus acquisition.
+  persistence, and immutable replay without a full card-data download.
 - Added the opt-in 16-tool Playgroup Public API 1.0.0 capability: all 15
   documented operations plus redacted auth status, lossless provider evidence,
   explicit unsupported deck updates, exact 14/14/16 mode visibility, and no
@@ -105,7 +113,7 @@
 - Replaced the flat batch-change input with an eleven-variant closed schema,
   described every public MCP input, and upgraded capability metadata to schema
   6 with separate implementation and credential states and no provider I/O.
-- Split Scryfall card, corpus, snapshot, storage, and pacing ownership and
+- Split Scryfall card data, snapshots, storage, and pacing into clear owners, and
   Archidekt deck, folder, snapshot, transport, mapping, and synchronization
   ownership behind behavior-preserving public facades.
 - Added three deterministic `deck_*` categorization tools with explicit inline

@@ -38,7 +38,7 @@ evidence-first boundary and the Core/App/Scryfall project split.
 
 ## References
 
-- [Evidence-first deckbuilding evolution umbrella](../../planned/evidence-first-deckbuilding-evolution/README.md)
+- [Evidence-first deckbuilding evolution umbrella](../../completed/evidence-first-deckbuilding-evolution/README.md)
 - [North Star](../../../../north-star.md)
 - [Design goals](../../../../design-goals.md)
 - [Rewrite guide](../../../../rewrite-guide.md)

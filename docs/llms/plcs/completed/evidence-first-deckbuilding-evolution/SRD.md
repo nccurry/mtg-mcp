@@ -2,14 +2,14 @@
 
 ## Document Control
 
-- Lifecycle status: Planned
+- Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
 - Owner: mtg-mcp
 - Reviewers: product owner, Core maintainer, adapter maintainer, MCP contract maintainer
-- Last updated: 2026-09-08
+- Last updated: 2026-09-12
 - Related design: [SADD.md](SADD.md)
 - Related implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
-- Implementation authorized: No
+- Implementation authorization: Closed
 
 ## Revision History
 
@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | 2026-09-06 | mtg-mcp | Initial post-0.9 cleanup and product-evolution roadmap. |
 | 2026-09-08 | mtg-mcp | Completed Phase 5 source decisions; no new community or deck-group source is admitted. |
+| 2026-09-12 | mtg-mcp | Closed the completed delivery record after Phase 7 documentation and validation reconciliation. |
 
 ## Executive Summary
 
@@ -25,9 +26,9 @@ to build it. The stable server should provide source-backed card and deck
 information, exact calculations, and explicit guarded deck operations. It
 should make missing data, source bias, assumptions, and uncertainty visible.
 
-This PLC turns that product statement into an incremental roadmap. First it
-makes existing module ownership real. Then it provides a disciplined path for
-new source evidence and one bounded, sampled deck mana and on-curve estimate.
+This PLC turned that product statement into an incremental delivery record. It
+made existing module ownership real, set a disciplined path for new source
+evidence, and added one bounded, sampled deck mana and on-curve estimate.
 
 ## Audience
 
@@ -241,6 +242,7 @@ mode, or local tag-management surface.
 | 4A | [Repair official Scryfall tag grouping](../../completed/official-scryfall-tag-grouping-reliability/README.md). | EFD-001, EFD-003 to EFD-005, EFD-007, EFD-010, EFD-013, EFD-014 | Source hierarchy, selector validation, one-generation consistency, and the in-place `common-v1` correction pass without a new tag system. |
 | 5 | [Research community and deck-group sources without scraping](SOURCE_FEASIBILITY.md). **Complete 2026-09-08:** no new source is admitted. | EFD-006, EFD-007, EFD-010, EFD-013 | Reddit is deferred pending explicit approval; direct EDHREC and Moxfield automation are rejected; public Archidekt collection and current Playgroup do not supply a usable deck group. |
 | 6 | [Build the authorized deck mana and on-curve estimate](../../completed/deck-mana-on-curve-simulation/README.md). | EFD-001, EFD-003 to EFD-005, EFD-009 to EFD-011, EFD-013 | One read-only tool reports actual-deck source facts, caller land rules, a sampled result, and stated limits. |
+| 7 | Reconcile completed work. | All selected requirements | Documentation, tool counts, package/startup validation, and deferred work are accurate. |
 
 ## Traceability
 
@@ -287,18 +289,18 @@ provider child defines an independently safe mutation acceptance path.
 
 ## Definition Of Done
 
-- [ ] Each selected Must requirement is implemented by an approved child. A
+- [x] Each selected Must requirement is implemented by an approved child. A
   currently authorized child cannot close a Must requirement by merely calling
   it deferred; the owner must verify it or approve an amendment that removes
   or replaces it.
-- [ ] Any deferred future child or child outcome has a record that names
+- [x] Any deferred future child or child outcome has a record that names
   its rationale, owner, activation or review trigger, affected acceptance
   criteria, and confirmation that the active phase still meets its exit
   criteria.
-- [ ] The evidence/advice boundary remains visible in code, schemas, and docs.
-- [ ] Architecture owners match their actual responsibilities.
-- [ ] Every added provider has current API/access evidence and fixtures.
-- [ ] Exact and sampled outputs remain visibly different.
-- [ ] Broad validation and any applicable package/client smoke evidence are
+- [x] The evidence/advice boundary remains visible in code, schemas, and docs.
+- [x] Architecture owners match their actual responsibilities.
+- [x] Every added provider has current API/access evidence and fixtures.
+- [x] Exact and sampled outputs remain visibly different.
+- [x] Broad validation and any applicable package/client smoke evidence are
   recorded.
-- [ ] Residual risks and rejected/deferred sources are documented.
+- [x] Residual risks and rejected/deferred sources are documented.

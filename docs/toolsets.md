@@ -1,6 +1,7 @@
 # MCP Toolsets
 
-Toolsets reduce the model-visible surface. They do not grant authority.
+Toolsets limit the list of tools an LLM sees. They do not grant permission to
+write.
 
 ## Select toolsets
 
@@ -25,8 +26,8 @@ not advertise dynamic tool-list changes.
 
 ## Combine toolsets with modes
 
-The visible surface is the intersection of the selected toolsets and operation
-mode.
+The available tools are those in the selected toolsets that the operation mode
+allows.
 
 | Profile | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
@@ -50,6 +51,10 @@ writes. A toolset cannot widen these permissions.
 
 The default profile supports local deckbuilding without loading provider-account
 tools. Enable Archidekt, Playgroup, or Spellbook only for those workflows.
+
+Use `all` for deliberate broad investigation or diagnostics. For ordinary
+work, name only the toolsets the session needs. Start a new MCP session to
+change the selection.
 
 The three `spellbook` tools are read-only in every mode. They return Commander
 Spellbook evidence, not a recommendation about a deck or combo.

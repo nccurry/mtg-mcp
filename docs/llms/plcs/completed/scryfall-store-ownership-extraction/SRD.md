@@ -4,7 +4,7 @@
 
 - Lifecycle status: Completed
 - PLC packet: [README.md](README.md)
-- Parent PLC: [Evidence-First Deckbuilding Evolution](../../planned/evidence-first-deckbuilding-evolution/README.md)
+- Parent PLC: [Evidence-First Deckbuilding Evolution](../../completed/evidence-first-deckbuilding-evolution/README.md)
 - Owner: mtg-mcp
 - Reviewers: independent design reviewer and adapter maintainer
 - Last updated: 2026-09-07
@@ -40,9 +40,9 @@ needs familiarity with the evidence-first rewrite and the Scryfall adapter.
 
 ## References
 
-- [Parent implementation plan](../../planned/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1a-scryfall-ownership-extraction)
-- [Parent requirements](../../planned/evidence-first-deckbuilding-evolution/SRD.md#requirements)
-- [Parent architecture](../../planned/evidence-first-deckbuilding-evolution/SADD.md#building-blocks)
+- [Parent implementation plan](../../completed/evidence-first-deckbuilding-evolution/IMPLEMENTATION_PLAN.md#phase-1a-scryfall-ownership-extraction)
+- [Parent requirements](../../completed/evidence-first-deckbuilding-evolution/SRD.md#requirements)
+- [Parent architecture](../../completed/evidence-first-deckbuilding-evolution/SADD.md#building-blocks)
 - [Rewrite guide](../../../../rewrite-guide.md)
 - [Scryfall adapter instructions](../../../../../src/MtgMcp.Scryfall/AGENTS.md)
 - [Database owner](../../../../../src/MtgMcp.Scryfall/ScryfallDatabase.cs)

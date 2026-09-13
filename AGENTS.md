@@ -2,17 +2,16 @@
 
 ## Source Of Truth
 
-- This file is the authoritative durable instruction file for coding agents in
-  this repository.
+- This file is the main instruction file for coding agents in this repository.
 - Current code, tests, project files, `Taskfile.yml`, `Directory.Build.props`,
   `Directory.Packages.props`, `global.json`, `.editorconfig`, and human-facing
   docs describe the current checkout and win over stale planning notes.
-- For an explicitly authorized rewrite child, the approved umbrella guardrails
-  and that child's approved PLC define the target behavior. Current legacy code
-  remains evidence, not an abstraction source to copy by default.
+- For work shaped by the completed rewrite, the approved overall rules and
+  completed child PLCs define the design limits. Treat legacy code as evidence,
+  not as a default design to copy.
 - `llms.txt` is a compact orientation map, not a second rulebook.
-- `docs/llms/` contains supplemental workflow guidance, durable plans, and PLC
-  packets. `.codex/` contains optional review and validation playbooks.
+- `docs/llms/` contains extra agent guidance, long-lived plans, and PLC packets.
+  `.codex/` contains optional review and validation playbooks.
 - Read the closest scoped `AGENTS.md` under `src/`, `src/MtgMcp.Core/`,
   `src/MtgMcp.App/`, `src/MtgMcp.Scryfall/`, `src/MtgMcp.Playgroup/`,
   `tests/`, or `docs/` before
@@ -26,18 +25,18 @@
   parser-derived classifications, heuristics, and blended scores distinct.
 - Do not invent missing facts, equate deterministic output with factual output,
   or treat popularity as proof of card quality.
-- Keep `mtg-mcp` an evidence and workflow server, not a Magic rules engine or
-  the final decision-maker.
+- Keep `mtg-mcp` a server that returns evidence and performs explicit
+  operations, not a Magic rules engine or the final decision-maker.
 - Treat `docs/north-star.md`, `docs/design-goals.md`, and
-  `docs/heuristic-models.md` as the durable product direction.
+  `docs/heuristic-models.md` as the long-term product direction.
 
 ## Evidence-First Rewrite
 
 - Read `docs/rewrite-guide.md` before planning, reviewing, or implementing the
   clean-break `0.9.0` work.
-- The umbrella PLC owns cross-child guardrails. Each child remains independently
-  reviewable and must say `Implementation authorized: Yes` before production
-  edits begin for that child.
+- The completed overall PLC owns the rules shared by its child PLCs. New work
+  that spans several modules or public APIs needs its own reviewed and approved
+  PLC.
 - Accepted AMEND-005 plus the completed hardening, statistics, and
   categorization children define the original 93-tool rewrite baseline. The
   completed Commander Spellbook evidence child adds three opt-in tools, and the
@@ -45,8 +44,8 @@
   tools. Statistics remains exact, caller-supplied,
   provider-independent, and legality-free. The stabilization child and `0.9.0`
   release are complete.
-- Stable `0.9.0` returns evidence, provider data, explicit workflow operations,
-  exact mathematics, and one bounded on-curve estimate. The client LLM makes
+- Stable `0.9.0` returns evidence, provider data, explicit operations, exact
+  mathematics, and one limited on-curve estimate. The client LLM makes
   deckbuilding decisions.
 - Do not carry advisor prompts, intent inference, recommendations, weak-card
   judgments, blended quality scores, or strategic simulation into the stable
@@ -55,21 +54,20 @@
   use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `spellbook_*`,
   and `stats_*` prefixes. Accepted AMEND-004 removes the separate Tagger prefix,
   adapter, toolset, and database; do not implement the superseded design.
-- Assign every stable tool to exactly one capability toolset. Toolset selection
-  controls which relevant tools an LLM sees; operation mode remains the sole
-  authority boundary. Registration is fixed for an MCP session, the default
-  profile stays intentionally small, and optional provider surfaces require
-  explicit enablement.
-- The rewrite is a clean break: do not add automatic legacy data/config/schema
-  migration or compatibility aliases unless an approved umbrella amendment
-  explicitly changes that guardrail.
+- Assign every stable tool to exactly one toolset. Toolsets choose which tools an
+  LLM sees; operation mode is the only write-permission boundary. Registration
+  is fixed for an MCP session, the default profile stays focused, and optional
+  provider tools require explicit enablement.
+- The rewrite starts fresh: do not add automatic legacy data, configuration, or
+  schema migration or compatibility aliases unless an approved overall PLC
+  amendment explicitly changes that rule.
 
 ## Architecture
 
 - Keep dependency-light domain logic in `MtgMcp.Core`; it must not reference
   adapter or host projects.
 - Keep MCP registration, tools, resources, prompts, operation modes, server
-  metadata, and host concerns in `MtgMcp.App`.
+  metadata, and host code in `MtgMcp.App`.
 - Keep third-party HTTP contracts, auth, pacing, retries, and provider caches in
   their adapter projects.
 - Adapters may translate third-party payloads into Core models, but Core must
@@ -77,17 +75,17 @@
 - Prefer the least code and abstraction needed. Add an abstraction only when it
   removes real duplication, clarifies ownership, or matches an established
   pattern.
-- During the rewrite, follow the approved child module boundary: Decks owns
-  local persistence/interchange, Statistics owns exact calculations, provider
-  projects own transport/cache concerns, and App owns MCP hosting/composition.
+- Follow the approved project boundaries: Decks owns local storage and import/
+  export, Statistics owns exact calculations, provider projects own HTTP and
+  caches, and App hosts and wires the MCP server together.
 - Under accepted AMEND-004, Scryfall owns official card, ruling, and community
   tag acquisition in one `scryfall.db`, while their schemas and evidence classes
-  remain distinct. Corpus downloads are explicit; no background download or
-  unsupported Tagger-site acquisition is allowed.
-- Do not solve surface growth with a generic router, intent inference, dynamic
-  per-request tool switching, or compatibility aliases. Prefer coherent,
-  capability-owned tools and merge catalog or discovery tools when one stable
-  response can describe the same domain without losing information.
+  remain distinct. Full Scryfall card-data downloads are explicit; no background
+  download or unsupported Tagger-site acquisition is allowed.
+- Do not solve a growing tool list with a generic router, intent inference,
+  per-request tool switching, or compatibility aliases. Keep each tool clearly
+  owned by one toolset. Merge catalog or discovery tools when one stable result
+  can describe the same information without loss.
 
 ## C# Style
 
@@ -130,9 +128,9 @@
 - For a small change, run the narrow affected test first. For shared behavior,
   public MCP shape, project references, or adapter contracts, run `task lint`
   and `task test` as risk warrants.
-- Put durable ordinary plans under `docs/llms/plans/` and cross-cutting,
-  public-surface, adapter-contract, persistence, or phased work under
-  `docs/llms/plcs/`.
+- Put long-lived ordinary plans under `docs/llms/plans/`. Put work that spans
+  several modules, changes public tools/APIs, changes provider contracts or
+  storage, or needs phases under `docs/llms/plcs/`.
 - Keep PLCs in `planned/`, `in-progress/`, or `completed/` according to their
   lifecycle. Keep ignored `/plans/` for local scratch only.
 - For docs-only guidance changes, run `git diff --check` and inspect links and

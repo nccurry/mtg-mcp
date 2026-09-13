@@ -5,6 +5,9 @@
 > simulation work starts with the independently reviewed feasibility entry in
 > [potential-features.md](potential-features.md).
 
+> Everything below describes removed `0.8.x` behavior. It is not a current
+> configuration format, tool contract, or implementation guide.
+
 Simulation profiles are deterministic Commander play-pattern presets. They tune
 mulligans, spell sequencing, interaction hold-up, scenario target turns, and
 fallback win detection. They do not make `mtg-mcp` a Magic rules engine.

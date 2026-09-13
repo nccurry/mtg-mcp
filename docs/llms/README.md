@@ -5,8 +5,8 @@ This directory contains durable guidance for AI coding agents working in
 configuration, `Taskfile.yml`, and [AGENTS.md](../../AGENTS.md).
 
 For evidence-first rewrite work, first read the
-[current-versus-target rewrite guide](../rewrite-guide.md) and the governing
-[umbrella PLC](plcs/completed/evidence-first-mcp-rewrite-program/README.md).
+[rewrite guide](../rewrite-guide.md) and the
+[overall rewrite PLC](plcs/completed/evidence-first-mcp-rewrite-program/README.md).
 Legacy implementation details remain in Git history. They are not current
 architecture.
 

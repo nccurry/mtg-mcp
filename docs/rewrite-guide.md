@@ -1,8 +1,8 @@
 # Evidence-First Rewrite Guide
 
-This document is the bridge between the currently shipped pre-rewrite server
-and the in-progress clean-break `0.9.0` server. It prevents current implementation
-documentation from being mistaken for the rewrite target.
+This document records the clean-break `0.9.0` design and release. Use it to
+understand the lasting product and architecture boundaries, not as an active
+implementation plan.
 
 All twelve rewrite children and the `0.9.0` cutover are complete. The
 stabilization child added no capability.
@@ -27,26 +27,26 @@ If an approved child conflicts with an umbrella guardrail, stop and amend the
 umbrella first. Reviewing or implementing one child must not silently change
 another.
 
-## Current Server Versus Rewrite Target
+## Legacy Server Versus Released `0.9.0`
 
-| Concern | Released legacy server | Clean-break `0.9.0` target |
+| Concern | Released legacy server | Released clean-break `0.9.0` |
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, exact mathematics, and one bounded sampled estimate; the client LLM decides |
 | MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public surface | Legacy workspace-oriented tools, resources, and prompts | 29 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, 16 opt-in `playgroup_*`, and 3 opt-in `spellbook_*` tools, one capability resource, and zero prompts |
-| Surface size | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 33/55/55 and current `all` is 61/84/97 tools by mode after deterministic categorization, with one resource and zero prompts; counts are reconciliation checks, not compatibility targets |
+| Public tools and API | Legacy workspace-oriented tools, resources, and prompts | 29 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, 16 opt-in `playgroup_*`, and 3 opt-in `spellbook_*` tools, one `mtg://server/capabilities` resource, and zero prompts |
+| Tool count | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 33/55/55 and current `all` is 61/84/97 tools by mode after deterministic categorization, with one resource and zero prompts; counts are checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Spellbook, Statistics, and OnCurve |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, unified `scryfall.db`, and short-lived `spellbook.db` response cache |
 | Compatibility | Existing pre-1.0 deprecation policy | Intentional clean break with no automatic legacy data, config, or tool-schema migration |
 | Moxfield | Automated unofficial import adapter | Manual interchange artifacts only; no network automation |
-| Community tags | Curated `otag`/`atag` evidence remains distinct from card facts | Official Scryfall bulk tags join the unified corpus; no separate Tagger adapter, database, toolset, or website acquisition |
+| Community tags | Curated `otag`/`atag` evidence remains distinct from card facts | Official Scryfall bulk tags join the installed card data; no separate Tagger adapter, database, toolset, or website acquisition |
 | Simulation and recommendations | Implemented legacy features | Not in stable `0.9.0`; separately reviewed post-cutover possibilities only |
 
 The exact current baseline and deletion/reuse allowlists live in the
 [legacy audit](llms/plcs/completed/legacy-surface-audit-and-disposition/README.md).
-The target surface count is an internal reconciliation check, not a requirement
-to preserve or invent tools.
+The target tool count is an internal check, not a requirement to preserve or
+invent tools.
 
 ## Stable Rewrite Capabilities
 
@@ -56,30 +56,30 @@ The original required planning sequence covers:
 2. repository foundation and minimal MCP host;
 3. revisioned local deck domain and SQLite store;
 4. offline manual deck interchange;
-5. startup-selected capability toolsets with a small default surface;
-6. a unified official Scryfall corpus, authoritative query cache, tag evidence,
-   and immutable request snapshots;
+5. startup-selected capability toolsets with a focused default profile;
+6. unified official Scryfall card data, authoritative query cache, tag evidence,
+  and immutable request snapshots;
 7. explicit Archidekt deck lifecycle, conflict-safe synchronization, folder
    organization, and named snapshot lifecycle/restore;
 8. the documented Playgroup public API;
 9. pre-statistics MCP contract and adapter hardening, including exact-only deck
    identity reconciliation and no legality behavior;
 10. exact provider-independent deck statistics;
-11. deterministic caller-configured deck categorization over corpus tag
-    evidence; and
+11. deterministic caller-configured deck categorization over installed Scryfall tag
+   evidence; and
 12. stabilization and `0.9.0` cutover.
 
 Every stable tool belongs to one toolset. The default profile contains
 `decks`, `scryfall`, and `stats`; provider toolsets require explicit selection.
 Toolsets control relevance, modes control authority, and registration remains
-static for an MCP session. Stabilization must pass its north-star workflow
-check in addition to schema, package, and release acceptance.
+static for an MCP session. Stabilization passed its north-star workflow check
+alongside schema, package, and release acceptance.
 
 Items 6 and 11 reflect accepted umbrella amendment AMEND-004. Item 9 reflects
 accepted AMEND-005. All twelve original rewrite children are complete.
 
-The separately approved Commander Spellbook evidence child adds an opt-in
-provider surface after the rewrite cutover. It returns bounded source evidence
+The separately approved Commander Spellbook evidence child adds three opt-in
+provider tools after the rewrite cutover. They return bounded source evidence
 only; it does not reopen the original rewrite's removed recommendation or
 simulation features.
 
@@ -92,20 +92,16 @@ heuristics, and unknown states must remain visibly different. Stable `0.9.0`
 contains no advisor prompts, intent inference, weak-card judgments,
 replacement recommendations, blended quality scores, or strategic automation.
 
-## Starting A Rewrite Child
+## Use This Completed Record
 
-Before the first production edit for a child:
+The rewrite program is closed. Do not use one of its completed children as
+authorization for new production work. For a new cross-cutting change:
 
-1. Confirm its dependencies are approved.
-2. Complete independent review and record approval in the child README.
-3. Set `Implementation authorized: Yes` only with explicit repository-owner
-   authority and move that child to `in-progress/`.
-4. Use the sibling worktree and `ncurry/evidence-first-mcp-rewrite` branch
-   required by the program after foundation prerequisites have landed.
-5. Read the child files in order: README, SRD, SADD, implementation plan,
-   fixtures.
-6. Implement only the active child/phase, keep normal tests offline, and update
-   acceptance evidence as work proceeds.
+1. Start a new PLC with its own scope, design, review, and owner approval.
+2. Preserve the boundaries recorded here unless the new PLC explicitly changes
+   them.
+3. Keep normal tests offline and record focused and broad validation in the
+   new packet.
 
 ## Deferred Work
 

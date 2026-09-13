@@ -1,14 +1,13 @@
 # Potential Features
 
-This is the durable idea registry for work intentionally deferred beyond the
-evidence-first `0.9.0` rewrite. An entry is not a commitment, approved PLC, or
-implementation authorization. Before work starts, the idea needs its own narrow
-PLC, current provider/policy research, explicit evidence boundaries, and an
-independent review.
+This is a list of ideas deliberately postponed until after the evidence-first
+`0.9.0` rewrite. An entry is not a commitment, approved PLC, or permission to
+implement. Before work starts, the idea needs its own small PLC, current
+provider and policy research, clear evidence limits, and an independent review.
 
-The [evidence-first deckbuilding evolution PLC](llms/plcs/planned/evidence-first-deckbuilding-evolution/README.md)
-records the current planning roadmap. It remains planning-only; its individual
-children still require approval before implementation.
+The [evidence-first deckbuilding evolution PLC](llms/plcs/completed/evidence-first-deckbuilding-evolution/README.md)
+records the completed follow-on work. New ideas below still need their own
+narrow PLC and approval before implementation.
 
 ## Registered Post-Cutover Ideas
 
@@ -28,24 +27,24 @@ and Playgroup. It admitted no source: Reddit needs explicit approval, the
 website terms do not support direct EDHREC, Moxfield, or public Archidekt
 automation, and the current Playgroup API cannot supply complete deck entries
 for card-use analysis. See the
-[Phase 5 source-feasibility record](llms/plcs/planned/evidence-first-deckbuilding-evolution/SOURCE_FEASIBILITY.md).
+[Phase 5 source-feasibility record](llms/plcs/completed/evidence-first-deckbuilding-evolution/SOURCE_FEASIBILITY.md).
 
-#### Deck-population composition evidence
+#### Deck-group composition evidence
 
 The future `popularity-evidence-sources` PLC must include this representative
 acceptance question:
 
 > Among the most popular decks matching an exact commander and theme, how many
-> cards matching an explicit card predicate do those decks usually run?
+> cards matching an explicit card rule do those decks usually run?
 
 For example, after the caller resolves what "Jarad," "monarch deck," and
 "monarch-based card" mean, the MCP should be able to report the distribution
-of matching-card counts across a source-defined cohort. This workflow is not
-owned by exact single-deck statistics, the Scryfall card corpus, or the current
-owned-deck Archidekt adapter alone. It requires a permissioned deck-population
-source plus deterministic composition over joined Scryfall evidence.
+of matching-card counts across a defined group of decks from one source. This
+work is not owned by exact single-deck statistics, installed Scryfall card data,
+or the current owned-deck Archidekt adapter alone. It requires a source that
+permits deck-group access plus repeatable counting over joined Scryfall data.
 
-At the workflow level this decomposes into three visible evidence operations:
+This needs three visible evidence operations:
 
 1. Get the top `X` decks from one provider for an exact commander and optional
    caller-supplied deck filters, limited to an explicit update window such as
@@ -56,10 +55,10 @@ At the workflow level this decomposes into three visible evidence operations:
    and unresolved cards or unsupported query semantics remain explicit rather
    than being treated as nonmatches.
 3. Count matching quantities per deck, then return the ordered per-deck rows
-   and deterministic cohort statistics such as minimum, maximum, median, mean,
+   and repeatable group statistics such as minimum, maximum, median, mean,
    percentiles, and a histogram.
 
-The deck-cohort operation retains provider, format, exact commander identity,
+The deck-group operation retains provider, format, exact commander identity,
 update cutoff, requested/returned deck count, ordering metric, rank/metric
 value, population size when known, stable source deck IDs, retrieval times,
 and missing/private/unavailable rows. Results from different providers remain
@@ -68,16 +67,15 @@ separate unless the caller explicitly requests a documented union.
 The filter/count operations distinguish quantity counts from unique-card
 counts and commander/main/sideboard zones. Oracle facts, Scryfall community
 tags, and exact Scryfall queries remain distinct inputs; the MCP does not
-invent what "monarch-based" means. A replayable join fingerprint covers the
-provider cohort, ordered deck versions, Scryfall evidence, exact query, and
-aggregation version.
+invent what "monarch-based" means. A replay ID records the source deck group,
+ordered deck versions, Scryfall evidence, exact query, and counting version.
 
 Popularity ordering is evidence about a provider population, not a statement
 that a deck or card is good. "Usually" must be answered with the actual
 distribution and denominators rather than a hidden representative value. The
 future PLC may split deck-population acquisition from composition analysis if
 provider research shows they need independent ownership, but this end-to-end
-question remains an acceptance gate.
+question remains required proof before implementation.
 
 ### Deck mana and on-curve estimate
 
@@ -110,9 +108,9 @@ must expose its components and never imply functional equivalence.
 
 ## Conditional Provider Expansions
 
-- Broader Archidekt capabilities such as automatic activity/recent-change
+- Broader Archidekt features such as automatic activity/recent-change
   history, packages, deck tags, and collaboration may receive separate PLCs if
-  they support the evidence/workflow mission. Folder organization and named
+  they support the evidence-first purpose. Folder organization and named
   snapshot lifecycle/restore are already stable child-6 scope. Social and
   account-administration automation need a stronger product justification.
 - New official Playgroup operations, including a future deck-update or cleanup
@@ -123,37 +121,36 @@ must expose its components and never imply functional equivalence.
 
 ## Local Scryfall Query Engine
 
-A future PLC may investigate executing part of Scryfall's query language over
-the local corpus. It is not a `0.9.0` cutover dependency. Any proposal must
-publish query-coverage limits, differential-test supported semantics against
- Scryfall, and fall back to the provider whenever complete local equivalence
- cannot be proven. The unified corpus does not itself authorize local execution
- of arbitrary searches.
+A future PLC may investigate running part of Scryfall's query language over
+installed Scryfall card data. It is not required for `0.9.0`. Any proposal must
+state which query forms it supports, compare those forms with Scryfall, and use
+the provider whenever the local result cannot be proven equivalent. Installed
+card data alone does not justify running arbitrary searches locally.
 
-### Local Scryfall cohort analysis
+### Local Scryfall group analysis
 
-Build a deterministic evidence layer for cross-card questions over explicit
-local-corpus populations: subtype/tag frequency, feature distributions,
-Spirit-versus-Bird comparisons, Pirate tag counts, and overlap between cohorts.
-The design seed is [local Scryfall cohort analysis](llms/plans/local-scryfall-cohort-analysis.md).
+Build repeatable card-data queries for explicit local groups of cards:
+subtype/tag frequency, feature distributions, Spirit-versus-Bird comparisons,
+Pirate tag counts, and overlap between groups. The design seed is [local
+Scryfall group analysis](llms/plans/local-scryfall-cohort-analysis.md).
 
-This remains post-cutover work and must depend on the local query-engine
-coverage boundary. Callers define colors versus color identity, exact subtype
+This remains work for after `0.9.0` and must depend on the local query-engine
+limits. Callers define colors versus color identity, exact subtype
 membership, changeling treatment, feature families, and distinct-card versus
 quantity counting. Results return exact counts, denominators, supporting card
-IDs, corpus generations, and unknown/unsupported states. “Synergy” is exposed
-as separate observable evidence such as exact subtype references, tags,
+IDs, installed card-data versions, and unknown/unsupported states. “Synergy” is
+returned as separate observable evidence such as exact subtype references, tags,
 keywords, type-line components, or exact Oracle-text predicates; the MCP does
 not produce a synergy score or recommendation.
 
-The future PLC should keep cohort selection, feature grouping, and cohort
-comparison explicit and bounded. It must not add legality assumptions, hidden
+The future PLC should keep group selection, feature grouping, and group
+comparison explicit and limited. It must not add legality assumptions, hidden
 tribal taxonomies, popularity joins, or a Magic rules engine.
 
 ## Explicitly Not Queued
 
 - Automated Moxfield network access while its terms prohibit automated access.
-- Tagger-site scraping or background Scryfall corpus downloads.
+- Tagger-site scraping or background full Scryfall card-data downloads.
 - A comprehensive Magic rules engine.
 - Advisor prompts, intent inference, opaque power scores, weak-card judgments,
   or MCP-selected replacements.
