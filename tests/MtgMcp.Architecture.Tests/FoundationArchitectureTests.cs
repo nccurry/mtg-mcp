@@ -346,7 +346,7 @@ public sealed class FoundationArchitectureTests
         using JsonDocument manifest = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(RepositoryRoot, "server.json")));
 
-        Assert.Equal("0.9.0", version);
+        Assert.Equal("0.10.0", version);
         Assert.Empty(project.Descendants("PackageVersion"));
         Assert.Contains("VERSION: ''", taskfile, StringComparison.Ordinal);
         Assert.DoesNotContain("-p:PackageVersion", taskfile, StringComparison.Ordinal);

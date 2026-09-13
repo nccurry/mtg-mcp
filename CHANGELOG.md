@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-09-13
+
 - Added the read-only `deck_on_curve_estimate` tool. It samples one bounded
   land-only cast-by-turn model for a saved deck using direct installed Scryfall
   facts and caller-supplied land rules. Results include source facts, replay
