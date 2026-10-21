@@ -1,35 +1,36 @@
-# Core Instructions
+# MtgMcp.Core — Agent Instructions
 
-Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
-`MtgMcp.Core`.
+The root `AGENTS.md` and `src/AGENTS.md` still apply. This file adds rules for
+`src/MtgMcp.Core/`.
 
-## Boundary
+## What this folder owns
+
+Dependency-light, provider-neutral evidence, identifiers, failures, and shared
+contracts. Deck persistence belongs in Decks and exact mathematics in
+Statistics.
+
+## Rules
 
 - Keep Core free of runtime third-party package references and independent of
   App, adapters, HTTP payloads, MCP SDK types, configuration binding, and host
   services.
-- In the rewrite, model only dependency-light provider-neutral evidence,
-  identifiers, failures, and shared contracts assigned by the active child.
-  Deck persistence belongs in Decks and exact mathematics in Statistics.
 - Do not restore legacy planning, intent, recommendation, scoring, or
-  simulation types. Introduce only contracts assigned by the active child.
-- Keep future I/O behind small approved contracts so behavior stays testable
-  without treating removed legacy interfaces as mandatory.
-
-## Domain Design
-
+  simulation types.
+- Keep I/O behind small contracts so behavior stays testable. Removed legacy
+  interfaces are not required.
 - Prefer immutable inputs and deterministic pure computations where practical.
 - Return explicit assumptions, warnings, provenance, and fingerprints for
-  evidence and exact derivations. Sampled/heuristic metadata applies only to an
-  independently approved experimental capability.
-- Use unions for payload-bearing closed outcomes and exhaustive switches. Use
-  enums for labels without case-specific state and records for independent data.
+  evidence and exact derivations. Sampled or heuristic metadata applies only to
+  a separately approved experimental capability.
 - Do not add a generic rules engine, arbitrary expression evaluator, advisor
-  policy, or stable simulation profile. Experimental work requires its own
-  approved post-cutover PLC.
+  policy, or stable simulation profile. Experimental work needs its own
+  approved PLC.
 
-## Validation
+## Checks
 
-- Add focused unit tests for success, failure, unsupported, and boundary cases.
-- Keep tests offline and deterministic, and preserve Core's 90 percent line
-  coverage floor.
+Add focused unit tests for success, failure, unsupported, and boundary cases.
+
+```sh
+task test:unit
+task coverage:core
+```
