@@ -1,23 +1,24 @@
-# Agent Notes
+# mtg-mcp — Agent Instructions
 
-## Source Of Truth
+`mtg-mcp` is a C# MCP server that gives LLMs grounded Magic: The Gathering
+card, deck, source, and statistical evidence plus explicit deck operations. It
+ships as a .NET tool and release archives built through `Taskfile.yml`.
 
-- This file is the main instruction file for coding agents in this repository.
-- Current code, tests, project files, `Taskfile.yml`, `Directory.Build.props`,
-  `Directory.Packages.props`, `global.json`, `.editorconfig`, and human-facing
-  docs describe the current checkout and win over stale planning notes.
-- For work shaped by the completed rewrite, the approved overall rules and
-  completed child PLCs define the design limits. Treat legacy code as evidence,
-  not as a default design to copy.
-- `llms.txt` is a compact orientation map, not a second rulebook.
-- `docs/llms/` contains extra agent guidance, long-lived plans, and PLC packets.
-  `.codex/` contains optional review and validation playbooks.
-- Read the closest scoped `AGENTS.md` under `src/`, `src/MtgMcp.Core/`,
-  `src/MtgMcp.App/`, `src/MtgMcp.Scryfall/`, `src/MtgMcp.Playgroup/`,
-  `tests/`, or `docs/` before
-  changing that tree.
+## Source of truth
 
-## North Star
+When sources disagree, trust them in this order:
+
+1. Current code, tests, and project files.
+2. `Taskfile.yml` and `.github/workflows/` for build and check commands.
+3. `global.json`, `Directory.Build.props`, `Directory.Packages.props`,
+   `.editorconfig`, lock files, and other checked-in configuration.
+4. `README.md`, `CONTRIBUTING.md`, and the docs under `docs/`.
+5. Scoped `AGENTS.md` files, `llms.txt`, and `.codex/` playbooks.
+
+Completed PLCs in `docs/llms/plcs/completed/` and legacy code in Git history
+are design evidence, not designs to copy; current code and tests win.
+
+## North star
 
 - Help LLMs make informed deckbuilding decisions by returning grounded card,
   deck, source, and statistical evidence with visible provenance and limits.
@@ -26,114 +27,172 @@
 - Do not invent missing facts, equate deterministic output with factual output,
   or treat popularity as proof of card quality.
 - Keep `mtg-mcp` a server that returns evidence and performs explicit
-  operations, not a Magic rules engine or the final decision-maker.
-- Treat `docs/north-star.md`, `docs/design-goals.md`, and
-  `docs/heuristic-models.md` as the long-term product direction.
+  operations, not a Magic rules engine or the final decision-maker. The client
+  LLM makes deckbuilding decisions.
+- `docs/north-star.md`, `docs/design-goals.md`, and `docs/heuristic-models.md`
+  set the long-term product direction. Read `docs/rewrite-guide.md` before
+  changing a product or architecture boundary.
 
-## Evidence-First Rewrite
+## Product rules
 
-- Read `docs/rewrite-guide.md` before planning, reviewing, or implementing the
-  clean-break `0.9.0` work.
-- The completed overall PLC owns the rules shared by its child PLCs. New work
-  that spans several modules or public APIs needs its own reviewed and approved
-  PLC.
-- Accepted AMEND-005 plus the completed hardening, statistics, and
-  categorization children define the original 93-tool rewrite baseline. The
-  completed Commander Spellbook evidence child adds three opt-in tools, and the
-  on-curve estimate adds one decks tool, so the `all` profile now exposes 97
-  tools. Statistics remains exact, caller-supplied,
-  provider-independent, and legality-free. The stabilization child and `0.9.0`
-  release are complete.
-- Stable `0.9.0` returns evidence, provider data, explicit operations, exact
-  mathematics, and one limited on-curve estimate. The client LLM makes
-  deckbuilding decisions.
-- Do not carry advisor prompts, intent inference, recommendations, weak-card
-  judgments, blended quality scores, or strategic simulation into the stable
-  rewrite.
-- Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
-  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `spellbook_*`,
-  and `stats_*` prefixes. Accepted AMEND-004 removes the separate Tagger prefix,
-  adapter, toolset, and database; do not implement the superseded design.
-- Assign every stable tool to exactly one toolset. Toolsets choose which tools an
-  LLM sees; operation mode is the only write-permission boundary. Registration
-  is fixed for an MCP session, the default profile stays focused, and optional
-  provider tools require explicit enablement.
-- The rewrite starts fresh: do not add automatic legacy data, configuration, or
-  schema migration or compatibility aliases unless an approved overall PLC
-  amendment explicitly changes that rule.
+- The stable server returns evidence, provider data, explicit operations, exact
+  mathematics, and one bounded sampled on-curve estimate. Do not add advisor
+  prompts, intent inference, recommendations, weak-card judgments, blended
+  quality scores, or strategic simulation to the stable surface. Statistics
+  stays exact, caller-supplied, provider-independent, and legality-free.
+- Operation modes are `read-only`, `local` (default), and `remote`. Mode is the
+  only write-permission boundary.
+- Tools use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`,
+  `spellbook_*`, and `stats_*` prefixes. Assign every stable tool to exactly
+  one toolset. Toolsets choose which tools an LLM sees; they never grant write
+  access.
+- Registration is fixed for an MCP session. The default profile stays focused;
+  optional provider toolsets need explicit enablement.
+- Community tags come from official Scryfall data and live in `scryfall.db`.
+  There is no separate Tagger prefix, adapter, toolset, or database.
+- Do not add automatic legacy data, configuration, or schema migration, or
+  compatibility aliases, unless an approved PLC changes that rule.
+- Do not solve a growing tool list with a generic router, intent inference,
+  per-request tool switching, or aliases. Merge catalog or discovery tools when
+  one stable result can describe the same information without loss.
+
+## Repository map
+
+| Path | What it owns |
+| --- | --- |
+| `src/MtgMcp.Core/` | Dependency-light, provider-neutral evidence, identifiers, failures, and shared contracts |
+| `src/MtgMcp.App/` | MCP host, registration, tools, resources, operation modes, configuration, and wiring |
+| `src/MtgMcp.Decks/` | Local deck storage (`decks.db`) and manual import and export |
+| `src/MtgMcp.Statistics/` | Exact deck calculations |
+| `src/MtgMcp.OnCurve/` | The sampled on-curve estimate |
+| `src/MtgMcp.Scryfall/` | Scryfall API, card data, rulings, tags, and `scryfall.db` |
+| `src/MtgMcp.Archidekt/`, `src/MtgMcp.Playgroup/`, `src/MtgMcp.Spellbook/` | Optional provider adapters |
+| `tests/` | One test project per production project, plus architecture and E2E tests |
+| `docs/` | Product docs, `architecture.md`, `adapters.md`, and agent docs under `docs/llms/` |
+| `scripts/` | Helper scripts that Task calls |
+
+Read the closest folder `AGENTS.md` before changing files in that folder.
 
 ## Architecture
 
-- Keep dependency-light domain logic in `MtgMcp.Core`; it must not reference
-  adapter or host projects.
-- Keep MCP registration, tools, resources, prompts, operation modes, server
-  metadata, and host code in `MtgMcp.App`.
-- Keep third-party HTTP contracts, auth, pacing, retries, and provider caches in
-  their adapter projects.
-- Adapters may translate third-party payloads into Core models, but Core must
-  not expose provider transport types.
-- Prefer the least code and abstraction needed. Add an abstraction only when it
-  removes real duplication, clarifies ownership, or matches an established
-  pattern.
-- Follow the approved project boundaries: Decks owns local storage and import/
-  export, Statistics owns exact calculations, provider projects own HTTP and
-  caches, and App hosts and wires the MCP server together.
-- Under accepted AMEND-004, Scryfall owns official card, ruling, and community
-  tag acquisition in one `scryfall.db`, while their schemas and evidence classes
-  remain distinct. Full Scryfall card-data downloads are explicit; no background
-  download or unsupported Tagger-site acquisition is allowed.
-- Do not solve a growing tool list with a generic router, intent inference,
-  per-request tool switching, or compatibility aliases. Keep each tool clearly
-  owned by one toolset. Merge catalog or discovery tools when one stable result
-  can describe the same information without loss.
+- `MtgMcp.Core` must not reference adapter or host projects.
+- Third-party HTTP contracts, auth, pacing, retries, and provider caches stay
+  in their adapter projects. Adapters may translate provider payloads into Core
+  models, but Core must not expose provider transport types.
+- Full Scryfall card-data downloads are explicit. Nothing downloads in the
+  background, and there is no Tagger-site acquisition.
 
-## C# Style
+## Commands
 
-- Use the checked-in .NET 11 preview toolchain, nullable reference types, and
-  clear C# 15 features supported by that toolchain.
-- Use unions for closed alternatives with meaningful case payloads and switch
-  exhaustively. Keep enums for simple categories and records for orthogonal
-  state; do not convert models only to use a newer feature.
-- Prefer guard clauses, shallow control flow, small cohesive methods, and loops
-  over complex multi-line LINQ. Use `List.Sort()` for an existing mutable list.
-- Keep the established unprefixed camelCase private-field convention.
-- Add a useful XML summary to every named C# type and member, including private
-  members and tests. Comment local functions and lambdas only when their intent
-  is not obvious.
-- Avoid boilerplate summaries that restate a member name or type. Add parameter,
-  return, and type-parameter tags only when they add information; use
-  `<inheritdoc/>` for inherited contracts.
-- Use inline comments sparingly for provider quirks, safety invariants,
-  secret-handling, concurrency, persistence, or non-obvious algorithms.
-- Never mention prompts or change history in code comments, and never use
-  emojis in code text, logs, or documentation comments.
+Use Task for every repeatable operation. Run `task --list` for the menu and see
+`docs/llms/repo-operations.md` for the policy.
 
-## Safety And Tests
+```sh
+task test:unit          # App, Core, Statistics, and OnCurve unit tests
+task test:integration   # architecture and local deck integration tests
+task test:e2e           # process end-to-end tests
+task lint               # format check plus strict analyzer build
+task test               # all non-live tests
+task validate           # lint plus test
+task ci                 # what CI runs, including coverage gates and smoke tests
+```
 
+- Start with the narrowest affected test. Run `task lint` and `task test` for
+  shared behavior, public MCP shape, project references, or adapter contracts.
+- `task format` changes files. `task install` changes the local workstation.
+  `task test:live` calls real providers; run it only when asked and safe.
+- Run one top-level Task invocation at a time per worktree. Docs-only changes
+  need `git diff --check` and a link check, not a .NET build.
+- Do not hand-edit generated build, package, coverage, benchmark, or release
+  output unless the task targets those baselines.
+
+## Code and comments
+
+- Write the least code that solves the problem. Reuse existing code and
+  dependencies first. Add an abstraction only when it removes real
+  duplication, clarifies ownership, or matches an established pattern.
+- Comments explain the code. Never mention prompts, plans, or change history in
+  code comments. No emojis in code, logs, or documentation comments.
+- Use inline comments sparingly, for provider quirks, safety invariants, secret
+  handling, concurrency, persistence, or non-obvious algorithms.
+
+### C# and .NET
+
+- `global.json` pins the preview SDK. Package versions live in
+  `Directory.Packages.props`; shared build settings live in
+  `Directory.Build.props`. Use C# features that toolchain supports.
+- Nullable reference types are on and warnings fail the build. Fix warnings
+  instead of suppressing them. Follow `.editorconfig`, including the unprefixed
+  camelCase private-field convention.
+- Add a useful XML summary to every named type and member, including private
+  members and tests; the analyzers enforce it. Do not restate the name. Add
+  parameter, return, and type-parameter tags only when they add information,
+  and use `<inheritdoc/>` for inherited contracts.
+- Use unions for closed alternatives with case payloads and switch
+  exhaustively. Use enums for simple labels and records for independent data.
+  Do not convert models only to use a newer feature.
+- Prefer guard clauses, shallow control flow, and small methods. Prefer loops
+  over long multi-line LINQ. Use `List.Sort()` for an existing mutable list.
 - Pass `CancellationToken` through async library paths and use
-  `ConfigureAwait(false)` consistently outside host-specific code.
-- Guard write-capable MCP tools with `OperationModeGuard`; keep annotations,
-  descriptions, output schemas, and operation-mode visibility accurate.
+  `ConfigureAwait(false)` outside host-specific code.
+- More detail: `docs/llms/csharp-best-practices.md`.
+
+## Safety and tests
+
+- Guard write-capable MCP tools with `OperationModeGuard`. Keep annotations,
+  descriptions, output schemas, and mode visibility accurate.
 - Never expose credentials, tokens, cookies, or local secret paths in errors,
   logs, configuration output, tests, or docs.
-- Keep normal tests deterministic, offline, and free of real Archidekt
+- Keep normal tests deterministic, offline, and free of real provider
   mutations. Prefer fixtures, fake HTTP, temporary files, and in-memory stores.
-- Mark live provider tests with `Category=Live` so `task test` stays offline.
-- Maintain at least 90 percent line coverage for every production assembly with
-  behavior-focused tests; do not meet the gate through unjustified exclusions.
+- Mark live provider tests `[Trait("Category", "Live")]`; `task test` skips them.
+- Keep at least 90 percent line coverage for every production assembly
+  (`task coverage:gates`) with behavior-focused tests, not unjustified
+  exclusions.
+- Public MCP tool or API changes update `README.md`, `CHANGELOG.md`, and the
+  related tests. Follow `docs/versioning.md`.
 
-## Planning And Validation
+## Planning
 
-- Use `task --list` as the menu of supported repository operations.
-- For a small change, run the narrow affected test first. For shared behavior,
-  public MCP shape, project references, or adapter contracts, run `task lint`
-  and `task test` as risk warrants.
-- Put long-lived ordinary plans under `docs/llms/plans/`. Put work that spans
-  several modules, changes public tools/APIs, changes provider contracts or
-  storage, or needs phases under `docs/llms/plcs/`.
-- Keep PLCs in `planned/`, `in-progress/`, or `completed/` according to their
-  lifecycle. Keep ignored `/plans/` for local scratch only.
-- For docs-only guidance changes, run `git diff --check` and inspect links and
-  rendered Markdown. Do not run a .NET build unless executable inputs changed.
-- Do not hand-edit generated build, package, coverage, benchmark, or release
-  artifacts unless the task explicitly targets those baselines.
+- Put durable ordinary plans under `docs/llms/plans/`. Put work that spans
+  several modules, changes public tools or APIs, changes provider contracts or
+  storage, or needs phases in a PLC under `docs/llms/plcs/`.
+- Keep PLCs in `planned/`, `in-progress/`, or `completed/` by lifecycle. A
+  planned PLC is not permission to implement; follow
+  `docs/llms/plcs/README.md` for review and owner authorization.
+- Use the ignored `/plans/` folder for local scratch only.
+
+## Worktrees
+
+- Do your work in your own worktree: `../mtg-mcp-wt/<campaign>/<checkout>`,
+  where the campaign is the PLC, plan, or feature slug. Never reuse a folder
+  for another branch.
+- Never change the branch or files of the main checkout or of a worktree you
+  do not own. Never reset, stash, or clean them.
+- Evidence: record decisions and short validation results in the PLC or plan
+  under `docs/llms/`. Raw logs and output stay untracked in the checkout's
+  ignored `artifacts/` folder or in `<campaign>/_output/`.
+- To keep a worktree from cleanup, lock it:
+  `git worktree lock --reason "<owner>; keep until <condition>; <date>"`.
+  Clean, unlocked, idle worktrees may be removed; their branches are kept.
+- No containers are used here; if you run one, run it as your own user.
+
+## Commits and reviews
+
+- Use Conventional Commits with a scope, such as `feat(decks): ...` or
+  `docs(plc): ...`. The subject says what changed, not the steps taken.
+- Keep changes scoped. Do not commit local settings, `mtg-mcp.local.json`,
+  logs, caches, credentials, or build output.
+- Fix every supported review finding in scope. Reply with evidence when you
+  leave one unfixed.
+
+## Keeping this file current
+
+- Add a rule only for a repeated mistake or a fact an agent cannot easily find.
+  Prefer a check, analyzer rule, test, or task over a written rule.
+- No status, dates, version numbers, tool counts, or plan IDs. They go stale.
+- Put multi-step procedures in docs or skills, and link to them.
+- Keep this file under 200 lines. Move folder-specific rules into that folder's
+  `AGENTS.md`.
+- When you change this file, update `llms.txt`, scoped `AGENTS.md` files, and
+  `.codex/` to match, and remove rules that no longer apply.

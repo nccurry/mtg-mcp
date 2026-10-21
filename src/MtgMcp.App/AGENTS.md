@@ -1,46 +1,51 @@
-# MCP Application Instructions
+# MtgMcp.App — Agent Instructions
 
-Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
-`MtgMcp.App`.
+The root `AGENTS.md` and `src/AGENTS.md` still apply. This file adds rules for
+`src/MtgMcp.App/`.
 
-## MCP Surface
+## What this folder owns
 
-- Keep tool registration deterministically sorted and keep titles,
+The MCP host: transport, DI, configuration, logging, CLI, MCP error mapping,
+provider composition, tool registration, and result presenters.
+
+## MCP surface
+
+- Keep tool registration sorted deterministically and keep titles,
   descriptions, annotations, input schemas, and typed output schemas accurate.
 - Prefer bounded structured results. Use shared detail levels, pagination, and
-  resources instead of returning unbounded text or collections.
+  resources instead of unbounded text or collections.
 - Preserve evidence source, assumptions, warnings, confidence, freshness, and
   replay metadata when presenting Core results.
-- Treat annotations as accurate risk hints, not authorization. Enforce write
-  capability with `OperationModeGuard`. Rewrite modes are `read-only`, `local`,
-  and `remote`, with local and remote mutation kept distinct.
-- Assign each stable tool to exactly one of `decks`, `scryfall`, `stats`,
-  `archidekt`, `playgroup`, or `spellbook`. Build one deterministic registration
-  set at startup by intersecting enabled toolsets with operation-mode
-  visibility; never use toolsets as authorization.
-- Keep the default profile limited to `decks`, `scryfall`, and `stats`.
-  Provider-specific `archidekt`, `playgroup`, and `spellbook` surfaces are opt-in.
-  Do not advertise dynamic list changes while registration is session-static.
-- Accepted AMEND-004 removes the separate Tagger descriptor and routes official
-  community-tag evidence through `scryfall`; do not add a placeholder or alias.
+- Annotations are risk hints, not authorization. Keep local and remote writes
+  distinct.
+- Each stable tool belongs to exactly one of `decks`, `scryfall`, `stats`,
+  `archidekt`, `playgroup`, or `spellbook`. Build one deterministic
+  registration set at startup by intersecting enabled toolsets with
+  operation-mode visibility.
+- Keep the default profile limited to `decks`, `scryfall`, and `stats`. The
+  `archidekt`, `playgroup`, and `spellbook` toolsets are opt-in. Do not
+  advertise dynamic tool-list changes while registration is fixed per session.
+- Community-tag evidence goes through `scryfall`. Do not add a Tagger
+  descriptor, placeholder, or alias.
 
-## Host Boundary
+## Host boundary
 
-- Keep transport, DI, configuration, logging, CLI, MCP error mapping, and
-  provider composition in App. Keep provider-neutral shared contracts in Core,
-  local deck and exact-statistics behavior in their owning rewrite projects,
-  and provider contracts in adapters.
-- Sanitize errors before they reach MCP output or logs. Never expose provider
-  secrets or local credential paths.
-- Pass cancellation through tool wrappers and avoid anonymous return types when
-  a stable structured schema is useful.
+- Keep provider-neutral contracts in Core, local deck and exact-statistics
+  behavior in their own projects, and provider contracts in adapters.
+- Sanitize errors before they reach MCP output or logs.
+- Pass cancellation through tool wrappers. Avoid anonymous return types when a
+  stable structured schema is useful.
 
-## Validation
+## Checks
 
 - Update surface tests for every tool, resource, prompt, annotation, schema,
-  operation-mode, or toolset change.
-- Stable rewrite surface tests must also prove capability-prefixed names, one
-  capability resource, zero prompts, exact toolset membership, default and
-  explicit profile behavior, and absence of legacy decision surfaces.
-- Use App unit tests for presenters and registration, and mocked process E2E
-  tests for transport-visible behavior.
+  operation-mode, or toolset change. They prove prefixed names, one capability
+  resource, zero prompts, exact toolset membership, default and explicit
+  profile behavior, and that legacy decision surfaces are absent.
+- Use App unit tests for presenters and registration, and process E2E tests
+  for transport-visible behavior.
+
+```sh
+task test:unit
+task test:e2e
+```
