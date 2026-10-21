@@ -164,7 +164,7 @@ task ci                 # what CI runs, including coverage gates and smoke tests
 
 ## Worktrees
 
-- Do your work in your own worktree: `../mtg-mcp-wt/<campaign>/<checkout>`,
+- Do your work in your own worktree: `../<repo-name>-wt/<campaign>/<checkout>`,
   where the campaign is the PLC, plan, or feature slug. Never reuse a folder
   for another branch.
 - Never change the branch or files of the main checkout or of a worktree you
@@ -173,7 +173,7 @@ task ci                 # what CI runs, including coverage gates and smoke tests
   under `docs/llms/`. Raw logs and output stay untracked in the checkout's
   ignored `artifacts/` folder or in `<campaign>/_output/`.
 - To keep a worktree from cleanup, lock it:
-  `git worktree lock --reason "<owner>; keep until <condition>; <date>"`.
+  `git worktree lock --reason "<owner>; keep until <condition>; <date>" <path>`.
   Clean, unlocked, idle worktrees may be removed; their branches are kept.
 - No containers are used here; if you run one, run it as your own user.
 
