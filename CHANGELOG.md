@@ -2,8 +2,26 @@
 
 ## Unreleased
 
-## 0.10.0 - 2026-09-13
+## 0.10.0 - 2026-10-25
 
+- Added the opt-in Commander Spellbook adapter with three read-only evidence
+  tools: `spellbook_variant_search`, `spellbook_variant_get`, and
+  `spellbook_deck_combos_find`. Each call makes at most one upstream request,
+  is paced across processes that share a data root, and caches successful
+  responses in `spellbook.db` for 15 minutes by default. Configure the cache
+  with `--spellbook-ttl-minutes`, `MTGMCP__SPELLBOOK__TTL_MINUTES`, or
+  `SPELLBOOK_TTL_MINUTES`.
+- Changed the server to require MCP protocol `2026-07-28`. Older
+  initialize-based clients are no longer supported.
+- Fixed deck grouping from installed official Scryfall tags: exact source IDs,
+  all-parent ancestry, strict rule validation, and an in-place `common-v1`
+  correction.
+- Fixed Archidekt sync to exclude new maybeboard cards from deck and price
+  totals, keep category assignment order, and ignore volatile view counts in
+  remote-state guards.
+- Moved the toolchain to mise with reproducible package locks and SHA-pinned
+  GitHub Actions, and updated Microsoft.Data.Sqlite, SQLitePCLRaw, and
+  analyzers.
 - Added the read-only `deck_on_curve_estimate` tool. It samples one bounded
   land-only cast-by-turn model for a saved deck using direct installed Scryfall
   facts and caller-supplied land rules. Results include source facts, replay
