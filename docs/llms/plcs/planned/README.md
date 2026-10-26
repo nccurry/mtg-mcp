@@ -29,6 +29,12 @@ is complete.
 | [configurable-decision-models](configurable-decision-models/README.md) | Post-cutover reference | Seed for a future experimental feasibility PLC; not stable `0.9.0` scope. |
 | [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by the unified Scryfall, Archidekt, and Playgroup children. |
 
+## Agent Surface
+
+| Packet | Status | Summary |
+| --- | --- | --- |
+| [focused-agent-tool-surface](focused-agent-tool-surface/README.md) | Planned, reviewed, awaiting implementation authorization | Smaller default toolsets with deck writes kept, one opt-in for the Archidekt round trip, tag search and deck tag view, `card_lists_compare` and `card_list_query` for list comparison and grouped deck analysis, Commander rule facts, enum schemas, opt-in concise card results, and caller-ruled `stats_simulate`. Playgroup frozen. |
+
 ## Jasmine Analysis Repair Packets
 
 | Packet | Status | Summary |
