@@ -8,15 +8,15 @@
 > [deck statistics](../../completed/exact-deck-statistics/README.md). Count invariants remain
 > fixture rationale, but primary-category bucketing and preservation of legacy
 > `maybeboardCards`/`roleCounts` do not transfer. Reviewed against the rewrite
-> on 2026-07-03; lifecycle movement is deferred to authorized foundation work.
+> on 2026-07-03; moved to `completed/` on 2026-10-27 after the rewrite cutover.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/deck-count-contracts/
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: docs/llms/plcs/completed/deck-count-contracts/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-10-27
 - Current phase: implementation retired; reference invariants only
 
 ## Summary
@@ -75,8 +75,12 @@ None.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Planning packet inspection | Pass | Compatibility and invariant matrix specified |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
 Do not move this packet to `in-progress`. The linked rewrite children own the
 replacement model; reactivation would require explicit repository-owner review.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

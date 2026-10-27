@@ -8,16 +8,16 @@
 > PLC must first decide whether a bounded simulation can be truthful and useful,
 > then explicitly absorb this packet with `configurable-decision-models`,
 > `simulation-profile-evidence`, and `stats-lab-interaction-readiness`. Reviewed
-> against the rewrite on 2026-07-03; lifecycle movement is deferred to
-> authorized foundation implementation.
+> against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after the rewrite
+> cutover.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/conservative-goldfish-v2/
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: docs/llms/plcs/completed/conservative-goldfish-v2/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-10-27
 - Current phase: post-cutover design seed; implementation retired pending feasibility
 
 ## Summary
@@ -78,6 +78,7 @@ None.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Planning packet inspection | Pass | Contracts, semantics, fixtures, phases, and dependencies specified |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
@@ -87,3 +88,6 @@ for any future simulation. A revived program must separately approve feasibility
 private kernel validation, experimental public surface, and deletion of replaced
 paths. It uses the rewrite evidence descriptor rather than depending on the
 legacy trust enum; the old `0.9` compatibility exception is moot.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

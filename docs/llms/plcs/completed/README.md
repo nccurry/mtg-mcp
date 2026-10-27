@@ -33,3 +33,21 @@ data” instead.
 | [rewrite-stabilization-cutover](rewrite-stabilization-cutover/README.md) | Validated, packaged, and released the clean-break `0.9.0` surface with rollback and provider evidence. |
 | [latest-mcp-and-toolchain](latest-mcp-and-toolchain/README.md) | Pinned the current MCP protocol and toolchain, added reproducible locks, SHA-pinned actions, and a managed registry publisher. |
 | [official-scryfall-tag-grouping-reliability](official-scryfall-tag-grouping-reliability/README.md) | Repaired deck grouping from installed official Scryfall tags: exact source IDs, all-parent ancestry, strict rule validation, and the in-place `common-v1` correction. |
+
+## Superseded Reference Packets
+
+These packets were drafted for the legacy server and retired by the rewrite
+without implementation. They moved here on 2026-10-27 and remain reference
+evidence only.
+
+| Packet | Outcome |
+| --- | --- |
+| [card-snapshot-integrity](card-snapshot-integrity/README.md) | Superseded; known-empty/unknown and root/face principles are owned by local deck and Scryfall packets. |
+| [deck-count-contracts](deck-count-contracts/README.md) | Superseded; zone-based storage and exact summaries remove the category-count root cause. |
+| [land-entry-classification](land-entry-classification/README.md) | Reference-only; exact statistics uses caller-supplied source masks and does not parse oracle text. |
+| [mcp-trust-evidence](mcp-trust-evidence/README.md) | Absorbed; evidence vocabulary is owned by the rewrite foundation, provider, and statistics packets. |
+| [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed; provider principles are owned by the Scryfall, Archidekt, and Playgroup packets. |
+| [configurable-decision-models](configurable-decision-models/README.md) | Retired post-cutover experimental seed; never stable scope. |
+| [simulation-profile-evidence](simulation-profile-evidence/README.md) | Retired post-cutover simulation fixture input; never stable scope. |
+| [stats-lab-interaction-readiness](stats-lab-interaction-readiness/README.md) | Retired post-cutover heuristic sequencing taxonomy; never stable scope. |
+| [conservative-goldfish-v2](conservative-goldfish-v2/README.md) | Retired post-cutover goldfish kernel seed; server-side play decisions are out of scope. |

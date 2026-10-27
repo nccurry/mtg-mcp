@@ -40,7 +40,7 @@ CGF-FIX-022 consumes the canonical serialization contract owned by
 | CGF-FIX-031 | MCP schema | tests/MtgMcp.E2E.Tests/ConservativeGoldfishE2ETests.cs | archidekt_compare_goldfish | App | Fake HTTP only |
 | CGF-FIX-032 | MCP schema | tests/MtgMcp.E2E.Tests/ConservativeGoldfishE2ETests.cs | deck_batch_tuning_report subtree | App | Non-goldfish fields unchanged |
 | CGF-FIX-033 | Detail matrix | tests/MtgMcp.App.Tests/ConservativeGoldfishPresenterTests.cs | Summary/normal/full null and bounds | App | Sync with SADD table |
-| CGF-FIX-034 | Consumer inventory | docs/llms/plcs/planned/conservative-goldfish-v2/IMPLEMENTATION_PLAN.md | Batch, brainstorm, models, prompts, old-code removal | Maintainers | Zero obsolete references |
+| CGF-FIX-034 | Consumer inventory | docs/llms/plcs/completed/conservative-goldfish-v2/IMPLEMENTATION_PLAN.md | Batch, brainstorm, models, prompts, old-code removal | Maintainers | Zero obsolete references |
 | CGF-FIX-035 | Reliability | tests/MtgMcp.Core.Tests/ConservativeGoldfishReliabilityTests.cs | Compile/run cancellation and redacted failures | Core/App | Deterministic cancel points |
 | CGF-FIX-036 | Benchmark | tests/MtgMcp.Benchmarks/ConservativeGoldfishBenchmark.cs | Frozen Jasmine 1,000-run Release job | Simulation | Record commit/machine/runtime/settings/median |
 | CGF-FIX-037 | Live read-only smoke | tests/MtgMcp.E2E.Tests/ConservativeGoldfishLiveTests.cs | Deck 22958528 import and drift report | Archidekt | Manual only; never mutate |

@@ -8,16 +8,16 @@
 > input for callers or a future
 > [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
 > PLC. Any future classifier output is `parser_derived`, never source fact.
-> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
-> authorized foundation implementation.
+> Reviewed against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after the rewrite
+> cutover.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/land-entry-classification/
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: docs/llms/plcs/completed/land-entry-classification/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-10-27
 - Current phase: implementation retired; fixture/reference evidence only
 
 ## Summary
@@ -76,8 +76,12 @@ None.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Planning packet inspection | Pass | Ordered land-text matrix is complete |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
 Do not move this packet to `in-progress`. No classifier code transfers to the
 stable rewrite; only its examples may inform explicitly supplied inputs.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

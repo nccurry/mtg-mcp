@@ -7,18 +7,18 @@
 > [Scryfall corpus and evidence](../../completed/scryfall-corpus-and-evidence/README.md), including
 > explicit root/face handling for multi-face cards. Moxfield mapping, legacy
 > workspace migration, and `deck_refresh_card_metadata` mechanisms are removed.
-> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
-> authorized foundation implementation.
+> Reviewed against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after the rewrite
+> cutover.
 > All hydration/provider mechanisms below are historical and non-normative;
 > later identity resolution must use the replacement corpus boundary.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/card-snapshot-integrity/
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: docs/llms/plcs/completed/card-snapshot-integrity/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
+- Last updated: 2026-10-27
 - Current phase: implementation retired; reference evidence only
 
 ## Summary
@@ -77,8 +77,12 @@ None.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Planning packet inspection | Pass | Requirements, phases, and fixtures are fully mapped |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
 Do not move this packet to `in-progress`. Preserve its fixtures/reasoning as
 reference evidence; implementation proceeds through the linked rewrite children.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

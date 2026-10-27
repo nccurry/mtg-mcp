@@ -7,16 +7,16 @@
 > snapshot and land-classifier mechanisms. Preserve only the disjoint failure
 > taxonomy and access-versus-sequencing distinction for a future
 > [`experimental-goldfish-feasibility`](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry)
-> PLC. Reviewed against the rewrite on 2026-07-03; lifecycle movement is
-> deferred to authorized foundation implementation.
+> PLC. Reviewed against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after
+> the rewrite cutover.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/stats-lab-interaction-readiness/
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: docs/llms/plcs/completed/stats-lab-interaction-readiness/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-10-27
 - Current phase: post-cutover reference; implementation retired
 
 ## Summary
@@ -75,6 +75,7 @@ None.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Planning packet inspection | Pass | Checkpoint and disjoint failure semantics specified |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
@@ -83,3 +84,6 @@ re-establish any needed experimental snapshot/source model and sequencing
 kernel. Recommendation-score propagation remains excluded unless a separate
 experimental decision-model PLC explicitly approves it; legacy `0.9` key
 compatibility does not constrain the clean rewrite.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

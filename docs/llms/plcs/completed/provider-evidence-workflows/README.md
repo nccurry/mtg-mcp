@@ -10,19 +10,19 @@
 > Popularity/tournament
 > sources remain in the program's
 > [post-cutover registry](../../completed/evidence-first-mcp-rewrite-program/README.md#post-cutover-registry).
-> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
-> authorized foundation implementation.
+> Reviewed against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after the rewrite
+> cutover.
 > All transport and acquisition language elsewhere in this packet is historical
 > and non-normative. Official Scryfall bulk/API contracts in the replacement
 > packet are the only planned card/tag acquisition authority.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/provider-evidence-workflows/`
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: `docs/llms/plcs/completed/provider-evidence-workflows/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-04
+- Last updated: 2026-10-27
 - Current phase: implementation retired; principles absorbed by provider children
 
 ## Summary
@@ -89,8 +89,12 @@ diagnostics, and source documentation. It must align with
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Foundation follow-up packet drafted | Passed | Planning only; no provider calls or mutations added. |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
 Do not move this packet to `in-progress`. Provider work proceeds only through
 the owning rewrite child or a separately reviewed post-cutover PLC.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

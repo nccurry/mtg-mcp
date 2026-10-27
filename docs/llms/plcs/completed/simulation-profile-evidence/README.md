@@ -8,16 +8,16 @@
 > PLC must absorb this packet with `configurable-decision-models`,
 > `stats-lab-interaction-readiness`, and `conservative-goldfish-v2`. Retain only
 > the per-family deduplication, stable tie, and no-invented-routes fixtures.
-> Reviewed against the rewrite on 2026-07-03; lifecycle movement is deferred to
-> authorized foundation implementation.
+> Reviewed against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after the rewrite
+> cutover.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: docs/llms/plcs/planned/simulation-profile-evidence/
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: docs/llms/plcs/completed/simulation-profile-evidence/
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-10-27
 - Current phase: post-cutover reference; implementation retired
 
 ## Summary
@@ -76,6 +76,7 @@ None.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Planning packet inspection | Pass | Evidence and deterministic tie policy specified |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
@@ -83,3 +84,6 @@ Do not move this packet to `in-progress`. If simulation feasibility is later
 approved, use the rewrite's shared evidence descriptor rather than introducing
 a profile-only `evidenceKind`, and require removal of built-in speculative route
 claims before exposing any experimental profile output.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

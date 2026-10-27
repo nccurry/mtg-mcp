@@ -9,19 +9,19 @@
 > and [deterministic deck categorization](../../completed/deterministic-deck-categorization/README.md).
 > Legacy legality,
 > recommendation, bracket, role, and scoring work is not part of the stable
-> rewrite. Reviewed against the rewrite on 2026-07-03; lifecycle movement is
-> deferred to authorized foundation implementation.
+> rewrite. Reviewed against the rewrite on 2026-07-03; moved to `completed/` on 2026-10-27 after
+> the rewrite cutover.
 > The remaining packet body is historical evidence only. Its provider routes,
 > transport assumptions, phases, and fixtures are non-normative; official
 > Scryfall bulk/API acquisition is owned solely by the replacement child.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/mcp-trust-evidence/`
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: `docs/llms/plcs/completed/mcp-trust-evidence/`
 - Owner: mtg-mcp
 - Created: 2026-06-28
-- Last updated: 2026-07-04
+- Last updated: 2026-10-27
 - Current phase: implementation retired; reference evidence only
 
 ## Summary
@@ -120,8 +120,8 @@ or live-test requirements are intended by the first implementation slice.
 - Reactivation requires an explicit umbrella amendment and repository-owner
   authorization before any lifecycle move or implementation.
 
-- [x] Independent lifecycle move retired; packet remains reference-only pending
-      authorized foundation reconciliation.
+- [x] Independent lifecycle move retired; packet moved to `completed/` as
+      reference-only on 2026-10-27.
 - [ ] Current phase is named before code changes start.
 - [ ] SRD/SADD updated when implementation changes the plan.
 - [ ] Validation evidence recorded as phases complete.
@@ -136,9 +136,9 @@ or live-test requirements are intended by the first implementation slice.
 | 2026-06-28 | PLC packet drafted from templates | Pending review | Docs-only packet; no product code implementation. |
 | 2026-06-28 | PLC packet hardened after review | Passed | Added legality policy matrix, exact evidence tier strings, Phase 3/4 dependency decision, existing-surface reuse guidance, and concrete starter cases. |
 | 2026-07-03 | Goldfish ownership reconciliation | Passed | REQ-003 superseded; REQ-005 retained; goldfish REQ-008 detail gating delegated. |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
-This PLC remains in the planned folder only as reference evidence. Do not move
-it to `in-progress`; authorized foundation reconciliation may later move or
-archive it without implementing the retired phases.
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.

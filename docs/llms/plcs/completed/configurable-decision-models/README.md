@@ -8,15 +8,15 @@
 > PLC must decide feasibility first and explicitly absorb or reject this packet,
 > `simulation-profile-evidence`, `stats-lab-interaction-readiness`, and
 > `conservative-goldfish-v2`. Reviewed against the rewrite on 2026-07-03;
-> lifecycle movement is deferred to authorized foundation implementation.
+> moved to `completed/` on 2026-10-27 after the rewrite cutover.
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/configurable-decision-models/`
+- Status: Completed (superseded by the rewrite; not implemented)
+- Folder: `docs/llms/plcs/completed/configurable-decision-models/`
 - Owner: mtg-mcp
 - Created: 2026-07-03
-- Last updated: 2026-07-03
+- Last updated: 2026-10-27
 - Current phase: post-cutover reference; implementation retired
 
 ## Summary
@@ -74,9 +74,13 @@ engine is planned as a Core dependency.
 | Date | Check | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-07-03 | Foundation follow-up packet drafted | Passed | Planning only; no runtime behavior changed. |
+| 2026-10-27 | Lifecycle closure | Passed | Moved to `completed/` as superseded; the rewrite foundation finished on 2026-07-03 and `0.9.0` released on 2026-07-12. No code changed. |
 
 ## Completion Notes
 
 Do not move this packet to `in-progress`. Preserve it as design input until the
 future feasibility PLC explicitly absorbs or supersedes it. Pre-cutover
 implementation requires an umbrella amendment and repository-owner exception.
+
+Closed on 2026-10-27 as superseded by the evidence-first rewrite. This packet
+was never implemented and remains historical reference only.
