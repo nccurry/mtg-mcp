@@ -12,7 +12,7 @@ final names, including in expected error messages: a case that says
 "naming `scryfall_corpus_sync`" means the message names
 `scryfall_card_data_sync` once phase 3 has landed.
 
-### decks (29 tools today, 19 after phase 3, 18 after phase 6)
+### decks (29 tools today, 19 after phase 3, 20 after phase 4, 19 after phase 6)
 
 | Today | After |
 | --- | --- |
@@ -23,6 +23,7 @@ final names, including in expected error messages: a case that says
 | `deck_on_curve_estimate` (R) | unchanged until phase 6, then removed; use `stats_simulate` preset `on-curve` |
 | `deck_create`, `deck_apply_changes`, `deck_backup_create`, `deck_import_create` (LW) | unchanged |
 | `deck_delete`, `deck_backup_restore`, `deck_backup_delete`, `deck_category_rules_apply`, `deck_identity_reconcile_apply` (LW, D) | unchanged |
+| — (new in phase 4) | `deck_duplicates_preview` (R) |
 | `deck_update` | `deck_apply_changes` with `update-metadata` |
 | `deck_entry_add`, `deck_entry_update`, `deck_entry_remove` | `deck_apply_changes` with `add-entry`, `update-entry`, `remove-entry` |
 | `deck_category_create`, `deck_category_update`, `deck_category_delete` | `deck_apply_changes` with `add-category`, `update-category`, `remove-category` |
@@ -42,10 +43,10 @@ final names, including in expected error messages: a case that says
 | — (new in phase 4) | `card_lists_compare` (R, OpenWorld) |
 | — (new in phase 4) | `card_list_query` (R, OpenWorld) |
 
-### stats (8 today, 9 after phase 6)
+### stats (8 today, 9 after phase 4, 10 after phase 6)
 
-All eight `stats_*` tools stay, with new descriptions. Phase 6 adds
-`stats_simulate`.
+All eight `stats_*` tools stay, with new descriptions. Phase 4 adds
+`stats_castability` (R). Phase 6 adds `stats_simulate` (R).
 
 ### archidekt (23 today, 21 after)
 
@@ -55,13 +56,15 @@ All eight `stats_*` tools stay, with new descriptions. Phase 6 adds
 | `archidekt_snapshot_list`, `archidekt_snapshot_get` (R) | `archidekt_snapshots_get` |
 | All other Archidekt tools | unchanged; conflict results gain current state |
 
-### playgroup (16, frozen)
+### playgroup (16 today, 17 after phase 4)
 
-No changes in this packet.
+The 16 existing tools are frozen. Phase 4 adds `playgroup_games_stats_get`
+(R, OpenWorld).
 
-### spellbook (3)
+### spellbook (3 today, 4 after phase 4)
 
-Unchanged; now on by default.
+The 3 existing tools are unchanged and now on by default. Phase 4 adds
+`spellbook_deck_bracket_facts_get` (R, OpenWorld).
 
 ## Final Tool Names
 
@@ -81,12 +84,20 @@ listed keep their working name.
 | `deck_identity_reconcile_preview`, `deck_identity_reconcile_apply` | `local_deck_identity_reconcile_preview`, `local_deck_identity_reconcile_apply` |
 | `deck_create`, `deck_apply_changes`, `deck_delete` | `local_deck_create`, `local_deck_apply_changes`, `local_deck_delete` |
 | `deck_on_curve_estimate` | removed in phase 6; until then `local_deck_on_curve_estimate` |
+| `deck_duplicates_preview` | `local_deck_duplicates_preview` |
 | `stats_deck_summary` | `stats_local_deck_summary` |
 | `scryfall_corpus_status`, `scryfall_corpus_sync` | `scryfall_card_data_status`, `scryfall_card_data_sync` |
 | `scryfall_corpus_rollback`, `scryfall_corpus_delete` | `scryfall_card_data_rollback`, `scryfall_card_data_delete` |
 | `scryfall_tag_search` | `scryfall_tags_search` |
 | `scryfall_cards_by_tag` | `scryfall_installed_cards_by_tag` |
 | `scryfall_snapshot_delete` | `scryfall_search_snapshot_delete` |
+
+**Naming exceptions (NAME-001).** These final names keep the source prefix
+but not the full `<source>_<object>_<action>` shape: `scryfall_search`,
+`scryfall_autocomplete`, `card_lists_compare`, `card_list_query`, the eight
+existing `stats_*` names other than `stats_local_deck_summary`,
+`stats_castability`, and `stats_simulate`. The architecture test reads this
+list.
 
 ## Count Check
 
@@ -97,20 +108,22 @@ The six toolsets are the same as today; only their tools change.
 | `scryfall` after phase 3 | 9 | 4 | 0 |
 | `scryfall` after phase 4 | 11 | 4 | 0 |
 | `decks` after phase 3 | 10 | 9 | 0 |
-| `decks` after phase 6 | 9 | 9 | 0 |
-| `stats` | 8, then 9 after phase 6 | 0 | 0 |
-| `spellbook` | 3 | 0 | 0 |
+| `decks` after phase 4 | 11 | 9 | 0 |
+| `decks` after phase 6 | 10 | 9 | 0 |
+| `stats` | 8, then 9 after phase 4, then 10 after phase 6 | 0 | 0 |
+| `spellbook` | 3, then 4 after phase 4 | 0 | 0 |
 | `archidekt` | 9 | 1 | 11 |
-| `playgroup` | 14 | 0 | 2 |
+| `playgroup` | 14, then 15 after phase 4 | 0 | 2 |
 
 | Selection (read-only / local / remote) | After phase 3 | After phase 4 or 6 |
 | --- | --- | --- |
-| Default, no credentials | 30 / 43 / 43 | 32 / 45 / 45 |
-| Default, Archidekt credentials only | 39 / 53 / 64 | 41 / 55 / 66 |
-| Default, both credentials (same as `all`) | 53 / 67 / 80 | 55 / 69 / 82 |
+| Default, no credentials | 30 / 43 / 43 | 35 / 48 / 48 |
+| Default, Archidekt credentials only | 39 / 53 / 64 | 44 / 58 / 69 |
+| Default, both credentials (same as `all`) | 53 / 67 / 80 | 59 / 73 / 86 |
 
-The default mode is `remote`, so a default start shows the last column: 45
-tools without credentials and 82 with both.
+The default mode is `remote`, so a default start shows the last column: 48
+tools without credentials and 86 with both. Phase 6 adds `stats_simulate`
+and removes `deck_on_curve_estimate`, so its counts equal phase 4's.
 
 Today, for comparison: the default selection is `decks`, `scryfall`, and
 `stats` in `local` mode (55 tools), and `all` is 61 / 84 / 97.
@@ -152,6 +165,18 @@ Run each task three times per build and record the median.
 | T27 | Find 5 cards that share at least one oracle tag with "Cultivate", are in D1's color identity, and are not in D1 (phase 4 only). | Matches tag lookup, search, and `card_lists_compare` fixtures. |
 | T28 | What changed in D1 since its last backup (phase 4 only)? | Matches `card_lists_compare` `symmetric-difference` with a `deck-backup` source. |
 | T29 | Show 3 example opening hands for D1 with a free first mulligan (phase 6 only). | Hands match `sampleHands` for the fixed seed. |
+| T30 | For D1, which spells are least likely to be castable on curve with its lands as sources (phase 4 only)? | Matches `stats_castability` rows for the fixture source groups. |
+| T31 | Is D3's commander pair legal (phase 4 only)? | Matches the `pairing` fact for the fixture partners. |
+| T32 | How many Game Changers, mass land denial cards, extra-turn cards, and two-card combos does D1 have (phase 4 only)? | Matches the Spellbook bracket facts fixture; no bracket is named. |
+| T33 | Which deck has the highest win rate in playgroup G1 over the last 90 days, with game counts (phase 4 only)? | Matches `playgroup_games_stats_get` fixture rows; the answer cites game counts. |
+| T34 | How many lands in D1 say they enter tapped (phase 4 only)? | Matches `card_list_query` with `oracleText` contains "enters tapped" and `cardTypes` contains `Land`. |
+| T35 | Which cards in D1 are not available on MTG Arena, and what is D1's total Cardmarket price (phase 4 only)? | Matches `games` filter and `sum:priceEur`. |
+| T36 | Chance of casting D1's commander (`{2}{B}{G}`) on turn 4 with its lands' real colors (phase 6 only). | Matches fixed-seed `stats_simulate` with `produces` and `can-cast`. |
+| T37 | Archidekt deck A2 has cards in both playing categories and Maybeboard. Keep one copy of each card, preferring Commander, then the playing categories, then Sideboard, then Maybeboard, and upload the result (phase 4 only). | Fake server ends with one copy per card; the agent called `deck_duplicates_preview`, `deck_apply_changes`, and the push pair, and resolved any `ambiguous` card by asking again. |
+
+Held-out tasks (EVAL-003): T04, T06, T07, T10, and T12, which all run on the
+`0.10.0` baseline, plus T27 and T33 from phase 4. They are never used while
+rewriting descriptions; their results are reported in their own rows.
 
 Record per run: correct (yes/no), tool calls, total tool-result tokens, and
 invalid-parameter errors.
@@ -179,6 +204,13 @@ invalid-parameter errors.
 | S17 | Deck small enough that `each-turn` draws empty the library before the last turn. | Drawing stops; the sample is counted in `libraryEmpty`. |
 | S18 | `freeFirstMulligan: true`, one mulligan taken. | Kept hand has 7 cards; nothing bottomed. With `false`, 1 card bottomed. |
 | S19 | `sampleHands` 3 with a fixed seed; rerun with `sampleHands` 0. | The 3 returned samples match the first 3 counted samples; condition hits are identical in both runs. |
+| S20 | Lands group with `produces.default: ["G"]`; `can-cast` `{G}{G}` on turn 2 with two Forests in play. | Hit. With one Forest and one generic-only source, miss. |
+| S21 | `byEntry` gives one dual `["B","G"]`; `can-cast` `{B}{G}` with a Forest and the dual in play. | Hit: the dual pays B, the Forest pays G. |
+| S22 | `can-cast` `{W/U}` with one Island in play. | Hit (hybrid accepts either color). |
+| S23 | `can-cast` `{G/P}` with no green source. | Miss; `limits` lists Phyrexian life payment as not modeled. |
+| S24 | Replay of a saved `deck_on_curve_estimate` fixture whose target has a colored cost. | Identical hit counts through the `on-curve` preset. |
+| S25 | `play` with `pick: "target-first"` and `targetCost` `{1}{U}{U}`; hand holds a Forest, an Island, and a U/G dual whose rule is `next-turn`. | The Island is played (it covers a colored symbol now); with two Islands already in play, ties fall to same-turn, then lowest entry ID, as `target-first-v1` does. |
+| S26 | `cast-if-able` spends 2 generic from a Forest and an Island; then `can-cast` `{G}` the same turn with a third source that makes only U. | Hit only if one joint assignment pays both: the Forest pays `{G}` and the other two pay the 2 generic. |
 
 ## Card Set Cases
 
@@ -215,6 +247,10 @@ invalid-parameter errors.
 | Q08 | Sorted rows by `priceUsd` desc, paged. | Stable order across pages, ties broken by name then Oracle ID. |
 | Q09 | Card data not installed. | `not-cached` naming `scryfall_corpus_sync`. |
 | Q10 | Unknown field in `groupBy`. | `invalid-input` listing allowed fields. |
+| Q11 | `where` `oracleText` contains "ENTERS TAPPED" over a deck with a tapped dual and an MDFC whose back face says it. | Both match (case-insensitive, every face). `oracleText` in `groupBy` returns `invalid-input`. |
+| Q12 | `where` `legalIn` contains `oathbreaker`; `bannedIn` contains `commander`. | Only cards with those Scryfall legality values. |
+| Q13 | `where` `games` contains `arena`; group by `reserved`. | Correct groups; cards without `games` data counted in `missingValues`. |
+| Q14 | `sum:priceEur` and `sum:priceTix` with missing values. | Exact decimal sums; `missingValues` per field. |
 
 ## Deck Rule Cases
 
@@ -226,6 +262,82 @@ invalid-parameter errors.
 | R04 | Two copies of a nonbasic; 20 Forests; 10 Relentless Rats. | Singleton fact fails only for the nonbasic. |
 | R05 | A banned card. | Legality fact fails naming it. |
 | R06 | Four Game Changers. | Count 4 with the list; no `passed` flag and no bracket. |
-| R07 | Two commanders. | Both listed with their text; no pairing verdict. |
+| R07 | Two commanders. | Both listed with their text and a `pairing` fact (cases R10 to R15 cover the rules). |
 | R08 | Card data not installed. | `not-cached` naming `scryfall_corpus_sync`. |
 | R09 | One entry whose installed data lacks `game_changer`. | Game Changer fact has `status: "unknown"` naming that entry; the count covers the other entries. |
+| R10 | Two commanders with plain Partner. | `pairing` passed. |
+| R11 | A "Partner with" commander and the card it names; then the same card with a different Partner commander. | First passes; second fails naming the required partner. |
+| R12 | Two Friends forever commanders; a Friends forever commander with a plain Partner. | First passes; second fails. |
+| R13 | A Choose a Background commander and a Background; the same commander with a non-Background enchantment. | First passes; second fails. |
+| R14 | A Doctor's companion commander and a Time Lord Doctor. | `pairing` passed. |
+| R15 | A commander whose keyword is a Partner variant the table does not list. | `status: "unknown"` with the keyword; no pass or fail. |
+| R16 | Lurrus in a `companion` zone; main deck has a 3-mana-value permanent. | `companion` fails naming the entry. |
+| R17 | Jegantha in a `companion` zone; no card repeats a mana symbol. | `companion` passed. |
+| R18 | Zirda in a `companion` zone. | `status: "not-checked"` with the restriction text and reason. |
+| R19 | A Choose a Background commander and a legendary Background in the `commander` zone. | Commander eligibility passes for both; `pairing` passed. |
+| R20 | Seven copies of Seven Dwarves; then eight. | Singleton passes with seven and fails with eight, naming the card and its limit of 7. |
+| R21 | Lutri in a `companion` zone with Relentless Rats in the deck; then Kaheera with a Changeling creature; then a companion outside the commanders' identity. | Lutri fails naming Relentless Rats; Kaheera passes; the identity check fails naming the companion. |
+
+## Input Binding Cases
+
+| Case | Input | Expected |
+| --- | --- | --- |
+| X01 | `deck_apply_changes` with one change `{"entry":{...},"kind":"update-entry"}` (`kind` last). | Same result as the same change with `kind` first. |
+| X02 | A change with `"kind":"rename-entry"` (not a union value). | `invalid-input`, reason `invalid-arguments`, path `changes[0].kind`, message listing allowed kinds; `isError: true`. |
+| X03 | A change whose `quantity` is a string. | `invalid-input` with path `changes[0].entry.quantity`; never "An error occurred invoking". |
+
+## Archidekt Category Diff Cases
+
+| Case | Input | Expected |
+| --- | --- | --- |
+| A01 | Remote entry categories `["Maybeboard","Sideboard","Removal"]`, local `["Maybeboard","Removal","Sideboard"]`, same primary. | No entry operation planned. |
+| A02 | Same set, different primary category. | One entry update planned. |
+| A03 | Fake server: pull a deck, apply a no-op local edit, then push preview. | Zero entry operations; predicted provider requests cover only deck-level checks. |
+| A04 | Fake server: pull, add category "Protection" and two entries locally, push apply, add 10 unrelated sideboard entries, push preview. | Exactly the 10 sideboard entry-adds; no remove or re-add of the two pushed entries; no category change. |
+| A05 | After A04's first push, read the local deck's binding baseline. | The two entries and the category map to the provider IDs the fake server assigned. |
+| A06 | Fake server returns a created row that matches no planned create exactly. | Push apply reports it in `unlinked`; the local row stays unbound; nothing is guessed. |
+| A07 | After A06, run push preview. | `conflict` with reason `unlinked-remote-rows` naming the row and telling the agent to pull; no create is planned again. |
+
+## Deck Duplicate Cases
+
+| Case | Input | Expected |
+| --- | --- | --- |
+| D01 | Swords to Plowshares as one entry in `main` with category Removal and one with category Maybeboard; `keepPriority` Removal, then Maybeboard; `matchBy: oracle`. | Removal entry kept; one `remove-entry` for the Maybeboard entry. |
+| D02 | Two printings of Sol Ring in two entries. | Duplicate under `oracle` and `name`; not a duplicate under `printing`. |
+| D03 | Two copies of a card, both in category Ramp, in separate entries. | Card in `ambiguous` with both entries; no change planned. |
+| D04 | One copy in a listed group and one in an unlisted group. | Listed-group copy kept; the other removed. |
+| D05 | One entry with quantity 3 and no other copies. | `update-entry` setting quantity 1. |
+| D06 | 30 Forests and 2 Relentless Rats entries, with `exempt: commander-singleton-exceptions`, then with `none`. | Skipped with the exemption; reported without it. |
+| D08 | Seven Dwarves in 8 entries with `exempt: commander-singleton-exceptions`; then `matchBy: oracle` with card data not installed. | Seven copies kept and one removed; then `not-cached` naming the sync tool. |
+| D07 | Fake Archidekt deck pulled, `changes` applied with `deck_apply_changes`, then `archidekt_push_preview`. | Push preview has only the planned removals and quantity updates; no category-order updates (ARCH-001). |
+
+## Castability Cases
+
+| Case | Input | Expected |
+| --- | --- | --- |
+| K01 | 99-card raw deck, 40 sources all `["G"]`, one spell `{1}{G}{G}`, `turn: mana-value`, on the play, `requireLandDrops: false`. | One row at turn 3 whose exact probability equals `stats_mana_availability` with draw count 9 and `MaximumUsableSources` 3. |
+| K02 | A 20-card deck small enough to enumerate, with two source groups and one cost, `requireLandDrops: true`, on the play and on the draw. | Exact conditional values equal brute-force enumeration of P(payable and at least T sources seen) / P(at least T sources seen). |
+| K03 | Two spells sharing `{2}{B}`. | One row listing both cards. |
+| K04 | A spell with no mana cost, a spell with `{X}{R}`, a spell with `{W/U}`, and a spell with `{G/P}`. | All four in `skipped` with reasons; no row. |
+| K05 | Three spells with different probabilities. | Rows sorted by probability, then name; no `passed` field and no target. |
+| K06 | Distinct costs times source groups above the work limit. | `invalid-input` stating the limit. |
+| K07 | `scryfall-snapshot` source; then a `deck` source with card data not installed. | `invalid-input` naming the allowed source kinds; then `not-cached` naming the sync tool. |
+
+## Spellbook Bracket Facts Cases
+
+| Case | Input | Expected |
+| --- | --- | --- |
+| B01 | Fake `/estimate-bracket` response with a Game Changer, a mass land denial card, an extra-turn card, and one two-card combo. | Per-card flags and the combo's `definitelyTwoCard`, `speed`, and `manaNeeded` are returned. |
+| B02 | The B01 response includes `bracketTag: "Spicy"`. | No result field contains the tag or its value. |
+| B03 | Same request twice within the cache window. | Second call reports `cached`; no second HTTP request. |
+| B04 | Fake server returns 503. | The existing Spellbook provider failure kind, with `isError: true`. |
+
+## Playgroup Statistics Cases
+
+| Case | Input | Expected |
+| --- | --- | --- |
+| P01 | 12 fixture games over 2 pages, `groupBy: deck`. | One row per deck with exact games, wins, win rate, and `baselineRate`. |
+| P02 | Same games, `groupBy: player`; then `groupBy: commander`. | Correct totals per player, rows sorted by key; `commander` returns `invalid-input` listing `deck` and `player`. |
+| P03 | `from` and `to` that include 5 of the 12 games, which arrive in no date order. | Rows total 5 games; `gamesOutsideRange` is 7. |
+| P04 | `maxGames: 8` with 12 games, two of which have no winner, and a date range. | `gamesRead` 8, `limitReached` true, skipped games listed with `no-winner`, and a note that the range may be incomplete. |
+| P05 | `from` after `to`. | `invalid-input`. |
