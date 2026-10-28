@@ -43,13 +43,13 @@ internal static class OnCurveCalculator
         OperationResult<OnCurveRequest> validation = OnCurveRequestValidator.Validate(request);
         if (validation is not OperationSuccess<OnCurveRequest> valid)
         {
-            return ForwardFailure<OnCurveRequest, OnCurveRunReport>(validation);
+            return OperationFailure.Forward<OnCurveRequest, OnCurveRunReport>(validation);
         }
 
         OperationResult<OnCurveManaCost> costResult = OnCurveManaSymbols.ReadCost(valid.Data.Target!.ManaCost);
         if (costResult is not OperationSuccess<OnCurveManaCost> cost)
         {
-            return ForwardFailure<OnCurveManaCost, OnCurveRunReport>(costResult);
+            return OperationFailure.Forward<OnCurveManaCost, OnCurveRunReport>(costResult);
         }
 
         if (!OnCurveSeed.TryParse(valid.Data.Seed, out ulong seed))
@@ -62,7 +62,7 @@ internal static class OnCurveCalculator
         OperationResult<IReadOnlyList<OnCurveLibraryCard>> libraryResult = BuildLibrary(valid.Data);
         if (libraryResult is not OperationSuccess<IReadOnlyList<OnCurveLibraryCard>> library)
         {
-            return ForwardFailure<IReadOnlyList<OnCurveLibraryCard>, OnCurveRunReport>(libraryResult);
+            return OperationFailure.Forward<IReadOnlyList<OnCurveLibraryCard>, OnCurveRunReport>(libraryResult);
         }
 
         Dictionary<Guid, OnCurveLandRule> landRules = valid.Data.LandRules!
@@ -147,7 +147,9 @@ internal static class OnCurveCalculator
                 OperationResult<IReadOnlyList<OnCurveManaSymbol>> colorsResult = ReadSourceColors(values.Colors);
                 if (colorsResult is not OperationSuccess<IReadOnlyList<OnCurveManaSymbol>> parsedColors)
                 {
-                    return ForwardFailure<IReadOnlyList<OnCurveManaSymbol>, IReadOnlyList<OnCurveLibraryCard>>(colorsResult);
+                    return OperationFailure.Forward<IReadOnlyList<OnCurveManaSymbol>,
+                        IReadOnlyList<OnCurveLibraryCard>>(
+                        colorsResult);
                 }
 
                 colors = parsedColors.Data;
@@ -213,27 +215,5 @@ internal static class OnCurveCalculator
         }
 
         return Array.AsReadOnly(result.ToArray());
-    }
-
-    /// <summary>
-    /// Projects a common operation failure to a calculation result without changing its reason.
-    /// </summary>
-    private static OperationResult<T> ForwardFailure<TSource, T>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-on-curve-result",
-                "The on-curve calculation returned an unexpected result."),
-            _ => new OperationUnavailable(
-                "unexpected-on-curve-result",
-                "The on-curve calculation returned an unexpected result."),
-        };
     }
 }

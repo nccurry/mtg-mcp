@@ -34,9 +34,9 @@ public sealed class ToolsetCredentialGateTests
             DisabledToolset.CredentialsMissing,
             configuration.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup));
         Assert.Null(configuration.Toolsets.FindDisabledReason(CapabilityToolset.Decks));
-        Assert.Equal(30, Count(configuration, OperationMode.ReadOnly));
-        Assert.Equal(43, Count(configuration, OperationMode.Local));
-        Assert.Equal(43, Count(configuration, OperationMode.Remote));
+        Assert.Equal(35, Count(configuration, OperationMode.ReadOnly));
+        Assert.Equal(48, Count(configuration, OperationMode.Local));
+        Assert.Equal(48, Count(configuration, OperationMode.Remote));
     }
 
     /// <summary>
@@ -58,9 +58,9 @@ public sealed class ToolsetCredentialGateTests
         FoundationConfiguration everything = Resolve(profile, both);
         FoundationConfiguration all = Resolve(profile, new Dictionary<string, string?>(both) { ["TOOLSETS"] = "all" });
 
-        Assert.Equal((39, 53, 64), Counts(archidektOnly));
-        Assert.Equal((53, 67, 80), Counts(everything));
-        Assert.Equal((53, 67, 80), Counts(all));
+        Assert.Equal((44, 58, 69), Counts(archidektOnly));
+        Assert.Equal((59, 73, 86), Counts(everything));
+        Assert.Equal((59, 73, 86), Counts(all));
         Assert.Empty(everything.Toolsets.DisabledToolsets);
         Assert.Equal(
             DisabledToolset.CredentialsMissing,
@@ -166,7 +166,7 @@ public sealed class ToolsetCredentialGateTests
         Assert.Equal(
             DisabledToolset.CredentialsMissing,
             configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt));
-        Assert.Equal(19, Count(configuration, OperationMode.Remote));
+        Assert.Equal(20, Count(configuration, OperationMode.Remote));
     }
 
     /// <summary>

@@ -29,6 +29,7 @@ public sealed class SpellbookMcpTests
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
             {
+                ["spellbook_deck_bracket_facts_get"] = ["deckId", "expectedRevision"],
                 ["spellbook_deck_combos_find"] =
                     ["deckId", "expectedRevision", "groupByCombo", "limit", "offset", "sourceQuery"],
                 ["spellbook_variant_get"] = ["variantId"],

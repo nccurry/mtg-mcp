@@ -20,8 +20,8 @@ The current public MCP contract is:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- a default profile (the same as `all`) of 30/43/43 tools by mode with no
-  provider credentials and 53/67/80 tools with Archidekt and Playgroup
+- a default profile (the same as `all`) of 35/48/48 tools by mode with no
+  provider credentials and 59/73/86 tools with Archidekt and Playgroup
   credentials, plus zero prompts, with the default mode `remote`;
 - fixed `default`, `all`, `none`, and explicit toolset selection, with version 8
   of the capabilities-resource schema; and

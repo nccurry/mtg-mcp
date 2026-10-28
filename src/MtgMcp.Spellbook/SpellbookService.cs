@@ -109,6 +109,18 @@ public sealed class SpellbookService : IDisposable
         return ExecuteAsync(() => FindDeckCombosCoreAsync(request, cancellationToken));
     }
 
+    /// <summary>
+    /// Reads the bracket-related facts of a deck from Commander Spellbook: per-card flags and per-combo details. The
+    /// provider's bracket label is dropped before the result is built.
+    /// </summary>
+    public Task<OperationResult<SpellbookBracketFacts>> EstimateBracketFactsAsync(
+        SpellbookDeckRequest deck,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(async () => SpellbookBracketMapper.Map(
+            await EstimateBracketCoreAsync(deck, cancellationToken).ConfigureAwait(false)));
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -200,6 +212,32 @@ public sealed class SpellbookService : IDisposable
             HttpMethod.Post,
             $"find-my-combos?{PageQuery(sourceQuery, page)}",
             "POST /find-my-combos",
+            JsonSerializer.Serialize(deck, serializerOptions),
+            details,
+            identity);
+        return GetOrAcquireAsync(prepared, cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates and prepares one bracket estimate request for a deck.
+    /// </summary>
+    private Task<SpellbookEvidence> EstimateBracketCoreAsync(
+        SpellbookDeckRequest? request,
+        CancellationToken cancellationToken)
+    {
+        SpellbookDeckRequest deck = SpellbookContract.Deck(request);
+        SpellbookRequestDetails details = new(null, null, null);
+        SpellbookRequestIdentity identity = SpellbookRequestIdentity.Create(
+            "estimate-bracket",
+            HttpMethod.Post,
+            "/estimate-bracket",
+            details,
+            deck);
+        SpellbookPreparedRequest prepared = new(
+            "estimate-bracket",
+            HttpMethod.Post,
+            "estimate-bracket",
+            "POST /estimate-bracket",
             JsonSerializer.Serialize(deck, serializerOptions),
             details,
             identity);
@@ -319,11 +357,11 @@ public sealed class SpellbookService : IDisposable
     /// <summary>
     /// Converts expected source and input failures into the shared exhaustive operation result union.
     /// </summary>
-    private static async Task<OperationResult<SpellbookEvidence>> ExecuteAsync(Func<Task<SpellbookEvidence>> operation)
+    private static async Task<OperationResult<T>> ExecuteAsync<T>(Func<Task<T>> operation)
     {
         try
         {
-            return new OperationSuccess<SpellbookEvidence>(await operation().ConfigureAwait(false));
+            return new OperationSuccess<T>(await operation().ConfigureAwait(false));
         }
         catch (SpellbookProviderException exception)
         {

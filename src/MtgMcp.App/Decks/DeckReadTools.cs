@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
@@ -23,12 +24,19 @@ internal sealed class DeckReadTools
     private readonly DeckCardViewCoordinator cardViews;
 
     /// <summary>
-    /// Creates read tools around one process-local deck store and the coordinator that adds card data to entries.
+    /// Builds validation results, with Commander rule facts when asked.
     /// </summary>
-    internal DeckReadTools(SqliteDeckStore store, DeckCardViewCoordinator cardViews)
+    private readonly DeckRuleCoordinator rules;
+
+    /// <summary>
+    /// Creates read tools around one process-local deck store, the coordinator that adds card data to entries, and
+    /// the coordinator that works out rule facts.
+    /// </summary>
+    internal DeckReadTools(SqliteDeckStore store, DeckCardViewCoordinator cardViews, DeckRuleCoordinator rules)
     {
         this.store = store;
         this.cardViews = cardViews;
+        this.rules = rules;
     }
 
     /// <summary>
@@ -101,24 +109,32 @@ internal sealed class DeckReadTools
     }
 
     /// <summary>
-    /// Reports only local structural invariants for one deck.
+    /// Reports local structural invariants for one deck and, on request, Commander rule facts.
     /// </summary>
     [McpServerTool(
         Name = "local_deck_validate",
-        Title = "Validate Local Deck Structure",
+        Title = "Validate Local Deck",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Local deck store: checks local references, quantities, zones, and primary categories without format, " +
-        "legality, or quality judgments.")]
-    internal Task<OperationResult<DeckValidationReport>> ValidateAsync(
+        "Local deck store: checks local references, quantities, zones, and primary categories. With rules " +
+        "commander it also reports Commander rule facts from installed Scryfall card data: deck size, commanders " +
+        "and whether each is eligible, color identity and entries outside it, singleton breaks, Commander " +
+        "legality of every entry, a Game Changer count and list, the partner pairing of two commanders, and the " +
+        "checks of a companion in a companion zone. Each fact has passed or a status and names the entries " +
+        "involved. It never names a bracket, a power level, or an overall verdict. Example: " +
+        "{\"deckId\":\"0193e97a-ef95-7700-8000-000000000001\",\"rules\":\"commander\"}.")]
+    internal Task<OperationResult<DeckValidationView>> ValidateAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
+        [Description("Optional rule set to add facts for: commander. Omit for structural checks only."),
+         AllowedValues("commander")]
+        string? rules = null,
         CancellationToken cancellationToken = default)
     {
-        return store.ValidateAsync(deckId, cancellationToken);
+        return this.rules.ValidateAsync(deckId, rules, cancellationToken);
     }
 
     /// <summary>

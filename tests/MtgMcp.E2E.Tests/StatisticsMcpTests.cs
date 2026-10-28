@@ -12,10 +12,11 @@ namespace MtgMcp.E2E.Tests;
 public sealed class StatisticsMcpTests
 {
     /// <summary>
-    /// Lists the exact eight statistics tools in canonical discovery order.
+    /// Lists the exact nine statistics tools in canonical discovery order.
     /// </summary>
     private static readonly string[] ToolNames =
     [
+        "stats_castability",
         "stats_hypergeometric",
         "stats_local_deck_summary",
         "stats_mana_availability",
@@ -90,10 +91,14 @@ public sealed class StatisticsMcpTests
             Assert.Equal(ToolNames, tools.Select(value => value.Name));
             foreach (McpClientTool tool in tools)
             {
-                Assert.Equal(["request"], tool.ProtocolTool.InputSchema
+                string[] expectedInputs = tool.Name == "stats_castability"
+                    ? ["onThePlay", "requireLandDrops", "source", "sources", "turn"]
+                    : ["request"];
+                Assert.Equal(expectedInputs, tool.ProtocolTool.InputSchema
                     .GetProperty("properties")
                     .EnumerateObject()
-                    .Select(value => value.Name));
+                    .Select(value => value.Name)
+                    .Order(StringComparer.Ordinal));
                 Assert.NotNull(tool.ProtocolTool.OutputSchema);
                 Assert.NotNull(tool.ProtocolTool.Annotations);
                 Assert.True(tool.ProtocolTool.Annotations.ReadOnlyHint);

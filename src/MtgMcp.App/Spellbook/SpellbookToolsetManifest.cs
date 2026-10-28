@@ -19,6 +19,7 @@ internal static class SpellbookToolsetManifest
         CapabilityToolsetStability.Stable,
         "Bounded Commander Spellbook source evidence for variants and one revisioned local deck. It never recommends deck changes.",
         [
+            "spellbook_deck_bracket_facts_get",
             "spellbook_deck_combos_find",
             "spellbook_variant_get",
             "spellbook_variant_search",
@@ -37,7 +38,9 @@ internal static class SpellbookToolsetManifest
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(deckStore);
-        builder.WithRegisteredTools(ToolRegistration.Create(
-            new SpellbookReadTools(service, new SpellbookDeckInputResolver(deckStore))));
+        SpellbookDeckInputResolver resolver = new(deckStore);
+        builder
+            .WithRegisteredTools(ToolRegistration.Create(new SpellbookReadTools(service, resolver)))
+            .WithRegisteredTools(ToolRegistration.Create(new SpellbookBracketTools(service, resolver, deckStore)));
     }
 }

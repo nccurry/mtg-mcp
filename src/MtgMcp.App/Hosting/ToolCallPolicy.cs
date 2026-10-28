@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -208,7 +209,17 @@ internal static partial class ToolCallPolicy
         }
 
         ToolArgumentCatalog? catalog = context.Services?.GetService<ToolArgumentCatalog>();
-        return catalog is not null && catalog.TryGet(context.Params.Name, out ToolArguments tool) ? tool : null;
+        if (catalog is not null && catalog.TryGet(context.Params.Name, out ToolArguments tool))
+        {
+            return tool;
+        }
+
+        // The SDK matched a tool that this server's registration never recorded. Argument checks are skipped for
+        // it, so say so: it means a tool was added to the server without going through WithRegisteredTools.
+        context.Services?.GetService<ILoggerFactory>()?.CreateLogger(nameof(ToolCallPolicy)).LogWarning(
+            "Tool {ToolName} was matched by the SDK but is not in the argument catalog; its arguments are not checked.",
+            context.Params.Name);
+        return null;
     }
 
     /// <summary>

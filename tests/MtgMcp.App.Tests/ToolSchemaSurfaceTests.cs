@@ -121,7 +121,7 @@ public sealed partial class ToolSchemaSurfaceTests
 
         string[] names = [.. registered.Tools.Select(tool => tool.ProtocolTool.Name)];
 
-        Assert.Equal(80, names.Length);
+        Assert.Equal(86, names.Length);
         Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
     }
 

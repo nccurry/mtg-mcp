@@ -60,6 +60,8 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
         "playgroup_user_playgroup_get", "playgroup_playgroup_members_list", "playgroup_playgroup_games_list",
         "playgroup_playgroup_game_get", "playgroup_game_events_batch_create", "playgroup_live_session_create",
         "spellbook_variant_search", "spellbook_variant_get", "spellbook_deck_combos_find",
+        "spellbook_deck_bracket_facts_get", "playgroup_games_stats_get", "card_lists_compare", "card_list_query",
+        "local_deck_duplicates_preview", "stats_castability",
     ];
 
     /// <summary>
@@ -187,7 +189,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
                 JsonValueKind.False,
                 tool.ProtocolTool.InputSchema.GetProperty("additionalProperties").ValueKind);
             OperationInvalidInput failure = Assert.IsType<OperationInvalidInput>(
-                ToolCallPolicy.FindUnknownArgument(catalog, name, unknown));
+                ToolCallPolicy.FindUnknownArgument(remote.Catalog, name, unknown));
             Assert.Equal("unknownField", failure.Path);
             Assert.Contains("'unknownField'", failure.Message, StringComparison.Ordinal);
             Assert.Equal(ToolCallPolicy.InvalidArgumentsReason, failure.ReasonCode);
@@ -321,6 +323,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
                 _ when name.StartsWith("stats_", StringComparison.Ordinal) => ["Exact math:"],
                 _ when name.StartsWith("scryfall_", StringComparison.Ordinal) =>
                     ["Scryfall:", "Saved Scryfall requests:", "Installed Scryfall card data:"],
+                _ when name.StartsWith("card_", StringComparison.Ordinal) => ["Scryfall:"],
                 _ when name.StartsWith("archidekt_", StringComparison.Ordinal) => ["Archidekt:"],
                 _ when name.StartsWith("playgroup_", StringComparison.Ordinal) => ["Playgroup:"],
                 _ when name.StartsWith("spellbook_", StringComparison.Ordinal) => ["Commander Spellbook:"],
@@ -428,9 +431,9 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
     /// writes, and remote shows all, with the counts of a fully configured server (SURF-006, SURF-007).
     /// </summary>
     [Theory]
-    [InlineData("read-only", 53)]
-    [InlineData("local", 67)]
-    [InlineData("remote", 80)]
+    [InlineData("read-only", 59)]
+    [InlineData("local", 73)]
+    [InlineData("remote", 86)]
     public void RegisteredTools_EachMode_MatchTheDescriptorCounts(string modeName, int expectedCount)
     {
         OperationMode mode = Assert.IsType<OperationSuccess<OperationMode>>(

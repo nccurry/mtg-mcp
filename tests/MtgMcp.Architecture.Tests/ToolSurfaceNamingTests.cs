@@ -21,6 +21,9 @@ public sealed partial class ToolSurfaceNamingTests
     [
         "scryfall_search",
         "scryfall_autocomplete",
+        "card_lists_compare",
+        "card_list_query",
+        "stats_castability",
         "stats_hypergeometric",
         "stats_mana_availability",
         "stats_minimum_count",
@@ -123,7 +126,7 @@ public sealed partial class ToolSurfaceNamingTests
     {
         string[] names = ReadToolNames();
 
-        Assert.Equal(80, names.Length);
+        Assert.Equal(86, names.Length);
         Assert.All(names, name =>
         {
             Assert.True(Prefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)), name);
@@ -158,7 +161,7 @@ public sealed partial class ToolSurfaceNamingTests
     /// Verifies the 16 Playgroup tools are exactly the frozen list and belong to the Playgroup toolset.
     /// </summary>
     [Fact]
-    public void PlaygroupTools_AreExactlyTheFrozenSixteen()
+    public void PlaygroupTools_AreTheFrozenSixteenPlusTheGameStatisticsTool()
     {
         string[] playgroup =
         [
@@ -170,8 +173,10 @@ public sealed partial class ToolSurfaceNamingTests
             .Select(match => match.Groups[1].Value)
             .Order(StringComparer.Ordinal)];
 
-        Assert.Equal(FrozenPlaygroupTools, playgroup);
-        Assert.Equal(FrozenPlaygroupTools, assigned);
+        string[] expected = [.. FrozenPlaygroupTools, "playgroup_games_stats_get"];
+        Array.Sort(expected, StringComparer.Ordinal);
+        Assert.Equal(expected, playgroup);
+        Assert.Equal(expected, assigned);
     }
 
     /// <summary>

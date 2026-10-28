@@ -22,6 +22,7 @@ internal static class DeckToolsetManifest
         [
             "local_deck_backup_list",
             "local_deck_category_rules_preview",
+            "local_deck_duplicates_preview",
             "local_deck_export_bundle",
             "local_deck_get",
             "local_deck_import_preview",
@@ -64,10 +65,12 @@ internal static class DeckToolsetManifest
         DeckCardViewCoordinator cardViewCoordinator = new(deckStore, scryfallService);
         builder
             .WithRegisteredTools(ToolRegistration.Create(
-                new DeckReadTools(deckStore, cardViewCoordinator),
+                new DeckReadTools(deckStore, cardViewCoordinator, new DeckRuleCoordinator(deckStore, scryfallService)),
                 DeckReadTools.ItemChoices))
             .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeReadTools(interchangeService)))
             .WithRegisteredTools(ToolRegistration.Create(new DeckIdentityReconciliationReadTools(identityCoordinator)))
+            .WithRegisteredTools(ToolRegistration.Create(
+                new DeckDuplicatesReadTools(new DeckDuplicatesCoordinator(deckStore, scryfallService))))
             .WithRegisteredTools(ToolRegistration.Create(new DeckOnCurveEstimateTools(onCurveCoordinator)));
         builder.WithRegisteredTools(
             ToolRegistration.Create(new DeckCategorizationReadTools(categorizationCoordinator)));

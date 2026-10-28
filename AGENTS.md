@@ -42,7 +42,7 @@
   completed Commander Spellbook evidence child added three tools and the
   on-curve estimate one decks tool (97 in total). The focused agent tool
   surface then removed, merged, and renamed tools, so with every toolset on
-  the server exposes 80 tools in `remote` mode (53 in `read-only`, 67 in
+  the server exposes 86 tools in `remote` mode (53 in `read-only`, 67 in
   `local`). Statistics remains exact, caller-supplied,
   provider-independent, and legality-free. The stabilization child and `0.9.0`
   release are complete.

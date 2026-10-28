@@ -256,6 +256,60 @@ public sealed class DeckBackupStore
     }
 
     /// <summary>
+    /// Reads one deck as it was in a backup. The backup file is opened read-only and no migration runs, so the
+    /// backup and the live database stay as they are. A backup whose schema version differs from the one this
+    /// server reads is reported as unsupported, naming both versions.
+    /// </summary>
+    public async Task<OperationResult<DeckDocument>> ReadDeckAsync(
+        Guid backupId,
+        Guid deckId,
+        CancellationToken cancellationToken)
+    {
+        if (backupId == Guid.Empty || deckId == Guid.Empty)
+        {
+            return Invalid<DeckDocument>("A backup ID and a deck ID are required.");
+        }
+
+        (string backupPath, _) = GetBackupPaths(backupId);
+        if (!File.Exists(backupPath))
+        {
+            return BackupNotFound<DeckDocument>();
+        }
+
+        try
+        {
+            SqliteConnectionStringBuilder builder = new()
+            {
+                DataSource = backupPath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false,
+            };
+            await using SqliteConnection connection = new(builder.ToString());
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            int version = await DeckDatabase.GetSchemaVersionAsync(connection, cancellationToken)
+                .ConfigureAwait(false);
+            if (version != DeckDatabase.SchemaVersion)
+            {
+                return new OperationUnsupported(
+                    "backup-schema-mismatch",
+                    $"The backup uses decks.db schema version {version}, but this server reads version " +
+                    $"{DeckDatabase.SchemaVersion}. Restore the backup with the version of mtg-mcp that made it, " +
+                    "or use another source.");
+            }
+
+            DeckDocument? deck = await DeckSql.ReadDeckAsync(connection, transaction: null, deckId, cancellationToken)
+                .ConfigureAwait(false);
+            return deck is null
+                ? new OperationNotFound("deck-not-in-backup", "The deck is not in this backup.")
+                : new OperationSuccess<DeckDocument>(deck);
+        }
+        catch (Exception exception) when (IsExpectedFailure(exception))
+        {
+            return MapFailure<DeckDocument>(exception);
+        }
+    }
+
+    /// <summary>
     /// Creates a snapshot while the shared mutation gate is already held.
     /// </summary>
     private async Task<DeckBackupManifest> CreateUnderGateAsync(

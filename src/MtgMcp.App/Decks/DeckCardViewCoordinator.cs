@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using MtgMcp.App.CardLists;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
@@ -104,7 +105,8 @@ internal sealed class DeckCardViewCoordinator
         List<DeckEntry> slice = [.. deck.Entries.Skip(offset.Data).Take(pageSize ?? DefaultPageSize)];
         OperationResult<ScryfallInstalledCardViews> read = await ScryfallToolExecution.RunAsync(() =>
             scryfall.ReadInstalledCardViewsAsync(
-                [.. slice.Select(LookupFor)],
+                [.. slice.Select(entry => CardListResolver.LookupFor(
+                    entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId))],
                 fields,
                 include.Contains(IncludeCards, StringComparer.Ordinal),
                 include.Contains(IncludeTags, StringComparer.Ordinal),
@@ -263,25 +265,6 @@ internal sealed class DeckCardViewCoordinator
             "The cursor is not valid for this request. Pass nextCursor unchanged with the same deckId, include, " +
             "and fields, or start again without a cursor.",
             "cursor");
-    }
-
-    /// <summary>
-    /// Chooses the exact Scryfall identity of an entry: its printing, then its set and collector number, then its
-    /// Oracle ID. An entry with none has no exact identity.
-    /// </summary>
-    private static ScryfallCardLookup? LookupFor(DeckEntry entry)
-    {
-        if (entry.PrintingId is Guid printingId)
-        {
-            return new ScryfallCardLookup("scryfall-id", printingId.ToString("D"));
-        }
-
-        if (!string.IsNullOrWhiteSpace(entry.SetCode) && !string.IsNullOrWhiteSpace(entry.CollectorNumber))
-        {
-            return new ScryfallCardLookup("printing", null, entry.SetCode, entry.CollectorNumber);
-        }
-
-        return entry.OracleId is Guid oracleId ? new ScryfallCardLookup("oracle-id", oracleId.ToString("D")) : null;
     }
 
     /// <summary>

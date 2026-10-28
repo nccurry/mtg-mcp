@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
@@ -213,7 +214,7 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
         string[] published = [.. set.Tools.Select(tool => tool.ProtocolTool.Name).Order(StringComparer.Ordinal)];
 
         Assert.Equal(published.AsEnumerable(), catalog.Methods.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(80, published.Length);
+        Assert.Equal(86, published.Length);
     }
 
     /// <summary>
@@ -470,6 +471,103 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
             TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedError, result.IsError == true);
+    }
+
+    /// <summary>
+    /// Verifies a tool the SDK matched but registration never recorded is logged as a warning, and its call still
+    /// passes through unchanged.
+    /// </summary>
+    [Fact]
+    public async Task Filter_MatchedToolMissingFromTheCatalog_LogsAWarningAndPassesThrough()
+    {
+        await using McpServer server = CreateServer();
+        CapturingLoggerFactory logs = new();
+        CallToolResult returned = new()
+        {
+            StructuredContent = JsonSerializer.SerializeToElement(new { kind = "success" }),
+        };
+        McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
+            (_, _) => ValueTask.FromResult(returned));
+        RequestContext<CallToolRequestParams> context = new(
+            server,
+            new JsonRpcRequest { Method = "tools/call" },
+            new CallToolRequestParams { Name = "unregistered_tool", Arguments = Arguments("{}") })
+        {
+            MatchedPrimitive = McpServerTool.Create(() => "x",
+                new McpServerToolCreateOptions { Name = "unregistered_tool" }),
+            Services = new ServiceCollection()
+                .AddSingleton(catalog)
+                .AddSingleton<ILoggerFactory>(logs)
+                .BuildServiceProvider(),
+        };
+
+        CallToolResult result = await filter(context, TestContext.Current.CancellationToken);
+
+        Assert.Same(returned, result);
+        string warning = Assert.Single(logs.Messages);
+        Assert.Contains("unregistered_tool", warning, StringComparison.Ordinal);
+        Assert.Contains("not in the argument catalog", warning, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Collects the messages written to loggers it creates.
+    /// </summary>
+    private sealed class CapturingLoggerFactory : ILoggerFactory
+    {
+        /// <summary>
+        /// Gets the warning and error messages in the order they were written.
+        /// </summary>
+        internal List<string> Messages { get; } = [];
+
+        /// <inheritdoc/>
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new CapturingLogger(Messages);
+        }
+
+        /// <inheritdoc/>
+        public void AddProvider(ILoggerProvider provider)
+        {
+            ArgumentNullException.ThrowIfNull(provider);
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>
+    /// Writes each message of level warning or above to a list.
+    /// </summary>
+    private sealed class CapturingLogger(List<string> messages) : ILogger
+    {
+        /// <inheritdoc/>
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+        {
+            return null;
+        }
+
+        /// <inheritdoc/>
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return logLevel >= LogLevel.Warning;
+        }
+
+        /// <inheritdoc/>
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(logLevel))
+            {
+                messages.Add(formatter(state, exception));
+            }
+        }
     }
 
     /// <summary>

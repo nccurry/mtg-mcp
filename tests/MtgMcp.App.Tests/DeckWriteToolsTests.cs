@@ -28,7 +28,10 @@ public sealed class DeckWriteToolsTests
             allowLocalWrites: false,
             "0.9.0-preview.1",
             ToolCallPolicy.SerializerOptions);
-        DeckReadTools reads = new(store, new DeckCardViewCoordinator(store, scryfall));
+        DeckReadTools reads = new(
+            store,
+            new DeckCardViewCoordinator(store, scryfall),
+            new DeckRuleCoordinator(store, scryfall));
         Guid initialEntryId = Guid.CreateVersion7();
         DeckDocument deck = RequireSuccess(await writes.CreateAsync(
             new DeckCreateRequest(
@@ -81,6 +84,7 @@ public sealed class DeckWriteToolsTests
         Assert.Equal(deck.Revision, read.Revision);
         Assert.True(RequireSuccess(await reads.ValidateAsync(
             deck.DeckId,
+            null,
             TestContext.Current.CancellationToken)).IsStructurallyValid);
         DeckBackup backup = RequireSuccess(
             await writes.CreateBackupAsync(TestContext.Current.CancellationToken));

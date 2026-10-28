@@ -313,35 +313,35 @@ public sealed class CapabilityToolsetTests
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
         Assert.Equal(CapabilityToolset.Decks, decks.Toolset);
-        Assert.Equal(19, decks.AllToolNames.Length);
-        Assert.Equal(10, decks.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(20, decks.AllToolNames.Length);
+        Assert.Equal(11, decks.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Scryfall, scryfall.Toolset);
-        Assert.Equal(13, scryfall.AllToolNames.Length);
-        Assert.Equal(9, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(15, scryfall.AllToolNames.Length);
+        Assert.Equal(11, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Stats, stats.Toolset);
-        Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.ReadOnly));
-        Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.Local));
-        Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(9, stats.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(9, stats.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(9, stats.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Archidekt, archidekt.Toolset);
         Assert.Equal(9, archidekt.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(10, archidekt.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(21, archidekt.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Playgroup, playgroup.Toolset);
-        Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
-        Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.Local));
-        Assert.Equal(16, playgroup.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(15, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(15, playgroup.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(17, playgroup.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Spellbook, spellbook.Toolset);
-        Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.ReadOnly));
-        Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Local));
-        Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Remote));
-        Assert.Equal(53, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
-        Assert.Equal(67, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
-        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
+        Assert.Equal(4, spellbook.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(4, spellbook.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(4, spellbook.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(59, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
+        Assert.Equal(73, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
+        Assert.Equal(86, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
         Assert.Equal(0, CapabilityToolsetRegistry.CountVisibleTools(noneSelection, OperationMode.Local));
         CapabilityToolsetSelection allSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("all"));
-        Assert.Equal(53, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
-        Assert.Equal(67, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
-        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
+        Assert.Equal(59, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
+        Assert.Equal(73, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
+        Assert.Equal(86, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
     }
 
     /// <summary>

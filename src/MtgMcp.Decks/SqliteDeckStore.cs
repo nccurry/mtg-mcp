@@ -432,7 +432,7 @@ public sealed class SqliteDeckStore : IDisposable
                 if (revision is not OperationSuccess<long>)
                 {
                     await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                    return ForwardFailure<DeckDeleteResult, long>(revision);
+                    return OperationFailure.Forward<long, DeckDeleteResult>(revision);
                 }
 
                 await DeckSql.DeleteDeckAsync(connection, transaction, deckId, cancellationToken)
@@ -499,7 +499,7 @@ public sealed class SqliteDeckStore : IDisposable
                 if (revision is not OperationSuccess<long>)
                 {
                     await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                    return ForwardFailure<DeckDocument, long>(revision);
+                    return OperationFailure.Forward<long, DeckDocument>(revision);
                 }
 
                 foreach (DeckChange change in changes)
@@ -881,25 +881,5 @@ public sealed class SqliteDeckStore : IDisposable
     private static OperationResult<T> NotFound<T>()
     {
         return new OperationNotFound("deck-not-found", "The local deck was not found.");
-    }
-
-    /// <summary>
-    /// Forwards a closed failure union while rejecting an unexpected success.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TTarget, TSource>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "deck-operation-failed",
-                "The local deck operation could not be completed."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 }

@@ -5,9 +5,9 @@
 statistical evidence. The LLM makes deckbuilding decisions.
 
 The unreleased `0.11.0` tool surface builds on the `0.9.0` stdio server design. Every toolset is on by default.
-With Archidekt and Playgroup credentials, the server exposes 80 tools in `remote`
-mode (the default), 67 in `local` mode, and 53 in `read-only` mode. Without
-credentials it exposes 43, 43, and 30, because the Archidekt and Playgroup
+With Archidekt and Playgroup credentials, the server exposes 86 tools in `remote`
+mode (the default), 73 in `local` mode, and 59 in `read-only` mode. Without
+credentials it exposes 48, 48, and 35, because the Archidekt and Playgroup
 toolsets turn on only when their credentials are present. It also exposes one
 `mtg://server/capabilities` resource and no prompts. It does not migrate `0.8.x`
 data or tool schemas.
@@ -19,12 +19,12 @@ the new server.
 
 | Feature | Tools | Default | Storage or writes |
 | --- | ---: | --- | --- |
-| Local decks and interchange | 19 | Yes | Local |
-| Scryfall evidence | 13 | Yes | Local cache and card data |
-| Exact statistics | 8 | Yes | No |
+| Local decks and interchange | 20 | Yes | Local |
+| Scryfall evidence | 15 | Yes | Local cache and card data |
+| Exact statistics | 9 | Yes | No |
 | Archidekt | 21 | When credentials are present | Remote |
-| Playgroup | 16 | When credentials are present | Remote |
-| Commander Spellbook evidence | 3 | Yes | Local cache only |
+| Playgroup | 17 | When credentials are present | Remote |
+| Commander Spellbook evidence | 4 | Yes | Local cache only |
 
 The packaged acceptance run before the Spellbook addition made 88 safe tool
 calls. It uses saved test data for the two Scryfall card-data download tools and
@@ -111,9 +111,9 @@ and `spellbook`. Selection is fixed for the MCP session. `archidekt` and
 
 | Selection | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
-| Default or `all`, no credentials | 30 | 43 | 43 |
-| Default or `all`, Archidekt credentials only | 39 | 53 | 64 |
-| Default or `all`, both credentials | 53 | 67 | 80 |
+| Default or `all`, no credentials | 35 | 48 | 48 |
+| Default or `all`, Archidekt credentials only | 44 | 58 | 69 |
+| Default or `all`, both credentials | 59 | 73 | 86 |
 | `none` | 0 | 0 | 0 |
 
 Read `mtg://server/capabilities` to see the active mode, toolsets, why a toolset
@@ -279,7 +279,7 @@ of information.
 
 ## Read Commander Spellbook evidence
 
-The `spellbook` toolset has three tools that return Commander Spellbook
+The `spellbook` toolset has four tools that return Commander Spellbook
 data:
 
 - `spellbook_variant_search` returns one bounded page for an exact Commander
@@ -287,6 +287,9 @@ data:
 - `spellbook_variant_get` returns one exact source variant by ID.
 - `spellbook_deck_combos_find` sends only the `commander` and `main` entries
   from one exact saved deck revision, then reports the entries it skipped.
+- `spellbook_deck_bracket_facts_get` sends the same entries and returns the
+  Game Changer, mass land denial, extra turn, banned, and combo flags that
+  Commander Spellbook reports. It drops the provider bracket verdict.
 
 The tools preserve Commander Spellbook JSON and name the source, request,
 retrieval time, cache state, checksum, and limits. They do not rank results,
@@ -294,17 +297,35 @@ infer card roles, or recommend a combo or card change. The cache lasts 15
 minutes by default; configure it with a whole number from 1 through 1,440
 minutes.
 
+## Work with card lists and deck rule facts
+
+These tools return facts only. They never say a deck is legal or illegal.
+
+- `card_lists_compare` compares two card lists (a Scryfall set, a name list,
+  a local deck, a deck backup, an Archidekt deck or snapshot, or another
+  comparison) and returns the cards only in one, only in the other, and in both.
+- `card_list_query` filters, groups, and totals any one card list by named
+  fields, with a cursor for large results.
+- `local_deck_validate` takes an optional `rules: "commander"` and then adds
+  Commander facts from installed Scryfall data: deck size, commander
+  eligibility, color identity, copy limits, format legality, Game Changers,
+  commander pairing, and companion restrictions.
+- `local_deck_duplicates_preview` finds repeated cards in a deck and plans the
+  removals for a caller-chosen keep order; it changes nothing.
+- `playgroup_games_stats_get` totals Playgroup games by deck or player.
+
 ## Calculate exact statistics
 
-The `stats` toolset provides eight read-only tools for:
+The `stats` toolset provides nine read-only tools for:
 
 - univariate and multivariate hypergeometric probability;
 - probability-by-turn tables;
 - caller-defined mana-source availability;
 - package and combo assembly;
 - explicit mulligan schedules;
-- minimum-copy and minimum-source solving; and
-- deterministic deck composition summaries.
+- minimum-copy and minimum-source solving;
+- deterministic deck composition summaries; and
+- exact on-curve castability of each spell in a deck (`stats_castability`).
 
 Every probability returns an exact reduced fraction and a stable decimal. The
 caller supplies the population, groups, turn draws, mana capabilities, and keep

@@ -155,7 +155,7 @@ public sealed class DeckInterchangeService
             cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<DeckImportPreview> success)
         {
-            return ForwardFailure<DeckImportCreateResult, DeckImportPreview>(previewResult);
+            return OperationFailure.Forward<DeckImportPreview, DeckImportCreateResult>(previewResult);
         }
 
         DeckImportPreview preview = success.Data;
@@ -243,7 +243,7 @@ public sealed class DeckInterchangeService
             cancellationToken).ConfigureAwait(false);
         if (snapshotResult is not OperationSuccess<DeckInterchangeSnapshot> success)
         {
-            return ForwardFailure<DeckExportBundle, DeckInterchangeSnapshot>(snapshotResult);
+            return OperationFailure.Forward<DeckInterchangeSnapshot, DeckExportBundle>(snapshotResult);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -420,24 +420,5 @@ public sealed class DeckInterchangeService
     private static OperationResult<T> Invalid<T>(string message)
     {
         return new OperationInvalidInput("invalid-interchange-input", message);
-    }
-
-    /// <summary>
-    /// Forwards every closed failure case while rejecting an unexpected success.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TTarget, TSource>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "interchange-operation-failed",
-                "The manual interchange operation could not be completed."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 }

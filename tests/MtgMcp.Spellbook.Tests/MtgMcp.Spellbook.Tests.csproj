@@ -15,6 +15,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\MtgMcp.Spellbook\MtgMcp.Spellbook.csproj" />
   </ItemGroup>
 </Project>

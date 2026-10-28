@@ -436,7 +436,8 @@ public sealed class DeckCardViewTests
             this.directory = directory;
             this.scryfall = scryfall;
             Store = store;
-            reads = new DeckReadTools(store, new DeckCardViewCoordinator(store, scryfall));
+            reads = new DeckReadTools(store, new DeckCardViewCoordinator(store, scryfall),
+                new DeckRuleCoordinator(store, scryfall));
             Writes = new DeckBatchWriteTools(store, OperationMode.Local);
         }
 
