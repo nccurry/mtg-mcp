@@ -133,7 +133,7 @@ server does not ship its own role definitions.
 | `card_list_query` | Group a local deck by `manaValue` with `quantity`, `pips`, and `sum:priceUsd`. | One row per mana value with counts, pips by color, and price sums. | New tool. |
 | `deck_validate` rules | `deck_validate` with `rules: "commander"`. | Structural checks plus size, commander, identity, singleton, and legality facts, each with `passed` and the entries involved, plus a Game Changer count and list. | Additive; without `rules` the result is unchanged. |
 | Card facts | `responseFormat: "concise"` | Rows also carry `tags`, `cheapestPriceUsd`, `gameChanger`, and `edhrecRank`. | Additive. |
-| Conflict results | Apply with a stale revision. | `conflict` with the current revision in `data`. | Additive. |
+| Conflict results | Apply with a stale revision. | `conflict` with a `current` object holding the current `revision` and, for Archidekt, `remoteFingerprint`. | Additive. |
 | `stats_simulate` | Send a deck, groups, rules, conditions, sample count, and seed. | Hit counts, rates, intervals, applied rules, seed, and fingerprint. Groups may declare the colors they produce, and a `can-cast` condition checks a colored mana cost. | New tool. |
 | `deck_on_curve_estimate` | Removed in phase 6. | Use the `on-curve` preset of `stats_simulate`. | Breaking. Old seeds replay to the same result through the preset, including colored targets. |
 | Failed results | Any call that returns `invalid-input`, `conflict`, `not-found`, `not-cached`, `unsupported`, or a provider failure. | The result has `isError: true`; the structured failure body is unchanged. | Additive flag. Clients that ignored failures now see them as errors. |
@@ -152,7 +152,7 @@ Example of a failed result after the change:
 ```json
 { "isError": true,
   "structuredContent": { "kind": "conflict", "reasonCode": "stale-revision",
-    "message": "Deck changed; current revision is 9.", "data": { "revision": 9 } } }
+    "message": "Deck changed; current revision is 9.", "current": { "revision": 9 } } }
 ```
 
 Example error after the change, for a value the schema rejects:
@@ -181,7 +181,7 @@ Example error after the change, for a value the schema rejects:
 | FLOW-001 | Must | `scryfall_search` describes tag, type, color identity, mana value, format, and price filtering in `query`, with examples. `scryfall_tag_search` and `scryfall_cards_by_tag` describe their roles relative to it. | Description review; a fixture search with `otag:` passes through unchanged. | Review plus Scryfall test. |
 | FLOW-002 | Must | `deck_get` accepts `include` with `cards` and `tags` and returns per-entry card fields and oracle tag slugs. | Tests for installed, not-installed, and unresolved card data. | App tests. |
 | FLOW-003 | Must | The `common-v1` preset is removed; inline rules remain. | Preset request returns `invalid-input`; inline rules equivalent to the old preset give the same categories as before. | App tests. |
-| ERR-001 | Must | Every `conflict` result from a deck or Archidekt write or preview includes the current local revision or remote state marker. | One test per conflict source. | App tests. |
+| ERR-001 | Must | Every stale-state `conflict` from a deck or Archidekt write or preview (a changed revision, preview, or remote deck) includes a `current` object with the current local revision, remote fingerprint, or both. Conflicts that are not about stale state (missing or existing binding, missing baseline, deleted remote deck, unlinked rows) have no newer state to report and omit it. | Store, statistics, identity, categorization, Spellbook, on-curve, and Archidekt pull and push conflict tests. | Core, Decks, and App tests. |
 | ERR-003 | Must | A request whose arguments fail to bind (bad JSON shape, unknown union `kind`, wrong type) returns `invalid-input` with a reason code and the JSON path of the bad value, never the SDK's generic "An error occurred invoking" text. | Cases X01 to X03. | App tests plus E2E smoke. |
 | SCHEMA-007 | Must | Every polymorphic tool input (for example `DeckChangeInput`, statistics events, list sources, simulation rules) accepts its `kind` discriminator in any property position. | Case X01 for `deck_apply_changes`, plus an architecture test that sends `kind` last for every union type in a tool schema. | App and architecture tests. |
 | ARCH-001 | Must | Archidekt push preview and apply treat an entry's non-primary categories as a set: order and letter case never create an entry update. The primary category is compared separately. | Cases A01 to A03, including pull, then no-op edit, then push preview with zero entry operations. | Archidekt tests. |

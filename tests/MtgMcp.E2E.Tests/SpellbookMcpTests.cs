@@ -181,8 +181,8 @@ public sealed class SpellbookMcpTests
             toolName,
             arguments,
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement result = Assert.IsType<JsonElement>(call.StructuredContent);
+        Assert.Equal(!string.Equals(result.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
         Assert.Equal("success", result.GetProperty("kind").GetString());
         return result.GetProperty("data");
     }

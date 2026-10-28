@@ -461,7 +461,8 @@ public sealed class SqliteDeckStoreTests
         DeckDocument persisted = RequireSuccess(
             await store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
 
-        Assert.IsType<OperationConflict>(stale.Value);
+        OperationConflict conflict = Assert.IsType<OperationConflict>(stale.Value);
+        Assert.Equal(updated.Revision, conflict.Current?.Revision);
         Assert.Equal(
             "deck-category-not-found",
             Assert.IsType<OperationNotFound>(invalid.Value).ReasonCode);

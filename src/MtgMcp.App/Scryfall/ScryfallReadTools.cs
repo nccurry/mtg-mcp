@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
@@ -36,16 +37,21 @@ internal sealed class ScryfallReadTools
         UseStructuredContent = true)]
     [Description(
         "Runs an official Scryfall query with complete provider pagination, then returns a bounded page " +
-        "from its immutable exact-request snapshot.")]
+        "from its immutable exact-request snapshot. This is the main way to find cards of a kind: Scryfall " +
+        "evaluates the whole query, including official oracle tags. Filters combine with spaces: otag:ramp " +
+        "(oracle tag), t:creature (type), id<=bg (within color identity), mv<=3 (mana value), " +
+        "f:commander (legal in a format), usd<2 (price), and o:\"draw a card\" (rules text). " +
+        "Example query: otag:removal t:instant id<=wb mv<=2 f:commander. Use scryfall_tag_search to find " +
+        "a tag's exact slug, and scryfall_cards_by_tag only to read tag assignments from installed card data.")]
     internal Task<OperationResult<ScryfallSearchResult>> SearchAsync(
         [Description("Official Scryfall search expression evaluated by Scryfall, not by mtg-mcp.")] string query,
-        [Description("Scryfall uniqueness mode: cards, art, or prints.")] string unique = "cards",
-        [Description("Official Scryfall result order name.")] string order = "name",
-        [Description("Direction: auto, asc, or desc.")] string direction = "auto",
+        [Description("Scryfall uniqueness mode: cards, art, or prints."), AllowedValues("cards", "art", "prints")] string unique = "cards",
+        [Description("Official Scryfall result order name."), AllowedValues("name", "set", "released", "rarity", "color", "usd", "tix", "eur", "cmc", "power", "toughness", "edhrec", "penny", "artist", "review")] string order = "name",
+        [Description("Direction: auto, asc, or desc."), AllowedValues("auto", "asc", "desc")] string direction = "auto",
         [Description("Include supplemental objects such as tokens and emblems.")] bool includeExtras = false,
         [Description("Include cards in every available language rather than only English.")] bool includeMultilingual = false,
         [Description("Include variation printings in the provider result.")] bool includeVariations = false,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Include each lossless raw provider object; limits pages to 25 when true.")] bool includeRaw = false,
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description("Items to return, from 1 through 100, or through 25 when includeRaw is true.")] int pageSize = 25,
@@ -74,7 +80,7 @@ internal sealed class ScryfallReadTools
         [Description(
             "Explicit lookup discriminator and values; fuzzy behavior occurs only when kind is fuzzy-name.")]
         ScryfallCardLookup lookup,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Include the lossless raw provider card and face objects.")] bool includeRaw = false,
         CancellationToken cancellationToken = default)
     {
@@ -126,7 +132,7 @@ internal sealed class ScryfallReadTools
     [Description("Lists deterministically ordered printings for one Oracle ID from the corpus or an official request snapshot.")]
     internal Task<OperationResult<ScryfallPrintsResult>> GetPrintsAsync(
         [Description("Exact Oracle UUID whose printings should be listed.")] Guid oracleId,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Include each lossless raw provider card and face object.")] bool includeRaw = false,
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description("Items to return, from 1 through 100, or through 25 when includeRaw is true.")] int pageSize = 25,
@@ -151,7 +157,7 @@ internal sealed class ScryfallReadTools
     internal Task<OperationResult<ScryfallRulingsResult>> GetRulingsAsync(
         [Description("Exact Oracle UUID whose rulings should be listed.")] Guid oracleId,
         [Description("Optional exact Scryfall printing UUID used by the provider rulings route.")] Guid? scryfallCardId = null,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Include each lossless raw ruling object.")] bool includeRaw = false,
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description("Items to return, from 1 through 100, or through 25 when includeRaw is true.")] int pageSize = 25,
@@ -175,7 +181,7 @@ internal sealed class ScryfallReadTools
     [Description("Lists official Scryfall sets or resolves one exact set code or ID through an immutable request snapshot.")]
     internal Task<OperationResult<ScryfallSetsResult>> GetSetsAsync(
         [Description("Optional exact set code or set UUID; omit to list all sets.")] string? codeOrId = null,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Include each lossless raw set object.")] bool includeRaw = false,
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description("Items to return, from 1 through 100, or through 25 when includeRaw is true.")] int pageSize = 25,
@@ -199,7 +205,7 @@ internal sealed class ScryfallReadTools
     [Description("Returns a bounded page from one named official Scryfall catalog snapshot.")]
     internal Task<OperationResult<ScryfallCatalogResult>> GetCatalogAsync(
         [Description("Exact supported official Scryfall catalog name.")] string catalog,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description("Catalog values to return, from 1 through 100.")] int pageSize = 25,
         CancellationToken cancellationToken = default)
@@ -223,7 +229,7 @@ internal sealed class ScryfallReadTools
     internal Task<OperationResult<ScryfallAutocompleteResult>> AutocompleteAsync(
         [Description("Card-name prefix sent to Scryfall autocomplete.")] string query,
         [Description("Include supplemental objects such as tokens and emblems.")] bool includeExtras = false,
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description("Suggestions to return, from 1 through 100.")] int pageSize = 25,
         CancellationToken cancellationToken = default)
@@ -245,7 +251,7 @@ internal sealed class ScryfallReadTools
         UseStructuredContent = true)]
     [Description("Returns official metadata for All Cards, Rulings, Oracle Tags, and Art Tags without downloading them.")]
     internal Task<OperationResult<ScryfallBulkMetadataResult>> GetBulkMetadataAsync(
-        [Description("Cache policy: default, cache-only, or refresh.")] string freshnessPolicy = "default",
+        [Description("Cache policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {
         return ScryfallToolExecution.RunAsync(() => service.GetBulkMetadataAsync(freshnessPolicy, cancellationToken));
@@ -284,7 +290,7 @@ internal sealed class ScryfallReadTools
         UseStructuredContent = true)]
     [Description("Lists immutable exact-request snapshot metadata without exposing local paths.")]
     internal Task<OperationResult<ScryfallPage<ScryfallSnapshotSummary>>> ListSnapshotsAsync(
-        [Description("Optional exact snapshot operation filter.")] string? operation = null,
+        [Description("Optional exact snapshot operation filter."), AllowedValues("search", "autocomplete", "card-get", "card-collection", "card-prints", "card-rulings", "sets", "set-get", "catalog", "bulk-metadata")] string? operation = null,
         [Description("Optional inclusive UTC lower bound for retrieval time.")] DateTimeOffset? retrievedAfterUtc = null,
         [Description("Optional exclusive UTC upper bound for retrieval time.")] DateTimeOffset? retrievedBeforeUtc = null,
         [Description("Opaque snapshot-list cursor.")] string? cursor = null,
@@ -337,10 +343,12 @@ internal sealed class ScryfallReadTools
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Searches installed official community-tag metadata by ID, slug, label, or alias without category inference.")]
+    [Description(
+        "Searches installed official community-tag metadata by ID, slug, label, or alias without category " +
+        "inference. Use it to find a tag's exact slug, then filter cards with scryfall_search and otag:<slug>.")]
     internal Task<OperationResult<ScryfallPage<ScryfallTag>>> SearchTagsAsync(
         [Description("Case-insensitive exact or substring community-tag search text.")] string query,
-        [Description("Optional tag kind: oracle or art.")] string? tagType = null,
+        [Description("Optional tag kind: oracle or art."), AllowedValues("oracle", "art")] string? tagType = null,
         [Description("Include raw tag objects, which may contain large assignment arrays.")] bool includeRaw = false,
         [Description("Opaque cursor bound to the installed corpus generation.")] string? cursor = null,
         [Description("Tags to return, from 1 through 100.")] int pageSize = 25,
@@ -363,10 +371,11 @@ internal sealed class ScryfallReadTools
         UseStructuredContent = true)]
     [Description(
         "Returns cards assigned to one installed tag with direct or explicitly requested descendant " +
-        "evidence; it does not map tags to deck categories.")]
+        "evidence; it does not map tags to deck categories. To filter cards by tag together with type, " +
+        "color, mana value, or format, use scryfall_search with otag: instead.")]
     internal Task<OperationResult<ScryfallCardsByTagResult>> GetCardsByTagAsync(
         [Description("Exact community tag identity returned by scryfall_tag_search.")] string tagIdentity,
-        [Description("Required tag kind: oracle or art.")] string tagType,
+        [Description("Required tag kind: oracle or art."), AllowedValues("oracle", "art")] string tagType,
         [Description("Include assignments inherited from descendant community tags.")] bool includeDescendants = false,
         [Description("Minimum assignment weight accepted by the official tag dataset.")] string minimumWeight = "weak",
         [Description("Include raw tag and card objects; limits pages to 25 when true.")] bool includeRaw = false,

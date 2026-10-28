@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Decks;
 
@@ -59,15 +60,15 @@ internal static class ArchidektToolsetManifest
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(deckStore);
         ArchidektCoordinator coordinator = new(service, deckStore);
-        builder.WithTools(new ArchidektReadTools(coordinator));
+        builder.WithTools(new ArchidektReadTools(coordinator), ToolCallPolicy.SerializerOptions);
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(new ArchidektLocalWriteTools(coordinator, mode));
+            builder.WithTools(new ArchidektLocalWriteTools(coordinator, mode), ToolCallPolicy.SerializerOptions);
         }
 
         if (OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite))
         {
-            builder.WithTools(new ArchidektRemoteWriteTools(coordinator, mode));
+            builder.WithTools(new ArchidektRemoteWriteTools(coordinator, mode), ToolCallPolicy.SerializerOptions);
         }
     }
 }

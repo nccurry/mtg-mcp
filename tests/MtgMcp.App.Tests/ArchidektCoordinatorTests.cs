@@ -124,9 +124,9 @@ public sealed class ArchidektCoordinatorTests
                     replace.RemoteFingerprint,
                     "wrong-preview"),
                 TestContext.Current.CancellationToken);
-            Assert.Equal(
-                "pull-preview-changed",
-                Assert.IsType<OperationConflict>(stalePull.Value).ReasonCode);
+            OperationConflict staleConflict = Assert.IsType<OperationConflict>(stalePull.Value);
+            Assert.Equal("pull-preview-changed", staleConflict.ReasonCode);
+            Assert.Equal(new ConflictState(afterPush.Revision, replace.RemoteFingerprint), staleConflict.Current);
 
             ArchidektApplyResult replaced = Success(await coordinator.ApplyPullAsync(
                 new ArchidektPullApplyRequest(
@@ -154,6 +154,119 @@ public sealed class ArchidektCoordinatorTests
             Assert.Equal("42", created.RemoteId);
             Assert.Equal("42", Assert.Single(bound.ProviderBindings).RemoteId);
             Assert.Null(Assert.Single(bound.ProviderBindings).BaselineFingerprint);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifies a freshly pulled deck whose entry has several categories plans no push operation.
+    /// </summary>
+    [Fact]
+    public async Task PreviewPush_AfterPullWithSeveralCategories_PlansNoOperations()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string deck = RemoteDeck
+            .Replace(
+                "{ \"id\": 10, \"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0 }",
+                "{ \"id\": 10, \"name\": \"Removal\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0 }," +
+                "{ \"id\": 11, \"name\": \"Sideboard\", \"includedInDeck\": false, \"includedInPrice\": true, \"sortOrder\": 1 }," +
+                "{ \"id\": 12, \"name\": \"Maybeboard\", \"includedInDeck\": false, \"includedInPrice\": false, \"sortOrder\": 2 }",
+                StringComparison.Ordinal)
+            .Replace(
+                "\"categories\": [\"Mainboard\"]",
+                "\"categories\": [\"Maybeboard\", \"Sideboard\", \"Removal\"]",
+                StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            for (int index = 0; index < 4; index++)
+            {
+                handler.Add(HttpMethod.Get, "api/decks/42/", deck);
+            }
+
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+
+            ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                localDeckId,
+                TestContext.Current.CancellationToken));
+
+            Assert.Empty(push.Operations);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifies a baseline with rows the last push could not link blocks the next push preview before any provider call.
+    /// </summary>
+    [Fact]
+    public async Task PreviewPush_UnlinkedRowsFromLastPush_ReturnsConflictWithoutProviderCall()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            for (int index = 0; index < 4; index++)
+            {
+                handler.Add(HttpMethod.Get, "api/decks/42/", RemoteDeck);
+            }
+
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+            DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+            DeckProviderBinding binding = Assert.Single(local.ProviderBindings);
+            DeckSyncBaseline stored = Success(await store.GetSyncBaselineAsync(
+                localDeckId,
+                binding.BindingId,
+                TestContext.Current.CancellationToken));
+            ArchidektSyncBaseline pulled = ArchidektLocalMapper.ParseBaseline(stored.CanonicalSnapshot);
+            DeckEntry added = new(Guid.NewGuid(), 1, "Boros Charm", null, null, null, null, "en", "nonfoil", "main", 9);
+            DeckDocument edited = local with { Entries = [.. local.Entries, added] };
+            RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pulled, pulled.RemoteSnapshot);
+            string unlinkedBaseline = ArchidektLocalMapper.CreatePushBaseline(edited, pulled.RemoteSnapshot, pushed);
+            _ = Success(await store.ApplyChangesAsync(
+                localDeckId,
+                local.Revision,
+                [new UpsertDeckProviderBindingChange(binding, unlinkedBaseline)],
+                TestContext.Current.CancellationToken));
+            int requestsBefore = handler.Requests.Count;
+
+            OperationResult<ArchidektSyncPreview> preview = await coordinator.PreviewPushAsync(
+                localDeckId,
+                TestContext.Current.CancellationToken);
+
+            OperationConflict conflict = Assert.IsType<OperationConflict>(preview.Value);
+            Assert.Equal("unlinked-remote-rows", conflict.ReasonCode);
+            Assert.Contains(added.EntryId.ToString(), conflict.Message, StringComparison.Ordinal);
+            Assert.Equal(requestsBefore, handler.Requests.Count);
         }
         finally
         {

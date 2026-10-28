@@ -801,7 +801,8 @@ public sealed class SqliteDeckStore : IDisposable
         {
             return new OperationConflict(
                 "stale-deck-revision",
-                "The deck changed after the supplied revision.");
+                "The deck changed after the supplied revision.",
+                new ConflictState(Revision: current.Value));
         }
 
         return new OperationSuccess<long>(current.Value);

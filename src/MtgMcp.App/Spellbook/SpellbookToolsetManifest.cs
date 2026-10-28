@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
 using MtgMcp.Spellbook;
 
@@ -36,6 +37,6 @@ internal static class SpellbookToolsetManifest
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(deckStore);
-        builder.WithTools(new SpellbookReadTools(service, new SpellbookDeckInputResolver(deckStore)));
+        builder.WithTools(new SpellbookReadTools(service, new SpellbookDeckInputResolver(deckStore)), ToolCallPolicy.SerializerOptions);
     }
 }

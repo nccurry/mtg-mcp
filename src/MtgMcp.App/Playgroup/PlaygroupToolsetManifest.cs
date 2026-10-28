@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Playgroup;
@@ -46,10 +47,10 @@ internal static class PlaygroupToolsetManifest
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
-        builder.WithTools(new PlaygroupReadTools(service));
+        builder.WithTools(new PlaygroupReadTools(service), ToolCallPolicy.SerializerOptions);
         if (OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite))
         {
-            builder.WithTools(new PlaygroupRemoteWriteTools(service, mode));
+            builder.WithTools(new PlaygroupRemoteWriteTools(service, mode), ToolCallPolicy.SerializerOptions);
         }
     }
 }

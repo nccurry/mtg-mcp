@@ -14,6 +14,42 @@ public sealed class OperationResultTests
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
+    /// Verifies stale-state conflicts carry the current state and round-trip it, and plain conflicts omit it.
+    /// </summary>
+    [Fact]
+    public void Conflict_CurrentState_SerializesOnlyWhenPresentAndRoundTrips()
+    {
+        OperationResult<string> stale = new OperationConflict(
+            "stale-deck-revision",
+            "The deck changed.",
+            new ConflictState(Revision: 9, RemoteFingerprint: "abc"));
+        OperationResult<string> plain = new OperationConflict("binding-missing", "No binding.");
+
+        string staleJson = JsonSerializer.Serialize(stale, SerializerOptions);
+        string plainJson = JsonSerializer.Serialize(plain, SerializerOptions);
+        OperationConflict parsed = Assert.IsType<OperationConflict>(
+            JsonSerializer.Deserialize<OperationResult<string>>(staleJson, SerializerOptions).Value);
+
+        Assert.Contains("\"current\":{\"revision\":9,\"remoteFingerprint\":\"abc\"}", staleJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("current", plainJson, StringComparison.Ordinal);
+        Assert.Equal(new ConflictState(9, "abc"), parsed.Current);
+    }
+
+    /// <summary>
+    /// Verifies invalid input can name the JSON path of a rejected value, which is omitted when absent.
+    /// </summary>
+    [Fact]
+    public void InvalidInput_Path_SerializesOnlyWhenPresent()
+    {
+        OperationResult<string> located = new OperationInvalidInput("invalid-arguments", "Bad value.", "changes[0].kind");
+        OperationResult<string> general = new OperationInvalidInput("invalid-input", "Bad request.");
+
+        Assert.Contains("\"path\":\"changes[0].kind\"", JsonSerializer.Serialize(located, SerializerOptions), StringComparison.Ordinal);
+        Assert.DoesNotContain("path", JsonSerializer.Serialize(general, SerializerOptions), StringComparison.Ordinal);
+        Assert.Throws<ArgumentException>(() => new OperationInvalidInput("invalid-arguments", "Bad value.", " "));
+    }
+
+    /// <summary>
     /// Verifies that every result case has a stable and distinct discriminator.
     /// </summary>
     [Fact]

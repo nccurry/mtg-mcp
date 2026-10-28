@@ -164,12 +164,28 @@ public sealed record OperationConflict
     /// <summary>
     /// Creates a conflict outcome with a stable reason and safe explanation.
     /// </summary>
-    [JsonConstructor]
     public OperationConflict(string reasonCode, string message)
+        : this(reasonCode, message, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a conflict outcome that also reports the newer state the caller should retry against.
+    /// </summary>
+    [JsonConstructor]
+    public OperationConflict(string reasonCode, string message, ConflictState? current)
     {
         ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
         Message = ContractValidation.RequiredText(message, nameof(message));
+        Current = current;
     }
+
+    /// <summary>
+    /// Gets the newer local revision or remote state marker, when the conflict is about stale state.
+    /// </summary>
+    [JsonPropertyName("current")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ConflictState? Current { get; }
 
     /// <summary>
     /// Gets the machine-readable reason for this outcome.
@@ -192,6 +208,19 @@ public sealed record OperationConflict
 }
 
 /// <summary>
+/// Carries the current state a stale request should be retried against.
+/// </summary>
+/// <param name="Revision">The current local deck revision, when a local deck is involved.</param>
+/// <param name="RemoteFingerprint">The current provider state fingerprint, when a provider deck is involved.</param>
+public sealed record ConflictState(
+    [property: JsonPropertyName("revision")]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    long? Revision = null,
+    [property: JsonPropertyName("remoteFingerprint")]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? RemoteFingerprint = null);
+
+/// <summary>
 /// Reports that caller input cannot be accepted by the operation contract.
 /// </summary>
 public sealed record OperationInvalidInput
@@ -199,12 +228,28 @@ public sealed record OperationInvalidInput
     /// <summary>
     /// Creates an invalid-input outcome with a stable reason and safe explanation.
     /// </summary>
-    [JsonConstructor]
     public OperationInvalidInput(string reasonCode, string message)
+        : this(reasonCode, message, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates an invalid-input outcome that also names the JSON path of the rejected argument value.
+    /// </summary>
+    [JsonConstructor]
+    public OperationInvalidInput(string reasonCode, string message, string? path)
     {
         ReasonCode = ContractValidation.ReasonCode(reasonCode, nameof(reasonCode));
         Message = ContractValidation.RequiredText(message, nameof(message));
+        Path = path is null ? null : ContractValidation.RequiredText(path, nameof(path));
     }
+
+    /// <summary>
+    /// Gets the JSON path of the rejected argument value, when the failure concerns one value.
+    /// </summary>
+    [JsonPropertyName("path")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Path { get; }
 
     /// <summary>
     /// Gets the machine-readable reason for this outcome.

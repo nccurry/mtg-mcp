@@ -249,7 +249,10 @@ pass.
 
 ## Reviews
 
-After phases 4 and 6, run focused read-only reviews on the same revision, at
+At the end of every phase, run a full code audit (the repository's combined
+audit) of that phase's changes before the phase is reported done, and fix
+supported findings in scope; this is an owner instruction from 2026-10-27.
+After phases 4 and 6, also run focused read-only reviews on the same revision, at
 most three reviewers at a time: correctness, test quality, and plain language.
 Fix every supported finding in scope, including low-severity ones. Allow at
 most three review passes in total. Re-review only after a confirmed serious

@@ -108,7 +108,8 @@ internal sealed class StatisticsDeckResolver
             OperationSuccess<DeckDocument> success when success.Data.Revision != expectedRevision =>
                 new OperationConflict(
                     "deck-revision-conflict",
-                    "The local deck revision changed; load it again before calculating statistics."),
+                    "The local deck revision changed; load it again before calculating statistics.",
+                    new ConflictState(Revision: success.Data.Revision)),
             OperationSuccess<DeckDocument> success => ResolveSelection(success.Data, selectors),
             OperationNotFound value => value,
             OperationNotCached value => value,

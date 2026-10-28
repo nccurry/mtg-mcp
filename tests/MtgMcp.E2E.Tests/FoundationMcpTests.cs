@@ -348,6 +348,34 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
+    /// Verifies two separate server starts list the full tool surface in the same order.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task ToolList_TwoStarts_ReturnSameOrder()
+    {
+        string[] first = await ListAllToolNamesAsync().ConfigureAwait(false);
+        string[] second = await ListAllToolNamesAsync().ConfigureAwait(false);
+
+        Assert.NotEmpty(first);
+        Assert.Equal(first, second);
+    }
+
+    /// <summary>
+    /// Starts one remote-mode server with every toolset and returns its tool names in listed order.
+    /// </summary>
+    private static async Task<string[]> ListAllToolNamesAsync()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "all",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        return tools.Select(tool => tool.Name).ToArray();
+    }
+
+    /// <summary>
     /// Verifies default, all, none, and explicit profiles remain static in every operation mode.
     /// </summary>
     [Theory]

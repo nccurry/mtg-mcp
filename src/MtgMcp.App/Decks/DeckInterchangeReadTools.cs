@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
@@ -54,7 +55,7 @@ internal sealed class DeckInterchangeReadTools
         UseStructuredContent = true)]
     [Description("Returns a normalized proposal, diagnostics, unresolved identities, and guarded fingerprint.")]
     internal Task<OperationResult<DeckImportPreview>> PreviewAsync(
-        [Description("Exact import-capable format ID returned by deck_interchange_formats.")] string formatId,
+        [Description("Exact import-capable format ID returned by deck_interchange_formats."), AllowedValues("mtg-mcp-json-v1", "generic-text-v1", "archidekt-text-v1", "moxfield-bulk-edit-v1")] string formatId,
         [Description("UTF-8 manual deck document, limited to 5 MiB.")] string content,
         [Description("Caller-controlled parsing defaults and explicit opt-ins.")] DeckImportOptions? options = null,
         CancellationToken cancellationToken = default)
@@ -76,7 +77,7 @@ internal sealed class DeckInterchangeReadTools
     [Description("Exports deterministic artifacts without writing files or contacting providers.")]
     internal Task<OperationResult<DeckExportBundle>> ExportAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
-        [Description("Exact export-capable format ID returned by deck_interchange_formats.")] string formatId,
+        [Description("Exact export-capable format ID returned by deck_interchange_formats."), AllowedValues("mtg-mcp-json-v1", "generic-text-v1", "archidekt-text-v1", "moxfield-bulk-edit-v1")] string formatId,
         [Description("Explicit provider-format opt-ins; global Moxfield tags are off by default.")]
         DeckExportOptions? options = null,
         CancellationToken cancellationToken = default)

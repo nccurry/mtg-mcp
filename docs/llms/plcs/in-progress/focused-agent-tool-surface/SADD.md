@@ -640,18 +640,21 @@ marker in its data, so the agent can repeat the preview in one step
 
 ## Enum Schemas
 
-Each choice parameter becomes a C# enum in the project that owns the
-behavior, with `JsonStringEnumMemberName` values equal to today's strings.
+Each choice parameter or request-record property keeps its string type and
+gains an `[AllowedValues(...)]` annotation listing today's exact strings:
 
 ```csharp
-[JsonConverter(typeof(JsonStringEnumConverter<ScryfallFreshnessPolicy>))]
-internal enum ScryfallFreshnessPolicy
-{
-    [JsonStringEnumMemberName("default")] Default,
-    [JsonStringEnumMemberName("cache-only")] CacheOnly,
-    [JsonStringEnumMemberName("refresh")] Refresh,
-}
+[Description("Cache policy: default, cache-only, or refresh."),
+ AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
 ```
+
+The phase 1 spike showed that SDK 2.2.0 publishes both this annotation and a
+`JsonStringEnumConverter` enum type as a JSON Schema `enum`
+(`tests/MtgMcp.App.Tests/ToolSchemaSdkTests.cs`). The annotation was chosen
+because it changes no C# type, no wire value, and no adapter API: the
+Archidekt request records used as tool inputs keep their string properties,
+and the services keep validating values at run time. The `JsonStringEnumConverter`
+design remains a valid alternative for new parameters that own an enum type.
 
 Expected schema:
 
@@ -664,15 +667,16 @@ Expected schema:
 }
 ```
 
-Phase 1 step 1 confirms SDK 2.2.0 produces this. If it does not, the
-fallback is the `TransformSchemaNode` hook already used in
-`StatisticsToolsetManifest`, applied by a shared App helper.
-
-Known choice parameters today include `freshnessPolicy`, `unique`, `order`,
-and `direction` in `ScryfallReadTools.cs`, plus choice strings in
-`DeckCategorization.cs`, `DeckCategoryRuleResolver.cs`, and
-`DeckIdentityReconciliation.cs`. The SCHEMA-001 test finds any that are
-missed. Frozen Playgroup tools get enums only where they already have choice
+Phase 1 annotated 28 choice fields: `freshnessPolicy` (12 tools),
+`unique`, `order`, `direction`, `tagType` (2), the snapshot `operation`
+filter, `metadataPolicy`, the interchange `formatId` (3), the on-curve land
+`rule`, and the Archidekt deck `format` and `visibility`, folder
+`visibility` (create and update), and folder-move `kind`. The SCHEMA-001
+test (`ToolSchemaSurfaceTests`) walks every tool schema and fails on any
+string field whose description lists values without publishing `enum`; it
+found two fields a text search had missed. The Archidekt `format` list is
+lower case while the adapter accepts any case; the server does not enforce
+the schema, so mixed-case input keeps working. Frozen Playgroup tools get enums only where they already have choice
 strings; their names and inputs do not otherwise change.
 
 ## Statistics Descriptions
@@ -1281,7 +1285,7 @@ message that says what to change. Examples:
 - overlapping groups: `overlapping-groups`, naming the entries;
 - work limit exceeded: `simulation-too-large`, stating the limit and the
   computed size;
-- stale deck: `conflict`, with the current revision in the data (ERR-001);
+- stale deck: `conflict`, with the current revision in `current` (ERR-001);
 - list source whose owning toolset is off: `invalid-input` with reason
   `toolset-not-selected` or `credentials-missing`;
 - Archidekt deck or local deck changed between comparison pages: `conflict`,

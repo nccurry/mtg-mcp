@@ -1,18 +1,18 @@
 # Focused Agent Tool Surface PLC Packet
 
 > [!IMPORTANT]
-> This packet is a plan. It does not authorize code changes until the owner
-> approves it and sets `Implementation authorized: Yes`.
+> The owner authorized implementation on 2026-10-27. Work proceeds phase by
+> phase as listed in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Lifecycle
 
-- Status: Planned
-- Folder: `docs/llms/plcs/planned/focused-agent-tool-surface/`
+- Status: In progress
+- Folder: `docs/llms/plcs/in-progress/focused-agent-tool-surface/`
 - Owner: mtg-mcp
 - Created: 2026-10-25
 - Last updated: 2026-10-27
-- Current phase: Amended with research gaps (2026-10-27); awaiting review and implementation authorization
-- Implementation authorized: No
+- Current phase: Phase 1 (schemas, descriptions, conflict data, bug fixes, and baseline)
+- Implementation authorized: Yes (owner, 2026-10-27)
 
 ## Summary
 
@@ -174,7 +174,7 @@ and a few Scryfall tools; see [final names](FIXTURES.md#final-tool-names).
 | Remove the `common-v1` preset. | Proposed | It encodes the server's view of card roles. | [SADD](SADD.md#removal-review) |
 | Keep local backups and exact identity reconciliation. | Proposed | Backups copy the whole database; reconciliation is exact-match only. | [SADD](SADD.md#removal-review) |
 | Freeze Playgroup's existing tools; add one aggregate read tool. | Owner decision, 2026-10-25; amended 2026-10-27 | The 16 existing tools stay unchanged. Querying a playgroup is a stated goal, and win rates need an aggregate. | [SADD](SADD.md#playgroup-game-statistics) |
-| Publish enums through `JsonStringEnumConverter`. | Proposed, needs a spike | Values stay the same on the wire. The schema output from MCP C# SDK 2.2.0 must be confirmed first. | [SADD](SADD.md#enum-schemas) |
+| Publish choice values as JSON Schema enums through `[AllowedValues]` annotations. | Adopted in phase 1 after the SDK spike | Values and C# types stay the same; works on adapter request records; SDK 2.2.0 publishes it as `enum`. | [SADD](SADD.md#enum-schemas) |
 | Keep `standard` as the default card format; add opt-in `concise` with an optional `fields` list. | Owner decision, 2026-10-25 | Today's output stays the default. Agents that filter many cards ask for `concise`. | [SADD](SADD.md#card-response-formats) |
 | State every simulation play choice in the request; fix and list the few engine rules. | Proposed | Keeps decisions with the agent and makes results explainable. | [SADD](SADD.md#engine-rules) |
 | Replace `deck_on_curve_estimate` with a `stats_simulate` preset. | Proposed | One sampling engine and one replay contract. | [SADD](SADD.md#on-curve-migration) |
@@ -292,7 +292,7 @@ design review on the same day; see Validation Evidence.
 - [x] An independent design review has examined the 2026-10-27 additions;
       its findings are addressed (see Validation Evidence).
 - [x] The owner has answered the open questions (2026-10-25).
-- [ ] The owner has set `Implementation authorized: Yes`.
+- [x] The owner has set `Implementation authorized: Yes` (2026-10-27).
 
 ## Validation Evidence
 
@@ -320,8 +320,24 @@ Filled in by EVAL-002. Held-out tasks are reported in their own rows.
 
 ## Result Size Measurements
 
-Filled in by phase 1 (SIZE-001): the largest default result of every tool,
-in UTF-8 characters, and whether it exceeds 40,000. Not measured yet.
+Phase 1 (SIZE-001), measured on 2026-10-27 with the live test
+`ResultSizeLiveTests` against real Scryfall data and a local deck. Sizes are
+UTF-8 bytes of the structured result.
+
+| Tool and request | Size | Over 40,000? |
+| --- | --- | --- |
+| `scryfall_search`, default `standard` format, 25 rows (`set:dmu t:creature`) | 123,956 | Yes, about 31,000 tokens, over Claude Code's default 25,000-token output cap |
+| `deck_get`, 100 entries, no `include` | 16,033 | No |
+
+Not measured in phase 1: tools that need Archidekt or Playgroup credentials,
+and `scryfall_cards_by_tag`, which needs installed card data. Their sizes are
+measured when phase 2 adds paging or `concise` to them.
+
+The `scryfall_search` result is today's default output, which the owner chose
+to keep (2026-10-25). Under SIZE-001 it is reported, not truncated, and its
+description must recommend `concise`. Because it exceeds what Claude Code
+returns to the model by default, the owner should confirm whether the default
+page size or format should change in phase 2.
 
 ## Deferred Work
 

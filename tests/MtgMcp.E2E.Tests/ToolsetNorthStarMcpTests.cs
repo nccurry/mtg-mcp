@@ -165,8 +165,8 @@ public sealed class ToolsetNorthStarMcpTests
             toolName,
             arguments,
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
+        Assert.Equal(!string.Equals(content.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
         JsonElement result = content;
         Assert.Equal("success", result.GetProperty("kind").GetString());
         return result.GetProperty("data");

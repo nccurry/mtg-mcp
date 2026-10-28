@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MtgMcp.Archidekt;
 
 /// <summary>
@@ -5,9 +7,9 @@ namespace MtgMcp.Archidekt;
 /// </summary>
 public sealed record ArchidektDeckCreateRequest(
     string Name,
-    string Format,
+    [property: AllowedValues("standard", "modern", "commander", "edh", "legacy", "vintage", "pauper", "pioneer", "brawl", "historic", "oathbreaker")] string Format,
     string? Description = null,
-    string Visibility = "private",
+    [property: AllowedValues("private", "unlisted", "public")] string Visibility = "private",
     string? ParentFolderId = null);
 
 /// <summary>
@@ -42,7 +44,7 @@ public sealed record ArchidektPushApplyRequest(
 /// </summary>
 public sealed record ArchidektFolderCreateRequest(
     string Name,
-    string Visibility,
+    [property: AllowedValues("private", "public")] string Visibility,
     string? ParentFolderId = null);
 
 /// <summary>
@@ -52,7 +54,7 @@ public sealed record ArchidektFolderUpdateRequest(
     string FolderId,
     string ExpectedTreeFingerprint,
     string? Name = null,
-    string? Visibility = null,
+    [property: AllowedValues("private", "public")] string? Visibility = null,
     string? ParentFolderId = null,
     bool UpdateParent = false);
 
@@ -60,7 +62,7 @@ public sealed record ArchidektFolderUpdateRequest(
 /// Identifies one exact deck or folder and its expected current parent.
 /// </summary>
 public sealed record ArchidektFolderMoveItem(
-    string Kind,
+    [property: AllowedValues("deck", "folder")] string Kind,
     string Id,
     string? ExpectedParentFolderId);
 

@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -63,6 +64,7 @@ internal sealed class DeckBatchWriteTools
             BindingFlags.Instance | BindingFlags.NonPublic)!;
         return McpServerTool.Create(method, target, new McpServerToolCreateOptions
         {
+            SerializerOptions = ToolCallPolicy.SerializerOptions,
             SchemaCreateOptions = new AIJsonSchemaCreateOptions
             {
                 TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
