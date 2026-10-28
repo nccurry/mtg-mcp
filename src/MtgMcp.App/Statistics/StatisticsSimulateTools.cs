@@ -27,8 +27,8 @@ internal sealed class StatisticsSimulateTools
     /// </summary>
     internal const string ExampleFull =
         "{\"deck\":{\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId + "\",\"expectedRevision\":" +
-        DeckToolExamples.PlaceholderRevision + "},\"groups\":[{\"id\":\"lands\",\"select\":{\"kind\":" +
-        "\"category-ids\"," +
+        DeckToolExamples.PlaceholderRevision + "},\"groups\":[{\"id\":\"lands\"," +
+        "\"select\":{\"kind\":\"category-ids\"," +
         "\"ids\":[\"" + StatisticsCastabilityTools.ExampleCategoryId + "\"]},\"produces\":{\"default\":[\"G\"]," +
         "\"byEntry\":[{\"entryIds\":[\"" + DeckToolExamples.PlaceholderEntryId + "\"],\"colors\":[\"B\",\"G\"]}]}}," +
         "{\"id\":\"ramp\",\"select\":{\"kind\":\"entry-ids\",\"ids\":[\"" + StatisticsCastabilityTools.ExampleEntryId2 +
@@ -76,45 +76,54 @@ internal sealed class StatisticsSimulateTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Seeded sampling: an estimate, not exact math. Shuffles the main zone of one local deck and plays your " +
-        "rules over many random games, then reports how often each of your conditions held (hits, rate, 95% " +
-        "Wilson interval) with " +
-        "the seed that replays it. You state every choice; only these rules are fixed. 1) Groups pick main-zone " +
-        "entries by entry or category ID and must not overlap; cards in no group are drawn and held. 2) Each turn: " +
-        "draw (none on turn 1 on the play), then eachTurn rules in listed order, each up to maxPerTurn times; " +
-        "conditions are checked after the turn's rules. 3) pick: random is uniform and seeded; listed-order takes " +
-        "the first listed entry in hand (entry-ids groups only); target-first (play only) takes the card that lets " +
-        "mana pay the most colored symbols of targetCost, then the most symbols, then same-turn mana, then the " +
-        "lowest entry ID. 4) same-turn mana is usable at once, next-turn mana from the next turn; mana does not " +
-        "carry over. 5) London mulligan: redraw while keepWhen fails, up to maxMulligans (the last hand is kept), " +
-        "then bottom cards from preferGroups, else random; freeFirstMulligan bottoms none the first time. " +
-        "6) play is free; cast-if-able and draw-cards spend generic cost while that much is unspent. 7) draw-cards " +
-        "cards are in hand at once; each-turn cards draw again at every later draw step; an empty library stops " +
-        "drawing (libraryEmpty). 8) sampleHands returns the first samples in full; they are the counted ones. " +
-        "9) produces adds colors W, U, B, R, G, C, or any; can-cast pays its cost and all mana spent that turn " +
-        "with one assignment; hybrid takes either color, Phyrexian needs its color (life is not modeled). " +
-        "Limit: samples x turns x deck cards <= 50,000,000. preset on-curve replaces groups, openingHand, eachTurn, " +
-        "turns, and conditions with one land a turn toward a target card and needs installed card data." +
+        "Seeded sampling: an estimate, not exact math. Shuffles the main-zone cards of one local deck and plays " +
+        "your rules over many random games, then reports how often each condition you name held (hits, rate, 95% " +
+        "Wilson interval) with the seed that replays it. You state every choice; only these rules are fixed. " +
+        "1) Groups pick main-zone entries by entry or category ID and must not overlap; cards in no group are " +
+        "drawn and stay in hand. 2) Each turn: draw one card (none on turn 1 on the play), apply each eachTurn " +
+        "rule in listed order up to maxPerTurn times, then check conditions. 3) pick random is uniform and " +
+        "seeded; listed-order takes the entry listed first in select.ids (entry-ids groups only); target-first " +
+        "(play only) takes the card whose mana lets the mana in play pay the most colored symbols of targetCost, " +
+        "then the most symbols, then mana usable this turn, then the entry ID that sorts first. 4) same-turn mana " +
+        "is usable the turn the card enters play, next-turn mana the turn after; unused mana is lost at turn " +
+        "end. 5) London mulligan: draw a new hand while keepWhen fails, up to maxMulligans (then keep the last " +
+        "hand), then bottom cards from preferGroups, else at random; freeFirstMulligan bottoms none the first " +
+        "time. 6) play is free; cast-if-able and draw-cards need cost generic mana unspent and spend it. 7) " +
+        "draw-cards draws at once, so later rules that turn can use the cards; each-turn cards draw again at " +
+        "every later draw step; drawing from an empty library stops and counts the game in libraryEmpty. 8) The " +
+        "first sampleHands games are returned in full and are counted; moved[].rule is the eachTurn index; " +
+        "mulligans.keptByRule counts hands that passed keepWhen, keptAtLimit hands kept at the limit; skipped " +
+        "lists category cards outside the main zone. 9) produces gives the colors each card adds (W, U, B, R, G, " +
+        "C, or any of W/U/B/R/G); without it a card adds colorless mana for generic costs only. can-cast pays its " +
+        "cost plus all mana spent that turn with one assignment; hybrid takes either color; Phyrexian needs its " +
+        "color (life is not modeled). Limits: samples x turns x deck cards <= 50,000,000 and a cost estimate " +
+        "<= 400,000,000 (can-cast checks and target-first rules are costly), 1,000 units of mana in play. " +
+        "preset on-curve replaces groups, openingHand, eachTurn, turns, and conditions: one land a turn toward a " +
+        "target card, from installed card data." +
         UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + ExampleMinimal +
         DeckToolExamples.ExamplePrefix + "full): " + ExampleFull +
         DeckToolExamples.ExamplePrefix + "preset): " + ExamplePreset)]
     internal Task<OperationResult<SimulateToolResult>> SimulateAsync(
-        [Description("The saved deck whose main zone is shuffled.")]
+        [Description("The saved deck whose main zone is shuffled: at most 150 entries and 500 cards.")]
         SimulationDeckInput deck,
         [Description("Number of sampled games, from 1 to 100000.")]
         int samples,
         [Description("How many of the first samples to return in full, from 0 to 10, and no more than samples.")]
         int sampleHands,
-        [Description("Groups of main-zone entries that rules and checks name. Optional.")]
+        [Description(
+            "Groups of main-zone cards that rules and checks name. Optional. At most 20 groups, at most 150 IDs in " +
+            "one select and 300 in the request.")]
         IReadOnlyList<SimulationGroupInput>? groups = null,
         [Description("Opening hand size, play or draw, and the optional mulligan. Required unless preset is given.")]
         SimulationOpeningHandInput? openingHand = null,
-        [Description("Rules applied each turn, in order. Required unless preset is given.")]
+        [Description("Rules applied each turn, in order, at most 20. Required unless preset is given.")]
         IReadOnlyList<SimulationRuleInput>? eachTurn = null,
         [Description("Last turn to model, from 1 to 20. Required unless preset is given.")]
         int? turns = null,
-        [Description("Checks whose success rate is reported. Required unless preset is given.")]
+        [Description(
+            "1 to 20 conditions whose success rate is reported; each holds at most 20 checks nested 4 deep. " +
+            "Required unless preset is given.")]
         IReadOnlyList<SimulationConditionInput>? conditions = null,
         [Description("A ready-made rule set; only on-curve. Not allowed together with groups, openingHand, eachTurn, " +
             "turns, or conditions.")]

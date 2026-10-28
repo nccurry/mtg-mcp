@@ -79,6 +79,22 @@ public static class SimulationLimits
     public const long MaximumWork = 50_000_000;
 
     /// <summary>
+    /// Gets the longest group or condition ID.
+    /// </summary>
+    public const int MaximumIdLength = 64;
+
+    /// <summary>
+    /// Gets the most units of mana the rules of one request may put in play, which bounds one payment test.
+    /// </summary>
+    public const int MaximumManaUnits = 1_000;
+
+    /// <summary>
+    /// Gets the most elementary operations one request may need, estimated from its rules, so that a request
+    /// with many payment tests per turn is refused before it runs.
+    /// </summary>
+    public const long MaximumOperations = 400_000_000;
+
+    /// <summary>
     /// Gets the most distinct entries in a deck.
     /// </summary>
     public const int MaximumDeckEntries = 150;

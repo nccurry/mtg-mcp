@@ -79,7 +79,7 @@ question remains required proof before implementation.
 
 ### Deck mana and on-curve estimate
 
-Phase 6 added one read-only estimate for an actual saved deck: whether a named
+The deckbuilding-evolution child added one read-only estimate for an actual saved deck: whether a named
 card can be cast by a named turn under caller-supplied simple land rules. It
 uses direct installed Scryfall facts, a repeatable seed, a visible land-play
 rule, sampled-result reporting, and a clear line between source facts and

@@ -23,7 +23,7 @@ public static class SimulationEngine
     /// </summary>
     private static readonly string[] Limits =
     [
-        "Groups without produces add generic mana only.",
+        "Groups without produces add colorless mana that pays only generic costs (not {C}).",
         "Mana is used or lost within its turn; unspent mana does not carry over to the next turn.",
         "Phyrexian life payment is not modeled; a Phyrexian symbol needs its color.",
         "Only the stated groups and rules are applied; cards in no group are drawn and held.",
@@ -35,14 +35,6 @@ public static class SimulationEngine
     public static bool TryParseSeed(string? text, out ulong seed)
     {
         return OnCurveSeed.TryParse(text, out seed);
-    }
-
-    /// <summary>
-    /// Formats a seed as the 16 lower-case hexadecimal characters used in requests and results.
-    /// </summary>
-    public static string FormatSeed(ulong seed)
-    {
-        return OnCurveSeed.Format(seed);
     }
 
     /// <summary>

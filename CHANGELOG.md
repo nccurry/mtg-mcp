@@ -6,10 +6,9 @@
 
 ### Seeded simulation (breaking)
 
-- Breaking: `deck_on_curve_estimate` removed. The tool was named
-  `local_deck_on_curve_estimate` in `0.11.0` and `deck_on_curve_estimate`
-  before that. Use `stats_simulate` with `preset` of kind `on-curve`. For the
-  same deck, seed, and inputs the preset returns the same success counts: it is
+- Breaking: `local_deck_on_curve_estimate` removed. The tool was named
+  `deck_on_curve_estimate` in `0.10.0` and earlier. Use `stats_simulate` with `preset` of kind `on-curve`. Within the work
+  limit, for the same deck, seed, and inputs the preset returns the same success counts: it is
   replayed against 16 captured runs of the old estimator, including colored
   targets, lands that enter tapped, and decks that run out of cards. The old
   arguments map as follows:
@@ -22,6 +21,7 @@
   | `turnLimit` | `preset.turnLimit` (1 to 20, was 1 to 12) |
   | `onThePlay` | `preset.onThePlay` |
   | `sampleCount` | `samples` (1 to 100,000, was 100 to 100,000, and now required) |
+  | (limit) | samples x turns x deck cards is at most 50,000,000 (the old tool accepted 100,000 x 12 x 500), and an operation estimate is at most 400,000,000; lower samples or turns for a larger request |
   | `seed` | `seed` |
 
   The result is different. `results[0].hits` and `rate` replace `successCount`

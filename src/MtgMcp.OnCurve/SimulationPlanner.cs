@@ -98,6 +98,12 @@ internal sealed class SimulationPlanner
             return OperationFailure.Forward<SimulationCheckNode[], SimulationPlan>(conditions);
         }
 
+        OperationInvalidInput? budget = CheckOperations(rulePlans.Data);
+        if (budget is not null)
+        {
+            return budget;
+        }
+
         return new OperationSuccess<SimulationPlan>(new SimulationPlan(
             request,
             [.. request.Deck.Select(entry => entry.EntryId)],
@@ -215,6 +221,81 @@ internal sealed class SimulationPlanner
     }
 
     /// <summary>
+    /// Refuses a request that could mean too much work per game even when samples times turns times deck cards is
+    /// small: too many units of mana in play, or too many payment tests per turn. The estimate counts, for each
+    /// turn, a scan of the hand for each rule and a payment test for each <c>can-cast</c> check and for each
+    /// candidate of a <c>target-first</c> rule, each costing about symbols times units of mana.
+    /// </summary>
+    private OperationInvalidInput? CheckOperations(SimulationRulePlan[] rules)
+    {
+        long copies = request.Deck.Sum(entry => (long)entry.Quantity);
+        long units = 0;
+        foreach (SimulationRulePlan rule in rules)
+        {
+            if (rule.Kind != SimulationRuleKind.DrawCards)
+            {
+                units += Math.Min((long)rule.MaxPerTurn * request.Turns, GroupCards(rule.Group)) * rule.AddsMana;
+            }
+        }
+
+        if (units > SimulationLimits.MaximumManaUnits)
+        {
+            return Invalid(
+                "simulation-too-large",
+                $"The rules could put {units} units of mana in play, over the limit of " +
+                $"{SimulationLimits.MaximumManaUnits}. Lower maxPerTurn, addsMana, or turns.",
+                "eachTurn");
+        }
+
+        long payment = units + 1;
+        long perTurn = copies * (1 + rules.Length);
+        foreach (SimulationLeafPlan leaf in leaves)
+        {
+            if (leaf.Kind == SimulationLeafKind.CanCast)
+            {
+                perTurn += (leaf.Cost!.SpecificSymbolCount + 1) * payment;
+            }
+        }
+
+        foreach (SimulationRulePlan rule in rules)
+        {
+            if (rule.Pick == SimulationPick.TargetFirst)
+            {
+                perTurn += request.Groups[rule.Group].EntryIds.Count *
+                    (rule.TargetCost!.SpecificSymbolCount + 1) * payment;
+            }
+        }
+
+        long mulligans = (request.OpeningHand.Mulligan?.MaxMulligans ?? 0) + 1;
+        long operations = request.Samples * ((request.Turns * perTurn) + (mulligans * copies));
+        if (operations <= SimulationLimits.MaximumOperations)
+        {
+            return null;
+        }
+
+        return Invalid(
+            "simulation-too-large",
+            $"This request needs about {operations} elementary operations, over the limit of " +
+            $"{SimulationLimits.MaximumOperations}. Lower samples or turns, or use fewer can-cast checks, " +
+            "target-first rules, rules, or units of mana.",
+            "samples");
+    }
+
+    /// <summary>
+    /// Counts the cards of the deck that are in one group.
+    /// </summary>
+    private long GroupCards(int group)
+    {
+        long cards = 0;
+        foreach (Guid id in request.Groups[group].EntryIds)
+        {
+            cards += request.Deck[entryIndex[id]].Quantity;
+        }
+
+        return cards;
+    }
+
+    /// <summary>
     /// Checks groups: unique IDs, entries in the deck, no overlap, and valid colors, then builds the per-entry data.
     /// </summary>
     private OperationInvalidInput? CheckGroups()
@@ -232,11 +313,12 @@ internal sealed class SimulationPlanner
         {
             SimulationGroup group = request.Groups[index];
             string path = $"groups[{index}]";
-            if (string.IsNullOrWhiteSpace(group.Id) || !groupIndex.TryAdd(group.Id, index))
+            if (string.IsNullOrWhiteSpace(group.Id) || group.Id.Length > SimulationLimits.MaximumIdLength ||
+                !groupIndex.TryAdd(group.Id, index))
             {
                 return Invalid(
                     "invalid-simulation-group",
-                    "Each group needs a unique, non-blank id.",
+                    $"Each group needs a unique id of 1 to {SimulationLimits.MaximumIdLength} characters.",
                     path + ".id");
             }
 
@@ -449,6 +531,14 @@ internal sealed class SimulationPlanner
         OnCurveManaCost? target = null;
         if (play.Pick == SimulationPick.TargetFirst)
         {
+            if (string.IsNullOrWhiteSpace(play.TargetCost))
+            {
+                return Invalid(
+                    "missing-field",
+                    "targetCost is required with pick target-first.",
+                    path + ".targetCost");
+            }
+
             OperationResult<OnCurveManaCost> cost = ParseCost(play.TargetCost, path + ".targetCost");
             if (cost is not OperationSuccess<OnCurveManaCost> parsed)
             {
@@ -671,7 +761,7 @@ internal sealed class SimulationPlanner
                 if (!entryIndex.TryGetValue(id, out int entry) || entryGroup[entry] != group || !seen.Add(id))
                 {
                     return Invalid(
-                        "invalid-simulation-group",
+                        "invalid-simulation-rule",
                         "Each entry ID in manaFromByEntry must be an entry of the rule's group and appear only once.",
                         $"{path}.manaFromByEntry[{position}].entryIds");
                 }
@@ -694,11 +784,12 @@ internal sealed class SimulationPlanner
         {
             SimulationCondition condition = request.Conditions[index];
             string path = $"conditions[{index}]";
-            if (string.IsNullOrWhiteSpace(condition.Id) || !ids.Add(condition.Id))
+            if (string.IsNullOrWhiteSpace(condition.Id) || condition.Id.Length > SimulationLimits.MaximumIdLength ||
+                !ids.Add(condition.Id))
             {
                 return Invalid(
                     "invalid-simulation-check",
-                    "Each condition needs a unique, non-blank id.",
+                    $"Each condition needs a unique id of 1 to {SimulationLimits.MaximumIdLength} characters.",
                     path + ".id");
             }
 
@@ -931,7 +1022,9 @@ internal sealed class SimulationPlanner
         int turn = cast.Turn ?? cast.ByTurn!.Value;
         if (turn < 1 || turn > request.Turns)
         {
-            return Value($"turn and byTurn must be from 1 to turns ({request.Turns}).", path + ".turn");
+            return Value(
+                $"turn and byTurn must be from 1 to turns ({request.Turns}).",
+                path + (cast.Turn is null ? ".byTurn" : ".turn"));
         }
 
         OperationResult<OnCurveManaCost> cost = ParseCost(cast.ManaCost, path + ".manaCost");
@@ -982,13 +1075,21 @@ internal sealed class SimulationPlanner
     }
 
     /// <summary>
+    /// Cuts text echoed in a message to a short length.
+    /// </summary>
+    private static string Shorten(string? text)
+    {
+        return text is { Length: > 32 } ? text[..32] + "..." : text ?? string.Empty;
+    }
+
+    /// <summary>
     /// Builds the failure for a group ID that no group declares.
     /// </summary>
     private static OperationInvalidInput UnknownGroup(string? id, string path)
     {
         return Invalid(
             "invalid-simulation-group",
-            $"No group has the id '{id}'. Declare it in groups first.",
+            $"No group has the id '{Shorten(id)}'. Declare it in groups first.",
             path);
     }
 

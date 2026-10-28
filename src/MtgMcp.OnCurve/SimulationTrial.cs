@@ -76,6 +76,11 @@ internal sealed class SimulationTrial
     private readonly List<OnCurveActiveSource> units = [];
 
     /// <summary>
+    /// Holds the arrays the payment matcher reuses.
+    /// </summary>
+    private readonly OnCurveMatchScratch scratchArrays = new();
+
+    /// <summary>
     /// Holds the entries already scored for one target-first choice.
     /// </summary>
     private readonly List<int> scored = [];
@@ -264,7 +269,7 @@ internal sealed class SimulationTrial
     }
 
     /// <summary>
-    /// Plays one turn: untap, draw, apply the rules in order, then check the conditions.
+    /// Plays one turn: draw, apply the rules in order, then check the conditions.
     /// </summary>
     private SimulationTurnRecord PlayTurn(int turn, bool record)
     {
@@ -399,7 +404,8 @@ internal sealed class SimulationTrial
         {
             SimulationPick.Random => HandIndexOf(rule.Group, random.NextIndex(qualifying)),
             SimulationPick.ListedOrder => FirstListed(rule.Group),
-            _ => ChooseTargetFirst(rule, turn),
+            SimulationPick.TargetFirst => ChooseTargetFirst(rule, turn),
+            _ => throw new InvalidOperationException("The pick has no active case."),
         };
     }
 
@@ -428,8 +434,10 @@ internal sealed class SimulationTrial
     /// </summary>
     private int ChooseTargetFirst(SimulationRulePlan rule, int turn)
     {
-        OnCurveManaCost cost = rule.TargetCost!.WithExtraGeneric(spent);
+        OnCurveManaCost cost = rule.TargetCost!;
         scored.Clear();
+        FillUnits(turn);
+        int baseUnits = units.Count;
         int bestIndex = -1;
         int bestSpecific = 0;
         int bestTotal = 0;
@@ -442,13 +450,13 @@ internal sealed class SimulationTrial
             }
 
             scored.Add(entry);
-            FillUnits(turn);
+            units.RemoveRange(baseUnits, units.Count - baseUnits);
             if (rule.SameTurn[entry])
             {
                 AddUnits(entry, rule.AddsMana);
             }
 
-            OnCurvePaymentAnalysis payment = OnCurveManaPayment.Analyze(cost, units);
+            OnCurvePaymentAnalysis payment = OnCurveManaPayment.Analyze(cost, units, scratchArrays, spent);
             if (bestIndex < 0 ||
                 IsBetter(payment, entry, rule, bestSpecific, bestTotal, plan.CardEntry[hand[bestIndex]]))
             {
@@ -594,8 +602,10 @@ internal sealed class SimulationTrial
                 return seenByGroup[leaf.Group] >= leaf.Count;
             case SimulationLeafKind.OnBattlefieldAtLeast:
                 return inPlayByGroup[leaf.Group] >= leaf.Count;
-            default:
+            case SimulationLeafKind.CanCast:
                 return CanCast(leaf, turn);
+            default:
+                throw new InvalidOperationException("The leaf has no active case.");
         }
     }
 
@@ -609,9 +619,8 @@ internal sealed class SimulationTrial
             return false;
         }
 
-        OnCurveManaCost cost = leaf.Cost!.WithExtraGeneric(spent);
         FillUnits(turn);
-        return OnCurveManaPayment.Analyze(cost, units).CoversFullCost(cost);
+        return OnCurveManaPayment.Analyze(leaf.Cost!, units, scratchArrays, spent).IsComplete;
     }
 
     /// <summary>
@@ -652,7 +661,7 @@ internal sealed class SimulationTrial
                 }
 
                 return true;
-            default:
+            case SimulationCheckKind.Any:
                 foreach (SimulationCheckNode child in node.Children)
                 {
                     if (Evaluate(child))
@@ -662,6 +671,8 @@ internal sealed class SimulationTrial
                 }
 
                 return false;
+            default:
+                throw new InvalidOperationException("The check has no active case.");
         }
     }
 

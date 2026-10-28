@@ -73,25 +73,85 @@ public sealed class OnCurveManaTests
     }
 
     /// <summary>
+    /// Verifies a cost text is bounded in length, symbols, and generic mana, so a payment test has bounded cost and
+    /// no sum can overflow.
+    /// </summary>
+    [Theory]
+    [InlineData("{2147483647}")]
+    [InlineData("{100}")]
+    [InlineData("{50}{50}")]
+    [InlineData("{W}{W}{W}{W}{W}{W}{W}{W}{U}{U}{U}{U}{U}{U}{U}{U}{B}")]
+    [InlineData("{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}{W/U}")]
+    public void ReadCost_WithAnUnboundedCost_ReturnsUnsupported(string manaCost)
+    {
+        Assert.IsType<OperationUnsupported>(OnCurveManaSymbols.ReadCost(manaCost).Value);
+    }
+
+    /// <summary>
+    /// Verifies the largest allowed costs are read.
+    /// </summary>
+    [Fact]
+    public void ReadCost_AtTheLimits_IsRead()
+    {
+        OnCurveManaCost generic = Assert.IsType<OperationSuccess<OnCurveManaCost>>(
+            OnCurveManaSymbols.ReadCost("{99}").Value).Data;
+        OnCurveManaCost symbols = Assert.IsType<OperationSuccess<OnCurveManaCost>>(
+            OnCurveManaSymbols.ReadCost(string.Concat(Enumerable.Repeat("{W}", 16))).Value).Data;
+
+        Assert.Equal(99, generic.Generic);
+        Assert.Equal(16, symbols.SpecificSymbolCount);
+    }
+
+    /// <summary>
+    /// Verifies extra generic mana added to a huge cost saturates instead of wrapping negative.
+    /// </summary>
+    [Fact]
+    public void WithExtraGeneric_OnAHugeCost_DoesNotWrap()
+    {
+        OnCurveManaCost cost = new OnCurveManaCost(int.MaxValue, 0, 0, 0, 0, 0, 0).WithExtraGeneric(5);
+
+        Assert.Equal(int.MaxValue, cost.Generic);
+        Assert.False(OnCurveManaPayment.Analyze(cost, [Source(OnCurveManaSymbol.Green)]).CoversFullCost(cost));
+        Assert.False(OnCurveManaPayment.Analyze(
+            new OnCurveManaCost(int.MaxValue, 0, 0, 0, 0, 0, 0),
+            [Source(OnCurveManaSymbol.Green)],
+            new OnCurveMatchScratch(),
+            extraGeneric: 5).IsComplete);
+    }
+
+    /// <summary>
+    /// Verifies one scratch can be reused for runs of different sizes without a stale assignment.
+    /// </summary>
+    [Fact]
+    public void Analyze_ReusingScratch_GivesTheSameAnswers()
+    {
+        OnCurveMatchScratch scratch = new();
+        OnCurveManaCost cost = new(0, 0, 0, 0, 0, 2, 0);
+        IReadOnlyList<OnCurveActiveSource> many = [
+            .. Enumerable.Range(0, 40).Select(_ => Source(OnCurveManaSymbol.Green))];
+        IReadOnlyList<OnCurveActiveSource> one = [Source(OnCurveManaSymbol.Green)];
+
+        Assert.True(OnCurveManaPayment.Analyze(cost, many, scratch).IsComplete);
+        Assert.False(OnCurveManaPayment.Analyze(cost, one, scratch).IsComplete);
+        Assert.True(OnCurveManaPayment.Analyze(cost, many, scratch).IsComplete);
+    }
+
+    /// <summary>
     /// Verifies direct Scryfall mana strings have one fixed supported set.
     /// </summary>
     [Theory]
-    [InlineData("W", 0, "W")]
-    [InlineData("U", 1, "U")]
-    [InlineData("B", 2, "B")]
-    [InlineData("R", 3, "R")]
-    [InlineData("G", 4, "G")]
-    [InlineData("C", 5, "C")]
-    public void ProducedMana_WithSupportedValue_ParsesAndFormats(
-        string value,
-        int expectedValue,
-        string formatted)
+    [InlineData("W", 0)]
+    [InlineData("U", 1)]
+    [InlineData("B", 2)]
+    [InlineData("R", 3)]
+    [InlineData("G", 4)]
+    [InlineData("C", 5)]
+    public void ProducedMana_WithSupportedValue_Parses(string value, int expectedValue)
     {
         bool parsed = OnCurveManaSymbols.TryParseProducedMana(value, out OnCurveManaSymbol symbol);
 
         Assert.True(parsed);
         Assert.Equal((OnCurveManaSymbol)expectedValue, symbol);
-        Assert.Equal(formatted, OnCurveManaSymbols.Format(symbol));
     }
 
     /// <summary>
@@ -108,15 +168,6 @@ public sealed class OnCurveManaTests
         bool parsed = OnCurveManaSymbols.TryParseProducedMana(value, out _);
 
         Assert.False(parsed);
-    }
-
-    /// <summary>
-    /// Verifies invalid internal symbols do not format as a supported source value.
-    /// </summary>
-    [Fact]
-    public void Format_WithUnknownSymbol_Throws()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => OnCurveManaSymbols.Format((OnCurveManaSymbol)99));
     }
 
     /// <summary>
@@ -137,7 +188,7 @@ public sealed class OnCurveManaTests
 
         Assert.Equal(2, result.SpecificSymbolsCovered);
         Assert.Equal(3, result.TotalSymbolsCovered);
-        Assert.True(result.CoversSpecificCost(cost));
+        Assert.Equal(cost.SpecificSymbolCount, result.SpecificSymbolsCovered);
         Assert.True(result.CoversFullCost(cost));
     }
 
@@ -154,7 +205,7 @@ public sealed class OnCurveManaTests
 
         Assert.Equal(1, result.SpecificSymbolsCovered);
         Assert.Equal(1, result.TotalSymbolsCovered);
-        Assert.False(result.CoversSpecificCost(cost));
+        Assert.NotEqual(cost.SpecificSymbolCount, result.SpecificSymbolsCovered);
         Assert.False(result.CoversFullCost(cost));
     }
 
@@ -222,7 +273,7 @@ public sealed class OnCurveManaTests
 
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
 
-        Assert.True(result.CoversSpecificCost(cost));
+        Assert.Equal(cost.SpecificSymbolCount, result.SpecificSymbolsCovered);
         Assert.False(result.CoversFullCost(cost));
     }
 

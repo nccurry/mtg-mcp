@@ -71,9 +71,15 @@ internal sealed record OnCurveManaCost(
     internal IReadOnlyList<OnCurveManaSymbol[]> EitherSymbols => Either ?? [];
 
     /// <summary>
+    /// Gets, for each specific symbol, the colors that can pay it as a bit set, in the fixed matching order: single
+    /// colors in W, U, B, R, G, C order, then the hybrid and Phyrexian symbols as written.
+    /// </summary>
+    internal int[] RequiredMasks { get; } = BuildMasks(White, Blue, Black, Red, Green, Colorless, Either);
+
+    /// <summary>
     /// Gets the total number of specific colored or colorless symbols, including hybrid and Phyrexian symbols.
     /// </summary>
-    internal int SpecificSymbolCount => White + Blue + Black + Red + Green + Colorless + EitherSymbols.Count;
+    internal int SpecificSymbolCount => RequiredMasks.Length;
 
     /// <summary>
     /// Gets the full number of mana units required by the printed cost.
@@ -85,35 +91,37 @@ internal sealed record OnCurveManaCost(
     /// </summary>
     internal OnCurveManaCost WithExtraGeneric(int extra)
     {
-        return this with { Generic = Generic + extra };
+        return this with { Generic = (int)Math.Min(int.MaxValue, (long)Generic + extra) };
     }
 
     /// <summary>
-    /// Lists the specific symbols in the fixed matching order: single colors in W, U, B, R, G, C order, then the
-    /// hybrid and Phyrexian symbols as written. Each entry lists the colors that can pay that symbol.
+    /// Builds the bit set of each specific symbol.
     /// </summary>
-    internal IReadOnlyList<OnCurveManaSymbol[]> ExpandSpecificSymbols()
+    private static int[] BuildMasks(
+        int white,
+        int blue,
+        int black,
+        int red,
+        int green,
+        int colorless,
+        IReadOnlyList<OnCurveManaSymbol[]>? either)
     {
-        List<OnCurveManaSymbol[]> symbols = [];
-        AddSymbols(symbols, OnCurveManaSymbol.White, White);
-        AddSymbols(symbols, OnCurveManaSymbol.Blue, Blue);
-        AddSymbols(symbols, OnCurveManaSymbol.Black, Black);
-        AddSymbols(symbols, OnCurveManaSymbol.Red, Red);
-        AddSymbols(symbols, OnCurveManaSymbol.Green, Green);
-        AddSymbols(symbols, OnCurveManaSymbol.Colorless, Colorless);
-        symbols.AddRange(EitherSymbols);
-        return Array.AsReadOnly(symbols.ToArray());
-    }
-
-    /// <summary>
-    /// Adds the requested repeated symbol to one ordered list.
-    /// </summary>
-    private static void AddSymbols(List<OnCurveManaSymbol[]> symbols, OnCurveManaSymbol symbol, int count)
-    {
-        for (int index = 0; index < count; index++)
+        List<int> masks = [];
+        int[] counts = [white, blue, black, red, green, colorless];
+        for (int symbol = 0; symbol < counts.Length; symbol++)
         {
-            symbols.Add([symbol]);
+            for (int copy = 0; copy < counts[symbol]; copy++)
+            {
+                masks.Add(1 << symbol);
+            }
         }
+
+        foreach (OnCurveManaSymbol[] colors in either ?? [])
+        {
+            masks.Add(OnCurveManaSymbols.ToMask(colors));
+        }
+
+        return [.. masks];
     }
 }
 
@@ -123,12 +131,41 @@ internal sealed record OnCurveManaCost(
 internal static class OnCurveManaSymbols
 {
     /// <summary>
+    /// Gives the longest mana cost text that is read.
+    /// </summary>
+    internal const int MaximumCostLength = 128;
+
+    /// <summary>
+    /// Gives the most mana a cost may ask for in generic mana, so the arithmetic never overflows.
+    /// </summary>
+    internal const int MaximumGenericCost = 99;
+
+    /// <summary>
+    /// Gives the most symbols a cost may have, which bounds what one payment test costs.
+    /// </summary>
+    internal const int MaximumCostSymbols = 16;
+
+    /// <summary>
+    /// Turns colors into a bit set, one bit for each <see cref="OnCurveManaSymbol"/>.
+    /// </summary>
+    internal static int ToMask(IEnumerable<OnCurveManaSymbol> symbols)
+    {
+        int mask = 0;
+        foreach (OnCurveManaSymbol symbol in symbols)
+        {
+            mask |= 1 << (int)symbol;
+        }
+
+        return mask;
+    }
+
+    /// <summary>
     /// Reads one printed mana cost or returns an unsupported outcome. Generic numbers, W, U, B, R, G, C, hybrid
     /// symbols of two colors, and Phyrexian symbols are supported.
     /// </summary>
     internal static OperationResult<OnCurveManaCost> ReadCost(string? manaCost)
     {
-        if (string.IsNullOrWhiteSpace(manaCost))
+        if (string.IsNullOrWhiteSpace(manaCost) || manaCost.Length > MaximumCostLength)
         {
             return Unsupported();
         }
@@ -154,7 +191,7 @@ internal static class OnCurveManaSymbols
             string symbol = manaCost[(index + 1)..closeIndex];
             if (TryReadGeneric(symbol, out int genericValue))
             {
-                if (genericValue > int.MaxValue - generic)
+                if (genericValue > MaximumGenericCost - generic)
                 {
                     return Unsupported();
                 }
@@ -176,6 +213,11 @@ internal static class OnCurveManaSymbols
             }
 
             index = closeIndex + 1;
+        }
+
+        if (single.Sum() + either.Count > MaximumCostSymbols)
+        {
+            return Unsupported();
         }
 
         return new OperationSuccess<OnCurveManaCost>(new OnCurveManaCost(
@@ -206,23 +248,6 @@ internal static class OnCurveManaSymbols
             _ => default,
         };
         return value is "W" or "U" or "B" or "R" or "G" or "C";
-    }
-
-    /// <summary>
-    /// Formats one supported symbol for a result.
-    /// </summary>
-    internal static string Format(OnCurveManaSymbol symbol)
-    {
-        return symbol switch
-        {
-            OnCurveManaSymbol.White => "W",
-            OnCurveManaSymbol.Blue => "U",
-            OnCurveManaSymbol.Black => "B",
-            OnCurveManaSymbol.Red => "R",
-            OnCurveManaSymbol.Green => "G",
-            OnCurveManaSymbol.Colorless => "C",
-            _ => throw new ArgumentOutOfRangeException(nameof(symbol), symbol, "The mana symbol is unsupported."),
-        };
     }
 
     /// <summary>
@@ -287,32 +312,40 @@ internal static class OnCurveManaSymbols
     {
         return new OperationUnsupported(
             "unsupported-mana-cost",
-            "A mana cost must use only generic numbers, W, U, B, R, G, C, hybrid color pairs such as {W/U}, and " +
-            "Phyrexian symbols such as {G/P}.");
+            "A mana cost must use only generic numbers (at most 99 in all), W, U, B, R, G, C, hybrid color pairs such " +
+            "as " +
+            "{W/U}, and Phyrexian symbols such as {G/P}, with at most 16 symbols and 128 characters.");
     }
 }
 
 /// <summary>
 /// Represents one unit of mana a source can add this turn and the colors it may take. A unit with no colors pays
-/// generic mana only.
+/// generic costs only.
 /// </summary>
 /// <param name="Symbols">The colors this unit may take.</param>
-internal sealed record OnCurveActiveSource(IReadOnlyList<OnCurveManaSymbol> Symbols);
+internal sealed record OnCurveActiveSource(IReadOnlyList<OnCurveManaSymbol> Symbols)
+{
+    /// <summary>
+    /// Gets the colors as a bit set, one bit for each <see cref="OnCurveManaSymbol"/>.
+    /// </summary>
+    internal int Mask { get; } = OnCurveManaSymbols.ToMask(Symbols);
+}
 
 /// <summary>
 /// Captures the maximum specific and total cost progress made by the available units of mana.
 /// </summary>
 /// <param name="SpecificSymbolsCovered">How many specific symbols one exact assignment pays.</param>
 /// <param name="TotalSymbolsCovered">How many symbols, including generic mana, the same assignment pays.</param>
-internal sealed record OnCurvePaymentAnalysis(int SpecificSymbolsCovered, int TotalSymbolsCovered)
+/// <param name="SymbolsNeeded">How many symbols the cost and any extra generic mana need in all.</param>
+internal readonly record struct OnCurvePaymentAnalysis(
+    int SpecificSymbolsCovered,
+    int TotalSymbolsCovered,
+    long SymbolsNeeded)
 {
     /// <summary>
-    /// Reports whether all required colored and colorless symbols are covered.
+    /// Reports whether all required symbols, including generic mana and any extra generic mana, are covered.
     /// </summary>
-    internal bool CoversSpecificCost(OnCurveManaCost cost)
-    {
-        return SpecificSymbolsCovered == cost.SpecificSymbolCount;
-    }
+    internal bool IsComplete => TotalSymbolsCovered == SymbolsNeeded;
 
     /// <summary>
     /// Reports whether all required symbols, including generic mana, are covered.
@@ -320,6 +353,37 @@ internal sealed record OnCurvePaymentAnalysis(int SpecificSymbolsCovered, int To
     internal bool CoversFullCost(OnCurveManaCost cost)
     {
         return TotalSymbolsCovered == cost.TotalSymbolCount;
+    }
+}
+
+/// <summary>
+/// Holds the arrays one matching run needs, so repeated runs allocate nothing once the arrays are large enough.
+/// </summary>
+internal sealed class OnCurveMatchScratch
+{
+    /// <summary>
+    /// Gets or sets, for each unit of mana, the index of the symbol it is assigned to, or -1.
+    /// </summary>
+    internal int[] Assignments { get; private set; } = new int[16];
+
+    /// <summary>
+    /// Gets or sets, for each unit of mana, whether the current search has visited it.
+    /// </summary>
+    internal bool[] Visited { get; private set; } = new bool[16];
+
+    /// <summary>
+    /// Makes both arrays at least this long.
+    /// </summary>
+    internal void Reserve(int length)
+    {
+        if (Assignments.Length >= length)
+        {
+            return;
+        }
+
+        int size = Math.Max(length, Assignments.Length * 2);
+        Assignments = new int[size];
+        Visited = new bool[size];
     }
 }
 
@@ -336,23 +400,41 @@ internal static class OnCurveManaPayment
         OnCurveManaCost cost,
         IReadOnlyList<OnCurveActiveSource> sources)
     {
+        return Analyze(cost, sources, new OnCurveMatchScratch());
+    }
+
+    /// <summary>
+    /// Measures payment with arrays the caller reuses between runs.
+    /// </summary>
+    internal static OnCurvePaymentAnalysis Analyze(
+        OnCurveManaCost cost,
+        IReadOnlyList<OnCurveActiveSource> sources,
+        OnCurveMatchScratch scratch,
+        int extraGeneric = 0)
+    {
         ArgumentNullException.ThrowIfNull(cost);
         ArgumentNullException.ThrowIfNull(sources);
-        IReadOnlyList<OnCurveManaSymbol[]> required = cost.ExpandSpecificSymbols();
-        int[] sourceAssignments = new int[sources.Count];
-        Array.Fill(sourceAssignments, -1);
+        ArgumentNullException.ThrowIfNull(scratch);
+        int[] required = cost.RequiredMasks;
+        scratch.Reserve(sources.Count);
+        int[] assignments = scratch.Assignments;
+        Array.Fill(assignments, -1, 0, sources.Count);
         int matched = 0;
-        for (int requirementIndex = 0; requirementIndex < required.Count; requirementIndex++)
+        for (int requirementIndex = 0; requirementIndex < required.Length; requirementIndex++)
         {
-            bool[] visitedSources = new bool[sources.Count];
-            if (TryAssign(requirementIndex, required, sources, sourceAssignments, visitedSources))
+            Array.Clear(scratch.Visited, 0, sources.Count);
+            if (TryAssign(requirementIndex, required, sources, scratch))
             {
                 matched++;
             }
         }
 
-        long genericCovered = Math.Min(cost.Generic, sources.Count - matched);
-        return new OnCurvePaymentAnalysis(matched, matched + (int)genericCovered);
+        long genericNeeded = (long)cost.Generic + extraGeneric;
+        long genericPaid = Math.Min(genericNeeded, (long)sources.Count - matched);
+        return new OnCurvePaymentAnalysis(
+            matched,
+            matched + (int)genericPaid,
+            genericNeeded + required.Length);
     }
 
     /// <summary>
@@ -360,40 +442,23 @@ internal static class OnCurveManaPayment
     /// </summary>
     private static bool TryAssign(
         int requirementIndex,
-        IReadOnlyList<OnCurveManaSymbol[]> required,
+        int[] required,
         IReadOnlyList<OnCurveActiveSource> sources,
-        int[] sourceAssignments,
-        bool[] visitedSources)
+        OnCurveMatchScratch scratch)
     {
-        OnCurveManaSymbol[] acceptable = required[requirementIndex];
+        int acceptable = required[requirementIndex];
         for (int sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
         {
-            if (visitedSources[sourceIndex] || !CanPay(sources[sourceIndex], acceptable))
+            if (scratch.Visited[sourceIndex] || (sources[sourceIndex].Mask & acceptable) == 0)
             {
                 continue;
             }
 
-            visitedSources[sourceIndex] = true;
-            if (sourceAssignments[sourceIndex] < 0 ||
-                TryAssign(sourceAssignments[sourceIndex], required, sources, sourceAssignments, visitedSources))
+            scratch.Visited[sourceIndex] = true;
+            if (scratch.Assignments[sourceIndex] < 0 ||
+                TryAssign(scratch.Assignments[sourceIndex], required, sources, scratch))
             {
-                sourceAssignments[sourceIndex] = requirementIndex;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Reports whether a unit of mana has any of the colors that can pay a symbol.
-    /// </summary>
-    private static bool CanPay(OnCurveActiveSource source, OnCurveManaSymbol[] acceptable)
-    {
-        foreach (OnCurveManaSymbol symbol in acceptable)
-        {
-            if (source.Symbols.Contains(symbol))
-            {
+                scratch.Assignments[sourceIndex] = requirementIndex;
                 return true;
             }
         }

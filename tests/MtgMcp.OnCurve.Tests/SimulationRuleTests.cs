@@ -445,7 +445,8 @@ public sealed class SimulationRuleTests
         Guid fromAny = Assert.Single(RunOrdered(none).Outcome.Record!.Bottomed);
 
         Assert.Contains(fromFirst, new[] { Id(1), Id(2) });
-        Assert.InRange(Array.IndexOf(Enumerable.Range(1, 7).Select(Id).ToArray(), fromAny), 0, 6);
+        Assert.DoesNotContain(fromAny, new[] { Id(10), Id(11) });
+        Assert.Contains(fromAny, Enumerable.Range(1, 7).Select(Id));
     }
 
     /// <summary>

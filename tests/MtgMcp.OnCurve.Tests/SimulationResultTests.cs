@@ -101,7 +101,7 @@ public sealed class SimulationResultTests
         Assert.Null(report.Mulligans);
         Assert.Equal(0, report.LibraryEmpty);
         Assert.Empty(report.SampleHands);
-        Assert.Contains(report.Limits, limit => limit.Contains("generic mana only", StringComparison.Ordinal));
+        Assert.Contains(report.Limits, limit => limit.Contains("pays only generic costs", StringComparison.Ordinal));
         Assert.Contains(report.Limits, limit => limit.Contains("Phyrexian", StringComparison.Ordinal));
         Assert.Contains(report.Limits, limit => limit.Contains("Only the stated groups", StringComparison.Ordinal));
     }

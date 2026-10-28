@@ -884,7 +884,7 @@ These are fixed and stated in the tool description:
    untapped sources pay the most colored symbols of `targetCost`, then the
    most total symbols, then prefers `manaFrom: "same-turn"`, then the lowest
    entry ID. This is today's `target-first-v1` land choice
-   (`src/MtgMcp.OnCurve/OnCurveTrial.cs:225-290`), stated as a rule.
+   (`OnCurveTrial.cs:225-290` at 9d279de, now `SimulationTrial.ChooseTargetFirst`), stated as a rule.
 4. `manaFrom: "same-turn"` makes the added mana usable on the turn the card
    is played; `"next-turn"` makes it usable from the next turn.
 5. London mulligan: draw `openingHand.size` cards, test `keepWhen`, and if
@@ -917,7 +917,7 @@ These are fixed and stated in the tool description:
    turn's untapped sources pays both the `manaCost` and all generic mana
    spent that turn by rules. Colored symbols are matched first, then generic,
    using the matcher in `OnCurveManaPayment`
-   (`src/MtgMcp.OnCurve/OnCurveMana.cs:266`). The engine never decides which
+   (`OnCurveManaPayment` in `src/MtgMcp.OnCurve/OnCurveMana.cs`). The engine never decides which
    colored source paid an earlier generic cost; the joint assignment covers
    every choice. Hybrid symbols accept either color. Phyrexian symbols need
    their color, and life payment is listed in `limits` as not modeled.
@@ -1009,6 +1009,27 @@ phase 6 evidence row of the README.
 - **Required fields.** The input records use `required` members, so a request
   that leaves one out is refused with `invalid-arguments` and a `path` that
   names it, and the schema lists them as required.
+- **Work limits (SIM-005, repair after the strict audit).** The headline limit is samples x turns x deck
+  cards <= 50,000,000, stated in the error. It alone did not bound the real cost, so a second limit was added: an
+  operation estimate <= 400,000,000 that counts, for each turn, a hand scan for each rule, a payment test for each
+  `can-cast` check, and a payment test for each candidate of a `target-first` rule (each about cost symbols x units of
+  mana). The units of mana the rules could put in play are capped at 1,000, a cost has at most 16 symbols, 99
+  generic mana, and 128 characters, and group and condition IDs have at most 64. A request at the limits finishes in
+  seconds (`SimulationBudgetTests`). The 16 preset captures still replay.
+- **SIM-004 and the work limit.** The removed tool accepted 100,000 samples x 12 turns x 500 cards (600,000,000);
+  `stats_simulate` refuses a request above 50,000,000 for the same product. The preset replays every request the
+  limit accepts; a larger request must lower samples or turns. This narrows SIM-004 by design and is stated in the
+  README and CHANGELOG.
+- **Fingerprint.** It covers the deck (entries and counts), groups, rules, conditions, turns, opening hand, the
+  versions, and the deck revision. It leaves out the seed, the sample count, and `sampleHands`, so runs of one model
+  share it.
+- **Recorded fixture.** The App fixture count (82 of 100) was captured by running the old tool's App test at 9d279de
+  and reading its success count; the 16 engine captures were generated from the old calculator at 9d279de.
+- **Two cost readers.** `stats_castability` reads costs with `CastabilityManaCost` (it skips hybrid and Phyrexian
+  symbols), and the simulation reads them with `OnCurveManaSymbols` (it pays them). They differ on purpose, and a
+  shared tokenizer in Core is possible later.
+- **Shared select contract.** The select records keep their `Castability` names although both tools use them; a
+  rename waits for the `MtgMcp.Simulation` rename.
 - **Description label.** `stats_simulate` starts with `Seeded sampling:` and
   not `Exact math:`, so an estimate is not labeled as exact math (NAME-002).
 
@@ -1020,7 +1041,7 @@ draw, seed) into the equivalent groups, rules, and one condition, then calls
 the same engine. The preset's rules appear in `appliedRules` like any other
 request. SIM-004 replay fixtures prove identical hit counts.
 
-Today's estimator pays colored target costs from the colors each source
+The removed estimator (line numbers refer to 9d279de) paid colored target costs from the colors each source
 produces (`OnCurveCalculator.cs:143-186`, `OnCurveMana.cs:266`). It chooses
 which land to play by the target's cost (`ChooseLand` and `IsBetter`,
 `OnCurveTrial.cs:225-290`), and counts a hit only when the target is in hand

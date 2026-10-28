@@ -80,12 +80,14 @@ internal sealed record SimulationGroupInput
     /// <summary>
     /// Gets the colors of mana the group's cards add.
     /// </summary>
-    [Description("Colors of mana the group's cards add. Without it the group adds generic mana only.")]
+    [Description(
+        "Colors of mana the group's cards add. Without it the group's cards add colorless mana that pays generic " +
+        "costs only (not {C}).")]
     public SimulationProducesInput? Produces { get; init; }
 }
 
 /// <summary>
-/// Chooses the cards a mulligan keeps; only these three kinds are allowed there.
+/// Says which hands a mulligan keeps; only these three kinds are allowed there.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(SimulationKeepCountBetweenInput), "count-between")]
@@ -259,8 +261,8 @@ internal abstract record SimulationRuleInput
     /// Gets how the card is chosen.
     /// </summary>
     [Description(
-        "How to choose among the group's cards in hand: random (uniform, seeded), listed-order (first entry in the " +
-        "group's entryIds; only for entry-ids groups), or target-first (play rules only; needs targetCost)."),
+        "How to choose among the group's cards in hand: random (uniform, seeded), listed-order (the entry " +
+        "listed first in select.ids; only for entry-ids groups), or target-first (play rules only; needs targetCost)."),
      AllowedValues("random", "listed-order", "target-first")]
     public required string Pick { get; init; }
 
@@ -546,7 +548,9 @@ internal sealed record SimulationOnCurvePresetInput : SimulationPresetInput
     /// <summary>
     /// Gets the rule for each land.
     /// </summary>
-    [Description("One rule for every eligible single-faced land in the main zone, each named once.")]
+    [Description(
+        "One rule for every eligible land, each named once. An eligible land is a single-faced main-zone land " +
+        "whose installed card data lists the colors it makes.")]
     public required IReadOnlyList<SimulationLandRuleInput> LandRules { get; init; }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using MtgMcp.App.CardLists;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.OnCurve;
@@ -105,14 +106,17 @@ internal static class SimulationRequestMapper
     private static OperationInvalidInput? CheckIdCounts(SimulationScenario scenario)
     {
         int total = 0;
-        foreach (SimulationGroupInput? group in scenario.Groups)
+        for (int index = 0; index < scenario.Groups.Count; index++)
         {
+            SimulationGroupInput? group = scenario.Groups[index];
             int own = CountIds(group?.Select) +
                 (group?.Produces?.ByEntry?.Sum(item => item?.EntryIds?.Count ?? 0) ?? 0);
             total += own;
             if (CountIds(group?.Select) > CardListResolver.MaximumIdsPerSource)
             {
-                return TooManyIds($"A select lists at most {CardListResolver.MaximumIdsPerSource} IDs.");
+                return TooManyIds(
+                    $"A select lists at most {CardListResolver.MaximumIdsPerSource} IDs.",
+                    $"groups[{index}].select.ids");
             }
         }
 
@@ -122,7 +126,9 @@ internal static class SimulationRequestMapper
         }
 
         return total > CardListResolver.MaximumIdsPerRequest
-            ? TooManyIds($"A request lists at most {CardListResolver.MaximumIdsPerRequest} entry and category IDs.")
+            ? TooManyIds(
+                $"A request lists at most {CardListResolver.MaximumIdsPerRequest} entry and category IDs.",
+                "groups")
             : null;
     }
 
@@ -142,9 +148,9 @@ internal static class SimulationRequestMapper
     /// <summary>
     /// Builds the failure for too many IDs.
     /// </summary>
-    private static OperationInvalidInput TooManyIds(string message)
+    private static OperationInvalidInput TooManyIds(string message, string path)
     {
-        return new OperationInvalidInput("too-many-ids", message, "groups");
+        return new OperationInvalidInput("too-many-ids", message, path);
     }
 
     /// <summary>
@@ -176,6 +182,7 @@ internal static class SimulationRequestMapper
             OperationInvalidInput? problem = KeepMainZone(
                 input,
                 chosen.Data,
+                library,
                 main,
                 names,
                 path,
@@ -213,6 +220,7 @@ internal static class SimulationRequestMapper
     private static OperationInvalidInput? KeepMainZone(
         SimulationGroupInput input,
         List<Guid> chosen,
+        IReadOnlyList<DeckEntry> library,
         Dictionary<Guid, DeckEntry> main,
         Dictionary<Guid, string> names,
         string path,
@@ -243,8 +251,8 @@ internal static class SimulationRequestMapper
 
         if (!byEntry)
         {
-            List<Guid> order = [.. main.Keys];
-            members.Sort((left, right) => order.IndexOf(left).CompareTo(order.IndexOf(right)));
+            HashSet<Guid> chosenIds = [.. members];
+            members = [.. library.Where(entry => chosenIds.Contains(entry.EntryId)).Select(entry => entry.EntryId)];
         }
 
         return null;
@@ -422,7 +430,7 @@ internal static class SimulationRequestMapper
             case SimulationPlayInput play:
                 return MapPlay(play, picked.Data, path);
             case SimulationCastIfAbleInput cast:
-                return MapMana(cast, picked.Data, path, (timing, overrides) => new SimulationCastIfAble(
+                return MapMana(cast, path, (timing, overrides) => new SimulationCastIfAble(
                     cast.Group, picked.Data, cast.MaxPerTurn, cast.Cost, cast.AddsMana, timing, overrides));
             case SimulationDrawCardsInput draw:
                 return MapDraw(draw, picked.Data, path);
@@ -436,7 +444,7 @@ internal static class SimulationRequestMapper
     /// </summary>
     private static OperationResult<SimulationRule> MapPlay(SimulationPlayInput play, SimulationPick pick, string path)
     {
-        return MapMana(play, pick, path, (timing, overrides) => new SimulationPlay(
+        return MapMana(play, path, (timing, overrides) => new SimulationPlay(
             play.Group, pick, play.MaxPerTurn, play.AddsMana, timing, overrides, play.TargetCost));
     }
 
@@ -445,11 +453,9 @@ internal static class SimulationRequestMapper
     /// </summary>
     private static OperationResult<SimulationRule> MapMana(
         SimulationManaRuleInput input,
-        SimulationPick pick,
         string path,
         Func<SimulationManaFrom, List<SimulationManaFromOverride>, SimulationRule> build)
     {
-        _ = pick;
         OperationResult<SimulationManaFrom> from = ParseManaFrom(input.ManaFrom, path + ".manaFrom");
         if (from is not OperationSuccess<SimulationManaFrom> manaFrom)
         {
@@ -602,6 +608,6 @@ internal static class SimulationRequestMapper
     /// </summary>
     private static OperationInvalidInput Missing(string path)
     {
-        return new OperationInvalidInput("missing-field", $"A required value is missing at {path}.", path);
+        return new OperationInvalidInput(KindFields.MissingField, $"A required value is missing at {path}.", path);
     }
 }

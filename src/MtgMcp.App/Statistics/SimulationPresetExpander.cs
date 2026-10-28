@@ -20,6 +20,21 @@ internal sealed record ExpandedPreset(SimulationScenario Scenario, SimulationPre
 internal static class SimulationPresetExpander
 {
     /// <summary>
+    /// Names the land rule for mana usable on the turn the land is played.
+    /// </summary>
+    private const string SameTurnRule = "one-mana-same-turn";
+
+    /// <summary>
+    /// Names the land rule for mana usable from the next turn.
+    /// </summary>
+    private const string NextTurnRule = "one-mana-next-turn";
+
+    /// <summary>
+    /// Names the land rule for a land that stays in the library.
+    /// </summary>
+    private const string NotModeledRule = "not-modeled";
+
+    /// <summary>
     /// Names the preset's one group.
     /// </summary>
     private const string LandsGroup = "lands";
@@ -80,7 +95,7 @@ internal static class SimulationPresetExpander
             return missing;
         }
 
-        return Expand(preset, target, library, cards.Data.Cards);
+        return Expand(preset, target, library, cards.Data.Cards, library.ToList().IndexOf(target));
     }
 
     /// <summary>
@@ -120,9 +135,10 @@ internal static class SimulationPresetExpander
         SimulationOnCurvePresetInput preset,
         DeckEntry target,
         IReadOnlyList<DeckEntry> library,
-        IReadOnlyList<ScryfallListCard?> cards)
+        IReadOnlyList<ScryfallListCard?> cards,
+        int targetIndex)
     {
-        ScryfallCard targetCard = cards[library.ToList().IndexOf(target)]!.Card;
+        ScryfallCard targetCard = cards[targetIndex]!.Card;
         if (targetCard.Faces.Count > 0)
         {
             return new OperationUnsupported(
@@ -245,7 +261,7 @@ internal static class SimulationPresetExpander
         {
             SimulationLandRuleInput? input = inputs[position];
             string path = $"preset.landRules[{position}]";
-            if (input is null || input.Rule is not ("one-mana-same-turn" or "one-mana-next-turn" or "not-modeled"))
+            if (input is null || input.Rule is not (SameTurnRule or NextTurnRule or NotModeledRule))
             {
                 return new OperationInvalidInput(
                     "invalid-land-rules",
@@ -290,7 +306,7 @@ internal static class SimulationPresetExpander
         List<Candidate> candidates,
         Dictionary<Guid, string> rules)
     {
-        List<Candidate> modeled = [.. candidates.Where(candidate => rules[candidate.Entry.EntryId] != "not-modeled")];
+        List<Candidate> modeled = [.. candidates.Where(candidate => rules[candidate.Entry.EntryId] != NotModeledRule)];
         List<SimulationGroupInput> groups = [];
         List<SimulationRuleInput> eachTurn = [];
         if (modeled.Count > 0)
@@ -304,7 +320,7 @@ internal static class SimulationPresetExpander
             List<Guid> nextTurn =
             [
                 .. modeled
-                    .Where(candidate => rules[candidate.Entry.EntryId] == "one-mana-next-turn")
+                    .Where(candidate => rules[candidate.Entry.EntryId] == NextTurnRule)
                     .Select(candidate => candidate.Entry.EntryId),
             ];
             eachTurn.Add(new SimulationPlayInput

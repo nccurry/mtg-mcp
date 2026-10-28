@@ -84,23 +84,25 @@ public sealed class StatisticsSimulatePresetTests
     public async Task Preset_WithTheAppFixtureDeck_ReplaysTheOriginalToolAndStatesItsRules()
     {
         using PresetFixture fixture = await PresetFixture.CreateAsync();
+        int requestsBefore = fixture.Handler.RequestCount;
 
         SimulateToolResult result = SimulateSetup.Success(await fixture.RunAsync(fixture.Request()));
+        Assert.Equal(requestsBefore, fixture.Handler.RequestCount);
 
         Assert.Equal(OnCurveReplayFixtures.AppFixtureSuccessCount(), result.Results[0].Hits);
         SimulationPresetFacts facts = result.Preset!;
         Assert.Equal("on-curve", facts.Kind);
         Assert.Equal("Fixture Growth", facts.Target.Name);
         Assert.Equal("{1}{G}", facts.Target.ManaCost);
-        Assert.Equal(DeckOnCurveSourceFixture.TargetPrintingId, facts.Target.PrintingId);
+        Assert.Equal(PresetCardDataFixture.TargetPrintingId, facts.Target.PrintingId);
         SimulationPresetLand forest = Assert.Single(facts.CandidateLands);
-        Assert.Equal(DeckOnCurveSourceFixture.GreenLandPrintingId, forest.PrintingId);
+        Assert.Equal(PresetCardDataFixture.GreenLandPrintingId, forest.PrintingId);
         Assert.Equal(["G"], forest.ProducedMana);
         Assert.Equal("one-mana-same-turn", forest.Rule);
         Assert.Equal(
-            DeckOnCurveSourceFixture.KnownEmptyLandPrintingId,
+            PresetCardDataFixture.KnownEmptyLandPrintingId,
             Assert.Single(facts.KnownEmptyLands).PrintingId);
-        Assert.Equal(DeckOnCurveSourceFixture.MultiFacePrintingId, Assert.Single(facts.MultiFaceCards).PrintingId);
+        Assert.Equal(PresetCardDataFixture.MultiFacePrintingId, Assert.Single(facts.MultiFaceCards).PrintingId);
         Assert.Equal("installed-scryfall-card-data", facts.Source);
         SimulationPlayInput play = Assert.IsType<SimulationPlayInput>(Assert.Single(result.AppliedRules.EachTurn));
         Assert.Equal(
@@ -213,9 +215,9 @@ public sealed class StatisticsSimulatePresetTests
     public async Task Preset_WithUntrustedFacts_IsUnavailable()
     {
         using PresetFixture nullLand = await PresetFixture.CreateAsync(
-            extraLand: DeckOnCurveSourceFixture.NullLandPrintingId);
+            extraLand: PresetCardDataFixture.NullLandPrintingId);
         using PresetFixture missingLand = await PresetFixture.CreateAsync(
-            extraLand: DeckOnCurveSourceFixture.MissingLandPrintingId);
+            extraLand: PresetCardDataFixture.MissingLandPrintingId);
         using PresetFixture noData = await PresetFixture.CreateAsync(unidentified: true);
 
         OperationUnavailable nullFact = Assert.IsType<OperationUnavailable>(
@@ -481,6 +483,11 @@ public sealed class StatisticsSimulatePresetTests
         private SqliteDeckStore store = null!;
 
         /// <summary>
+        /// Gets the fake provider, to read how many requests it saw.
+        /// </summary>
+        internal PresetCardDataFixture.PresetCardHandler Handler { get; private set; } = null!;
+
+        /// <summary>
         /// Gets the target entry.
         /// </summary>
         internal Guid TargetEntryId { get; private set; }
@@ -515,8 +522,9 @@ public sealed class StatisticsSimulatePresetTests
             bool unidentified = false)
         {
             PresetFixture fixture = new();
-            DeckOnCurveSourceFixture.DeckOnCurveSourceHandler handler = DeckOnCurveSourceFixture.CreateHandler();
-            fixture.scryfall = DeckOnCurveSourceFixture.CreateService(fixture.folder.Path, handler);
+            PresetCardDataFixture.PresetCardHandler handler = PresetCardDataFixture.CreateHandler();
+            fixture.Handler = handler;
+            fixture.scryfall = PresetCardDataFixture.CreateService(fixture.folder.Path, handler);
             if (install)
             {
                 _ = await fixture.scryfall.SyncCorpusAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -525,17 +533,17 @@ public sealed class StatisticsSimulatePresetTests
             fixture.store = new SqliteDeckStore(fixture.folder.Path, "test");
             List<DeckEntryDraft> entries =
             [
-                new(1, "Fixture Growth", PrintingId: DeckOnCurveSourceFixture.TargetPrintingId, Zone: "main"),
-                new(7, "Fixture Forest", PrintingId: DeckOnCurveSourceFixture.GreenLandPrintingId, Zone: "main"),
+                new(1, "Fixture Growth", PrintingId: PresetCardDataFixture.TargetPrintingId, Zone: "main"),
+                new(7, "Fixture Forest", PrintingId: PresetCardDataFixture.GreenLandPrintingId, Zone: "main"),
                 new(
                     1,
                     "Fixture Front // Fixture Back",
-                    PrintingId: DeckOnCurveSourceFixture.MultiFacePrintingId,
+                    PrintingId: PresetCardDataFixture.MultiFacePrintingId,
                     Zone: "main"),
                 new(
                     1,
                     "Fixture Empty Land",
-                    PrintingId: DeckOnCurveSourceFixture.KnownEmptyLandPrintingId,
+                    PrintingId: PresetCardDataFixture.KnownEmptyLandPrintingId,
                     Zone: "main"),
             ];
             if (extraLand is Guid land)
@@ -554,7 +562,7 @@ public sealed class StatisticsSimulatePresetTests
                     new DeckEntryDraft(
                         1,
                         "Fixture Commander",
-                        PrintingId: DeckOnCurveSourceFixture.TargetPrintingId,
+                        PrintingId: PresetCardDataFixture.TargetPrintingId,
                         Zone: "commander"));
             }
 

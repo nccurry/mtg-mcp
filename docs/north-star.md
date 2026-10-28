@@ -5,8 +5,8 @@ by supplying grounded evidence. The MCP gathers and computes; the calling LLM
 connects that evidence to a player's goals and makes the judgment.
 
 For stable `0.9.0`, this means provider data, exact cached evidence, explicit
-deck/provider operations, exact mathematics, and seeded sampling of rules the caller
-states (`stats_simulate`). It does not include advisor prompts, inferred deck intent,
+deck/provider operations, and exact mathematics. From `0.12.0` it also includes seeded sampling of rules the
+caller states (`stats_simulate`; `0.9.0` had one on-curve estimate). It does not include advisor prompts, inferred deck intent,
 weak-card judgments, replacement recommendations, blended quality scores, or
 strategic automation. Those legacy features are removal targets, not
 abstractions to preserve.

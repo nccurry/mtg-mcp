@@ -1,7 +1,7 @@
 {
   "source": "Captured from the on-curve estimator (model on-curve-v1, policy target-first-v1, random splitmix64-v1) at commit 9d279de, before the stats_simulate engine replaced it. Entry ids are small integers; the test turns id n into the GUID whose first group is n.",
   "appFixture": {
-    "description": "The App test deck: Fixture Growth {1}{G} x1, Fixture Forest (G) x7 same turn, one multi-face card, one empty land; installed card data fixture.",
+    "description": "Recorded by running the old tool's App test at 9d279de (the old coordinator returned this success count). The App test deck: Fixture Growth {1}{G} x1, Fixture Forest (G) x7 same turn, one multi-face card, one empty land; installed card data fixture.",
     "turnLimit": 2,
     "sampleCount": 100,
     "onThePlay": true,

@@ -134,6 +134,20 @@ internal sealed class StatisticsSimulateCoordinator
             return OperationFailure.Forward<SimulationMapping, SimulateToolResult>(mapped);
         }
 
+        int echoed = ResultSize.Measure(new SimulationAppliedRules(
+                ready.Data.Scenario.Turns,
+                ready.Data.Scenario.OpeningHand,
+                ready.Data.Scenario.Groups,
+                ready.Data.Scenario.EachTurn,
+                ready.Data.Scenario.Conditions));
+        if (echoed > MaximumResultBytes)
+        {
+            return new OperationInvalidInput(
+                "result-too-large",
+                "The echoed rules alone are over the size limit. Use fewer groups, rules, and conditions.",
+                "groups");
+        }
+
         OperationResult<SimulationReport> run = SimulationEngine.Run(mapping.Data.Request, cancellationToken);
         if (run is not OperationSuccess<SimulationReport> report)
         {
@@ -162,7 +176,7 @@ internal sealed class StatisticsSimulateCoordinator
     {
         if (deck is null)
         {
-            return new OperationInvalidInput("missing-field", "deck is required.", "deck");
+            return new OperationInvalidInput(KindFields.MissingField, "deck is required.", "deck");
         }
 
         if (preset is not null)
@@ -188,7 +202,10 @@ internal sealed class StatisticsSimulateCoordinator
 
             return preset is SimulationOnCurvePresetInput { LandRules: not null }
                 ? null
-                : new OperationInvalidInput("missing-field", "preset.landRules is required.", "preset.landRules");
+                : new OperationInvalidInput(
+                    KindFields.MissingField,
+                    "preset.landRules is required.",
+                    "preset.landRules");
         }
 
         (string Name, bool Given)[] required =
@@ -271,10 +288,9 @@ internal sealed class StatisticsSimulateCoordinator
         if (prepared.Facts is not null)
         {
             limits.Add(
-                "The on-curve preset plays at most one land each turn, keeps the opening seven cards, and reads " +
-                "lands " +
-                "and the target from installed Scryfall card data; a land that enters tapped is modeled only by its " +
-                "one-mana-next-turn rule.");
+                "The on-curve preset plays at most one land each turn, keeps the opening seven cards, and reads the " +
+                "lands and the target from installed Scryfall card data; a land that enters tapped is modeled only " +
+                "by its one-mana-next-turn rule.");
         }
 
         ResultView view = new(info, prepared, mapping, report, library, listed, limits);

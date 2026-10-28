@@ -201,14 +201,14 @@ are always inline, and the MCP does not decide what a category means. See
 [Category rules without a preset](#category-rules-without-a-preset) for what
 replaced the removed `common-v1` preset.
 
-### Estimate mana on curve
+## Sample games and estimate mana on curve
 
 `stats_simulate` replaces `local_deck_on_curve_estimate`, which was removed in
 `0.12.0`. It is in the `stats` toolset. Use its `on-curve` preset to sample how
 often one main-zone card can be cast by a chosen turn: give the saved deck, the
 target entry ID, one rule for each eligible single-faced land, a turn limit, and
 play or draw. The preset expands to ordinary rules, which the result echoes in
-`appliedRules`, and it replays the removed tool's success counts for the same
+`appliedRules`, and, within the work limit below, it replays the removed tool's success counts for the same
 deck, seed, and inputs. It needs installed card data for the target's cost and
 the lands' colors, and it models only lands as mana, one land a turn.
 
@@ -221,7 +221,7 @@ that draw at once or every turn, group `produces` colors, and `can-cast`
 checks that pay a mana cost together with all mana already spent that turn. It
 chooses no strategy: every pick, limit, and mulligan rule is a field you supply.
 The same request and seed give the same result on every platform. A request is
-limited to samples x turns x deck cards of 50,000,000, and the result states
+limited to samples x turns x deck cards of 50,000,000 (the removed tool accepted more: lower samples or turns for a larger run) and to an operation estimate of 400,000,000, and the result states
 the seed, the applied rules, each condition's hits and 95% Wilson interval,
 mulligan keep counts, how many games emptied the library, and up to 10 full
 sample games. This example asks how often a 99-card deck with 40 land cards has
@@ -556,7 +556,7 @@ resolved against installed card data, so run `scryfall_card_data_sync` first.
 Use `scryfall_tags_search` to find other tags, then use their `exactSlug`
 instead of `tagId` if you prefer.
 
-## Calculate exact statistics and sample games
+## Calculate exact statistics
 
 The `stats` toolset provides ten read-only tools for:
 

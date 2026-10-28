@@ -159,7 +159,7 @@ public sealed class SimulationValidationTests
 
         AssertRefused(
             Request(Distinct(12), groups, [Play("g", SimulationPick.TargetFirst)]),
-            "invalid-simulation-check",
+            "missing-field",
             "eachTurn[0].targetCost");
         AssertRefused(
             Request(Distinct(12), groups, [Play("g", SimulationPick.TargetFirst, targetCost: "{X}")]),
@@ -241,7 +241,7 @@ public sealed class SimulationValidationTests
                         SimulationManaFrom.SameTurn,
                         null,
                         (SimulationManaFrom.NextTurn, [2]))]),
-            "invalid-simulation-group",
+            "invalid-simulation-rule",
             "eachTurn[0].manaFromByEntry[0].entryIds");
     }
 

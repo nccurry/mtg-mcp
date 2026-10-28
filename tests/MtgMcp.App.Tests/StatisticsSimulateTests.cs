@@ -621,6 +621,40 @@ public sealed class StatisticsSimulateTests
     }
 
     /// <summary>
+    /// Verifies the README example: a 99-card deck with 40 land cards, one land a turn, and four mana on turn 4 gives
+    /// the numbers the README prints for the seed.
+    /// </summary>
+    [Fact]
+    public async Task Simulate_WithTheReadmeExample_GivesTheDocumentedCounts()
+    {
+        using SimulateSetup setup = await CreateAsync();
+        Guid land = Guid.Parse("0193e97a-ef95-7700-8000-000000000011");
+        Guid category = Guid.Parse("0193e97a-ef95-7700-8000-000000000021");
+        Guid deckId = Assert.IsType<OperationSuccess<DeckDocument>>((await setup.Data.Store.CreateAsync(
+            new DeckCreateRequest(
+                "Readme",
+                Entries:
+                [
+                    new DeckEntryDraft(40, "Forest", Zone: "main", EntryId: land),
+                    new DeckEntryDraft(59, "Other", Zone: "main"),
+                ],
+                Categories: [new DeckCategoryDraft("Lands", CategoryId: category)],
+                CategoryAssignments: [new DeckCategoryAssignment(land, category, true)]),
+            TestContext.Current.CancellationToken)).Value).Data.DeckId;
+
+        SimulateToolResult result = Success(await setup.RunAsync(
+            deck: new SimulationDeckInput { DeckId = deckId },
+            groups: [new SimulationGroupInput { Id = "lands", Select = new CastabilityCategoryIdsSelect([category]) }],
+            conditions: [Condition("four-mana-turn-4", new SimulationManaAtLeastInput { Amount = 4, Turn = 4 })],
+            samples: 10_000));
+
+        SimulationConditionView view = Assert.Single(result.Results);
+        Assert.Equal(6365, view.Hits);
+        Assert.Equal(0.6365, view.Rate);
+        Assert.Equal([0.627022, 0.645873], view.Wilson95);
+    }
+
+    /// <summary>
     /// Measures a result as the server writes it.
     /// </summary>
     private static int Size(SimulateToolResult result)

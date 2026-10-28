@@ -273,7 +273,7 @@ Example error after the change, for a value the schema rejects:
 | `/estimate-bracket` reverses the Spellbook packet's exclusion of that endpoint. | Bracket labels leak into results. | The adapter removes `bracketTag` before building the result; a test fails if it appears (BRACKET-001). Phase 4 step 1 records the reversal in the rewrite umbrella. |
 | Playgroup statistics read many game pages. | Slow calls and provider load. | Existing pacing, a game limit stated in the request and result, and date filters (PG-001, PG-002). |
 | Pairing abilities change with new sets. | A new Partner variant is reported wrong. | Pairing reads Scryfall `keywords`; an unknown Partner variant returns `status: "unknown"` with the keyword instead of a pass or fail. |
-| Colored simulation is slower than generic. | Work limit hit sooner. | The work limit counts colored conditions; the error states the limit. |
+| Colored simulation is slower than generic. | Work limit hit sooner. | Two limits: samples x turns x deck cards (SIM-005), and an operation estimate that counts each can-cast check, each target-first candidate, the rules, and the mana units in play, with a cap on units of mana, cost symbols, and generic cost; each error states its limit. |
 | SDK 2.2.0 may not support tool `_meta` or prompts. | SAFE-002 or PROMPT-001 cannot pass. | Both are Should. The phase 1 spike records support; unsupported items are deferred with the reason. |
 
 ## Assumptions
