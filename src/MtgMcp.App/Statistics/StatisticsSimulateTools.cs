@@ -43,15 +43,6 @@ internal sealed class StatisticsSimulateTools
         "\"sampleHands\":3,\"seed\":\"9f3c1a7e5b2d4c60\"}";
 
     /// <summary>
-    /// A preset request: the on-curve estimate of one card, with a rule for the one land.
-    /// </summary>
-    internal const string ExamplePreset =
-        "{\"deck\":{\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId + "\"},\"preset\":{\"kind\":\"on-curve\"," +
-        "\"targetEntryId\":\"" + StatisticsCastabilityTools.ExampleEntryId2 + "\",\"landRules\":[{\"entryId\":\"" +
-        DeckToolExamples.PlaceholderEntryId + "\",\"rule\":\"one-mana-same-turn\"}],\"turnLimit\":4," +
-        "\"onThePlay\":true},\"samples\":10000,\"sampleHands\":0}";
-
-    /// <summary>
     /// Runs the simulation.
     /// </summary>
     private readonly StatisticsSimulateCoordinator coordinator;
@@ -102,8 +93,7 @@ internal sealed class StatisticsSimulateTools
         "target card, from installed card data." +
         UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + ExampleMinimal +
-        DeckToolExamples.ExamplePrefix + "full): " + ExampleFull +
-        DeckToolExamples.ExamplePrefix + "preset): " + ExamplePreset)]
+        DeckToolExamples.ExamplePrefix + "full): " + ExampleFull)]
     internal Task<OperationResult<SimulateToolResult>> SimulateAsync(
         [Description("The saved deck whose main zone is shuffled: at most 150 entries and 500 cards.")]
         SimulationDeckInput deck,

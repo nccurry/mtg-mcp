@@ -312,7 +312,7 @@ public sealed class StatisticsSimulatePresetTests
     }
 
     /// <summary>
-    /// Verifies the published examples bind to the tool and run, including one that uses the preset (SCHEMA-006).
+    /// Verifies the published examples bind to the tool and run, (SCHEMA-006).
     /// </summary>
     [Fact]
     public async Task Examples_BindAndRun()
@@ -350,7 +350,7 @@ public sealed class StatisticsSimulatePresetTests
         (string Name, string Json)[] examples = CardListExampleSupport.ReadExamples(
             CardListExampleSupport.DescriptionOf("stats_simulate"));
 
-        Assert.Equal(["minimal", "full", "preset"], examples.Select(example => example.Name));
+        Assert.Equal(["minimal", "full"], examples.Select(example => example.Name));
         foreach ((string name, string json) in examples)
         {
             string filled = CardListExampleSupport.Fill(json, deck, Guid.NewGuid(), Guid.NewGuid());
