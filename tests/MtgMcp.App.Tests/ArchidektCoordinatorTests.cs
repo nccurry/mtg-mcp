@@ -1036,6 +1036,174 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Holds a remote deck whose categories include two that differ only by case, with the card in one of them.
+    /// </summary>
+    private static readonly string CaseVariantDeck = RemoteDeck
+        .Replace(
+            "{ \"id\": 10, \"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0 }",
+            "{ \"id\": 10, \"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0 }," +
+            "{ \"id\": 11, \"name\": \"Sideboard\", \"includedInDeck\": false, \"includedInPrice\": true, \"sortOrder\": 1 }," +
+            "{ \"id\": 12, \"name\": \"SIDEBOARD\", \"includedInDeck\": false, \"includedInPrice\": true, \"sortOrder\": 2 }",
+            StringComparison.Ordinal)
+        .Replace("\"categories\": [\"Mainboard\"]", "\"categories\": [\"SIDEBOARD\"]", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Verifies a push that moves a card between two categories that differ only by case sends the exact names and
+    /// is planned as one card update, with no category change.
+    /// </summary>
+    [Fact]
+    public async Task Push_MovingACardBetweenCaseVariantCategories_SendsTheExactName()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            handler.SetStanding("api/decks/42/", CaseVariantDeck);
+            handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+            DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+            DeckEntry island = Assert.Single(local.Entries);
+            DeckCategory lower = local.Categories.First(value => value.Name == "Sideboard");
+            DeckCategory upper = local.Categories.First(value => value.Name == "SIDEBOARD");
+            DeckDocument moved = Success(await store.ApplyChangesAsync(
+                localDeckId,
+                local.Revision,
+                [
+                    new UnassignDeckCategoryChange(island.EntryId, upper.CategoryId),
+                    new AssignDeckCategoryChange(island.EntryId, lower.CategoryId, true),
+                ],
+                TestContext.Current.CancellationToken));
+
+            ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                localDeckId,
+                TestContext.Current.CancellationToken));
+            _ = await coordinator.ApplyPushAsync(
+                new ArchidektPushApplyRequest(localDeckId, moved.Revision, push.RemoteFingerprint, push.PreviewFingerprint),
+                TestContext.Current.CancellationToken);
+            string body = handler.Bodies[handler.Requests.FindIndex(value => value.Method == HttpMethod.Patch)];
+
+            Assert.Equal(["entry-update:Island"], push.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
+            Assert.Contains("\"categories\":[\"Sideboard\"]", body, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the same remote deck imports again after the first copy lost its binding and was renamed.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPull_ImportingAgainAfterTheBindingWasRemovedAndTheDeckRenamed_Succeeds()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            handler.SetStanding("api/decks/42/", RemoteDeck);
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview first = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid firstId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, first.RemoteFingerprint, first.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+            DeckDocument firstDeck = Success(await store.GetAsync(firstId, TestContext.Current.CancellationToken));
+            _ = Success(await store.ApplyChangesAsync(
+                firstId,
+                firstDeck.Revision,
+                [
+                    new RemoveDeckProviderBindingChange(Assert.Single(firstDeck.ProviderBindings).BindingId),
+                    new UpdateDeckMetadataChange("Renamed copy", null, firstDeck.Format),
+                ],
+                TestContext.Current.CancellationToken));
+
+            ArchidektSyncPreview second = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            ArchidektApplyResult imported = Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, second.RemoteFingerprint, second.PreviewFingerprint),
+                TestContext.Current.CancellationToken));
+
+            Assert.Equal("applied", imported.Outcome);
+            Assert.NotEqual(firstId, imported.LocalDeckId);
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Verifies edits to the same field that end in different values are still a conflict, and one converged row does
+    /// not hide another row that really conflicts.
+    /// </summary>
+    [Fact]
+    public async Task Push_WhenTheSameFieldEndsInDifferentValues_IsStillAConflict()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string remoteChanged = RichRemoteDeck
+            .Replace("\"deckRelationId\": 101, \"quantity\": 2", "\"deckRelationId\": 101, \"quantity\": 4", StringComparison.Ordinal)
+            .Replace("\"deckRelationId\": 102, \"quantity\": 1", "\"deckRelationId\": 102, \"quantity\": 6", StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
+                await PullRichDeckAsync(handler, root);
+            using (store)
+            {
+                DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                DeckEntry bolt = local.Entries.First(value => value.CardName == "Bolt");
+                DeckEntry anger = local.Entries.First(value => value.CardName == "Anger");
+                DeckDocument edited = Success(await store.ApplyChangesAsync(
+                    localDeckId,
+                    local.Revision,
+                    [
+                        new UpdateDeckEntryChange(bolt with { Quantity = 3 }),
+                        new UpdateDeckEntryChange(anger with { Quantity = 6 }),
+                    ],
+                    TestContext.Current.CancellationToken));
+                handler.SetStanding("api/decks/42/", remoteChanged);
+
+                ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                OperationConflict refused = Assert.IsType<OperationConflict>((await coordinator.ApplyPushAsync(
+                    new ArchidektPushApplyRequest(
+                        localDeckId,
+                        edited.Revision,
+                        push.RemoteFingerprint,
+                        push.PreviewFingerprint),
+                    TestContext.Current.CancellationToken)).Value);
+
+                Assert.True(push.HasConflicts);
+                Assert.Contains(push.Differences, value => value.State == "concurrent-changed");
+                Assert.Contains(push.Differences, value => value.State == "converged");
+                Assert.Equal("push-conflict", refused.ReasonCode);
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]
@@ -1598,6 +1766,11 @@ public sealed class ArchidektCoordinatorTests
         internal List<HttpRequestMessage> Requests { get; } = [];
 
         /// <summary>
+        /// Gets the text of each request body, in provider start order, read before the content is disposed.
+        /// </summary>
+        internal List<string> Bodies { get; } = [];
+
+        /// <summary>
         /// Stores GET bodies that answer every request for a path, and can be replaced to change the remote deck.
         /// </summary>
         private readonly ConcurrentDictionary<string, string> standing = new(StringComparer.Ordinal);
@@ -1629,8 +1802,8 @@ public sealed class ArchidektCoordinatorTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            _ = cancellationToken;
             Requests.Add(request);
+            Bodies.Add(request.Content is null ? string.Empty : request.Content.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult());
             string key = $"{request.Method.Method} {request.RequestUri!.PathAndQuery.TrimStart('/')}";
             if (standing.TryGetValue(key, out string? body) &&
                 !(responses.TryGetValue(key, out Queue<HttpResponseMessage>? pending) && pending.Count > 0))
