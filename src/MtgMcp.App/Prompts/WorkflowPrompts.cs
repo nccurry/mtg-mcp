@@ -67,8 +67,8 @@ internal sealed class WorkflowPrompts
             3. For the curve, call card_list_query on source {"kind": "deck", "deckId": "{{id}}", "zones": ["main"]}
                with groupBy ["manaValue"], metrics ["quantity"], and where manaValue gt 0, and report the counts.
                Mana value 0 holds lands and free spells and is left out; say so.
-            4. For colors, call card_list_query on the same source with no groupBy and metrics ["pips", "sources"],
-               and report the colored pips and the color sources.
+            4. For colors, call card_list_query on the same source with zones ["main", "commander"],
+               no groupBy and metrics ["pips", "sources"], and report the colored pips and the color sources.
             5. Call stats_castability for the deck's spells with source groups and turns we agree on, and report
                the exact chances.
             6. Call spellbook_deck_bracket_facts_get and report its flags and combos.
@@ -129,6 +129,7 @@ internal sealed class WorkflowPrompts
             2. For each deck, call card_list_query on source {"kind": "deck", "deckId": "<that deck's ID>",
                "zones": ["main"]} with groupBy ["manaValue"], metrics ["quantity"], and where manaValue gt 0 for
                the curve (mana value 0 holds lands and free spells and is left out; say so). Then call it again with
+               zones ["main", "commander"],
                no groupBy and metrics ["pips", "sources"] for the colors. Show the two decks side by side.
             3. Report the differences as facts: counts, names, curve, pips, and sources. Do not say which deck is
                better.
@@ -153,21 +154,22 @@ internal sealed class WorkflowPrompts
             }
             catch (Exception exception) when (exception is not (McpProtocolException or OperationCanceledException))
             {
-                string? missing = FindMissingArgument(context);
-                if (missing is null)
+                string? problem = FindArgumentProblem(context);
+                if (problem is null)
                 {
                     throw;
                 }
 
-                throw new McpProtocolException(RequiredMessage(missing), exception, McpErrorCode.InvalidParams);
+                throw new McpProtocolException(problem, exception, McpErrorCode.InvalidParams);
             }
         };
     }
 
     /// <summary>
-    /// Finds the first required argument of the matched prompt that the request left out or left blank.
+    /// Finds the first required argument of the matched prompt that the request left out, left blank, or gave as
+    /// something other than text, and words the error for it.
     /// </summary>
-    private static string? FindMissingArgument(RequestContext<GetPromptRequestParams> context)
+    private static string? FindArgumentProblem(RequestContext<GetPromptRequestParams> context)
     {
         if (context.MatchedPrimitive is not McpServerPrompt prompt || prompt.ProtocolPrompt.Arguments is null)
         {
@@ -177,17 +179,37 @@ internal sealed class WorkflowPrompts
         IDictionary<string, JsonElement>? given = context.Params?.Arguments;
         foreach (PromptArgument argument in prompt.ProtocolPrompt.Arguments)
         {
-            bool present = given is not null &&
-                given.TryGetValue(argument.Name, out JsonElement value) &&
-                value.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(value.GetString());
-            if (argument.Required == true && !present)
+            if (argument.Required != true)
             {
-                return argument.Name;
+                continue;
+            }
+
+            if (given is null || !given.TryGetValue(argument.Name, out JsonElement value) ||
+                value.ValueKind == JsonValueKind.Null)
+            {
+                return RequiredMessage(argument.Name);
+            }
+
+            if (value.ValueKind != JsonValueKind.String)
+            {
+                return MustBeUuidMessage(argument.Name);
+            }
+
+            if (string.IsNullOrWhiteSpace(value.GetString()))
+            {
+                return RequiredMessage(argument.Name);
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Words the error for an argument that is not a UUID.
+    /// </summary>
+    private static string MustBeUuidMessage(string name)
+    {
+        return $"{name} must be a UUID such as 0193e97a-ef95-7700-8000-000000000001.";
     }
 
     /// <summary>
@@ -214,7 +236,7 @@ internal sealed class WorkflowPrompts
         if (!Guid.TryParse(value, out Guid id) || id == Guid.Empty)
         {
             throw new McpProtocolException(
-                $"{name} must be a UUID such as 0193e97a-ef95-7700-8000-000000000001.",
+                MustBeUuidMessage(name),
                 McpErrorCode.InvalidParams);
         }
 

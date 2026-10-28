@@ -242,6 +242,12 @@ public sealed class FoundationMcpTests
         Assert.NotNull(session.Client.ServerCapabilities.Resources);
         Assert.NotNull(session.Client.ServerCapabilities.Tools);
         Assert.NotNull(session.Client.ServerCapabilities.Prompts);
+        Assert.NotEqual(true, session.Client.ServerCapabilities.Prompts.ListChanged);
+        Assert.NotEqual(true, session.Client.ServerCapabilities.Tools.ListChanged);
+        Assert.NotEqual(true, session.Client.ServerCapabilities.Resources.ListChanged);
+#pragma warning disable MCP9005 // The logging capability is deprecated; the test proves the server no longer claims it.
+        Assert.Null(session.Client.ServerCapabilities.Logging);
+#pragma warning restore MCP9005
 
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);

@@ -590,8 +590,8 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(3, Regex.Count(playgroupManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(2, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
-        Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
-        Assert.Contains("prompts.Remove(\"listChanged\")", source, StringComparison.Ordinal);
+        Assert.Contains("capability.Remove(\"listChanged\")", source, StringComparison.Ordinal);
+        Assert.Contains("\"resources\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);
 
         string[] forbiddenMarkers =

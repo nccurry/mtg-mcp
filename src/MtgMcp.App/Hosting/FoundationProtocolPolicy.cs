@@ -28,25 +28,38 @@ internal static class FoundationProtocolPolicy
     }
 
     /// <summary>
-    /// Removes implicit logging and dynamic tool-list and prompt-list claims from an initialization-shaped result.
+    /// Removes implicit logging and dynamic list claims (tools, prompts, and resources) from a capability result.
+    /// Two shapes carry capabilities: the initialize result, which has a top-level <c>serverInfo</c>, and the
+    /// <c>server/discover</c> result of the pinned protocol, which has <c>supportedVersions</c> and keeps the server
+    /// information in <c>_meta</c>. The server registers everything at start and sends no list-changed notification.
     /// </summary>
     internal static void RemoveUnsupportedImplicitCapabilities(JsonNode? result)
     {
-        if (result is JsonObject resultObject &&
-            resultObject["serverInfo"] is JsonObject &&
-            resultObject["capabilities"] is JsonObject capabilities)
+        if (result is not JsonObject resultObject ||
+            resultObject["capabilities"] is not JsonObject capabilities ||
+            !IsCapabilityResult(resultObject))
         {
-            capabilities.Remove("logging");
-            if (capabilities["tools"] is JsonObject tools)
-            {
-                tools.Remove("listChanged");
-            }
+            return;
+        }
 
-            if (capabilities["prompts"] is JsonObject prompts)
+        capabilities.Remove("logging");
+        foreach (string name in new[] { "tools", "prompts", "resources" })
+        {
+            if (capabilities[name] is JsonObject capability)
             {
-                prompts.Remove("listChanged");
+                capability.Remove("listChanged");
             }
         }
+    }
+
+    /// <summary>
+    /// Tells whether a result is an initialize result or a discover result.
+    /// </summary>
+    private static bool IsCapabilityResult(JsonObject result)
+    {
+        return result["serverInfo"] is JsonObject ||
+            result["supportedVersions"] is JsonArray ||
+            result["_meta"] is JsonObject meta && meta["io.modelcontextprotocol/serverInfo"] is JsonObject;
     }
 
     /// <summary>

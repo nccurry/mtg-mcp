@@ -247,6 +247,12 @@ Old-to-new tool names:
   tool's input schema.
 - Logged a warning when the SDK matches a tool the server's catalog does not
   hold, and made every `kind` choice of an input that accepts several shapes carry a generated description.
+- Fixed the capabilities the server advertises under the pinned protocol
+  (`2026-07-28`). The server removes the `logging` capability and the
+  `listChanged` claims for tools, prompts, and resources, because it sends no
+  such notifications and its lists are fixed for the session. The removal only
+  matched the initialize result, which the pinned protocol does not use, so
+  `server/discover` still advertised them. It now matches both.
 
 ### Earlier changes in this release
 

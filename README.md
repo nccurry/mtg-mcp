@@ -447,13 +447,13 @@ and the user decide what to change.
 
 `local_deck_category_rules_preview` and `local_deck_category_rules_apply` take
 inline rules only. The `common-v1` preset was removed, and a source of kind
-`preset` now returns `invalid-input`. The preset mapped four role names to four
-official Scryfall oracle tags, each with its descendant tags and the minimum
-weight `weak`. The same rules sent inline are one rule per role, with the ID of a
-category that exists in the deck in `categoryId`, the tag's ID in `tagId`, and
-`includeDescendants` on. If you set a `primaryPriority` on a preset binding, set
-it on the matching inline rule. The four tag IDs below are the ones `common-v1`
-used:
+`preset` now returns `invalid-input`. The preset mapped four role names to
+four official Scryfall oracle tags, each with its descendant tags and the
+minimum weight `weak`. The same rules sent inline are one rule per role, with
+the ID of a category that exists in the deck in `categoryId`, the tag's ID in
+`tagId`, and `includeDescendants` on. If you set a `primaryPriority` on a
+preset binding, set it on the matching inline rule. The four tag IDs below are
+the ones `common-v1` used:
 
 | Role | Oracle tag ID |
 | --- | --- |
@@ -611,11 +611,12 @@ Other clients list them under their own prompt or command menu.
 The prompts name only tools of the default selection that needs no provider
 credentials (the `decks`, `scryfall`, `stats`, and `spellbook` toolsets).
 Prompts are always offered, because registration is fixed for the session and
-a prompt costs nothing to list. When the session hides a named tool (a narrower
-`--toolsets`, or `read-only` mode, which hides write tools such as
-`local_deck_create`, `local_deck_apply_changes`, and `scryfall_card_data_sync`), the prompt
-tells the agent to say which step it skipped and carry on. Every prompt says
-that the user and agent make every judgment; the server only supplies facts.
+a prompt costs nothing to list. When the session hides a named tool (a
+narrower `--toolsets`, or `read-only` mode, which hides write tools such as
+`local_deck_create`, `local_deck_apply_changes`, and
+`scryfall_card_data_sync`), the prompt tells the agent to say which step it
+skipped and carry on. Every prompt says that the user and agent make every
+judgment; the server only supplies facts.
 
 ## Errors
 

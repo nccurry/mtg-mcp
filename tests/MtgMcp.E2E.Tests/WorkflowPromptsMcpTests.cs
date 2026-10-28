@@ -30,6 +30,7 @@ public sealed class WorkflowPromptsMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
 
         Assert.NotNull(session.Client.ServerCapabilities.Prompts);
+        Assert.NotEqual(true, session.Client.ServerCapabilities.Prompts.ListChanged);
         IList<McpClientPrompt> prompts = await session.Client.ListPromptsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
 
