@@ -11,12 +11,13 @@
 - Owner: mtg-mcp
 - Created: 2026-10-25
 - Last updated: 2026-10-28
-- Current phase: Phase 5 (documentation and 0.11.0 release preparation). Phases 1 and 2 delivered 2026-10-27; phases 3 and 4 delivered 2026-10-28; the EVAL-002 baseline is deferred to the owner.
+- Current phase: Phase 6 (caller-ruled simulation and 0.12.0). Phases 1 and 2 delivered 2026-10-27; phases 3 to 5 delivered 2026-10-28, with the 0.11.0 release prepared but not published (held for the owner); the EVAL-002 baseline is deferred to the owner.
 - Implementation authorized: Yes (owner, 2026-10-27)
 - Phase 1 status: Delivered 2026-10-27 (strict audit passed except EVAL-002).
 - Phase 2 status: Delivered 2026-10-27 (strict audit passed).
 - Phase 3 status: Delivered 2026-10-28 (strict audit passed after three passes).
 - Phase 4 status: Delivered 2026-10-28 (strict audit passed after two passes; agent task rerun deferred with EVAL-002).
+- Phase 5 status: Delivered 2026-10-28 except publishing (strict audit passed after two passes; 0.11.0 packed and smoke-tested, not tagged or published).
 - EVAL-002 baseline: Deferred to the owner. This session has no agent-eval harness, so the `0.10.0` baseline rows below stay "Not run".
 
 ## Summary
