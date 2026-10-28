@@ -123,6 +123,16 @@ internal sealed class DeckDatabase
         SchemaV2Sql);
 
     /// <summary>
+    /// Supplies the time recorded when an older database is upgraded as it is opened for writing.
+    /// </summary>
+    private readonly TimeProvider timeProvider;
+
+    /// <summary>
+    /// Names the application version recorded when an older database is upgraded.
+    /// </summary>
+    private readonly string applicationVersion;
+
+    /// <summary>
     /// Gets the private database location for same-assembly backup operations.
     /// </summary>
     internal string DatabasePath { get; }
@@ -130,10 +140,15 @@ internal sealed class DeckDatabase
     /// <summary>
     /// Creates a database boundary around one fully resolved private path.
     /// </summary>
-    internal DeckDatabase(string databasePath)
+    internal DeckDatabase(
+        string databasePath,
+        TimeProvider? timeProvider = null,
+        string applicationVersion = "unknown")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         DatabasePath = Path.GetFullPath(databasePath);
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+        this.applicationVersion = applicationVersion;
     }
 
     /// <summary>
@@ -208,6 +223,16 @@ internal sealed class DeckDatabase
             if (existed)
             {
                 await ValidateExistingSchemaAsync(connection, cancellationToken).ConfigureAwait(false);
+                if (writable && await GetSchemaVersionAsync(connection, cancellationToken).ConfigureAwait(false) == 1)
+                {
+                    // Every write path upgrades an older database first, so no write sees the old schema.
+                    await ApplyMigrationAsync(
+                        connection,
+                        SchemaV2Migration with { IsDestructive = true },
+                        timeProvider.GetUtcNow(),
+                        applicationVersion,
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
 
             return connection;

@@ -110,7 +110,7 @@ public sealed class CategoryNameTests
     /// <summary>
     /// Builds a database exactly as schema 1 did, with one deck, one entry, and one category link.
     /// </summary>
-    private static void MakeVersionOneDatabase(string path)
+    internal static void MakeVersionOneDatabase(string path)
     {
         Assembly assembly = typeof(SqliteDeckStore).Assembly;
         Type database = assembly.GetType("MtgMcp.Decks.DeckDatabase")!;

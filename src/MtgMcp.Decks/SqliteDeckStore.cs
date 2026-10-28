@@ -49,7 +49,10 @@ public sealed class SqliteDeckStore : IDisposable
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.createId = createId ?? (() => Guid.CreateVersion7(this.timeProvider.GetUtcNow()));
         this.applicationVersion = applicationVersion.Trim();
-        database = new DeckDatabase(Path.Combine(Path.GetFullPath(dataRoot), "decks.db"));
+        database = new DeckDatabase(
+            Path.Combine(Path.GetFullPath(dataRoot), "decks.db"),
+            this.timeProvider,
+            this.applicationVersion);
         Backups = new DeckBackupStore(
             database,
             mutationGate,

@@ -205,6 +205,11 @@ public sealed class DeckBackupStore
                 File.Delete(replacementPath);
             }
 
+            // A backup made by an earlier version has the older schema; upgrade it now, as every write would.
+            await database.EnsureInitializedAsync(
+                timeProvider.GetUtcNow(),
+                applicationVersion,
+                cancellationToken).ConfigureAwait(false);
             string restoredFingerprint = await ComputeCurrentFingerprintAsync(cancellationToken)
                 .ConfigureAwait(false);
             return new OperationSuccess<DeckRestoreResult>(
