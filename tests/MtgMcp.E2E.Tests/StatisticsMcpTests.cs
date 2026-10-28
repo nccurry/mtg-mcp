@@ -16,8 +16,8 @@ public sealed class StatisticsMcpTests
     /// </summary>
     private static readonly string[] ToolNames =
     [
-        "stats_deck_summary",
         "stats_hypergeometric",
+        "stats_local_deck_summary",
         "stats_mana_availability",
         "stats_minimum_count",
         "stats_mulligan",
@@ -265,7 +265,7 @@ public sealed class StatisticsMcpTests
 
         JsonElement summary = await CallExactAsync(
             session,
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             SummaryRequest(deckId, revision, entries)).ConfigureAwait(false);
         Assert.Equal(99, summary.GetProperty("totalQuantity").GetInt32());
         Assert.Equal(10, summary.GetProperty("entryCount").GetInt32());
@@ -323,13 +323,13 @@ public sealed class StatisticsMcpTests
         long revision = deck.GetProperty("revision").GetInt64();
         JsonElement stale = await CallResultAsync(
             session,
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             new { request = FailureSummaryRequest(deckId, revision + 1) }).ConfigureAwait(false);
         Assert.Equal("conflict", stale.GetProperty("kind").GetString());
 
         JsonElement missing = await CallResultAsync(
             session,
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             new { request = FailureSummaryRequest(Guid.NewGuid(), 1) }).ConfigureAwait(false);
         Assert.Equal("not-found", missing.GetProperty("kind").GetString());
 
@@ -410,7 +410,7 @@ public sealed class StatisticsMcpTests
 
         return await CallSuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new
             {
                 request = new
@@ -552,7 +552,7 @@ public sealed class StatisticsMcpTests
     {
         _ = await CallSuccessAsync(
             session,
-            "deck_delete",
+            "local_deck_delete",
             new { deckId, expectedRevision = revision }).ConfigureAwait(false);
     }
 

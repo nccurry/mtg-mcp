@@ -45,7 +45,7 @@ public sealed class StatisticsToolExampleTests
                 string name = method.GetCustomAttribute<McpServerToolAttribute>()!.Name!;
                 string example = ReadExample(method)
                     .Replace(StatisticsToolExamples.PlaceholderDeckId, deck.DeckId.ToString(), StringComparison.Ordinal);
-                if (name == "stats_deck_summary")
+                if (name == "stats_local_deck_summary")
                 {
                     example = example.Replace(
                         "\"expectedRevision\":1",

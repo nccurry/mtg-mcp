@@ -20,7 +20,7 @@ public sealed class DeckMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement deck = await CallSuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -39,55 +39,51 @@ public sealed class DeckMcpTests
 
         JsonElement listed = await CallSuccessAsync(
             session,
-            "deck_list",
+            "local_deck_list",
             new Dictionary<string, object?> { ["pageSize"] = 10 });
         Assert.Equal(deckId, listed.GetProperty("items")[0].GetProperty("deckId").GetGuid());
         JsonElement loaded = await CallSuccessAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = deckId });
         Assert.Equal("Dummy Commander Deck", loaded.GetProperty("name").GetString());
         JsonElement validation = await CallSuccessAsync(
             session,
-            "deck_validate",
+            "local_deck_validate",
             new Dictionary<string, object?> { ["deckId"] = deckId });
         Assert.True(validation.GetProperty("isStructurallyValid").GetBoolean());
 
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_update",
-            new Dictionary<string, object?>
+            deckId,
+            revision,
+            new
             {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["name"] = "Dummy Commander Deck Updated",
-                ["description"] = "Metadata updated through MCP",
-                ["format"] = "commander",
+                kind = "update-metadata",
+                name = "Dummy Commander Deck Updated",
+                description = "Metadata updated through MCP",
+                format = "commander",
             });
         revision = deck.GetProperty("revision").GetInt64();
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_entry_add",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entry"] = new { quantity = 2, cardName = "Island", zone = "main" },
-            });
+            deckId,
+            revision,
+            new { kind = "add-entry", entryDraft = new { quantity = 2, cardName = "Island", zone = "main" } });
         revision = deck.GetProperty("revision").GetInt64();
         Guid islandId = deck.GetProperty("entries")
             .EnumerateArray()
             .Single(value => value.GetProperty("cardName").GetString() == "Island")
             .GetProperty("entryId")
             .GetGuid();
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_entry_update",
-            new Dictionary<string, object?>
+            deckId,
+            revision,
+            new
             {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entry"] = new
+                kind = "update-entry",
+                entry = new
                 {
                     entryId = islandId,
                     quantity = 10,
@@ -100,7 +96,7 @@ public sealed class DeckMcpTests
                     finish = "nonfoil",
                     zone = "main",
                     sortOrder = 1,
-                },
+                }
             });
         revision = deck.GetProperty("revision").GetInt64();
         Assert.Equal(
@@ -111,62 +107,47 @@ public sealed class DeckMcpTests
                 .GetProperty("quantity")
                 .GetInt32());
 
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_category_create",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["category"] = new { name = "Lands", color = "#123456", sortOrder = 1 },
-            });
+            deckId,
+            revision,
+            new { kind = "add-category", categoryDraft = new { name = "Lands", color = "#123456", sortOrder = 1 } });
         revision = deck.GetProperty("revision").GetInt64();
         Guid categoryId = deck.GetProperty("categories")[0].GetProperty("categoryId").GetGuid();
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_category_update",
-            new Dictionary<string, object?>
+            deckId,
+            revision,
+            new
             {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["category"] = new
+                kind = "update-category",
+                category = new
                 {
                     categoryId,
                     name = "Mana Sources",
                     color = "#654321",
                     sortOrder = 2,
-                },
+                }
             });
         revision = deck.GetProperty("revision").GetInt64();
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_category_assign",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entryId"] = islandId,
-                ["categoryId"] = categoryId,
-                ["isPrimary"] = true,
-            });
+            deckId,
+            revision,
+            new { kind = "assign-category", entryId = islandId, categoryId = categoryId, isPrimary = true });
         revision = deck.GetProperty("revision").GetInt64();
         Assert.True(deck.GetProperty("categoryAssignments")[0].GetProperty("isPrimary").GetBoolean());
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_category_unassign",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entryId"] = islandId,
-                ["categoryId"] = categoryId,
-            });
+            deckId,
+            revision,
+            new { kind = "unassign-category", entryId = islandId, categoryId = categoryId });
         revision = deck.GetProperty("revision").GetInt64();
         Assert.Empty(deck.GetProperty("categoryAssignments").EnumerateArray());
 
         JsonElement invalidBatch = await CallAsync(
             session,
-            "deck_apply_changes",
+            "local_deck_apply_changes",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -188,7 +169,7 @@ public sealed class DeckMcpTests
 
         deck = await CallSuccessAsync(
             session,
-            "deck_apply_changes",
+            "local_deck_apply_changes",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -199,66 +180,58 @@ public sealed class DeckMcpTests
                     {
                         kind = "update-metadata",
                         name = "Dummy Commander Batch Updated",
-                        description = "Metadata updated through deck_apply_changes",
+                        description = "Metadata updated through local_deck_apply_changes",
                         format = "commander",
                     },
                 },
             });
         revision = deck.GetProperty("revision").GetInt64();
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_entry_remove",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entryId"] = islandId,
-            });
+            deckId,
+            revision,
+            new { kind = "remove-entry", entryId = islandId });
         revision = deck.GetProperty("revision").GetInt64();
-        deck = await CallSuccessAsync(
+        deck = await ApplyAsync(
             session,
-            "deck_category_delete",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["categoryId"] = categoryId,
-            });
+            deckId,
+            revision,
+            new { kind = "remove-category", categoryId = categoryId });
         revision = deck.GetProperty("revision").GetInt64();
         Assert.Single(deck.GetProperty("entries").EnumerateArray());
         Assert.Empty(deck.GetProperty("categories").EnumerateArray());
 
         JsonElement backup = await CallSuccessAsync(
             session,
-            "deck_backup_create",
+            "local_deck_backup_create",
             new Dictionary<string, object?>());
         Guid backupId = backup.GetProperty("backupId").GetGuid();
         JsonElement backupInventory = await CallSuccessAsync(
             session,
-            "deck_backup_list",
+            "local_deck_backup_list",
             new Dictionary<string, object?>());
         Assert.Equal(backupId, backupInventory.GetProperty("items")[0].GetProperty("backupId").GetGuid());
-        _ = await CallSuccessAsync(
+        _ = await ApplyAsync(
             session,
-            "deck_update",
-            new Dictionary<string, object?>
+            deckId,
+            revision,
+            new
             {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["name"] = "Changed After Backup",
-                ["description"] = "This state should be rolled back",
-                ["format"] = "commander",
+                kind = "update-metadata",
+                name = "Changed After Backup",
+                description = "This state should be rolled back",
+                format = "commander",
             });
         JsonElement changedInventory = await CallSuccessAsync(
             session,
-            "deck_backup_list",
+            "local_deck_backup_list",
             new Dictionary<string, object?>());
         string currentFingerprint = changedInventory
             .GetProperty("currentDatabaseFingerprint")
             .GetString()!;
         JsonElement restored = await CallSuccessAsync(
             session,
-            "deck_backup_restore",
+            "local_deck_backup_restore",
             new Dictionary<string, object?>
             {
                 ["backupId"] = backupId,
@@ -267,22 +240,22 @@ public sealed class DeckMcpTests
         Guid rollbackBackupId = restored.GetProperty("rollbackBackupId").GetGuid();
         loaded = await CallSuccessAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = deckId });
         Assert.Equal("Dummy Commander Batch Updated", loaded.GetProperty("name").GetString());
         Assert.Equal(revision, loaded.GetProperty("revision").GetInt64());
 
         _ = await CallSuccessAsync(
             session,
-            "deck_backup_delete",
+            "local_deck_backup_delete",
             new Dictionary<string, object?> { ["backupId"] = backupId });
         _ = await CallSuccessAsync(
             session,
-            "deck_backup_delete",
+            "local_deck_backup_delete",
             new Dictionary<string, object?> { ["backupId"] = rollbackBackupId });
         _ = await CallSuccessAsync(
             session,
-            "deck_delete",
+            "local_deck_delete",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -290,11 +263,11 @@ public sealed class DeckMcpTests
             });
         listed = await CallSuccessAsync(
             session,
-            "deck_list",
+            "local_deck_list",
             new Dictionary<string, object?>());
         backupInventory = await CallSuccessAsync(
             session,
-            "deck_backup_list",
+            "local_deck_backup_list",
             new Dictionary<string, object?>());
 
         Assert.Empty(listed.GetProperty("items").EnumerateArray());
@@ -314,7 +287,7 @@ public sealed class DeckMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement created = await CallAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -332,15 +305,11 @@ public sealed class DeckMcpTests
         Guid deckId = createdDeck.GetProperty("deckId").GetGuid();
         long revision = createdDeck.GetProperty("revision").GetInt64();
 
-        JsonElement addedEntry = await CallAsync(
+        JsonElement addedEntry = await ApplyRawAsync(
             session,
-            "deck_entry_add",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entry"] = new { quantity = 2, cardName = "Island", zone = "main" },
-            });
+            deckId,
+            revision,
+            new { kind = "add-entry", entryDraft = new { quantity = 2, cardName = "Island", zone = "main" } });
         JsonElement afterEntry = RequireSuccessData(addedEntry);
         revision = afterEntry.GetProperty("revision").GetInt64();
         Guid islandId = afterEntry.GetProperty("entries")
@@ -349,57 +318,41 @@ public sealed class DeckMcpTests
             .GetProperty("entryId")
             .GetGuid();
 
-        JsonElement categoryResult = await CallAsync(
+        JsonElement categoryResult = await ApplyRawAsync(
             session,
-            "deck_category_create",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["category"] = new { name = "Lands", color = "#123456" },
-            });
+            deckId,
+            revision,
+            new { kind = "add-category", categoryDraft = new { name = "Lands", color = "#123456" } });
         JsonElement afterCategory = RequireSuccessData(categoryResult);
         revision = afterCategory.GetProperty("revision").GetInt64();
         Guid categoryId = afterCategory.GetProperty("categories")[0]
             .GetProperty("categoryId")
             .GetGuid();
 
-        JsonElement assigned = await CallAsync(
+        JsonElement assigned = await ApplyRawAsync(
             session,
-            "deck_category_assign",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = revision,
-                ["entryId"] = islandId,
-                ["categoryId"] = categoryId,
-                ["isPrimary"] = true,
-            });
+            deckId,
+            revision,
+            new { kind = "assign-category", entryId = islandId, categoryId = categoryId, isPrimary = true });
         JsonElement afterAssignment = RequireSuccessData(assigned);
         revision = afterAssignment.GetProperty("revision").GetInt64();
 
-        JsonElement stale = await CallAsync(
+        JsonElement stale = await ApplyRawAsync(
             session,
-            "deck_update",
-            new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["expectedRevision"] = 1,
-                ["name"] = "Stale",
-                ["description"] = string.Empty,
-                ["format"] = "commander",
-            });
+            deckId,
+            1,
+            new { kind = "update-metadata", name = "Stale", description = string.Empty, format = "commander" });
         JsonElement loaded = RequireSuccessData(await CallAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = deckId }));
         JsonElement backup = RequireSuccessData(await CallAsync(
             session,
-            "deck_backup_create",
+            "local_deck_backup_create",
             new Dictionary<string, object?>()));
         JsonElement backupList = RequireSuccessData(await CallAsync(
             session,
-            "deck_backup_list",
+            "local_deck_backup_list",
             new Dictionary<string, object?>()));
 
         Assert.Equal("conflict", stale.GetProperty("kind").GetString());
@@ -415,6 +368,38 @@ public sealed class DeckMcpTests
             backupList.GetProperty("items")[0].GetProperty("backupId").GetGuid());
         Assert.DoesNotContain(session.DataRoot, backupList.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.True(File.Exists(Path.Combine(session.DataRoot, "decks.db")));
+    }
+
+    /// <summary>
+    /// Applies one change to a deck through the batch tool and returns the successful deck state.
+    /// </summary>
+    private static async Task<JsonElement> ApplyAsync(
+        McpProcessSession session,
+        Guid deckId,
+        long revision,
+        object change)
+    {
+        return RequireSuccessData(await ApplyRawAsync(session, deckId, revision, change));
+    }
+
+    /// <summary>
+    /// Applies one change to a deck through the batch tool and returns the operation result as sent.
+    /// </summary>
+    private static Task<JsonElement> ApplyRawAsync(
+        McpProcessSession session,
+        Guid deckId,
+        long revision,
+        object change)
+    {
+        return CallAsync(
+            session,
+            "local_deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["changes"] = new[] { change },
+            });
     }
 
     /// <summary>

@@ -39,7 +39,7 @@ integration merely because the server supports it.
    sources require separately approved future PLCs.
 3. **Derived mathematics**: counts, exact probabilities, and reproducible
    statistics calculated from declared inputs.
-4. **Sampled estimates**: `deck_on_curve_estimate` is the approved bounded
+4. **Sampled estimates**: `local_deck_on_curve_estimate` is the approved bounded
    example. It shows its model version, seed, sample count, confidence interval,
    assumptions, and input fingerprint. It is not a general game simulator.
 5. **Parser-derived and heuristic evidence**: a separately labeled category,

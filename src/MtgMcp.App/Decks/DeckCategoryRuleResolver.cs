@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
@@ -11,31 +9,13 @@ namespace MtgMcp.App.Decks;
 /// </summary>
 internal sealed record ResolvedDeckCategoryRules(
     CategoryRuleSet Rules,
-    Guid? ScryfallGenerationId,
-    int? PresetSchemaVersion,
-    string? PresetChecksum);
+    Guid? ScryfallGenerationId);
 
 /// <summary>
 /// Expands category rule sources and resolves their tag identities against installed Scryfall data.
 /// </summary>
 internal sealed class DeckCategoryRuleResolver
 {
-    /// <summary>
-    /// Defines the verified official source tags behind stable common-v1 role keys.
-    /// </summary>
-    private static readonly (string RoleKey, Guid TagId)[] CommonPresetSourceTags =
-    [
-        ("ramp", Guid.Parse("2f3e4ad7-5e60-41b4-bdbc-653f16869cf6")),
-        ("card-draw", Guid.Parse("b6448c45-ce65-4848-aa98-2151e4e07437")),
-        ("removal", Guid.Parse("444f824c-f910-4530-9dbe-ede7a84cd7f9")),
-        ("recursion", Guid.Parse("82b824ad-648f-467f-a190-2e0fa9a795d2")),
-    ];
-
-    /// <summary>
-    /// Identifies the complete checked-in common-v1 source-tag definition.
-    /// </summary>
-    private static readonly string CommonPresetChecksum = ComputeCommonPresetChecksum();
-
     /// <summary>
     /// Reads installed source tags.
     /// </summary>
@@ -94,9 +74,7 @@ internal sealed class DeckCategoryRuleResolver
         {
             return new OperationSuccess<ResolvedDeckCategoryRules>(new ResolvedDeckCategoryRules(
                 validRules.Data,
-                null,
-                PresetSchemaVersion(source),
-                PresetChecksum(source)));
+                null));
         }
 
         OperationResult<ScryfallTagResolution> sourceTags = await scryfall.ResolveDeckTagIdentitiesAsync(
@@ -120,55 +98,19 @@ internal sealed class DeckCategoryRuleResolver
 
         return new OperationSuccess<ResolvedDeckCategoryRules>(new ResolvedDeckCategoryRules(
             BindTagIds(validRules.Data, resolvedTags.Data.TagIds),
-            resolvedTags.Data.GenerationId,
-            PresetSchemaVersion(source),
-            PresetChecksum(source)));
+            resolvedTags.Data.GenerationId));
     }
 
     /// <summary>
-    /// Expands an inline rule set or the supported common-v1 preset.
+    /// Reads the caller-supplied inline rule set; inline rules are the only supported source.
     /// </summary>
     private static OperationResult<CategoryRuleSet> Expand(CategoryRuleSource source)
     {
-        if (source is InlineCategoryRuleSource inline)
-        {
-            return new OperationSuccess<CategoryRuleSet>(inline.RuleSet);
-        }
-
-        if (source is not CommonPresetCategoryRuleSource preset ||
-            !string.Equals(preset.PresetId, "common-v1", StringComparison.Ordinal) ||
-            preset.Bindings is null ||
-            preset.Bindings.Count == 0 ||
-            preset.Bindings.Select(binding => binding?.RoleKey).Distinct(StringComparer.Ordinal).Count() != preset.Bindings.Count)
-        {
-            return new OperationInvalidInput("invalid-category-preset", "Only common-v1 with unique category bindings is supported.");
-        }
-
-        List<CategoryRule> rules = [];
-        foreach (CategoryRoleBinding? binding in preset.Bindings)
-        {
-            if (binding is null || binding.CategoryId == Guid.Empty || rules.Any(rule => rule.CategoryId == binding.CategoryId))
-            {
-                return new OperationInvalidInput(
-                    "invalid-category-binding",
-                    "Preset bindings require unique non-empty category IDs.");
-            }
-
-            CategoryTagSelector? selector = CommonPresetSelector(binding.RoleKey);
-            if (selector is null)
-            {
-                return new OperationInvalidInput("invalid-category-role", "The preset role key is not supported.");
-            }
-
-            rules.Add(new CategoryRule(
-                binding.CategoryId,
-                [selector],
-                [],
-                [],
-                binding.PrimaryPriority));
-        }
-
-        return new OperationSuccess<CategoryRuleSet>(new CategoryRuleSet(preset.AssignmentMode, rules));
+        return source is InlineCategoryRuleSource inline
+            ? new OperationSuccess<CategoryRuleSet>(inline.RuleSet)
+            : new OperationInvalidInput(
+                "invalid-category-rule-source",
+                "Only inline category rules are supported.");
     }
 
     /// <summary>
@@ -235,49 +177,6 @@ internal sealed class DeckCategoryRuleResolver
         }
 
         return bound;
-    }
-
-    /// <summary>
-    /// Gets one verified source selector for a stable common-v1 role key.
-    /// </summary>
-    private static CategoryTagSelector? CommonPresetSelector(string roleKey)
-    {
-        foreach ((string key, Guid tagId) in CommonPresetSourceTags)
-        {
-            if (string.Equals(roleKey, key, StringComparison.Ordinal))
-            {
-                return new CategoryTagSelector("oracle", tagId, IncludeDescendants: true, MinimumWeight: "weak");
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Gets the common-preset metadata only when the source selects that preset.
-    /// </summary>
-    private static int? PresetSchemaVersion(CategoryRuleSource source)
-    {
-        return source is CommonPresetCategoryRuleSource ? 1 : null;
-    }
-
-    /// <summary>
-    /// Gets the checked-in preset checksum only when the source selects that preset.
-    /// </summary>
-    private static string? PresetChecksum(CategoryRuleSource source)
-    {
-        return source is CommonPresetCategoryRuleSource ? CommonPresetChecksum : null;
-    }
-
-    /// <summary>
-    /// Computes a stable checksum over every source ID and descendant setting in common-v1.
-    /// </summary>
-    private static string ComputeCommonPresetChecksum()
-    {
-        string definition = string.Join(
-            '|',
-            CommonPresetSourceTags.Select(value => $"{value.RoleKey}:{value.TagId:D}:include-descendants:weak"));
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(definition)));
     }
 
     /// <summary>

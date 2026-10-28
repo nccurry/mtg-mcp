@@ -64,6 +64,7 @@ internal sealed class FoundationResources
                 CapabilityToolsetPolicy.Format(descriptor.Stability),
                 enabled,
                 descriptor.DefaultEnabled,
+                configuration.Toolsets.FindGateReason(descriptor.Toolset),
                 enabled ? descriptor.GetVisibleToolCount(configuration.Mode) : 0,
                 descriptor.Description,
                 descriptor.Toolset == CapabilityToolset.Playgroup
@@ -72,7 +73,7 @@ internal sealed class FoundationResources
         }
 
         FoundationCapabilityDocument document = new(
-            7,
+            8,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
@@ -110,31 +111,30 @@ internal sealed class FoundationResources
                 CapabilityToolset.Spellbook =>
                 ("not-required", null),
             CapabilityToolset.Archidekt => (
-                IsArchidektConfigured(configuration) ? "configured-unverified" : "not-configured",
+                FoundationConfigurationLoader.HasArchidektCredentials(configuration.Archidekt)
+                    ? "configured-unverified"
+                    : "not-configured",
                 "archidekt_auth_status"),
             CapabilityToolset.Playgroup => (
-                IsPlaygroupConfigured(configuration) ? "configured-unverified" : "not-configured",
+                GetPlaygroupCredentialState(configuration),
                 "playgroup_auth_status"),
             _ => ("not-required", null),
         };
     }
 
     /// <summary>
-    /// Reports whether any Archidekt credential source was configured without reading it.
+    /// Reports the Playgroup credential state from setting and file presence only.
     /// </summary>
-    private static bool IsArchidektConfigured(FoundationConfiguration configuration)
+    private static string GetPlaygroupCredentialState(FoundationConfiguration configuration)
     {
-        return !string.IsNullOrWhiteSpace(configuration.Archidekt.Username) ||
-            !string.IsNullOrWhiteSpace(configuration.Archidekt.Password) ||
-            !string.IsNullOrWhiteSpace(configuration.Archidekt.CredentialsFile);
-    }
+        string? gateReason = configuration.Toolsets.FindGateReason(CapabilityToolset.Playgroup);
+        if (gateReason == CapabilityToolsetGate.CredentialsInvalid)
+        {
+            return "configuration-invalid";
+        }
 
-    /// <summary>
-    /// Reports whether any Playgroup credential source was configured without reading it.
-    /// </summary>
-    private static bool IsPlaygroupConfigured(FoundationConfiguration configuration)
-    {
-        return !string.IsNullOrWhiteSpace(configuration.Playgroup.ApiKey) ||
-            !string.IsNullOrWhiteSpace(configuration.Playgroup.CredentialsFile);
+        return FoundationConfigurationLoader.HasPlaygroupCredentials(configuration.Playgroup)
+            ? "configured-unverified"
+            : "not-configured";
     }
 }

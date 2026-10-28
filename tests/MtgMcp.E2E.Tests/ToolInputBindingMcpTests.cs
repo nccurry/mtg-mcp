@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -23,7 +24,7 @@ public sealed class ToolInputBindingMcpTests
 
         CallToolResult result = await CallAsync(
             session,
-            "deck_apply_changes",
+            "local_deck_apply_changes",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -58,7 +59,7 @@ public sealed class ToolInputBindingMcpTests
 
         CallToolResult result = await CallAsync(
             session,
-            "deck_apply_changes",
+            "local_deck_apply_changes",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -83,7 +84,7 @@ public sealed class ToolInputBindingMcpTests
 
         CallToolResult result = await CallAsync(
             session,
-            "deck_apply_changes",
+            "local_deck_apply_changes",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -102,6 +103,91 @@ public sealed class ToolInputBindingMcpTests
     }
 
     /// <summary>
+    /// Verifies a misspelled field inside a nested change is rejected with its path, not silently ignored.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task ApplyChanges_UnknownNestedProperty_ReturnsInvalidArgumentsNamingTheField()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "local",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        (Guid deckId, long revision) = await CreateDeckAsync(session).ConfigureAwait(false);
+
+        CallToolResult result = await CallAsync(
+            session,
+            "local_deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["changes"] = new[]
+                {
+                    new
+                    {
+                        kind = "add-entry",
+                        entryDraft = new { quantity = 1, cardName = "Sol Ring", quantiy = 2 },
+                    },
+                },
+            }).ConfigureAwait(false);
+
+        AssertInvalidArguments(result, "changes[0].entryDraft.quantiy", "quantiy");
+    }
+
+    /// <summary>
+    /// Verifies the removed common-v1 preset is refused as invalid input and lists inline as the only source.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task CategoryRulesPreview_PresetSource_ReturnsInvalidInput()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "local",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        (Guid deckId, long _) = await CreateDeckAsync(session).ConfigureAwait(false);
+
+        CallToolResult result = await CallAsync(
+            session,
+            "local_deck_category_rules_preview",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["source"] = new
+                {
+                    kind = "preset",
+                    presetId = "common-v1",
+                    assignmentMode = "add-only",
+                    bindings = Array.Empty<object>(),
+                },
+            }).ConfigureAwait(false);
+
+        AssertInvalidArguments(result, "source", "Allowed kinds: inline.");
+    }
+
+    /// <summary>
+    /// Verifies the removed tool names return an unknown-tool protocol error, with no compatibility alias.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task RemovedToolName_IsAnUnknownTool()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "all",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        foreach (string oldName in new[] { "deck_get", "deck_update", "scryfall_card_get", "scryfall_corpus_sync" })
+        {
+            await Assert.ThrowsAsync<McpProtocolException>(
+                async () => await session.Client.CallToolAsync(
+                    oldName,
+                    new Dictionary<string, object?>(),
+                    cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false))
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Verifies an operation failure is reported with the MCP error flag and an unchanged structured body.
     /// </summary>
     [Fact]
@@ -114,7 +200,7 @@ public sealed class ToolInputBindingMcpTests
 
         CallToolResult result = await CallAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = Guid.CreateVersion7() }).ConfigureAwait(false);
 
         Assert.True(result.IsError);
@@ -177,7 +263,7 @@ public sealed class ToolInputBindingMcpTests
     {
         CallToolResult created = await CallAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new

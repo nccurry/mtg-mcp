@@ -5,8 +5,9 @@ It does not carry the released legacy API forward.
 
 ## Current `0.9.0` Status
 
-The local deck store, manual deck-file support, Scryfall tools, and optional
-Archidekt, Playgroup, and Commander Spellbook tools use the official C# SDK
+The local deck store, manual deck-file support, Scryfall tools, Commander
+Spellbook tools, and the Archidekt and Playgroup tools (on when their
+credentials are present) use the official C# SDK
 selected in `Directory.Packages.props`.
 The server requires MCP `2026-07-28`; it does not support older
 initialize-based clients. Official-client E2E tests prove current-protocol
@@ -19,9 +20,10 @@ The current public MCP contract is:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- a default profile of 33/55/55 tools and complete `all` profile of 61/84/97
-  tools by mode, plus zero prompts;
-- fixed `default`, `all`, `none`, and explicit toolset selection, with version 7
+- a default profile (the same as `all`) of 30/43/43 tools by mode with no
+  provider credentials and 53/67/80 tools with Archidekt and Playgroup
+  credentials, plus zero prompts, with the default mode `remote`;
+- fixed `default`, `all`, `none`, and explicit toolset selection, with version 8
   of the capabilities-resource schema; and
 - no logging, subscription, or changing-tool-list feature advertisement.
 

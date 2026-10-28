@@ -7,9 +7,10 @@ Current code, tests, project files, checked-in configuration, and `AGENTS.md`
 are authoritative. This file is a compact orientation index, not a second
 instruction file.
 
-This branch contains the finished `0.9.0` server: local decks in SQLite, manual
-deck imports and exports, Scryfall evidence, optional guarded Archidekt sync,
-and the optional documented Playgroup public API. The old server remains in Git
+This branch contains the finished `0.9.0` server and the focused agent tool surface: local decks in SQLite, manual
+deck imports and exports, Scryfall evidence, guarded Archidekt sync (on when
+Archidekt credentials are present), and the documented Playgroup public API
+(on when a Playgroup key is present). The old server remains in Git
 history and released packages, but its production code is not in this branch.
 Read the [rewrite guide](docs/rewrite-guide.md) before using historical design
 or API documents to plan new work.
@@ -17,7 +18,7 @@ or API documents to plan new work.
 ## Start Here
 
 - [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
-- [README](README.md): Current deck, Scryfall, Archidekt, and Playgroup tools, configuration, product direction, and development commands.
+- [README](README.md): Current local deck, Scryfall, Archidekt, Playgroup, and Spellbook tools, configuration, product direction, and development commands.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): The released `0.9.0` boundary, lasting rules, and how to start new work without reopening the rewrite.
@@ -41,7 +42,7 @@ or API documents to plan new work.
 - [Architecture](docs/architecture.md): Current project, data, evidence, and write boundaries.
 - [Adapters](docs/adapters.md): Current Scryfall, Archidekt, Playgroup, and Moxfield boundaries.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
-- [Toolsets](docs/toolsets.md): Fixed tool-group selection, modes, and common profiles.
+- [Toolsets](docs/toolsets.md): Fixed tool-group selection, credential gating, modes, and common profiles.
 - [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, and the historical `detailLevel` levels.
 
 ## Agent Planning

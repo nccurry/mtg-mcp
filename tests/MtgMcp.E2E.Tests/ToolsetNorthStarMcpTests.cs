@@ -23,12 +23,12 @@ public sealed class ToolsetNorthStarMcpTests
         {
             JsonElement capability = await ReadCapabilityAsync(defaultSession).ConfigureAwait(false);
             Assert.Equal("default", capability.GetProperty("toolsets").GetProperty("selection").GetString());
-            Assert.Equal(55, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
+            Assert.Equal(67, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
 
             const string deckText = "[commander]\n1 Mock Commander\n[main]\n2 Island";
             JsonElement preview = await CallSuccessAsync(
                 defaultSession,
-                "deck_import_preview",
+                "local_deck_import_preview",
                 new Dictionary<string, object?>
                 {
                     ["formatId"] = "generic-text-v1",
@@ -41,7 +41,7 @@ public sealed class ToolsetNorthStarMcpTests
                 }).ConfigureAwait(false);
             JsonElement imported = await CallSuccessAsync(
                 defaultSession,
-                "deck_import_create",
+                "local_deck_import_create",
                 new Dictionary<string, object?>
                 {
                     ["formatId"] = "generic-text-v1",
@@ -59,28 +59,35 @@ public sealed class ToolsetNorthStarMcpTests
 
             JsonElement updated = await CallSuccessAsync(
                 defaultSession,
-                "deck_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["name"] = "Toolset Mock Commander Updated",
-                    ["description"] = "Disposable north-star workflow",
-                    ["format"] = "commander",
+                    ["changes"] = new[]
+                    {
+                        new
+                        {
+                            kind = "update-metadata",
+                            name = "Toolset Mock Commander Updated",
+                            description = "Disposable north-star workflow",
+                            format = "commander",
+                        },
+                    },
                 }).ConfigureAwait(false);
             revision = updated.GetProperty("revision").GetInt64();
 
             JsonElement loaded = await CallSuccessAsync(
                 defaultSession,
-                "deck_get",
+                "local_deck_get",
                 new Dictionary<string, object?> { ["deckId"] = deckId }).ConfigureAwait(false);
             JsonElement formats = await CallSuccessAsync(
                 defaultSession,
-                "deck_interchange_formats",
+                "local_deck_interchange_formats",
                 new Dictionary<string, object?>()).ConfigureAwait(false);
             JsonElement exported = await CallSuccessAsync(
                 defaultSession,
-                "deck_export_bundle",
+                "local_deck_export_bundle",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
@@ -97,7 +104,7 @@ public sealed class ToolsetNorthStarMcpTests
 
             _ = await CallSuccessAsync(
                 defaultSession,
-                "deck_delete",
+                "local_deck_delete",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
@@ -105,7 +112,7 @@ public sealed class ToolsetNorthStarMcpTests
                 }).ConfigureAwait(false);
             JsonElement remaining = await CallSuccessAsync(
                 defaultSession,
-                "deck_list",
+                "local_deck_list",
                 new Dictionary<string, object?>()).ConfigureAwait(false);
             Assert.Empty(remaining.GetProperty("items").EnumerateArray());
         }
@@ -133,10 +140,10 @@ public sealed class ToolsetNorthStarMcpTests
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             JsonElement capability = await ReadCapabilityAsync(allSession).ConfigureAwait(false);
 
-            Assert.Equal(84, tools.Count);
+            Assert.Equal(67, tools.Count);
             Assert.Equal(tools.Select(tool => tool.Name).Order(StringComparer.Ordinal), tools.Select(tool => tool.Name));
             Assert.Equal("all", capability.GetProperty("toolsets").GetProperty("selection").GetString());
-            Assert.Equal(84, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
+            Assert.Equal(67, capability.GetProperty("surface").GetProperty("toolCount").GetInt32());
             Assert.False(Directory.Exists(allSession.DataRoot));
         }
     }

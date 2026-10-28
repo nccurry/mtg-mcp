@@ -9,12 +9,13 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Tests;
 
 /// <summary>
-/// Verifies MCP deck writes enforce mode authority and share one transaction vocabulary.
+/// Verifies MCP deck writes enforce mode authority, and that the batch tool covers every deck edit that the
+/// removed single-step tools used to make.
 /// </summary>
 public sealed class DeckWriteToolsTests
 {
     /// <summary>
-    /// Exercises every deck wrapper as one coherent local workflow over the shared store.
+    /// Exercises the create, edit, backup, restore, and delete tools as one coherent local workflow.
     /// </summary>
     [Fact]
     public async Task LocalTools_CompleteCrudBackupAndRestoreWorkflow()
@@ -37,77 +38,40 @@ public sealed class DeckWriteToolsTests
                 Entries: [new DeckEntryDraft(1, "First", EntryId: initialEntryId)]),
             TestContext.Current.CancellationToken));
 
-        deck = RequireSuccess(await writes.UpdateAsync(
-            deck.DeckId,
-            deck.Revision,
-            "Workflow Updated",
-            "Local evidence",
-            "custom",
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.AddEntryAsync(
-            deck.DeckId,
-            deck.Revision,
-            new DeckEntryDraft(1, "Second"),
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckMetadataInput("Workflow Updated", "Local evidence", "custom"));
+        deck = await ApplyAsync(batchWrites, deck, new AddDeckEntryInput(new DeckEntryDraft(1, "Second")));
         DeckEntry second = Assert.Single(deck.Entries, value => value.CardName == "Second");
-        deck = RequireSuccess(await writes.UpdateEntryAsync(
-            deck.DeckId,
-            deck.Revision,
-            second with { Quantity = 2, Zone = "sideboard" },
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.RemoveEntryAsync(
-            deck.DeckId,
-            deck.Revision,
-            second.EntryId,
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.CreateCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            new DeckCategoryDraft("Ramp"),
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckEntryInput(second with { Quantity = 2, Zone = "sideboard" }));
+        deck = await ApplyAsync(batchWrites, deck, new RemoveDeckEntryInput(second.EntryId));
+        deck = await ApplyAsync(batchWrites, deck, new AddDeckCategoryInput(new DeckCategoryDraft("Ramp")));
         DeckCategory category = Assert.Single(deck.Categories);
-        deck = RequireSuccess(await writes.UpdateCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            category with { Name = "Acceleration", Color = "#123456" },
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.AssignCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            initialEntryId,
-            category.CategoryId,
-            isPrimary: true,
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.UnassignCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            initialEntryId,
-            category.CategoryId,
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckCategoryInput(category with { Name = "Acceleration", Color = "#123456" }));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new AssignDeckCategoryInput(initialEntryId, category.CategoryId, true));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UnassignDeckCategoryInput(initialEntryId, category.CategoryId));
         Guid bindingId = Guid.CreateVersion7();
-        deck = RequireSuccess(await batchWrites.ApplyChangesAsync(
-            deck.DeckId,
-            deck.Revision,
-            [
-                new UpsertDeckProviderBindingInput(
-                    new DeckProviderBinding(
-                        bindingId,
-                        "Example",
-                        "remote-1",
-                        null,
-                        "v1",
-                        "baseline-1",
-                        null,
-                        null),
-                    "{\"name\":\"Workflow Updated\"}"),
-                new RemoveDeckProviderBindingInput(bindingId),
-            ],
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.DeleteCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            category.CategoryId,
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpsertDeckProviderBindingInput(
+                new DeckProviderBinding(bindingId, "Example", "remote-1", null, "v1", "baseline-1", null, null),
+                "{\"name\":\"Workflow Updated\"}"),
+            new RemoveDeckProviderBindingInput(bindingId));
+        deck = await ApplyAsync(batchWrites, deck, new RemoveDeckCategoryInput(category.CategoryId));
 
         Assert.Single(RequireSuccess(await reads.ListAsync(
             cancellationToken: TestContext.Current.CancellationToken)).Items);
@@ -124,13 +88,10 @@ public sealed class DeckWriteToolsTests
         DeckBackupPage inventory = RequireSuccess(
             await reads.ListBackupsAsync(TestContext.Current.CancellationToken));
         Assert.Contains(inventory.Items, value => value.BackupId == backup.BackupId);
-        DeckDocument changed = RequireSuccess(await writes.UpdateAsync(
-            deck.DeckId,
-            deck.Revision,
-            "Changed After Backup",
-            null,
-            "custom",
-            TestContext.Current.CancellationToken));
+        DeckDocument changed = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckMetadataInput("Changed After Backup", null, "custom"));
         Assert.NotEqual(deck.Name, changed.Name);
         DeckBackupPage changedInventory = RequireSuccess(
             await reads.ListBackupsAsync(TestContext.Current.CancellationToken));
@@ -149,164 +110,161 @@ public sealed class DeckWriteToolsTests
     }
 
     /// <summary>
-    /// Verifies every granular union mutation matches its one-operation batch form.
+    /// Verifies a single update-metadata change replaces the name, description, and format (SURF-005).
     /// </summary>
     [Fact]
-    public async Task GranularAndBatchMutations_ProduceEquivalentState()
+    public async Task ApplyChanges_UpdateMetadata_ReplacesDeckFields()
     {
-        using TemporaryDirectory firstDirectory = new();
-        using TemporaryDirectory secondDirectory = new();
-        using SqliteDeckStore firstStore = new(firstDirectory.Path, "0.9.0-preview.1");
-        using SqliteDeckStore secondStore = new(secondDirectory.Path, "0.9.0-preview.1");
-        Guid deckId = Guid.CreateVersion7();
-        Guid entryId = Guid.CreateVersion7();
-        Guid categoryId = Guid.CreateVersion7();
-        DeckDocument first = RequireSuccess(await firstStore.CreateAsync(
-            new DeckCreateRequest("Deck", Format: "custom", DeckId: deckId),
-            TestContext.Current.CancellationToken));
-        DeckDocument second = RequireSuccess(await secondStore.CreateAsync(
-            new DeckCreateRequest("Deck", Format: "custom", DeckId: deckId),
-            TestContext.Current.CancellationToken));
-        DeckWriteTools firstTools = new(firstStore, OperationMode.Local);
-        DeckWriteTools secondTools = new(secondStore, OperationMode.Local);
-        DeckBatchWriteTools secondBatchTools = new(secondStore, OperationMode.Local);
-        first = RequireSuccess(await firstTools.UpdateAsync(
-            deckId,
-            first.Revision,
-            "Renamed",
-            "Description",
-            "future-format",
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UpdateDeckMetadataInput("Renamed", "Description", "future-format")],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
 
-        DeckEntryDraft entryDraft = new(1, "Card", EntryId: entryId);
-        first = RequireSuccess(await firstTools.AddEntryAsync(
-            deckId,
-            first.Revision,
-            entryDraft,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new AddDeckEntryInput(entryDraft)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
+        DeckDocument deck = await fixture.ApplyAsync(
+            new UpdateDeckMetadataInput("Renamed", "Description", "future-format"));
 
-        DeckEntry updatedEntry = Assert.Single(first.Entries) with
+        Assert.Equal(("Renamed", "Description", "future-format"), (deck.Name, deck.Description, deck.Format));
+        Assert.Equal(fixture.Deck.Revision + 1, deck.Revision);
+    }
+
+    /// <summary>
+    /// Verifies a single add-entry change adds an independently addressable entry (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_AddEntry_AddsEntryWithoutMergingEquivalentCards()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+
+        DeckDocument deck = await fixture.ApplyAsync(new AddDeckEntryInput(new DeckEntryDraft(1, "Card")));
+
+        Assert.Equal(["Card", "Card"], deck.Entries.Select(entry => entry.CardName));
+    }
+
+    /// <summary>
+    /// Verifies a single update-entry change replaces quantity, finish, and zone (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_UpdateEntry_ReplacesEntryFields()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+        DeckEntry updated = Assert.Single(fixture.Deck.Entries) with
         {
             Quantity = 2,
             Finish = "foil",
             Zone = "sideboard",
         };
-        first = RequireSuccess(await firstTools.UpdateEntryAsync(
-            deckId,
-            first.Revision,
-            updatedEntry,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UpdateDeckEntryInput(updatedEntry)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
 
-        DeckCategoryDraft categoryDraft = new("Ramp", "#123456", 7, categoryId);
-        first = RequireSuccess(await firstTools.CreateCategoryAsync(
-            deckId,
-            first.Revision,
-            categoryDraft,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new AddDeckCategoryInput(categoryDraft)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
+        DeckDocument deck = await fixture.ApplyAsync(new UpdateDeckEntryInput(updated));
 
-        DeckCategory updatedCategory = Assert.Single(first.Categories) with { Name = "Mana" };
-        first = RequireSuccess(await firstTools.UpdateCategoryAsync(
-            deckId,
-            first.Revision,
-            updatedCategory,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UpdateDeckCategoryInput(updatedCategory)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.AssignCategoryAsync(
-            deckId,
-            first.Revision,
-            entryId,
-            categoryId,
-            isPrimary: true,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new AssignDeckCategoryInput(entryId, categoryId, true)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.UnassignCategoryAsync(
-            deckId,
-            first.Revision,
-            entryId,
-            categoryId,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UnassignDeckCategoryInput(entryId, categoryId)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.DeleteCategoryAsync(
-            deckId,
-            first.Revision,
-            categoryId,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new RemoveDeckCategoryInput(categoryId)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.RemoveEntryAsync(
-            deckId,
-            first.Revision,
-            entryId,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new RemoveDeckEntryInput(entryId)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
+        Assert.Equal(updated, Assert.Single(deck.Entries));
     }
 
     /// <summary>
-    /// Compares the caller-visible state controlled by one deck transaction.
+    /// Verifies a single remove-entry change removes the entry and its category assignments (SURF-005).
     /// </summary>
-    private static void AssertEquivalent(DeckDocument first, DeckDocument second)
+    [Fact]
+    public async Task ApplyChanges_RemoveEntry_RemovesEntryAndItsAssignments()
     {
-        Assert.Equal(first.DeckId, second.DeckId);
-        Assert.Equal(first.Name, second.Name);
-        Assert.Equal(first.Description, second.Description);
-        Assert.Equal(first.Format, second.Format);
-        Assert.Equal(first.Revision, second.Revision);
-        Assert.Equal(first.Entries, second.Entries);
-        Assert.Equal(first.Categories, second.Categories);
-        Assert.Equal(first.CategoryAssignments, second.CategoryAssignments);
-        Assert.Equal(first.ProviderBindings, second.ProviderBindings);
+        using BatchFixture fixture = await BatchFixture.CreateAsync(withAssignment: true);
+
+        DeckDocument deck = await fixture.ApplyAsync(new RemoveDeckEntryInput(fixture.EntryId));
+
+        Assert.Empty(deck.Entries);
+        Assert.Empty(deck.CategoryAssignments);
+        Assert.Single(deck.Categories);
+    }
+
+    /// <summary>
+    /// Verifies a single add-category change adds a category without changing entries (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_AddCategory_AddsCategory()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync(withCategory: false);
+        Guid categoryId = Guid.CreateVersion7();
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new AddDeckCategoryInput(new DeckCategoryDraft("Draw", "#123456", 7, categoryId)));
+
+        DeckCategory category = Assert.Single(deck.Categories);
+        Assert.Equal((categoryId, "Draw", "#123456"), (category.CategoryId, category.Name, category.Color));
+        Assert.Single(deck.Entries);
+    }
+
+    /// <summary>
+    /// Verifies a single update-category change replaces the category name (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_UpdateCategory_ReplacesCategoryFields()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+        DeckCategory updated = Assert.Single(fixture.Deck.Categories) with { Name = "Mana" };
+
+        DeckDocument deck = await fixture.ApplyAsync(new UpdateDeckCategoryInput(updated));
+
+        Assert.Equal("Mana", Assert.Single(deck.Categories).Name);
+    }
+
+    /// <summary>
+    /// Verifies a single remove-category change removes the category and its assignments but keeps entries
+    /// (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_RemoveCategory_KeepsEntries()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync(withAssignment: true);
+
+        DeckDocument deck = await fixture.ApplyAsync(new RemoveDeckCategoryInput(fixture.CategoryId));
+
+        Assert.Empty(deck.Categories);
+        Assert.Empty(deck.CategoryAssignments);
+        Assert.Single(deck.Entries);
+    }
+
+    /// <summary>
+    /// Verifies a single assign-category change adds a primary assignment (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_AssignCategory_AddsPrimaryAssignment()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new AssignDeckCategoryInput(fixture.EntryId, fixture.CategoryId, true));
+
+        Assert.Equal(
+            new DeckCategoryAssignment(fixture.EntryId, fixture.CategoryId, true),
+            Assert.Single(deck.CategoryAssignments));
+    }
+
+    /// <summary>
+    /// Verifies a single unassign-category change removes the assignment but keeps entry and category (SURF-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_UnassignCategory_KeepsEntryAndCategory()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync(withAssignment: true);
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new UnassignDeckCategoryInput(fixture.EntryId, fixture.CategoryId));
+
+        Assert.Empty(deck.CategoryAssignments);
+        Assert.Single(deck.Entries);
+        Assert.Single(deck.Categories);
+    }
+
+    /// <summary>
+    /// Verifies one batch of several changes applies in one revision.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SeveralChanges_ApplyInOneRevision()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Second")),
+            new UpdateDeckMetadataInput("Batch", null, "custom"));
+
+        Assert.Equal(2, deck.Entries.Count);
+        Assert.Equal("Batch", deck.Name);
+        Assert.Equal(fixture.Deck.Revision + 1, deck.Revision);
     }
 
     /// <summary>
@@ -328,10 +286,135 @@ public sealed class DeckWriteToolsTests
     }
 
     /// <summary>
+    /// Verifies the batch tool refuses to run in read-only mode.
+    /// </summary>
+    [Fact]
+    public async Task ReadOnlyMode_BatchInvocationReturnsUnsupported()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckBatchWriteTools tools = new(store, OperationMode.ReadOnly);
+
+        OperationResult<DeckDocument> result = await tools.ApplyChangesAsync(
+            Guid.CreateVersion7(),
+            1,
+            [new UpdateDeckMetadataInput("Denied", null, "custom")],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("operation-mode-denied", Assert.IsType<OperationUnsupported>(result.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Applies changes to one deck through the batch tool and returns the new deck state.
+    /// </summary>
+    private static async Task<DeckDocument> ApplyAsync(
+        DeckBatchWriteTools tools,
+        DeckDocument deck,
+        params DeckChangeInput[] changes)
+    {
+        return RequireSuccess(await tools.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            changes,
+            TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// Extracts successful tool data or fails with the actual result case.
     /// </summary>
     private static T RequireSuccess<T>(OperationResult<T> result)
     {
         return Assert.IsType<OperationSuccess<T>>(result.Value).Data;
+    }
+
+    /// <summary>
+    /// Holds a temporary store with one deck, one entry, and optionally one category for single-change tests.
+    /// </summary>
+    private sealed class BatchFixture : IDisposable
+    {
+        /// <summary>
+        /// Owns the folder that holds the deck database.
+        /// </summary>
+        private readonly TemporaryDirectory directory;
+
+        /// <summary>
+        /// Owns the deck store behind the batch tool.
+        /// </summary>
+        private readonly SqliteDeckStore store;
+
+        /// <summary>
+        /// Applies changes through the batch tool.
+        /// </summary>
+        private readonly DeckBatchWriteTools tools;
+
+        /// <summary>
+        /// Wraps the created deck and the store that holds it.
+        /// </summary>
+        private BatchFixture(
+            TemporaryDirectory directory,
+            SqliteDeckStore store,
+            DeckDocument deck,
+            Guid entryId,
+            Guid categoryId)
+        {
+            this.directory = directory;
+            this.store = store;
+            tools = new DeckBatchWriteTools(store, OperationMode.Local);
+            Deck = deck;
+            EntryId = entryId;
+            CategoryId = categoryId;
+        }
+
+        /// <summary>
+        /// Gets the deck as created, before any change.
+        /// </summary>
+        internal DeckDocument Deck { get; }
+
+        /// <summary>
+        /// Gets the stable ID of the deck's one entry.
+        /// </summary>
+        internal Guid EntryId { get; }
+
+        /// <summary>
+        /// Gets the stable ID of the category, which exists only when the fixture was created with one.
+        /// </summary>
+        internal Guid CategoryId { get; }
+
+        /// <summary>
+        /// Creates a deck with one entry, optionally with one category and an assignment of the entry to it.
+        /// </summary>
+        internal static async Task<BatchFixture> CreateAsync(bool withCategory = true, bool withAssignment = false)
+        {
+            TemporaryDirectory directory = new();
+            SqliteDeckStore store = new(directory.Path, "0.9.0-preview.1");
+            Guid entryId = Guid.CreateVersion7();
+            Guid categoryId = Guid.CreateVersion7();
+            DeckCreateRequest request = new(
+                "Fixture",
+                Format: "custom",
+                Entries: [new DeckEntryDraft(1, "Card", EntryId: entryId)],
+                Categories: withCategory ? [new DeckCategoryDraft("Ramp", CategoryId: categoryId)] : null,
+                CategoryAssignments: withCategory && withAssignment
+                    ? [new DeckCategoryAssignment(entryId, categoryId, false)]
+                    : null);
+            DeckDocument deck = RequireSuccess(
+                await store.CreateAsync(request, TestContext.Current.CancellationToken));
+            return new BatchFixture(directory, store, deck, entryId, categoryId);
+        }
+
+        /// <summary>
+        /// Applies one batch to the fixture deck at its created revision.
+        /// </summary>
+        internal Task<DeckDocument> ApplyAsync(params DeckChangeInput[] changes)
+        {
+            return DeckWriteToolsTests.ApplyAsync(tools, Deck, changes);
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            store.Dispose();
+            directory.Dispose();
+        }
     }
 }

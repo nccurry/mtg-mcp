@@ -13,7 +13,8 @@ internal sealed class CapabilityToolsetSelection
     /// </summary>
     internal CapabilityToolsetSelection(
         CapabilityToolsetSelectionKind kind,
-        IEnumerable<CapabilityToolset> enabledToolsets)
+        IEnumerable<CapabilityToolset> enabledToolsets,
+        IEnumerable<CapabilityToolsetGate>? gates = null)
     {
         if (!Enum.IsDefined(kind))
         {
@@ -22,6 +23,7 @@ internal sealed class CapabilityToolsetSelection
 
         ArgumentNullException.ThrowIfNull(enabledToolsets);
         Kind = kind;
+        Gates = [.. gates ?? []];
         EnabledToolsets = [.. enabledToolsets];
         HashSet<CapabilityToolset> uniqueToolsets = [];
         foreach (CapabilityToolset toolset in EnabledToolsets)
@@ -46,6 +48,11 @@ internal sealed class CapabilityToolsetSelection
     internal ImmutableArray<CapabilityToolset> EnabledToolsets { get; }
 
     /// <summary>
+    /// Gets the toolsets that would be on but were turned off at startup, with the reason for each.
+    /// </summary>
+    internal ImmutableArray<CapabilityToolsetGate> Gates { get; }
+
+    /// <summary>
     /// Gets the sanitized public selection label.
     /// </summary>
     internal string Label => CapabilityToolsetPolicy.Format(Kind);
@@ -56,6 +63,46 @@ internal sealed class CapabilityToolsetSelection
     internal bool Includes(CapabilityToolset toolset)
     {
         return EnabledToolsets.Contains(toolset);
+    }
+
+    /// <summary>
+    /// Finds the reason a toolset was turned off at startup, or null when it was not gated.
+    /// </summary>
+    internal string? FindGateReason(CapabilityToolset toolset)
+    {
+        foreach (CapabilityToolsetGate gate in Gates)
+        {
+            if (gate.Toolset == toolset)
+            {
+                return gate.Reason;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns a selection with the gated toolsets turned off and the gates recorded.
+    /// </summary>
+    internal CapabilityToolsetSelection WithGates(IReadOnlyList<CapabilityToolsetGate> gates)
+    {
+        ArgumentNullException.ThrowIfNull(gates);
+        List<CapabilityToolset> remaining = [];
+        foreach (CapabilityToolset toolset in EnabledToolsets)
+        {
+            bool gated = false;
+            foreach (CapabilityToolsetGate gate in gates)
+            {
+                gated |= gate.Toolset == toolset;
+            }
+
+            if (!gated)
+            {
+                remaining.Add(toolset);
+            }
+        }
+
+        return new CapabilityToolsetSelection(Kind, remaining, gates);
     }
 }
 

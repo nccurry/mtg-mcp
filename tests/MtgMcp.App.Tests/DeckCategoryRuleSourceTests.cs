@@ -12,10 +12,11 @@ namespace MtgMcp.App.Tests;
 public sealed class DeckCategoryRuleSourceTests
 {
     /// <summary>
-    /// Resolves parent selectors to exact source IDs and preserves the common-v1 role mapping in place.
+    /// Resolves parent selectors to exact source IDs, and inline rules for the four common roles resolve to the
+    /// reviewed tags.
     /// </summary>
     [Fact]
-    public async Task Preview_UsesExactSourceIdsAndCommonPresetRoles()
+    public async Task Preview_UsesExactSourceIdsForInlineRoleRules()
     {
         using TemporaryDirectory temporary = new();
         DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
@@ -80,16 +81,7 @@ public sealed class DeckCategoryRuleSourceTests
             "unmatched",
             Assert.Single(parentPreview.Decisions, value => value.CategoryId == directOnlyCategory).Status);
 
-        CommonPresetCategoryRuleSource preset = new(
-            "common-v1",
-            "add-only",
-            [
-                new CategoryRoleBinding("ramp", rampCategory),
-                new CategoryRoleBinding("card-draw", drawCategory),
-                new CategoryRoleBinding("removal", removalCategory),
-                new CategoryRoleBinding("recursion", recursionCategory),
-            ]);
-        InlineCategoryRuleSource equivalentInline = new(new CategoryRuleSet(
+        InlineCategoryRuleSource roleRules = new(new CategoryRuleSet(
             "add-only",
             [
                 new CategoryRule(rampCategory, [SourceSelector(DeckCategorizationSourceFixture.RampTagId)], [], []),
@@ -97,41 +89,25 @@ public sealed class DeckCategoryRuleSourceTests
                 new CategoryRule(removalCategory, [SourceSelector(DeckCategorizationSourceFixture.RemovalTagId)], [], []),
                 new CategoryRule(recursionCategory, [SourceSelector(DeckCategorizationSourceFixture.RecursionTagId)], [], []),
             ]));
-        DeckCategoryRulesPreview presetPreview = RequireSuccess(await coordinator.PreviewAsync(
+        DeckCategoryRulesPreview rolePreview = RequireSuccess(await coordinator.PreviewAsync(
             deck.DeckId,
             deck.Revision,
-            preset,
-            "default",
-            TestContext.Current.CancellationToken));
-        DeckCategoryRulesPreview inlinePreview = RequireSuccess(await coordinator.PreviewAsync(
-            deck.DeckId,
-            deck.Revision,
-            equivalentInline,
+            roleRules,
             "default",
             TestContext.Current.CancellationToken));
 
-        Assert.Equal(1, presetPreview.PresetSchemaVersion);
-        Assert.NotEqual("common-v1-ramp-draw-removal-recursion", presetPreview.PresetChecksum);
         Assert.Equal(
-            presetPreview.ExpandedRules.Rules.Select(rule => (
-                rule.CategoryId,
-                rule.AllOf.Single().TagId,
-                rule.AllOf.Single().IncludeDescendants)),
-            inlinePreview.ExpandedRules.Rules.Select(rule => (
-                rule.CategoryId,
-                rule.AllOf.Single().TagId,
-                rule.AllOf.Single().IncludeDescendants)));
+            [
+                DeckCategorizationSourceFixture.RampTagId,
+                DeckCategorizationSourceFixture.DrawTagId,
+                DeckCategorizationSourceFixture.RemovalTagId,
+                DeckCategorizationSourceFixture.RecursionTagId,
+            ],
+            rolePreview.ExpandedRules.Rules.Select(rule => rule.AllOf.Single().TagId!.Value));
+        Assert.All(rolePreview.ExpandedRules.Rules, rule => Assert.True(rule.AllOf.Single().IncludeDescendants));
         Assert.Equal(
-            presetPreview.Decisions.Select(decision => (
-                decision.EntryId,
-                decision.CategoryId,
-                decision.Status,
-                string.Join(',', decision.MatchedTagIds))),
-            inlinePreview.Decisions.Select(decision => (
-                decision.EntryId,
-                decision.CategoryId,
-                decision.Status,
-                string.Join(',', decision.MatchedTagIds))));
+            "matched",
+            Assert.Single(rolePreview.Decisions, value => value.CategoryId == rampCategory).Status);
         Assert.Equal(requestsAfterInstall, handler.RequestCount);
     }
 

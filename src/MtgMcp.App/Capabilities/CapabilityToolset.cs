@@ -105,16 +105,12 @@ internal static class CapabilityToolsetPolicy
     }
 
     /// <summary>
-    /// Reports whether a stable toolset enters the ordinary profile when implemented.
+    /// Reports whether a stable toolset enters the ordinary profile when its credentials are present.
+    /// Every implemented toolset does; provider toolsets are then turned off when credentials are missing.
     /// </summary>
     internal static bool IsDefaultEnabled(CapabilityToolset toolset)
     {
-        return toolset switch
-        {
-            CapabilityToolset.Decks or CapabilityToolset.Scryfall or CapabilityToolset.Stats => true,
-            CapabilityToolset.Archidekt or CapabilityToolset.Playgroup or CapabilityToolset.Spellbook => false,
-            _ => false,
-        };
+        return Enum.IsDefined(toolset);
     }
 
     /// <summary>

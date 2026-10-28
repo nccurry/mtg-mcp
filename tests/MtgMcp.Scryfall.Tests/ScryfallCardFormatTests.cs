@@ -547,7 +547,7 @@ public sealed class ScryfallCardFormatTests
         {
             string limit = Assert.Single(limits!, text => text.Contains("not installed", StringComparison.Ordinal));
             Assert.Contains("tags and cheapestPriceUsd are null", limit, StringComparison.Ordinal);
-            Assert.Contains("scryfall_corpus_sync", limit, StringComparison.Ordinal);
+            Assert.Contains("scryfall_card_data_sync", limit, StringComparison.Ordinal);
         }
 
         JsonElement first = Element(search.Page.Items[0]);

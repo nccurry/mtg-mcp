@@ -4,11 +4,13 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-Version `0.9.0` is a fresh stdio server design. Its full `all` profile in
-`remote` mode exposes 97 tools, one `mtg://server/capabilities` resource, and
-no prompts. The focused default profile exposes 33 tools in `read-only` mode
-and 55 in `local` or `remote` mode. It does not migrate `0.8.x` data or tool
-schemas.
+Version `0.9.0` is a fresh stdio server design. Every toolset is on by default.
+With Archidekt and Playgroup credentials, the server exposes 80 tools in `remote`
+mode (the default), 67 in `local` mode, and 53 in `read-only` mode. Without
+credentials it exposes 43, 43, and 30, because the Archidekt and Playgroup
+toolsets turn on only when their credentials are present. It also exposes one
+`mtg://server/capabilities` resource and no prompts. It does not migrate `0.8.x`
+data or tool schemas.
 
 ## Status
 
@@ -17,12 +19,12 @@ the new server.
 
 | Feature | Tools | Default | Storage or writes |
 | --- | ---: | --- | --- |
-| Local decks and interchange | 29 | Yes | Local |
-| Scryfall evidence | 18 | Yes | Local cache and card data |
+| Local decks and interchange | 19 | Yes | Local |
+| Scryfall evidence | 13 | Yes | Local cache and card data |
 | Exact statistics | 8 | Yes | No |
-| Archidekt | 23 | No | Remote |
-| Playgroup | 16 | No | Remote |
-| Commander Spellbook evidence | 3 | No | Local cache only |
+| Archidekt | 21 | When credentials are present | Remote |
+| Playgroup | 16 | When credentials are present | Remote |
+| Commander Spellbook evidence | 3 | Yes | Local cache only |
 
 The packaged acceptance run before the Spellbook addition made 88 safe tool
 calls. It uses saved test data for the two Scryfall card-data download tools and
@@ -62,7 +64,7 @@ when you intend to review the related pin and lock-file changes.
 Use `mtg-mcp` as the MCP command. The default invocation is equivalent to:
 
 ```text
-mtg-mcp --mode=local --toolsets=default
+mtg-mcp --mode=remote --toolsets=default
 ```
 
 Use `--smoke` for a one-shot configuration check. It does not start an MCP
@@ -82,7 +84,8 @@ Modes control authority.
 | `local` | Yes | Yes | No |
 | `remote` | Yes | Yes | Yes |
 
-`local` is the default. A Scryfall cache miss can need a local write to record
+`remote` is the default. Use `--mode=local` to hide Archidekt and Playgroup writes, or
+`--mode=read-only` to hide every write. A Scryfall cache miss can need a local write to record
 the response and rate-limit timing. In `read-only`, that miss returns
 `local-write-required` before any HTTP request.
 
@@ -97,23 +100,26 @@ to write.
 
 | Value | Result |
 | --- | --- |
-| `default` or omitted | Enable `decks`, `scryfall`, and `stats` |
-| `all` | Enable every implemented toolset |
+| `default`, `all`, or omitted | Enable every toolset whose credentials are present |
 | `none` | Expose no tools |
-| Comma-separated list | Enable the exact named toolsets |
+| Comma-separated list | Enable the exact named toolsets, still subject to credentials |
 
 Available toolsets are `decks`, `scryfall`, `stats`, `archidekt`, `playgroup`,
-and `spellbook`. Selection is fixed for the MCP session.
+and `spellbook`. Selection is fixed for the MCP session. `archidekt` and
+`playgroup` are off when their credentials are absent, even when named; see
+[Toolsets](docs/toolsets.md) for the exact rules.
 
-| Profile | `read-only` | `local` | `remote` |
+| Selection | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
-| `default` | 33 | 55 | 55 |
-| `all` | 61 | 84 | 97 |
+| Default or `all`, no credentials | 30 | 43 | 43 |
+| Default or `all`, Archidekt credentials only | 39 | 53 | 64 |
+| Default or `all`, both credentials | 53 | 67 | 80 |
 | `none` | 0 | 0 | 0 |
 
-Read `mtg://server/capabilities` to see the active mode, toolsets, tool counts,
-credential state, package version, and local data state. It does not contact a
-provider.
+Read `mtg://server/capabilities` to see the active mode, toolsets, why a toolset
+is off (`disabledReason`), tool counts, credential state, package version, and
+local data state. It does not contact a provider. The server also sends short
+instructions at start that name the first tool for each job.
 
 ## Configure the server
 
@@ -135,7 +141,8 @@ The default data root is the platform application-data directory under
 
 ### Configure Archidekt
 
-Use `MTGMCP__ARCHIDEKT__USERNAME` and `MTGMCP__ARCHIDEKT__PASSWORD`, or create:
+The `archidekt` toolset turns on when you set both `MTGMCP__ARCHIDEKT__USERNAME` and
+`MTGMCP__ARCHIDEKT__PASSWORD`, or create:
 
 ```text
 ~/.mtg-mcp/archidekt.json
@@ -146,7 +153,7 @@ account identity, or a credential path.
 
 ### Configure Playgroup
 
-Use `MTGMCP__PLAYGROUP__API_KEY`, or create:
+The `playgroup` toolset turns on when you set `MTGMCP__PLAYGROUP__API_KEY`, or create:
 
 ```text
 ~/.mtg-mcp/playgroup.json
@@ -159,8 +166,9 @@ official public API.
 
 The `decks` toolset supports:
 
-- revisioned deck, entry, zone, category, and provider-binding changes;
-- atomic ordered batches;
+- revisioned deck, entry, zone, category, and provider-binding changes, made
+  through one atomic ordered batch tool, `local_deck_apply_changes` (a batch of
+  one change is normal);
 - guarded backup, restore, and delete;
 - native JSON and generic text import and export;
 - manual import and export files for Archidekt and Moxfield;
@@ -172,28 +180,28 @@ Every change to an existing deck requires `expectedRevision`. The local store
 is not tied to one import format. Validation checks structure, not Commander
 legality, card quality, or strategic fit.
 
-Use `deck_identity_reconcile_preview` before apply. Resolution uses printing ID,
+Use `local_deck_identity_reconcile_preview` before apply. Resolution uses printing ID,
 set and collector number, Oracle ID, then exact name. It never uses fuzzy
 matching or selects an arbitrary printing.
 
-Use `deck_get` for the stored deck. Pass `include` with `cards`, `tags`, or both
+Use `local_deck_get` for the stored deck. Pass `include` with `cards`, `tags`, or both
 to add, for each entry, concise Scryfall card fields (the entry's exact
 printing) and official oracle tag slugs, read from installed card data and
 returned in pages of entries with `nextCursor`. Each entry then carries
-`cardData`: `found`, `not-installed` (run `scryfall_corpus_sync`), or
+`cardData`: `found`, `not-installed` (run `scryfall_card_data_sync`), or
 `unresolved` (no exact Scryfall identity, or not in the installed data). A page
 is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`. `fields` narrows the card fields; it uses the same names as the
 Scryfall card tools.
 
-Use `deck_category_rules_validate`, `deck_category_rules_preview`, and
-`deck_category_rules_apply` to evaluate caller-owned tag rules. Rules can be
-inline or use the transparent `common-v1` preset. The MCP does not decide what a
-category means.
+Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
+evaluate caller-owned tag rules. The preview validates the rules first; rules
+are always inline, and the MCP does not decide what a category means (the
+`common-v1` preset was removed).
 
 ### Estimate mana on curve
 
-Use `deck_on_curve_estimate` to sample how often one mainboard card can be cast
+Use `local_deck_on_curve_estimate` to sample how often one mainboard card can be cast
 by a chosen turn. Supply the saved deck ID and current revision, the target
 entry ID, one rule for each eligible land, a turn limit, and optionally a seed
 and sample count. The result includes the exact installed Scryfall facts used,
@@ -206,7 +214,7 @@ sources, choose plays, rate the deck, or predict real games.
 
 ## Import and export decks
 
-Use `deck_interchange_formats` to inspect preservation limits.
+Use `local_deck_interchange_formats` to inspect preservation limits.
 
 | Format | Notes |
 | --- | --- |
@@ -220,9 +228,11 @@ in the native companion file and are omitted from provider text.
 
 ## Query Scryfall
 
-The `scryfall` toolset supports search, exact card lookup, collection lookup,
-prints, rulings, sets, catalogs, autocomplete, bulk metadata, tag evidence,
-immutable snapshots, and explicit card-data download operations.
+The `scryfall` toolset supports search, card lookup (`scryfall_cards_get`, one or
+many cards), printings and rulings (`scryfall_card_details`), sets, catalogs, and
+bulk metadata (`scryfall_reference_get`), autocomplete, tag evidence,
+immutable search snapshots (`scryfall_search_snapshots_get`), and explicit
+card-data download operations.
 
 The local card-data store contains All Cards, Rulings, Oracle Tags, and Art
 Tags. Card-data downloads are explicit. They never run at startup or in the
@@ -237,19 +247,19 @@ without it.
 
 The download is multi-gigabyte and an update needs temporary working space.
 Start it only through the explicit full-data tools in `local` or `remote` mode.
-The public names `scryfall_corpus_status`, `scryfall_corpus_sync`,
-`scryfall_corpus_rollback`, and `scryfall_corpus_delete` are existing API
+The public names `scryfall_card_data_status`, `scryfall_card_data_sync`,
+`scryfall_card_data_rollback`, and `scryfall_card_data_delete` are existing API
 names for inspecting and managing that installed card data.
 
 Freshness policies are `default`, `cache-only`, and `refresh`. The default TTL
 is 24 hours. Immutable snapshots do not expire.
 
-`scryfall_card_collection` accepts 150 ordered lookup rows. It uses local card-data
+`scryfall_cards_get` accepts 150 ordered lookups (pass one to read one card). It uses local card-data
 hits first, deduplicates provider misses, and sends provider batches of at most
 75. Results use stable cursor pagination.
 
-The card tools `scryfall_search`, `scryfall_card_get`, `scryfall_card_collection`,
-and `scryfall_cards_by_tag` take `responseFormat`:
+The card tools `scryfall_search`, `scryfall_cards_get`, and
+`scryfall_installed_cards_by_tag` take `responseFormat`:
 
 | Value | Result |
 | --- | --- |
@@ -261,7 +271,7 @@ In `concise`, `tags` and `cheapestPriceUsd` come from installed card data and ar
 `null`, with the reason in `limits`, when it is not installed. A `concise` page
 is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`. `includeRaw` was replaced by `responseFormat: "full"` on these
-four tools.
+three tools.
 
 For arbitrary queries, Scryfall remains the source of truth. The cache reuses
 only the exact same request. Card facts and community tags stay separate kinds
@@ -269,7 +279,7 @@ of information.
 
 ## Read Commander Spellbook evidence
 
-Enable the `spellbook` toolset for three tools that return Commander Spellbook
+The `spellbook` toolset has three tools that return Commander Spellbook
 data:
 
 - `spellbook_variant_search` returns one bounded page for an exact Commander
@@ -306,7 +316,8 @@ without hiding the selected cards.
 
 ## Synchronize Archidekt
 
-Enable the `archidekt` toolset. Use `remote` mode for remote writes.
+The `archidekt` toolset turns on when Archidekt credentials are present. Use
+`remote` mode (the default) for remote writes.
 
 The adapter supports owned deck list/get/create/delete, pull, push, diff,
 folders, and named snapshots. Apply operations require current revisions,
@@ -329,7 +340,8 @@ instead of duplicating it.
 
 ## Read Playgroup evidence
 
-Enable the `playgroup` toolset. It exposes tools for the pinned Public API 1.0.0.
+The `playgroup` toolset turns on when a Playgroup key is present. It exposes tools
+for the pinned Public API 1.0.0.
 All modes include 14 safe read tools. `remote` adds two write tools.
 
 Results preserve provider JSON and include operation, API version, retrieval
@@ -350,6 +362,15 @@ A call whose arguments cannot be read returns `kind: "invalid-input"`, reason
 change's `add-entry`) may appear anywhere in its object. A `conflict` caused by
 stale state includes `current`, the current local revision, remote fingerprint,
 or both, to preview again against.
+
+Every tool rejects an argument it does not declare, including a misspelled field
+inside a nested object such as an entry draft, with `invalid-input` and the
+field name in `path`. Input schemas set `additionalProperties: false`.
+
+Text written by other people (Archidekt deck and category names, Playgroup names
+and notes, Commander Spellbook descriptions) is untrusted data. The tools that
+return it say so in their descriptions, and the server never acts on it. The
+destructive Archidekt remote writes ask Claude Code to confirm each call.
 
 ## Evidence and safety
 

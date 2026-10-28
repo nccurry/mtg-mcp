@@ -25,6 +25,11 @@ internal static class ToolCallPolicy
     private const int MaximumKindSearchDepth = 4;
 
     /// <summary>
+    /// Limits how much of an unknown argument name an error message repeats.
+    /// </summary>
+    private const int MaximumEchoedNameLength = 64;
+
+    /// <summary>
     /// Maps each tool name to the method that implements it. The SDK does not expose the bound method to
     /// call-tool filters, so the policy finds it by tool name.
     /// </summary>
@@ -47,6 +52,15 @@ internal static class ToolCallPolicy
         ArgumentNullException.ThrowIfNull(next);
         return async (context, cancellationToken) =>
         {
+            if (context.Params is not null)
+            {
+                OperationInvalidInput? unknown = FindUnknownArgument(context.Params.Name, context.Params.Arguments);
+                if (unknown is not null)
+                {
+                    return CreateFailureResult(unknown);
+                }
+            }
+
             CallToolResult result;
             try
             {
@@ -132,6 +146,53 @@ internal static class ToolCallPolicy
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds the first argument the tool does not declare, so a misspelled or invented field fails the call
+    /// instead of being ignored. Arguments are checked in ordinal order so the message is deterministic.
+    /// </summary>
+    internal static OperationInvalidInput? FindUnknownArgument(
+        string toolName,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0 || !ToolMethods.TryGetValue(toolName, out MethodInfo? method))
+        {
+            return null;
+        }
+
+        List<string> accepted = [];
+        foreach (ParameterInfo parameter in method.GetParameters())
+        {
+            if (IsArgumentParameter(parameter) && parameter.Name is not null)
+            {
+                accepted.Add(parameter.Name);
+            }
+        }
+
+        accepted.Sort(StringComparer.Ordinal);
+        string? unknown = arguments.Keys
+            .Where(name => !accepted.Contains(name, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (unknown is null)
+        {
+            return null;
+        }
+
+        string acceptedText = accepted.Count == 0 ? "none" : string.Join(", ", accepted);
+        if (string.IsNullOrWhiteSpace(unknown))
+        {
+            return new OperationInvalidInput(
+                InvalidArgumentsReason,
+                $"An argument with a blank name is not accepted by {toolName}. Accepted arguments: {acceptedText}.");
+        }
+
+        string shown = unknown.Length <= MaximumEchoedNameLength ? unknown : unknown[..MaximumEchoedNameLength] + "...";
+        return new OperationInvalidInput(
+            InvalidArgumentsReason,
+            $"Argument '{shown}' is not accepted by {toolName}. Accepted arguments: {acceptedText}.",
+            shown);
     }
 
     /// <summary>
@@ -330,13 +391,15 @@ internal static class ToolCallPolicy
     }
 
     /// <summary>
-    /// Copies the SDK's default options and allows union discriminators after other properties.
+    /// Copies the SDK default options, allows union discriminators after other properties, and rejects JSON properties
+    /// that no input type declares.
     /// </summary>
     private static JsonSerializerOptions CreateSerializerOptions()
     {
         JsonSerializerOptions options = new(McpJsonUtilities.DefaultOptions)
         {
             AllowOutOfOrderMetadataProperties = true,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         };
         options.MakeReadOnly();
         return options;

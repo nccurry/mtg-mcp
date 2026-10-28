@@ -20,10 +20,10 @@ namespace MtgMcp.App.Tests;
 public sealed class ScryfallResponseFormatToolTests
 {
     /// <summary>
-    /// Names the four tools that take a response format in place of the old raw option.
+    /// Names the three tools that take a response format in place of the old raw option.
     /// </summary>
     private static readonly string[] FormatTools =
-        ["scryfall_search", "scryfall_card_get", "scryfall_card_collection", "scryfall_cards_by_tag"];
+        ["scryfall_search", "scryfall_cards_get", "scryfall_installed_cards_by_tag"];
 
     /// <summary>
     /// Verifies each card tool publishes responseFormat as an enum, fields with enum items, and no includeRaw.
@@ -50,18 +50,18 @@ public sealed class ScryfallResponseFormatToolTests
                 field => Assert.Contains(field, description, StringComparison.Ordinal));
         }
 
-        JsonElement prints = tools["scryfall_card_prints"].ProtocolTool.InputSchema.GetProperty("properties");
+        JsonElement prints = tools["scryfall_card_details"].ProtocolTool.InputSchema.GetProperty("properties");
         Assert.True(prints.TryGetProperty("includeRaw", out _));
     }
 
     /// <summary>
-    /// Verifies <c>deck_get</c> publishes enum items for include and fields.
+    /// Verifies <c>local_deck_get</c> publishes enum items for include and fields.
     /// </summary>
     [Fact]
     public void DeckGet_PublishesEnumItemsForIncludeAndFields()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
-        McpServerTool deckGet = registered.Tools.Single(tool => tool.ProtocolTool.Name == "deck_get");
+        McpServerTool deckGet = registered.Tools.Single(tool => tool.ProtocolTool.Name == "local_deck_get");
 
         JsonElement properties = deckGet.ProtocolTool.InputSchema.GetProperty("properties");
 
@@ -87,7 +87,7 @@ public sealed class ScryfallResponseFormatToolTests
             Assert.Contains("concise", tools[name].ProtocolTool.Description, StringComparison.Ordinal);
         }
 
-        foreach (string name in new[] { "scryfall_search", "scryfall_card_collection", "scryfall_cards_by_tag" })
+        foreach (string name in new[] { "scryfall_search", "scryfall_cards_get", "scryfall_installed_cards_by_tag" })
         {
             Assert.Contains("40,000 bytes", tools[name].ProtocolTool.Description, StringComparison.Ordinal);
         }
@@ -105,7 +105,7 @@ public sealed class ScryfallResponseFormatToolTests
         Dictionary<string, McpServerTool> tools = registered.Tools
             .ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
 
-        string unchanged = tools["deck_list"].ProtocolTool.OutputSchema!.Value.GetRawText();
+        string unchanged = tools["local_deck_list"].ProtocolTool.OutputSchema!.Value.GetRawText();
 
         Assert.Equal("true", unchanged);
         foreach (string name in FormatTools)

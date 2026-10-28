@@ -121,7 +121,8 @@ settings above. Today an invalid Playgroup configuration fails startup
 `playgroup` is named in `--toolsets`. Under the default selection the toolset
 is turned off with the reason `credentials-invalid` instead, so one bad
 setting does not stop the whole server. Credentials added later take effect
-on the next start, because the tool list is fixed for a session.
+on the next start, because the tool list is fixed for a session. The capabilities resource reports the
+reason in a `disabledReason` field (schema version 8).
 
 **Selection.** With no `--toolsets` option, the selection is every toolset
 whose credentials are present. An explicit list still narrows it. `all` means
@@ -609,6 +610,11 @@ The preview result gains the validation details.
 The `deck_apply_changes` description gains one example per common change and
 states that a single change is a normal use.
 
+The `deck_category_rules_preview` `expectedRevision` is optional, so a call
+without it validates and previews; with it, a stale revision returns
+`conflict`. The result drops the preset fields (`presetSchemaVersion`,
+`presetChecksum`).
+
 ### Removal Review
 
 | Item | Decision | Reason |
@@ -626,7 +632,7 @@ states that a single change is a normal use.
 | New tool | Replaces | Input |
 | --- | --- | --- |
 | `scryfall_cards_get` | `scryfall_card_get`, `scryfall_card_collection` | `lookups`: 1 to 150 existing `ScryfallCardLookup` values; cursor and page size as today. |
-| `scryfall_card_details` | `scryfall_card_prints`, `scryfall_card_rulings` | One lookup and required `include`: a non-empty set of `prints` and `rulings`. The result has one shape with a `prints` section and a `rulings` section, each present only when asked for. |
+| `scryfall_card_details` | `scryfall_card_prints`, `scryfall_card_rulings` | `oracleId` (the card, by Oracle ID) and required `include`: a non-empty set of `prints` and `rulings`. `scryfallCardId` applies to `rulings` only; `printsCursor` and `rulingsCursor` page each section. The result has one shape with a `prints` section and a `rulings` section, each present only when asked for. |
 | `scryfall_reference_get` | `scryfall_sets`, `scryfall_catalog`, `scryfall_bulk_metadata` | Required `kind`: `sets`, `catalog`, or `bulk`; `catalogName` required only when `kind` is `catalog`. The result is a union with the same `kind`, holding today's sets, catalog, or bulk metadata result. |
 | `scryfall_search_snapshots_get` | `scryfall_snapshot_list`, `scryfall_snapshot_get` | Required `kind`: `list` (with paging) or `get` (with required `snapshotId`). The result is a union with the same `kind`, holding today's list page or snapshot. |
 

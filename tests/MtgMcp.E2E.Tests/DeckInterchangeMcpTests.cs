@@ -27,7 +27,7 @@ public sealed class DeckInterchangeMcpTests
         Guid basicsId = Guid.CreateVersion7();
         Guid candidateCategoryId = Guid.CreateVersion7();
         Guid creaturesId = Guid.CreateVersion7();
-        JsonElement original = await CallSuccessAsync(session, "deck_create", new Dictionary<string, object?>
+        JsonElement original = await CallSuccessAsync(session, "local_deck_create", new Dictionary<string, object?>
         {
             ["request"] = new
             {
@@ -63,7 +63,7 @@ public sealed class DeckInterchangeMcpTests
 
         JsonElement interchangeFormats = await CallSuccessAsync(
             session,
-            "deck_interchange_formats",
+            "local_deck_interchange_formats",
             new Dictionary<string, object?>()).ConfigureAwait(false);
         Assert.Equal(4, interchangeFormats.GetArrayLength());
         Assert.All(
@@ -85,11 +85,14 @@ public sealed class DeckInterchangeMcpTests
                      "moxfield-bulk-edit-v1",
                  })
         {
-            JsonElement bundle = await CallSuccessAsync(session, "deck_export_bundle", new Dictionary<string, object?>
-            {
-                ["deckId"] = originalId,
-                ["formatId"] = formatId,
-            }).ConfigureAwait(false);
+            JsonElement bundle = await CallSuccessAsync(
+                session,
+                "local_deck_export_bundle",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = originalId,
+                    ["formatId"] = formatId,
+                }).ConfigureAwait(false);
             bundles.Add(formatId, bundle);
             Assert.Equal("available", bundle.GetProperty("status").GetString());
             Assert.All(
@@ -101,43 +104,52 @@ public sealed class DeckInterchangeMcpTests
         foreach ((string formatId, JsonElement bundle) in bundles)
         {
             string content = Artifact(bundle, PrimaryArtifact(formatId));
-            JsonElement preview = await CallSuccessAsync(session, "deck_import_preview", new Dictionary<string, object?>
-            {
-                ["formatId"] = formatId,
-                ["content"] = content,
-                ["options"] = new
+            JsonElement preview = await CallSuccessAsync(
+                session,
+                "local_deck_import_preview",
+                new Dictionary<string, object?>
                 {
-                    deckName = "Imported Dummy Commander",
-                    format = "commander",
-                },
-            }).ConfigureAwait(false);
+                    ["formatId"] = formatId,
+                    ["content"] = content,
+                    ["options"] = new
+                    {
+                        deckName = "Imported Dummy Commander",
+                        format = "commander",
+                    },
+                }).ConfigureAwait(false);
             previews.Add(formatId, preview);
             Assert.Equal("complete", preview.GetProperty("completeness").GetString());
         }
 
         string genericContent = Artifact(bundles["generic-text-v1"], "deck.txt");
-        JsonElement genericImported = await CallSuccessAsync(session, "deck_import_create", new Dictionary<string, object?>
-        {
-            ["formatId"] = "generic-text-v1",
-            ["content"] = genericContent,
-            ["expectedFingerprint"] = previews["generic-text-v1"].GetProperty("fingerprint").GetString(),
-            ["options"] = new { deckName = "Imported Dummy Commander", format = "commander" },
-        }).ConfigureAwait(false);
+        JsonElement genericImported = await CallSuccessAsync(
+            session,
+            "local_deck_import_create",
+            new Dictionary<string, object?>
+            {
+                ["formatId"] = "generic-text-v1",
+                ["content"] = genericContent,
+                ["expectedFingerprint"] = previews["generic-text-v1"].GetProperty("fingerprint").GetString(),
+                ["options"] = new { deckName = "Imported Dummy Commander", format = "commander" },
+            }).ConfigureAwait(false);
         Guid genericId = genericImported.GetProperty("deck").GetProperty("deckId").GetGuid();
 
-        _ = await CallSuccessAsync(session, "deck_delete", new Dictionary<string, object?>
+        _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = originalId,
             ["expectedRevision"] = originalRevision,
         }).ConfigureAwait(false);
         string nativeContent = Artifact(bundles["mtg-mcp-json-v1"], "deck.mtg-mcp.json");
-        JsonElement nativeImported = await CallSuccessAsync(session, "deck_import_create", new Dictionary<string, object?>
-        {
-            ["formatId"] = "mtg-mcp-json-v1",
-            ["content"] = nativeContent,
-            ["expectedFingerprint"] = previews["mtg-mcp-json-v1"].GetProperty("fingerprint").GetString(),
-            ["options"] = new { },
-        }).ConfigureAwait(false);
+        JsonElement nativeImported = await CallSuccessAsync(
+            session,
+            "local_deck_import_create",
+            new Dictionary<string, object?>
+            {
+                ["formatId"] = "mtg-mcp-json-v1",
+                ["content"] = nativeContent,
+                ["expectedFingerprint"] = previews["mtg-mcp-json-v1"].GetProperty("fingerprint").GetString(),
+                ["options"] = new { },
+            }).ConfigureAwait(false);
         JsonElement restored = nativeImported.GetProperty("deck");
 
         Assert.Equal(originalId, restored.GetProperty("deckId").GetGuid());
@@ -161,19 +173,19 @@ public sealed class DeckInterchangeMcpTests
         Assert.Equal("preserved", PreservationStatus(bundles["moxfield-bulk-edit-v1"], "secondary-categories"));
         Assert.Equal("companion-only", PreservationStatus(bundles["moxfield-bulk-edit-v1"], "excluded-entries"));
 
-        _ = await CallSuccessAsync(session, "deck_delete", new Dictionary<string, object?>
+        _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = genericId,
             ["expectedRevision"] = genericImported.GetProperty("deck").GetProperty("revision").GetInt64(),
         }).ConfigureAwait(false);
-        _ = await CallSuccessAsync(session, "deck_delete", new Dictionary<string, object?>
+        _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = originalId,
             ["expectedRevision"] = restored.GetProperty("revision").GetInt64(),
         }).ConfigureAwait(false);
         JsonElement decks = await CallSuccessAsync(
             session,
-            "deck_list",
+            "local_deck_list",
             new Dictionary<string, object?>()).ConfigureAwait(false);
         Assert.Empty(decks.GetProperty("items").EnumerateArray());
     }

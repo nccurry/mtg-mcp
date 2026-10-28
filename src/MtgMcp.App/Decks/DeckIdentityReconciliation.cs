@@ -701,14 +701,16 @@ internal sealed class DeckIdentityReconciliationReadTools
     /// Resolves exact Scryfall identities and returns an evidence-bound proposal without mutation.
     /// </summary>
     [McpServerTool(
-        Name = "deck_identity_reconcile_preview",
+        Name = "local_deck_identity_reconcile_preview",
         Title = "Preview Local Deck Identity Reconciliation",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = true,
         UseStructuredContent = true)]
-    [Description("Previews exact Scryfall-backed identity normalization without fuzzy matching, legality checks, or deck mutation.")]
+    [Description(
+        "Local deck store: previews exact Scryfall-backed identity normalization without fuzzy matching, legality " +
+        "checks, or deck mutation.")]
     internal Task<OperationResult<DeckIdentityReconciliationPreview>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
@@ -758,20 +760,22 @@ internal sealed class DeckIdentityReconciliationWriteTools
     /// Replays retained evidence and atomically applies only accepted identity field changes.
     /// </summary>
     [McpServerTool(
-        Name = "deck_identity_reconcile_apply",
+        Name = "local_deck_identity_reconcile_apply",
         Title = "Apply Local Deck Identity Reconciliation",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Applies an unchanged exact identity preview in one revision; all non-identity deck fields are preserved.")]
+    [Description(
+        "Local deck store: applies an unchanged exact identity preview in one revision; all non-identity deck fields " +
+        "are preserved.")]
     internal Task<OperationResult<DeckDocument>> ApplyAsync(
         [Description("Stable local deck UUID used for preview.")] Guid deckId,
         [Description("Deck revision used for preview.")] long expectedRevision,
-        [Description("Evidence-bound fingerprint returned by deck_identity_reconcile_preview.")]
+        [Description("Evidence-bound fingerprint returned by local_deck_identity_reconcile_preview.")]
         string previewFingerprint,
-        [Description("Opaque apply token returned by deck_identity_reconcile_preview.")]
+        [Description("Opaque apply token returned by local_deck_identity_reconcile_preview.")]
         string applyToken,
         [Description("Whether resolved rows may be applied when other selected identities remain incomplete.")]
         bool allowPartial = false,

@@ -11,7 +11,7 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Decks;
 
 /// <summary>
-/// Builds the <c>deck_get</c> result: the stored deck, optionally with a page of entries enriched from installed
+/// Builds the <c>local_deck_get</c> result: the stored deck, optionally with a page of entries enriched from installed
 /// Scryfall card data.
 /// </summary>
 internal sealed class DeckCardViewCoordinator
@@ -41,7 +41,7 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private const string NotInstalledLimit =
         "Card fields and tags are not available because Scryfall card data is not installed. " +
-        "Run scryfall_corpus_sync to install it.";
+        "Run scryfall_card_data_sync to install it.";
 
     /// <summary>
     /// Reads stored decks.

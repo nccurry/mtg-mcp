@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
 
@@ -11,6 +12,11 @@ namespace MtgMcp.App.Archidekt;
 /// </summary>
 internal sealed class ArchidektRemoteWriteTools
 {
+    /// <summary>
+    /// Names the tool metadata key that asks Claude Code to confirm with the user before each call.
+    /// </summary>
+    internal const string RequiresUserInteractionKey = "anthropic/requiresUserInteraction";
+
     /// <summary>
     /// Provides guarded provider/local workflows.
     /// </summary>
@@ -34,7 +40,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Creates one private-by-default empty remote shell and optionally binds an unchanged local deck.
     /// </summary>
     [McpServerTool(Name = "archidekt_deck_create", Title = "Create Archidekt Deck", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Creates and verifies one empty Archidekt deck shell; contents require a separate push preview/apply.")]
+    [Description(
+        "Archidekt: creates and verifies one empty Archidekt deck shell; contents require a separate push " +
+        "preview/apply." +
+        UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteDeckSnapshot>> CreateDeckAsync(
         [Description("Explicit Archidekt deck shell or content request.")] ArchidektDeckCreateRequest request,
         [Description("Optional stable local deck UUID to bind after verified creation.")] Guid? localDeckId = null,
@@ -52,7 +61,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Deletes one unchanged exactly confirmed remote deck.
     /// </summary>
     [McpServerTool(Name = "archidekt_deck_delete", Title = "Delete Archidekt Deck", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Deletes one exact unchanged Archidekt deck and verifies listing absence; local decks and bindings remain untouched.")]
+    [McpMeta(RequiresUserInteractionKey, JsonValue = "true")]
+    [Description(
+        "Archidekt: deletes one exact unchanged Archidekt deck and verifies listing absence; local decks and " +
+        "bindings remain untouched.")]
     internal Task<OperationResult<ArchidektApplyResult>> DeleteDeckAsync(
         [Description("Exact remote fingerprint and acknowledgement required to delete one Archidekt deck.")]
         ArchidektDeckDeleteRequest request,
@@ -65,7 +77,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Applies one unchanged local-to-remote preview and updates the baseline only after verification.
     /// </summary>
     [McpServerTool(Name = "archidekt_push_apply", Title = "Apply Archidekt Push", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Refetches local and remote state, verifies preview guards, executes stable primitive operations, and verifies final content.")]
+    [McpMeta(RequiresUserInteractionKey, JsonValue = "true")]
+    [Description(
+        "Archidekt: refetches local and remote state, verifies preview guards, executes stable primitive operations, " +
+        "and verifies final content.")]
     internal Task<OperationResult<ArchidektApplyResult>> ApplyPushAsync(
         [Description("Preview-, revision-, and remote-fingerprint-guarded push application request.")]
         ArchidektPushApplyRequest request,
@@ -78,7 +93,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Creates one folder under an exact optional parent.
     /// </summary>
     [McpServerTool(Name = "archidekt_folder_create", Title = "Create Archidekt Folder", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Creates and verifies one explicitly named Archidekt folder without same-name inference or recursive creation.")]
+    [Description(
+        "Archidekt: creates and verifies one explicitly named Archidekt folder without same-name inference or " +
+        "recursive creation." +
+        UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteFolderRecord>> CreateFolderAsync(
         [Description("Explicit folder name and optional exact parent identifier.")] ArchidektFolderCreateRequest request,
         CancellationToken cancellationToken = default)
@@ -90,7 +108,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Updates allowlisted metadata for one unchanged folder tree.
     /// </summary>
     [McpServerTool(Name = "archidekt_folder_update", Title = "Update Archidekt Folder", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Updates one exact folder only when its fresh tree fingerprint and optional destination remain valid.")]
+    [Description(
+        "Archidekt: updates one exact folder only when its fresh tree fingerprint and optional destination remain " +
+        "valid." +
+        UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteFolderRecord>> UpdateFolderAsync(
         [Description("Exact folder metadata update guarded by its current tree fingerprint.")]
         ArchidektFolderUpdateRequest request,
@@ -103,7 +124,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Moves exact typed items after stale-parent and cycle preflight.
     /// </summary>
     [McpServerTool(Name = "archidekt_folder_move_items", Title = "Move Archidekt Folder Items", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Moves deduplicated exact deck/folder IDs after fresh source-parent and cycle checks, then verifies each assignment.")]
+    [McpMeta(RequiresUserInteractionKey, JsonValue = "true")]
+    [Description(
+        "Archidekt: moves deduplicated exact deck/folder IDs after fresh source-parent and cycle checks, then " +
+        "verifies each assignment.")]
     internal Task<OperationResult<ArchidektFolderMoveResult>> MoveFolderItemsAsync(
         [Description("Exact typed folder/deck moves with source and destination fingerprint guards.")]
         ArchidektFolderMoveRequest request,
@@ -116,7 +140,8 @@ internal sealed class ArchidektRemoteWriteTools
     /// Deletes one exactly confirmed empty folder without recursive or deck deletion.
     /// </summary>
     [McpServerTool(Name = "archidekt_folder_delete", Title = "Delete Archidekt Folder", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Deletes one unchanged empty folder only; never submits deck items or recursive deletion.")]
+    [McpMeta(RequiresUserInteractionKey, JsonValue = "true")]
+    [Description("Archidekt: deletes one unchanged empty folder only; never submits deck items or recursive deletion.")]
     internal Task<OperationResult<ArchidektApplyResult>> DeleteFolderAsync(
         [Description("Exact empty-folder deletion request with fingerprint and acknowledgement guards.")]
         ArchidektFolderDeleteRequest request,
@@ -129,7 +154,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Creates one named snapshot from an unchanged remote deck.
     /// </summary>
     [McpServerTool(Name = "archidekt_snapshot_create", Title = "Create Archidekt Snapshot", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Creates and verifies one explicitly named snapshot only when the source deck fingerprint still matches.")]
+    [Description(
+        "Archidekt: creates and verifies one explicitly named snapshot only when the source deck fingerprint still " +
+        "matches." +
+        UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteNamedSnapshotSummary>> CreateSnapshotAsync(
         [Description("Named snapshot request guarded by the current remote deck fingerprint.")]
         ArchidektSnapshotCreateRequest request,
@@ -142,7 +170,9 @@ internal sealed class ArchidektRemoteWriteTools
     /// Updates one unchanged snapshot's supported metadata.
     /// </summary>
     [McpServerTool(Name = "archidekt_snapshot_update", Title = "Update Archidekt Snapshot", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Updates supported name/description metadata only when the exact snapshot checksum still matches.")]
+    [Description(
+        "Archidekt: updates supported name/description metadata only when the exact snapshot checksum still matches." +
+        UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteNamedSnapshotSummary>> UpdateSnapshotAsync(
         [Description("Allowlisted snapshot metadata update guarded by current remote state.")]
         ArchidektSnapshotUpdateRequest request,
@@ -155,7 +185,8 @@ internal sealed class ArchidektRemoteWriteTools
     /// Deletes one unchanged exactly confirmed named snapshot.
     /// </summary>
     [McpServerTool(Name = "archidekt_snapshot_delete", Title = "Delete Archidekt Snapshot", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Deletes one exact unchanged snapshot and verifies its absence from the fresh collection.")]
+    [McpMeta(RequiresUserInteractionKey, JsonValue = "true")]
+    [Description("Archidekt: deletes one exact unchanged snapshot and verifies its absence from the fresh collection.")]
     internal Task<OperationResult<ArchidektApplyResult>> DeleteSnapshotAsync(
         [Description("Exact snapshot deletion request with fingerprint and acknowledgement guards.")]
         ArchidektSnapshotDeleteRequest request,
@@ -168,7 +199,10 @@ internal sealed class ArchidektRemoteWriteTools
     /// Restores one unchanged named snapshot onto one unchanged remote deck.
     /// </summary>
     [McpServerTool(Name = "archidekt_snapshot_restore_apply", Title = "Apply Archidekt Snapshot Restore", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Replays every source/target/preview guard, applies primitive deck writes, and verifies restored content without changing local state.")]
+    [McpMeta(RequiresUserInteractionKey, JsonValue = "true")]
+    [Description(
+        "Archidekt: replays every source/target/preview guard, applies primitive deck writes, and verifies restored " +
+        "content without changing local state.")]
     internal Task<OperationResult<ArchidektApplyResult>> ApplySnapshotRestoreAsync(
         [Description("Preview- and remote-state-guarded request to restore one named snapshot.")]
         ArchidektSnapshotRestoreApplyRequest request,

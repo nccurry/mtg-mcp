@@ -21,25 +21,20 @@ internal static class ScryfallToolsetManifest
         "corpus, and community tags kept distinct from card facts.",
         [
             "scryfall_autocomplete",
-            "scryfall_bulk_metadata",
-            "scryfall_card_collection",
-            "scryfall_card_get",
-            "scryfall_card_prints",
-            "scryfall_card_rulings",
-            "scryfall_cards_by_tag",
-            "scryfall_catalog",
-            "scryfall_corpus_status",
+            "scryfall_card_data_status",
+            "scryfall_card_details",
+            "scryfall_cards_get",
+            "scryfall_installed_cards_by_tag",
+            "scryfall_reference_get",
             "scryfall_search",
-            "scryfall_sets",
-            "scryfall_snapshot_get",
-            "scryfall_snapshot_list",
-            "scryfall_tag_search",
+            "scryfall_search_snapshots_get",
+            "scryfall_tags_search",
         ],
         [
-            "scryfall_corpus_delete",
-            "scryfall_corpus_rollback",
-            "scryfall_corpus_sync",
-            "scryfall_snapshot_delete",
+            "scryfall_card_data_delete",
+            "scryfall_card_data_rollback",
+            "scryfall_card_data_sync",
+            "scryfall_search_snapshot_delete",
         ],
         []);
 
@@ -54,10 +49,14 @@ internal static class ScryfallToolsetManifest
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
 
-        builder.WithTools(ToolItemChoices.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices));
+        builder
+            .WithTools(ToolRegistration.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices))
+            .WithTools(ToolRegistration.Create(
+                new ScryfallReferenceTools(service),
+                ScryfallReferenceTools.ItemChoices));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(new ScryfallWriteTools(service, mode), ToolCallPolicy.SerializerOptions);
+            builder.WithTools(ToolRegistration.Create(new ScryfallWriteTools(service, mode)));
         }
     }
 }

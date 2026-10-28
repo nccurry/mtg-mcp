@@ -23,19 +23,20 @@ public sealed class FoundationConfigurationTests
     /// Verifies that omitted configuration selects local mode and the versioned platform path without creating it.
     /// </summary>
     [Fact]
-    public void Resolve_OmittedValues_UsesLocalVersionedPathWithoutCreatingIt()
+    public void Resolve_OmittedValues_UsesRemoteModeAndLocalVersionedPathWithoutCreatingIt()
     {
         using TemporaryDirectory temporary = new();
         IConfiguration configuration = new ConfigurationBuilder().Build();
         string expectedPath = Path.Combine(temporary.Path, "mtg-mcp", "v0.9");
 
         FoundationConfiguration resolved = RequireSuccess(
-            FoundationConfigurationLoader.Resolve(configuration, temporary.Path, string.Empty));
+            FoundationConfigurationLoader.Resolve(configuration, temporary.Path, string.Empty, temporary.Path));
 
-        Assert.Equal(OperationMode.Local, resolved.Mode);
+        Assert.Equal(OperationMode.Remote, resolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.Default, resolved.Toolsets.Kind);
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Decks));
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Scryfall));
+        Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Spellbook));
         Assert.Equal(TimeSpan.FromHours(24), resolved.ScryfallFreshnessTtl);
         Assert.Equal(TimeSpan.FromMinutes(15), resolved.SpellbookCacheTtl);
         Assert.Equal(expectedPath, resolved.DataRoot);

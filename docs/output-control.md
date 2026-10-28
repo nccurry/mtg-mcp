@@ -2,8 +2,8 @@
 
 ## Current: card response formats and the result size limit
 
-The Scryfall card tools `scryfall_search`, `scryfall_card_get`,
-`scryfall_card_collection`, and `scryfall_cards_by_tag` take `responseFormat`:
+The Scryfall card tools `scryfall_search`, `scryfall_cards_get`, and
+`scryfall_installed_cards_by_tag` take `responseFormat`:
 
 | Value | Result |
 | --- | --- |
@@ -11,13 +11,13 @@ The Scryfall card tools `scryfall_search`, `scryfall_card_get`,
 | `concise` | A small set of fields for comparing many cards. `fields` picks which; `scryfallId`, `oracleId`, and `name` are always included. |
 | `full` | `standard` plus the raw provider objects. Pages are limited to 25 rows. |
 
-`deck_get` with `include` returns concise card fields and oracle tag slugs for a
+`local_deck_get` with `include` returns concise card fields and oracle tag slugs for a
 page of entries, using the same field names.
 
 Results that can grow with the caller's data stay under 40,000 UTF-8 bytes of
 structured result. The text block of a tool result repeats the structured JSON,
 and a client passes only one of the two to the model. A `concise` page, and a
-`deck_get` page with `include`, keeps the leading items that fit and then sets
+`local_deck_get` page with `include`, keeps the leading items that fit and then sets
 `truncated: true`, a `narrow` hint, and a `nextCursor` that continues from the
 first item left out. The `standard` format is reported, not truncated: a page of
 25 rows can pass 40,000 bytes, so use `concise` or a smaller `pageSize`.

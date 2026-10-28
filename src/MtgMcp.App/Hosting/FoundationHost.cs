@@ -72,6 +72,7 @@ internal static class FoundationHost
             .AddMcpServer(options =>
             {
                 options.ProtocolVersion = SupportedProtocolVersion;
+                options.ServerInstructions = ServerInstructions.Build(configuration.Toolsets, configuration.Mode);
                 options.ServerInfo = new Implementation
                 {
                     Name = FoundationServerIdentity.Name,

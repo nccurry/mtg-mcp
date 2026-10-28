@@ -20,37 +20,27 @@ internal static class DeckToolsetManifest
         CapabilityToolsetStability.Stable,
         "Local deck storage and manual interchange. Toolset selection controls relevance; operation mode separately controls local writes.",
         [
-            "deck_backup_list",
-            "deck_category_rules_preview",
-            "deck_category_rules_validate",
-            "deck_export_bundle",
-            "deck_get",
-            "deck_import_preview",
-            "deck_identity_reconcile_preview",
-            "deck_interchange_formats",
-            "deck_list",
-            "deck_on_curve_estimate",
-            "deck_validate",
+            "local_deck_backup_list",
+            "local_deck_category_rules_preview",
+            "local_deck_export_bundle",
+            "local_deck_get",
+            "local_deck_import_preview",
+            "local_deck_identity_reconcile_preview",
+            "local_deck_interchange_formats",
+            "local_deck_list",
+            "local_deck_on_curve_estimate",
+            "local_deck_validate",
         ],
         [
-            "deck_apply_changes",
-            "deck_backup_create",
-            "deck_backup_delete",
-            "deck_backup_restore",
-            "deck_category_assign",
-            "deck_category_create",
-            "deck_category_delete",
-            "deck_category_unassign",
-            "deck_category_update",
-            "deck_category_rules_apply",
-            "deck_create",
-            "deck_delete",
-            "deck_entry_add",
-            "deck_entry_remove",
-            "deck_entry_update",
-            "deck_import_create",
-            "deck_identity_reconcile_apply",
-            "deck_update",
+            "local_deck_apply_changes",
+            "local_deck_backup_create",
+            "local_deck_backup_delete",
+            "local_deck_backup_restore",
+            "local_deck_category_rules_apply",
+            "local_deck_create",
+            "local_deck_delete",
+            "local_deck_import_create",
+            "local_deck_identity_reconcile_apply",
         ],
         []);
 
@@ -73,20 +63,20 @@ internal static class DeckToolsetManifest
         DeckOnCurveEstimateCoordinator onCurveCoordinator = new(deckStore, scryfallService);
         DeckCardViewCoordinator cardViewCoordinator = new(deckStore, scryfallService);
         builder
-            .WithTools(ToolItemChoices.Create(
+            .WithTools(ToolRegistration.Create(
                 new DeckReadTools(deckStore, cardViewCoordinator),
                 DeckReadTools.ItemChoices))
-            .WithTools(new DeckInterchangeReadTools(interchangeService), ToolCallPolicy.SerializerOptions)
-            .WithTools(new DeckIdentityReconciliationReadTools(identityCoordinator), ToolCallPolicy.SerializerOptions)
-            .WithTools(new DeckOnCurveEstimateTools(onCurveCoordinator), ToolCallPolicy.SerializerOptions);
-        builder.WithTools(new DeckCategorizationReadTools(categorizationCoordinator), ToolCallPolicy.SerializerOptions);
+            .WithTools(ToolRegistration.Create(new DeckInterchangeReadTools(interchangeService)))
+            .WithTools(ToolRegistration.Create(new DeckIdentityReconciliationReadTools(identityCoordinator)))
+            .WithTools(ToolRegistration.Create(new DeckOnCurveEstimateTools(onCurveCoordinator)));
+        builder.WithTools(ToolRegistration.Create(new DeckCategorizationReadTools(categorizationCoordinator)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder
-                .WithTools(new DeckWriteTools(deckStore, mode), ToolCallPolicy.SerializerOptions)
-                .WithTools(new DeckInterchangeWriteTools(interchangeService, mode), ToolCallPolicy.SerializerOptions)
-                .WithTools(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode), ToolCallPolicy.SerializerOptions)
-                .WithTools(new DeckCategorizationWriteTools(categorizationCoordinator, mode), ToolCallPolicy.SerializerOptions)
+                .WithTools(ToolRegistration.Create(new DeckWriteTools(deckStore, mode)))
+                .WithTools(ToolRegistration.Create(new DeckInterchangeWriteTools(interchangeService, mode)))
+                .WithTools(ToolRegistration.Create(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode)))
+                .WithTools(ToolRegistration.Create(new DeckCategorizationWriteTools(categorizationCoordinator, mode)))
                 .WithTools([DeckBatchWriteTools.Create(deckStore, mode)]);
         }
     }

@@ -222,7 +222,8 @@ internal sealed class ScryfallCardResponseOperations
     }
 
     /// <summary>
-    /// Resolves a card collection and writes each row's card in the requested format.
+    /// Resolves a card collection and writes each row's card in the requested format. One fuzzy-name lookup is
+    /// answered as a single-row collection, because the provider's collection endpoint cannot match fuzzy names.
     /// </summary>
     internal async Task<OperationResult<ScryfallCollectionResponse>> GetCollectionAsync(
         IReadOnlyList<ScryfallCardLookup>? lookups,
@@ -233,6 +234,12 @@ internal sealed class ScryfallCardResponseOperations
         IReadOnlyList<string>? fields,
         CancellationToken cancellationToken)
     {
+        if (cursor is null && lookups is [{ Kind: "fuzzy-name" } fuzzyLookup])
+        {
+            return await GetFuzzyRowAsync(fuzzyLookup, freshnessPolicy, responseFormat, fields, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
@@ -277,6 +284,40 @@ internal sealed class ScryfallCardResponseOperations
                 Limits = formatted.Limits,
                 Truncated = formatted.Truncated ? true : null,
                 Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
+            });
+    }
+
+    /// <summary>
+    /// Resolves one fuzzy-name lookup as a card read and returns it as a one-row collection.
+    /// </summary>
+    private async Task<OperationResult<ScryfallCollectionResponse>> GetFuzzyRowAsync(
+        ScryfallCardLookup lookup,
+        string freshnessPolicy,
+        string? responseFormat,
+        IReadOnlyList<string>? fields,
+        CancellationToken cancellationToken)
+    {
+        OperationResult<ScryfallCardResponse> single = await GetCardAsync(
+            lookup,
+            freshnessPolicy,
+            responseFormat,
+            fields,
+            cancellationToken).ConfigureAwait(false);
+        if (single is not OperationSuccess<ScryfallCardResponse> success)
+        {
+            return Forward<ScryfallCardResponse, ScryfallCollectionResponse>(single);
+        }
+
+        ScryfallCardResponse card = success.Data;
+        ScryfallCollectionRowResponse row = new(0, lookup, "found", card.Origin, card.Card, null);
+        return new OperationSuccess<ScryfallCollectionResponse>(
+            new ScryfallCollectionResponse(
+                new ScryfallPage<ScryfallCollectionRowResponse>([row], 1, null),
+                card.Snapshot,
+                card.CorpusGenerationId)
+            {
+                ResponseFormat = card.ResponseFormat,
+                Limits = card.Limits,
             });
     }
 

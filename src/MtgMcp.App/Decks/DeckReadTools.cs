@@ -45,16 +45,16 @@ internal sealed class DeckReadTools
     /// Lists one canonical page of local decks.
     /// </summary>
     [McpServerTool(
-        Name = "deck_list",
+        Name = "local_deck_list",
         Title = "List Local Decks",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Lists canonically ordered local deck summaries using an opaque stable cursor.")]
+    [Description("Local deck store: lists canonically ordered local deck summaries using an opaque stable cursor.")]
     internal Task<OperationResult<DeckPage>> ListAsync(
-        [Description("Opaque cursor returned by a prior deck_list call.")] string? cursor = null,
+        [Description("Opaque cursor returned by a prior local_deck_list call.")] string? cursor = null,
         [Description("Number of summaries to return, from 1 through 100.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
@@ -65,7 +65,7 @@ internal sealed class DeckReadTools
     /// Gets one complete canonical local deck by stable ID.
     /// </summary>
     [McpServerTool(
-        Name = "deck_get",
+        Name = "local_deck_get",
         Title = "Get Local Deck",
         ReadOnly = true,
         Destructive = false,
@@ -73,11 +73,11 @@ internal sealed class DeckReadTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Gets one local deck: its stored state with entries, zones, categories, assignments, and " +
+        "Local deck store: gets one local deck: its stored state with entries, zones, categories, assignments, and " +
         "provider-neutral bindings, plus the entry IDs that edits need. Add include [cards, tags] to also get, " +
         "for each entry, its concise Scryfall card fields (exact printing) and oracle tag slugs from installed " +
         "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
-        "scryfall_corpus_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
+        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
         "To filter, group, or total a card list, use a card-list analysis tool instead.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
@@ -91,7 +91,8 @@ internal sealed class DeckReadTools
             "same names as scryfall_search fields.")]
         IReadOnlyList<string>? fields = null,
         [Description(
-            "Opaque cursor from nextCursor of a previous deck_get call with the same deckId, include, and fields.")]
+            "Opaque cursor from nextCursor of a previous local_deck_get call with the same deckId, include, and " +
+            "fields.")]
         string? cursor = null,
         [Description("Only with include: entries per page, from 1 through 100; the default is 25.")]
         int? pageSize = null,
@@ -104,7 +105,7 @@ internal sealed class DeckReadTools
     /// Reports only local structural invariants for one deck.
     /// </summary>
     [McpServerTool(
-        Name = "deck_validate",
+        Name = "local_deck_validate",
         Title = "Validate Local Deck Structure",
         ReadOnly = true,
         Destructive = false,
@@ -112,7 +113,7 @@ internal sealed class DeckReadTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Checks local references, quantities, zones, and primary categories without format, " +
+        "Local deck store: checks local references, quantities, zones, and primary categories without format, " +
         "legality, or quality judgments.")]
     internal Task<OperationResult<DeckValidationReport>> ValidateAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
@@ -125,14 +126,14 @@ internal sealed class DeckReadTools
     /// Lists opaque local deck backups and the current guarded database fingerprint.
     /// </summary>
     [McpServerTool(
-        Name = "deck_backup_list",
+        Name = "local_deck_backup_list",
         Title = "List Local Deck Backups",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Lists opaque deck backup metadata without exposing local filesystem paths.")]
+    [Description("Local deck store: lists opaque deck backup metadata without exposing local filesystem paths.")]
     internal Task<OperationResult<DeckBackupPage>> ListBackupsAsync(
         CancellationToken cancellationToken = default)
     {

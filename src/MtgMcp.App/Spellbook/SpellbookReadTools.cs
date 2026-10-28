@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 using MtgMcp.Spellbook;
 
@@ -33,7 +34,10 @@ internal sealed class SpellbookReadTools
     /// Returns one bounded source page for an exact Commander Spellbook search query.
     /// </summary>
     [McpServerTool(Name = "spellbook_variant_search", Title = "Search Commander Spellbook Variants", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Returns a bounded Commander Spellbook variant page for an exact source query. It does not rank results or recommend cards.")]
+    [Description(
+        "Commander Spellbook: returns a bounded Commander Spellbook variant page for an exact source query. It does " +
+        "not rank results or recommend cards." +
+        UntrustedTextNotes.Spellbook)]
     internal Task<OperationResult<SpellbookEvidence>> SearchVariantsAsync(
         [Description("Exact Commander Spellbook query sent unchanged except for URL escaping.")] string sourceQuery,
         [Description("Source page size from 1 through 25; omitted uses 20.")] int? limit = null,
@@ -52,7 +56,10 @@ internal sealed class SpellbookReadTools
     /// Returns one exact source variant without local interpretation.
     /// </summary>
     [McpServerTool(Name = "spellbook_variant_get", Title = "Get Commander Spellbook Variant", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Returns the exact Commander Spellbook JSON object for one variant ID without interpreting it.")]
+    [Description(
+        "Commander Spellbook: returns the exact Commander Spellbook JSON object for one variant ID without " +
+        "interpreting it." +
+        UntrustedTextNotes.Spellbook)]
     internal Task<OperationResult<SpellbookEvidence>> GetVariantAsync(
         [Description("Exact Commander Spellbook variant identifier.")] string variantId,
         CancellationToken cancellationToken = default)
@@ -64,7 +71,10 @@ internal sealed class SpellbookReadTools
     /// Sends only supported entries from one exact local deck revision to Commander Spellbook.
     /// </summary>
     [McpServerTool(Name = "spellbook_deck_combos_find", Title = "Find Commander Spellbook Deck Combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Sends only commander and main entries from one exact local deck revision to Commander Spellbook and reports skipped zones. It does not decide whether a result fits the deck.")]
+    [Description(
+        "Commander Spellbook: sends only commander and main entries from one exact local deck revision to Commander " +
+        "Spellbook and reports skipped zones. It does not decide whether a result fits the deck." +
+        UntrustedTextNotes.Spellbook)]
     internal async Task<OperationResult<SpellbookDeckComboEvidence>> FindDeckCombosAsync(
         [Description("Local deck identifier.")] Guid deckId,
         [Description("Exact local deck revision to read before the source request.")] long expectedRevision,

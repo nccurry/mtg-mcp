@@ -47,8 +47,9 @@ internal sealed record DeckEntryView(
 }
 
 /// <summary>
-/// Carries a deck as <c>deck_get</c> returns it. Without an include list it holds the whole deck and its JSON matches
-/// the stored deck; with one it holds a page of entries, the categories, and the assignments of those entries.
+/// Carries a deck as <c>local_deck_get</c> returns it. Without an include list it holds the whole deck and its
+/// JSON matches the stored deck; with one it holds a page of entries, the categories, and the assignments of
+/// those entries.
 /// </summary>
 internal sealed record DeckDocumentView(
     Guid DeckId,

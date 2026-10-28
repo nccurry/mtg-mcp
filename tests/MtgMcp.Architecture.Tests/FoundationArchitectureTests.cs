@@ -307,33 +307,46 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies every tool registration in App passes the shared serializer options, so every union reads the same way.
+    /// Verifies every tool is created by the one registration helper, so every tool shares the serializer options
+    /// and closes its input schema to unknown properties, and no manifest builds its own schema options.
     /// </summary>
     [Fact]
-    public void ToolRegistrations_PassSharedSerializerOptions()
+    public void ToolRegistrations_UseTheSharedRegistrationHelper()
     {
-        const string sharedOptions = "ToolCallPolicy.SerializerOptions";
         string appRoot = Path.Combine(RepositoryRoot, "src", "MtgMcp.App");
-        List<(string File, string Statement, bool IsListRegistration)> registrations = [];
+        string helperPath = Path.Combine(appRoot, "Hosting", "ToolRegistration.cs");
+        string helper = File.ReadAllText(helperPath);
+        List<string> offenders = [];
+        int registrations = 0;
         string[] files = [.. Directory.GetFiles(appRoot, "*.cs", SearchOption.AllDirectories).Where(IsAuthoredSource)];
         foreach (string file in files)
         {
             string text = File.ReadAllText(file);
-            registrations.AddRange(FindStatements(text, ".WithTools(")
-                .Select(statement => (ToRepositoryPath(file), statement, true)));
-            registrations.AddRange(FindStatements(text, "McpServerTool.Create(")
-                .Select(statement => (ToRepositoryPath(file), statement, false)));
+            foreach (string statement in FindStatements(text, ".WithTools("))
+            {
+                registrations++;
+                bool viaHelper = statement.Contains("ToolRegistration.Create(", StringComparison.Ordinal) ||
+                    statement.Contains("DeckBatchWriteTools.Create(", StringComparison.Ordinal) ||
+                    statement.Contains("Create(nameof(", StringComparison.Ordinal);
+                if (!viaHelper)
+                {
+                    offenders.Add($"{ToRepositoryPath(file)}: {statement.ReplaceLineEndings(" ")}");
+                }
+            }
+
+            bool direct = text.Contains("McpServerTool.Create(", StringComparison.Ordinal) ||
+                text.Contains("AIJsonSchemaCreateOptions", StringComparison.Ordinal) ||
+                text.Contains("McpServerToolCreateOptions", StringComparison.Ordinal);
+            if (direct && !string.Equals(file, helperPath, StringComparison.Ordinal))
+            {
+                offenders.Add($"{ToRepositoryPath(file)} creates a tool or schema options itself.");
+            }
         }
 
-        // A tool list built by a helper is checked where that helper calls McpServerTool.Create.
-        string[] offenders = registrations
-            .Where(value => !value.IsListRegistration || !value.Statement.Contains("Create(", StringComparison.Ordinal))
-            .Where(value => !value.Statement.Contains(sharedOptions, StringComparison.Ordinal))
-            .Select(value => $"{value.File}: {value.Statement.ReplaceLineEndings(" ")}")
-            .ToArray();
-
-        Assert.True(registrations.Count >= 20, $"Only {registrations.Count} registrations were found.");
+        Assert.True(registrations >= 20, $"Only {registrations} registrations were found.");
         Assert.Empty(offenders);
+        Assert.Contains("ToolCallPolicy.SerializerOptions", helper, StringComparison.Ordinal);
+        Assert.Contains("\"additionalProperties\"", helper, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -423,7 +436,7 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, ninety-six-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, eighty-tool, zero-prompt toolset-owned surface.
     /// </summary>
     [Fact]
     public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()
@@ -449,9 +462,9 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Spellbook", "SpellbookToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(97, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(80, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(19, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(20, Regex.Count(source, @"\.WithTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -468,51 +481,39 @@ public sealed class FoundationArchitectureTests
                 "archidekt_deck_list",
                 "archidekt_folder_create",
                 "archidekt_folder_delete",
-                "archidekt_folder_get",
-                "archidekt_folder_list",
                 "archidekt_folder_move_items",
                 "archidekt_folder_update",
+                "archidekt_folders_get",
                 "archidekt_pull_apply",
                 "archidekt_pull_preview",
                 "archidekt_push_apply",
                 "archidekt_push_preview",
                 "archidekt_snapshot_create",
                 "archidekt_snapshot_delete",
-                "archidekt_snapshot_get",
-                "archidekt_snapshot_list",
                 "archidekt_snapshot_restore_apply",
                 "archidekt_snapshot_restore_preview",
                 "archidekt_snapshot_update",
+                "archidekt_snapshots_get",
                 "archidekt_sync_diff",
-                "deck_apply_changes",
-                "deck_backup_create",
-                "deck_backup_delete",
-                "deck_backup_list",
-                "deck_backup_restore",
-                "deck_category_assign",
-                "deck_category_create",
-                "deck_category_delete",
-                "deck_category_rules_apply",
-                "deck_category_rules_preview",
-                "deck_category_rules_validate",
-                "deck_category_unassign",
-                "deck_category_update",
-                "deck_create",
-                "deck_delete",
-                "deck_entry_add",
-                "deck_entry_remove",
-                "deck_entry_update",
-                "deck_export_bundle",
-                "deck_get",
-                "deck_identity_reconcile_apply",
-                "deck_identity_reconcile_preview",
-                "deck_import_create",
-                "deck_import_preview",
-                "deck_interchange_formats",
-                "deck_list",
-                "deck_on_curve_estimate",
-                "deck_update",
-                "deck_validate",
+                "local_deck_apply_changes",
+                "local_deck_backup_create",
+                "local_deck_backup_delete",
+                "local_deck_backup_list",
+                "local_deck_backup_restore",
+                "local_deck_category_rules_apply",
+                "local_deck_category_rules_preview",
+                "local_deck_create",
+                "local_deck_delete",
+                "local_deck_export_bundle",
+                "local_deck_get",
+                "local_deck_identity_reconcile_apply",
+                "local_deck_identity_reconcile_preview",
+                "local_deck_import_create",
+                "local_deck_import_preview",
+                "local_deck_interchange_formats",
+                "local_deck_list",
+                "local_deck_on_curve_estimate",
+                "local_deck_validate",
                 "playgroup_auth_status",
                 "playgroup_commander_get",
                 "playgroup_commander_get_by_name",
@@ -530,28 +531,23 @@ public sealed class FoundationArchitectureTests
                 "playgroup_user_playgroup_get",
                 "playgroup_user_playgroups_list",
                 "scryfall_autocomplete",
-                "scryfall_bulk_metadata",
-                "scryfall_card_collection",
-                "scryfall_card_get",
-                "scryfall_card_prints",
-                "scryfall_card_rulings",
-                "scryfall_cards_by_tag",
-                "scryfall_catalog",
-                "scryfall_corpus_delete",
-                "scryfall_corpus_rollback",
-                "scryfall_corpus_status",
-                "scryfall_corpus_sync",
+                "scryfall_card_data_delete",
+                "scryfall_card_data_rollback",
+                "scryfall_card_data_status",
+                "scryfall_card_data_sync",
+                "scryfall_card_details",
+                "scryfall_cards_get",
+                "scryfall_installed_cards_by_tag",
+                "scryfall_reference_get",
                 "scryfall_search",
-                "scryfall_sets",
-                "scryfall_snapshot_delete",
-                "scryfall_snapshot_get",
-                "scryfall_snapshot_list",
-                "scryfall_tag_search",
+                "scryfall_search_snapshot_delete",
+                "scryfall_search_snapshots_get",
+                "scryfall_tags_search",
                 "spellbook_deck_combos_find",
                 "spellbook_variant_get",
                 "spellbook_variant_search",
-                "stats_deck_summary",
                 "stats_hypergeometric",
+                "stats_local_deck_summary",
                 "stats_mana_availability",
                 "stats_minimum_count",
                 "stats_mulligan",
@@ -568,7 +564,9 @@ public sealed class FoundationArchitectureTests
             archidektManifestSource,
             playgroupManifestSource,
             spellbookManifestSource);
-        string[] assignedToolNames = Regex.Matches(manifestSource, "\\\"((?:archidekt|deck|playgroup|scryfall|spellbook|stats)_[^\\\"]+)\\\"")
+        string[] assignedToolNames = Regex.Matches(
+                manifestSource,
+                "\\\"((?:archidekt|local_deck|playgroup|scryfall|spellbook|stats)_[^\\\"]+)\\\"")
             .Select(match => match.Groups[1].Value)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -577,7 +575,7 @@ public sealed class FoundationArchitectureTests
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
         Assert.Equal(10, Regex.Count(deckManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
-        Assert.Equal(2, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
+        Assert.Equal(3, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
         Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithTools\("));
         Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithTools\("));
         Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithTools\("));

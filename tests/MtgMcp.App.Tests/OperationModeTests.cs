@@ -9,15 +9,15 @@ namespace MtgMcp.App.Tests;
 public sealed class OperationModeTests
 {
     /// <summary>
-    /// Verifies the local default and every accepted normalized mode value.
+    /// Verifies the remote default and every accepted normalized mode value.
     /// </summary>
     [Fact]
     public void Parse_ValidValues_NormalizesMode()
     {
         (string? ConfiguredValue, OperationMode ExpectedMode, string ExpectedValue)[] cases =
         [
-            (null, OperationMode.Local, "local"),
-            (" ", OperationMode.Local, "local"),
+            (null, OperationMode.Remote, "remote"),
+            (" ", OperationMode.Remote, "remote"),
             ("READ-ONLY", OperationMode.ReadOnly, "read-only"),
             (" local ", OperationMode.Local, "local"),
             ("Remote", OperationMode.Remote, "remote"),

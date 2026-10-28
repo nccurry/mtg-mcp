@@ -49,7 +49,7 @@ public sealed class ToolCallPolicyTests
     {
         Dictionary<string, JsonElement> arguments = Arguments(UnknownKindChanges);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal(ToolCallPolicy.InvalidArgumentsReason, failure.ReasonCode);
@@ -77,7 +77,7 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal("changes[0].entryDraft.quantity", failure.Path);
@@ -100,7 +100,7 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("deck_apply_changes", arguments));
+        Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments));
     }
 
     /// <summary>
@@ -109,7 +109,7 @@ public sealed class ToolCallPolicyTests
     [Fact]
     public void DiagnoseArguments_MissingRequiredOrUnknownTool_ReportsOrSkips()
     {
-        OperationInvalidInput? missing = ToolCallPolicy.DiagnoseArguments("deck_apply_changes", Arguments("{}"));
+        OperationInvalidInput? missing = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", Arguments("{}"));
 
         Assert.NotNull(missing);
         Assert.Equal("deckId", missing.Path);
@@ -189,7 +189,7 @@ public sealed class ToolCallPolicyTests
         System.Collections.Frozen.FrozenDictionary<string, MethodInfo> methods =
             ToolCallPolicy.IndexToolMethods(typeof(ToolCallPolicy).Assembly.GetTypes());
 
-        Assert.True(methods.ContainsKey("deck_apply_changes"));
+        Assert.True(methods.ContainsKey("local_deck_apply_changes"));
     }
 
     /// <summary>
@@ -220,10 +220,10 @@ public sealed class ToolCallPolicyTests
     {
         await using McpServer server = CreateServer();
         McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
-            (_, _) => throw new InvalidOperationException("An error occurred invoking 'deck_apply_changes'."));
+            (_, _) => throw new InvalidOperationException("An error occurred invoking 'local_deck_apply_changes'."));
 
         CallToolResult result = await filter(
-            Context(server, "deck_apply_changes", UnknownKindChanges),
+            Context(server, "local_deck_apply_changes", UnknownKindChanges),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError);
@@ -247,7 +247,9 @@ public sealed class ToolCallPolicyTests
             (_, _) => throw toolFailure);
 
         InvalidOperationException thrown = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => filter(Context(server, "deck_apply_changes", ValidChanges), TestContext.Current.CancellationToken)
+            () => filter(
+                    Context(server, "local_deck_apply_changes", ValidChanges),
+                    TestContext.Current.CancellationToken)
                 .AsTask());
 
         Assert.Same(toolFailure, thrown);
@@ -265,7 +267,7 @@ public sealed class ToolCallPolicyTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => filter(
-                Context(server, "deck_apply_changes", UnknownKindChanges),
+                Context(server, "local_deck_apply_changes", UnknownKindChanges),
                 TestContext.Current.CancellationToken)
                 .AsTask());
     }
@@ -305,7 +307,7 @@ public sealed class ToolCallPolicyTests
             (_, _) => ValueTask.FromResult(returned));
 
         CallToolResult result = await filter(
-            Context(server, "deck_get", """{ "deckId": "0193e97a-ef95-7700-8000-000000000001" }"""),
+            Context(server, "local_deck_get", """{ "deckId": "0193e97a-ef95-7700-8000-000000000001" }"""),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedError, result.IsError == true);

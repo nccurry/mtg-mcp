@@ -66,15 +66,15 @@ if (Compare-Object $expectedFixtureOnly $actualFixtureOnly) {
 }
 
 $expectedFixtureBacked = @(
-    "scryfall_corpus_delete",
-    "scryfall_corpus_sync"
+    "scryfall_card_data_delete",
+    "scryfall_card_data_sync"
 )
 $actualFixtureBacked = @($fixtureBacked.tool | Sort-Object)
 if (Compare-Object $expectedFixtureBacked $actualFixtureBacked) {
     throw "The fixture-backed disposition does not match the reviewed Scryfall lifecycle boundary."
 }
 
-if ($pending[0].tool -ne "scryfall_corpus_rollback") {
+if ($pending[0].tool -ne "scryfall_card_data_rollback") {
     throw "The pending provider-generation disposition is not the reviewed Scryfall rollback boundary."
 }
 

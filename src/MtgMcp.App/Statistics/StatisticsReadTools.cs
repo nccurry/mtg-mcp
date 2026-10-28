@@ -36,7 +36,7 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_hypergeometric", Title = "Exact Hypergeometric Probability", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Calculates an exact univariate draw probability from explicit population and event inputs. " +
+        "Exact math: calculates an exact univariate draw probability from explicit population and event inputs. " +
         "Fields of `request`: population (raw buckets or a local deck selection), successGroup, drawCount, " +
         "event." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.Hypergeometric)]
@@ -58,7 +58,7 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_multivariate", Title = "Exact Multivariate Probability", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Calculates an exact conjunction over explicitly declared, possibly overlapping groups. " +
+        "Exact math: calculates an exact conjunction over explicitly declared, possibly overlapping groups. " +
         "Fields of `request`: population, drawCount, conditions (group, minimum, maximum)." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.Multivariate)]
     internal Task<OperationResult<StatisticsCalculation<MultivariateResult>>> MultivariateAsync(
@@ -79,7 +79,8 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_turn_table", Title = "Exact Probability By Turn", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Calculates exact probability rows using an explicit cards-seen schedule without turn-rule inference. " +
+        "Exact math: calculates exact probability rows using an explicit cards-seen schedule without turn-rule " +
+        "inference. " +
         "Fields of `request`: population, successGroup, openingHandSize, drawsByTurn, event." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.TurnTable)]
     internal Task<OperationResult<StatisticsCalculation<TurnTableResult>>> TurnTableAsync(
@@ -105,7 +106,7 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_mana_availability", Title = "Exact Mana Availability", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Calculates exact payment availability from caller-declared source groups and capabilities. " +
+        "Exact math: calculates exact payment availability from caller-declared source groups and capabilities. " +
         "Fields of `request`: population, drawCount, sources (group, capabilities), requirement, " +
         "maximumUsableSources." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.ManaAvailability)]
@@ -132,7 +133,8 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_package_assembly", Title = "Exact Package Assembly", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Calculates whether drawn physical copies can fill every caller-declared package slot exactly once. " +
+        "Exact math: calculates whether drawn physical copies can fill every caller-declared package slot exactly " +
+        "once. " +
         "Fields of `request`: population, drawCount, requirements (name, count, eligibleGroups)." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.PackageAssembly)]
     internal Task<OperationResult<StatisticsCalculation<PackageAssemblyResult>>> PackageAssemblyAsync(
@@ -153,7 +155,8 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_mulligan", Title = "Exact Mulligan Schedule", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Calculates exact outcomes for caller-supplied independent attempts, keep constraints, and bottom " +
+        "Exact math: calculates exact outcomes for caller-supplied independent attempts, keep constraints, and " +
+        "bottom " +
         "priority. " +
         "Fields of `request`: population, attempts (drawCount, bottomCount, forced), keepConditions, " +
         "bottomPriority, finalConditions." +
@@ -181,7 +184,7 @@ internal sealed class StatisticsReadTools
     /// </summary>
     [McpServerTool(Name = "stats_minimum_count", Title = "Exact Minimum Copy Count", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
-        "Finds the lowest bounded count meeting an exact target for a supported monotone event. " +
+        "Exact math: finds the lowest bounded count meeting an exact target for a supported monotone event. " +
         "Fields of `request`: event, targetNumerator, targetDenominator, minimumCount, maximumCount." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.MinimumCount)]
     internal Task<OperationResult<StatisticsCalculation<MinimumCountResult>>> MinimumCountAsync(
@@ -202,9 +205,17 @@ internal sealed class StatisticsReadTools
     /// <summary>
     /// Summarizes selected stored deck fields and caller-supplied numeric series.
     /// </summary>
-    [McpServerTool(Name = "stats_deck_summary", Title = "Deterministic Deck Summary", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
+    [McpServerTool(
+        Name = "stats_local_deck_summary",
+        Title = "Deterministic Deck Summary",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false,
+        UseStructuredContent = true)]
     [Description(
-        "Summarizes an exact deck revision without provider lookup, format policy, or legality inference. " +
+        "Local deck store: summarizes an exact deck revision without provider lookup, format policy, or legality " +
+        "inference. " +
         "Fields of `request`: deckId, expectedRevision, populationSelectors, numericSeries, percentiles, " +
         "zonePartition." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.DeckSummary)]

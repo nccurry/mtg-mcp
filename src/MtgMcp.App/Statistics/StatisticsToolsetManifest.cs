@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
@@ -43,7 +42,7 @@ internal static class StatisticsToolsetManifest
         CapabilityToolsetStability.Stable,
         "Provider-independent exact mathematics over caller-supplied groups and explicitly selected deck populations.",
         [
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             "stats_hypergeometric",
             "stats_mana_availability",
             "stats_minimum_count",
@@ -88,18 +87,7 @@ internal static class StatisticsToolsetManifest
         MethodInfo method = typeof(StatisticsReadTools).GetMethod(
             methodName,
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return McpServerTool.Create(method, target, new McpServerToolCreateOptions
-        {
-            SerializerOptions = ToolCallPolicy.SerializerOptions,
-            SchemaCreateOptions = new AIJsonSchemaCreateOptions
-            {
-                TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                TransformOptions = new AIJsonSchemaTransformOptions
-                {
-                    TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                },
-            },
-        });
+        return ToolRegistration.Create(method, target, describeNode: DescribeDiscriminator);
     }
 
     /// <summary>

@@ -29,14 +29,16 @@ internal sealed class DeckInterchangeReadTools
     /// Lists deterministic manual interchange formats and their supported directions.
     /// </summary>
     [McpServerTool(
-        Name = "deck_interchange_formats",
+        Name = "local_deck_interchange_formats",
         Title = "List Manual Deck Interchange Formats",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Lists format IDs, supported import/export directions, losslessness, instructions, and preservation boundaries.")]
+    [Description(
+        "Local deck store: lists format IDs, supported import/export directions, losslessness, instructions, and " +
+        "preservation boundaries.")]
     internal OperationResult<IReadOnlyList<DeckInterchangeFormat>> ListFormats()
     {
         return service.ListFormats();
@@ -46,16 +48,19 @@ internal sealed class DeckInterchangeReadTools
     /// Parses caller-provided content without storage mutation or provider access.
     /// </summary>
     [McpServerTool(
-        Name = "deck_import_preview",
+        Name = "local_deck_import_preview",
         Title = "Preview Manual Deck Import",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Returns a normalized proposal, diagnostics, unresolved identities, and guarded fingerprint.")]
+    [Description(
+        "Local deck store: returns a normalized proposal, diagnostics, unresolved identities, and guarded " +
+        "fingerprint.")]
     internal Task<OperationResult<DeckImportPreview>> PreviewAsync(
-        [Description("Exact import-capable format ID returned by deck_interchange_formats."), InterchangeFormatValues]
+        [Description(
+            "Exact import-capable format ID returned by local_deck_interchange_formats."), InterchangeFormatValues]
         string formatId,
         [Description("UTF-8 manual deck document, limited to 5 MiB.")] string content,
         [Description("Caller-controlled parsing defaults and explicit opt-ins.")] DeckImportOptions? options = null,
@@ -68,17 +73,18 @@ internal sealed class DeckInterchangeReadTools
     /// Generates checksummed manual artifacts and a field-preservation report.
     /// </summary>
     [McpServerTool(
-        Name = "deck_export_bundle",
+        Name = "local_deck_export_bundle",
         Title = "Export Manual Deck Artifact Bundle",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Exports deterministic artifacts without writing files or contacting providers.")]
+    [Description("Local deck store: exports deterministic artifacts without writing files or contacting providers.")]
     internal Task<OperationResult<DeckExportBundle>> ExportAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
-        [Description("Exact export-capable format ID returned by deck_interchange_formats."), InterchangeFormatValues]
+        [Description(
+            "Exact export-capable format ID returned by local_deck_interchange_formats."), InterchangeFormatValues]
         string formatId,
         [Description("Explicit provider-format opt-ins; global Moxfield tags are off by default.")]
         DeckExportOptions? options = null,

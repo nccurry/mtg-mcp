@@ -58,11 +58,24 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string? toolsets,
         CancellationToken cancellationToken)
     {
+        return await StartAsync(mode, toolsets, McpCredentials.Both, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Starts the server with an explicit toolset selection and an explicit set of provider credentials.
+    /// </summary>
+    internal static async Task<McpProcessSession> StartAsync(
+        string? mode,
+        string? toolsets,
+        McpCredentials credentials,
+        CancellationToken cancellationToken)
+    {
         return await StartIsolatedAsync(
             mode,
             toolsets,
             null,
             CurrentProtocolVersion,
+            credentials,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -80,6 +93,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
             toolsets,
             seedDataRoot,
             CurrentProtocolVersion,
+            McpCredentials.Both,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -97,6 +111,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
             toolsets,
             null,
             protocolVersion,
+            McpCredentials.Both,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -108,6 +123,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
         string? toolsets,
         Func<string, CancellationToken, Task>? seedDataRoot,
         string protocolVersion,
+        McpCredentials credentials,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(protocolVersion);
@@ -121,7 +137,7 @@ internal sealed class McpProcessSession : IAsyncDisposable
             dataRoot,
             mode,
             toolsets,
-            environmentOverrides: null,
+            environmentOverrides: CreateCredentialEnvironment(workingDirectory, repositoryRoot, credentials),
             requireInstalledCommand: false);
 
         try
@@ -316,6 +332,41 @@ internal sealed class McpProcessSession : IAsyncDisposable
                 ? TimeSpan.FromSeconds(10)
                 : TimeSpan.FromMilliseconds(500),
         };
+    }
+
+    /// <summary>
+    /// Builds the environment that fixes which provider credentials the isolated server sees. Credential file
+    /// settings always name a file, so the server never falls back to a credential file in the user's profile.
+    /// </summary>
+    private static Dictionary<string, string?> CreateCredentialEnvironment(
+        DirectoryInfo workingDirectory,
+        string repositoryRoot,
+        McpCredentials credentials)
+    {
+        Dictionary<string, string?> environment = new(StringComparer.Ordinal)
+        {
+            ["MTGMCP__ARCHIDEKT__USERNAME"] = null,
+            ["MTGMCP__ARCHIDEKT__PASSWORD"] = null,
+            ["MTGMCP__ARCHIDEKT__CREDENTIALS_FILE"] = Path.Combine(workingDirectory.FullName, "no-archidekt.json"),
+            ["MTGMCP__PLAYGROUP__CREDENTIALS_FILE"] = Path.Combine(workingDirectory.FullName, "no-playgroup.json"),
+        };
+        if (credentials is McpCredentials.ArchidektOnly or McpCredentials.Both)
+        {
+            environment["MTGMCP__ARCHIDEKT__USERNAME"] = "e2e-fake-user";
+            environment["MTGMCP__ARCHIDEKT__PASSWORD"] = "e2e-fake-password";
+        }
+
+        if (credentials == McpCredentials.Both)
+        {
+            environment["MTGMCP__PLAYGROUP__CREDENTIALS_FILE"] = Path.Combine(
+                repositoryRoot,
+                "tests",
+                "MtgMcp.E2E.Tests",
+                "Fixtures",
+                "empty-playgroup-credentials.json");
+        }
+
+        return environment;
     }
 
     /// <summary>

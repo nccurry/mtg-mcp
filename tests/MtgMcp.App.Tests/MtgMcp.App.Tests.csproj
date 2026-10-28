@@ -19,6 +19,7 @@
 
     <ItemGroup>
         <Compile Include="..\MtgMcp.Scryfall.Tests\RecordedCards.cs" Link="Fixtures\RecordedCards.cs" />
+        <Compile Include="..\MtgMcp.Scryfall.Tests\ScryfallTestFixture.cs" Link="Fixtures\ScryfallTestFixture.cs" />
         <None Include="..\MtgMcp.Scryfall.Tests\Fixtures\cards\*.json" Link="Fixtures\cards\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 

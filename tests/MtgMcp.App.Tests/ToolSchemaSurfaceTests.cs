@@ -84,13 +84,13 @@ public sealed partial class ToolSchemaSurfaceTests
             EnumValues(tools["scryfall_search"].ProtocolTool.InputSchema, "direction"));
         Assert.Contains(
             "moxfield-bulk-edit-v1",
-            EnumValues(tools["deck_export_bundle"].ProtocolTool.InputSchema, "formatId"));
+            EnumValues(tools["local_deck_export_bundle"].ProtocolTool.InputSchema, "formatId"));
         Assert.Equal(
             ["concise", "standard", "full"],
             EnumValues(tools["scryfall_search"].ProtocolTool.InputSchema, "responseFormat"));
         Assert.Equal(
             ["cards", "tags"],
-            ItemEnumValues(tools["deck_get"].ProtocolTool.InputSchema, "include"));
+            ItemEnumValues(tools["local_deck_get"].ProtocolTool.InputSchema, "include"));
         Assert.Equal(
             ScryfallConciseFields.All,
             ItemEnumValues(tools["scryfall_search"].ProtocolTool.InputSchema, "fields"));
@@ -121,7 +121,7 @@ public sealed partial class ToolSchemaSurfaceTests
 
         string[] names = [.. registered.Tools.Select(tool => tool.ProtocolTool.Name)];
 
-        Assert.Equal(97, names.Length);
+        Assert.Equal(80, names.Length);
         Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
     }
 

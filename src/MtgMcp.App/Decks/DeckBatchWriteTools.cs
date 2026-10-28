@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
@@ -62,32 +61,31 @@ internal sealed class DeckBatchWriteTools
         MethodInfo method = typeof(DeckBatchWriteTools).GetMethod(
             nameof(ApplyChangesAsync),
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return McpServerTool.Create(method, target, new McpServerToolCreateOptions
-        {
-            SerializerOptions = ToolCallPolicy.SerializerOptions,
-            SchemaCreateOptions = new AIJsonSchemaCreateOptions
-            {
-                TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                TransformOptions = new AIJsonSchemaTransformOptions
-                {
-                    TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                },
-            },
-        });
+        return ToolRegistration.Create(method, target, describeNode: DescribeDiscriminator);
     }
 
     /// <summary>
     /// Applies an explicit ordered batch atomically through the shared transaction path.
     /// </summary>
     [McpServerTool(
-        Name = "deck_apply_changes",
+        Name = "local_deck_apply_changes",
         Title = "Apply Local Deck Changes",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Applies an ordered batch atomically; any invalid change rolls back the full batch.")]
+    [Description(
+        "Local deck store: applies an ordered batch of changes to one local deck atomically; any invalid " +
+        "change rolls back the whole batch. This is the only tool that edits an existing deck, and a batch of " +
+        "one change is a normal use. Each change has a kind: update-metadata (name, description, format), " +
+        "add-entry, update-entry (the complete replacement entry with its entryId), remove-entry, " +
+        "add-category, update-category, remove-category, assign-category, unassign-category, " +
+        "upsert-provider-binding, or remove-provider-binding. A new entry or category may carry its own ID, " +
+        "so later changes in the same batch can refer to it." +
+        DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.ApplyChangesMinimal +
+        DeckToolExamples.ExamplePrefix + "categorize): " + DeckToolExamples.ApplyChangesCategorize +
+        DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.ApplyChangesFull)]
     internal Task<OperationResult<DeckDocument>> ApplyChangesAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,

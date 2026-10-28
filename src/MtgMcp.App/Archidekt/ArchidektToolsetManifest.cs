@@ -23,13 +23,11 @@ internal static class ArchidektToolsetManifest
             "archidekt_auth_status",
             "archidekt_deck_get",
             "archidekt_deck_list",
-            "archidekt_folder_get",
-            "archidekt_folder_list",
+            "archidekt_folders_get",
             "archidekt_pull_preview",
             "archidekt_push_preview",
-            "archidekt_snapshot_get",
-            "archidekt_snapshot_list",
             "archidekt_snapshot_restore_preview",
+            "archidekt_snapshots_get",
             "archidekt_sync_diff",
         ],
         ["archidekt_pull_apply"],
@@ -60,15 +58,15 @@ internal static class ArchidektToolsetManifest
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(deckStore);
         ArchidektCoordinator coordinator = new(service, deckStore);
-        builder.WithTools(new ArchidektReadTools(coordinator), ToolCallPolicy.SerializerOptions);
+        builder.WithTools(ToolRegistration.Create(new ArchidektReadTools(coordinator)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(new ArchidektLocalWriteTools(coordinator, mode), ToolCallPolicy.SerializerOptions);
+            builder.WithTools(ToolRegistration.Create(new ArchidektLocalWriteTools(coordinator, mode)));
         }
 
         if (OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite))
         {
-            builder.WithTools(new ArchidektRemoteWriteTools(coordinator, mode), ToolCallPolicy.SerializerOptions);
+            builder.WithTools(ToolRegistration.Create(new ArchidektRemoteWriteTools(coordinator, mode)));
         }
     }
 }

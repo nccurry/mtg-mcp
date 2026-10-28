@@ -50,6 +50,7 @@ internal sealed record FoundationToolsetStatus(
     [property: JsonPropertyName("stability")] string Stability,
     [property: JsonPropertyName("enabled")] bool Enabled,
     [property: JsonPropertyName("defaultEnabled")] bool DefaultEnabled,
+    [property: JsonPropertyName("disabledReason")] string? DisabledReason,
     [property: JsonPropertyName("visibleToolCount")] int VisibleToolCount,
     [property: JsonPropertyName("description")] string Description,
     [property: JsonPropertyName("unsupportedOperations")] IReadOnlyList<string> UnsupportedOperations);

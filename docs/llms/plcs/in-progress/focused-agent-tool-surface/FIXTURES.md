@@ -94,10 +94,10 @@ listed keep their working name.
 
 **Naming exceptions (NAME-001).** These final names keep the source prefix
 but not the full `<source>_<object>_<action>` shape: `scryfall_search`,
-`scryfall_autocomplete`, `card_lists_compare`, `card_list_query`, the eight
+`scryfall_autocomplete`, `card_lists_compare`, `card_list_query`, the seven
 existing `stats_*` names other than `stats_local_deck_summary`,
-`stats_castability`, and `stats_simulate`. The architecture test reads this
-list.
+`stats_castability`, and `stats_simulate`. The architecture test pins this
+list (`ToolSurfaceNamingTests`).
 
 ## Count Check
 
