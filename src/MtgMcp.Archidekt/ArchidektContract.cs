@@ -93,6 +93,15 @@ internal static class ArchidektContract
     }
 
     /// <summary>
+    /// Derives a stable local identifier that is unique to one local deck, so the same provider row can be imported
+    /// into several local decks without sharing primary keys.
+    /// </summary>
+    internal static Guid StableGuid(string scope, Guid localDeckId, string providerId)
+    {
+        return StableGuid($"{scope}:{localDeckId:D}", providerId);
+    }
+
+    /// <summary>
     /// Formats a provider value as stable JSON text for path-addressed comparisons.
     /// </summary>
     internal static string? JsonValue(object? value)

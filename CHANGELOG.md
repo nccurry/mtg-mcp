@@ -14,6 +14,9 @@
   local database treated those names as the same and the apply failed with a generic constraint error. Category names
   are now case-sensitive, as on Archidekt; an existing database is upgraded on first use (a copy is kept first), and
   local constraint errors now name the cause (duplicate category name, duplicate entry ID, and so on).
+- Fixed importing the same Archidekt deck a second time. Local entry and category IDs were derived from the Archidekt
+  row alone, so a second local copy collided on its primary keys. They are now derived from the local deck and the
+  Archidekt row; existing decks keep their IDs and links.
 
 ### Seeded simulation (breaking)
 

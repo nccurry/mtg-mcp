@@ -274,6 +274,54 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies the same remote deck can be imported into two local decks, and each keeps its own rows and a clean
+    /// push preview.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPull_ImportingTheSameRemoteDeckTwice_GivesEachLocalDeckItsOwnRows()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            for (int index = 0; index < 12; index++)
+            {
+                handler.Add(HttpMethod.Get, "api/decks/42/", RemoteDeck);
+            }
+
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            List<DeckDocument> decks = [];
+            for (int import = 0; import < 2; import++)
+            {
+                ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId: null,
+                    TestContext.Current.CancellationToken));
+                Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+                    TestContext.Current.CancellationToken)).LocalDeckId);
+                decks.Add(Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken)));
+                ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                Assert.Empty(push.Operations);
+            }
+
+            Assert.NotEqual(decks[0].DeckId, decks[1].DeckId);
+            Assert.Empty(decks[0].Entries.Select(entry => entry.EntryId).Intersect(
+                decks[1].Entries.Select(entry => entry.EntryId)));
+            Assert.Empty(decks[0].Categories.Select(category => category.CategoryId).Intersect(
+                decks[1].Categories.Select(category => category.CategoryId)));
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]

@@ -18,11 +18,12 @@ public static class ArchidektLocalMapper
     {
         ArgumentNullException.ThrowIfNull(remote);
         ArgumentNullException.ThrowIfNull(binding);
+        Guid localDeckId = deckId ?? Guid.CreateVersion7();
         List<DeckCategoryDraft> categories = [];
         Dictionary<string, Guid> categoryIds = new(StringComparer.Ordinal);
         foreach (RemoteDeckCategory category in remote.Categories)
         {
-            Guid categoryId = ArchidektContract.StableGuid("category", category.ProviderCategoryId);
+            Guid categoryId = ArchidektContract.StableGuid("category", localDeckId, category.ProviderCategoryId);
             categoryIds[category.Name] = categoryId;
             categories.Add(new DeckCategoryDraft(
                 category.Name,
@@ -35,7 +36,7 @@ public static class ArchidektLocalMapper
         List<DeckCategoryAssignment> assignments = [];
         foreach (RemoteDeckEntry entry in remote.Entries)
         {
-            Guid entryId = ArchidektContract.StableGuid("entry", entry.ProviderRelationId);
+            Guid entryId = ArchidektContract.StableGuid("entry", localDeckId, entry.ProviderRelationId);
             entries.Add(new DeckEntryDraft(
                 entry.Quantity,
                 entry.CardName,
@@ -68,7 +69,7 @@ public static class ArchidektLocalMapper
             categories,
             assignments,
             [binding],
-            deckId);
+            localDeckId);
     }
 
     /// <summary>
@@ -143,12 +144,24 @@ public static class ArchidektLocalMapper
         }
 
         ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
-        Dictionary<Guid, string> entryRelations = verified.Entries.ToDictionary(
-            value => ArchidektContract.StableGuid("entry", value.ProviderRelationId),
-            value => value.ProviderRelationId);
-        Dictionary<Guid, string> categoryRelations = verified.Categories.ToDictionary(
-            value => ArchidektContract.StableGuid("category", value.ProviderCategoryId),
-            value => value.ProviderCategoryId);
+        Dictionary<Guid, string> entryRelations = [];
+        foreach (RemoteDeckEntry value in verified.Entries)
+        {
+            entryRelations[ArchidektContract.StableGuid("entry", local.DeckId, value.ProviderRelationId)] =
+                value.ProviderRelationId;
+            entryRelations.TryAdd(ArchidektContract.StableGuid("entry", value.ProviderRelationId), value.ProviderRelationId);
+        }
+
+        Dictionary<Guid, string> categoryRelations = [];
+        foreach (RemoteDeckCategory value in verified.Categories)
+        {
+            categoryRelations[ArchidektContract.StableGuid("category", local.DeckId, value.ProviderCategoryId)] =
+                value.ProviderCategoryId;
+            categoryRelations.TryAdd(
+                ArchidektContract.StableGuid("category", value.ProviderCategoryId),
+                value.ProviderCategoryId);
+        }
+
         List<Guid> unlinked = [];
         for (int index = 0; index < local.Entries.Count; index++)
         {
@@ -190,6 +203,7 @@ public static class ArchidektLocalMapper
     {
         ArgumentNullException.ThrowIfNull(local);
         ArgumentNullException.ThrowIfNull(remote);
+        Guid deckId = local.DeckId ?? throw new ArgumentException("The creation draft needs a deck ID.", nameof(local));
         ArchidektSyncBaseline baseline = new(
             1,
             remote.RemoteId,
@@ -197,10 +211,10 @@ public static class ArchidektLocalMapper
             FingerprintLocalContent(local),
             remote,
             remote.Entries.ToDictionary(
-                value => ArchidektContract.StableGuid("entry", value.ProviderRelationId),
+                value => ArchidektContract.StableGuid("entry", deckId, value.ProviderRelationId),
                 value => value.ProviderRelationId),
             remote.Categories.ToDictionary(
-                value => ArchidektContract.StableGuid("category", value.ProviderCategoryId),
+                value => ArchidektContract.StableGuid("category", deckId, value.ProviderCategoryId),
                 value => value.ProviderCategoryId));
         return JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
     }
