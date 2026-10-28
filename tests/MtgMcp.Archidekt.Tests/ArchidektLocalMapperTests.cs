@@ -724,6 +724,118 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Builds a deck snapshot with the named categories and no entries.
+    /// </summary>
+    private static RemoteDeckSnapshot WithCategories(params string[] names)
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        return parsed with
+        {
+            Entries = [],
+            Categories =
+            [
+                .. names.Select((name, index) => new RemoteDeckCategory(
+                    (100 + index).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    name,
+                    false,
+                    true,
+                    false,
+                    index)),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Lists the planned category operations as kind and name.
+    /// </summary>
+    private static string[] CategoryOperations(RemoteDeckSnapshot current, RemoteDeckSnapshot target)
+    {
+        return
+        [
+            .. ArchidektSyncPlanner.PlanRemoteApply(current, target).PublicOperations
+                .Where(value => value.Kind.StartsWith("category-", StringComparison.Ordinal))
+                .Select(value => $"{value.Kind}:{value.Subject}"),
+        ];
+    }
+
+    /// <summary>
+    /// Verifies adding a category that differs only by case from an existing one creates it and never renames the
+    /// existing category.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_AddingACaseVariantCategory_CreatesIt()
+    {
+        string[] operations = CategoryOperations(
+            WithCategories("Sideboard"),
+            WithCategories("Sideboard", "SIDEBOARD"));
+
+        Assert.Equal(["category-create:SIDEBOARD"], operations);
+    }
+
+    /// <summary>
+    /// Verifies deleting one of two case-variant categories deletes that one and leaves the other.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_RemovingACaseVariantCategory_DeletesOnlyThatOne()
+    {
+        string[] operations = CategoryOperations(
+            WithCategories("Sideboard", "SIDEBOARD"),
+            WithCategories("Sideboard"));
+
+        Assert.Equal(["category-delete:SIDEBOARD"], operations);
+    }
+
+    /// <summary>
+    /// Verifies a category written with different case is a new category and the old one is deleted, not renamed.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_ARecasedCategory_IsCreatedAndTheOldOneDeleted()
+    {
+        string[] operations = CategoryOperations(WithCategories("Sideboard"), WithCategories("sideboard"));
+
+        Assert.Equal(["category-create:sideboard", "category-delete:Sideboard"], operations.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies linking after a push never gives a target category a verified category that another target category
+    /// matched exactly.
+    /// </summary>
+    [Fact]
+    public void LinkRows_ACaseVariantCategory_NeverTakesAnExactlyMatchedOne()
+    {
+        RemoteDeckSnapshot verified = WithCategories("Sideboard");
+        RemoteDeckSnapshot target = WithCategories("Sideboard", "SIDEBOARD");
+
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+
+        Assert.Equal(["100", null], links.CategoryIds);
+    }
+
+    /// <summary>
+    /// Verifies a category move between two case-variant categories is planned and sent with the exact names.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_MovingAnEntryBetweenCaseVariantCategories_IsAnUpdate()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckSnapshot current = WithCategories("Sideboard", "SIDEBOARD");
+        RemoteDeckEntry before = parsed.Entries[0] with
+        {
+            CategoryNames = ["Sideboard"],
+            PrimaryCategoryName = "Sideboard",
+        };
+        RemoteDeckSnapshot start = current with { Entries = [before] };
+        RemoteDeckSnapshot moved = current with
+        {
+            Entries = [before with { CategoryNames = ["SIDEBOARD"], PrimaryCategoryName = "SIDEBOARD" }],
+        };
+
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(start, moved);
+
+        Assert.Equal(["entry-update"], plan.PublicOperations.Select(value => value.Kind));
+    }
+
+    /// <summary>
     /// Parses the reusable complete deck fixture.
     /// </summary>
     private static RemoteDeckSnapshot ParseDeck()
