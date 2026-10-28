@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -59,13 +61,52 @@ internal static class WholeNumberArguments
     }
 
     /// <summary>
-    /// Reads a number whose value is whole and fits in 64 bits.
+    /// Reads a number whose value is exactly whole and fits in 64 bits, judged from the digits as written, so a
+    /// long decimal that is close to a whole number is not rounded to it.
     /// </summary>
     private static bool TryWhole(JsonElement number, out long whole)
     {
         whole = 0;
-        if (!number.TryGetDecimal(out decimal value) || value != decimal.Truncate(value) ||
-            value < long.MinValue || value > long.MaxValue)
+        string text = number.GetRawText();
+        int exponentAt = text.AsSpan().IndexOfAny('e', 'E');
+        string mantissa = exponentAt < 0 ? text : text[..exponentAt];
+        if (!int.TryParse(
+                exponentAt < 0 ? "0" : text[(exponentAt + 1)..],
+                NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out int exponent) ||
+            Math.Abs(exponent) > 400)
+        {
+            return false;
+        }
+
+        bool negative = mantissa.StartsWith('-');
+        string unsigned = negative ? mantissa[1..] : mantissa;
+        int point = unsigned.IndexOf('.', StringComparison.Ordinal);
+        string digits = point < 0 ? unsigned : unsigned.Remove(point, 1);
+        int scale = exponent - (point < 0 ? 0 : unsigned.Length - point - 1);
+        BigInteger digitsValue = BigInteger.Parse(digits, CultureInfo.InvariantCulture);
+        BigInteger value;
+        if (scale >= 0)
+        {
+            value = digitsValue * BigInteger.Pow(10, scale);
+        }
+        else
+        {
+            BigInteger divisor = BigInteger.Pow(10, -scale);
+            value = BigInteger.DivRem(digitsValue, divisor, out BigInteger remainder);
+            if (!remainder.IsZero)
+            {
+                return false;
+            }
+        }
+
+        if (negative)
+        {
+            value = -value;
+        }
+
+        if (value < long.MinValue || value > long.MaxValue)
         {
             return false;
         }

@@ -29,8 +29,7 @@ The current public MCP contract is:
   of the capabilities-resource schema; and
 - no logging, subscription, or changing tool-list, prompt-list, or
   resource-list feature advertisement; the server removes these from both the
-  initialize result and the `server/discover` result that the pinned protocol
-  uses.
+  initialize result and the `server/discover` result of the `2026-07-28` protocol.
 
 `task smoke:process` is only a one-shot startup/configuration probe.
 `task smoke:mcp` establishes a real MCP session, reads the resource, verifies

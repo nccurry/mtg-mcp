@@ -61,6 +61,30 @@ public sealed class WholeNumberBindingTests : IClassFixture<ToolCatalogFixture>
     }
 
     /// <summary>
+    /// Verifies the wholeness of a number is judged from its digits: a long decimal close to a whole number is not
+    /// rounded to it, and an exact whole value in an unusual spelling is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData("0.99999999999999999999999999999999", false)]
+    [InlineData("2.00000000000000000000000000001", false)]
+    [InlineData("1e-30", false)]
+    [InlineData("1.000000000000000000000000000000000", true)]
+    [InlineData("100e-2", true)]
+    [InlineData("0.5e1", true)]
+    [InlineData("-12.0", true)]
+    [InlineData("9223372036854775807.0", true)]
+    [InlineData("9223372036854775808.0", false)]
+    [InlineData("1e400", false)]
+    public void Normalize_JudgesWholenessFromTheDigits(string literal, bool rewritten)
+    {
+        Dictionary<string, JsonElement> arguments = Arguments("{ \"n\": " + literal + " }");
+
+        WholeNumberArguments.Normalize(arguments);
+
+        Assert.Equal(rewritten, !arguments["n"].GetRawText().AsSpan().ContainsAny('.', 'e', 'E'));
+    }
+
+    /// <summary>
     /// Verifies nested integer fields in a batch edit bind as whole numbers once normalized.
     /// </summary>
     [Fact]

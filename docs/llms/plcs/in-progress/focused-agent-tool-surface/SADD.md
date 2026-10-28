@@ -1011,9 +1011,11 @@ phase 6 evidence row of the README.
   names it, and the schema lists them as required.
 - **Work limits (SIM-005, repair after the strict audit).** The headline limit is samples x turns x deck
   cards <= 50,000,000, stated in the error. It alone did not bound the real cost, so a second limit was added: an
-  operation estimate <= 400,000,000 that counts, for each turn, a hand scan for each rule, a payment test for each
-  `can-cast` check, and a payment test for each candidate of a `target-first` rule (each about cost symbols x units of
-  mana). The units of mana the rules could put in play are capped at 1,000, a cost has at most 16 symbols, 99
+  operation estimate <= 400,000,000 that counts, for each turn, a scan of the hand and of the mana in play for
+  each firing of each rule (up to min of its `maxPerTurn`, its group's cards, and the deck's cards), a payment test for
+  each `can-cast` check, and, at each firing of a `target-first` rule, a payment test for each candidate (each about
+  cost symbols x units of mana). Pass 2 found that counting a rule once per turn let 99 firings a turn run 49 seconds;
+  `SimulationBudgetTests` now runs both measured shapes at the limit. The units of mana the rules could put in play are capped at 1,000, a cost has at most 16 symbols, 99
   generic mana, and 128 characters, and group and condition IDs have at most 64. A request at the limits finishes in
   seconds (`SimulationBudgetTests`). The 16 preset captures still replay.
 - **SIM-004 and the work limit.** The removed tool accepted 100,000 samples x 12 turns x 500 cards (600,000,000);
