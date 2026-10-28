@@ -323,8 +323,8 @@ Each example shows the arguments you send and the shape of what comes back.
 The results are trimmed to the fields that matter and use a small deck
 ("Golgari Ramp": Kodama of the East Tree as commander, ten Forest, Llanowar
 Elves, Sol Ring, and Rhystic Study) with card data installed. A test binds every
-request below to the real tool schema, so these examples cannot drift from the
-tools.
+request below to the real tool schema, so these requests cannot drift from the
+tool schemas.
 
 **Search results that are not in my deck.** Run `scryfall_search` first. It
 saves the request as a snapshot and returns `snapshot.snapshotId`. Then ask for
@@ -341,7 +341,7 @@ the left list minus the right list:
 ```
 
 The saved search held five ramp cards and the deck holds two of them, so three
-remain. Only the first fields of each card are shown here:
+remain. Only some fields of each card are shown here:
 
 ```json
 {
@@ -351,7 +351,7 @@ remain. Only the first fields of each card are shown here:
     "page": {
       "items": [
         { "name": "Arcane Signet", "manaCost": "{2}", "typeLine": "Artifact" },
-        { "name": "Birds of Paradise", "manaCost": "{G}", "typeLine": "Creature - Bird" },
+        { "name": "Birds of Paradise", "manaCost": "{G}", "typeLine": "Creature — Bird" },
         { "name": "Cultivate", "manaCost": "{2}{G}", "typeLine": "Sorcery" }
       ],
       "totalCount": 3
@@ -449,9 +449,11 @@ and the user decide what to change.
 inline rules only. The `common-v1` preset was removed, and a source of kind
 `preset` now returns `invalid-input`. The preset mapped four role names to four
 official Scryfall oracle tags, each with its descendant tags and the minimum
-weight `weak`. The same rules sent inline are one rule per role, with your own
-category ID in `categoryId`, the tag's ID in `tagId`, and `includeDescendants`
-on. The four tag IDs below are the ones `common-v1` used:
+weight `weak`. The same rules sent inline are one rule per role, with the ID of a
+category that exists in the deck in `categoryId`, the tag's ID in `tagId`, and
+`includeDescendants` on. If you set a `primaryPriority` on a preset binding, set
+it on the matching inline rule. The four tag IDs below are the ones `common-v1`
+used:
 
 | Role | Oracle tag ID |
 | --- | --- |
@@ -584,12 +586,15 @@ arguments on spaces still works.
 
 | Prompt | Arguments | What the agent is asked to do |
 | --- | --- | --- |
-| `audit-deck` | `deckId` | Read the deck with card data; report Commander rule facts, curve, pips, color sources, castability, and bracket facts; then ask what to change. |
+| `audit-deck` | `deckId` | Read the deck; report Commander rule facts, curve (without lands), pips, color sources, castability, and bracket facts; then ask what to change. |
 | `build-from-commander` | `scryfallId` | Read the commander; ask for budget, bracket, and plan; search by tags; build a local deck in batches. |
 | `compare-decks` | `deckIdA`, `deckIdB` | Run `card_lists_compare` and `card_list_query` on both decks and report the differences. |
 
 Each argument is a UUID (the local deck ID, or the Scryfall card ID of the
-commander). Anything else is refused.
+commander). A missing or different value is refused with an invalid-params
+error that names the argument. To get an ID, ask the agent to list your local
+decks (`local_deck_list`) or to look up a card by its exact name
+(`scryfall_cards_get`), then copy the ID from the result.
 
 In Claude Code, MCP prompts appear as slash commands named
 `/mcp__<server>__<prompt>`, where `<server>` is the name you gave the server
@@ -607,7 +612,8 @@ The prompts name only tools of the default selection that needs no provider
 credentials (the `decks`, `scryfall`, `stats`, and `spellbook` toolsets).
 Prompts are always offered, because registration is fixed for the session and
 a prompt costs nothing to list. When the session hides a named tool (a narrower
-`--toolsets`, or `read-only` mode for `local_deck_apply_changes`), the prompt
+`--toolsets`, or `read-only` mode, which hides write tools such as
+`local_deck_create`, `local_deck_apply_changes`, and `scryfall_card_data_sync`), the prompt
 tells the agent to say which step it skipped and carry on. Every prompt says
 that the user and agent make every judgment; the server only supplies facts.
 

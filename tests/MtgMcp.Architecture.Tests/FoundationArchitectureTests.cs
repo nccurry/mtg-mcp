@@ -436,10 +436,10 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, eighty-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, 86-tool, three-prompt toolset-owned surface.
     /// </summary>
     [Fact]
-    public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()
+    public void SourceSurface_ContainsOnlyApprovedCapabilityToolsResourceAndPrompts()
     {
         string sourceRoot = Path.Combine(RepositoryRoot, "src");
         string[] sourceFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
@@ -608,6 +608,25 @@ public sealed class FoundationArchitectureTests
 
         Assert.DoesNotContain("tagger_", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MtgMcp.Tagger", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the MCP smoke test filter in the Taskfile and in the release script name the same E2E classes, and
+    /// that the filter includes the prompt tests.
+    /// </summary>
+    [Fact]
+    public void SmokeFilters_InTaskfileAndReleaseScript_AreTheSame()
+    {
+        Regex filter = new(@"""(/\*/\*/\([A-Za-z]+Tests\)[^""]*)""");
+        string task = File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml"));
+        string script = File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1"));
+
+        Match fromTask = filter.Match(task);
+        Match fromScript = filter.Match(script);
+
+        Assert.True(fromTask.Success && fromScript.Success, "A smoke filter was not found.");
+        Assert.Equal(fromTask.Groups[1].Value, fromScript.Groups[1].Value);
+        Assert.Contains("(WorkflowPromptsMcpTests)", fromTask.Groups[1].Value, StringComparison.Ordinal);
     }
 
     /// <summary>

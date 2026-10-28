@@ -1,5 +1,8 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace MtgMcp.App.Prompts;
@@ -29,6 +32,11 @@ internal sealed class WorkflowPrompts
     internal const string CompareDecksName = "compare-decks";
 
     /// <summary>
+    /// Counts the prompts this class publishes; the capabilities resource reports it.
+    /// </summary>
+    internal const int PromptCount = 3;
+
+    /// <summary>
     /// Ends every prompt with who decides and what to do when a tool is hidden.
     /// </summary>
     private const string Closing =
@@ -45,23 +53,26 @@ internal sealed class WorkflowPrompts
         "Read one local deck and report its facts: Commander rule facts, curve, color pips, color sources, " +
         "castability, and bracket facts. Takes the local deck ID.")]
     internal static string AuditDeck(
-        [Description("Local deck ID (a UUID with no spaces).")] string deckId)
+        [Description("Local deck ID (a UUID with no spaces).")] string? deckId)
     {
         string id = ReadId(deckId, nameof(deckId));
         return string.Create(CultureInfo.InvariantCulture, $$"""
             Audit the local deck {{id}}. Report facts and ask me what to change; change nothing yet.
 
-            1. Call local_deck_get with include ["cards", "tags"] to read the deck. If entries say card data is not
-               installed, tell me, and offer scryfall_card_data_sync, which is a large explicit download: ask before
-               running it.
+            1. Call local_deck_get for the deck without include, to see its name, format, zones, and entries.
             2. Call local_deck_validate with rules "commander" and report each fact it returns: deck size,
                commanders, color identity, copy limits, format legality, Game Changers, pairing, and companions.
-            3. Call card_list_query on source {"kind": "deck", "deckId": "{{id}}"} grouped by manaValue with metrics
-               quantity, pips, and sources, and report the curve, the colored pips, and the color sources.
-            4. Call stats_castability for the deck's spells with source groups and turns we agree on, and report
+               If a tool says card data is not installed, tell me, and offer scryfall_card_data_sync, which is a
+               large explicit download: ask before running it.
+            3. For the curve, call card_list_query on source {"kind": "deck", "deckId": "{{id}}", "zones": ["main"]}
+               with groupBy ["manaValue"], metrics ["quantity"], and where manaValue gt 0, and report the counts.
+               Mana value 0 holds lands and free spells and is left out; say so.
+            4. For colors, call card_list_query on the same source with no groupBy and metrics ["pips", "sources"],
+               and report the colored pips and the color sources.
+            5. Call stats_castability for the deck's spells with source groups and turns we agree on, and report
                the exact chances.
-            5. Call spellbook_deck_bracket_facts_get and report its flags and combos.
-            6. List what the tools could not read (unresolved entries, missing card data) and ask me what I want
+            6. Call spellbook_deck_bracket_facts_get and report its flags and combos.
+            7. List what the tools could not read (unresolved entries, missing card data) and ask me what I want
                to change.
 
             {{Closing}}
@@ -76,7 +87,7 @@ internal sealed class WorkflowPrompts
         "Read a commander, ask the user for budget, bracket, and plan, search by tags, and build a local deck. " +
         "Takes the commander's Scryfall card ID.")]
     internal static string BuildFromCommander(
-        [Description("Scryfall card ID of the commander (a UUID with no spaces).")] string scryfallId)
+        [Description("Scryfall card ID of the commander (a UUID with no spaces).")] string? scryfallId)
     {
         string id = ReadId(scryfallId, nameof(scryfallId));
         return string.Create(CultureInfo.InvariantCulture, $$"""
@@ -104,8 +115,8 @@ internal sealed class WorkflowPrompts
     [McpServerPrompt(Name = CompareDecksName, Title = "Compare Two Local Decks")]
     [Description("Compare two local decks card by card and by curve and pips. Takes two local deck IDs.")]
     internal static string CompareDecks(
-        [Description("First local deck ID (a UUID with no spaces).")] string deckIdA,
-        [Description("Second local deck ID (a UUID with no spaces).")] string deckIdB)
+        [Description("First local deck ID (a UUID with no spaces).")] string? deckIdA,
+        [Description("Second local deck ID (a UUID with no spaces).")] string? deckIdB)
     {
         string a = ReadId(deckIdA, nameof(deckIdA));
         string b = ReadId(deckIdB, nameof(deckIdB));
@@ -115,8 +126,10 @@ internal sealed class WorkflowPrompts
             1. Call card_lists_compare with left {"kind": "deck", "deckId": "{{a}}"}, right
                {"kind": "deck", "deckId": "{{b}}"}, and operation "difference" for the cards only in A, then swap
                the two for the cards only in B, then use "intersection" for the shared cards.
-            2. Call card_list_query on each deck, grouped by manaValue with metrics quantity, pips, and sources,
-               and show the two results side by side.
+            2. For each deck, call card_list_query on source {"kind": "deck", "deckId": "<that deck's ID>",
+               "zones": ["main"]} with groupBy ["manaValue"], metrics ["quantity"], and where manaValue gt 0 for
+               the curve (mana value 0 holds lands and free spells and is left out; say so). Then call it again with
+               no groupBy and metrics ["pips", "sources"] for the colors. Show the two decks side by side.
             3. Report the differences as facts: counts, names, curve, pips, and sources. Do not say which deck is
                better.
 
@@ -125,13 +138,84 @@ internal sealed class WorkflowPrompts
     }
 
     /// <summary>
-    /// Checks one ID argument and returns it in canonical form, so a prompt never carries free text.
+    /// Wraps the prompt request pipeline so a missing required argument is an invalid-params protocol error that
+    /// names the argument. The SDK fails such a request before the prompt runs and reports only an internal error.
     /// </summary>
-    private static string ReadId(string value, string name)
+    internal static McpRequestHandler<GetPromptRequestParams, GetPromptResult> ArgumentFilter(
+        McpRequestHandler<GetPromptRequestParams, GetPromptResult> next)
     {
+        ArgumentNullException.ThrowIfNull(next);
+        return async (context, cancellationToken) =>
+        {
+            try
+            {
+                return await next(context, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not (McpProtocolException or OperationCanceledException))
+            {
+                string? missing = FindMissingArgument(context);
+                if (missing is null)
+                {
+                    throw;
+                }
+
+                throw new McpProtocolException(RequiredMessage(missing), exception, McpErrorCode.InvalidParams);
+            }
+        };
+    }
+
+    /// <summary>
+    /// Finds the first required argument of the matched prompt that the request left out or left blank.
+    /// </summary>
+    private static string? FindMissingArgument(RequestContext<GetPromptRequestParams> context)
+    {
+        if (context.MatchedPrimitive is not McpServerPrompt prompt || prompt.ProtocolPrompt.Arguments is null)
+        {
+            return null;
+        }
+
+        IDictionary<string, JsonElement>? given = context.Params?.Arguments;
+        foreach (PromptArgument argument in prompt.ProtocolPrompt.Arguments)
+        {
+            bool present = given is not null &&
+                given.TryGetValue(argument.Name, out JsonElement value) &&
+                value.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(value.GetString());
+            if (argument.Required == true && !present)
+            {
+                return argument.Name;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Words the error for a missing argument.
+    /// </summary>
+    private static string RequiredMessage(string name)
+    {
+        return $"{name} is required: give a UUID such as 0193e97a-ef95-7700-8000-000000000001.";
+    }
+
+    /// <summary>
+    /// Checks one ID argument and returns it in canonical form, so a prompt never carries free text. A missing or
+    /// bad value is an invalid-params protocol error that carries this message to the client.
+    /// </summary>
+    private static string ReadId(string? value, string name)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new McpProtocolException(
+                RequiredMessage(name),
+                McpErrorCode.InvalidParams);
+        }
+
         if (!Guid.TryParse(value, out Guid id) || id == Guid.Empty)
         {
-            throw new ArgumentException($"{name} must be a UUID such as 0193e97a-ef95-7700-8000-000000000001.", name);
+            throw new McpProtocolException(
+                $"{name} must be a UUID such as 0193e97a-ef95-7700-8000-000000000001.",
+                McpErrorCode.InvalidParams);
         }
 
         return id.ToString("D", CultureInfo.InvariantCulture);

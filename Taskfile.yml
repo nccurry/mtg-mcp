@@ -304,7 +304,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter-query "/*/*/FoundationArchitectureTests/SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
+        -- --filter-query "/*/*/FoundationArchitectureTests/SourceSurface_ContainsOnlyApprovedCapabilityToolsResourceAndPrompts"
 
   ci:
     desc: Run the CI validation suite

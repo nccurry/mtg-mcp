@@ -53,11 +53,14 @@ aliases: calling one returns an unknown-tool error.
   inline rule set replaces `common-v1`: it mapped four role names to four
   official Scryfall oracle tags, each with descendant tags included and the
   minimum weight `weak`. To get the same result, send one inline rule per role,
-  with your own category ID for each (`categoryId`) and the tag ID that
-  `common-v1` used (ramp `2f3e4ad7-5e60-41b4-bdbc-653f16869cf6`, card-draw
+  with the ID of a category that exists in the deck for each (`categoryId`) and
+  the tag ID that `common-v1` used (ramp
+  `2f3e4ad7-5e60-41b4-bdbc-653f16869cf6`, card-draw
   `b6448c45-ce65-4848-aa98-2151e4e07437`, removal
   `444f824c-f910-4530-9dbe-ede7a84cd7f9`, recursion
-  `82b824ad-648f-467f-a190-2e0fa9a795d2`). For example, ramp and removal:
+  `82b824ad-648f-467f-a190-2e0fa9a795d2`). A `primaryPriority` set on a
+  preset binding goes on the matching inline rule. For example, ramp and
+  removal:
 
   ```json
   {
@@ -234,8 +237,9 @@ Old-to-new tool names:
   no credentials, and says that the user and agent make every judgment. An
   argument must be a UUID, so values never contain spaces. Claude Code lists
   them as `/mcp__<server>__audit-deck` and so on. The capabilities resource now
-  reports `promptCount` 3 (it was 0). The README says which fields to send and shows what
-  comes back.
+  reports `promptCount` 3 (it was 0). A prompt with a missing or invalid
+  argument returns an invalid-params error that names the argument. The README
+  says how to find the IDs.
 - Added worked examples to the README for "search results not in my deck"
   (`card_lists_compare`), "mana curve and pips" (`card_list_query`), Commander
   rule facts (`local_deck_validate` with `rules: "commander"`), and the inline

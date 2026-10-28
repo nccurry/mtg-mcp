@@ -71,30 +71,30 @@ internal static class FoundationProtocolPolicy
     private static void SortByName(JsonNode? result, string property)
     {
         if (result is not JsonObject resultObject ||
-            resultObject[property] is not JsonArray tools)
+            resultObject[property] is not JsonArray items)
         {
             return;
         }
 
-        List<(string Name, JsonNode Tool)> sorted = [];
-        foreach (JsonNode? tool in tools)
+        List<(string Name, JsonNode Item)> sorted = [];
+        foreach (JsonNode? item in items)
         {
-            if (tool is not JsonObject toolObject ||
-                toolObject["name"] is not JsonValue nameValue ||
+            if (item is not JsonObject itemObject ||
+                itemObject["name"] is not JsonValue nameValue ||
                 !nameValue.TryGetValue(out string? name) ||
                 string.IsNullOrWhiteSpace(name))
             {
                 return;
             }
 
-            sorted.Add((name, tool));
+            sorted.Add((name, item));
         }
 
         sorted.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
-        tools.Clear();
-        foreach ((string _, JsonNode tool) in sorted)
+        items.Clear();
+        foreach ((string _, JsonNode item) in sorted)
         {
-            tools.Add(tool);
+            items.Add(item);
         }
     }
 }

@@ -50,11 +50,10 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
             examples.Select(example => example.Tool));
         foreach ((string tool, string json) in examples)
         {
-            using JsonDocument document = JsonDocument.Parse(json);
-            Dictionary<string, JsonElement> arguments = document.RootElement.EnumerateObject()
-                .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+            Dictionary<string, JsonElement> arguments = Parse(json);
 
             Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, tool, arguments));
+            Assert.Null(ToolCallPolicy.FindUnknownArgument(catalog, tool, arguments));
         }
     }
 
@@ -82,6 +81,33 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
             4,
             byTool["local_deck_category_rules_preview"].GetProperty("source").GetProperty("ruleSet")
                 .GetProperty("rules").GetArrayLength());
+    }
+
+    /// <summary>
+    /// Verifies the checks the examples go through would reject a misspelled top-level field and a misspelled nested
+    /// field, so a passing example proves something.
+    /// </summary>
+    [Fact]
+    public void ReadmeExampleChecks_RejectMisspelledFields()
+    {
+        string topLevel = "{\"deckId\":\"0193e97a-ef95-7700-8000-000000000001\",\"rulez\":\"commander\"}";
+        string nested =
+            "{\"left\":{\"kind\":\"deck\",\"deckIdd\":\"0193e97a-ef95-7700-8000-000000000001\"}," +
+            "\"right\":{\"kind\":\"deck\",\"deckId\":\"0193e97a-ef95-7700-8000-000000000001\"}," +
+            "\"operation\":\"difference\"}";
+
+        Assert.NotNull(ToolCallPolicy.FindUnknownArgument(catalog, "local_deck_validate", Parse(topLevel)));
+        Assert.NotNull(ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", Parse(nested)));
+    }
+
+    /// <summary>
+    /// Parses a JSON object of tool arguments.
+    /// </summary>
+    private static Dictionary<string, JsonElement> Parse(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        return document.RootElement.EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
     }
 
     /// <summary>

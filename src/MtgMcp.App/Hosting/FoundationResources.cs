@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Prompts;
 
 namespace MtgMcp.App.Hosting;
 
@@ -85,7 +86,7 @@ internal sealed class FoundationResources
                 FoundationServerIdentity.PackageVersion,
                 server.NegotiatedProtocolVersion ?? "unavailable"),
             OperationModeParser.Format(configuration.Mode),
-            new FoundationSurfaceStatus(toolCount, 1, 3),
+            new FoundationSurfaceStatus(toolCount, 1, WorkflowPrompts.PromptCount),
             new FoundationToolsetsStatus(
                 configuration.Toolsets.Label,
                 "Toolsets control relevance; operation mode controls authority.",
