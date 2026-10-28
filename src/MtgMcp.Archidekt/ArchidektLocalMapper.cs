@@ -365,7 +365,7 @@ public static class ArchidektLocalMapper
             local.Name,
             local.Description,
             local.Format,
-            entries = local.Entries.Select(value => new
+            entries = local.Entries.OrderBy(value => value.EntryId).Select(value => new
             {
                 value.EntryId,
                 value.Quantity,
@@ -379,19 +379,22 @@ public static class ArchidektLocalMapper
                 value.Zone,
                 value.SortOrder,
             }),
-            categories = local.Categories.Select(value => new
+            categories = local.Categories.OrderBy(value => value.CategoryId).Select(value => new
             {
                 value.CategoryId,
                 value.Name,
                 value.Color,
                 value.SortOrder,
             }),
-            assignments = local.CategoryAssignments.Select(value => new
-            {
-                value.EntryId,
-                value.CategoryId,
-                value.IsPrimary,
-            }),
+            assignments = local.CategoryAssignments
+                .OrderBy(value => value.EntryId)
+                .ThenBy(value => value.CategoryId)
+                .Select(value => new
+                {
+                    value.EntryId,
+                    value.CategoryId,
+                    value.IsPrimary,
+                }),
         });
     }
 
@@ -405,7 +408,7 @@ public static class ArchidektLocalMapper
             local.Name,
             Description = local.Description ?? string.Empty,
             local.Format,
-            entries = (local.Entries ?? []).Select(value => new
+            entries = (local.Entries ?? []).OrderBy(value => value.EntryId ?? Guid.Empty).Select(value => new
             {
                 EntryId = value.EntryId ?? Guid.Empty,
                 value.Quantity,
@@ -419,19 +422,24 @@ public static class ArchidektLocalMapper
                 value.Zone,
                 value.SortOrder,
             }),
-            categories = (local.Categories ?? []).Select(value => new
-            {
-                CategoryId = value.CategoryId ?? Guid.Empty,
-                value.Name,
-                value.Color,
-                value.SortOrder,
-            }),
-            assignments = (local.CategoryAssignments ?? []).Select(value => new
-            {
-                value.EntryId,
-                value.CategoryId,
-                value.IsPrimary,
-            }),
+            categories = (local.Categories ?? [])
+                .OrderBy(value => value.CategoryId ?? Guid.Empty)
+                .Select(value => new
+                {
+                    CategoryId = value.CategoryId ?? Guid.Empty,
+                    value.Name,
+                    value.Color,
+                    value.SortOrder,
+                }),
+            assignments = (local.CategoryAssignments ?? [])
+                .OrderBy(value => value.EntryId)
+                .ThenBy(value => value.CategoryId)
+                .Select(value => new
+                {
+                    value.EntryId,
+                    value.CategoryId,
+                    value.IsPrimary,
+                }),
         });
     }
 

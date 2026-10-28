@@ -322,6 +322,109 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Provides a remote deck with several entries and categories listed in a different order from the one the
+    /// local store returns them in.
+    /// </summary>
+    private const string RichRemoteDeck = """
+        {
+          "id": 42,
+          "name": "Rich",
+          "description": "",
+          "deckFormat": 3,
+          "private": true,
+          "categories": [
+            { "id": 12, "name": "Maybeboard", "includedInDeck": false, "includedInPrice": false, "sortOrder": 2 },
+            { "id": 11, "name": "Sideboard", "includedInDeck": false, "includedInPrice": true, "sortOrder": 1 },
+            { "id": 10, "name": "Removal", "includedInDeck": true, "includedInPrice": true, "sortOrder": 0 }
+          ],
+          "cards": [
+            {
+              "deckRelationId": 103, "quantity": 1, "categories": ["Maybeboard"],
+              "card": { "id": 503, "uid": "33333333-3333-3333-3333-333333333303", "edition": { "editioncode": "dmu" },
+                "collectorNumber": "3", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444403", "name": "Charm" } }
+            },
+            {
+              "deckRelationId": 101, "quantity": 2, "categories": ["Removal", "Sideboard"],
+              "card": { "id": 501, "uid": "33333333-3333-3333-3333-333333333301", "edition": { "editioncode": "dmu" },
+                "collectorNumber": "1", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444401", "name": "Bolt" } }
+            },
+            {
+              "deckRelationId": 102, "quantity": 1, "categories": ["Sideboard"],
+              "card": { "id": 502, "uid": "33333333-3333-3333-3333-333333333302", "edition": { "editioncode": "dmu" },
+                "collectorNumber": "2", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444402", "name": "Anger" } }
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// Verifies a freshly pulled deck is in sync with its own baseline: no pull differences, no conflict, and no
+    /// push operation. Editing it is seen as a local change, and reverting the edit clears it.
+    /// </summary>
+    [Fact]
+    public async Task PullThenPreview_OnAFreshDeck_ShowsNoDifferences_AndRevertingClearsLocalChange()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            for (int index = 0; index < 12; index++)
+            {
+                handler.Add(HttpMethod.Get, "api/decks/42/", RichRemoteDeck);
+            }
+
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+
+            ArchidektSyncPreview fresh = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId,
+                TestContext.Current.CancellationToken));
+            Assert.False(fresh.HasConflicts);
+            Assert.Empty(fresh.Differences);
+
+            DeckDocument original = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+            DeckEntry entry = original.Entries.First(value => value.CardName == "Bolt");
+            DeckDocument edited = Success(await store.ApplyChangesAsync(
+                localDeckId,
+                original.Revision,
+                [new UpdateDeckEntryChange(entry with { Quantity = 3 })],
+                TestContext.Current.CancellationToken));
+            ArchidektSyncPreview changed = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId,
+                TestContext.Current.CancellationToken));
+            Assert.True(changed.HasConflicts);
+
+            DeckDocument reverted = Success(await store.ApplyChangesAsync(
+                localDeckId,
+                edited.Revision,
+                [new UpdateDeckEntryChange(entry)],
+                TestContext.Current.CancellationToken));
+            ArchidektSyncPreview clean = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId,
+                TestContext.Current.CancellationToken));
+
+            Assert.True(reverted.Revision > original.Revision);
+            Assert.False(clean.HasConflicts);
+            Assert.Empty(clean.Differences);
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]

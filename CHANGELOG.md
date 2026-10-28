@@ -17,6 +17,11 @@
 - Fixed importing the same Archidekt deck a second time. Local entry and category IDs were derived from the Archidekt
   row alone, so a second local copy collided on its primary keys. They are now derived from the local deck and the
   Archidekt row; existing decks keep their IDs and links.
+- Fixed a freshly pulled deck showing `local-changed` at `/localOnly/content` before any edit, and a deck staying
+  `local-changed` after its edits were reverted. The local content fingerprint depended on the order the rows were
+  listed in, and the order at pull time differed from the order the store returns. The fingerprint now sorts by row ID.
+  A deck pulled by an older version keeps the old baseline and still shows the difference once; use the pull option
+  that takes the remote state (see below) to reset it.
 
 ### Seeded simulation (breaking)
 
