@@ -462,6 +462,38 @@ public sealed class ArchidektServiceTests
     }
 
     /// <summary>
+    /// Verifies a stale restore preview conflict carries the current provider fingerprint.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotRestore_StalePreview_ConflictCarriesCurrentFingerprint()
+    {
+        ArchidektTestHttpHandler handler = new();
+        AddLogin(handler);
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        handler.Add(HttpMethod.Get, "api/decks/snapshots/77/", ArchidektTestPayloads.Snapshot);
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        using ArchidektService service = CreateService(handler);
+        ArchidektSnapshotRestorePreview preview = Success(await service.PreviewSnapshotRestoreAsync(
+            "42",
+            "77",
+            TestContext.Current.CancellationToken));
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>((await service.ApplySnapshotRestoreAsync(
+            new ArchidektSnapshotRestoreApplyRequest(
+                "42",
+                "77",
+                preview.SnapshotChecksum,
+                preview.SnapshotContentFingerprint,
+                preview.RemoteFingerprint,
+                "stale-preview",
+                "restore snapshot 77"),
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("restore-preview-changed", conflict.ReasonCode);
+        Assert.Equal(new ConflictState(RemoteFingerprint: preview.RemoteFingerprint), conflict.Current);
+    }
+
+    /// <summary>
     /// Verifies a previewed metadata plan executes once and requires exact final provider verification.
     /// </summary>
     [Fact]

@@ -272,7 +272,8 @@ internal sealed class ArchidektSnapshotOperations
                 RequireFingerprint(
                     request.PreviewFingerprint,
                     RestorePreviewFingerprint(current, snapshot, plan),
-                    "restore-preview-changed");
+                    "restore-preview-changed",
+                    current.RemoteFingerprint);
                 return await deckOperations.ApplyPlanAsync(
                     current,
                     target,
