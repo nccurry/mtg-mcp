@@ -24,8 +24,6 @@ public sealed class FoundationMcpTests
     /// <summary>
     /// Identifies the newest initialize-based MCP wire revision used to prove rejection.
     /// </summary>
-    private const string LegacyInitializeProtocolVersion = "2025-11-25";
-
     /// <summary>
     /// Lists the path-free legacy inspection states permitted by the public contract.
     /// </summary>
@@ -329,21 +327,34 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies that an older initialize-based client cannot obtain a fallback session.
+    /// Verifies a standard initialize handshake succeeds for every older protocol version the SDK serves, advertises
+    /// tools, prompts, and resources without logging or list-changed claims, and lists the full surface.
     /// </summary>
-    [Fact]
+    [Theory]
     [Trait("Category", "E2E")]
-    public async Task OlderProtocolClient_IsRejected()
+    [InlineData("2024-11-05")]
+    [InlineData("2025-03-26")]
+    [InlineData("2025-06-18")]
+    [InlineData("2025-11-25")]
+    public async Task InitializeClient_AtEachSupportedVersion_ListsTheFullSurface(string version)
     {
-        await Assert.ThrowsAsync<UnsupportedProtocolVersionException>(
-            async () =>
-            {
-                await McpProcessSession.StartWithProtocolAsync(
-                    "local",
-                    null,
-                    LegacyInitializeProtocolVersion,
-                    TestContext.Current.CancellationToken).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+        await using McpProcessSession session = await McpProcessSession.StartWithProtocolAsync(
+            "remote",
+            "all",
+            version,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        Assert.Equal(version, session.Client.NegotiatedProtocolVersion);
+        Assert.NotNull(session.Client.ServerCapabilities.Tools);
+        Assert.NotNull(session.Client.ServerCapabilities.Prompts);
+        Assert.NotNull(session.Client.ServerCapabilities.Resources);
+#pragma warning disable MCP9005 // The logging capability is deprecated; the test proves the server does not claim it.
+        Assert.Null(session.Client.ServerCapabilities.Logging);
+#pragma warning restore MCP9005
+        Assert.NotEqual(true, session.Client.ServerCapabilities.Tools.ListChanged);
+        Assert.Equal(86, tools.Count);
     }
 
     /// <summary>

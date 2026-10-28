@@ -4,6 +4,13 @@
 
 ## 0.12.0 - 2026-10-28
 
+### Fixed
+
+- Fixed the standard `initialize` handshake. The server pinned MCP `2026-07-28`, so an `initialize` request got error
+  -32022 and clients that use it (Claude Code) connected with no tools. The pin is removed: `initialize` now succeeds
+  for the versions the SDK serves, `server/discover` on `2026-07-28` still works, and the capabilities still omit
+  `logging` and `listChanged`. This supersedes the `0.10.0` decision to accept only `2026-07-28`.
+
 ### Seeded simulation (breaking)
 
 - Breaking: `local_deck_on_curve_estimate` removed. The tool was named

@@ -9,8 +9,9 @@ The local deck store, manual deck-file support, Scryfall tools, Commander
 Spellbook tools, and the Archidekt and Playgroup tools (on when their
 credentials are present) use the official C# SDK
 selected in `Directory.Packages.props`.
-The server requires MCP `2026-07-28`; it does not support older
-initialize-based clients. Official-client E2E tests prove current-protocol
+The server speaks MCP `2026-07-28` (`server/discover`) and also answers the standard `initialize`
+handshake for the older versions the SDK serves (`2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`), so
+clients such as Claude Code that still use `initialize` list every tool. Official-client E2E tests prove current-protocol
 connections in `read-only`, `local`, and `remote` modes, protocol reporting,
 resource listing and reading, unknown-resource errors, sanitized pre-transport
 failures, and clean process termination when stdin closes.
