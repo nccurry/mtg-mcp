@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.CardLists;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Scryfall;
@@ -18,8 +19,11 @@ internal static class ScryfallToolsetManifest
         CapabilityToolset.Scryfall,
         CapabilityToolsetStability.Stable,
         "Official Scryfall evidence with exact-request snapshots, explicitly synchronized " +
-        "installed card data, and community tags kept distinct from card facts.",
+        "installed card data, and community tags kept distinct from card facts. The card list tools also read " +
+        "local decks, deck backups, and Archidekt decks when those sources are available.",
         [
+            "card_list_query",
+            "card_lists_compare",
             "scryfall_autocomplete",
             "scryfall_card_data_status",
             "scryfall_card_details",
@@ -44,16 +48,20 @@ internal static class ScryfallToolsetManifest
     internal static void Register(
         IMcpServerBuilder builder,
         ScryfallService service,
-        OperationMode mode)
+        OperationMode mode,
+        CardListAccess access)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(access);
+        CardListTools cardLists = new(new CardListCoordinator(new CardListResolver(service, access), service));
 
         builder
             .WithRegisteredTools(ToolRegistration.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices))
             .WithRegisteredTools(ToolRegistration.Create(
                 new ScryfallReferenceTools(service),
-                ScryfallReferenceTools.ItemChoices));
+                ScryfallReferenceTools.ItemChoices))
+            .WithRegisteredTools(ToolRegistration.Create(cardLists, CardListTools.ItemChoices));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder.WithRegisteredTools(ToolRegistration.Create(new ScryfallWriteTools(service, mode)));

@@ -22,6 +22,14 @@ and a client passes only one of the two to the model. A `concise` page, and a
 first item left out. The `standard` format is reported, not truncated: a page of
 25 rows can pass 40,000 bytes, so use `concise` or a smaller `pageSize`.
 
+`card_lists_compare` takes the same `responseFormat` and `fields`, and pages its result with a `nextCursor`; a page
+that would pass the size limit keeps the leading cards that fit and sets `truncated` and `narrow`. `card_list_query`
+returns groups and, when `rows` is asked for, a page of rows. Groups are cut first to a fixed share of the limit
+when rows are present, rows are cut to fit the rest, and a cut result sets `truncated` with a `narrow` hint that says
+what to change. `local_deck_duplicates_preview`, `stats_castability`, and `spellbook_deck_bracket_facts_get` cut their
+lists the same way and say how many items they left out (`unmatchedOmitted`, `skippedOmitted`,
+`unflaggedCardsOmitted`, `combosOmitted`).
+
 In `concise`, `tags` and `cheapestPriceUsd` (lowest USD price among English
 printings) come from installed card data. When it is not installed they are
 `null` and `limits` says why. The result also names the format it used in

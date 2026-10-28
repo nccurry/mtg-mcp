@@ -27,12 +27,12 @@ another. App wires the server together.
 
 The server uses stdio and registers static tools for one session. It exposes:
 
-- 19 `local_deck_*` tools;
-- 13 `scryfall_*` tools;
-- 8 `stats_*` tools;
+- 20 `local_deck_*` tools;
+- 13 `scryfall_*` tools and two `card_list*` tools (`card_list_query`, `card_lists_compare`);
+- 9 `stats_*` tools;
 - 21 `archidekt_*` tools (on when Archidekt credentials are present);
-- 16 `playgroup_*` tools (on when a Playgroup key is present);
-- 3 `spellbook_*` tools;
+- 17 `playgroup_*` tools (on when a Playgroup key is present);
+- 4 `spellbook_*` tools;
 - `mtg://server/capabilities`; and
 - zero prompts.
 
@@ -93,7 +93,7 @@ again and retry.
 
 Stable `0.9.0` does not provide:
 
-- deck legality decisions;
+- deck legality verdicts (Commander rule facts are reported, with no legal or illegal answer);
 - advisor prompts or intent inference;
 - weak-card or replacement judgments;
 - blended quality scores;

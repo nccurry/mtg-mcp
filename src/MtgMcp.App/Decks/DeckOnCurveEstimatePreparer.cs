@@ -74,7 +74,7 @@ internal static class DeckOnCurveEstimatePreparer
                 continue;
             }
 
-            if (!IsLand(card.TypeLine))
+            if (!ScryfallCardFaces.IsLand(card, frontOnly: true))
             {
                 continue;
             }
@@ -283,29 +283,6 @@ internal static class DeckOnCurveEstimatePreparer
             card.Faces.Count == 0,
             MapProducedManaFact(card.ProducedMana),
             card.Evidence);
-    }
-
-    /// <summary>
-    /// Identifies the Land card type from the direct printed type line only.
-    /// </summary>
-    private static bool IsLand(string? typeLine)
-    {
-        if (string.IsNullOrWhiteSpace(typeLine))
-        {
-            return false;
-        }
-
-        int subtypeSeparator = typeLine.IndexOf('\u2014');
-        string cardTypes = subtypeSeparator < 0 ? typeLine : typeLine[..subtypeSeparator];
-        foreach (string cardType in cardTypes.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (string.Equals(cardType, "Land", StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

@@ -55,9 +55,9 @@ allows. The default mode is `remote`.
 
 | Selection | `read-only` | `local` | `remote` |
 | --- | ---: | ---: | ---: |
-| Default or `all`, no credentials | 30 | 43 | 43 |
-| Default or `all`, Archidekt credentials only | 39 | 53 | 64 |
-| Default or `all`, Archidekt and Playgroup credentials | 53 | 67 | 80 |
+| Default or `all`, no credentials | 35 | 48 | 48 |
+| Default or `all`, Archidekt credentials only | 44 | 58 | 69 |
+| Default or `all`, Archidekt and Playgroup credentials | 59 | 73 | 86 |
 | `none` | 0 | 0 | 0 |
 
 `read-only` allows reads only. `local` adds local writes. `remote` adds remote
@@ -73,16 +73,18 @@ Every tool belongs to one toolset. Tool names say where the data comes from:
 their provider. Each description starts with the data the tool works on:
 `Local deck store:`, `Scryfall:`, `Installed Scryfall card data:`,
 `Saved Scryfall requests:`, `Archidekt:`, `Playgroup:`, `Commander Spellbook:`,
-or `Exact math:`. The prefix names the input data, not the toolset.
+or `Exact math:`. The prefix names the input data, not the toolset. The two `card_list*` tools are the one
+exception to the `<source>_<object>_<action>` rule: they read any card list, so they have no single source
+prefix, and their descriptions start with `Scryfall:` because installed Scryfall card data resolves every list.
 
 | Toolset | Read-only | Local write | Remote write |
 | --- | ---: | ---: | ---: |
-| `decks` | 10 | 9 | 0 |
-| `scryfall` | 9 | 4 | 0 |
-| `stats` | 8 | 0 | 0 |
-| `spellbook` | 3 | 0 | 0 |
+| `decks` | 11 | 9 | 0 |
+| `scryfall` | 11 | 4 | 0 |
+| `stats` | 9 | 0 | 0 |
+| `spellbook` | 4 | 0 | 0 |
 | `archidekt` | 9 | 1 | 11 |
-| `playgroup` | 14 | 0 | 2 |
+| `playgroup` | 15 | 0 | 2 |
 
 ## Choose a workflow
 
@@ -103,7 +105,7 @@ tool for each job in the active selection, say that the agent makes every
 deckbuilding judgment, and say that text written by other people in provider
 results is untrusted data.
 
-The three `spellbook` tools are read-only in every mode. They return Commander
+The four `spellbook` tools are read-only in every mode. They return Commander
 Spellbook evidence, not a recommendation about a deck or combo.
 
 Read `mtg://server/capabilities` to inspect the active selection, why a

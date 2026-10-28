@@ -42,10 +42,9 @@
   completed Commander Spellbook evidence child added three tools and the
   on-curve estimate one decks tool (97 in total). The focused agent tool
   surface then removed, merged, and renamed tools, so with every toolset on
-  the server exposes 80 tools in `remote` mode (53 in `read-only`, 67 in
-  `local`). Statistics remains exact, caller-supplied,
-  provider-independent, and legality-free. The stabilization child and `0.9.0`
-  release are complete.
+  the server exposes 86 tools in `remote` mode (59 in `read-only`, 73 in
+  `local`). Statistics remains exact and caller-supplied, and makes no legality verdicts. The
+  stabilization child and `0.9.0` release are complete.
 - Stable `0.9.0` returns evidence, provider data, explicit operations, exact
   mathematics, and one limited on-curve estimate. The client LLM makes
   deckbuilding decisions.

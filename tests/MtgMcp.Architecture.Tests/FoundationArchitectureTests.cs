@@ -462,10 +462,10 @@ public sealed class FoundationArchitectureTests
             Path.Combine(sourceRoot, "MtgMcp.App", "Spellbook", "SpellbookToolsetManifest.cs"));
 
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
-        Assert.Equal(80, Regex.Count(source, @"\[McpServerTool\("));
+        Assert.Equal(86, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithTools\("));
-        Assert.Equal(20, Regex.Count(source, @"\.WithRegisteredTools\("));
+        Assert.Equal(25, Regex.Count(source, @"\.WithRegisteredTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -496,6 +496,8 @@ public sealed class FoundationArchitectureTests
                 "archidekt_snapshot_update",
                 "archidekt_snapshots_get",
                 "archidekt_sync_diff",
+                "card_list_query",
+                "card_lists_compare",
                 "local_deck_apply_changes",
                 "local_deck_backup_create",
                 "local_deck_backup_delete",
@@ -505,6 +507,7 @@ public sealed class FoundationArchitectureTests
                 "local_deck_category_rules_preview",
                 "local_deck_create",
                 "local_deck_delete",
+                "local_deck_duplicates_preview",
                 "local_deck_export_bundle",
                 "local_deck_get",
                 "local_deck_identity_reconcile_apply",
@@ -522,6 +525,7 @@ public sealed class FoundationArchitectureTests
                 "playgroup_deck_elo_history_get",
                 "playgroup_deck_get",
                 "playgroup_game_events_batch_create",
+                "playgroup_games_stats_get",
                 "playgroup_live_session_create",
                 "playgroup_me_get",
                 "playgroup_playgroup_game_get",
@@ -544,9 +548,11 @@ public sealed class FoundationArchitectureTests
                 "scryfall_search_snapshot_delete",
                 "scryfall_search_snapshots_get",
                 "scryfall_tags_search",
+                "spellbook_deck_bracket_facts_get",
                 "spellbook_deck_combos_find",
                 "spellbook_variant_get",
                 "spellbook_variant_search",
+                "stats_castability",
                 "stats_hypergeometric",
                 "stats_local_deck_summary",
                 "stats_mana_availability",
@@ -567,20 +573,20 @@ public sealed class FoundationArchitectureTests
             spellbookManifestSource);
         string[] assignedToolNames = Regex.Matches(
                 manifestSource,
-                "\\\"((?:archidekt|local_deck|playgroup|scryfall|spellbook|stats)_[^\\\"]+)\\\"")
+                "\\\"((?:archidekt|card|local_deck|playgroup|scryfall|spellbook|stats)_[^\\\"]+)\\\"")
             .Select(match => match.Groups[1].Value)
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(toolNames, assignedToolNames);
         Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
-        Assert.Equal(10, Regex.Count(deckManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(11, Regex.Count(deckManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
-        Assert.Equal(3, Regex.Count(scryfallManifestSource, @"\.WithRegisteredTools\("));
-        Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(4, Regex.Count(scryfallManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(2, Regex.Count(statisticsManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithRegisteredTools\("));
-        Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithRegisteredTools\("));
-        Assert.Equal(1, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(3, Regex.Count(playgroupManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(2, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
         Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
@@ -19,6 +20,14 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
     /// Holds the argument catalog of one full registration.
     /// </summary>
     private readonly ToolArgumentCatalog catalog;
+
+    /// <summary>
+    /// Lists the kinds of a card list source.
+    /// </summary>
+    private static readonly string[] SourceKinds =
+    [
+        "scryfall-snapshot", "cards", "deck", "deck-backup", "archidekt-deck", "archidekt-snapshot", "compare",
+    ];
 
     /// <summary>
     /// Takes the catalog the fixture built, so the policy can look tools up by name.
@@ -121,6 +130,137 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
     }
 
     /// <summary>
+    /// Verifies an unknown list source kind is reported at its path with every source kind named.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_CardListSourceUnknownKind_NamesPathAndAllowedKinds()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "left": { "kind": "mystery" },
+              "right": { "kind": "cards", "ids": ["0193e97a-ef95-7700-8000-0000000000b1"] },
+              "operation": "union"
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", arguments);
+
+        Assert.NotNull(failure);
+        Assert.Equal("left", failure.Path);
+        foreach (string kind in SourceKinds)
+        {
+            Assert.Contains(kind, failure.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Verifies an unknown kind inside a nested comparison is reported at its nested path.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_NestedCompareUnknownKind_NamesNestedPath()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "left": {
+                "kind": "compare",
+                "left": { "kind": "cards", "ids": ["0193e97a-ef95-7700-8000-0000000000b1"] },
+                "right": { "kind": "mystery" },
+                "operation": "union"
+              },
+              "right": { "kind": "cards", "ids": ["0193e97a-ef95-7700-8000-0000000000b1"] },
+              "operation": "difference"
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", arguments);
+
+        Assert.NotNull(failure);
+        Assert.Equal("left.right", failure.Path);
+    }
+
+    /// <summary>
+    /// Verifies a list source and a nested comparison with the kind after other properties bind without a failure.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_CardListSourceKindLast_Binds()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "left": {
+                "left": { "ids": ["0193e97a-ef95-7700-8000-0000000000b1"], "kind": "cards" },
+                "right": { "deckId": "0193e97a-ef95-7700-8000-000000000001", "kind": "deck" },
+                "operation": "union",
+                "kind": "compare"
+              },
+              "right": { "ids": ["0193e97a-ef95-7700-8000-0000000000b1"], "kind": "cards" },
+              "operation": "difference"
+            }
+            """);
+
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", arguments));
+    }
+
+    /// <summary>
+    /// Verifies the select and turn unions of stats_castability bind with the kind last, and an unknown select kind
+    /// is reported at its path.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_CastabilitySelectAndTurn_BindWithTheKindLastAndReportUnknownKinds()
+    {
+        const string template =
+            """
+            {
+              "source": { "deckId": "0193e97a-ef95-7700-8000-000000000001", "kind": "deck" },
+              "sources": [
+                { "id": "lands", "select": SELECT, "produces": { "default": ["G"] } }
+              ],
+              "turn": TURN,
+              "onThePlay": true,
+              "requireLandDrops": false
+            }
+            """;
+        string valid = template
+            .Replace("SELECT", "{ \"ids\": [\"0193e97a-ef95-7700-8000-000000000012\"], \"kind\": \"entry-ids\" }",
+                StringComparison.Ordinal)
+            .Replace("TURN", "{ \"turn\": 3, \"kind\": \"fixed\" }", StringComparison.Ordinal);
+        string unknownSelect = template
+            .Replace("SELECT", "{ \"kind\": \"all-cards\" }", StringComparison.Ordinal)
+            .Replace("TURN", "{ \"kind\": \"mana-value\" }", StringComparison.Ordinal);
+
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "stats_castability", Arguments(valid)));
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog,
+            "stats_castability",
+            Arguments(unknownSelect));
+
+        Assert.NotNull(failure);
+        Assert.Equal("sources[0].select", failure.Path);
+        Assert.Contains("entry-ids", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a union kind constant gets a description, and one that already has a description keeps it.
+    /// </summary>
+    [Fact]
+    public void DescribeUnionKind_AddsADescriptionOnlyWhereThereIsNone()
+    {
+        System.Text.Json.Nodes.JsonObject bare = new() { ["const"] = "deck" };
+        System.Text.Json.Nodes.JsonObject described = new() { ["const"] = "deck", ["description"] = "Mine." };
+        System.Text.Json.Nodes.JsonObject notAConstant = new() { ["type"] = "string" };
+
+        ToolRegistration.DescribeUnionKind(bare);
+        ToolRegistration.DescribeUnionKind(described);
+        ToolRegistration.DescribeUnionKind(notAConstant);
+
+        Assert.False(string.IsNullOrWhiteSpace(bare["description"]?.GetValue<string>()));
+        Assert.Equal("Mine.", described["description"]!.GetValue<string>());
+        Assert.False(notAConstant.ContainsKey("description"));
+    }
+
+    /// <summary>
     /// Verifies a missing required argument is named, and a tool missing from the catalog fails loudly.
     /// </summary>
     [Fact]
@@ -213,7 +353,7 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
         string[] published = [.. set.Tools.Select(tool => tool.ProtocolTool.Name).Order(StringComparer.Ordinal)];
 
         Assert.Equal(published.AsEnumerable(), catalog.Methods.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(80, published.Length);
+        Assert.Equal(86, published.Length);
     }
 
     /// <summary>
@@ -470,6 +610,103 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
             TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedError, result.IsError == true);
+    }
+
+    /// <summary>
+    /// Verifies a tool the SDK matched but registration never recorded is logged as a warning, and its call still
+    /// passes through unchanged.
+    /// </summary>
+    [Fact]
+    public async Task Filter_MatchedToolMissingFromTheCatalog_LogsAWarningAndPassesThrough()
+    {
+        await using McpServer server = CreateServer();
+        CapturingLoggerFactory logs = new();
+        CallToolResult returned = new()
+        {
+            StructuredContent = JsonSerializer.SerializeToElement(new { kind = "success" }),
+        };
+        McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
+            (_, _) => ValueTask.FromResult(returned));
+        RequestContext<CallToolRequestParams> context = new(
+            server,
+            new JsonRpcRequest { Method = "tools/call" },
+            new CallToolRequestParams { Name = "unregistered_tool", Arguments = Arguments("{}") })
+        {
+            MatchedPrimitive = McpServerTool.Create(() => "x",
+                new McpServerToolCreateOptions { Name = "unregistered_tool" }),
+            Services = new ServiceCollection()
+                .AddSingleton(catalog)
+                .AddSingleton<ILoggerFactory>(logs)
+                .BuildServiceProvider(),
+        };
+
+        CallToolResult result = await filter(context, TestContext.Current.CancellationToken);
+
+        Assert.Same(returned, result);
+        string warning = Assert.Single(logs.Messages);
+        Assert.Contains("unregistered_tool", warning, StringComparison.Ordinal);
+        Assert.Contains("not in the argument catalog", warning, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Collects the messages written to loggers it creates.
+    /// </summary>
+    private sealed class CapturingLoggerFactory : ILoggerFactory
+    {
+        /// <summary>
+        /// Gets the warning and error messages in the order they were written.
+        /// </summary>
+        internal List<string> Messages { get; } = [];
+
+        /// <inheritdoc/>
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new CapturingLogger(Messages);
+        }
+
+        /// <inheritdoc/>
+        public void AddProvider(ILoggerProvider provider)
+        {
+            ArgumentNullException.ThrowIfNull(provider);
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>
+    /// Writes each message of level warning or above to a list.
+    /// </summary>
+    private sealed class CapturingLogger(List<string> messages) : ILogger
+    {
+        /// <inheritdoc/>
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+        {
+            return null;
+        }
+
+        /// <inheritdoc/>
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return logLevel >= LogLevel.Warning;
+        }
+
+        /// <inheritdoc/>
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(logLevel))
+            {
+                messages.Add(formatter(state, exception));
+            }
+        }
     }
 
     /// <summary>

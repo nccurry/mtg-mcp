@@ -229,6 +229,68 @@ public sealed class PlaygroupService : IDisposable
             cancellationToken));
     }
 
+    /// <summary>
+    /// Reads typed games from a playgroup's game list, page by page with the shared pacing, and stops once the limit
+    /// is reached. The provider list has no date filter and no stated order, so the caller filters after reading.
+    /// </summary>
+    public async Task<OperationResult<PlaygroupGameRead>> ReadGamesAsync(
+        int playgroupId,
+        int maxGames,
+        CancellationToken cancellationToken)
+    {
+        if (maxGames is < 1 or > 1000)
+        {
+            return new OperationInvalidInput("invalid-max-games", "maxGames must be from 1 through 1000.");
+        }
+
+        int pageSize = Math.Min(100, maxGames);
+        int pageLimit = ((maxGames + pageSize - 1) / pageSize) + 1;
+        List<PlaygroupGame> games = [];
+        HashSet<int> seen = [];
+        PlaygroupEvidence? last = null;
+        for (int page = 1; page <= pageLimit; page++)
+        {
+            OperationResult<PlaygroupEvidence> result = await ListPlaygroupGamesAsync(
+                playgroupId,
+                page,
+                pageSize,
+                includeEvents: false,
+                cancellationToken).ConfigureAwait(false);
+            if (result.Value is not OperationSuccess<PlaygroupEvidence> success)
+            {
+                return OperationFailure.Forward<PlaygroupEvidence, PlaygroupGameRead>(result);
+            }
+
+            last = success.Data;
+            int received = last.Data.ValueKind == JsonValueKind.Array ? last.Data.GetArrayLength() : 0;
+            bool more = false;
+            foreach (PlaygroupGame game in PlaygroupGameParser.Parse(last.Data))
+            {
+                if (!seen.Add(game.Id))
+                {
+                    continue;
+                }
+
+                if (games.Count < maxGames)
+                {
+                    games.Add(game);
+                }
+                else
+                {
+                    more = true;
+                }
+            }
+
+            if (more || received < pageSize)
+            {
+                return new OperationSuccess<PlaygroupGameRead>(new PlaygroupGameRead(games, more, page, last));
+            }
+        }
+
+        // The page limit stopped the read (pages of repeated or unreadable games), so the list may be incomplete.
+        return new OperationSuccess<PlaygroupGameRead>(new PlaygroupGameRead(games, true, pageLimit, last!));
+    }
+
     /// <summary>Submits one caller-supplied event batch without automatic retries.</summary>
     public Task<OperationResult<PlaygroupEvidence>> CreateGameEventsBatchAsync(
         int gameId,

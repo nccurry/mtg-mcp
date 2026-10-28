@@ -22,6 +22,8 @@ public sealed class ScryfallMcpTests
     /// </summary>
     private static readonly string[] ReadTools =
     [
+        "card_list_query",
+        "card_lists_compare",
         "scryfall_autocomplete",
         "scryfall_card_data_status",
         "scryfall_card_details",
@@ -79,6 +81,9 @@ public sealed class ScryfallMcpTests
 
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
+            ["card_list_query"] = ["cursor", "groupBy", "metrics", "rows", "source", "where"],
+            ["card_lists_compare"] =
+                ["cursor", "fields", "left", "matchBy", "operation", "pageSize", "responseFormat", "right"],
             ["scryfall_autocomplete"] = ["cursor", "freshnessPolicy", "includeExtras", "pageSize", "query"],
             ["scryfall_cards_get"] = ["cursor", "fields", "freshnessPolicy", "lookups", "pageSize", "responseFormat"],
             ["scryfall_card_details"] =
@@ -117,6 +122,8 @@ public sealed class ScryfallMcpTests
         ];
         HashSet<string> openWorld =
         [
+            "card_list_query",
+            "card_lists_compare",
             "scryfall_autocomplete",
             "scryfall_card_details",
             "scryfall_cards_get",

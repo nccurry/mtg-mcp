@@ -2,8 +2,10 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.CardLists;
 using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
+using MtgMcp.Scryfall;
 using MtgMcp.Statistics;
 
 namespace MtgMcp.App.Statistics;
@@ -39,8 +41,10 @@ internal static class StatisticsToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Stats,
         CapabilityToolsetStability.Stable,
-        "Provider-independent exact mathematics over caller-supplied groups and explicitly selected deck populations.",
+        "Exact mathematics over caller-supplied groups and explicitly selected deck populations; castability " +
+        "also reads installed Scryfall card data.",
         [
+            "stats_castability",
             "stats_local_deck_summary",
             "stats_hypergeometric",
             "stats_mana_availability",
@@ -54,16 +58,18 @@ internal static class StatisticsToolsetManifest
         []);
 
     /// <summary>
-    /// Registers exactly eight read-only tools for every operation mode.
+    /// Registers exactly nine read-only tools for every operation mode.
     /// </summary>
     internal static void Register(
         IMcpServerBuilder builder,
         SqliteDeckStore deckStore,
-        ExactStatisticsCalculator calculator)
+        ExactStatisticsCalculator calculator,
+        ScryfallService scryfallService)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(deckStore);
         ArgumentNullException.ThrowIfNull(calculator);
+        ArgumentNullException.ThrowIfNull(scryfallService);
         StatisticsReadTools target = new(new StatisticsDeckResolver(deckStore), calculator);
         builder.WithRegisteredTools(
         [
@@ -76,6 +82,12 @@ internal static class StatisticsToolsetManifest
             Create(nameof(StatisticsReadTools.MinimumCountAsync), target),
             Create(nameof(StatisticsReadTools.DeckSummaryAsync), target),
         ]);
+        builder.WithRegisteredTools(ToolRegistration.Create(
+            new StatisticsCastabilityTools(new StatisticsCastabilityCoordinator(
+                new CardListResolver(
+                    scryfallService,
+                    new CardListAccess(deckStore, null)),
+                calculator))));
     }
 
     /// <summary>

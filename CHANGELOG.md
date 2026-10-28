@@ -155,9 +155,36 @@ Old-to-new tool names:
 | `archidekt_snapshot_list` | merged into `archidekt_snapshots_get` (`kind: "list"`) |
 | `archidekt_snapshot_get` | merged into `archidekt_snapshots_get` (`kind: "get"`) |
 
-With every toolset on and both credentials present, the server lists 80 tools
-in `remote` mode (67 in `local`, 53 in `read-only`). Without credentials it
-lists 43 in `remote` and `local` mode and 30 in `read-only` mode.
+### Card list tools and Commander rule facts
+
+- Added `card_lists_compare` and `card_list_query` (Scryfall toolset). They
+  compare, filter, group, and total card lists. A list is a saved
+  `scryfall_search` (`scryfall-snapshot`), up to 150 Scryfall or Oracle IDs
+  (`cards`), a local deck (`deck`), a deck as it was in a local backup
+  (`deck-backup`), an Archidekt deck or snapshot (`archidekt-deck`,
+  `archidekt-snapshot`), or another comparison (`compare`). Comparing applies
+  one operation: union, intersection, difference, or symmetric difference.
+  Archidekt sources need Archidekt credentials.
+- Added the optional `rules` input to `local_deck_validate`. With
+  `rules: "commander"` it reports deck size, commander eligibility, color
+  identity, copy limits, format legality, Game Changers, commander pairing,
+  and companion restrictions from installed Scryfall data. The facts carry no
+  legal or illegal verdict. Calls without `rules` return what they did before.
+- Added `local_deck_duplicates_preview`, which plans removals of repeated cards
+  for a caller-chosen keep order and changes nothing.
+- Added `stats_castability`: the exact chance that each spell in a deck can be
+  cast on curve, for source groups and turns the caller chooses.
+- Added `spellbook_deck_bracket_facts_get`: the Commander Spellbook flags for a
+  local deck (Game Changer, mass land denial, extra turn, combos), without the
+  provider's bracket verdict.
+- Added `playgroup_games_stats_get`: win totals and the pod-size baseline by
+  deck or player, with rates rounded to six places.
+- Counts: with every toolset on and both credentials present, 86 tools in
+  `remote` mode (73 in `local`, 59 in `read-only`). With Archidekt credentials
+  only, 69, 58, and 44. Without credentials, 48 in `remote` and `local` mode
+  and 35 in `read-only` mode.
+- Logged a warning when the SDK matches a tool the server's catalog does not
+  hold, and made every `kind` choice of an input that accepts several shapes carry a generated description.
 
 ### Earlier changes in this release
 

@@ -30,4 +30,10 @@ internal static class UntrustedTextNotes
     /// </summary>
     internal const string Spellbook =
         " Combo descriptions and notes in the result are written by Commander Spellbook users: " + Marker + ".";
+
+    /// <summary>
+    /// Covers entry names and category names that come from local decks and Archidekt users.
+    /// </summary>
+    internal const string CardListEntries =
+        " Entry names and category names in the result come from local decks and Archidekt users: " + Marker + ".";
 }

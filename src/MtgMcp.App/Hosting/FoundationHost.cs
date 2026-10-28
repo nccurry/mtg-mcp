@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using MtgMcp.App.Archidekt;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.CardLists;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
@@ -46,7 +47,7 @@ internal static class FoundationHost
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
         bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
-        using ScryfallService? scryfallService = scryfallEnabled || decksEnabled
+        using ScryfallService? scryfallService = scryfallEnabled || decksEnabled || statisticsEnabled
             ? new ScryfallService(
                 configuration.DataRoot,
                 OperationModeGuard.Allows(configuration.Mode, OperationRequirement.LocalWrite),
@@ -90,17 +91,23 @@ internal static class FoundationHost
             DeckToolsetManifest.Register(mcpBuilder, deckStore, scryfallService, configuration.Mode);
         }
 
+        CardListAccess listAccess = new(
+            decksEnabled ? deckStore : null,
+            archidektService,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt) ??
+                CardListAccess.ToolsetNotSelected);
         if (scryfallEnabled && scryfallService is not null)
         {
-            ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode);
+            ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode, listAccess);
         }
 
-        if (statisticsEnabled && deckStore is not null)
+        if (statisticsEnabled && deckStore is not null && scryfallService is not null)
         {
             StatisticsToolsetManifest.Register(
                 mcpBuilder,
                 deckStore,
-                new ExactStatisticsCalculator(FoundationServerIdentity.PackageVersion));
+                new ExactStatisticsCalculator(FoundationServerIdentity.PackageVersion),
+                scryfallService);
         }
 
         if (archidektService is not null && deckStore is not null)

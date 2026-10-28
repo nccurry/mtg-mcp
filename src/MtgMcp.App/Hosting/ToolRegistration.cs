@@ -54,7 +54,7 @@ internal static class ToolRegistration
             SerializerOptions = ToolCallPolicy.SerializerOptions,
             SchemaCreateOptions = new AIJsonSchemaCreateOptions
             {
-                TransformSchemaNode = describeNode is null ? null : (_, schema) => describeNode(schema),
+                TransformSchemaNode = (_, schema) => Describe(schema),
                 // Two hooks build the schema. TransformOptions runs on the root input object and on each parameter
                 // schema of the tool method, which is where closing objects and list item choices are applied.
                 // The create-options hook runs on the schemas generated for each parameter type, so the optional
@@ -62,11 +62,30 @@ internal static class ToolRegistration
                 TransformOptions = new AIJsonSchemaTransformOptions
                 {
                     TransformSchemaNode = (context, schema) =>
-                        TransformNode(context.Path, schema, itemChoices, describeNode),
+                        TransformNode(context.Path, schema, itemChoices, Describe),
                 },
             },
         });
         return new RegisteredTool(tool, method);
+
+        JsonNode Describe(JsonNode node)
+        {
+            return DescribeUnionKind(describeNode is null ? node : describeNode(node));
+        }
+    }
+
+    /// <summary>
+    /// Gives a description to the constant that names a union variant, so every property of a published schema is
+    /// described. A description set by an earlier step is kept.
+    /// </summary>
+    internal static JsonNode DescribeUnionKind(JsonNode schema)
+    {
+        if (schema is JsonObject node && node["const"] is JsonValue && !node.ContainsKey("description"))
+        {
+            node["description"] = "Selects this variant of the closed input union.";
+        }
+
+        return schema;
     }
 
     /// <summary>

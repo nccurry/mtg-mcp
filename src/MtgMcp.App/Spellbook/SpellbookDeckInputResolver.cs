@@ -7,6 +7,11 @@ using MtgMcp.Spellbook;
 namespace MtgMcp.App.Spellbook;
 
 /// <summary>
+/// Carries the prepared Commander Spellbook selection together with the deck it was prepared from.
+/// </summary>
+internal sealed record SpellbookResolvedDeck(SpellbookDeckComboSelection Selection, DeckDocument Deck);
+
+/// <summary>
 /// Selects supported local deck zones for one Commander Spellbook request without judging the deck.
 /// </summary>
 internal sealed class SpellbookDeckInputResolver
@@ -32,9 +37,26 @@ internal sealed class SpellbookDeckInputResolver
         long expectedRevision,
         CancellationToken cancellationToken)
     {
+        OperationResult<SpellbookResolvedDeck> resolved = await ResolveWithDeckAsync(
+            deckId,
+            expectedRevision,
+            cancellationToken).ConfigureAwait(false);
+        return resolved is OperationSuccess<SpellbookResolvedDeck> success
+            ? new OperationSuccess<SpellbookDeckComboSelection>(success.Data.Selection)
+            : OperationFailure.Forward<SpellbookResolvedDeck, SpellbookDeckComboSelection>(resolved);
+    }
+
+    /// <summary>
+    /// Loads one exact local deck revision once and returns both the prepared selection and the deck that was read.
+    /// </summary>
+    internal async Task<OperationResult<SpellbookResolvedDeck>> ResolveWithDeckAsync(
+        Guid deckId,
+        long expectedRevision,
+        CancellationToken cancellationToken)
+    {
         if (deckId == Guid.Empty || expectedRevision <= 0)
         {
-            return Invalid<SpellbookDeckComboSelection>(
+            return Invalid<SpellbookResolvedDeck>(
                 "The deck ID and expected revision must identify one local deck revision.");
         }
 
@@ -60,7 +82,7 @@ internal sealed class SpellbookDeckInputResolver
     /// <summary>
     /// Groups exact local card names by supported source zone and records skipped local entries.
     /// </summary>
-    private static OperationResult<SpellbookDeckComboSelection> Prepare(DeckDocument deck)
+    private static OperationResult<SpellbookResolvedDeck> Prepare(DeckDocument deck)
     {
         SortedDictionary<string, int> commanders = new(StringComparer.Ordinal);
         SortedDictionary<string, int> main = new(StringComparer.Ordinal);
@@ -98,19 +120,19 @@ internal sealed class SpellbookDeckInputResolver
 
         if (commanders.Count > SpellbookDeckRequestLimits.MaximumCommanderEntries)
         {
-            return Invalid<SpellbookDeckComboSelection>(
+            return Invalid<SpellbookResolvedDeck>(
                 $"The local deck has more than {SpellbookDeckRequestLimits.MaximumCommanderEntries.ToString(CultureInfo.InvariantCulture)} distinct commander entries for Commander Spellbook.");
         }
 
         if (main.Count > SpellbookDeckRequestLimits.MaximumMainEntries)
         {
-            return Invalid<SpellbookDeckComboSelection>(
+            return Invalid<SpellbookResolvedDeck>(
                 $"The local deck has more than {SpellbookDeckRequestLimits.MaximumMainEntries.ToString(CultureInfo.InvariantCulture)} distinct main-deck entries for Commander Spellbook.");
         }
 
         if (commanders.Count == 0 && main.Count == 0)
         {
-            return Invalid<SpellbookDeckComboSelection>(
+            return Invalid<SpellbookResolvedDeck>(
                 "The local deck has no commander or main entries to send to Commander Spellbook.");
         }
 
@@ -130,10 +152,9 @@ internal sealed class SpellbookDeckInputResolver
             deck.Revision,
             sent,
             skipped);
-        return new OperationSuccess<SpellbookDeckComboSelection>(
-            new SpellbookDeckComboSelection(
-                new SpellbookDeckRequest(commanderEntries, mainEntries),
-                evidence));
+        return new OperationSuccess<SpellbookResolvedDeck>(new SpellbookResolvedDeck(
+            new SpellbookDeckComboSelection(new SpellbookDeckRequest(commanderEntries, mainEntries), evidence),
+            deck));
     }
 
     /// <summary>
@@ -148,7 +169,7 @@ internal sealed class SpellbookDeckInputResolver
             entry.CardName.Length > SpellbookDeckRequestLimits.MaximumCardNameLength ||
             entry.Quantity <= 0)
         {
-            return Invalid<SpellbookDeckComboSelection>(
+            return Invalid<SpellbookResolvedDeck>(
                 $"The local {zone} entry is outside Commander Spellbook's supported request limits.");
         }
 
@@ -160,7 +181,7 @@ internal sealed class SpellbookDeckInputResolver
         }
         catch (OverflowException)
         {
-            return Invalid<SpellbookDeckComboSelection>(
+            return Invalid<SpellbookResolvedDeck>(
                 "Repeated local deck entry quantities exceed the supported integer range.");
         }
     }

@@ -47,8 +47,13 @@ internal sealed class RegisteredToolSet : IDisposable
         ServiceCollection services = new();
         IMcpServerBuilder builder = services.AddMcpServer();
         DeckToolsetManifest.Register(builder, deckStore, scryfall, mode);
-        ScryfallToolsetManifest.Register(builder, scryfall, mode);
-        StatisticsToolsetManifest.Register(builder, deckStore, new ExactStatisticsCalculator("test"));
+        MtgMcp.App.CardLists.CardListAccess access = new(deckStore, archidekt);
+        ScryfallToolsetManifest.Register(builder, scryfall, mode, access);
+        StatisticsToolsetManifest.Register(
+            builder,
+            deckStore,
+            new ExactStatisticsCalculator("test"),
+            scryfall);
         ArchidektToolsetManifest.Register(builder, archidekt, deckStore, mode);
         PlaygroupToolsetManifest.Register(builder, playgroup, mode);
         SpellbookToolsetManifest.Register(builder, spellbook, deckStore);

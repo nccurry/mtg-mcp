@@ -306,6 +306,9 @@ and local decks are addressed by ID and revision.
 `card_lists_compare` and `card_list_query` share one list source type and one
 resolver in App, so a new source kind works in both tools.
 
+One request may read at most 20,000 cards from all its sources together. A source that would pass the limit is
+refused before it is read (a snapshot) or as soon as it is counted, as `list-too-large` with the path of that source.
+
 | Kind | Input | Owning toolset | Notes |
 | --- | --- | --- | --- |
 | `scryfall-snapshot` | `snapshotId` | `scryfall` | The full saved result of a search. Immutable. |
@@ -430,7 +433,7 @@ or a comparison result.
 | Part | Meaning |
 | --- | --- |
 | `where` | Filters, all of which must match. `op` is one of `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `contains`. For list fields (colors, tags, keywords, subtypes), `contains` means the list holds the value. |
-| `groupBy` | Zero to two fields. A card with several values in a list field counts once in each group; the result says so with `multiValued: true`. Cards with no value go in a `none` group. |
+| `groupBy` | Zero to two fields. A card with several values in a list field counts once in each group; the result says so with `multiValued: true`. Cards with no value go in one group whose key is JSON `null`, written last, so it never merges with a real value that is the text `none`. |
 | `metrics` | `quantity` (copies, from deck quantities; 1 for search results), `cards` (distinct cards), `sum:`, `avg:`, `min:`, `max:` over numeric fields, `pips`, and `sources`. |
 | `rows` | Optional per-card rows with chosen fields, sorting, and paging. Omit it to get only grouped totals. |
 
@@ -534,9 +537,9 @@ adds these facts to its structural checks, using installed card data:
 | Fact | How it is computed |
 | --- | --- |
 | Deck size | Sum of quantities in `commander` and `main`. |
-| Commanders | Entries in the `commander` zone, and whether each is eligible: a legendary creature; a card whose text says it "can be your commander"; or a Background paired with a "Choose a Background" commander (from the pairing fact). Phase 4 checks the current Comprehensive Rules 903.3 text and adds any other eligible card types it names, such as legendary Vehicles or Spacecraft, with a case for each. |
+| Commanders | Entries in the `commander` zone, and whether each is eligible: a legendary creature; a card whose text says it "can be your commander"; or a Background paired with a "Choose a Background" commander (from the pairing fact). Phase 4 checked Comprehensive Rules 903.3 (CR dated 2026-09-25): a commander is a legendary creature, Vehicle, or Spacecraft that has power and toughness boxes (rule 903.3), or a card whose text says it can be a commander (903.3a). The rule fact reads the front face. Each commander item carries `oracleText` so the agent can read any text-based exception itself. |
 | Color identity | Union of the commanders' `color_identity`, and every main entry whose `color_identity` is outside it. |
-| Singleton | Card names with more copies than allowed. Basic lands and cards whose text says "A deck can have any number of cards named" have no limit. Cards whose text says "A deck can have up to N cards named" (for example Seven Dwarves, Nazgûl) are limited to N. Every other card is limited to 1. |
+| Singleton | Card names with more copies than allowed. Basic lands and cards whose text says "A deck can have any number of cards named" have no limit. Cards whose text says "A deck can have up to N cards named" (for example Seven Dwarves, Nazgûl) are limited to N. Only those exact phrases count: a search text such as "search your library for up to three cards named" (Howling Wolf) is not a deck limit. Every other card is limited to 1. |
 | Format legality | Each entry whose Scryfall `legalities.commander` is `banned` or `not_legal`. |
 | Game Changers | Count and list of entries whose Scryfall `game_changer` field is true. This fact has no `passed` flag, because the allowed number depends on the bracket the agent chooses. If any entry's installed data lacks the field, the fact reports `status: "unknown"` with those entries, and the count covers only entries where it is known. |
 | Pairing (RULE-003) | When the `commander` zone has two cards, each card's pairing ability from Scryfall `keywords` and oracle text, and whether the pair is allowed by the table below. |
@@ -547,16 +550,21 @@ rule, plus the entries involved. The tool does not name a bracket, judge power l
 whether a deck is "good". The `game_changer` field is not mapped today, so
 phase 2 adds it to the card mapping.
 
+When a commander has no card data, the color identity fact has `passed: null` (unknown) and lists no entry outside the
+identity, and a companion check is `not-checked` instead of failed. An adventure or flip card is read by the cost of
+its front face (rule 715.4) when a companion restriction looks at mana symbols. The structural report and the rule
+facts come from one read of the deck, so they describe one revision.
+
 **Pairing rules.** A pair passes when one row matches both cards:
 
 | Card A | Card B | Source |
 | --- | --- | --- |
-| Partner | Partner | `keywords` holds `Partner` without a named card |
-| Partner with *name* | the named card | `keywords` holds `Partner with`; the name comes from oracle text |
-| Friends forever | Friends forever | `keywords` |
+| Partner | Partner | `keywords` holds `Partner`, with no `Partner with` keyword and no `Partner—variant` line in the text (a plain Partner card) |
+| Partner with *name* | the named card | captured data: `keywords` holds both `Partner with` and `Partner`; the name comes from the "Partner with" oracle text line |
+| Friends forever | Friends forever | captured data: not a keyword; read from the text line `Partner—Friends forever` (em dash) |
 | Choose a Background | a legendary Background enchantment | `keywords`; the type line holds `Background` |
 | Doctor's companion | a legendary Time Lord Doctor creature with no other creature types | `keywords`; the type line |
-| Partner—*variant* | Partner—same *variant* | `keywords`; the variant text after the dash |
+| Partner—*variant* | Partner—same *variant* | captured data: variants (Character select, Father & son, Friends forever, Survivors) are not keywords; read from the `Partner—variant` text line |
 
 Before coding, phase 4 captures Scryfall card data for one card of each row
 and confirms how `keywords` and oracle text show each ability. The table is
@@ -1022,8 +1030,9 @@ deck, then goes to Archidekt through the existing push.
 - `matchBy: "oracle"` reads Oracle IDs from installed card data; if it is
   not installed the result is `not-cached` naming the sync tool. Entries with
   no Scryfall identity go in `unmatched`. `name` needs no card data.
-- The best-ranked entry is kept with quantity 1. If two entries tie for best
-  rank, the card is reported in `ambiguous` and no change is planned for it.
+- The best-ranked entry is kept with quantity 1. Ties are evaluated at the cut line (a design decision made in
+  phase 4): if the entries that would fill the kept slot tie for best rank, the card is reported in `ambiguous` and no
+  change is planned for it; entries that tie only below the kept entry are removed.
   The agent adds a more specific group and asks again. The server never
   breaks ties by entry order, price, or printing.
 - `matchBy: "oracle"` needs Scryfall identity on every entry. Entries without
@@ -1079,8 +1088,14 @@ probability is good enough.
 The result has one row per distinct mana cost: the cost, the cards that share
 it, the turn checked, the exact probability as a decimal string and fraction,
 and the conditioning used. Rows are sorted by probability, then name.
-`skipped` lists, with the reason, cards with no mana cost, with `X`, or with
-hybrid or Phyrexian symbols. The exact engine's requirement type
+The work limit is 480 (distinct costs times source groups; a design decision made in phase 4); a request over it is
+refused as `invalid-input` with the limit. The exact-work budget is shared by the whole request, not given to each cost,
+and a turn must be from 1 to 99. When `requireLandDrops` is true and the deck holds fewer sources than the turn
+number, the condition cannot happen, so the probability is `null` (undefined, never 0) and the row sorts last. Every entry
+with no card data, land or not, is listed in `skipped` as `no-scryfall-identity` or `not-in-card-data`. `skipped` also
+lists, with the reason, cards with no mana cost (`no-mana-cost`), with `X` (`x-cost`), with hybrid or Phyrexian symbols
+(`hybrid-or-phyrexian-symbol`), with two costs (`split-card-has-two-costs`), with another symbol
+(`unsupported-symbol`), or with a mana value past turn 99 under the mana-value rule (`mana-value-above-turn-limit`). The exact engine's requirement type
 (`ManaRequirementInput`, `src/MtgMcp.Statistics/TurnManaInverseModels.cs:78`)
 holds only W, U, B, R, G, C, and generic counts. Card data must be
 installed; otherwise the result is `not-cached` naming the sync tool.
@@ -1125,6 +1140,13 @@ transport, pacing, cache, and failure mapping (BRACKET-001). It returns:
 step, before the App result is built. A test fails if the field reaches a
 result.
 
+A response that leaves out a flag (`gameChanger`, `massLandDenial`, `extraTurn`, `banned`, `definitelyTwoCard`,
+`arguablyTwoCard`) or a combo's `speed` or `manaValueNeeded`, or that holds an item that is not an object, is refused
+as `unavailable` with `source-invalid-response`, before it is cached. A missing flag is never read as false. Entries
+are matched to the provider's cards by Oracle ID when both have one, otherwise by name with the front face of a
+two-faced name matching either spelling. When a result passes the size limit, cards with no flag are left out first
+(`unflaggedCardsOmitted`), then combos from the end of the list (`combosOmitted`), with `truncated` and `narrow` set.
+
 The Commander Spellbook packet excluded `/estimate-bracket` because it returns
 a bracket label
 ([non-goals](../../completed/commander-spellbook-evidence/SADD.md#non-goals)).
@@ -1161,8 +1183,8 @@ filter and no stated order. So:
 
 It pages the existing games list service call with the existing pacing and
 adds no Playgroup endpoint. Games come back today as raw JSON, so the adapter
-adds a typed game record with only the fields above. Each row has `games`,
-`wins`, `winRate` (exact decimal string), `baselineRate` (the mean of
+adds a typed game record with only the fields above. Rates are rounded half to even to 6 places. Each row has `games`,
+`wins`, `winRate` (decimal string rounded half to even to 6 places), `baselineRate` (the mean of
 1 / players over the group's games), and `averageTotalRounds`. The result
 also reports `gamesRead`, `gamesSkipped` with reasons (no winner, missing
 deck), `gamesOutsideRange`, and `limitReached`. It never ranks rows or says

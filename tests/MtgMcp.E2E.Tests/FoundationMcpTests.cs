@@ -45,6 +45,7 @@ public sealed class FoundationMcpTests
     [
         "local_deck_backup_list",
         "local_deck_category_rules_preview",
+        "local_deck_duplicates_preview",
         "local_deck_export_bundle",
         "local_deck_get",
         "local_deck_identity_reconcile_preview",
@@ -69,6 +70,7 @@ public sealed class FoundationMcpTests
         "local_deck_category_rules_preview",
         "local_deck_create",
         "local_deck_delete",
+        "local_deck_duplicates_preview",
         "local_deck_export_bundle",
         "local_deck_get",
         "local_deck_identity_reconcile_apply",
@@ -86,6 +88,8 @@ public sealed class FoundationMcpTests
     /// </summary>
     private static readonly string[] ScryfallReadToolNames =
     [
+        "card_list_query",
+        "card_lists_compare",
         "scryfall_autocomplete",
         "scryfall_card_data_status",
         "scryfall_card_details",
@@ -114,6 +118,7 @@ public sealed class FoundationMcpTests
     /// </summary>
     private static readonly string[] StatisticsToolNames =
     [
+        "stats_castability",
         "stats_local_deck_summary",
         "stats_hypergeometric",
         "stats_mana_availability",
@@ -171,6 +176,7 @@ public sealed class FoundationMcpTests
         "playgroup_commander_turn_damage_get",
         "playgroup_deck_elo_history_get",
         "playgroup_deck_get",
+        "playgroup_games_stats_get",
         "playgroup_me_get",
         "playgroup_playgroup_game_get",
         "playgroup_playgroup_games_list",
@@ -196,6 +202,7 @@ public sealed class FoundationMcpTests
     /// </summary>
     private static readonly string[] SpellbookReadToolNames =
     [
+        "spellbook_deck_bracket_facts_get",
         "spellbook_deck_combos_find",
         "spellbook_variant_get",
         "spellbook_variant_search",
@@ -206,10 +213,10 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData(null, "remote", 43)]
-    [InlineData("read-only", "read-only", 30)]
-    [InlineData("local", "local", 43)]
-    [InlineData("remote", "remote", 43)]
+    [InlineData(null, "remote", 48)]
+    [InlineData("read-only", "read-only", 35)]
+    [InlineData("local", "local", 48)]
+    [InlineData("remote", "remote", 48)]
     public async Task CapabilityResource_EachMode_ReportsExactFoundationSurface(
         string? configuredMode,
         string expectedMode,
@@ -367,30 +374,30 @@ public sealed class FoundationMcpTests
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("read-only", "default", "default", 53)]
-    [InlineData("local", "default", "default", 67)]
-    [InlineData("remote", "default", "default", 80)]
-    [InlineData("read-only", "all", "all", 53)]
-    [InlineData("local", "all", "all", 67)]
-    [InlineData("remote", "all", "all", 80)]
-    [InlineData("read-only", "decks", "explicit", 10)]
-    [InlineData("local", "decks", "explicit", 19)]
-    [InlineData("remote", "decks", "explicit", 19)]
-    [InlineData("read-only", "scryfall", "explicit", 9)]
-    [InlineData("local", "scryfall", "explicit", 13)]
-    [InlineData("remote", "scryfall", "explicit", 13)]
-    [InlineData("read-only", "stats", "explicit", 8)]
-    [InlineData("local", "stats", "explicit", 8)]
-    [InlineData("remote", "stats", "explicit", 8)]
+    [InlineData("read-only", "default", "default", 59)]
+    [InlineData("local", "default", "default", 73)]
+    [InlineData("remote", "default", "default", 86)]
+    [InlineData("read-only", "all", "all", 59)]
+    [InlineData("local", "all", "all", 73)]
+    [InlineData("remote", "all", "all", 86)]
+    [InlineData("read-only", "decks", "explicit", 11)]
+    [InlineData("local", "decks", "explicit", 20)]
+    [InlineData("remote", "decks", "explicit", 20)]
+    [InlineData("read-only", "scryfall", "explicit", 11)]
+    [InlineData("local", "scryfall", "explicit", 15)]
+    [InlineData("remote", "scryfall", "explicit", 15)]
+    [InlineData("read-only", "stats", "explicit", 9)]
+    [InlineData("local", "stats", "explicit", 9)]
+    [InlineData("remote", "stats", "explicit", 9)]
     [InlineData("read-only", "archidekt", "explicit", 9)]
     [InlineData("local", "archidekt", "explicit", 10)]
     [InlineData("remote", "archidekt", "explicit", 21)]
-    [InlineData("read-only", "playgroup", "explicit", 14)]
-    [InlineData("local", "playgroup", "explicit", 14)]
-    [InlineData("remote", "playgroup", "explicit", 16)]
-    [InlineData("read-only", "spellbook", "explicit", 3)]
-    [InlineData("local", "spellbook", "explicit", 3)]
-    [InlineData("remote", "spellbook", "explicit", 3)]
+    [InlineData("read-only", "playgroup", "explicit", 15)]
+    [InlineData("local", "playgroup", "explicit", 15)]
+    [InlineData("remote", "playgroup", "explicit", 17)]
+    [InlineData("read-only", "spellbook", "explicit", 4)]
+    [InlineData("local", "spellbook", "explicit", 4)]
+    [InlineData("remote", "spellbook", "explicit", 4)]
     [InlineData("read-only", "none", "none", 0)]
     [InlineData("local", "none", "none", 0)]
     [InlineData("remote", "none", "none", 0)]
@@ -485,6 +492,7 @@ public sealed class FoundationMcpTests
             ["local_deck_category_rules_preview"] = ["deckId", "expectedRevision", "freshnessPolicy", "source"],
             ["local_deck_create"] = ["request"],
             ["local_deck_delete"] = ["deckId", "expectedRevision"],
+            ["local_deck_duplicates_preview"] = ["deckId", "exempt", "expectedRevision", "keepPriority", "matchBy"],
             ["local_deck_export_bundle"] = ["deckId", "formatId", "options"],
             ["local_deck_get"] = ["cursor", "deckId", "fields", "include", "pageSize"],
             ["local_deck_identity_reconcile_apply"] =
@@ -499,7 +507,7 @@ public sealed class FoundationMcpTests
                 "deckId", "expectedRevision", "landRules", "onThePlay", "sampleCount", "seed", "targetEntryId",
                 "turnLimit",
             ],
-            ["local_deck_validate"] = ["deckId"],
+            ["local_deck_validate"] = ["deckId", "rules"],
         };
         HashSet<string> readOnly = [.. DeckReadToolNames];
         HashSet<string> destructive =
@@ -624,6 +632,7 @@ public sealed class FoundationMcpTests
             ["playgroup_commander_turn_damage_get"] = ["commanderId"],
             ["playgroup_deck_elo_history_get"] = ["deckId", "includeArchived", "leagueId", "playgroupId"],
             ["playgroup_deck_get"] = ["deckId", "includeArchived"],
+            ["playgroup_games_stats_get"] = ["from", "groupBy", "maxGames", "playgroupId", "to"],
             ["playgroup_game_events_batch_create"] = ["events", "gameId"],
             ["playgroup_live_session_create"] = ["request"],
             ["playgroup_me_get"] = [],
@@ -639,7 +648,7 @@ public sealed class FoundationMcpTests
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
 
-        Assert.Equal(16, tools.Count);
+        Assert.Equal(17, tools.Count);
         foreach (McpClientTool tool in tools)
         {
             Assert.Equal(
@@ -790,15 +799,15 @@ public sealed class FoundationMcpTests
             descriptors[0],
             "decks",
             decksEnabled,
-            decksEnabled ? (mode == "read-only" ? 10 : 19) : 0,
+            decksEnabled ? (mode == "read-only" ? 11 : 20) : 0,
             null);
         AssertDescriptor(
             descriptors[1],
             "scryfall",
             scryfallEnabled,
-            scryfallEnabled ? (mode == "read-only" ? 9 : 13) : 0,
+            scryfallEnabled ? (mode == "read-only" ? 11 : 15) : 0,
             null);
-        AssertDescriptor(descriptors[2], "stats", statsEnabled, statsEnabled ? 8 : 0, null);
+        AssertDescriptor(descriptors[2], "stats", statsEnabled, statsEnabled ? 9 : 0, null);
         AssertDescriptor(
             descriptors[3],
             "archidekt",
@@ -814,14 +823,14 @@ public sealed class FoundationMcpTests
             descriptors[4],
             "playgroup",
             playgroupEnabled,
-            playgroupEnabled ? (mode == "remote" ? 16 : 14) : 0,
+            playgroupEnabled ? (mode == "remote" ? 17 : 15) : 0,
             playgroupRequested && !playgroupEnabled ? "credentials-missing" : null);
         Assert.Equal(
             ["deck-update"],
             descriptors[4].GetProperty("unsupportedOperations")
                 .EnumerateArray()
                 .Select(value => value.GetString()));
-        AssertDescriptor(descriptors[5], "spellbook", spellbookEnabled, spellbookEnabled ? 3 : 0, null);
+        AssertDescriptor(descriptors[5], "spellbook", spellbookEnabled, spellbookEnabled ? 4 : 0, null);
         Assert.Contains(
             "operation mode separately controls local writes",
             descriptors[0].GetProperty("description").GetString(),
@@ -976,19 +985,20 @@ public sealed class FoundationMcpTests
             expectedNames,
             element.EnumerateObject().Select(property => property.Name).ToArray());
     }
+
     /// <summary>
     /// Verifies the provider toolsets that need credentials turn on only when their credentials are present,
     /// whether the selection is the default or names them, and report why they are off.
     /// </summary>
     [Theory]
     [Trait("Category", "E2E")]
-    [InlineData("remote", "default", McpCredentials.None, 43)]
-    [InlineData("local", "default", McpCredentials.None, 43)]
-    [InlineData("read-only", "default", McpCredentials.None, 30)]
-    [InlineData("remote", "default", McpCredentials.ArchidektOnly, 64)]
-    [InlineData("local", "default", McpCredentials.ArchidektOnly, 53)]
-    [InlineData("read-only", "default", McpCredentials.ArchidektOnly, 39)]
-    [InlineData("remote", "all", McpCredentials.Both, 80)]
+    [InlineData("remote", "default", McpCredentials.None, 48)]
+    [InlineData("local", "default", McpCredentials.None, 48)]
+    [InlineData("read-only", "default", McpCredentials.None, 35)]
+    [InlineData("remote", "default", McpCredentials.ArchidektOnly, 69)]
+    [InlineData("local", "default", McpCredentials.ArchidektOnly, 58)]
+    [InlineData("read-only", "default", McpCredentials.ArchidektOnly, 44)]
+    [InlineData("remote", "all", McpCredentials.Both, 86)]
     [InlineData("remote", "archidekt", McpCredentials.None, 0)]
     [InlineData("remote", "playgroup", McpCredentials.ArchidektOnly, 0)]
     [InlineData("remote", "archidekt", McpCredentials.ArchidektOnly, 21)]
@@ -1056,7 +1066,7 @@ public sealed class FoundationMcpTests
                 $"{tool.Name} input schema does not reject unknown properties.");
         }
 
-        Assert.Equal(80, tools.Count);
+        Assert.Equal(86, tools.Count);
         Assert.True(failures.Count == 0, string.Join(", ", failures));
     }
 

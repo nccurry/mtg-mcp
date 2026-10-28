@@ -42,6 +42,11 @@ public sealed class ScryfallService : IDisposable
     private readonly ScryfallInstalledCardViewOperations installedViews;
 
     /// <summary>
+    /// Owns whole-card reads for card lists from installed card data and saved searches.
+    /// </summary>
+    private readonly ScryfallListCardOperations listCards;
+
+    /// <summary>
     /// Creates the Scryfall service with official production defaults.
     /// </summary>
     public ScryfallService(
@@ -67,6 +72,7 @@ public sealed class ScryfallService : IDisposable
         deckTags = new ScryfallDeckTagOperations(cards.CardDataStore);
         responses = new ScryfallCardResponseOperations(cards, resultSerializerOptions);
         installedViews = new ScryfallInstalledCardViewOperations(cards.CardDataStore);
+        listCards = new ScryfallListCardOperations(cards.CardDataStore, cards.SnapshotStore, resultSerializerOptions);
     }
 
     /// <inheritdoc cref="ScryfallCardEvidenceOperations.ResolveExactCollectionAsync"/>
@@ -324,6 +330,45 @@ public sealed class ScryfallService : IDisposable
         CancellationToken cancellationToken = default)
     {
         return installedViews.ReadAsync(lookups, fields, includeCards, includeTags, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads whole cards, with tag and price facts, for exact card identities from installed card data only, without
+    /// network access. A null lookup stands for an entry that has no exact Scryfall identity.
+    /// </summary>
+    public Task<OperationResult<ScryfallInstalledListCards>> ReadInstalledListCardsAsync(
+        IReadOnlyList<ScryfallCardLookup?> lookups,
+        bool includeRaw,
+        bool includeFacts,
+        CancellationToken cancellationToken = default)
+    {
+        return listCards.ReadInstalledAsync(lookups, includeRaw, includeFacts, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads every card of one saved search from its immutable snapshot, without network access. A snapshot with more
+    /// than the given number of cards is refused before any card is read.
+    /// </summary>
+    public Task<OperationResult<ScryfallSnapshotCards>> ReadSnapshotCardsAsync(
+        Guid snapshotId,
+        bool includeRaw,
+        bool includeFacts,
+        int maximumCards = ScryfallListQuery.MaximumEntries,
+        CancellationToken cancellationToken = default)
+    {
+        return listCards.ReadSnapshotAsync(snapshotId, includeRaw, includeFacts, maximumCards, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes already mapped cards as concise, standard, or full cards, in order and without a size cut.
+    /// </summary>
+    public Task<OperationResult<ScryfallFormattedList>> FormatCardsAsync(
+        IReadOnlyList<ScryfallCard> cards,
+        string? responseFormat,
+        IReadOnlyList<string>? fields,
+        CancellationToken cancellationToken = default)
+    {
+        return listCards.FormatAsync(cards, responseFormat, fields, cancellationToken);
     }
 
     /// <summary>
