@@ -935,6 +935,21 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies a baseline left by a verification mismatch reads as a local change even when every row matches.
+    /// </summary>
+    [Fact]
+    public void Diff_AnUnsynchronizedBaselineWhoseRowsAllMatch_StillReportsALocalChange()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        ArchidektSyncBaseline baseline = Baseline(remote, ArchidektLocalMapper.UnsynchronizedFingerprint);
+
+        ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "any-local-fingerprint", remote, remote, baseline);
+
+        Assert.Contains(diff.Differences, value => value.Path == "/localOnly/content" && value.State == "local-changed");
+    }
+
+    /// <summary>
     /// Parses the reusable complete deck fixture.
     /// </summary>
     private static RemoteDeckSnapshot ParseDeck()

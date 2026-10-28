@@ -1204,6 +1204,79 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies the way out of a mismatch: after a first push that does not verify, a second push that does leaves the
+    /// pull and push previews with no local change and no operation.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_AfterAMismatchThenAVerifiedPush_LeavesNothingToDo()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string accepted = RichRemoteDeck.Replace(
+            "\"deckRelationId\": 101, \"quantity\": 2",
+            "\"deckRelationId\": 101, \"quantity\": 3",
+            StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
+                await PullRichDeckAsync(handler, root);
+            using (store)
+            {
+                DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                DeckEntry bolt = local.Entries.First(value => value.CardName == "Bolt");
+                _ = Success(await store.ApplyChangesAsync(
+                    localDeckId,
+                    local.Revision,
+                    [new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
+                    TestContext.Current.CancellationToken));
+
+                // First push: Archidekt ignores the change, so the verification differs.
+                ArchidektApplyResult first = await PushAsync(coordinator, localDeckId);
+                Assert.Equal("verification-mismatch", first.Outcome);
+
+                // Second push: Archidekt now takes it.
+                handler.SetStanding("api/decks/42/", accepted);
+                ArchidektApplyResult second = await PushAsync(coordinator, localDeckId);
+                ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.Equal("applied", second.Outcome);
+                Assert.False(pull.HasConflicts);
+                Assert.Empty(pull.Differences);
+                Assert.Empty(push.Operations);
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Previews and applies one push of a local deck.
+    /// </summary>
+    private static async Task<ArchidektApplyResult> PushAsync(ArchidektCoordinator coordinator, Guid localDeckId)
+    {
+        ArchidektSyncPreview preview = Success(await coordinator.PreviewPushAsync(
+            localDeckId,
+            TestContext.Current.CancellationToken));
+        return Success(await coordinator.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                preview.LocalRevision!.Value,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]
