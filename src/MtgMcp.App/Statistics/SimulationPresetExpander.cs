@@ -2,8 +2,8 @@ using MtgMcp.App.CardLists;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
-using MtgMcp.Simulation;
 using MtgMcp.Scryfall;
+using MtgMcp.Simulation;
 
 namespace MtgMcp.App.Statistics;
 
