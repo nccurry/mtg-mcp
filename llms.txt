@@ -18,7 +18,7 @@ or API documents to plan new work.
 ## Start Here
 
 - [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
-- [README](README.md): Current local deck, Scryfall, Archidekt, Playgroup, and Spellbook tools, configuration, product direction, and development commands.
+- [README](README.md): Current local deck, Scryfall, Archidekt, Playgroup, and Spellbook tools, the three workflow prompts, worked examples, configuration, product direction, and development commands.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): The released `0.9.0` boundary, lasting rules, and how to start new work without reopening the rewrite.
@@ -42,7 +42,7 @@ or API documents to plan new work.
 - [Architecture](docs/architecture.md): Current project, data, evidence, and write boundaries.
 - [Adapters](docs/adapters.md): Current Scryfall, Archidekt, Playgroup, and Moxfield boundaries.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
-- [Toolsets](docs/toolsets.md): Fixed tool-group selection, credential gating, modes, and common profiles.
+- [Toolsets](docs/toolsets.md): Fixed tool-group selection, credential gating, modes, common profiles, and the workflow prompts.
 - [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, and the historical `detailLevel` levels.
 
 ## Agent Planning

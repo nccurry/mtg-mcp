@@ -20,26 +20,46 @@ internal static class FoundationProtocolPolicy
                 (context.JsonRpcMessage as JsonRpcResponse)?.Result);
             CanonicalizeToolList(
                 (context.JsonRpcMessage as JsonRpcResponse)?.Result);
+            CanonicalizePromptList(
+                (context.JsonRpcMessage as JsonRpcResponse)?.Result);
 
             await next(context, cancellationToken).ConfigureAwait(false);
         };
     }
 
     /// <summary>
-    /// Removes implicit logging and dynamic tool-list claims from an initialization-shaped result.
+    /// Removes implicit logging and dynamic list claims (tools, prompts, and resources) from a capability result.
+    /// Two shapes carry capabilities: the initialize result, which has a top-level <c>serverInfo</c>, and the
+    /// <c>server/discover</c> result of the pinned protocol, which has <c>supportedVersions</c> and keeps the server
+    /// information in <c>_meta</c>. The server registers everything at start and sends no list-changed notification.
     /// </summary>
     internal static void RemoveUnsupportedImplicitCapabilities(JsonNode? result)
     {
-        if (result is JsonObject resultObject &&
-            resultObject["serverInfo"] is JsonObject &&
-            resultObject["capabilities"] is JsonObject capabilities)
+        if (result is not JsonObject resultObject ||
+            resultObject["capabilities"] is not JsonObject capabilities ||
+            !IsCapabilityResult(resultObject))
         {
-            capabilities.Remove("logging");
-            if (capabilities["tools"] is JsonObject tools)
+            return;
+        }
+
+        capabilities.Remove("logging");
+        foreach (string name in new[] { "tools", "prompts", "resources" })
+        {
+            if (capabilities[name] is JsonObject capability)
             {
-                tools.Remove("listChanged");
+                capability.Remove("listChanged");
             }
         }
+    }
+
+    /// <summary>
+    /// Tells whether a result is an initialize result or a discover result.
+    /// </summary>
+    private static bool IsCapabilityResult(JsonObject result)
+    {
+        return result["serverInfo"] is JsonObject ||
+            result["supportedVersions"] is JsonArray ||
+            result["_meta"] is JsonObject meta && meta["io.modelcontextprotocol/serverInfo"] is JsonObject;
     }
 
     /// <summary>
@@ -47,31 +67,47 @@ internal static class FoundationProtocolPolicy
     /// </summary>
     internal static void CanonicalizeToolList(JsonNode? result)
     {
+        SortByName(result, "tools");
+    }
+
+    /// <summary>
+    /// Sorts a prompts-list result by exact name so discovery is stable across reflection order.
+    /// </summary>
+    internal static void CanonicalizePromptList(JsonNode? result)
+    {
+        SortByName(result, "prompts");
+    }
+
+    /// <summary>
+    /// Sorts the named array of a list result by each item's exact name; an item with no name leaves it unchanged.
+    /// </summary>
+    private static void SortByName(JsonNode? result, string property)
+    {
         if (result is not JsonObject resultObject ||
-            resultObject["tools"] is not JsonArray tools)
+            resultObject[property] is not JsonArray items)
         {
             return;
         }
 
-        List<(string Name, JsonNode Tool)> sorted = [];
-        foreach (JsonNode? tool in tools)
+        List<(string Name, JsonNode Item)> sorted = [];
+        foreach (JsonNode? item in items)
         {
-            if (tool is not JsonObject toolObject ||
-                toolObject["name"] is not JsonValue nameValue ||
+            if (item is not JsonObject itemObject ||
+                itemObject["name"] is not JsonValue nameValue ||
                 !nameValue.TryGetValue(out string? name) ||
                 string.IsNullOrWhiteSpace(name))
             {
                 return;
             }
 
-            sorted.Add((name, tool));
+            sorted.Add((name, item));
         }
 
         sorted.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
-        tools.Clear();
-        foreach ((string _, JsonNode tool) in sorted)
+        items.Clear();
+        foreach ((string _, JsonNode item) in sorted)
         {
-            tools.Add(tool);
+            items.Add(item);
         }
     }
 }

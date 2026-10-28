@@ -304,7 +304,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter-query "/*/*/FoundationArchitectureTests/SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource"
+        -- --filter-query "/*/*/FoundationArchitectureTests/SourceSurface_ContainsOnlyApprovedCapabilityToolsResourceAndPrompts"
 
   ci:
     desc: Run the CI validation suite
@@ -330,7 +330,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter-query "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(DeckOnCurveMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)"
+        -- --filter-query "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(DeckOnCurveMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)|(WorkflowPromptsMcpTests)"
 
   install:
     desc: Install the current branch on this workstation

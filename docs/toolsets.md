@@ -110,3 +110,14 @@ Spellbook evidence, not a recommendation about a deck or combo.
 
 Read `mtg://server/capabilities` to inspect the active selection, why a
 toolset is off, and the exact tool count.
+
+## Prompts
+
+The three MCP prompts (`audit-deck`, `build-from-commander`, and
+`compare-decks`) do not belong to a toolset and are listed in every selection,
+because registration is fixed for the session and a prompt costs no model
+context until a user runs it. Their text names only tools of the toolsets that
+need no credentials (`decks`, `scryfall`, `stats`, and `spellbook`). When the
+selection or mode hides a named tool, the prompt tells the agent to say which
+step it skipped and continue. See the README section "Start a workflow with a
+prompt".

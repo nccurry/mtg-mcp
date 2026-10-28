@@ -405,7 +405,7 @@ public sealed class FoundationArchitectureTests
         using JsonDocument manifest = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(RepositoryRoot, "server.json")));
 
-        Assert.Equal("0.10.0", version);
+        Assert.Equal("0.11.0", version);
         Assert.Empty(project.Descendants("PackageVersion"));
         Assert.Contains("VERSION: ''", taskfile, StringComparison.Ordinal);
         Assert.DoesNotContain("-p:PackageVersion", taskfile, StringComparison.Ordinal);
@@ -436,10 +436,10 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies the exact one-resource, eighty-tool, zero-prompt toolset-owned surface.
+    /// Verifies the exact one-resource, 86-tool, three-prompt toolset-owned surface.
     /// </summary>
     [Fact]
-    public void SourceSurface_ContainsOnlyApprovedCapabilityToolsAndResource()
+    public void SourceSurface_ContainsOnlyApprovedCapabilityToolsResourceAndPrompts()
     {
         string sourceRoot = Path.Combine(RepositoryRoot, "src");
         string[] sourceFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
@@ -464,6 +464,8 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
         Assert.Equal(86, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
+        Assert.Equal(3, Regex.Count(source, @"\[McpServerPrompt\("));
+        Assert.Equal(1, Regex.Count(source, @"\.WithPrompts<"));
         Assert.Equal(1, Regex.Count(source, @"\.WithTools\("));
         Assert.Equal(25, Regex.Count(source, @"\.WithRegisteredTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
@@ -588,12 +590,12 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(3, Regex.Count(playgroupManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(2, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
-        Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
+        Assert.Contains("capability.Remove(\"listChanged\")", source, StringComparison.Ordinal);
+        Assert.Contains("\"resources\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);
 
         string[] forbiddenMarkers =
         [
-            "McpServerPrompt",
             "WithToolsFromAssembly",
             "WithPromptsFromAssembly",
             "WithResourcesFromAssembly",
@@ -606,6 +608,25 @@ public sealed class FoundationArchitectureTests
 
         Assert.DoesNotContain("tagger_", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MtgMcp.Tagger", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the MCP smoke test filter in the Taskfile and in the release script name the same E2E classes, and
+    /// that the filter includes the prompt tests.
+    /// </summary>
+    [Fact]
+    public void SmokeFilters_InTaskfileAndReleaseScript_AreTheSame()
+    {
+        Regex filter = new(@"""(/\*/\*/\([A-Za-z]+Tests\)[^""]*)""");
+        string task = File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml"));
+        string script = File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1"));
+
+        Match fromTask = filter.Match(task);
+        Match fromScript = filter.Match(script);
+
+        Assert.True(fromTask.Success && fromScript.Success, "A smoke filter was not found.");
+        Assert.Equal(fromTask.Groups[1].Value, fromScript.Groups[1].Value);
+        Assert.Contains("(WorkflowPromptsMcpTests)", fromTask.Groups[1].Value, StringComparison.Ordinal);
     }
 
     /// <summary>

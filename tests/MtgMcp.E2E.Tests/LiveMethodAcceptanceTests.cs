@@ -2338,7 +2338,7 @@ public sealed class LiveMethodAcceptanceTests
             }
 
             Assert.NotNull(session.Client.ServerCapabilities.Resources);
-            Assert.Null(session.Client.ServerCapabilities.Prompts);
+            Assert.NotNull(session.Client.ServerCapabilities.Prompts);
             IList<McpClientResource> resources = await session.Client.ListResourcesAsync(
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             McpClientResource resource = Assert.Single(resources);

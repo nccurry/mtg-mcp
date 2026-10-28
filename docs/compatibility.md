@@ -22,10 +22,14 @@ The current public MCP contract is:
 - one static `application/json` resource at `mtg://server/capabilities`;
 - a default profile (the same as `all`) of 35/48/48 tools by mode with no
   provider credentials and 59/73/86 tools with Archidekt and Playgroup
-  credentials, plus zero prompts, with the default mode `remote`;
+  credentials, plus three workflow prompts (`audit-deck`,
+  `build-from-commander`, and `compare-decks`), with the default mode `remote`;
 - fixed `default`, `all`, `none`, and explicit toolset selection, with version 8
   of the capabilities-resource schema; and
-- no logging, subscription, or changing-tool-list feature advertisement.
+- no logging, subscription, or changing tool-list, prompt-list, or
+  resource-list feature advertisement; the server removes these from both the
+  initialize result and the `server/discover` result that the pinned protocol
+  uses.
 
 `task smoke:process` is only a one-shot startup/configuration probe.
 `task smoke:mcp` establishes a real MCP session, reads the resource, verifies

@@ -16,7 +16,7 @@ public sealed class FoundationHostingTests
     {
         Assert.Equal("io.github.nccurry/mtg-mcp", FoundationServerIdentity.Name);
         Assert.Equal("mtg-mcp", FoundationServerIdentity.Title);
-        Assert.Equal("0.10.0", FoundationServerIdentity.PackageVersion);
+        Assert.Equal("0.11.0", FoundationServerIdentity.PackageVersion);
         Assert.DoesNotContain('+', FoundationServerIdentity.PackageVersion);
     }
 
@@ -49,6 +49,43 @@ public sealed class FoundationHostingTests
         JsonObject tools = Assert.IsType<JsonObject>(capabilities["tools"]);
         Assert.Null(tools["listChanged"]);
         Assert.True(tools["stableField"]?.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// Verifies the policy also fixes the result of <c>server/discover</c>, which the pinned protocol uses instead of
+    /// initialize: it has <c>supportedVersions</c>, keeps the server information in <c>_meta</c>, and has no
+    /// top-level <c>serverInfo</c>. Logging and every list-changed claim are removed; other fields stay.
+    /// </summary>
+    [Fact]
+    public void ProtocolPolicy_FixesTheDiscoverResult()
+    {
+        JsonObject result = JsonNode.Parse("""
+            {
+              "supportedVersions": ["2026-07-28"],
+              "capabilities": {
+                "logging": {},
+                "prompts": { "listChanged": true },
+                "resources": { "listChanged": true, "subscribe": false },
+                "tools": { "listChanged": true }
+              },
+              "_meta": { "io.modelcontextprotocol/serverInfo": { "name": "x", "version": "1" } }
+            }
+            """)!.AsObject();
+        JsonObject withoutMarkers = JsonNode.Parse("""
+            { "capabilities": { "logging": {}, "prompts": { "listChanged": true } } }
+            """)!.AsObject();
+
+        FoundationProtocolPolicy.RemoveUnsupportedImplicitCapabilities(result);
+        FoundationProtocolPolicy.RemoveUnsupportedImplicitCapabilities(withoutMarkers);
+
+        JsonObject capabilities = Assert.IsType<JsonObject>(result["capabilities"]);
+        Assert.Null(capabilities["logging"]);
+        Assert.Null(capabilities["prompts"]!["listChanged"]);
+        Assert.Null(capabilities["tools"]!["listChanged"]);
+        Assert.Null(capabilities["resources"]!["listChanged"]);
+        Assert.False(capabilities["resources"]!["subscribe"]!.GetValue<bool>());
+        Assert.NotNull(result["_meta"]);
+        Assert.NotNull(withoutMarkers["capabilities"]!["logging"]);
     }
 
     /// <summary>
