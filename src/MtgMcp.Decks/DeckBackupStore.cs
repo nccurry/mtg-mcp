@@ -288,7 +288,7 @@ public sealed class DeckBackupStore
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             int version = await DeckDatabase.GetSchemaVersionAsync(connection, cancellationToken)
                 .ConfigureAwait(false);
-            if (version != DeckDatabase.SchemaVersion)
+            if (version is < 1 || version > DeckDatabase.SchemaVersion)
             {
                 return new OperationUnsupported(
                     "backup-schema-mismatch",
@@ -480,7 +480,7 @@ public sealed class DeckBackupStore
             cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidDataException("The local deck backup manifest is invalid.");
         if (manifest.BackupId == Guid.Empty ||
-            manifest.SchemaVersion != DeckDatabase.SchemaVersion ||
+            manifest.SchemaVersion < 1 || manifest.SchemaVersion > DeckDatabase.SchemaVersion ||
             string.IsNullOrWhiteSpace(manifest.Fingerprint) ||
             manifest.DeckCount < 0)
         {

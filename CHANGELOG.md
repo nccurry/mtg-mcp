@@ -10,6 +10,10 @@
   -32022 and clients that use it (Claude Code) connected with no tools. The pin is removed: `initialize` now succeeds
   for the versions the SDK serves, `server/discover` on `2026-07-28` still works, and the capabilities still omit
   `logging` and `listChanged`. This supersedes the `0.10.0` decision to accept only `2026-07-28`.
+- Fixed pulling an Archidekt deck whose categories differ only by case (for example `Sideboard` and `SIDEBOARD`). The
+  local database treated those names as the same and the apply failed with a generic constraint error. Category names
+  are now case-sensitive, as on Archidekt; an existing database is upgraded on first use (a copy is kept first), and
+  local constraint errors now name the cause (duplicate category name, duplicate entry ID, and so on).
 
 ### Seeded simulation (breaking)
 

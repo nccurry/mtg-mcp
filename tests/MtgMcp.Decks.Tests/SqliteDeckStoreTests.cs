@@ -134,7 +134,7 @@ public sealed class SqliteDeckStoreTests
             new DeckCreateRequest("Deck", Categories: [new DeckCategoryDraft(" ")]),
             new DeckCreateRequest(
                 "Deck",
-                Categories: [new DeckCategoryDraft("Same"), new DeckCategoryDraft("same")]),
+                Categories: [new DeckCategoryDraft("Same"), new DeckCategoryDraft("Same")]),
             new DeckCreateRequest(
                 "Deck",
                 Entries: [new DeckEntryDraft(1, "Card", EntryId: entryId)],
@@ -298,7 +298,7 @@ public sealed class SqliteDeckStoreTests
 
         await AssertSingleRowAsync(connection, """
             SELECT version, applied_at_utc, application_version, checksum
-            FROM schema_migrations;
+            FROM schema_migrations WHERE version=1;
             """, reader =>
         {
             Assert.Equal(1L, reader.GetInt64(0));
@@ -393,7 +393,7 @@ public sealed class SqliteDeckStoreTests
         Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM deck_entry_categories;"));
         Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM provider_bindings;"));
         Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM sync_baselines;"));
-        Assert.Equal(1L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM schema_migrations;"));
+        Assert.Equal(2L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM schema_migrations;"));
     }
 
     /// <summary>
@@ -675,7 +675,7 @@ public sealed class SqliteDeckStoreTests
         Assert.Equal(1L, await ScalarInt64Async(connection, "PRAGMA foreign_keys;"));
         Assert.Equal("wal", await ScalarStringAsync(connection, "PRAGMA journal_mode;"));
         Assert.Equal(5000L, await ScalarInt64Async(connection, "PRAGMA busy_timeout;"));
-        Assert.Equal(1L, await ScalarInt64Async(connection, "SELECT MAX(version) FROM schema_migrations;"));
+        Assert.Equal(2L, await ScalarInt64Async(connection, "SELECT MAX(version) FROM schema_migrations;"));
         Assert.Matches(
             "^[0-9a-f]{64}$",
             await ScalarStringAsync(connection, "SELECT checksum FROM schema_migrations WHERE version=1;"));
@@ -703,7 +703,7 @@ public sealed class SqliteDeckStoreTests
             writable: true,
             TestContext.Current.CancellationToken);
         SqliteMigration migration = new(
-            2,
+            DeckDatabase.SchemaVersion + 1,
             true,
             "ALTER TABLE decks ADD COLUMN note TEXT; SELECT * FROM missing_table;");
 
@@ -714,7 +714,7 @@ public sealed class SqliteDeckStoreTests
                 DateTimeOffset.UtcNow,
                 "0.9.0-preview.1",
                 TestContext.Current.CancellationToken));
-        Assert.Equal(1, await DeckDatabase.GetSchemaVersionAsync(
+        Assert.Equal(DeckDatabase.SchemaVersion, await DeckDatabase.GetSchemaVersionAsync(
             connection,
             TestContext.Current.CancellationToken));
         Assert.Equal(

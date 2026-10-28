@@ -221,6 +221,59 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies a remote deck with categories that differ only by case previews, applies, and plans no push change.
+    /// </summary>
+    [Fact]
+    public async Task PullApply_WithCategoriesThatDifferOnlyByCase_KeepsBothAndPlansNoPush()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string deck = RemoteDeck
+            .Replace(
+                "{ \"id\": 10, \"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0 }",
+                "{ \"id\": 10, \"name\": \"Mainboard\", \"includedInDeck\": true, \"includedInPrice\": true, \"sortOrder\": 0 }," +
+                "{ \"id\": 11, \"name\": \"Sideboard\", \"includedInDeck\": false, \"includedInPrice\": true, \"sortOrder\": 1 }," +
+                "{ \"id\": 12, \"name\": \"SIDEBOARD\", \"includedInDeck\": false, \"includedInPrice\": true, \"sortOrder\": 2 }",
+                StringComparison.Ordinal)
+            .Replace(
+                "\"categories\": [\"Mainboard\"]",
+                "\"categories\": [\"Mainboard\", \"SIDEBOARD\"]",
+                StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            for (int index = 0; index < 4; index++)
+            {
+                handler.Add(HttpMethod.Get, "api/decks/42/", deck);
+            }
+
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+
+            DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+            ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                localDeckId,
+                TestContext.Current.CancellationToken));
+
+            Assert.Equal(
+                ["Mainboard", "SIDEBOARD", "Sideboard"],
+                local.Categories.Select(category => category.Name).Order(StringComparer.Ordinal));
+            Assert.Empty(push.Operations);
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]

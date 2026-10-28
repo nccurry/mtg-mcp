@@ -12,7 +12,7 @@ internal sealed class DeckDatabase
     /// <summary>
     /// Identifies the schema understood by this assembly.
     /// </summary>
-    internal const int SchemaVersion = 1;
+    internal const int SchemaVersion = 2;
 
     /// <summary>
     /// Bounds lock waits so callers receive an explicit unavailable result.
@@ -88,12 +88,39 @@ internal sealed class DeckDatabase
         """;
 
     /// <summary>
+    /// Rebuilds the category table so names are unique per deck as exact text. Version 1 compared names without
+    /// regard to case, but Archidekt allows two categories whose names differ only by case.
+    /// </summary>
+    private const string SchemaV2Sql = """
+        CREATE TABLE deck_categories_v2 (
+            category_id TEXT PRIMARY KEY,
+            deck_id TEXT NOT NULL REFERENCES decks(deck_id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            color TEXT NULL,
+            sort_order INTEGER NOT NULL,
+            UNIQUE (deck_id, name)
+        );
+        INSERT INTO deck_categories_v2 (category_id, deck_id, name, color, sort_order)
+            SELECT category_id, deck_id, name, color, sort_order FROM deck_categories;
+        DROP TABLE deck_categories;
+        ALTER TABLE deck_categories_v2 RENAME TO deck_categories;
+        """;
+
+    /// <summary>
     /// Defines the exact first migration and its computed content fingerprint.
     /// </summary>
     private static readonly SqliteMigration SchemaV1Migration = new(
         1,
         IsDestructive: false,
         SchemaV1Sql);
+
+    /// <summary>
+    /// Defines the case-sensitive category name migration.
+    /// </summary>
+    private static readonly SqliteMigration SchemaV2Migration = new(
+        2,
+        IsDestructive: false,
+        SchemaV2Sql);
 
     /// <summary>
     /// Gets the private database location for same-assembly backup operations.
@@ -138,6 +165,16 @@ internal sealed class DeckDatabase
             await ApplyMigrationAsync(
                 connection,
                 SchemaV1Migration,
+                appliedAtUtc,
+                applicationVersion,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (currentVersion < 2)
+        {
+            await ApplyMigrationAsync(
+                connection,
+                currentVersion == 1 ? SchemaV2Migration with { IsDestructive = true } : SchemaV2Migration,
                 appliedAtUtc,
                 applicationVersion,
                 cancellationToken).ConfigureAwait(false);
@@ -214,20 +251,28 @@ internal sealed class DeckDatabase
         CancellationToken cancellationToken)
     {
         int version = await GetSchemaVersionAsync(connection, cancellationToken).ConfigureAwait(false);
-        if (version != SchemaVersion)
+        if (version is not (1 or 2))
         {
             throw new InvalidDataException("The local deck database uses an unsupported schema.");
         }
 
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT checksum FROM schema_migrations WHERE version=$version;";
-        command.Parameters.AddWithValue("$version", SchemaVersion);
-        string checksum = Convert.ToString(
-            await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
-            System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
-        if (!checksum.Equals(SchemaV1Migration.Checksum, StringComparison.Ordinal))
+        foreach (SqliteMigration migration in new[] { SchemaV1Migration, SchemaV2Migration })
         {
-            throw new InvalidDataException("The local deck database uses an unsupported schema.");
+            if (migration.Version > version)
+            {
+                continue;
+            }
+
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT checksum FROM schema_migrations WHERE version=$version;";
+            command.Parameters.AddWithValue("$version", migration.Version);
+            string checksum = Convert.ToString(
+                await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+            if (!checksum.Equals(migration.Checksum, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("The local deck database uses an unsupported schema.");
+            }
         }
     }
 
@@ -250,6 +295,7 @@ internal sealed class DeckDatabase
             await CreatePreMigrationBackupAsync(connection, cancellationToken).ConfigureAwait(false);
         }
 
+        await SetForeignKeysAsync(connection, enabled: false, cancellationToken).ConfigureAwait(false);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
@@ -277,6 +323,23 @@ internal sealed class DeckDatabase
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+        finally
+        {
+            await SetForeignKeysAsync(connection, enabled: true, CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Turns foreign key enforcement on or off for a connection; it cannot change inside a transaction.
+    /// </summary>
+    private static async Task SetForeignKeysAsync(
+        SqliteConnection connection,
+        bool enabled,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = enabled ? "PRAGMA foreign_keys=ON;" : "PRAGMA foreign_keys=OFF;";
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

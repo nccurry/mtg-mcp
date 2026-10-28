@@ -853,8 +853,7 @@ public sealed class SqliteDeckStore : IDisposable
             SqliteException { SqliteErrorCode: 5 or 6 } => new OperationUnavailable(
                 "deck-database-busy",
                 "The local deck database is busy."),
-            SqliteException { SqliteErrorCode: 19 } => Invalid<T>(
-                "The requested deck change violates a local constraint."),
+            SqliteException { SqliteErrorCode: 19 } constraint => Invalid<T>(DescribeConstraint(constraint)),
             SqliteException => new OperationUnavailable(
                 "deck-database-unavailable",
                 "The local deck database is unavailable."),
@@ -865,6 +864,37 @@ public sealed class SqliteDeckStore : IDisposable
                 "deck-storage-unavailable",
                 "Local deck storage is unavailable."),
         };
+    }
+
+    /// <summary>
+    /// Names the violated constraint in plain words, from the table and columns SQLite reports.
+    /// </summary>
+    internal static string DescribeConstraint(SqliteException exception)
+    {
+        string message = exception.Message;
+        if (message.Contains("deck_categories.deck_id, deck_categories.name", StringComparison.Ordinal))
+        {
+            return "Two categories of one deck have the same name; category names are unique per deck.";
+        }
+
+        if (message.Contains("deck_entries.entry_id", StringComparison.Ordinal))
+        {
+            return "An entry ID is already used by an entry of a local deck; entry IDs are unique across local decks.";
+        }
+
+        if (message.Contains("provider_bindings", StringComparison.Ordinal))
+        {
+            return "The deck already has a binding to this provider deck.";
+        }
+
+        if (message.Contains("deck_entry_categories", StringComparison.Ordinal))
+        {
+            return "An entry has more than one primary category or repeats a category.";
+        }
+
+        int index = message.IndexOf("failed: ", StringComparison.Ordinal);
+        string detail = index < 0 ? string.Empty : " (" + message[(index + 8)..].Trim() + ")";
+        return "The requested deck change violates a local constraint" + detail + ".";
     }
 
     /// <summary>

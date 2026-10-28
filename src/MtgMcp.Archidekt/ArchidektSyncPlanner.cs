@@ -279,13 +279,11 @@ public static class ArchidektSyncPlanner
                 CurrentEntry: null));
         }
 
-        Dictionary<string, RemoteDeckCategory> currentCategories = current.Categories
-            .ToDictionary(value => value.Name, StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, RemoteDeckCategory> targetCategories = target.Categories
-            .ToDictionary(value => value.Name, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RemoteDeckCategory> currentCategories = CategoryNames.Index(current.Categories, value => value.Name);
+        Dictionary<string, RemoteDeckCategory> targetCategories = CategoryNames.Index(target.Categories, value => value.Name);
         foreach (RemoteDeckCategory targetCategory in target.Categories)
         {
-            if (!currentCategories.TryGetValue(targetCategory.Name, out RemoteDeckCategory? currentCategory))
+            if (!CategoryNames.TryFind(currentCategories, targetCategory.Name, out RemoteDeckCategory? currentCategory))
             {
                 planned.Add(new ArchidektPlannedOperation(
                     new ArchidektRemoteOperation(sequence++, "category-create", targetCategory.Name, "Create one category."),
@@ -307,7 +305,7 @@ public static class ArchidektSyncPlanner
 
         foreach (RemoteDeckCategory currentCategory in current.Categories)
         {
-            if (!targetCategories.ContainsKey(currentCategory.Name))
+            if (!CategoryNames.TryFind(targetCategories, currentCategory.Name, out _))
             {
                 planned.Add(new ArchidektPlannedOperation(
                     new ArchidektRemoteOperation(sequence++, "category-delete", currentCategory.Name, "Delete one unused category."),
@@ -434,7 +432,7 @@ public static class ArchidektSyncPlanner
             entryRelationIds.Add(matched?.ProviderRelationId);
         }
 
-        Dictionary<string, string> verifiedCategories = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> verifiedCategories = new(StringComparer.Ordinal);
         foreach (RemoteDeckCategory category in verified.Categories)
         {
             if (!string.IsNullOrWhiteSpace(category.ProviderCategoryId))
@@ -446,7 +444,7 @@ public static class ArchidektSyncPlanner
         List<string?> categoryIds = [];
         foreach (RemoteDeckCategory category in target.Categories)
         {
-            categoryIds.Add(verifiedCategories.GetValueOrDefault(category.Name));
+            categoryIds.Add(CategoryNames.TryFind(verifiedCategories, category.Name, out string? verifiedId) ? verifiedId : null);
         }
 
         return new ArchidektRowLinks(entryRelationIds, categoryIds);

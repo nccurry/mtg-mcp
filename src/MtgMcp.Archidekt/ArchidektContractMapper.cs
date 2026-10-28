@@ -46,9 +46,7 @@ internal static class ArchidektJsonContract
         List<RemoteDeckCategory> categories = MapCategories(deck);
         Dictionary<string, RemoteDeckCategory> categoriesById = categories
             .ToDictionary(value => value.ProviderCategoryId, StringComparer.Ordinal);
-        Dictionary<string, RemoteDeckCategory> categoriesByName = categories
-            .GroupBy(value => value.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RemoteDeckCategory> categoriesByName = CategoryNames.Index(categories, value => value.Name);
         List<RemoteDeckEntry> entries = MapEntries(deck, categoriesById, categoriesByName);
         Dictionary<string, JsonElement> extensions = CopyUnknown(deck, KnownDeckFields);
         string sourceChecksum = ArchidektContract.Hash(sourceJson);
@@ -444,10 +442,10 @@ internal static class ArchidektJsonContract
 
             string resolved = categoriesById.TryGetValue(candidate, out RemoteDeckCategory? byId)
                 ? byId.Name
-                : categoriesByName.TryGetValue(candidate, out RemoteDeckCategory? byName)
+                : CategoryNames.TryFind(categoriesByName, candidate, out RemoteDeckCategory? byName)
                     ? byName.Name
                     : candidate;
-            if (!names.Contains(resolved, StringComparer.OrdinalIgnoreCase))
+            if (!names.Contains(resolved, StringComparer.Ordinal))
             {
                 names.Add(resolved);
             }
@@ -466,7 +464,7 @@ internal static class ArchidektJsonContract
         foreach (string name in names)
         {
             if (name.Equals("commander", StringComparison.OrdinalIgnoreCase) ||
-                (categoriesByName.TryGetValue(name, out RemoteDeckCategory? category) && category.IsPremier))
+                (CategoryNames.TryFind(categoriesByName, name, out RemoteDeckCategory? category) && category.IsPremier))
             {
                 return "commander";
             }

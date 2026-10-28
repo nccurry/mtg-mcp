@@ -19,7 +19,7 @@ public static class ArchidektLocalMapper
         ArgumentNullException.ThrowIfNull(remote);
         ArgumentNullException.ThrowIfNull(binding);
         List<DeckCategoryDraft> categories = [];
-        Dictionary<string, Guid> categoryIds = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Guid> categoryIds = new(StringComparer.Ordinal);
         foreach (RemoteDeckCategory category in remote.Categories)
         {
             Guid categoryId = ArchidektContract.StableGuid("category", category.ProviderCategoryId);
@@ -50,14 +50,12 @@ public static class ArchidektLocalMapper
                 entryId));
             foreach (string categoryName in entry.CategoryNames)
             {
-                if (categoryIds.TryGetValue(categoryName, out Guid categoryId))
+                if (CategoryNames.TryFind(categoryIds, categoryName, out Guid categoryId))
                 {
                     assignments.Add(new DeckCategoryAssignment(
                         entryId,
                         categoryId,
-                        entry.PrimaryCategoryName?.Equals(
-                            categoryName,
-                            StringComparison.OrdinalIgnoreCase) == true));
+                        CategoryNames.SameName(entry.PrimaryCategoryName, categoryName, categoryIds)));
                 }
             }
         }

@@ -69,7 +69,7 @@ public sealed class DeckBackupReadTests
         OperationUnsupported unsupported = Assert.IsType<OperationUnsupported>(result.Value);
         Assert.Equal("backup-schema-mismatch", unsupported.ReasonCode);
         Assert.Contains("version 0", unsupported.Message, StringComparison.Ordinal);
-        Assert.Contains("version 1", unsupported.Message, StringComparison.Ordinal);
+        Assert.Contains($"version {DeckDatabase.SchemaVersion}", unsupported.Message, StringComparison.Ordinal);
         Assert.Equal(before, HashOf(path));
     }
 
@@ -157,7 +157,7 @@ public sealed class DeckBackupReadTests
         {
             await connection.OpenAsync(TestContext.Current.CancellationToken);
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "UPDATE schema_migrations SET version = $version;";
+            command.CommandText = "DELETE FROM schema_migrations WHERE version > 1; UPDATE schema_migrations SET version = $version;";
             command.Parameters.AddWithValue("$version", version);
             await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
