@@ -122,6 +122,13 @@ internal sealed class SimulationTrial
     internal bool KeepDeckOrder { get; init; }
 
     /// <summary>
+    /// Gets the elementary operations this runner has done, counted the way the planner estimates them: each step of
+    /// a hand or mana scan, and symbols times units for each payment test. It lets a test hold the estimate to the
+    /// real work.
+    /// </summary>
+    internal long WorkDone { get; private set; }
+
+    /// <summary>
     /// Creates a trial runner for one plan and one random sequence.
     /// </summary>
     internal SimulationTrial(SimulationPlan plan, SplitMix64Random random, CancellationToken cancellationToken)
@@ -414,6 +421,7 @@ internal sealed class SimulationTrial
     /// </summary>
     private int FirstListed(int group)
     {
+        WorkDone += hand.Count;
         int best = -1;
         for (int index = 0; index < hand.Count; index++)
         {
@@ -441,6 +449,7 @@ internal sealed class SimulationTrial
         int bestIndex = -1;
         int bestSpecific = 0;
         int bestTotal = 0;
+        WorkDone += hand.Count;
         for (int index = 0; index < hand.Count; index++)
         {
             int entry = plan.CardEntry[hand[index]];
@@ -456,6 +465,7 @@ internal sealed class SimulationTrial
                 AddUnits(entry, rule.AddsMana);
             }
 
+            WorkDone += (cost.SpecificSymbolCount + 1L) * (units.Count + 1L);
             OnCurvePaymentAnalysis payment = OnCurveManaPayment.Analyze(cost, units, scratchArrays, spent);
             if (bestIndex < 0 ||
                 IsBetter(payment, entry, rule, bestSpecific, bestTotal, plan.CardEntry[hand[bestIndex]]))
@@ -503,6 +513,7 @@ internal sealed class SimulationTrial
     /// </summary>
     private int CountInHand(int group)
     {
+        WorkDone += hand.Count;
         int count = 0;
         foreach (int card in hand)
         {
@@ -520,6 +531,7 @@ internal sealed class SimulationTrial
     /// </summary>
     private int HandIndexOf(int group, int nth)
     {
+        WorkDone += hand.Count;
         for (int index = 0; index < hand.Count; index++)
         {
             if (plan.EntryGroup[plan.CardEntry[hand[index]]] == group && nth-- == 0)
@@ -536,6 +548,7 @@ internal sealed class SimulationTrial
     /// </summary>
     private int ReadyUnits(int turn)
     {
+        WorkDone += producers.Count;
         int total = 0;
         foreach (ManaProducer producer in producers)
         {
@@ -553,6 +566,7 @@ internal sealed class SimulationTrial
     /// </summary>
     private void FillUnits(int turn)
     {
+        WorkDone += producers.Count + 1;
         units.Clear();
         foreach (ManaProducer producer in producers)
         {
@@ -620,6 +634,7 @@ internal sealed class SimulationTrial
         }
 
         FillUnits(turn);
+        WorkDone += (leaf.Cost!.SpecificSymbolCount + 1L) * (units.Count + 1L);
         return OnCurveManaPayment.Analyze(leaf.Cost!, units, scratchArrays, spent).IsComplete;
     }
 

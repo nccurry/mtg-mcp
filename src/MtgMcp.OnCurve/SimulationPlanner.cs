@@ -98,7 +98,7 @@ internal sealed class SimulationPlanner
             return OperationFailure.Forward<SimulationCheckNode[], SimulationPlan>(conditions);
         }
 
-        OperationInvalidInput? budget = CheckOperations(rulePlans.Data);
+        OperationInvalidInput? budget = CheckOperations(rulePlans.Data, out long estimatedOperations);
         if (budget is not null)
         {
             return budget;
@@ -117,7 +117,10 @@ internal sealed class SimulationPlanner
             mulliganPlan.Data,
             [.. request.Conditions.Select(condition => condition.Id)],
             roots.Data,
-            [.. leaves]));
+            [.. leaves])
+        {
+            EstimatedOperations = estimatedOperations,
+        });
     }
 
     /// <summary>
@@ -227,8 +230,9 @@ internal sealed class SimulationPlanner
     /// the cards of its group), and a payment test for each <c>can-cast</c> check and, at each firing, for each
     /// candidate of a <c>target-first</c> rule, each costing about symbols times units of mana.
     /// </summary>
-    private OperationInvalidInput? CheckOperations(SimulationRulePlan[] rules)
+    private OperationInvalidInput? CheckOperations(SimulationRulePlan[] rules, out long estimate)
     {
+        estimate = 0;
         long copies = request.Deck.Sum(entry => (long)entry.Quantity);
         long units = 0;
         foreach (SimulationRulePlan rule in rules)
@@ -253,9 +257,9 @@ internal sealed class SimulationPlanner
         long[] firings = new long[rules.Length];
         for (int index = 0; index < rules.Length; index++)
         {
-            // Each firing scans the hand for the group and, for a rule that costs mana, the producers in play.
+            // Each firing scans the hand twice (count, then pick) and the producers in play.
             firings[index] = Math.Min(Math.Min((long)rules[index].MaxPerTurn, GroupCards(rules[index].Group)), copies);
-            perTurn += firings[index] * (copies + payment);
+            perTurn += firings[index] * ((2 * copies) + payment);
         }
 
         foreach (SimulationLeafPlan leaf in leaves)
@@ -279,6 +283,7 @@ internal sealed class SimulationPlanner
 
         long mulligans = (request.OpeningHand.Mulligan?.MaxMulligans ?? 0) + 1;
         long operations = request.Samples * ((request.Turns * perTurn) + (mulligans * copies));
+        estimate = operations;
         if (operations <= SimulationLimits.MaximumOperations)
         {
             return null;

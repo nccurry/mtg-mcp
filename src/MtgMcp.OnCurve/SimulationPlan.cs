@@ -176,4 +176,10 @@ internal sealed record SimulationPlan(
     SimulationMulliganPlan? Mulligan,
     string[] ConditionIds,
     SimulationCheckNode[] ConditionRoots,
-    SimulationLeafPlan[] Leaves);
+    SimulationLeafPlan[] Leaves)
+{
+    /// <summary>
+    /// Gets the planner's estimate of the elementary operations the whole run needs, the figure the limit checks.
+    /// </summary>
+    internal long EstimatedOperations { get; init; }
+}

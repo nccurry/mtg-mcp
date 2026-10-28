@@ -37,6 +37,7 @@ public sealed class SimulationBudgetTests
     /// Verifies the largest sample count the planner accepts for the heaviest shape finishes within seconds.
     /// </summary>
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void HeaviestShape_AtTheLimit_FinishesQuickly()
     {
         int low = 1;
@@ -155,10 +156,42 @@ public sealed class SimulationBudgetTests
     }
 
     /// <summary>
+    /// Verifies, without a clock, that the planner's estimate is at least the work a run counts for each risky shape:
+    /// many firings a turn, a target-first rule that fires many times, and many costly checks.
+    /// </summary>
+    [Theory]
+    [InlineData("firing", 20)]
+    [InlineData("target-first", 1)]
+    [InlineData("heavy", 5)]
+    public void Estimate_IsAtLeastTheCountedWork(string shape, int samples)
+    {
+        SimulationRequest request = shape switch
+        {
+            "firing" => FiringShape(samples),
+            "target-first" => TargetFirstShape(samples),
+            _ => Heavy(samples),
+        };
+        SimulationPlan plan = Assert.IsType<OperationSuccess<SimulationPlan>>(SimulationPlanner.Plan(request).Value).Data;
+        SimulationTrial trial = new(plan, new SplitMix64Random(7), CancellationToken.None);
+
+        for (int sample = 0; sample < samples; sample++)
+        {
+            _ = trial.Run(sample, record: false);
+        }
+
+        Assert.True(trial.WorkDone > 0);
+        Assert.True(
+            trial.WorkDone <= plan.EstimatedOperations,
+            $"counted {trial.WorkDone} operations, estimate {plan.EstimatedOperations}");
+    }
+
+    /// <summary>
     /// Verifies a rule that fires 99 times a turn is charged for every firing, so the largest accepted request still
-    /// finishes in seconds (it took 48.8 seconds when firings were not counted).
+    /// finishes in seconds. Without the firing charge a probe measured 48.8 seconds and this test 45.8 seconds. The time
+    /// is a benchmark; the deterministic check is <see cref="Estimate_IsAtLeastTheCountedWork"/>.
     /// </summary>
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void ManyFiringsPerTurn_AtTheLimit_FinishQuickly()
     {
         Assert.InRange(SecondsAtTheLimit(FiringShape), 0, 20);
@@ -166,9 +199,10 @@ public sealed class SimulationBudgetTests
 
     /// <summary>
     /// Verifies a target-first rule that fires many times is charged for the candidate loop at every firing (it took
-    /// 23.2 seconds when it was charged once).
+    /// a probe measured 23.2 seconds and this test 31.5 seconds when it was charged once).
     /// </summary>
     [Fact]
+    [Trait("Category", "Benchmark")]
     public void TargetFirstFiringManyTimes_AtTheLimit_FinishesQuickly()
     {
         Assert.InRange(SecondsAtTheLimit(TargetFirstShape), 0, 20);
