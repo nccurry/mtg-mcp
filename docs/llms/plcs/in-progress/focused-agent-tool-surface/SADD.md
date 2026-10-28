@@ -1109,7 +1109,9 @@ phase 6 evidence row of the README.
   if an integer type other than `int` or `long` appears.
 - **Pass 2 simulation repair.** The operation estimate charges every firing of
   every rule (see the work limits above); `SimulationBudgetTests` runs the two
-  shapes that took 48.8 and 23.2 seconds as at-limit tests. `WithExtraGeneric`
+  shapes that a probe measured at 48.8 and 23.2 seconds as at-limit benchmark tests (45.8 and 31.5 seconds as tests
+  before the fix). The planner keeps the estimate on the plan (`EstimatedOperations`), the trial counts its own work
+  (`WorkDone`), and `Estimate_IsAtLeastTheCountedWork` holds the estimate to the count with no clock. `WithExtraGeneric`
   and `CoversFullCost` were test-only and are deleted.
 
 

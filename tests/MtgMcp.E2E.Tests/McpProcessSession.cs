@@ -1,4 +1,3 @@
-using ModelContextProtocol;
 using ModelContextProtocol.Client;
 
 namespace MtgMcp.E2E.Tests;
@@ -253,29 +252,17 @@ internal sealed class McpProcessSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrWhiteSpace(protocolVersion);
 
-        // A server process that starts slowly on a loaded machine can miss the client's first probe, and the client
-        // then reports the version as unsupported. A fresh process is tried again; a real mismatch fails every time.
-        const int maximumAttempts = 3;
-        for (int attempt = 1; ; attempt++)
-        {
-            StdioClientTransport transport = new(options);
-            try
+        StdioClientTransport transport = new(options);
+        return await McpClient.CreateAsync(
+            transport,
+            new McpClientOptions
             {
-                return await McpClient.CreateAsync(
-                    transport,
-                    new McpClientOptions
-                    {
-                        ProtocolVersion = protocolVersion,
-                    },
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            catch (McpException exception) when (
-                attempt < maximumAttempts &&
-                exception.Message.Contains("does not support the requested protocol version", StringComparison.Ordinal))
-            {
-                // The failed client has already stopped its process; the next attempt starts a new one.
-            }
-        }
+                ProtocolVersion = protocolVersion,
+                // The default 5 second probe can expire while a server process starts on a loaded machine, and the
+                // client then reports the version as unsupported. This server speaks 2026-07-28, so wait for it.
+                DiscoverProbeTimeout = Timeout.InfiniteTimeSpan,
+            },
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

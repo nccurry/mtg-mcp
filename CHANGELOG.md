@@ -55,7 +55,7 @@
 - Breaking: the local deck database moves to schema 2 the first time 0.12.0 opens it for writing, and this cannot be
   undone. 0.11.0 cannot open the upgraded database or restore a backup made by 0.12.0. A copy made just before the
   upgrade is kept as `backups/decks/pre-migration-*.db` in the data folder; restoring it into 0.11.0 means copying it
-  over `decks.db` with the server stopped.
+  over `decks.db` with the server stopped and deleting `decks.db-wal` and `decks.db-shm` beside it.
 - A new difference state, `converged`, can appear in `archidekt_diff`, `archidekt_pull_preview`, and
   `archidekt_push_preview`. Clients that switch on the state strings must treat it as "both sides made the same change".
 - New failure reasons: `entry-zone-contradicts-category` (from `archidekt_push_preview` and `archidekt_push_apply`) and
