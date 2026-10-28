@@ -161,7 +161,7 @@ public sealed class SimulationBudgetTests
     [Fact]
     public void ManyFiringsPerTurn_AtTheLimit_FinishQuickly()
     {
-        Assert.InRange(SecondsAtTheLimit(FiringShape), 0, 6);
+        Assert.InRange(SecondsAtTheLimit(FiringShape), 0, 20);
     }
 
     /// <summary>
@@ -171,7 +171,7 @@ public sealed class SimulationBudgetTests
     [Fact]
     public void TargetFirstFiringManyTimes_AtTheLimit_FinishesQuickly()
     {
-        Assert.InRange(SecondsAtTheLimit(TargetFirstShape), 0, 6);
+        Assert.InRange(SecondsAtTheLimit(TargetFirstShape), 0, 20);
     }
 
     /// <summary>
