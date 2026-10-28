@@ -150,6 +150,7 @@ or authorized drafts. Their durable idea notes and promotion rules live in
 | `local-scryfall-query-engine` | Differentially verified local Scryfall query evaluation with explicit coverage and provider fallback whenever parity is unproven. |
 | `focused-agent-tool-surface` (owner decision, 2026-10-28) | Commander rule facts in `local_deck_validate` reverse the `0.9.0` "no legality behavior" rule: the tool reports facts (deck size, singleton, color identity, commanders, pairing, companion, Game Changers) from installed Scryfall data and issues no legal or illegal verdict. Approved with the PLC. |
 | `focused-agent-tool-surface` (owner decision, 2026-10-28) | Commander Spellbook `/estimate-bracket` is used factually by `spellbook_deck_bracket_facts_get`: it returns the Game Changer, mass land denial, extra turn and combo flags and drops the provider `bracketTag` verdict. Approved with the PLC. |
+| `focused-agent-tool-surface` (owner decision, 2026-10-25; recorded 2026-10-28) | Caller-ruled sampling answers the `experimental-goldfish-feasibility` decision for one narrow case: `stats_simulate` runs seeded samples of rules the caller states in the request (groups, opening-hand and per-turn rules, conditions, and the fixed engine rules in the PLC design). It replaces `local_deck_on_curve_estimate`, and the server picks no strategy, role, or mulligan. Full-game goldfish play, a rules engine, and card-text interpretation stay deferred under the original `experimental-goldfish-feasibility` row. Approved with the PLC. |
 
 ## Project And Surface Impact
 
