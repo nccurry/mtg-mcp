@@ -232,6 +232,42 @@ public sealed class ScryfallReferenceToolTests
     }
 
     /// <summary>
+    /// Verifies a page size outside the allowed range, or too large for raw output, is refused before the card is
+    /// resolved, so the provider is never called.
+    /// </summary>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(101, false)]
+    [InlineData(26, true)]
+    public async Task CardDetails_BadPageSize_FailsBeforeAnyProviderCall(int pageSize, bool includeRaw)
+    {
+        using TemporaryDirectory temporary = new();
+        int providerCalls = 0;
+        using ScryfallService service = new(
+            Path.Combine(temporary.Path, "data"),
+            allowLocalWrites: true,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
+            ScryfallTestFixture.ApiBaseUri,
+            handler: ScryfallTestFixture.Provider(intercept: request =>
+            {
+                providerCalls++;
+                return null;
+            }));
+        ScryfallReferenceTools tools = new(service);
+
+        OperationResult<ScryfallCardDetailsResult> result = await tools.GetCardDetailsAsync(
+            WhiteLookup,
+            ["prints"],
+            includeRaw: includeRaw,
+            pageSize: pageSize,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(0, providerCalls);
+    }
+
+    /// <summary>
     /// Verifies the snapshot tool lists saved snapshots and replays one by ID, with a result that names the kind.
     /// </summary>
     [Fact]
@@ -374,6 +410,41 @@ public sealed class ScryfallReferenceToolTests
         ScryfallCollectionRowResponse row = Assert.Single(response.Page.Items);
         Assert.Equal(("not-found", 0), (row.Status, row.Index));
         Assert.Null(row.Card);
+    }
+
+    /// <summary>
+    /// Verifies a fuzzy-name lookup in cache-only mode with nothing cached returns one not-cached row, like the
+    /// collection path, and never reaches the provider.
+    /// </summary>
+    [Fact]
+    public async Task CardsGet_FuzzyNameLookupCacheOnlyWithNothingCached_ReturnsANotCachedRow()
+    {
+        using TemporaryDirectory temporary = new();
+        int providerCalls = 0;
+        using ScryfallService service = new(
+            Path.Combine(temporary.Path, "data"),
+            allowLocalWrites: true,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
+            ScryfallTestFixture.ApiBaseUri,
+            handler: ScryfallTestFixture.Provider(intercept: request =>
+            {
+                providerCalls++;
+                return null;
+            }));
+        ScryfallReadTools tools = new(service);
+
+        OperationResult<ScryfallCollectionResponse> result = await tools.GetCardsAsync(
+            [new ScryfallCardLookup("fuzzy-name", "venerable knight")],
+            freshnessPolicy: "cache-only",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        ScryfallCollectionResponse response = Assert.IsType<OperationSuccess<ScryfallCollectionResponse>>(
+            result.Value).Data;
+        ScryfallCollectionRowResponse row = Assert.Single(response.Page.Items);
+        Assert.Equal(("not-cached", 0), (row.Status, row.Index));
+        Assert.Null(row.Card);
+        Assert.Equal(0, providerCalls);
     }
 
     /// <summary>

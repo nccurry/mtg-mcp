@@ -37,7 +37,7 @@ internal static class SpellbookToolsetManifest
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(deckStore);
-        builder.WithTools(ToolRegistration.Create(
+        builder.WithRegisteredTools(ToolRegistration.Create(
             new SpellbookReadTools(service, new SpellbookDeckInputResolver(deckStore))));
     }
 }

@@ -322,7 +322,7 @@ public sealed class FoundationArchitectureTests
         foreach (string file in files)
         {
             string text = File.ReadAllText(file);
-            foreach (string statement in FindStatements(text, ".WithTools("))
+            foreach (string statement in FindStatements(text, ".WithRegisteredTools("))
             {
                 registrations++;
                 bool viaHelper = statement.Contains("ToolRegistration.Create(", StringComparison.Ordinal) ||
@@ -464,7 +464,8 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
         Assert.Equal(80, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
-        Assert.Equal(20, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(1, Regex.Count(source, @"\.WithTools\("));
+        Assert.Equal(20, Regex.Count(source, @"\.WithRegisteredTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
         Assert.Contains("Name = \"Server Capabilities\"", source, StringComparison.Ordinal);
         Assert.Contains("MimeType = \"application/json\"", source, StringComparison.Ordinal);
@@ -573,13 +574,13 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(toolNames, assignedToolNames);
         Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
-        Assert.Equal(10, Regex.Count(deckManifestSource, @"\.WithTools\("));
+        Assert.Equal(10, Regex.Count(deckManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
-        Assert.Equal(3, Regex.Count(scryfallManifestSource, @"\.WithTools\("));
-        Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithTools\("));
-        Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithTools\("));
-        Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithTools\("));
-        Assert.Equal(1, Regex.Count(spellbookManifestSource, @"\.WithTools\("));
+        Assert.Equal(3, Regex.Count(scryfallManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(1, Regex.Count(statisticsManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(2, Regex.Count(playgroupManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(1, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
         Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);

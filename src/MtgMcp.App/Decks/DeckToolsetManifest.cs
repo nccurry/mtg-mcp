@@ -63,21 +63,24 @@ internal static class DeckToolsetManifest
         DeckOnCurveEstimateCoordinator onCurveCoordinator = new(deckStore, scryfallService);
         DeckCardViewCoordinator cardViewCoordinator = new(deckStore, scryfallService);
         builder
-            .WithTools(ToolRegistration.Create(
+            .WithRegisteredTools(ToolRegistration.Create(
                 new DeckReadTools(deckStore, cardViewCoordinator),
                 DeckReadTools.ItemChoices))
-            .WithTools(ToolRegistration.Create(new DeckInterchangeReadTools(interchangeService)))
-            .WithTools(ToolRegistration.Create(new DeckIdentityReconciliationReadTools(identityCoordinator)))
-            .WithTools(ToolRegistration.Create(new DeckOnCurveEstimateTools(onCurveCoordinator)));
-        builder.WithTools(ToolRegistration.Create(new DeckCategorizationReadTools(categorizationCoordinator)));
+            .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeReadTools(interchangeService)))
+            .WithRegisteredTools(ToolRegistration.Create(new DeckIdentityReconciliationReadTools(identityCoordinator)))
+            .WithRegisteredTools(ToolRegistration.Create(new DeckOnCurveEstimateTools(onCurveCoordinator)));
+        builder.WithRegisteredTools(
+            ToolRegistration.Create(new DeckCategorizationReadTools(categorizationCoordinator)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder
-                .WithTools(ToolRegistration.Create(new DeckWriteTools(deckStore, mode)))
-                .WithTools(ToolRegistration.Create(new DeckInterchangeWriteTools(interchangeService, mode)))
-                .WithTools(ToolRegistration.Create(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode)))
-                .WithTools(ToolRegistration.Create(new DeckCategorizationWriteTools(categorizationCoordinator, mode)))
-                .WithTools([DeckBatchWriteTools.Create(deckStore, mode)]);
+                .WithRegisteredTools(ToolRegistration.Create(new DeckWriteTools(deckStore, mode)))
+                .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeWriteTools(interchangeService, mode)))
+                .WithRegisteredTools(ToolRegistration.Create(
+                    new DeckIdentityReconciliationWriteTools(identityCoordinator, mode)))
+                .WithRegisteredTools(ToolRegistration.Create(
+                    new DeckCategorizationWriteTools(categorizationCoordinator, mode)))
+                .WithRegisteredTools([DeckBatchWriteTools.Create(deckStore, mode)]);
         }
     }
 }

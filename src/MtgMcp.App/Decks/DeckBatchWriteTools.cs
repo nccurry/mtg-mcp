@@ -55,7 +55,7 @@ internal sealed class DeckBatchWriteTools
     /// <summary>
     /// Creates the explicitly registered tool with a description on its synthetic discriminator field.
     /// </summary>
-    internal static McpServerTool Create(SqliteDeckStore store, OperationMode mode)
+    internal static RegisteredTool Create(SqliteDeckStore store, OperationMode mode)
     {
         DeckBatchWriteTools target = new(store, mode);
         MethodInfo method = typeof(DeckBatchWriteTools).GetMethod(

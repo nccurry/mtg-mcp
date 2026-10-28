@@ -548,7 +548,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
             .ConfigureAwait(false);
         if (statusResult is not OperationSuccess<ScryfallCorpusStatus> statusSuccess)
         {
-            return ForwardFailure<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(statusResult);
+            return OperationFailure.Forward<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(statusResult);
         }
 
         if (expectedActiveGeneration is Guid expected &&
@@ -564,7 +564,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
             cancellationToken).ConfigureAwait(false);
         if (metadataResult is not OperationSuccess<ScryfallBulkMetadataResult> metadata)
         {
-            return ForwardFailure<ScryfallBulkMetadataResult, ScryfallCorpusSyncResult>(metadataResult);
+            return OperationFailure.Forward<ScryfallBulkMetadataResult, ScryfallCorpusSyncResult>(metadataResult);
         }
 
         DateTimeOffset now = cards.TimeProvider.GetUtcNow();
@@ -576,7 +576,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
                 .ConfigureAwait(false);
             if (currentResult is not OperationSuccess<ScryfallCorpusStatus> current)
             {
-                return ForwardFailure<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(currentResult);
+                return OperationFailure.Forward<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(currentResult);
             }
 
             return new OperationSuccess<ScryfallCorpusSyncResult>(new ScryfallCorpusSyncResult(
@@ -688,24 +688,6 @@ internal sealed class ScryfallCardDataLifecycleOperations
         return new OperationUnavailable(
             "local-write-required",
             "This Scryfall operation requires local mode to record coordinated evidence.");
-    }
-
-    /// <summary>Preserves every non-success case while changing the generic success type.</summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-success-shape",
-                "The operation returned an unexpected success shape."),
-        };
     }
 }
 

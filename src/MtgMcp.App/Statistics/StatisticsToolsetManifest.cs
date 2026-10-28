@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
-using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
@@ -66,7 +65,7 @@ internal static class StatisticsToolsetManifest
         ArgumentNullException.ThrowIfNull(deckStore);
         ArgumentNullException.ThrowIfNull(calculator);
         StatisticsReadTools target = new(new StatisticsDeckResolver(deckStore), calculator);
-        builder.WithTools(
+        builder.WithRegisteredTools(
         [
             Create(nameof(StatisticsReadTools.HypergeometricAsync), target),
             Create(nameof(StatisticsReadTools.MultivariateAsync), target),
@@ -82,7 +81,7 @@ internal static class StatisticsToolsetManifest
     /// <summary>
     /// Creates one explicitly named tool with discriminator descriptions.
     /// </summary>
-    private static McpServerTool Create(string methodName, StatisticsReadTools target)
+    private static RegisteredTool Create(string methodName, StatisticsReadTools target)
     {
         MethodInfo method = typeof(StatisticsReadTools).GetMethod(
             methodName,

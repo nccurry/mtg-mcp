@@ -58,15 +58,15 @@ internal static class ArchidektToolsetManifest
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(deckStore);
         ArchidektCoordinator coordinator = new(service, deckStore);
-        builder.WithTools(ToolRegistration.Create(new ArchidektReadTools(coordinator)));
+        builder.WithRegisteredTools(ToolRegistration.Create(new ArchidektReadTools(coordinator)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(ToolRegistration.Create(new ArchidektLocalWriteTools(coordinator, mode)));
+            builder.WithRegisteredTools(ToolRegistration.Create(new ArchidektLocalWriteTools(coordinator, mode)));
         }
 
         if (OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite))
         {
-            builder.WithTools(ToolRegistration.Create(new ArchidektRemoteWriteTools(coordinator, mode)));
+            builder.WithRegisteredTools(ToolRegistration.Create(new ArchidektRemoteWriteTools(coordinator, mode)));
         }
     }
 }

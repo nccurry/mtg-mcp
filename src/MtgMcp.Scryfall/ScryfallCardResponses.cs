@@ -143,7 +143,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallSearchResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallSearchResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -163,7 +163,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallSearchResult> success)
         {
-            return Forward<ScryfallSearchResult, ScryfallSearchResponse>(result);
+            return OperationFailure.Forward<ScryfallSearchResult, ScryfallSearchResponse>(result);
         }
 
         ScryfallFormattedCards formatted = PageCards(success.Data.Page);
@@ -191,7 +191,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallCardResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallCardResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -202,7 +202,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCardResult> success)
         {
-            return Forward<ScryfallCardResult, ScryfallCardResponse>(result);
+            return OperationFailure.Forward<ScryfallCardResult, ScryfallCardResponse>(result);
         }
 
         ScryfallFormattedCards formatted = await formatter.FormatAsync(
@@ -244,7 +244,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallCollectionResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallCollectionResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -258,7 +258,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCollectionResult> success)
         {
-            return Forward<ScryfallCollectionResult, ScryfallCollectionResponse>(result);
+            return OperationFailure.Forward<ScryfallCollectionResult, ScryfallCollectionResponse>(result);
         }
 
         IReadOnlyList<ScryfallCollectionRow> rows = success.Data.Page.Items;
@@ -286,6 +286,24 @@ internal sealed class ScryfallCardResponseOperations
                 Truncated = formatted.Truncated ? true : null,
                 Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
             });
+    }
+
+    /// <summary>
+    /// Reads a card miss as a row status, the way the collection path reports it: a card the provider does not have
+    /// is not-found, and a card that cache-only mode could not read is not-cached.
+    /// </summary>
+    private static bool TryDescribeMiss(
+        OperationResult<ScryfallCardResponse> single,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? status,
+        out string? message)
+    {
+        (status, message) = single switch
+        {
+            OperationNotFound missing => ("not-found", missing.Message),
+            OperationNotCached notCached => ("not-cached", notCached.Message),
+            _ => (null, null),
+        };
+        return status is not null;
     }
 
     /// <summary>
@@ -319,9 +337,9 @@ internal sealed class ScryfallCardResponseOperations
             responseFormat,
             fields,
             cancellationToken).ConfigureAwait(false);
-        if (single is OperationNotFound missing)
+        if (TryDescribeMiss(single, out string? missStatus, out string? missMessage))
         {
-            ScryfallCollectionRowResponse missRow = new(0, lookup, "not-found", null, null, missing.Message);
+            ScryfallCollectionRowResponse missRow = new(0, lookup, missStatus, null, null, missMessage);
             return new OperationSuccess<ScryfallCollectionResponse>(
                 new ScryfallCollectionResponse(
                     new ScryfallPage<ScryfallCollectionRowResponse>([missRow], 1, null),
@@ -334,7 +352,7 @@ internal sealed class ScryfallCardResponseOperations
 
         if (single is not OperationSuccess<ScryfallCardResponse> success)
         {
-            return Forward<ScryfallCardResponse, ScryfallCollectionResponse>(single);
+            return OperationFailure.Forward<ScryfallCardResponse, ScryfallCollectionResponse>(single);
         }
 
         ScryfallCardResponse card = success.Data;
@@ -367,7 +385,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallCardsByTagResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallCardsByTagResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -383,7 +401,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCardsByTagResult> success)
         {
-            return Forward<ScryfallCardsByTagResult, ScryfallCardsByTagResponse>(result);
+            return OperationFailure.Forward<ScryfallCardsByTagResult, ScryfallCardsByTagResponse>(result);
         }
 
         ScryfallFormattedCards formatted = PageCards(success.Data.Page);
@@ -396,14 +414,6 @@ internal sealed class ScryfallCardResponseOperations
                 Truncated = formatted.Truncated ? true : null,
                 Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
             });
-    }
-
-    /// <summary>
-    /// Passes a failure through to a result of another payload type.
-    /// </summary>
-    private static OperationResult<TTarget> Forward<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return ScryfallCardEvidenceOperations.ForwardFailure<TSource, TTarget>(result);
     }
 
     /// <summary>

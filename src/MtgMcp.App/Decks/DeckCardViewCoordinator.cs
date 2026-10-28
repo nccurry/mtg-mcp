@@ -84,7 +84,7 @@ internal sealed class DeckCardViewCoordinator
         OperationResult<DeckDocument> stored = await store.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (stored is not OperationSuccess<DeckDocument> success)
         {
-            return ForwardFailure(stored);
+            return OperationFailure.Forward<DeckDocument, DeckDocumentView>(stored);
         }
 
         DeckDocument deck = success.Data;
@@ -98,7 +98,7 @@ internal sealed class DeckCardViewCoordinator
         OperationResult<int> start = ReadStart(cursor, fingerprint, deck);
         if (start is not OperationSuccess<int> offset)
         {
-            return ForwardFailure(start);
+            return OperationFailure.Forward<int, DeckDocumentView>(start);
         }
 
         List<DeckEntry> slice = [.. deck.Entries.Skip(offset.Data).Take(pageSize ?? DefaultPageSize)];
@@ -111,7 +111,7 @@ internal sealed class DeckCardViewCoordinator
                 cancellationToken)).ConfigureAwait(false);
         if (read is not OperationSuccess<ScryfallInstalledCardViews> views)
         {
-            return ForwardFailure(read);
+            return OperationFailure.Forward<ScryfallInstalledCardViews, DeckDocumentView>(read);
         }
 
         return BuildPage(deck, slice, views.Data, offset.Data, fingerprint);
@@ -392,25 +392,6 @@ internal sealed class DeckCardViewCoordinator
     {
         byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new DeckViewCursor(fingerprint, revision, offset));
         return Convert.ToBase64String(payload).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    }
-
-    /// <summary>
-    /// Passes a failure through to a deck view result.
-    /// </summary>
-    private static OperationResult<DeckDocumentView> ForwardFailure<TSource>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "deck-result-mismatch",
-                "The deck result could not be projected."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 
     /// <summary>

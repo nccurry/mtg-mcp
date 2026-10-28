@@ -204,6 +204,38 @@ public sealed class DeckCategoryRuleSourceTests
     }
 
     /// <summary>
+    /// Verifies a source that is not inline is refused as invalid input at the source, before any provider call.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_SourceThatIsNotInline_ReturnsInvalidInputWithoutThrowing()
+    {
+        using TemporaryDirectory temporary = new();
+        DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
+            DeckCategorizationSourceFixture.CreateHandler();
+        using ScryfallService scryfall = DeckCategorizationSourceFixture.CreateService(temporary.Path, handler);
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
+        DeckCategoryRuleResolver resolver = new(scryfall);
+
+        OperationResult<ResolvedDeckCategoryRules> result = await resolver.ResolveAsync(
+            new OtherSource(),
+            deck,
+            "default",
+            TestContext.Current.CancellationToken);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(("invalid-category-rule-source", "source"), (invalid.ReasonCode, invalid.Path));
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    /// <summary>
+    /// Stands in for a source kind that the resolver does not know.
+    /// </summary>
+    private sealed record OtherSource : CategoryRuleSource;
+
+    /// <summary>
     /// Stops a synchronize preview before a missing source selector can produce a destructive change.
     /// </summary>
     [Fact]

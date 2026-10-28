@@ -4,9 +4,9 @@ using ModelContextProtocol.Server;
 namespace MtgMcp.App.Hosting;
 
 /// <summary>
-/// Records, for each tool that registration created, the method behind it and the arguments it accepts. The call
-/// filter reads from here, so it describes only tools that registration built, and it works out each tool's
-/// accepted-argument text once.
+/// Owned by one server: records, for each tool that registration created, the method behind it and the
+/// arguments it accepts. The call filter reads it from the request services, so it describes only tools that
+/// registration built for this server, and it works out each tool's accepted-argument text once.
 /// </summary>
 internal sealed class ToolArgumentCatalog
 {
@@ -19,11 +19,6 @@ internal sealed class ToolArgumentCatalog
     /// Guards the dictionary, because tests and hosts may register tools from several threads.
     /// </summary>
     private readonly object gate = new();
-
-    /// <summary>
-    /// Gets the catalog the server and its registration helper share.
-    /// </summary>
-    internal static ToolArgumentCatalog Shared { get; } = new();
 
     /// <summary>
     /// Gets a copy of the method behind each registered tool.

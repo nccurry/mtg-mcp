@@ -50,13 +50,13 @@ internal static class ScryfallToolsetManifest
         ArgumentNullException.ThrowIfNull(service);
 
         builder
-            .WithTools(ToolRegistration.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices))
-            .WithTools(ToolRegistration.Create(
+            .WithRegisteredTools(ToolRegistration.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices))
+            .WithRegisteredTools(ToolRegistration.Create(
                 new ScryfallReferenceTools(service),
                 ScryfallReferenceTools.ItemChoices));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(ToolRegistration.Create(new ScryfallWriteTools(service, mode)));
+            builder.WithRegisteredTools(ToolRegistration.Create(new ScryfallWriteTools(service, mode)));
         }
     }
 }

@@ -155,7 +155,8 @@ internal sealed class McpProcessSession : IAsyncDisposable
         }
         catch
         {
-            workingDirectory.Delete(recursive: true);
+            // The server process may still hold the folder for a moment, so retry the delete as Dispose does.
+            await DeleteWorkingDirectoryAsync(workingDirectory).ConfigureAwait(false);
             throw;
         }
     }
@@ -194,7 +195,8 @@ internal sealed class McpProcessSession : IAsyncDisposable
         }
         catch
         {
-            workingDirectory.Delete(recursive: true);
+            // The server process may still hold the folder for a moment, so retry the delete as Dispose does.
+            await DeleteWorkingDirectoryAsync(workingDirectory).ConfigureAwait(false);
             throw;
         }
     }
@@ -205,15 +207,16 @@ internal sealed class McpProcessSession : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Client.DisposeAsync().ConfigureAwait(false);
-        await DeleteWorkingDirectoryAsync().ConfigureAwait(false);
+        await DeleteWorkingDirectoryAsync(workingDirectory).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Deletes the isolated working directory. Disposing the client ends the launcher and its server process
     /// (both were gone within 500 ms when checked), so the retry only covers the short delay before Windows
-    /// releases the folder.
+    /// releases the folder. A failed start uses the same retry, because the server process may still be
+    /// shutting down.
     /// </summary>
-    private async Task DeleteWorkingDirectoryAsync()
+    private static async Task DeleteWorkingDirectoryAsync(DirectoryInfo workingDirectory)
     {
         const int maximumAttempts = 50;
         for (int attempt = 1; ; attempt++)

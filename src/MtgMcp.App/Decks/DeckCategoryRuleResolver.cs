@@ -51,9 +51,15 @@ internal sealed class DeckCategoryRuleResolver
                 "Freshness policy must be default, cache-only, or refresh.");
         }
 
-        // Inline rules are the only source kind, so the binder has already refused any other kind.
-        OperationResult<CategoryRuleSet> grammar = CategoryRuleSetValidator.Validate(
-            ((InlineCategoryRuleSource)source).RuleSet);
+        if (source is not InlineCategoryRuleSource inline)
+        {
+            return new OperationInvalidInput(
+                "invalid-category-rule-source",
+                "The category rule source must be of kind inline.",
+                "source");
+        }
+
+        OperationResult<CategoryRuleSet> grammar = CategoryRuleSetValidator.Validate(inline.RuleSet);
         if (grammar is not OperationSuccess<CategoryRuleSet> validRules)
         {
             return OperationFailure.Forward<CategoryRuleSet, ResolvedDeckCategoryRules>(grammar);

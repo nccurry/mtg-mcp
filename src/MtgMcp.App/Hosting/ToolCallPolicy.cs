@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -46,10 +47,14 @@ internal static partial class ToolCallPolicy
         return async (context, cancellationToken) =>
         {
             // A tool the server did not register for this selection and mode is an unknown tool: describe nothing.
-            bool registered = context.Params is not null && context.MatchedPrimitive is not null;
-            if (registered)
+            ToolArguments? tool = FindRegisteredTool(context);
+            bool registered = tool is not null;
+            if (tool is not null)
             {
-                OperationInvalidInput? unknown = FindUnknownArgument(context.Params!.Name, context.Params.Arguments);
+                OperationInvalidInput? unknown = FindUnknownArgument(
+                    tool,
+                    context.Params!.Name,
+                    context.Params.Arguments);
                 if (unknown is not null)
                 {
                     return CreateFailureResult(unknown);
@@ -65,7 +70,7 @@ internal static partial class ToolCallPolicy
                 exception is not OperationCanceledException && registered)
             {
                 // The SDK binds arguments inside the pipeline and lets a binding exception reach this filter.
-                OperationInvalidInput? failure = DiagnoseArguments(context.Params!.Name, context.Params.Arguments);
+                OperationInvalidInput? failure = DiagnoseArguments(tool!.Method, context.Params!.Arguments);
                 if (failure is null)
                 {
                     throw;
@@ -94,15 +99,15 @@ internal static partial class ToolCallPolicy
     }
 
     /// <summary>
-    /// Re-reads each argument into its parameter type to find the first value the tool could not bind.
+    /// Re-reads each argument into its parameter type to find the first value the tool could not bind. The tool
+    /// must be in the catalog; a name the catalog does not hold is a caller error, not a clean result.
     /// </summary>
     internal static OperationInvalidInput? DiagnoseArguments(
+        ToolArgumentCatalog catalog,
         string toolName,
         IDictionary<string, JsonElement>? arguments)
     {
-        return ToolArgumentCatalog.Shared.TryGet(toolName, out ToolArguments tool)
-            ? DiagnoseArguments(tool.Method, arguments)
-            : null;
+        return DiagnoseArguments(Require(catalog, toolName).Method, arguments);
     }
 
     /// <summary>
@@ -148,12 +153,22 @@ internal static partial class ToolCallPolicy
     /// instead of being ignored. Arguments are checked in ordinal order so the message is deterministic.
     /// </summary>
     internal static OperationInvalidInput? FindUnknownArgument(
+        ToolArgumentCatalog catalog,
         string toolName,
         IDictionary<string, JsonElement>? arguments)
     {
-        if (arguments is null
-            || arguments.Count == 0
-            || !ToolArgumentCatalog.Shared.TryGet(toolName, out ToolArguments tool))
+        return FindUnknownArgument(Require(catalog, toolName), toolName, arguments);
+    }
+
+    /// <summary>
+    /// Finds the first argument that the given tool does not declare.
+    /// </summary>
+    private static OperationInvalidInput? FindUnknownArgument(
+        ToolArguments tool,
+        string toolName,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0)
         {
             return null;
         }
@@ -183,9 +198,52 @@ internal static partial class ToolCallPolicy
     }
 
     /// <summary>
+    /// Finds the catalog entry for the tool a request matched, or null when the server did not register the tool.
+    /// </summary>
+    private static ToolArguments? FindRegisteredTool(RequestContext<CallToolRequestParams> context)
+    {
+        if (context.Params is null || context.MatchedPrimitive is null)
+        {
+            return null;
+        }
+
+        ToolArgumentCatalog? catalog = context.Services?.GetService<ToolArgumentCatalog>();
+        return catalog is not null && catalog.TryGet(context.Params.Name, out ToolArguments tool) ? tool : null;
+    }
+
+    /// <summary>
+    /// Finds a tool in the catalog and fails loudly when it is missing.
+    /// </summary>
+    private static ToolArguments Require(ToolArgumentCatalog catalog, string toolName)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.TryGet(toolName, out ToolArguments tool)
+            ? tool
+            : throw new ArgumentException($"Tool '{toolName}' is not in the catalog.", nameof(toolName));
+    }
+
+    /// <summary>
+    /// Replaces the final path segment, written as <c>.name</c> or <c>['name']</c>, with the shortened name.
+    /// A name that contains dots or brackets is matched as a whole, never split.
+    /// </summary>
+    private static string ShortenLastSegment(string path, string raw, string shortened)
+    {
+        string dotted = "." + raw;
+        if (path.EndsWith(dotted, StringComparison.Ordinal))
+        {
+            return path[..^dotted.Length] + "." + shortened;
+        }
+
+        string bracketed = "['" + raw + "']";
+        return path.EndsWith(bracketed, StringComparison.Ordinal)
+            ? path[..^bracketed.Length] + "['" + shortened + "']"
+            : path;
+    }
+
+    /// <summary>
     /// Cuts an echoed field name to the length limit without splitting a surrogate pair.
     /// </summary>
-    internal static string Shorten(string name)
+    private static string Shorten(string name)
     {
         if (name.Length <= MaximumEchoedNameLength)
         {
@@ -201,7 +259,7 @@ internal static partial class ToolCallPolicy
     /// <summary>
     /// Matches the serializer message for a JSON property that no input type declares.
     /// </summary>
-    [GeneratedRegex("The JSON property '([^']*)' could not be mapped to any [.]NET member")]
+    [GeneratedRegex("The JSON property '(.*)' could not be mapped to any [.]NET member")]
     private static partial Regex UnmappedMember();
 
     /// <summary>
@@ -233,9 +291,9 @@ internal static partial class ToolCallPolicy
             string message = $"The value at '{path}' could not be read: {TrimPathSuffix(exception.Message)}";
             if (unmapped.Success)
             {
-                string field = Shorten(unmapped.Groups[1].Value);
-                int split = path.LastIndexOf('.');
-                path = split < 0 ? field : path[..(split + 1)] + field;
+                string raw = unmapped.Groups[1].Value;
+                string field = Shorten(raw);
+                path = ShortenLastSegment(path, raw, field);
                 message = $"Property '{field}' is not accepted here.";
             }
             if (exception.Message.Contains("discriminator", StringComparison.OrdinalIgnoreCase))

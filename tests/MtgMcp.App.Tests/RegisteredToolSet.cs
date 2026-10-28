@@ -55,12 +55,18 @@ internal sealed class RegisteredToolSet : IDisposable
         ServiceProvider provider = services.BuildServiceProvider();
         owned.Add(provider);
         Tools = [.. provider.GetServices<McpServerTool>()];
+        Catalog = provider.GetRequiredService<ToolArgumentCatalog>();
     }
 
     /// <summary>
     /// Gets every tool the server would publish, in registration order.
     /// </summary>
     internal IReadOnlyList<McpServerTool> Tools { get; }
+
+    /// <summary>
+    /// Gets the argument catalog the registered server owns.
+    /// </summary>
+    internal ToolArgumentCatalog Catalog { get; }
 
     /// <summary>
     /// Releases the services and folder behind the registered tools.
@@ -85,30 +91,38 @@ internal sealed class RegisteredToolSet : IDisposable
 }
 
 /// <summary>
-/// Makes sure every tool has been registered once in this test process, so tests that look tools up by name through
-/// the shared argument catalog find them.
+/// Reads the tool methods of a fresh registration, then releases it.
 /// </summary>
 internal static class RegisteredTools
 {
     /// <summary>
-    /// Holds one full registration for the life of the test process.
-    /// </summary>
-    private static readonly Lazy<RegisteredToolSet> All = new(() => new RegisteredToolSet(OperationMode.Remote));
-
-    /// <summary>
-    /// Registers every tool once.
-    /// </summary>
-    internal static void Ensure()
-    {
-        _ = All.Value;
-    }
-
-    /// <summary>
-    /// Gets the method behind each registered tool.
+    /// Gets the method behind each tool of the full server surface.
     /// </summary>
     internal static IReadOnlyDictionary<string, System.Reflection.MethodInfo> Methods()
     {
-        Ensure();
-        return ToolArgumentCatalog.Shared.Methods;
+        using RegisteredToolSet set = new(OperationMode.Remote);
+        return set.Catalog.Methods;
+    }
+}
+
+/// <summary>
+/// Gives a test class one full registration for all of its tests; xUnit releases it after the last test.
+/// </summary>
+public sealed class ToolCatalogFixture : IDisposable
+{
+    /// <summary>
+    /// Holds the registration whose catalog the tests read.
+    /// </summary>
+    private readonly RegisteredToolSet set = new(OperationMode.Remote);
+
+    /// <summary>
+    /// Gets the catalog the registered server built.
+    /// </summary>
+    internal ToolArgumentCatalog Catalog => set.Catalog;
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        set.Dispose();
     }
 }

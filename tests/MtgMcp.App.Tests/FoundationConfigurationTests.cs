@@ -406,37 +406,6 @@ public sealed class FoundationConfigurationTests
     }
 
     /// <summary>
-    /// Verifies every valid result case is forwarded explicitly and an unexpected success fails closed.
-    /// </summary>
-    [Fact]
-    public void ForwardFailure_AllUnionCasesRemainStructured()
-    {
-        OperationResult<int>[] failures =
-        [
-            new OperationNotFound("not-found", "Not found."),
-            new OperationNotCached("not-cached", "Not cached."),
-            new OperationUnsupported("unsupported", "Unsupported."),
-            new OperationUnavailable("unavailable", "Unavailable."),
-            new OperationConflict("conflict", "Conflict."),
-            new OperationInvalidInput("invalid-input", "Invalid input."),
-        ];
-
-        foreach (OperationResult<int> failure in failures)
-        {
-            OperationResult<FoundationConfiguration> forwarded =
-                FoundationConfigurationLoader.ForwardFailure(failure);
-
-            Assert.Same(failure.Value, forwarded.Value);
-        }
-
-        OperationResult<FoundationConfiguration> unexpectedSuccess =
-            FoundationConfigurationLoader.ForwardFailure<int>(new OperationSuccess<int>(42));
-        OperationUnavailable unavailable =
-            Assert.IsType<OperationUnavailable>(unexpectedSuccess.Value);
-        Assert.Equal("configuration-resolution-failed", unavailable.ReasonCode);
-    }
-
-    /// <summary>
     /// Verifies legacy data remains byte-identical and no v0.9 directory is created during inspection.
     /// </summary>
     [Fact]

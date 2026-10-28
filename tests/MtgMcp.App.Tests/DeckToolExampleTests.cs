@@ -13,8 +13,21 @@ namespace MtgMcp.App.Tests;
 /// Runs the example requests published in the descriptions of the batch edit and category rule preview tools, so
 /// the examples cannot drift from the tools (SCHEMA-006).
 /// </summary>
-public sealed class DeckToolExampleTests
+public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
 {
+    /// <summary>
+    /// Holds the argument catalog of one full registration.
+    /// </summary>
+    private readonly ToolArgumentCatalog catalog;
+
+    /// <summary>
+    /// Takes the catalog the fixture built, so the examples bind through the registered tools.
+    /// </summary>
+    public DeckToolExampleTests(ToolCatalogFixture fixture)
+    {
+        catalog = fixture.Catalog;
+    }
+
     /// <summary>
     /// Verifies the batch edit description holds a minimal and a full example, and that every example binds to the
     /// tool's parameters and applies to a deck.
@@ -34,7 +47,7 @@ public sealed class DeckToolExampleTests
             string request = Fill(json, deck);
 
             Dictionary<string, JsonElement> arguments = Arguments(request);
-            Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments));
+            Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
             DeckBatchWriteTools tools = new(store, OperationMode.Local);
             IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
                 .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
@@ -99,7 +112,7 @@ public sealed class DeckToolExampleTests
             DeckDocument deck = await CreateDeckAsync(store, DeckCategorizationSourceFixture.OracleId);
             Dictionary<string, JsonElement> arguments = Arguments(Fill(json, deck));
 
-            Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_category_rules_preview", arguments));
+            Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_category_rules_preview", arguments));
             DeckCategorizationReadTools tools = new(new DeckCategorizationCoordinator(store, scryfall));
             OperationResult<DeckCategoryRulesPreview> result = await tools.PreviewAsync(
                 arguments["deckId"].GetGuid(),

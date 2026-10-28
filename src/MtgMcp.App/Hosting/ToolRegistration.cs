@@ -17,13 +17,13 @@ internal static class ToolRegistration
     /// <paramref name="itemChoices"/> publishes the listed values as a JSON Schema <c>enum</c> on its items,
     /// which <c>[AllowedValues]</c> cannot do for the items of a list.
     /// </summary>
-    internal static IReadOnlyList<McpServerTool> Create(
+    internal static IReadOnlyList<RegisteredTool> Create(
         object target,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? itemChoices = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        List<McpServerTool> tools = [];
+        List<RegisteredTool> tools = [];
         foreach (MethodInfo method in target.GetType().GetMethods(flags))
         {
             if (method.GetCustomAttribute<McpServerToolAttribute>() is null)
@@ -41,7 +41,7 @@ internal static class ToolRegistration
     /// Creates one tool from a method. The optional <paramref name="describeNode"/> runs on every schema node
     /// the SDK builds, for tools that describe generated union discriminators.
     /// </summary>
-    internal static McpServerTool Create(
+    internal static RegisteredTool Create(
         MethodInfo method,
         object target,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? itemChoices = null,
@@ -49,8 +49,7 @@ internal static class ToolRegistration
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(target);
-        ToolArgumentCatalog.Shared.Register(method);
-        return McpServerTool.Create(method, target, new McpServerToolCreateOptions
+        McpServerTool tool = McpServerTool.Create(method, target, new McpServerToolCreateOptions
         {
             SerializerOptions = ToolCallPolicy.SerializerOptions,
             SchemaCreateOptions = new AIJsonSchemaCreateOptions
@@ -67,6 +66,7 @@ internal static class ToolRegistration
                 },
             },
         });
+        return new RegisteredTool(tool, method);
     }
 
     /// <summary>

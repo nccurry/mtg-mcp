@@ -32,7 +32,8 @@ internal static class KindFields
             ? null
             : new OperationInvalidInput(
                 InvalidKind,
-                "kind must be " + string.Join(", ", allowed[..^1]) + (allowed.Length > 2 ? ", or " : " or ") + allowed[^1] + ".",
+                "kind must be " + string.Join(", ", allowed[..^1]) + (allowed.Length > 2 ? ", or " : " or ")
+                    + allowed[^1] + ".",
                 "kind");
     }
 
@@ -41,9 +42,17 @@ internal static class KindFields
     /// </summary>
     internal static OperationInvalidInput? RequireText(string kind, string field, string? value)
     {
-        return string.IsNullOrWhiteSpace(value)
-            ? new OperationInvalidInput(MissingField, $"{field} is required when kind is {kind}.", field)
-            : null;
+        return Require(kind, field, !string.IsNullOrWhiteSpace(value));
+    }
+
+    /// <summary>
+    /// Refuses a field the chosen kind requires when it was not given.
+    /// </summary>
+    internal static OperationInvalidInput? Require(string kind, string field, bool given)
+    {
+        return given
+            ? null
+            : new OperationInvalidInput(MissingField, $"{field} is required when kind is {kind}.", field);
     }
 
     /// <summary>

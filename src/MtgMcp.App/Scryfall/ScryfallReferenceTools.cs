@@ -224,7 +224,7 @@ internal sealed class ScryfallReferenceTools
         int pageSize,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = ValidateDetails(include, printsCursor, rulingsCursor);
+        OperationInvalidInput? invalid = ValidateDetails(include, includeRaw, printsCursor, rulingsCursor, pageSize);
         if (invalid is not null)
         {
             return invalid;
@@ -276,13 +276,22 @@ internal sealed class ScryfallReferenceTools
     }
 
     /// <summary>
-    /// Checks the include list and the cursors that apply to only one section.
+    /// Checks the include list, the page size and raw-output rule, and the cursors that apply to only one section, so a
+    /// bad request fails before the card is resolved.
     /// </summary>
     private static OperationInvalidInput? ValidateDetails(
         IReadOnlyList<string>? include,
+        bool includeRaw,
         string? printsCursor,
-        string? rulingsCursor)
+        string? rulingsCursor,
+        int pageSize)
     {
+        OperationInvalidInput? pageFailure = ScryfallCardEvidenceOperations.ValidatePageSize(pageSize, includeRaw);
+        if (pageFailure is not null)
+        {
+            return pageFailure;
+        }
+
         if (include is null || include.Count == 0)
         {
             return new OperationInvalidInput(
@@ -391,18 +400,21 @@ internal sealed class ScryfallReferenceTools
         int pageSize,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = KindFields.CheckKind(kind, KindList, KindGet) ?? (kind == KindList
-            ? KindFields.RejectGiven(kind, ("snapshotId", snapshotId is not null), ("includeRaw", includeRaw))
-            : snapshotId is null
-                ? new OperationInvalidInput(
-                    KindFields.MissingField,
-                    "snapshotId is required when kind is get.",
-                    "snapshotId")
-                : KindFields.RejectGiven(
+        OperationInvalidInput? invalid = KindFields.CheckKind(kind, KindList, KindGet);
+        if (invalid is null && kind == KindList)
+        {
+            invalid = KindFields.RejectGiven(kind, ("snapshotId", snapshotId is not null), ("includeRaw", includeRaw));
+        }
+        else
+        {
+            invalid ??= KindFields.Require(kind, "snapshotId", snapshotId is not null)
+                ?? KindFields.RejectGiven(
                     kind,
                     ("operation", operation is not null),
                     ("retrievedAfterUtc", retrievedAfterUtc is not null),
-                    ("retrievedBeforeUtc", retrievedBeforeUtc is not null)));
+                    ("retrievedBeforeUtc", retrievedBeforeUtc is not null));
+        }
+
         if (invalid is not null)
         {
             return invalid;

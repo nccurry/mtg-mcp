@@ -47,10 +47,10 @@ internal static class PlaygroupToolsetManifest
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
-        builder.WithTools(ToolRegistration.Create(new PlaygroupReadTools(service)));
+        builder.WithRegisteredTools(ToolRegistration.Create(new PlaygroupReadTools(service)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite))
         {
-            builder.WithTools(ToolRegistration.Create(new PlaygroupRemoteWriteTools(service, mode)));
+            builder.WithRegisteredTools(ToolRegistration.Create(new PlaygroupRemoteWriteTools(service, mode)));
         }
     }
 }

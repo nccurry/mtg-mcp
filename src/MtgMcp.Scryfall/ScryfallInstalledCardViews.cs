@@ -78,8 +78,7 @@ internal sealed class ScryfallInstalledCardViewOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse("concise", fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return ScryfallCardEvidenceOperations
-                .ForwardFailure<ScryfallCardFormat, ScryfallInstalledCardViews>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallInstalledCardViews>(parsed);
         }
 
         HashSet<string> selected = [.. format.Data.SelectedFields!];

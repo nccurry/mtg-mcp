@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 
@@ -11,14 +13,19 @@ namespace MtgMcp.App.Tests;
 /// <summary>
 /// Verifies the shared argument binding and error reporting rules applied to every tool call.
 /// </summary>
-public sealed class ToolCallPolicyTests
+public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
 {
     /// <summary>
-    /// Registers every tool once, so the policy can look tools up by name.
+    /// Holds the argument catalog of one full registration.
     /// </summary>
-    public ToolCallPolicyTests()
+    private readonly ToolArgumentCatalog catalog;
+
+    /// <summary>
+    /// Takes the catalog the fixture built, so the policy can look tools up by name.
+    /// </summary>
+    public ToolCallPolicyTests(ToolCatalogFixture fixture)
     {
-        RegisteredTools.Ensure();
+        catalog = fixture.Catalog;
     }
 
     /// <summary>
@@ -57,7 +64,8 @@ public sealed class ToolCallPolicyTests
     {
         Dictionary<string, JsonElement> arguments = Arguments(UnknownKindChanges);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal(ToolCallPolicy.InvalidArgumentsReason, failure.ReasonCode);
@@ -85,7 +93,8 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal("changes[0].entryDraft.quantity", failure.Path);
@@ -108,20 +117,22 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments));
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
     }
 
     /// <summary>
-    /// Verifies a missing required argument is named, and unknown tools are left alone.
+    /// Verifies a missing required argument is named, and a tool missing from the catalog fails loudly.
     /// </summary>
     [Fact]
-    public void DiagnoseArguments_MissingRequiredOrUnknownTool_ReportsOrSkips()
+    public void DiagnoseArguments_MissingRequiredOrUnknownTool_ReportsOrThrows()
     {
-        OperationInvalidInput? missing = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", Arguments("{}"));
+        OperationInvalidInput? missing = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", Arguments("{}"));
 
         Assert.NotNull(missing);
         Assert.Equal("deckId", missing.Path);
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("not_a_tool", Arguments("{}")));
+        Assert.Throws<ArgumentException>(() => ToolCallPolicy.DiagnoseArguments(
+            catalog, "not_a_tool", Arguments("{}")));
     }
 
     /// <summary>
@@ -198,10 +209,11 @@ public sealed class ToolCallPolicyTests
     [Fact]
     public void Registration_RecordsEveryRealTool()
     {
-        IReadOnlyDictionary<string, MethodInfo> methods = RegisteredTools.Methods();
+        using RegisteredToolSet set = new(OperationMode.Remote);
+        string[] published = [.. set.Tools.Select(tool => tool.ProtocolTool.Name).Order(StringComparer.Ordinal)];
 
-        Assert.True(methods.ContainsKey("local_deck_apply_changes"));
-        Assert.True(methods.Count >= 80);
+        Assert.Equal(published.AsEnumerable(), catalog.Methods.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(80, published.Length);
     }
 
     /// <summary>
@@ -295,7 +307,8 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal("changes[0].entry.cardData", failure.Path);
@@ -321,7 +334,8 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         string path = failure.Path!;
@@ -329,6 +343,55 @@ public sealed class ToolCallPolicyTests
         Assert.Equal(new string('a', 63) + "...", shown);
         Assert.False(char.IsHighSurrogate(shown[^4]));
         Assert.Contains(shown, failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies an unknown nested name that contains a dot or a bracket is reported whole, at its own path segment.
+    /// </summary>
+    [Theory]
+    [InlineData("a.b")]
+    [InlineData("x[0]")]
+    public void DiagnoseArguments_UnknownNestedNameWithPunctuation_KeepsTheNameWhole(string name)
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            $$"""
+            {
+              "deckId": "0193e97a-ef95-7700-8000-000000000001",
+              "expectedRevision": 1,
+              "changes": [ { "kind": "add-entry", "entryDraft": { "quantity": 1, "cardName": "x", "{{name}}": 1 } } ]
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
+
+        Assert.NotNull(failure);
+        Assert.StartsWith("changes[0].entryDraft", failure.Path, StringComparison.Ordinal);
+        Assert.Contains(name, failure.Path, StringComparison.Ordinal);
+        Assert.Equal($"Property '{name}' is not accepted here.", failure.Message);
+    }
+
+    /// <summary>
+    /// Verifies a call whose server has no catalog entry for the tool is treated as an unknown tool: nothing is
+    /// described and the pipeline's own error goes on.
+    /// </summary>
+    [Fact]
+    public async Task Filter_ToolMissingFromTheServersCatalog_DescribesNothing()
+    {
+        await using McpServer server = CreateServer();
+        InvalidOperationException unknownTool = new("Unknown tool.");
+        McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
+            (_, _) => throw unknownTool);
+        RequestContext<CallToolRequestParams> context = Context(
+            server,
+            "local_deck_apply_changes",
+            """{ "deckId": "0193e97a-ef95-7700-8000-000000000001", "extra": 1 }""");
+        context.Services = new ServiceCollection().AddSingleton(new ToolArgumentCatalog()).BuildServiceProvider();
+
+        InvalidOperationException thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => filter(context, TestContext.Current.CancellationToken).AsTask());
+
+        Assert.Same(unknownTool, thrown);
     }
 
     /// <summary>
@@ -422,7 +485,7 @@ public sealed class ToolCallPolicyTests
     /// <summary>
     /// Builds a tool call context with the given tool name and JSON arguments.
     /// </summary>
-    private static RequestContext<CallToolRequestParams> Context(
+    private RequestContext<CallToolRequestParams> Context(
         McpServer server,
         string toolName,
         string argumentsJson)
@@ -433,6 +496,7 @@ public sealed class ToolCallPolicyTests
             new CallToolRequestParams { Name = toolName, Arguments = Arguments(argumentsJson) })
         {
             MatchedPrimitive = McpServerTool.Create(() => "x", new McpServerToolCreateOptions { Name = toolName }),
+            Services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider(),
         };
     }
 

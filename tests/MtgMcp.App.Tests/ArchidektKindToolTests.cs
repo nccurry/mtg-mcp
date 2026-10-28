@@ -108,7 +108,8 @@ public sealed class ArchidektKindToolTests
     }
 
     /// <summary>
-    /// Verifies a provider failure is returned as the tool's failure, not as an empty union.
+    /// Verifies a folder the provider does not have is returned as a provider-entity-not-found failure, and the
+    /// requested folder path was read, not an empty union.
     /// </summary>
     [Fact]
     public async Task Folders_ProviderMiss_ReturnsTheFailure()
@@ -120,7 +121,9 @@ public sealed class ArchidektKindToolTests
             "404",
             TestContext.Current.CancellationToken);
 
-        Assert.IsNotType<OperationSuccess<ArchidektFoldersResult>>(result.Value);
+        OperationNotFound missing = Assert.IsType<OperationNotFound>(result.Value);
+        Assert.Equal("provider-entity-not-found", missing.ReasonCode);
+        Assert.Contains("api/decks/folders/404/", fixture.Handler.Requests.Select(request => request.Path));
     }
 
     /// <summary>

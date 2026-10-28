@@ -103,20 +103,21 @@ internal static class FoundationConfigurationLoader
         OperationResult<OperationMode> modeResult = OperationModeParser.Parse(configuration["MODE"]);
         if (modeResult is not OperationSuccess<OperationMode> mode)
         {
-            return ForwardFailure(modeResult);
+            return OperationFailure.Forward<OperationMode, FoundationConfiguration>(modeResult);
         }
 
         OperationResult<CapabilityToolsetSelection> toolsetsResult =
             CapabilityToolsetRegistry.Resolve(configuration["TOOLSETS"]);
         if (toolsetsResult is not OperationSuccess<CapabilityToolsetSelection> toolsets)
         {
-            return ForwardFailure(toolsetsResult);
+            return OperationFailure.Forward<CapabilityToolsetSelection, FoundationConfiguration>(
+                toolsetsResult);
         }
 
         OperationResult<TimeSpan> ttlResult = ParseScryfallTtl(configuration["SCRYFALL_TTL_HOURS"]);
         if (ttlResult is not OperationSuccess<TimeSpan> ttl)
         {
-            return ForwardFailure(ttlResult);
+            return OperationFailure.Forward<TimeSpan, FoundationConfiguration>(ttlResult);
         }
 
         string? spellbookTtlValue = configuration["SPELLBOOK:TTL_MINUTES"] ??
@@ -124,7 +125,7 @@ internal static class FoundationConfigurationLoader
         OperationResult<TimeSpan> spellbookTtlResult = ParseSpellbookTtl(spellbookTtlValue);
         if (spellbookTtlResult is not OperationSuccess<TimeSpan> spellbookTtl)
         {
-            return ForwardFailure(spellbookTtlResult);
+            return OperationFailure.Forward<TimeSpan, FoundationConfiguration>(spellbookTtlResult);
         }
 
         string? configuredDataRoot = configuration["DATA_DIR"];
@@ -134,7 +135,7 @@ internal static class FoundationConfigurationLoader
             roamingApplicationData);
         if (dataRootResult is not OperationSuccess<DataRootResolution> dataRoot)
         {
-            return ForwardFailure(dataRootResult);
+            return OperationFailure.Forward<DataRootResolution, FoundationConfiguration>(dataRootResult);
         }
 
         string applicationDataRoot = !string.IsNullOrWhiteSpace(localApplicationData)
@@ -144,7 +145,7 @@ internal static class FoundationConfigurationLoader
         OperationResult<ArchidektOptions> archidektResult = ResolveArchidekt(configuration, userProfile);
         if (archidektResult is not OperationSuccess<ArchidektOptions> archidekt)
         {
-            return ForwardFailure(archidektResult);
+            return OperationFailure.Forward<ArchidektOptions, FoundationConfiguration>(archidektResult);
         }
 
         OperationResult<PlaygroupOptions> playgroupResult = ResolvePlaygroup(configuration, userProfile);
@@ -152,7 +153,7 @@ internal static class FoundationConfigurationLoader
             toolsets.Data.Includes(CapabilityToolset.Playgroup);
         if (playgroupResult is not OperationSuccess<PlaygroupOptions> && playgroupNamed)
         {
-            return ForwardFailure(playgroupResult);
+            return OperationFailure.Forward<PlaygroupOptions, FoundationConfiguration>(playgroupResult);
         }
 
         PlaygroupOptions playgroupOptions = playgroupResult is OperationSuccess<PlaygroupOptions> playgroup
@@ -362,24 +363,5 @@ internal static class FoundationConfigurationLoader
 
         normalizedArguments = normalized.ToArray();
         return null;
-    }
-
-    /// <summary>
-    /// Preserves a structured failure while rejecting an unexpected successful branch.
-    /// </summary>
-    internal static OperationResult<FoundationConfiguration> ForwardFailure<T>(OperationResult<T> result)
-    {
-        return result switch
-        {
-            OperationSuccess<T> => new OperationUnavailable(
-                "configuration-resolution-failed",
-                "Configuration could not be resolved."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 }

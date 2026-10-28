@@ -13,14 +13,19 @@ namespace MtgMcp.App.Tests;
 /// Checks the rules that every tool, or every merged tool, must follow: the four merge rules, closed input
 /// schemas, source-first descriptions, untrusted-text notes, confirmation metadata, and secret-free results.
 /// </summary>
-public sealed class ToolSurfaceRulesTests
+public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
 {
     /// <summary>
-    /// Registers every tool once, so the policy can look tools up by name.
+    /// Holds the argument catalog of one full registration.
     /// </summary>
-    public ToolSurfaceRulesTests()
+    private readonly ToolArgumentCatalog catalog;
+
+    /// <summary>
+    /// Takes the catalog the fixture built, so the policy can look tools up by name.
+    /// </summary>
+    public ToolSurfaceRulesTests(ToolCatalogFixture fixture)
     {
-        RegisteredTools.Ensure();
+        catalog = fixture.Catalog;
     }
 
     /// <summary>
@@ -182,7 +187,7 @@ public sealed class ToolSurfaceRulesTests
                 JsonValueKind.False,
                 tool.ProtocolTool.InputSchema.GetProperty("additionalProperties").ValueKind);
             OperationInvalidInput failure = Assert.IsType<OperationInvalidInput>(
-                ToolCallPolicy.FindUnknownArgument(name, unknown));
+                ToolCallPolicy.FindUnknownArgument(catalog, name, unknown));
             Assert.Equal("unknownField", failure.Path);
             Assert.Contains("'unknownField'", failure.Message, StringComparison.Ordinal);
             Assert.Equal(ToolCallPolicy.InvalidArgumentsReason, failure.ReasonCode);
@@ -190,8 +195,8 @@ public sealed class ToolSurfaceRulesTests
     }
 
     /// <summary>
-    /// Verifies known arguments, no arguments, and unknown tools pass the unknown-argument check, and a blank or very
-    /// long name is reported safely.
+    /// Verifies known arguments and no arguments pass the unknown-argument check, a tool missing from the catalog
+    /// fails loudly, and a blank or very long name is reported safely.
     /// </summary>
     [Fact]
     public void FindUnknownArgument_KnownMissingAndOddNames_AreHandled()
@@ -206,14 +211,15 @@ public sealed class ToolSurfaceRulesTests
             [new string('a', 200)] = JsonSerializer.SerializeToElement(1),
         };
 
-        Assert.Null(ToolCallPolicy.FindUnknownArgument("local_deck_get", known));
-        Assert.Null(ToolCallPolicy.FindUnknownArgument("local_deck_get", null));
-        Assert.Null(ToolCallPolicy.FindUnknownArgument("local_deck_get", new Dictionary<string, JsonElement>()));
-        Assert.Null(ToolCallPolicy.FindUnknownArgument("not_a_tool", blank));
+        Assert.Null(ToolCallPolicy.FindUnknownArgument(catalog, "local_deck_get", known));
+        Assert.Null(ToolCallPolicy.FindUnknownArgument(catalog, "local_deck_get", null));
+        Assert.Null(ToolCallPolicy.FindUnknownArgument(
+            catalog, "local_deck_get", new Dictionary<string, JsonElement>()));
+        Assert.Throws<ArgumentException>(() => ToolCallPolicy.FindUnknownArgument(catalog, "not_a_tool", blank));
         OperationInvalidInput blankFailure = Assert.IsType<OperationInvalidInput>(
-            ToolCallPolicy.FindUnknownArgument("local_deck_get", blank));
+            ToolCallPolicy.FindUnknownArgument(catalog, "local_deck_get", blank));
         OperationInvalidInput longFailure = Assert.IsType<OperationInvalidInput>(
-            ToolCallPolicy.FindUnknownArgument("local_deck_get", longName));
+            ToolCallPolicy.FindUnknownArgument(catalog, "local_deck_get", longName));
         Assert.Null(blankFailure.Path);
         Assert.True(longFailure.Path!.Length < 100);
         Assert.Contains("Accepted arguments: ", longFailure.Message, StringComparison.Ordinal);
@@ -236,7 +242,8 @@ public sealed class ToolSurfaceRulesTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("local_deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal("changes[0].entryDraft.quantiy", failure.Path);
@@ -257,8 +264,7 @@ public sealed class ToolSurfaceRulesTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
-            "local_deck_category_rules_preview",
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_category_rules_preview",
             arguments);
 
         Assert.NotNull(failure);
@@ -280,7 +286,7 @@ public sealed class ToolSurfaceRulesTests
             }
             """);
 
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_category_rules_preview", arguments));
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_category_rules_preview", arguments));
 
         Dictionary<string, JsonElement> withRevision = Arguments(
             """
@@ -290,7 +296,7 @@ public sealed class ToolSurfaceRulesTests
               "source": { "kind": "inline", "ruleSet": { "assignmentMode": "add-only", "rules": [] } }
             }
             """);
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_category_rules_preview", withRevision));
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_category_rules_preview", withRevision));
     }
 
     /// <summary>
@@ -401,7 +407,7 @@ public sealed class ToolSurfaceRulesTests
     /// Verifies the seven destructive remote writes carry the confirmation hint, and no other tool does (SAFE-002).
     /// </summary>
     [Fact]
-    public void DestructiveArchidektWrites_CarryTheConfirmationHint()
+    public void DestructiveRemoteWrites_CarryTheConfirmationHint()
     {
         using RegisteredToolSet remote = new(OperationMode.Remote);
 
