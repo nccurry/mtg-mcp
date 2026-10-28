@@ -38,7 +38,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
         new("scryfall_card_details", true, ["include", "lookup"], "include", ["printsCursor", "rulingsCursor"]),
         new("scryfall_reference_get", true, ["kind"], "kind",
             ["codeOrId", "catalogName", "includeRaw", "cursor", "pageSize"]),
-        new("scryfall_search_snapshots_get", false, ["kind"], "kind",
+        new("scryfall_request_snapshots_get", false, ["kind"], "kind",
             ["snapshotId", "operation", "retrievedAfterUtc", "retrievedBeforeUtc", "includeRaw"]),
         new("archidekt_folders_get", true, ["kind"], "kind", ["folderId"]),
         new("archidekt_snapshots_get", true, ["deckId", "kind"], "kind", ["snapshotId"]),
@@ -163,7 +163,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
         Assert.Equal(
             [
                 "scryfall_reference_get",
-                "scryfall_search_snapshots_get",
+                "scryfall_request_snapshots_get",
                 "archidekt_folders_get",
                 "archidekt_snapshots_get",
             ],

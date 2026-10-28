@@ -65,6 +65,14 @@
 - Local entry and category IDs of decks pulled from now on are derived from the local deck, so they differ from the IDs
   0.11.0 derived for the same Archidekt deck. Existing decks keep their IDs and links.
 
+### Tool names (breaking)
+
+- Breaking: renamed from their 0.11.0 names, because the saved snapshots hold every kind of Scryfall request (search,
+  card lookups, sets, catalogs), not only searches: `scryfall_search_snapshots_get` is now
+  `scryfall_request_snapshots_get`, and `scryfall_search_snapshot_delete` is now `scryfall_request_snapshot_delete`.
+  Inputs, results, annotations, and operation modes are unchanged, and no alias keeps the old names. Tool counts are
+  unchanged.
+
 ### Seeded simulation (breaking)
 
 - Breaking: `local_deck_on_curve_estimate` removed. The tool was named

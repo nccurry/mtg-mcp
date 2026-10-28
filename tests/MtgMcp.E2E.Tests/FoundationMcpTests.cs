@@ -92,8 +92,8 @@ public sealed class FoundationMcpTests
         "scryfall_cards_get",
         "scryfall_installed_cards_by_tag",
         "scryfall_reference_get",
+        "scryfall_request_snapshots_get",
         "scryfall_search",
-        "scryfall_search_snapshots_get",
         "scryfall_tags_search",
     ];
 
@@ -106,7 +106,7 @@ public sealed class FoundationMcpTests
         "scryfall_card_data_delete",
         "scryfall_card_data_rollback",
         "scryfall_card_data_sync",
-        "scryfall_search_snapshot_delete",
+        "scryfall_request_snapshot_delete",
     ];
 
     /// <summary>

@@ -164,7 +164,7 @@ internal sealed class ScryfallReferenceTools
     /// Lists saved request snapshots or replays one by ID.
     /// </summary>
     [McpServerTool(
-        Name = "scryfall_search_snapshots_get",
+        Name = "scryfall_request_snapshots_get",
         Title = "Get Saved Scryfall Requests",
         ReadOnly = true,
         Destructive = false,
@@ -177,7 +177,7 @@ internal sealed class ScryfallReferenceTools
         "optional operation (the request type) and time filters; kind get replays the ordered members of one " +
         "snapshot (snapshotId is required). The result has the same kind. Example: " +
         "{\"kind\":\"list\",\"operation\":\"search\",\"pageSize\":10}.")]
-    internal Task<OperationResult<ScryfallSnapshotsResult>> GetSearchSnapshotsAsync(
+    internal Task<OperationResult<ScryfallSnapshotsResult>> GetRequestSnapshotsAsync(
         [Description("What to read: list (snapshot metadata) or get (one snapshot's members)."),
          AllowedValues(KindList, KindGet)]
         string kind,

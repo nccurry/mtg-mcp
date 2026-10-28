@@ -105,7 +105,7 @@ internal sealed class ScryfallWriteTools
     /// Deletes one immutable exact-request snapshot under its checksum guard.
     /// </summary>
     [McpServerTool(
-        Name = "scryfall_search_snapshot_delete",
+        Name = "scryfall_request_snapshot_delete",
         Title = "Delete Saved Scryfall Request",
         ReadOnly = false,
         Destructive = true,

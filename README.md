@@ -272,7 +272,7 @@ in the native companion file and are omitted from provider text.
 The `scryfall` toolset supports search, card lookup (`scryfall_cards_get`, one or
 many cards), printings and rulings (`scryfall_card_details`), sets, catalogs, and
 bulk metadata (`scryfall_reference_get`), autocomplete, tag evidence,
-immutable search snapshots (`scryfall_search_snapshots_get`), and explicit
+saved request snapshots (`scryfall_request_snapshots_get`), and explicit
 card-data download operations.
 
 The local card-data store contains All Cards, Rulings, Oracle Tags, and Art

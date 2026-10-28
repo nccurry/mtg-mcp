@@ -80,7 +80,7 @@ public sealed class ToolAllowedValuesTests
     [Fact]
     public void ScryfallSnapshotOperations_MatchRecordedNames()
     {
-        string[] published = Published(typeof(ScryfallReferenceTools), "GetSearchSnapshotsAsync", "operation");
+        string[] published = Published(typeof(ScryfallReferenceTools), "GetRequestSnapshotsAsync", "operation");
 
         Assert.Equal(ScryfallOperationNames.All.Order(), published.Order());
     }
@@ -153,7 +153,7 @@ public sealed class ToolAllowedValuesTests
         using ScryfallService service = CreateService(temporary, allowLocalWrites: false);
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        foreach (string operation in Published(typeof(ScryfallReferenceTools), "GetSearchSnapshotsAsync", "operation"))
+        foreach (string operation in Published(typeof(ScryfallReferenceTools), "GetRequestSnapshotsAsync", "operation"))
         {
             OperationResult<ScryfallPage<ScryfallSnapshotSummary>> listed = await service.ListSnapshotsAsync(
                 operation,

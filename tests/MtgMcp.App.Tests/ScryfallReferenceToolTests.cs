@@ -271,7 +271,7 @@ public sealed class ScryfallReferenceToolTests
     /// Verifies the snapshot tool lists saved snapshots and replays one by ID, with a result that names the kind.
     /// </summary>
     [Fact]
-    public async Task SearchSnapshots_ListThenGet_ReturnsResultsWithTheSameKind()
+    public async Task RequestSnapshots_ListThenGet_ReturnsResultsWithTheSameKind()
     {
         using ServiceFixture fixture = new();
         CancellationToken token = TestContext.Current.CancellationToken;
@@ -281,11 +281,11 @@ public sealed class ScryfallReferenceToolTests
         Guid snapshotId = Assert.IsType<OperationSuccess<ScryfallSearchResponse>>(search.Value)
             .Data.Snapshot.SnapshotId;
 
-        JsonElement list = Data(await fixture.Tools.GetSearchSnapshotsAsync(
+        JsonElement list = Data(await fixture.Tools.GetRequestSnapshotsAsync(
             "list",
             operation: "search",
             cancellationToken: token));
-        JsonElement get = Data(await fixture.Tools.GetSearchSnapshotsAsync(
+        JsonElement get = Data(await fixture.Tools.GetRequestSnapshotsAsync(
             "get",
             snapshotId,
             cancellationToken: token));
@@ -304,11 +304,11 @@ public sealed class ScryfallReferenceToolTests
     /// Verifies a snapshot that does not exist is reported as not found, not as an empty result.
     /// </summary>
     [Fact]
-    public async Task SearchSnapshots_GetUnknownSnapshot_ReturnsNotFound()
+    public async Task RequestSnapshots_GetUnknownSnapshot_ReturnsNotFound()
     {
         using ServiceFixture fixture = new();
 
-        OperationResult<ScryfallSnapshotsResult> result = await fixture.Tools.GetSearchSnapshotsAsync(
+        OperationResult<ScryfallSnapshotsResult> result = await fixture.Tools.GetRequestSnapshotsAsync(
             "get",
             Guid.CreateVersion7(),
             cancellationToken: TestContext.Current.CancellationToken);
@@ -327,14 +327,14 @@ public sealed class ScryfallReferenceToolTests
     [InlineData("get", "before", "retrievedBeforeUtc")]
     [InlineData("get", "none", "snapshotId")]
     [InlineData("other", "none", "kind")]
-    public async Task SearchSnapshots_InvalidFieldCombination_ReturnsInvalidInputNamingTheField(
+    public async Task RequestSnapshots_InvalidFieldCombination_ReturnsInvalidInputNamingTheField(
         string kind,
         string misplaced,
         string expectedPath)
     {
         using ServiceFixture fixture = new();
 
-        OperationResult<ScryfallSnapshotsResult> result = await fixture.Tools.GetSearchSnapshotsAsync(
+        OperationResult<ScryfallSnapshotsResult> result = await fixture.Tools.GetRequestSnapshotsAsync(
             kind,
             snapshotId: kind == "get" && misplaced == "none" ? null : misplaced == "id" || kind == "get"
                 ? Guid.CreateVersion7()
