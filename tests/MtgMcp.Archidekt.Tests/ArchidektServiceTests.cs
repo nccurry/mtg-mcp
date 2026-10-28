@@ -472,6 +472,8 @@ public sealed class ArchidektServiceTests
         handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
         handler.Add(HttpMethod.Get, "api/decks/snapshots/77/", ArchidektTestPayloads.Snapshot);
         handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        handler.Add(HttpMethod.Get, "api/decks/snapshots/77/", ArchidektTestPayloads.Snapshot);
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
         using ArchidektService service = CreateService(handler);
         ArchidektSnapshotRestorePreview preview = Success(await service.PreviewSnapshotRestoreAsync(
             "42",
