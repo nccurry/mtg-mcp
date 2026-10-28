@@ -910,7 +910,7 @@ public sealed class ArchidektLocalMapperTests
 
     /// <summary>
     /// Verifies a baseline made by an earlier version is read as unchanged when the deck matches the order that
-    /// version recorded, or when its rows show no change, and a visible edit is still reported.
+    /// version recorded, and a visible edit is reported as an ordinary local change with no unverified row.
     /// </summary>
     [Fact]
     public void Diff_AnEarlierVersionBaseline_IsNotStuckAsLocalChanged()
@@ -924,14 +924,78 @@ public sealed class ArchidektLocalMapperTests
 
         ArchidektSyncDiff sameOrder = ArchidektSyncPlanner.Diff(
             Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "legacy-local");
-        ArchidektSyncDiff rowsShowNothing = ArchidektSyncPlanner.Diff(
-            Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "other-order");
         ArchidektSyncDiff visibleEdit = ArchidektSyncPlanner.Diff(
             Guid.NewGuid(), 2, "new-order", edited, remote, legacy, "hidden", "other-order");
 
         Assert.Empty(sameOrder.Differences);
-        Assert.Empty(rowsShowNothing.Differences);
         Assert.Contains(visibleEdit.Differences, value => value.State == "local-changed");
+        Assert.DoesNotContain(visibleEdit.Differences, value => value.State == "local-changed-unverified");
+    }
+
+    /// <summary>
+    /// Verifies a schema 1 baseline whose local fingerprint differs, in either order, with no row to show why, gets
+    /// the unverified local row, because an edit to a category color or ordering cannot be told from no edit.
+    /// </summary>
+    [Fact]
+    public void Diff_AnEarlierVersionBaselineWithAnUnexplainedChange_ReportsAnUnverifiedLocalChange()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        ArchidektSyncBaseline legacy = Baseline(remote, "legacy-local") with { SchemaVersion = 1 };
+
+        ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "other-order");
+        ArchidektSyncDiff noLegacyFingerprint = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", remote, remote, legacy);
+
+        ArchidektDifference row = Assert.Single(diff.Differences);
+        Assert.Equal("/localOnly/content", row.Path);
+        Assert.Equal("local-changed-unverified", row.State);
+        Assert.Equal("legacy-local", row.BaselineValue);
+        Assert.Equal("new-order", row.LocalValue);
+        Assert.Equal(
+            "local-changed-unverified",
+            Assert.Single(noLegacyFingerprint.Differences).State);
+        Assert.False(diff.HasConflicts);
+    }
+
+    /// <summary>
+    /// Verifies a schema 2 baseline never gets the unverified row: its own hidden fingerprint decides, and a change it
+    /// cannot place reads as an ordinary local change.
+    /// </summary>
+    [Fact]
+    public void Diff_ACurrentBaselineWithAnUnexplainedChange_NeverReportsAnUnverifiedLocalChange()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        ArchidektSyncBaseline current = Baseline(remote, "local-before") with { LocalInvisibleFingerprint = "hidden" };
+
+        ArchidektSyncDiff hiddenEdit = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", remote, remote, current, "hidden-after", "legacy-local");
+        ArchidektSyncDiff unchanged = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-before", remote, remote, current, "hidden", "legacy-local");
+
+        Assert.Equal("local-changed", Assert.Single(hiddenEdit.Differences).State);
+        Assert.Empty(unchanged.Differences);
+    }
+
+    /// <summary>
+    /// Verifies the unverified row is not added when another row already shows a local change on the old baseline,
+    /// or when both sides made the same change.
+    /// </summary>
+    [Fact]
+    public void Diff_AnEarlierVersionBaselineWithAnExplainingRow_AddsNoUnverifiedRow()
+    {
+        (RemoteDeckSnapshot before, RemoteDeckSnapshot after) = ConvergedPair();
+        ArchidektSyncBaseline legacy = Baseline(before, "legacy-local") with { SchemaVersion = 1 };
+
+        ArchidektSyncDiff converged = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", after, after, legacy, "hidden", "other-order");
+        ArchidektSyncDiff localEdit = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", after, before, legacy, "hidden", "other-order");
+
+        Assert.Contains(converged.Differences, value => value.State == "converged");
+        Assert.DoesNotContain(converged.Differences, value => value.State == "local-changed-unverified");
+        Assert.Contains(localEdit.Differences, value => value.State.StartsWith("local-", StringComparison.Ordinal));
+        Assert.DoesNotContain(localEdit.Differences, value => value.State == "local-changed-unverified");
     }
 
     /// <summary>

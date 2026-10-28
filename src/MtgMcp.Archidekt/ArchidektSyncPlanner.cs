@@ -8,6 +8,11 @@ namespace MtgMcp.Archidekt;
 public static class ArchidektSyncPlanner
 {
     /// <summary>
+    /// Names the difference state of a schema 1 baseline whose local content differs with no row to show why.
+    /// </summary>
+    public const string LocalChangedUnverifiedState = "local-changed-unverified";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the one an earlier version recorded.
     /// </summary>
@@ -83,11 +88,13 @@ public static class ArchidektSyncPlanner
             baseline.LocalInvisibleFingerprint is not null &&
             localInvisibleFingerprint is not null &&
             !string.Equals(baseline.LocalInvisibleFingerprint, localInvisibleFingerprint, StringComparison.Ordinal);
-        if (localChanged && ((!representedLocalChange && !legacyBaseline) || hiddenChange))
+        // A baseline from an earlier version did not record category colors or ordering, so a difference no row shows
+        // cannot be told from an edit to those fields: it is reported as unverified, never as unchanged.
+        if (localChanged && (!representedLocalChange || hiddenChange))
         {
             differences.Add(new ArchidektDifference(
                 "/localOnly/content",
-                "local-changed",
+                legacyBaseline ? LocalChangedUnverifiedState : "local-changed",
                 baseline.LocalFingerprint,
                 localFingerprint,
                 RemoteValue: null));

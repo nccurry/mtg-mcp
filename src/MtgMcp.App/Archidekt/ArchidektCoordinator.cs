@@ -16,6 +16,15 @@ internal sealed class ArchidektSynchronizationContext
     private const string ProviderName = "archidekt";
 
     /// <summary>
+    /// Explains why a pull is refused over a deck whose baseline an earlier version recorded, and how to leave.
+    /// </summary>
+    private const string UnverifiedPullConflictMessage =
+        "The local deck may have changed since its synchronization baseline. The earlier version that made the " +
+        "baseline did not record category colors or ordering, so the server cannot tell whether they changed. " +
+        "Push the deck to keep the local content, or preview and apply the pull with discardLocalChanges to take " +
+        "the Archidekt state instead.";
+
+    /// <summary>
     /// Provides revisioned local state and transactional baseline updates.
     /// </summary>
     private readonly SqliteDeckStore deckStore;
@@ -266,8 +275,10 @@ discardLocalChanges
         {
             return new OperationConflict(
                 "pull-conflict",
-                "The local deck changed since its synchronization baseline. Preview the pull with " +
-                "discardLocalChanges to take the Archidekt state instead.",
+                HasUnverifiedLocalChange(preview.Data.Differences)
+                    ? UnverifiedPullConflictMessage
+                    : "The local deck changed since its synchronization baseline. Preview the pull with " +
+                    "discardLocalChanges to take the Archidekt state instead.",
                 new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
@@ -813,6 +824,14 @@ discardLocalChanges
             remote.RemoteFingerprint,
             plan.PlanFingerprint,
         });
+    }
+
+    /// <summary>
+    /// Reports whether the differences include a local change the server cannot verify from an earlier baseline.
+    /// </summary>
+    private static bool HasUnverifiedLocalChange(IReadOnlyList<ArchidektDifference> differences)
+    {
+        return differences.Any(value => value.State == ArchidektSyncPlanner.LocalChangedUnverifiedState);
     }
 
     /// <summary>

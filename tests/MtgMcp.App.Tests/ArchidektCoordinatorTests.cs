@@ -892,103 +892,244 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
-    /// Verifies a deck pulled by an earlier version (provider-only IDs, a version 1 baseline that never matched the
-    /// stored row order) is not stuck as locally changed, still shows a real local edit, and can push it.
+    /// Verifies a deck made by an earlier version (provider-only IDs, a schema 1 baseline that never matched the stored
+    /// row order and recorded no category colors or ordering) reads as an unverified local change, and a pull is
+    /// refused with a message that says why and names both exits.
     /// </summary>
     [Fact]
-    public async Task Sync_OfADeckMadeByAnEarlierVersion_IsNotStuckAndStillSeesEdits()
+    public async Task Pull_OfADeckMadeByAnEarlierVersion_IsRefusedAsAnUnverifiedLocalChange()
     {
         string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
         try
         {
             QueueHandler handler = new();
-            handler.SetStanding("api/decks/42/", RichRemoteDeck);
-            using ArchidektService service = CreateService(handler);
-            using SqliteDeckStore store = new(root, "test");
-            RemoteDeckSnapshot remote = ParseRemote(RichRemoteDeck);
-            Guid bindingId = Guid.CreateVersion7();
-            DeckProviderBinding binding = new(
-                bindingId,
-                "archidekt",
-                remote.RemoteId,
-                remote.RemoteUri,
-                remote.Evidence.ContractVersion,
-                remote.RemoteFingerprint,
-                DateTimeOffset.UtcNow,
-                null);
-            DeckCreateRequest modern = ArchidektLocalMapper.ToCreateRequest(remote, binding);
-            Guid deckId = modern.DeckId!.Value;
-            Dictionary<Guid, Guid> ids = [];
-            foreach (RemoteDeckEntry entry in remote.Entries)
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, DeckDocument created) =
+                await CreateEarlierVersionDeckAsync(handler, root);
+            using (store)
             {
-                ids[ModernId("entry", deckId, entry.ProviderRelationId)] = LegacyId("entry", entry.ProviderRelationId);
-            }
-
-            foreach (RemoteDeckCategory category in remote.Categories)
-            {
-                ids[ModernId("category", deckId, category.ProviderCategoryId)] =
-                    LegacyId("category", category.ProviderCategoryId);
-            }
-
-            // Build the deck as the earlier version did: IDs from the provider rows alone and a version 1 baseline.
-            DeckCreateRequest legacy = modern with
-            {
-                Entries = [.. modern.Entries!.Select(value => value with { EntryId = ids[value.EntryId!.Value] })],
-                Categories = [.. modern.Categories!.Select(value => value with { CategoryId = ids[value.CategoryId!.Value] })],
-                CategoryAssignments =
-                [
-                    .. modern.CategoryAssignments!.Select(value => value with
-                    {
-                        EntryId = ids[value.EntryId],
-                        CategoryId = ids[value.CategoryId],
-                    }),
-                ],
-            };
-            JsonObject baseline = JsonNode.Parse(ArchidektLocalMapper.CreateBaseline(modern, remote))!.AsObject();
-            baseline["schemaVersion"] = 1;
-            baseline["localFingerprint"] = "legacy-draft-order-fingerprint";
-            baseline.Remove("localInvisibleFingerprint");
-            baseline["entryRelations"] = RemapKeys(baseline["entryRelations"]!.AsObject(), ids);
-            baseline["categoryRelations"] = RemapKeys(baseline["categoryRelations"]!.AsObject(), ids);
-            DeckDocument created = Success(await store.CreateSynchronizedAsync(
-                legacy,
-                new DeckSyncBaseline(bindingId, baseline.ToJsonString()),
-                TestContext.Current.CancellationToken));
-            ArchidektCoordinator coordinator = new(service, store);
-
-            ArchidektSyncPreview fresh = Success(await coordinator.PreviewPullAsync(
-                "42",
-                created.DeckId,
-                TestContext.Current.CancellationToken));
-            ArchidektApplyResult pulled = Success(await coordinator.ApplyPullAsync(
-                new ArchidektPullApplyRequest(
+                ArchidektSyncDiff diff = Success(await coordinator.DiffAsync(
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview plain = Success(await coordinator.PreviewPullAsync(
                     "42",
                     created.DeckId,
-                    created.Revision,
-                    fresh.RemoteFingerprint,
-                    fresh.PreviewFingerprint),
-                TestContext.Current.CancellationToken));
-            created = Success(await store.GetAsync(created.DeckId, TestContext.Current.CancellationToken));
-            DeckEntry bolt = created.Entries.First(value => value.CardName == "Bolt");
-            DeckDocument edited = Success(await store.ApplyChangesAsync(
-                created.DeckId,
-                created.Revision,
-                [new UpdateDeckEntryChange(bolt with { Quantity = 5 })],
-                TestContext.Current.CancellationToken));
-            ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
-                created.DeckId,
-                TestContext.Current.CancellationToken));
+                    TestContext.Current.CancellationToken));
+                OperationConflict refused = Assert.IsType<OperationConflict>((await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest(
+                        "42",
+                        created.DeckId,
+                        created.Revision,
+                        plain.RemoteFingerprint,
+                        plain.PreviewFingerprint),
+                    TestContext.Current.CancellationToken)).Value);
 
-            Assert.Equal("applied", pulled.Outcome);
-            Assert.False(fresh.HasConflicts);
-            Assert.Empty(fresh.Differences);
-            Assert.Equal(["entry-update:Bolt"], push.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
-            Assert.True(edited.Revision > created.Revision);
+                ArchidektDifference row = Assert.Single(plain.Differences);
+                Assert.Equal("/localOnly/content", row.Path);
+                Assert.Equal("local-changed-unverified", row.State);
+                Assert.Contains(diff.Differences, value => value.State == "local-changed-unverified");
+                Assert.True(plain.HasConflicts);
+                Assert.Equal("pull-conflict", refused.ReasonCode);
+                Assert.Contains("did not record category colors or ordering", refused.Message, StringComparison.Ordinal);
+                Assert.Contains("Push the deck to keep the local content", refused.Message, StringComparison.Ordinal);
+                Assert.Contains("discardLocalChanges", refused.Message, StringComparison.Ordinal);
+            }
         }
         finally
         {
             DeleteRoot(root);
         }
+    }
+
+    /// <summary>
+    /// Verifies a pull with discardLocalChanges takes the Archidekt state over an unverified local change, binds to its
+    /// own preview, and leaves a schema 2 baseline so the next preview shows nothing.
+    /// </summary>
+    [Fact]
+    public async Task Pull_OfADeckMadeByAnEarlierVersion_WithDiscardLocalChanges_SucceedsAndClearsTheRow()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, DeckDocument created) =
+                await CreateEarlierVersionDeckAsync(handler, root);
+            using (store)
+            {
+                ArchidektSyncPreview plain = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview discard = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    discardLocalChanges: true,
+                    TestContext.Current.CancellationToken));
+                OperationConflict mismatched = Assert.IsType<OperationConflict>((await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest(
+                        "42",
+                        created.DeckId,
+                        created.Revision,
+                        plain.RemoteFingerprint,
+                        plain.PreviewFingerprint,
+                        DiscardLocalChanges: true),
+                    TestContext.Current.CancellationToken)).Value);
+                ArchidektApplyResult applied = Success(await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest(
+                        "42",
+                        created.DeckId,
+                        created.Revision,
+                        discard.RemoteFingerprint,
+                        discard.PreviewFingerprint,
+                        DiscardLocalChanges: true),
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview clean = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.False(discard.HasConflicts);
+                Assert.Contains(discard.Differences, value => value.State == "local-changed-unverified");
+                Assert.Equal("pull-preview-changed", mismatched.ReasonCode);
+                Assert.Equal("applied", applied.Outcome);
+                Assert.False(clean.HasConflicts);
+                Assert.Empty(clean.Differences);
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a push is not blocked by the unverified row and plans nothing from it: a push with no edit has no
+    /// operation, a push with a real edit (which the rows then explain) plans only that edit, and either one leaves a schema 2 baseline, so the
+    /// row is gone and a pull then sees no change.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Push_OfADeckMadeByAnEarlierVersion_IsNotBlockedAndClearsTheRow(bool withEdit)
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string accepted = RichRemoteDeck.Replace(
+            "\"deckRelationId\": 101, \"quantity\": 2",
+            "\"deckRelationId\": 101, \"quantity\": 5",
+            StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, DeckDocument created) =
+                await CreateEarlierVersionDeckAsync(handler, root);
+            using (store)
+            {
+                if (withEdit)
+                {
+                    handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+                    DeckEntry bolt = created.Entries.First(value => value.CardName == "Bolt");
+                    _ = Success(await store.ApplyChangesAsync(
+                        created.DeckId,
+                        created.Revision,
+                        [new UpdateDeckEntryChange(bolt with { Quantity = 5 })],
+                        TestContext.Current.CancellationToken));
+                }
+
+                ArchidektSyncPreview preview = Success(await coordinator.PreviewPushAsync(
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+                if (withEdit)
+                {
+                    handler.SetStanding("api/decks/42/", accepted);
+                }
+
+                ArchidektApplyResult pushed = await PushAsync(coordinator, created.DeckId);
+                ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview again = Success(await coordinator.PreviewPushAsync(
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.False(preview.HasConflicts);
+                Assert.Equal(
+                    !withEdit,
+                    preview.Differences.Any(value => value.State == "local-changed-unverified"));
+                Assert.Equal(
+                    withEdit ? ["entry-update:Bolt"] : [],
+                    preview.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
+                Assert.Equal("applied", pushed.Outcome);
+                Assert.False(pull.HasConflicts);
+                Assert.Empty(pull.Differences);
+                Assert.Empty(again.Operations);
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Builds a local deck the way the earlier version did: provider-only IDs and a schema 1 baseline whose local
+    /// fingerprint matches no current ordering and that has no hidden-field fingerprint.
+    /// </summary>
+    private static async Task<(ArchidektCoordinator Coordinator, SqliteDeckStore Store, DeckDocument Deck)>
+        CreateEarlierVersionDeckAsync(QueueHandler handler, string root)
+    {
+        handler.SetStanding("api/decks/42/", RichRemoteDeck);
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        ArchidektService service = CreateService(handler);
+        SqliteDeckStore store = new(root, "test");
+        RemoteDeckSnapshot remote = ParseRemote(RichRemoteDeck);
+        Guid bindingId = Guid.CreateVersion7();
+        DeckProviderBinding binding = new(
+            bindingId,
+            "archidekt",
+            remote.RemoteId,
+            remote.RemoteUri,
+            remote.Evidence.ContractVersion,
+            remote.RemoteFingerprint,
+            DateTimeOffset.UtcNow,
+            null);
+        DeckCreateRequest modern = ArchidektLocalMapper.ToCreateRequest(remote, binding);
+        Guid deckId = modern.DeckId!.Value;
+        Dictionary<Guid, Guid> ids = [];
+        foreach (RemoteDeckEntry entry in remote.Entries)
+        {
+            ids[ModernId("entry", deckId, entry.ProviderRelationId)] = LegacyId("entry", entry.ProviderRelationId);
+        }
+
+        foreach (RemoteDeckCategory category in remote.Categories)
+        {
+            ids[ModernId("category", deckId, category.ProviderCategoryId)] =
+                LegacyId("category", category.ProviderCategoryId);
+        }
+
+        DeckCreateRequest legacy = modern with
+        {
+            Entries = [.. modern.Entries!.Select(value => value with { EntryId = ids[value.EntryId!.Value] })],
+            Categories = [.. modern.Categories!.Select(value => value with { CategoryId = ids[value.CategoryId!.Value] })],
+            CategoryAssignments =
+            [
+                .. modern.CategoryAssignments!.Select(value => value with
+                {
+                    EntryId = ids[value.EntryId],
+                    CategoryId = ids[value.CategoryId],
+                }),
+            ],
+        };
+        JsonObject baseline = JsonNode.Parse(ArchidektLocalMapper.CreateBaseline(modern, remote))!.AsObject();
+        baseline["schemaVersion"] = 1;
+        baseline["localFingerprint"] = "legacy-draft-order-fingerprint";
+        baseline.Remove("localInvisibleFingerprint");
+        baseline["entryRelations"] = RemapKeys(baseline["entryRelations"]!.AsObject(), ids);
+        baseline["categoryRelations"] = RemapKeys(baseline["categoryRelations"]!.AsObject(), ids);
+        DeckDocument created = Success(await store.CreateSynchronizedAsync(
+            legacy,
+            new DeckSyncBaseline(bindingId, baseline.ToJsonString()),
+            TestContext.Current.CancellationToken));
+        return (new ArchidektCoordinator(service, store), store, created);
     }
 
     /// <summary>

@@ -625,6 +625,13 @@ To take the Archidekt state for a deck that is stuck as locally changed, call
 The preview lists what would be discarded. Without the flag nothing is
 discarded, and the flag needs an existing local deck (`discard-needs-local-deck`).
 
+A deck whose synchronization baseline an earlier version recorded did not store
+category colors or ordering, so the server cannot tell whether they changed. When
+such a deck differs from its baseline with no row to show why, the diff has a
+`/localOnly/content` row with state `local-changed-unverified`. A pull of it is
+refused until `discardLocalChanges` is set; push keeps the local content and is
+not blocked by the row. Either one writes a current baseline, and the row is gone.
+
 ## Read Playgroup evidence
 
 The `playgroup` toolset turns on when a Playgroup key is present. It exposes tools

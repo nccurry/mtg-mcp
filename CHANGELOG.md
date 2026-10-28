@@ -23,8 +23,16 @@
   `local-changed` after its edits were reverted. The local content fingerprint depended on the order the rows were
   listed in, and the order at pull time differed from the order the store returns. The fingerprint now sorts by row ID.
   A deck whose baseline an earlier version recorded is also compared in the old order, and is judged by its rows alone
-  when that does not match, so it is not stuck; an edit to a field no row shows (category color, entry order) on such
-  a deck is not seen until its next synchronization writes a new baseline.
+  when that does not match, so it is not stuck. An edit to a field no row shows (category color, entry order) on such
+  a deck cannot be seen, because the earlier baseline did not record those fields; see the next entry.
+- Fixed a pull overwriting an edit the server could not see. When a deck's baseline was made by an earlier version
+  (schema 1) and its local content differs from the baseline with no row to show why, the diff now has a
+  `/localOnly/content` row with the new state `local-changed-unverified`. A pull preview reports it, and a pull apply
+  is refused (`pull-conflict`) unless `discardLocalChanges` is set. The message says the earlier version did not record
+  category colors or ordering, so the server cannot tell whether they changed, and names the two ways out: push to
+  keep the local content, or pull with `discardLocalChanges` to take the Archidekt state. A push is not blocked by the
+  row and plans nothing from it. Any successful push or pull writes a current (schema 2) baseline, which clears the
+  row. A deck whose old fingerprint cannot be reproduced also gets the row once.
 - Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
   field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
   `converged`: no conflict and no operation, and applying either direction advances the baseline. A converged row never
@@ -58,6 +66,9 @@
   over `decks.db` with the server stopped and deleting `decks.db-wal` and `decks.db-shm` beside it.
 - A new difference state, `converged`, can appear in `archidekt_diff`, `archidekt_pull_preview`, and
   `archidekt_push_preview`. Clients that switch on the state strings must treat it as "both sides made the same change".
+- A new difference state, `local-changed-unverified`, can appear in `archidekt_diff` and `archidekt_pull_preview` (and in
+  the differences of `archidekt_push_preview`) for a deck whose baseline an earlier version made. Clients that
+  switch on the state strings must treat it as a local change that cannot be verified.
 - New failure reasons: `entry-zone-contradicts-category` (from `archidekt_push_preview` and `archidekt_push_apply`) and
   `discard-needs-local-deck` (from `archidekt_pull_preview` and `archidekt_pull_apply`).
 - `archidekt_pull_preview` has a new optional `discardLocalChanges` argument, and the `archidekt_pull_apply` request has
