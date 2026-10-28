@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- Changed failed tool calls to set the MCP `isError` flag. Before this, every
+  failure looked like a success to a client. Migration: clients that treated
+  any non-error result as success should check `isError` and then the
+  structured `kind` (`success` is the only kind without the flag). The
+  structured body and text block are unchanged.
+- Fixed input the server cannot read: it now returns `kind: "invalid-input"`,
+  reason `invalid-arguments`, and a top-level `path` to the rejected value
+  (for example `changes[0].entryDraft.quantity`), instead of a generic
+  "An error occurred invoking" message. An unknown union `kind` lists the
+  allowed kinds.
+- Fixed `deck_apply_changes` and every other union input to accept the `kind`
+  property in any position.
+- Added `current` (the current local revision, remote fingerprint, or both) to
+  stale-state `conflict` results from deck, statistics, Spellbook, on-curve,
+  identity, categorization, and Archidekt operations, so a caller can preview
+  again and retry.
+- Fixed Archidekt push previews counting a reordered list of an entry's
+  secondary categories as a change; the order is now ignored.
+- Fixed Archidekt push apply so entries and categories it creates are linked in
+  the new baseline; the next push preview plans only real changes. An entry
+  that cannot be matched exactly is listed in the new `unlinkedLocalIds`
+  field of the push result, and the next push removes and re-adds that row.
+- Changed tool schemas to publish a JSON Schema `enum` for parameters with a
+  fixed set of values (cache policy, search order, interchange format IDs,
+  Archidekt format and visibility, and others). Accepted values are unchanged.
+- Changed descriptions: each `stats_*` tool lists the fields of `request` and
+  one runnable example; `scryfall_search`, `scryfall_tag_search`, and
+  `scryfall_cards_by_tag` explain tag filtering with `otag:`, and
+  `scryfall_search` warns that a default page can exceed 40,000 characters.
+
 ## 0.10.0 - 2026-10-25
 
 - Added the opt-in Commander Spellbook adapter with three read-only evidence

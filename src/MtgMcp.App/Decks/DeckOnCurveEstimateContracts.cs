@@ -27,7 +27,8 @@ internal sealed record DeckOnCurveEstimateToolRequest(
 /// </summary>
 internal sealed record DeckOnCurveLandRuleToolInput(
     [property: Description("Stable mainboard entry UUID for one eligible land.")] Guid EntryId,
-    [property: Description("Exactly one of one-mana-same-turn, one-mana-next-turn, or not-modeled."), AllowedValues("one-mana-same-turn", "one-mana-next-turn", "not-modeled")]
+    [property: Description("Exactly one of one-mana-same-turn, one-mana-next-turn, or not-modeled."),
+              AllowedValues("one-mana-same-turn", "one-mana-next-turn", "not-modeled")]
     string Rule);
 
 /// <summary>

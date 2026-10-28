@@ -193,7 +193,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Deletes the isolated working directory, waiting briefly for a Windows launcher's child process to release it.
+    /// Deletes the isolated working directory. Disposing the client ends the launcher and its server process
+    /// (both were gone within 500 ms when checked), so the retry only covers the short delay before Windows
+    /// releases the folder.
     /// </summary>
     private async Task DeleteWorkingDirectoryAsync()
     {

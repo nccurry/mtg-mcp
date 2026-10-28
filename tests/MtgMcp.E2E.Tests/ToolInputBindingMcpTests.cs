@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 namespace MtgMcp.E2E.Tests;
@@ -65,7 +66,7 @@ public sealed class ToolInputBindingMcpTests
                 ["changes"] = new[] { new { kind = "rename-entry" } },
             }).ConfigureAwait(false);
 
-        AssertInvalidArguments(result, "changes[0]");
+        AssertInvalidArguments(result, "changes[0]", "add-entry");
     }
 
     /// <summary>
@@ -123,6 +124,53 @@ public sealed class ToolInputBindingMcpTests
     }
 
     /// <summary>
+    /// Verifies every listed tool with required arguments fails an empty call with a flagged invalid-arguments body.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task EveryToolWithRequiredArguments_EmptyCall_ReturnsFlaggedInvalidArguments()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "all",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        int checkedTools = 0;
+
+        foreach (McpClientTool tool in tools)
+        {
+            string[] required = ReadRequiredNames(tool.ProtocolTool.InputSchema);
+            if (required.Length == 0)
+            {
+                continue;
+            }
+
+            CallToolResult result = await CallAsync(session, tool.Name, new Dictionary<string, object?>())
+                .ConfigureAwait(false);
+
+            Assert.True(result.IsError, $"{tool.Name} did not set isError.");
+            JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
+            Assert.Equal("invalid-input", structured.GetProperty("kind").GetString());
+            Assert.Equal("invalid-arguments", structured.GetProperty("reasonCode").GetString());
+            Assert.Contains(structured.GetProperty("path").GetString(), required);
+            checkedTools++;
+        }
+
+        Assert.True(checkedTools > 50, $"Only {checkedTools} tools with required arguments were checked.");
+    }
+
+    /// <summary>
+    /// Reads the names of the arguments a tool's input schema requires.
+    /// </summary>
+    private static string[] ReadRequiredNames(JsonElement schema)
+    {
+        return schema.TryGetProperty("required", out JsonElement required) && required.ValueKind == JsonValueKind.Array
+            ? [.. required.EnumerateArray().Select(value => value.GetString()!)]
+            : [];
+    }
+
+    /// <summary>
     /// Creates one small local deck and returns its identity and revision.
     /// </summary>
     private static async Task<(Guid DeckId, long Revision)> CreateDeckAsync(McpProcessSession session)
@@ -161,7 +209,10 @@ public sealed class ToolInputBindingMcpTests
     /// <summary>
     /// Asserts the bounded binding failure shape, including the JSON path of the rejected value.
     /// </summary>
-    private static void AssertInvalidArguments(CallToolResult result, string expectedPath)
+    private static void AssertInvalidArguments(
+        CallToolResult result,
+        string expectedPath,
+        string? expectedMessageFragment = null)
     {
         Assert.True(result.IsError);
         string text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(block => block.Text));
@@ -169,7 +220,15 @@ public sealed class ToolInputBindingMcpTests
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
         Assert.Equal("invalid-input", structured.GetProperty("kind").GetString());
         Assert.Equal("invalid-arguments", structured.GetProperty("reasonCode").GetString());
-        Assert.StartsWith(expectedPath, structured.GetProperty("path").GetString(), StringComparison.Ordinal);
+        Assert.Equal(expectedPath, structured.GetProperty("path").GetString());
+        if (expectedMessageFragment is not null)
+        {
+            Assert.Contains(
+                expectedMessageFragment,
+                structured.GetProperty("message").GetString(),
+                StringComparison.Ordinal);
+        }
+
         Assert.DoesNotContain("An error occurred invoking", structured.ToString(), StringComparison.Ordinal);
     }
 }

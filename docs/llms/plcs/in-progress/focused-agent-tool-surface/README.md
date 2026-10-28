@@ -13,6 +13,8 @@
 - Last updated: 2026-10-27
 - Current phase: Phase 1 (schemas, descriptions, conflict data, bug fixes, and baseline)
 - Implementation authorized: Yes (owner, 2026-10-27)
+- Phase 1 status: Implemented and under audit repair. Not marked complete; the parent decides when phase 1 closes.
+- EVAL-002 baseline: Deferred to the owner. This session has no agent-eval harness, so the `0.10.0` baseline rows below stay "Not run".
 
 ## Summary
 
@@ -286,8 +288,8 @@ design review on the same day; see Validation Evidence.
 - [x] MCP guidance sources are recorded in the SRD.
 - [x] An independent design review examined this packet; its findings are
       addressed (see Validation Evidence).
-- [ ] The enum and unknown-property schema spikes have run (phase 1, step 1).
-- [ ] The SDK spike for `isError`, tool `_meta`, instructions, and prompts
+- [x] The enum and unknown-property schema spikes have run (phase 1, step 1; results in Validation Evidence, 2026-10-27).
+- [x] The SDK spike for `isError`, tool `_meta`, instructions, and prompts
       has run (phase 1, step 1).
 - [x] An independent design review has examined the 2026-10-27 additions;
       its findings are addressed (see Validation Evidence).
@@ -300,7 +302,7 @@ design review on the same day; see Validation Evidence.
 | --- | --- | --- | --- |
 | 2026-10-25 | Source inventory of tools, toolsets, and annotations | Done | 97 tools; counts match README and `docs/toolsets.md`. |
 | 2026-10-25 | `DeckChangeInput` union check | Done | Covers metadata, entry, category, assignment, and provider-binding changes (`src/MtgMcp.App/Decks/DeckChangeInput.cs:11-21`). |
-| 2026-10-25 | Enum converter use in source | Not present | No `JsonStringEnumConverter` exists yet; phase 1 adds and proves it. |
+| 2026-10-25 | Enum converter use in source | Superseded | No `JsonStringEnumConverter` existed on this date. Phase 1 chose `[AllowedValues]` for string parameters (see the 2026-10-27 spike row), so the packet adds no converter for them. |
 | 2026-10-25 | Independent design review 1 | Findings addressed | Two P1 (Archidekt round trip setup; unstated simulation play choices) and four P2 (tag path, concise fields, removal review, export placement) were fixed. Later owner decisions replaced the toolset-link fix with default-on toolsets. |
 | 2026-10-25 | Independent design review 2 | Findings addressed | Counts and source citations verified. Fixed: working-name versus final-name rule; unknown-property rejection moved to phase 3 as a breaking change; merge rule rewritten and merged inputs given a required `kind`; one owning-toolset rule for list sources; credential presence defined per setting; small fingerprint-bound cursor; backup schema check; job split between `deck_get`, `card_list_query`, and `stats_deck_summary`; SRD table fixes; Game Changer fact without `passed`; Archidekt IDs as strings; optional `expectedRevision` for read-only deck sources. |
 | 2026-10-25 | Removal review sources | Done | Backups copy all of `decks.db` (`DeckWriteTools.cs:314`); `common-v1` maps four role names to four tag IDs (`DeckCategoryRuleResolver.cs:26-32`); reconciliation is exact-only (`DeckIdentityReconciliation.cs:708`). |
@@ -308,10 +310,16 @@ design review on the same day; see Validation Evidence.
 | 2026-10-27 | Bugs from real `0.10.0` use, reported by another session | Confirmed in source; adopted | `deck_apply_changes` returns only the SDK's generic error when `kind` is not the first property: `[JsonPolymorphic]` at `DeckChangeInput.cs:10`, with no `AllowOutOfOrderMetadataProperties` in `src/`. Archidekt push preview counts reordered secondary categories as changes: ordered `SequenceEqual` at `ArchidektSyncPlanner.cs:540`, while the post-write check at `:460` compares as a set. In one push, 43 of 52 entry updates were order-only. Added SCHEMA-007, ERR-003, ARCH-001 to phase 1. |
 | 2026-10-27 | Third bug from the same session | Confirmed in source; adopted | After `archidekt_push_apply`, the new baseline maps IDs only from remote rows keyed by `StableGuid` of the provider ID (`ArchidektLocalMapper.cs:127-142`, called at `ArchidektCoordinator.cs:523`). Locally created entries and categories are never linked, so the next preview planned a remove and re-add for 2 pushed cards and showed the pushed category as removed plus added. Added ARCH-002 to phase 1, cases A04 to A07. |
 | 2026-10-27 | Independent design review 3 (2026-10-27 additions) | Findings addressed | 18 findings, all checked against source and adopted. P1: the `on-curve` preset could not replay today's land choice (`OnCurveTrial.cs:117,133,225-290`), so `pick: "target-first"` and `can-cast` `byTurn`/`inHand` were added. `stats_castability`'s conditional value needs new exact math, and hybrid and Phyrexian costs are skipped (`TurnManaInverseModels.cs:78-112`). Playgroup games have no commander field or winning turn (pinned OpenAPI `Game` and `Participation`), so `groupBy: commander` was dropped and the metric is `averageTotalRounds`. P2: FACT-002 narrowed to unmapped fields (`ScryfallMapper.cs:51-56,78`), with `fields` able to pick extra fields; commander eligibility includes Backgrounds; "up to N" singleton limits; Lutri, Changeling, and companion identity and legality; joint payment for spent mana; castability limited to deck sources; `unlinked` rows block the next push; size limit only for new and changed outputs. P3: case and acceptance mismatches, the error example, the baseline risk row, held-out tasks runnable on `0.10.0`, NAME-001 exceptions, SCHEMA-008 description length, DEDUP matching, and the binding-option location. Not verified by the review and moved to phase 4 checks: `/estimate-bracket` field names and Scryfall pairing keywords. |
+| 2026-10-27 | Phase 1 SDK spike (ModelContextProtocol 2.2.0), results parent-verified | Done; adopted | `[AllowedValues]` and `JsonStringEnumConverter` both publish `enum`, and `ToolSchemaSdkTests` shows a subclass of `AllowedValuesAttribute` does too. The default input schema does not set `additionalProperties:false`. `isError` can be set from a call-tool filter (`AddCallToolFilter`). Argument-binding exceptions propagate through call-tool filters and can be caught there (an E2E binding test failed with only a result-side check and passed once the filter caught the exception). Serializer options are set per registration through `WithTools(target, options)` and `McpServerToolCreateOptions.SerializerOptions`. `McpServerToolCreateOptions.Meta` and `McpMetaAttribute` exist for tool `_meta`. `McpServerOptions.ServerInstructions` exists. `WithPrompts` exists. `docs/design-goals.md` asks for "enums for simple categories"; publishing choices as JSON Schema enums meets that at the schema level, while the C# parameter types stay strings. |
+| 2026-10-27 | Phase 1 audit repair: bound method in a call-tool filter | `RequestContext.MatchedPrimitive` is set, but it does not expose the method | The primitive's runtime type is the internal `AIFunctionMcpServerTool`, so a filter cannot read the bound method (`UnderlyingMethod` is not reachable). `ToolCallPolicy` keeps its name-to-method index and now throws at startup if two tools share a name (`IndexToolMethods_DuplicateToolName_Throws`). |
+| 2026-10-27 | Phase 1 audit repair: error flag and binding diagnosis | Verified by E2E | The branch that diagnosed a generic SDK error result was removed because the SDK reports binding failures as exceptions; `ToolInputBindingMcpTests` (unknown kind, wrong type, kind last, operation failure) still pass. `EveryToolWithRequiredArguments_EmptyCall_ReturnsFlaggedInvalidArguments` calls every listed tool that has required arguments with `{}` and checks `isError`, `invalid-input`, `invalid-arguments`, and a `path` naming a required argument. Deviation from ERR-002's wording: tools whose arguments are all optional are not called with `{}`, because an empty call would run them (for example a corpus download); their `isError` follows the same one filter, covered by `Filter_ReturnedResult_AppliesKindRule`. |
+| 2026-10-27 | Phase 1 audit repair: every-union serializer proof (SCHEMA-007) | Done, as an architecture test | `ToolRegistrations_PassSharedSerializerOptions` scans App source and fails if any `WithTools` or `McpServerTool.Create` call omits `ToolCallPolicy.SerializerOptions` (checked by temporarily removing one; it failed). `SerializerOptions_ReadUnionKindInAnyPosition` checks `AllowOutOfOrderMetadataProperties` is on. `ApplyChanges_KindAfterOtherProperties_AppliesChange` runs a real union with `kind` last through the server. |
+| 2026-10-27 | Phase 1 audit repair: E2E launcher cleanup | Checked | After the client is disposed, the `cmd.exe` launcher and its `dotnet` child were both gone within 500 ms, so disposing the stdio transport ends the process tree and the test needs no process tracking. The folder-delete retry stays only for the short delay before Windows releases the folder. |
+| 2026-10-27 | Phase 1 audit repair: Archidekt push links | Verified in source and tests | A push no longer blocks on unlinked rows: a later push removes and re-adds an unlinked row (`PreviewPush_AfterPushLeftRowUnlinked_PlansRemoveAndAddWithoutDuplicate`). A successful push cannot normally leave an entry unlinked, because the push verification and the link step use the same row matching; the `unlinkedLocalIds` field is a safety report and is covered at mapper and serialization level. |
 
 ## Agent Task Results
 
-Filled in by EVAL-002. Held-out tasks are reported in their own rows.
+Filled in by EVAL-002. The baseline is deferred to the owner because no agent-eval harness is available in the implementation session. Held-out tasks are reported in their own rows.
 
 | Run | Build | Tasks | Correct (median of 3) | Tool calls | Tool-result tokens | Invalid-parameter errors |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -320,9 +328,10 @@ Filled in by EVAL-002. Held-out tasks are reported in their own rows.
 
 ## Result Size Measurements
 
-Phase 1 (SIZE-001), measured on 2026-10-27 with the live test
-`ResultSizeLiveTests` against real Scryfall data and a local deck. Sizes are
-UTF-8 bytes of the structured result.
+Phase 1 (SIZE-001), measured once on 2026-10-27 by a live run against real
+Scryfall data and a local deck. The one-off test was then deleted, so these
+numbers are a record, not a repeatable check. Sizes are UTF-8 bytes of the
+structured result, which equal characters for this ASCII JSON.
 
 | Tool and request | Size | Over 40,000? |
 | --- | --- | --- |

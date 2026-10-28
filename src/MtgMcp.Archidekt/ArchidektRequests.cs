@@ -7,9 +7,13 @@ namespace MtgMcp.Archidekt;
 /// </summary>
 public sealed record ArchidektDeckCreateRequest(
     string Name,
-    [property: AllowedValues("standard", "modern", "commander", "edh", "legacy", "vintage", "pauper", "pioneer", "brawl", "historic", "oathbreaker")] string Format,
+    [property: AllowedValues(
+        "standard", "modern", "commander", "edh", "legacy", "vintage", "pauper", "pioneer", "brawl", "historic",
+        "oathbreaker")]
+    string Format,
     string? Description = null,
-    [property: AllowedValues("private", "unlisted", "public")] string Visibility = "private",
+    [property: AllowedValues("private", "unlisted", "public")]
+    string Visibility = "private",
     string? ParentFolderId = null);
 
 /// <summary>
@@ -44,7 +48,7 @@ public sealed record ArchidektPushApplyRequest(
 /// </summary>
 public sealed record ArchidektFolderCreateRequest(
     string Name,
-    [property: AllowedValues("private", "public")] string Visibility,
+    [property: FolderVisibilityValues] string Visibility,
     string? ParentFolderId = null);
 
 /// <summary>
@@ -54,7 +58,7 @@ public sealed record ArchidektFolderUpdateRequest(
     string FolderId,
     string ExpectedTreeFingerprint,
     string? Name = null,
-    [property: AllowedValues("private", "public")] string? Visibility = null,
+    [property: FolderVisibilityValues] string? Visibility = null,
     string? ParentFolderId = null,
     bool UpdateParent = false);
 

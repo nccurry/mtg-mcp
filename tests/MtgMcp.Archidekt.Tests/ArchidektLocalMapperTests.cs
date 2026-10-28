@@ -427,6 +427,137 @@ public sealed class ArchidektLocalMapperTests
     public void CreatePushBaseline_CreatedRows_LinkAndLaterPushPlansOnlyNewEntries()
     {
         (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        (DeckDocument edited, DeckEntry charm, DeckEntry bombardment, Guid protectionId) = AddProtectionRows(local);
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+        DeckEntry[] sideboard = Enumerable.Range(0, 10)
+            .Select(index => NewEntry($"Sideboard Card {index}", "sideboard", 100 + index))
+            .ToArray();
+        DeckDocument later = edited with { Entries = [.. edited.Entries, .. sideboard] };
+        RemoteDeckSnapshot laterTarget = ArchidektLocalMapper.ToRemoteTarget(later, afterPush, verified);
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(verified, laterTarget);
+
+        Assert.Null(unlinkedLocalIds);
+        Assert.Equal("9001", afterPush.CategoryRelations[protectionId]);
+        Assert.Equal("9101", afterPush.EntryRelations[charm.EntryId]);
+        Assert.Equal("9102", afterPush.EntryRelations[bombardment.EntryId]);
+        Assert.Equal(10, plan.PublicOperations.Count);
+        Assert.All(plan.PublicOperations, value => Assert.Equal("entry-add", value.Kind));
+    }
+
+    /// <summary>
+    /// Verifies links follow content, not row order, when the provider returns rows shuffled with filled card details.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_ShuffledVerifiedRowsWithCardDetails_StillLinkByContent()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        (DeckDocument edited, DeckEntry charm, DeckEntry bombardment, _) = AddProtectionRows(local);
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot assigned = AssignProviderIds(pushed);
+        List<RemoteDeckEntry> shuffled = [];
+        foreach (RemoteDeckEntry value in assigned.Entries.Reverse())
+        {
+            shuffled.Add(value.ProviderRelationId is "9101" or "9102"
+                ? value with
+                {
+                    PrintingId = Guid.NewGuid(),
+                    SetCode = "xyz",
+                    ProviderCardId = "card-" + value.ProviderRelationId,
+                }
+                : value);
+        }
+
+        RemoteDeckSnapshot verified = assigned with { Entries = shuffled };
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+
+        Assert.Null(unlinkedLocalIds);
+        Assert.Equal("9101", afterPush.EntryRelations[charm.EntryId]);
+        Assert.Equal("9102", afterPush.EntryRelations[bombardment.EntryId]);
+    }
+
+    /// <summary>
+    /// Verifies a pushed row with no exact provider match is reported as unlinked rather than guessed.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_UnmatchedCreatedRow_ReportsUnlinkedId()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        DeckEntry charm = NewEntry("Boros Charm", "main", 50);
+        DeckDocument edited = local with { Entries = [.. local.Entries, charm] };
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
+        verified = verified with
+        {
+            Entries = verified.Entries
+                .Select(value => value.CardName == "Boros Charm" ? value with { CardName = "Lightning Helix" } : value)
+                .ToArray(),
+        };
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+
+        Assert.Equal([charm.EntryId], unlinkedLocalIds);
+        Assert.False(afterPush.EntryRelations.ContainsKey(charm.EntryId));
+    }
+
+    /// <summary>
+    /// Verifies a pushed category the provider did not return stores no link and is not reported.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_UnmatchedCategory_StoresNoLink()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        Guid protectionId = Guid.NewGuid();
+        DeckDocument edited = local with
+        {
+            Categories = [.. local.Categories, new DeckCategory(protectionId, "Protection", null, 9)],
+        };
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
+        verified = verified with
+        {
+            Categories = verified.Categories.Where(value => value.Name != "Protection").ToArray(),
+        };
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+
+        Assert.Null(unlinkedLocalIds);
+        Assert.False(afterPush.CategoryRelations.ContainsKey(protectionId));
+    }
+
+    /// <summary>
+    /// Verifies a pushed target that was not built from the local deck is rejected.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_TargetRowCountDiffersFromLocal_Throws()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(local, pullBaseline, pulled);
+        RemoteDeckSnapshot shortTarget = pushed with { Entries = pushed.Entries.Skip(1).ToArray() };
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            ArchidektLocalMapper.CreatePushBaseline(local, pulled, shortTarget));
+
+        Assert.Equal("target", exception.ParamName);
+    }
+
+    /// <summary>
+    /// Adds two new entries and one new category to a pulled local deck, as a user's local edit would.
+    /// </summary>
+    private static (DeckDocument Edited, DeckEntry Charm, DeckEntry Bombardment, Guid CategoryId) AddProtectionRows(
+        DeckDocument local)
+    {
         Guid protectionId = Guid.NewGuid();
         DeckEntry charm = NewEntry("Boros Charm", "main", 50);
         DeckEntry bombardment = NewEntry("Goblin Bombardment", "main", 51);
@@ -441,48 +572,7 @@ public sealed class ArchidektLocalMapperTests
                 new DeckCategoryAssignment(bombardment.EntryId, protectionId, true),
             ],
         };
-        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
-        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
-
-        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(
-            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed));
-        DeckEntry[] sideboard = Enumerable.Range(0, 10)
-            .Select(index => NewEntry($"Sideboard Card {index}", "sideboard", 100 + index))
-            .ToArray();
-        DeckDocument later = edited with { Entries = [.. edited.Entries, .. sideboard] };
-        RemoteDeckSnapshot laterTarget = ArchidektLocalMapper.ToRemoteTarget(later, afterPush, verified);
-        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(verified, laterTarget);
-
-        Assert.Null(afterPush.UnlinkedLocalIds);
-        Assert.Equal("9001", afterPush.CategoryRelations[protectionId]);
-        Assert.False(string.IsNullOrEmpty(afterPush.EntryRelations[charm.EntryId]));
-        Assert.Equal(10, plan.PublicOperations.Count);
-        Assert.All(plan.PublicOperations, value => Assert.Equal("entry-add", value.Kind));
-    }
-
-    /// <summary>
-    /// Verifies a pushed row with no exact provider match is reported as unlinked rather than guessed.
-    /// </summary>
-    [Fact]
-    public void CreatePushBaseline_UnmatchedCreatedRow_RecordsUnlinkedId()
-    {
-        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
-        DeckEntry charm = NewEntry("Boros Charm", "main", 50);
-        DeckDocument edited = local with { Entries = [.. local.Entries, charm] };
-        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
-        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
-        verified = verified with
-        {
-            Entries = verified.Entries
-                .Select(value => value.CardName == "Boros Charm" ? value with { CardName = "Lightning Helix" } : value)
-                .ToArray(),
-        };
-
-        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(
-            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed));
-
-        Assert.Equal([charm.EntryId], afterPush.UnlinkedLocalIds);
-        Assert.False(afterPush.EntryRelations.ContainsKey(charm.EntryId));
+        return (edited, charm, bombardment, protectionId);
     }
 
     /// <summary>

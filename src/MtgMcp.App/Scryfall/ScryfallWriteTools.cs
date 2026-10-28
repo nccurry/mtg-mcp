@@ -46,7 +46,8 @@ internal sealed class ScryfallWriteTools
         "Explicitly streams All Cards, Rulings, Oracle Tags, and Art Tags, validates a complete " +
         "generation, and atomically activates it.")]
     internal Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusAsync(
-        [Description("Metadata cache policy: default or refresh."), AllowedValues("default", "refresh")] string metadataPolicy = "default",
+        [Description("Metadata cache policy: default or refresh."), AllowedValues("default", "refresh")]
+        string metadataPolicy = "default",
         [Description("Optional active generation guard checked before synchronization.")] Guid? expectedActiveGeneration = null,
         CancellationToken cancellationToken = default)
     {

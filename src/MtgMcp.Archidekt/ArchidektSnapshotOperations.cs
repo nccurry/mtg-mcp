@@ -86,7 +86,8 @@ internal sealed class ArchidektSnapshotOperations
                 RequireFingerprint(
                     request.ExpectedRemoteFingerprint,
                     deck.RemoteFingerprint,
-                    "remote-deck-changed");
+                    "remote-deck-changed",
+                    deck.RemoteFingerprint);
                 string name = ArchidektContract.Required(request.Name, nameof(request.Name));
                 await snapshotTransport.SendCreateAsync(
                     request.DeckId,
@@ -264,7 +265,8 @@ internal sealed class ArchidektSnapshotOperations
                 RequireFingerprint(
                     request.ExpectedRemoteFingerprint,
                     current.RemoteFingerprint,
-                    "remote-deck-changed");
+                    "remote-deck-changed",
+                    current.RemoteFingerprint);
                 RemoteDeckSnapshot target = CreateRestoreTarget(current, snapshot.Deck);
                 ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
                 RequireFingerprint(
@@ -377,11 +379,15 @@ internal sealed class ArchidektSnapshotOperations
     /// <summary>
     /// Requires one caller fingerprint to match freshly retrieved evidence.
     /// </summary>
-    private static void RequireFingerprint(string expected, string actual, string reasonCode)
+    private static void RequireFingerprint(
+        string expected,
+        string actual,
+        string reasonCode,
+        string? currentRemoteFingerprint = null)
     {
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.");
+            throw Conflict(reasonCode, "Provider evidence changed after the preview.", currentRemoteFingerprint);
         }
     }
 
@@ -438,11 +444,17 @@ internal sealed class ArchidektSnapshotOperations
     /// <summary>
     /// Creates one provider-state conflict without transport details.
     /// </summary>
-    private static ArchidektProviderException Conflict(string reasonCode, string message)
+    private static ArchidektProviderException Conflict(
+        string reasonCode,
+        string message,
+        string? currentRemoteFingerprint = null)
     {
         return new ArchidektProviderException(
             ArchidektFailureKind.Conflict,
             reasonCode,
-            message);
+            message)
+        {
+            CurrentRemoteFingerprint = currentRemoteFingerprint,
+        };
     }
 }

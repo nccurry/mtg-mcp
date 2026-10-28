@@ -19,7 +19,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Pins the documented provider order vocabulary instead of forwarding invented enum values.
     /// </summary>
-    private static readonly string[] SearchOrders =
+    internal static readonly string[] SearchOrders =
     [
         "name", "set", "released", "rarity", "color", "usd", "tix", "eur", "cmc", "power",
         "toughness", "edhrec", "penny", "artist", "review",
@@ -161,7 +161,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             ("includeExtras", includeExtras),
             ("includeMultilingual", includeMultilingual),
             ("includeVariations", includeVariations),
-            ("operation", "search"),
+            ("operation", ScryfallOperationNames.Search),
             ("order", order),
             ("query", query),
             ("unique", unique));
@@ -172,7 +172,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             $"&include_multilingual={includeMultilingual.ToString().ToLowerInvariant()}" +
             $"&include_variations={includeVariations.ToString().ToLowerInvariant()}";
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "search",
+            ScryfallOperationNames.Search,
             request,
             freshnessPolicy,
             token => Provider.GetPagedAsync(path, token),
@@ -233,7 +233,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         SortedDictionary<string, object?> request = Request(
             ("collectorNumber", lookup.CollectorNumber),
             ("kind", lookup.Kind),
-            ("operation", "card-get"),
+            ("operation", ScryfallOperationNames.CardGet),
             ("setCode", lookup.SetCode),
             ("value", lookup.Value));
         string path = BuildCardPath(lookup);
@@ -241,7 +241,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             ? token => Provider.GetPagedAsync(path, token)
             : token => Provider.GetSingleAsync(path, token);
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "card-get",
+            ScryfallOperationNames.CardGet,
             request,
             freshnessPolicy,
             acquire,
@@ -355,10 +355,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
             SortedDictionary<string, object?> request = Request(
                 ("identifiers", identifiers),
-                ("operation", "card-collection"),
+                ("operation", ScryfallOperationNames.CardCollection),
                 ("providerBatchSize", 75));
             OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-                "card-collection",
+                ScryfallOperationNames.CardCollection,
                 request,
                 freshnessPolicy,
                 token => AcquireCollectionBatchesAsync(identifiers, token),
@@ -436,10 +436,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             SortedDictionary<string, object?> request = Request(
                 ("identifiers", providerIdentifiers),
-                ("operation", "card-collection"),
+                ("operation", ScryfallOperationNames.CardCollection),
                 ("providerBatchSize", 75));
             OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-                "card-collection",
+                ScryfallOperationNames.CardCollection,
                 request,
                 freshnessPolicy,
                 token => AcquireCollectionBatchesAsync(providerIdentifiers, token),
@@ -504,7 +504,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 return IdentityEvidenceUnavailable("The required Scryfall request snapshot is no longer retained.");
             }
 
-            if (!string.Equals(snapshot.Header.Operation, "card-collection", StringComparison.Ordinal) ||
+            if (snapshot.Header.Operation != ScryfallOperationNames.CardCollection ||
                 !string.Equals(snapshot.Header.Checksum, snapshotReference.Checksum, StringComparison.Ordinal))
             {
                 return new OperationInvalidInput(
@@ -743,7 +743,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     "The provider snapshot required by this collection cursor is no longer retained.");
             }
 
-            if (!string.Equals(snapshot.Header.Operation, "card-collection", StringComparison.Ordinal) ||
+            if (snapshot.Header.Operation != ScryfallOperationNames.CardCollection ||
                 !string.Equals(snapshot.Header.Checksum, state.SnapshotChecksum, StringComparison.Ordinal))
             {
                 return new OperationInvalidInput("invalid-cursor", "The Scryfall collection cursor evidence does not match.");
@@ -949,10 +949,12 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
-        SortedDictionary<string, object?> request = Request(("operation", "card-prints"), ("oracleId", oracleId));
+        SortedDictionary<string, object?> request = Request(
+            ("operation", ScryfallOperationNames.CardPrints),
+            ("oracleId", oracleId));
         string path = $"cards/search?q=oracleid%3A{oracleId:D}&unique=prints&order=released&dir=asc";
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "card-prints",
+            ScryfallOperationNames.CardPrints,
             request,
             freshnessPolicy,
             token => Provider.GetPagedAsync(path, token),
@@ -1031,11 +1033,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         SortedDictionary<string, object?> request = Request(
-            ("operation", "card-rulings"),
+            ("operation", ScryfallOperationNames.CardRulings),
             ("oracleId", oracleId),
             ("scryfallCardId", scryfallCardId));
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "card-rulings",
+            ScryfallOperationNames.CardRulings,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync($"cards/{scryfallCardId:D}/rulings", token),
@@ -1083,7 +1085,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         codeOrId = codeOrId?.Trim();
-        string operation = codeOrId is null ? "sets" : "set-get";
+        string operation = codeOrId is null ? ScryfallOperationNames.Sets : ScryfallOperationNames.SetGet;
         SortedDictionary<string, object?> request = Request(("codeOrId", codeOrId), ("operation", operation));
         Func<CancellationToken, Task<ProviderAcquisition>> acquire = codeOrId is null
             ? token => Provider.GetDataArrayAsync("sets", token)
@@ -1130,9 +1132,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             return pageFailure;
         }
 
-        SortedDictionary<string, object?> request = Request(("catalog", catalog), ("operation", "catalog"));
+        SortedDictionary<string, object?> request = Request(
+            ("catalog", catalog),
+            ("operation", ScryfallOperationNames.Catalog));
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "catalog",
+            ScryfallOperationNames.Catalog,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync($"catalog/{Uri.EscapeDataString(catalog)}", token),
@@ -1177,13 +1181,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         SortedDictionary<string, object?> request = Request(
             ("includeExtras", includeExtras),
-            ("operation", "autocomplete"),
+            ("operation", ScryfallOperationNames.Autocomplete),
             ("query", query));
         string path =
             $"cards/autocomplete?q={Uri.EscapeDataString(query)}" +
             $"&include_extras={includeExtras.ToString().ToLowerInvariant()}";
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "autocomplete",
+            ScryfallOperationNames.Autocomplete,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync(path, token),
@@ -1211,9 +1215,9 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {
-        SortedDictionary<string, object?> request = Request(("operation", "bulk-metadata"));
+        SortedDictionary<string, object?> request = Request(("operation", ScryfallOperationNames.BulkMetadata));
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "bulk-metadata",
+            ScryfallOperationNames.BulkMetadata,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync("bulk-data", token),

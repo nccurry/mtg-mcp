@@ -1,13 +1,12 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
-using MtgMcp.App.Hosting;
+using MtgMcp.App.Configuration;
 
 namespace MtgMcp.App.Tests;
 
 /// <summary>
-/// Walks every tool's published input schema to enforce rules that apply to the whole tool surface.
+/// Walks every registered tool's published input schema to enforce rules that apply to the whole tool surface.
 /// </summary>
 public sealed partial class ToolSchemaSurfaceTests
 {
@@ -22,8 +21,9 @@ public sealed partial class ToolSchemaSurfaceTests
     [Fact]
     public void ChoiceFields_PublishEnum()
     {
+        using RegisteredToolSet registered = new(OperationMode.Remote);
         List<string> missing = [];
-        foreach (McpServerTool tool in CreateTools())
+        foreach (McpServerTool tool in registered.Tools)
         {
             Walk(tool.ProtocolTool.Name, "$", tool.ProtocolTool.InputSchema, missing);
         }
@@ -32,12 +32,48 @@ public sealed partial class ToolSchemaSurfaceTests
     }
 
     /// <summary>
+    /// Verifies the walk reports a described value list that publishes no enum, in every way a string can be typed.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"type":"string","description":"Mode: x, y, or z."}""")]
+    [InlineData("""{"type":["string","null"],"description":"Mode: x, y, or z."}""")]
+    [InlineData("""{"anyOf":[{"type":"null"},{"type":"string"}],"description":"Mode: x, y, or z."}""")]
+    [InlineData("""{"oneOf":[{"type":"string"},{"type":"null"}],"description":"x, y, or z"}""")]
+    public void Walk_ListedValuesWithoutEnum_AreReported(string schemaJson)
+    {
+        using JsonDocument schema = JsonDocument.Parse(schemaJson);
+        List<string> missing = [];
+
+        Walk("fixture", "$", schema.RootElement, missing);
+
+        Assert.Single(missing);
+    }
+
+    /// <summary>
+    /// Verifies the walk accepts the same fields once the enum is published, on the node or on a string member.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"type":"string","enum":["x","y","z"],"description":"Mode: x, y, or z."}""")]
+    [InlineData("""{"anyOf":[{"type":"null"},{"type":"string","enum":["x","y","z"]}],"description":"x, y, or z"}""")]
+    public void Walk_ListedValuesWithEnum_AreNotReported(string schemaJson)
+    {
+        using JsonDocument schema = JsonDocument.Parse(schemaJson);
+        List<string> missing = [];
+
+        Walk("fixture", "$", schema.RootElement, missing);
+
+        Assert.Empty(missing);
+    }
+
+    /// <summary>
     /// Verifies the annotated choice parameters are present, so the walk above is not vacuous.
     /// </summary>
     [Fact]
     public void KnownChoiceParameters_PublishEnum()
     {
-        Dictionary<string, McpServerTool> tools = CreateTools().ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
+        using RegisteredToolSet registered = new(OperationMode.Remote);
+        Dictionary<string, McpServerTool> tools = registered.Tools
+            .ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
 
         Assert.Equal(
             ["default", "cache-only", "refresh"],
@@ -56,7 +92,8 @@ public sealed partial class ToolSchemaSurfaceTests
     [Fact]
     public void Descriptions_FitClientLimit()
     {
-        List<string> tooLong = CreateTools()
+        using RegisteredToolSet registered = new(OperationMode.Remote);
+        List<string> tooLong = registered.Tools
             .Where(tool => (tool.ProtocolTool.Description?.Length ?? 0) > MaximumDescriptionLength)
             .Select(tool => $"{tool.ProtocolTool.Name}: {tool.ProtocolTool.Description!.Length}")
             .ToList();
@@ -65,30 +102,17 @@ public sealed partial class ToolSchemaSurfaceTests
     }
 
     /// <summary>
-    /// Builds every tool declared in the App assembly with the serializer options the server registers.
+    /// Verifies the registration this suite inspects holds the full tool surface, so no rule is checked on a subset.
     /// </summary>
-    private static List<McpServerTool> CreateTools()
+    [Fact]
+    public void RegisteredToolSet_HoldsEveryToolOnce()
     {
-        List<McpServerTool> tools = [];
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        foreach (Type type in typeof(ToolCallPolicy).Assembly.GetTypes())
-        {
-            foreach (MethodInfo method in type.GetMethods(flags))
-            {
-                if (method.GetCustomAttribute<McpServerToolAttribute>() is null)
-                {
-                    continue;
-                }
+        using RegisteredToolSet registered = new(OperationMode.Remote);
 
-                McpServerToolCreateOptions options = new() { SerializerOptions = ToolCallPolicy.SerializerOptions };
-                tools.Add(method.IsStatic
-                    ? McpServerTool.Create(method, target: null, options)
-                    : McpServerTool.Create(method, _ => throw new InvalidOperationException("Schema only."), options));
-            }
-        }
+        string[] names = [.. registered.Tools.Select(tool => tool.ProtocolTool.Name)];
 
-        Assert.NotEmpty(tools);
-        return tools;
+        Assert.Equal(97, names.Length);
+        Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>
@@ -115,7 +139,7 @@ public sealed partial class ToolSchemaSurfaceTests
         if (IsString(node) &&
             node.TryGetProperty("description", out JsonElement description) &&
             ListsValues().IsMatch(description.GetString() ?? string.Empty) &&
-            !node.TryGetProperty("enum", out _))
+            !PublishesEnum(node))
         {
             missing.Add($"{tool} {path}: {description.GetString()}");
         }
@@ -127,18 +151,44 @@ public sealed partial class ToolSchemaSurfaceTests
     }
 
     /// <summary>
-    /// Reports whether a schema node describes a string, alone or with null.
+    /// Reports whether a schema node describes a string, alone, with null, or as one member of anyOf or oneOf.
     /// </summary>
     private static bool IsString(JsonElement node)
     {
-        if (!node.TryGetProperty("type", out JsonElement type))
+        if (node.TryGetProperty("type", out JsonElement type))
         {
-            return false;
+            return type.ValueKind == JsonValueKind.String
+                ? type.GetString() == "string"
+                : type.ValueKind == JsonValueKind.Array &&
+                    type.EnumerateArray().Any(value => value.GetString() == "string");
         }
 
-        return type.ValueKind == JsonValueKind.String
-            ? type.GetString() == "string"
-            : type.ValueKind == JsonValueKind.Array && type.EnumerateArray().Any(value => value.GetString() == "string");
+        return Members(node).Any(IsString);
+    }
+
+    /// <summary>
+    /// Reports whether a schema node, or one string member of its anyOf or oneOf, publishes an enum.
+    /// </summary>
+    private static bool PublishesEnum(JsonElement node)
+    {
+        return node.TryGetProperty("enum", out _) || Members(node).Any(PublishesEnum);
+    }
+
+    /// <summary>
+    /// Lists the alternatives of an anyOf or oneOf node.
+    /// </summary>
+    private static IEnumerable<JsonElement> Members(JsonElement node)
+    {
+        foreach (string keyword in new[] { "anyOf", "oneOf" })
+        {
+            if (node.TryGetProperty(keyword, out JsonElement members) && members.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement member in members.EnumerateArray())
+                {
+                    yield return member;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -153,7 +203,8 @@ public sealed partial class ToolSchemaSurfaceTests
     }
 
     /// <summary>
-    /// Matches a value list that starts the description or follows a colon or "one of", such as ": default, cache-only, or refresh".
+    /// Matches a value list that starts the description or follows a colon or "one of",
+    /// such as ": default, cache-only, or refresh". Descriptions that name allowed values some other way are not found.
     /// </summary>
     [GeneratedRegex(@"(?:^|: |one of )[a-z][a-z0-9-]*(?:, [a-z][a-z0-9-]*)*,? or (?!null\b)[a-z][a-z0-9-]*\.?(?:\s|$)")]
     private static partial Regex ListsValues();

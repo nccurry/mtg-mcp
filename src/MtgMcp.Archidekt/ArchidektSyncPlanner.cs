@@ -420,9 +420,10 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
-    /// Links each pushed target row to the provider row a verified read returned for it, by the verification match.
+    /// Links each pushed target row to the verified provider row with the same relation ID,
+    /// or else the only row with identical content.
     /// </summary>
-    public static ArchidektRowLinks LinkRows(RemoteDeckSnapshot verified, RemoteDeckSnapshot target)
+    internal static ArchidektRowLinks LinkRows(RemoteDeckSnapshot verified, RemoteDeckSnapshot target)
     {
         ArgumentNullException.ThrowIfNull(verified);
         ArgumentNullException.ThrowIfNull(target);
@@ -598,7 +599,7 @@ public static class ArchidektSyncPlanner
 /// <summary>
 /// Carries the provider IDs matched to pushed target rows, in target order; null means no exact match.
 /// </summary>
-public sealed record ArchidektRowLinks(
+internal sealed record ArchidektRowLinks(
     IReadOnlyList<string?> EntryRelationIds,
     IReadOnlyList<string?> CategoryIds);
 

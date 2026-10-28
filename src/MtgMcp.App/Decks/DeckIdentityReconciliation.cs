@@ -1,11 +1,11 @@
 using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -714,7 +714,7 @@ internal sealed class DeckIdentityReconciliationReadTools
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description("Optional unique entry UUIDs; omit to select every entry, up to 150.")]
         IReadOnlyList<Guid>? entryIds = null,
-        [Description("Scryfall evidence policy: default, cache-only, or refresh."), AllowedValues("default", "cache-only", "refresh")]
+        [Description("Scryfall evidence policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {

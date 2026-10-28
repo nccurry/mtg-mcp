@@ -291,9 +291,16 @@ Requests start at least two seconds apart per configured account. The adapter
 allows at most 30 starts in 60 seconds and 150 requests per tool invocation.
 It stops on `403` and `429`. Ambiguous mutations are not retried.
 
-Archidekt may renumber category positions. Content equality therefore compares
-category identity, membership, flags, and primary assignment, not the
-provider-controlled numeric rank.
+Archidekt may renumber category positions and the order of an entry's
+secondary categories. Content equality therefore compares category identity,
+membership, flags, and primary assignment, not the provider-controlled numeric
+rank or the order of secondary categories.
+
+After a verified push, the new baseline links each entry and category the push
+created to the row Archidekt assigned, so the next preview plans only real
+changes. If a created entry cannot be matched exactly, `archidekt_push_apply`
+lists it in `unlinkedLocalIds`; the next push removes and re-adds that row
+instead of duplicating it.
 
 ## Read Playgroup evidence
 
@@ -307,6 +314,17 @@ quality.
 Request starts are at least 250 milliseconds apart. Reads have bounded retry.
 Writes are single-attempt. Live acceptance does not invoke writes because the
 public API provides no cleanup operation.
+
+## Errors
+
+A failed tool call sets the MCP `isError` flag and keeps the structured body
+(`kind`, `reasonCode`, `message`). Check `isError` first, then read `kind`.
+A call whose arguments cannot be read returns `kind: "invalid-input"`, reason
+`invalid-arguments`, and a top-level `path` to the rejected value, for example
+`changes[0].entryDraft.quantity`. A union's `kind` property (such as a deck
+change's `add-entry`) may appear anywhere in its object. A `conflict` caused by
+stale state includes `current`, the current local revision, remote fingerprint,
+or both, to preview again against.
 
 ## Evidence and safety
 

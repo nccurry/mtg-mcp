@@ -161,13 +161,14 @@ public sealed class StatisticsDeckResolverTests
             await CreateDeckAsync(store, "custom");
         StatisticsDeckResolver resolver = new(store);
 
-        Assert.IsType<OperationConflict>((await resolver.ResolvePopulationAsync(
+        OperationConflict stale = Assert.IsType<OperationConflict>((await resolver.ResolvePopulationAsync(
             new DeckStatisticsPopulationInput(
                 deck.DeckId,
                 deck.Revision + 1,
                 [new DeckEntryIdsSelectorInput([firstId])],
                 []),
             TestContext.Current.CancellationToken)).Value);
+        Assert.Equal(new ConflictState(Revision: deck.Revision), stale.Current);
         Assert.IsType<OperationNotFound>((await resolver.ResolvePopulationAsync(
             new DeckStatisticsPopulationInput(
                 Guid.CreateVersion7(),

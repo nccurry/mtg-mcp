@@ -65,6 +65,43 @@ public sealed class ToolSchemaSdkTests
     }
 
     /// <summary>
+    /// Verifies the shared options read a union kind from any property position, which every registration relies on.
+    /// </summary>
+    [Fact]
+    public void SerializerOptions_ReadUnionKindInAnyPosition()
+    {
+        Assert.True(ToolCallPolicy.SerializerOptions.AllowOutOfOrderMetadataProperties);
+        Assert.True(ToolCallPolicy.SerializerOptions.IsReadOnly);
+    }
+
+    /// <summary>
+    /// Verifies a shared allowed-value attribute subclass publishes a schema enum on a parameter and a property.
+    /// </summary>
+    [Fact]
+    public void AllowedValuesSubclass_PublishesEnum()
+    {
+        McpServerTool tool = McpServerTool.Create(
+            ([FreshnessPolicyValues] string policy, SubclassRequest request) => policy + request.Policy,
+            new McpServerToolCreateOptions { Name = "sample", SerializerOptions = ToolCallPolicy.SerializerOptions });
+
+        JsonElement properties = tool.ProtocolTool.InputSchema.GetProperty("properties");
+
+        string[] expected = ["default", "cache-only", "refresh"];
+        Assert.Equal(
+            expected,
+            properties.GetProperty("policy").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(
+            expected,
+            properties.GetProperty("request").GetProperty("properties").GetProperty("policy")
+                .GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+    }
+
+    /// <summary>
+    /// A sample request record whose property uses a shared allowed-value attribute.
+    /// </summary>
+    internal sealed record SubclassRequest([property: FreshnessPolicyValues] string Policy);
+
+    /// <summary>
     /// A sample request record with an annotated string choice property.
     /// </summary>
     internal sealed record SampleRequest(

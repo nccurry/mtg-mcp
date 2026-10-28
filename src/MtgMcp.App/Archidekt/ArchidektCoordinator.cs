@@ -388,15 +388,6 @@ internal sealed class ArchidektSynchronizationContext
             return ForwardFailure<ArchidektSyncPreview, BindingState>(stateResult);
         }
 
-        if (state.Data.Baseline.UnlinkedLocalIds is { Count: > 0 } unlinked)
-        {
-            // An unlinked row already exists on Archidekt; pushing again would create it a second time.
-            return new OperationConflict(
-                "unlinked-remote-rows",
-                $"The last push could not link {unlinked.Count} local row(s) to Archidekt " +
-                $"({string.Join(", ", unlinked)}). Pull the Archidekt deck before pushing again.");
-        }
-
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
             state.Data.Binding.RemoteId,
             operationScope,
@@ -534,8 +525,8 @@ internal sealed class ArchidektSynchronizationContext
             BaselineFingerprint = verified.Data.RemoteFingerprint,
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
-        string baseline = ArchidektLocalMapper.CreatePushBaseline(local.Data, verified.Data, target);
-        IReadOnlyList<Guid>? unlinked = ArchidektLocalMapper.ParseBaseline(baseline).UnlinkedLocalIds;
+        (string baseline, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(local.Data, verified.Data, target);
         OperationResult<DeckDocument> baselineUpdate = await deckStore.ApplyChangesAsync(
             local.Data.DeckId,
             local.Data.Revision,
@@ -551,7 +542,7 @@ internal sealed class ArchidektSynchronizationContext
             LocalDeckId = updated.Data.DeckId,
             LocalRevision = updated.Data.Revision,
             FinalRemoteFingerprint = verified.Data.RemoteFingerprint,
-            Unlinked = unlinked,
+            UnlinkedLocalIds = unlinkedLocalIds,
         });
     }
 

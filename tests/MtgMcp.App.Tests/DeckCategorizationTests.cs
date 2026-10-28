@@ -17,7 +17,9 @@ public sealed class DeckCategorizationTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
-        DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Fixture"), TestContext.Current.CancellationToken));
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
 
         OperationResult<DeckCategoryRulesPreview> result = await coordinator.ValidateAsync(
             deck.DeckId,
@@ -83,7 +85,9 @@ public sealed class DeckCategorizationTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
-        DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Fixture"), TestContext.Current.CancellationToken));
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
         CategoryRuleSource source = new InlineCategoryRuleSource(new CategoryRuleSet("add-only", []));
 
         OperationResult<DeckDocument> result = await coordinator.ApplyAsync(
@@ -114,6 +118,30 @@ public sealed class DeckCategorizationTests
         Assert.True(preview.IsComplete);
         Assert.NotEmpty(preview.PreviewFingerprint);
         Assert.NotEmpty(preview.ApplyToken);
+    }
+
+    /// <summary>Reports the current deck revision when a preview is requested for a stale revision.</summary>
+    [Fact]
+    public async Task Preview_StaleRevision_ReturnsConflictWithCurrentRevision()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        DeckCategorizationCoordinator coordinator = new(store, scryfall);
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
+
+        OperationResult<DeckCategoryRulesPreview> result = await coordinator.PreviewAsync(
+            deck.DeckId,
+            deck.Revision + 1,
+            new InlineCategoryRuleSource(new CategoryRuleSet("add-only", [])),
+            "cache-only",
+            TestContext.Current.CancellationToken);
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>(result.Value);
+        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
     }
 
     /// <summary>Rejects assignment modes outside the closed categorization contract.</summary>

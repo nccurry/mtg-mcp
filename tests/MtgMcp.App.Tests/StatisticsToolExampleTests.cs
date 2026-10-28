@@ -53,6 +53,8 @@ public sealed class StatisticsToolExampleTests
                         StringComparison.Ordinal);
                 }
 
+                AssertExampleKeysArePublishedInputs(name, method, tools, example);
+
                 object result = await InvokeAsync(tools, method, example);
 
                 string kind = JsonSerializer.SerializeToElement(result, ToolCallPolicy.SerializerOptions)
@@ -67,6 +69,29 @@ public sealed class StatisticsToolExampleTests
             {
                 Directory.Delete(root, recursive: true);
             }
+        }
+    }
+
+    /// <summary>
+    /// Verifies every top-level key of an example is an input property the server publishes for the tool.
+    /// </summary>
+    private static void AssertExampleKeysArePublishedInputs(
+        string name,
+        MethodInfo method,
+        StatisticsReadTools tools,
+        string example)
+    {
+        McpServerTool published = McpServerTool.Create(
+            method,
+            tools,
+            new McpServerToolCreateOptions { SerializerOptions = ToolCallPolicy.SerializerOptions });
+        JsonElement properties = published.ProtocolTool.InputSchema.GetProperty("properties");
+        using JsonDocument document = JsonDocument.Parse(example);
+        foreach (JsonProperty key in document.RootElement.EnumerateObject())
+        {
+            Assert.True(
+                properties.TryGetProperty(key.Name, out _),
+                $"{name} example key '{key.Name}' is not a published input property.");
         }
     }
 

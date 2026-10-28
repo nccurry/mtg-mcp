@@ -312,10 +312,11 @@ public sealed record ArchidektApplyResult(
         Array.AsReadOnly(Operations.ToArray());
 
     /// <summary>
-    /// Gets local entry and category IDs a verified push could not link to provider rows; omitted when all linked.
+    /// Gets local entry IDs a verified push could not link to provider rows; omitted when all linked.
+    /// The next push removes and recreates these rows instead of duplicating them.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<Guid>? Unlinked { get; init; }
+    public IReadOnlyList<Guid>? UnlinkedLocalIds { get; init; }
 }
 
 /// <summary>

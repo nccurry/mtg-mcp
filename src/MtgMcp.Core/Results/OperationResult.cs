@@ -181,7 +181,7 @@ public sealed record OperationConflict
     }
 
     /// <summary>
-    /// Gets the newer local revision or remote state marker, when the conflict is about stale state.
+    /// Gets the current local revision, remote fingerprint, or both, when the conflict is about stale state.
     /// </summary>
     [JsonPropertyName("current")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

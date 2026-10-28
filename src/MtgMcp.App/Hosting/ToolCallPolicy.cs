@@ -25,14 +25,18 @@ internal static class ToolCallPolicy
     private const int MaximumKindSearchDepth = 4;
 
     /// <summary>
-    /// Gets the serializer options for tool arguments and results; union kinds may appear in any property position.
+    /// Maps each tool name to the method that implements it. The SDK does not expose the bound method to
+    /// call-tool filters, so the policy finds it by tool name.
     /// </summary>
-    internal static JsonSerializerOptions SerializerOptions { get; } = CreateSerializerOptions();
+    private static readonly FrozenDictionary<string, MethodInfo> ToolMethods =
+        IndexToolMethods(typeof(ToolCallPolicy).Assembly.GetTypes());
 
     /// <summary>
-    /// Maps each registered tool name to the method that implements it.
+    /// Gets the serializer options for tool arguments and results; union kinds may appear in any property position.
+    /// Every tool registration must use these options so the binding diagnosis reads arguments the same way the
+    /// SDK does.
     /// </summary>
-    private static readonly Lazy<FrozenDictionary<string, MethodInfo>> ToolMethods = new(IndexToolMethods);
+    internal static JsonSerializerOptions SerializerOptions { get; } = CreateSerializerOptions();
 
     /// <summary>
     /// Wraps the tool call pipeline so failures carry the MCP error flag and binding failures name their path.
@@ -48,9 +52,10 @@ internal static class ToolCallPolicy
             {
                 result = await next(context, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException && context.Params is not null)
+            catch (Exception exception) when (
+                exception is not OperationCanceledException && context.Params is not null)
             {
-                // The SDK binds arguments inside the pipeline and reports a binding exception only as generic text.
+                // The SDK binds arguments inside the pipeline and lets a binding exception reach this filter.
                 OperationInvalidInput? failure = DiagnoseArguments(context.Params.Name, context.Params.Arguments);
                 if (failure is null)
                 {
@@ -60,33 +65,23 @@ internal static class ToolCallPolicy
                 return CreateFailureResult(failure);
             }
 
-            return Apply(context.Params, result);
+            return MarkOperationFailure(result);
         };
     }
 
     /// <summary>
-    /// Marks failed operation results as errors and replaces the SDK's generic binding error with a bounded failure.
+    /// Sets the MCP error flag on any operation result whose kind is not success.
     /// </summary>
-    internal static CallToolResult Apply(CallToolRequestParams? request, CallToolResult result)
+    internal static CallToolResult MarkOperationFailure(CallToolResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (TryReadKind(result.StructuredContent, out string? kind))
+        if (TryReadKind(result.StructuredContent, out string? kind) &&
+            !string.Equals(kind, "success", StringComparison.Ordinal))
         {
-            if (!string.Equals(kind, "success", StringComparison.Ordinal))
-            {
-                result.IsError = true;
-            }
-
-            return result;
+            result.IsError = true;
         }
 
-        if (result.IsError != true || request is null)
-        {
-            return result;
-        }
-
-        OperationInvalidInput? failure = DiagnoseArguments(request.Name, request.Arguments);
-        return failure is null ? result : CreateFailureResult(failure);
+        return result;
     }
 
     /// <summary>
@@ -96,11 +91,19 @@ internal static class ToolCallPolicy
         string toolName,
         IDictionary<string, JsonElement>? arguments)
     {
-        if (!ToolMethods.Value.TryGetValue(toolName, out MethodInfo? method))
-        {
-            return null;
-        }
+        return ToolMethods.TryGetValue(toolName, out MethodInfo? method)
+            ? DiagnoseArguments(method, arguments)
+            : null;
+    }
 
+    /// <summary>
+    /// Re-reads each argument into the parameter types of one tool method to find the first unbound value.
+    /// </summary>
+    internal static OperationInvalidInput? DiagnoseArguments(
+        MethodInfo method,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        ArgumentNullException.ThrowIfNull(method);
         foreach (ParameterInfo parameter in method.GetParameters())
         {
             if (!IsArgumentParameter(parameter) || parameter.Name is null)
@@ -132,6 +135,18 @@ internal static class ToolCallPolicy
     }
 
     /// <summary>
+    /// Reports whether a parameter is supplied from tool arguments rather than injected by the host.
+    /// </summary>
+    private static bool IsArgumentParameter(ParameterInfo parameter)
+    {
+        Type type = parameter.ParameterType;
+        return type != typeof(CancellationToken) &&
+            type != typeof(IServiceProvider) &&
+            type != typeof(McpServer) &&
+            !(type.IsGenericType && type.GetGenericTypeDefinition() == typeof(RequestContext<>));
+    }
+
+    /// <summary>
     /// Reads one argument into its parameter type and describes the first failure, if any.
     /// </summary>
     private static OperationInvalidInput? TryBind(ParameterInfo parameter, JsonElement value)
@@ -150,7 +165,8 @@ internal static class ToolCallPolicy
                 IReadOnlyList<string> kinds = FindAllowedKinds(parameter.ParameterType);
                 if (kinds.Count > 0)
                 {
-                    message = $"The value at '{path}' has an unknown kind. Allowed kinds: {string.Join(", ", kinds)}.";
+                    message = $"The value at '{path}' has a missing or unknown kind. " +
+                        $"Allowed kinds: {string.Join(", ", kinds)}.";
                 }
             }
 
@@ -195,18 +211,6 @@ internal static class ToolCallPolicy
 
         kind = kindElement.GetString();
         return kind is not null;
-    }
-
-    /// <summary>
-    /// Reports whether a parameter is supplied from tool arguments rather than injected by the host.
-    /// </summary>
-    private static bool IsArgumentParameter(ParameterInfo parameter)
-    {
-        Type type = parameter.ParameterType;
-        return type != typeof(CancellationToken) &&
-            type != typeof(IServiceProvider) &&
-            type != typeof(McpServer) &&
-            !(type.IsGenericType && type.GetGenericTypeDefinition() == typeof(RequestContext<>));
     }
 
     /// <summary>
@@ -296,19 +300,28 @@ internal static class ToolCallPolicy
     }
 
     /// <summary>
-    /// Finds every tool method declared in this assembly by its MCP tool name.
+    /// Finds every tool method declared on the given types by its MCP tool name; a repeated name is a build error.
     /// </summary>
-    private static FrozenDictionary<string, MethodInfo> IndexToolMethods()
+    internal static FrozenDictionary<string, MethodInfo> IndexToolMethods(IEnumerable<Type> types)
     {
+        ArgumentNullException.ThrowIfNull(types);
         Dictionary<string, MethodInfo> methods = new(StringComparer.Ordinal);
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        foreach (Type type in typeof(ToolCallPolicy).Assembly.GetTypes())
+        const BindingFlags flags =
+            BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        foreach (Type type in types)
         {
             foreach (MethodInfo method in type.GetMethods(flags))
             {
-                if (method.GetCustomAttribute<McpServerToolAttribute>() is { Name: { } name })
+                if (method.GetCustomAttribute<McpServerToolAttribute>() is not { Name: { } name })
                 {
-                    methods[name] = method;
+                    continue;
+                }
+
+                if (!methods.TryAdd(name, method))
+                {
+                    throw new InvalidOperationException(
+                        $"Tool name '{name}' is declared by both {methods[name].DeclaringType?.Name} " +
+                        $"and {method.DeclaringType?.Name}.");
                 }
             }
         }
