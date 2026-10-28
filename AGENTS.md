@@ -39,9 +39,11 @@
   PLC.
 - Accepted AMEND-005 plus the completed hardening, statistics, and
   categorization children define the original 93-tool rewrite baseline. The
-  completed Commander Spellbook evidence child adds three opt-in tools, and the
-  on-curve estimate adds one decks tool, so the `all` profile now exposes 97
-  tools. Statistics remains exact, caller-supplied,
+  completed Commander Spellbook evidence child added three tools and the
+  on-curve estimate one decks tool (97 in total). The focused agent tool
+  surface then removed, merged, and renamed tools, so with every toolset on
+  the server exposes 80 tools in `remote` mode (53 in `read-only`, 67 in
+  `local`). Statistics remains exact, caller-supplied,
   provider-independent, and legality-free. The stabilization child and `0.9.0`
   release are complete.
 - Stable `0.9.0` returns evidence, provider data, explicit operations, exact
@@ -50,14 +52,15 @@
 - Do not carry advisor prompts, intent inference, recommendations, weak-card
   judgments, blended quality scores, or strategic simulation into the stable
   rewrite.
-- Rewrite modes are `read-only`, `local` (default), and `remote`. Rewrite tools
-  use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`, `spellbook_*`,
-  and `stats_*` prefixes. Accepted AMEND-004 removes the separate Tagger prefix,
+- Modes are `read-only`, `local`, and `remote` (default). Tools use the
+  `local_deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`,
+  `spellbook_*`, and `stats_*` prefixes, and each description starts with its
+  data source. Accepted AMEND-004 removes the separate Tagger prefix,
   adapter, toolset, and database; do not implement the superseded design.
 - Assign every stable tool to exactly one toolset. Toolsets choose which tools an
   LLM sees; operation mode is the only write-permission boundary. Registration
-  is fixed for an MCP session, the default profile stays focused, and optional
-  provider tools require explicit enablement.
+  is fixed for an MCP session, every toolset is on by default, and the Archidekt
+  and Playgroup toolsets turn on only when their credentials are present.
 - The rewrite starts fresh: do not add automatic legacy data, configuration, or
   schema migration or compatibility aliases unless an approved overall PLC
   amendment explicitly changes that rule.

@@ -13,24 +13,24 @@ namespace MtgMcp.E2E.Tests;
 public sealed class ScryfallMcpTests
 {
     /// <summary>
-    /// Lists the exact fourteen tools visible without local mutation authority.
+    /// Asks the card details tool for the rulings section only.
+    /// </summary>
+    private static readonly string[] RulingsOnly = ["rulings"];
+
+    /// <summary>
+    /// Lists the exact nine tools visible without local mutation authority.
     /// </summary>
     private static readonly string[] ReadTools =
     [
         "scryfall_autocomplete",
-        "scryfall_bulk_metadata",
-        "scryfall_card_collection",
-        "scryfall_card_get",
-        "scryfall_card_prints",
-        "scryfall_card_rulings",
-        "scryfall_cards_by_tag",
-        "scryfall_catalog",
-        "scryfall_corpus_status",
+        "scryfall_card_data_status",
+        "scryfall_card_details",
+        "scryfall_cards_get",
+        "scryfall_installed_cards_by_tag",
+        "scryfall_reference_get",
         "scryfall_search",
-        "scryfall_sets",
-        "scryfall_snapshot_get",
-        "scryfall_snapshot_list",
-        "scryfall_tag_search",
+        "scryfall_search_snapshots_get",
+        "scryfall_tags_search",
     ];
 
     /// <summary>
@@ -38,14 +38,14 @@ public sealed class ScryfallMcpTests
     /// </summary>
     private static readonly string[] WriteTools =
     [
-        "scryfall_corpus_delete",
-        "scryfall_corpus_rollback",
-        "scryfall_corpus_sync",
-        "scryfall_snapshot_delete",
+        "scryfall_card_data_delete",
+        "scryfall_card_data_rollback",
+        "scryfall_card_data_sync",
+        "scryfall_search_snapshot_delete",
     ];
 
     /// <summary>
-    /// Verifies the exact schemas, annotations, and per-mode visibility for all eighteen tools.
+    /// Verifies the exact schemas, annotations, and per-mode visibility for all thirteen tools.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
@@ -80,49 +80,49 @@ public sealed class ScryfallMcpTests
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
             ["scryfall_autocomplete"] = ["cursor", "freshnessPolicy", "includeExtras", "pageSize", "query"],
-            ["scryfall_bulk_metadata"] = ["freshnessPolicy"],
-            ["scryfall_card_collection"] = ["cursor", "fields", "freshnessPolicy", "lookups", "pageSize", "responseFormat"],
-            ["scryfall_card_get"] = ["fields", "freshnessPolicy", "lookup", "responseFormat"],
-            ["scryfall_card_prints"] = ["cursor", "freshnessPolicy", "includeRaw", "oracleId", "pageSize"],
-            ["scryfall_card_rulings"] = ["cursor", "freshnessPolicy", "includeRaw", "oracleId", "pageSize", "scryfallCardId"],
-            ["scryfall_cards_by_tag"] =
+            ["scryfall_cards_get"] = ["cursor", "fields", "freshnessPolicy", "lookups", "pageSize", "responseFormat"],
+            ["scryfall_card_details"] =
+                [
+                    "freshnessPolicy", "include", "includeRaw", "lookup", "pageSize", "printsCursor",
+                    "rulingsCursor",
+                ],
+            ["scryfall_installed_cards_by_tag"] =
                 ["cursor", "fields", "includeDescendants", "minimumWeight", "pageSize", "responseFormat", "tagIdentity", "tagType"],
-            ["scryfall_catalog"] = ["catalog", "cursor", "freshnessPolicy", "pageSize"],
-            ["scryfall_corpus_delete"] = ["acknowledgeDataLoss", "expectedActiveGeneration"],
-            ["scryfall_corpus_rollback"] = ["acknowledgeActivationChange", "expectedActiveGeneration", "expectedPreviousGeneration"],
-            ["scryfall_corpus_status"] = [],
-            ["scryfall_corpus_sync"] = ["expectedActiveGeneration", "metadataPolicy"],
+            ["scryfall_card_data_delete"] = ["acknowledgeDataLoss", "expectedActiveGeneration"],
+            ["scryfall_card_data_rollback"] =
+                ["acknowledgeActivationChange", "expectedActiveGeneration", "expectedPreviousGeneration"],
+            ["scryfall_card_data_status"] = [],
+            ["scryfall_card_data_sync"] = ["expectedActiveGeneration", "metadataPolicy"],
             ["scryfall_search"] =
                 [
                     "cursor", "direction", "fields", "freshnessPolicy", "includeExtras", "includeMultilingual",
                     "includeVariations", "order", "pageSize", "query", "responseFormat", "unique",
                 ],
-            ["scryfall_sets"] = ["codeOrId", "cursor", "freshnessPolicy", "includeRaw", "pageSize"],
-            ["scryfall_snapshot_delete"] = ["acknowledgeDataLoss", "expectedChecksum", "snapshotId"],
-            ["scryfall_snapshot_get"] = ["cursor", "includeRaw", "pageSize", "snapshotId"],
-            ["scryfall_snapshot_list"] =
-                ["cursor", "operation", "pageSize", "retrievedAfterUtc", "retrievedBeforeUtc"],
-            ["scryfall_tag_search"] = ["cursor", "includeRaw", "pageSize", "query", "tagType"],
+            ["scryfall_reference_get"] =
+                ["catalogName", "codeOrId", "cursor", "freshnessPolicy", "includeRaw", "kind", "pageSize"],
+            ["scryfall_search_snapshot_delete"] = ["acknowledgeDataLoss", "expectedChecksum", "snapshotId"],
+            ["scryfall_search_snapshots_get"] =
+                [
+                    "cursor", "includeRaw", "kind", "operation", "pageSize", "retrievedAfterUtc",
+                    "retrievedBeforeUtc", "snapshotId",
+                ],
+            ["scryfall_tags_search"] = ["cursor", "includeRaw", "pageSize", "query", "tagType"],
         };
         HashSet<string> writes = [.. WriteTools];
         HashSet<string> destructive =
         [
-            "scryfall_corpus_delete",
-            "scryfall_corpus_rollback",
-            "scryfall_snapshot_delete",
+            "scryfall_card_data_delete",
+            "scryfall_card_data_rollback",
+            "scryfall_search_snapshot_delete",
         ];
         HashSet<string> openWorld =
         [
             "scryfall_autocomplete",
-            "scryfall_bulk_metadata",
-            "scryfall_card_collection",
-            "scryfall_card_get",
-            "scryfall_card_prints",
-            "scryfall_card_rulings",
-            "scryfall_catalog",
+            "scryfall_card_details",
+            "scryfall_cards_get",
+            "scryfall_reference_get",
             "scryfall_search",
-            "scryfall_sets",
-            "scryfall_corpus_sync",
+            "scryfall_card_data_sync",
         ];
         foreach (McpClientTool tool in localTools)
         {
@@ -156,46 +156,50 @@ public sealed class ScryfallMcpTests
 
         JsonElement status = await CallSuccessAsync(
             session,
-            "scryfall_corpus_status",
+            "scryfall_card_data_status",
             new Dictionary<string, object?>()).ConfigureAwait(false);
         Assert.Equal("available", status.GetProperty("state").GetString());
 
         JsonElement white = await CallSuccessAsync(
             session,
-            "scryfall_card_get",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
-                ["lookup"] = new { kind = "exact-name", value = "Venerable Knight" },
+                ["lookups"] = new[] { new { kind = "exact-name", value = "Venerable Knight" } },
                 ["freshnessPolicy"] = "cache-only",
             }).ConfigureAwait(false);
-        Assert.Equal("corpus", white.GetProperty("origin").GetString());
-        Assert.Equal("Venerable Knight", white.GetProperty("card").GetProperty("name").GetString());
-        Assert.Equal("complete-direct", white.GetProperty("card").GetProperty("tagCoverage").GetString());
-        Assert.Equal("white-weenie", white.GetProperty("card").GetProperty("tags")[0].GetProperty("slug").GetString());
-        Assert.False(white.GetProperty("card").TryGetProperty("raw", out _));
+        JsonElement whiteRow = FirstRow(white);
+        Assert.Equal("found", whiteRow.GetProperty("status").GetString());
+        Assert.Equal("corpus", whiteRow.GetProperty("origin").GetString());
+        Assert.Equal("Venerable Knight", whiteRow.GetProperty("card").GetProperty("name").GetString());
+        Assert.Equal("complete-direct", whiteRow.GetProperty("card").GetProperty("tagCoverage").GetString());
+        Assert.Equal(
+            "white-weenie",
+            whiteRow.GetProperty("card").GetProperty("tags")[0].GetProperty("slug").GetString());
+        Assert.False(whiteRow.GetProperty("card").TryGetProperty("raw", out _));
 
         JsonElement fullWhite = await CallSuccessAsync(
             session,
-            "scryfall_card_get",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
-                ["lookup"] = new { kind = "exact-name", value = "Venerable Knight" },
+                ["lookups"] = new[] { new { kind = "exact-name", value = "Venerable Knight" } },
                 ["freshnessPolicy"] = "cache-only",
                 ["responseFormat"] = "full",
             }).ConfigureAwait(false);
-        Assert.True(fullWhite.GetProperty("card").TryGetProperty("raw", out _));
+        Assert.True(FirstRow(fullWhite).GetProperty("card").TryGetProperty("raw", out _));
         Assert.Equal("full", fullWhite.GetProperty("responseFormat").GetString());
 
         JsonElement conciseWhite = await CallSuccessAsync(
             session,
-            "scryfall_card_get",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
-                ["lookup"] = new { kind = "exact-name", value = "Venerable Knight" },
+                ["lookups"] = new[] { new { kind = "exact-name", value = "Venerable Knight" } },
                 ["freshnessPolicy"] = "cache-only",
                 ["responseFormat"] = "concise",
             }).ConfigureAwait(false);
-        JsonElement conciseCard = conciseWhite.GetProperty("card");
+        JsonElement conciseCard = FirstRow(conciseWhite).GetProperty("card");
         Assert.Equal("concise", conciseWhite.GetProperty("responseFormat").GetString());
         Assert.Equal("Venerable Knight", conciseCard.GetProperty("name").GetString());
         Assert.Equal("white-weenie", conciseCard.GetProperty("tags")[0].GetString());
@@ -204,18 +208,18 @@ public sealed class ScryfallMcpTests
 
         JsonElement red = await CallSuccessAsync(
             session,
-            "scryfall_card_get",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
-                ["lookup"] = new { kind = "exact-name", value = "Monastery Swiftspear" },
+                ["lookups"] = new[] { new { kind = "exact-name", value = "Monastery Swiftspear" } },
                 ["freshnessPolicy"] = "cache-only",
             }).ConfigureAwait(false);
-        Assert.Equal("R", red.GetProperty("card").GetProperty("colors")[0].GetString());
+        Assert.Equal("R", FirstRow(red).GetProperty("card").GetProperty("colors")[0].GetString());
 
         ScryfallCardLookup[] commanderLookups = CommanderLookups();
         JsonElement commanderFirst = await CallSuccessAsync(
             session,
-            "scryfall_card_collection",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
                 ["lookups"] = commanderLookups,
@@ -229,7 +233,7 @@ public sealed class ScryfallMcpTests
         string commanderCursor = firstPage.GetProperty("nextCursor").GetString()!;
         JsonElement commanderSecond = await CallSuccessAsync(
             session,
-            "scryfall_card_collection",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
                 ["lookups"] = commanderLookups,
@@ -243,7 +247,7 @@ public sealed class ScryfallMcpTests
 
         JsonElement inherited = await CallSuccessAsync(
             session,
-            "scryfall_cards_by_tag",
+            "scryfall_installed_cards_by_tag",
             new Dictionary<string, object?>
             {
                 ["tagIdentity"] = "aggro",
@@ -254,13 +258,18 @@ public sealed class ScryfallMcpTests
 
         JsonElement rulings = await CallSuccessAsync(
             session,
-            "scryfall_card_rulings",
+            "scryfall_card_details",
             new Dictionary<string, object?>
             {
-                ["oracleId"] = ScryfallTestFixture.WhiteOracleId,
+                ["lookup"] = new { kind = "oracle-id", value = ScryfallTestFixture.WhiteOracleId },
+                ["include"] = RulingsOnly,
                 ["freshnessPolicy"] = "cache-only",
             }).ConfigureAwait(false);
-        Assert.Equal("Fixture ruling.", rulings.GetProperty("page").GetProperty("items")[0].GetProperty("comment").GetString());
+        Assert.False(rulings.TryGetProperty("prints", out _));
+        Assert.Equal(
+            "Fixture ruling.",
+            rulings.GetProperty("rulings").GetProperty("page").GetProperty("items")[0]
+                .GetProperty("comment").GetString());
 
         JsonElement search = await CallSuccessAsync(
             session,
@@ -277,12 +286,15 @@ public sealed class ScryfallMcpTests
 
         JsonElement replay = await CallSuccessAsync(
             session,
-            "scryfall_snapshot_get",
+            "scryfall_search_snapshots_get",
             new Dictionary<string, object?>
             {
+                ["kind"] = "get",
                 ["snapshotId"] = snapshotId,
                 ["includeRaw"] = true,
             }).ConfigureAwait(false);
+        Assert.Equal("get", replay.GetProperty("kind").GetString());
+        replay = replay.GetProperty("snapshot");
         Assert.Equal(snapshotId, replay.GetProperty("summary").GetProperty("snapshotId").GetGuid());
         Assert.Equal(2, replay.GetProperty("items").GetArrayLength());
         Assert.Equal(0, replay.GetProperty("items")[0].GetProperty("ordinal").GetInt32());
@@ -290,15 +302,16 @@ public sealed class ScryfallMcpTests
 
         JsonElement compactReplay = await CallSuccessAsync(
             session,
-            "scryfall_snapshot_get",
-            new Dictionary<string, object?> { ["snapshotId"] = snapshotId }).ConfigureAwait(false);
+            "scryfall_search_snapshots_get",
+            new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = snapshotId }).ConfigureAwait(false);
+        compactReplay = compactReplay.GetProperty("snapshot");
         Assert.Equal(2, compactReplay.GetProperty("items").GetArrayLength());
         Assert.False(compactReplay.GetProperty("items")[0].TryGetProperty("raw", out _));
         Assert.NotEmpty(compactReplay.GetProperty("items")[0].GetProperty("checksum").GetString()!);
 
         _ = await CallSuccessAsync(
             session,
-            "scryfall_snapshot_delete",
+            "scryfall_search_snapshot_delete",
             new Dictionary<string, object?>
             {
                 ["snapshotId"] = snapshotId,
@@ -307,8 +320,8 @@ public sealed class ScryfallMcpTests
             }).ConfigureAwait(false);
         JsonElement deleted = await CallAsync(
             session,
-            "scryfall_snapshot_get",
-            new Dictionary<string, object?> { ["snapshotId"] = snapshotId }).ConfigureAwait(false);
+            "scryfall_search_snapshots_get",
+            new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = snapshotId }).ConfigureAwait(false);
         Assert.Equal("not-found", deleted.GetProperty("kind").GetString());
     }
 
@@ -326,7 +339,7 @@ public sealed class ScryfallMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement deck = await CallSuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -344,7 +357,7 @@ public sealed class ScryfallMcpTests
         long revision = deck.GetProperty("revision").GetInt64();
         JsonElement preview = await CallSuccessAsync(
             session,
-            "deck_identity_reconcile_preview",
+            "local_deck_identity_reconcile_preview",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -362,7 +375,7 @@ public sealed class ScryfallMcpTests
 
         JsonElement applied = await CallSuccessAsync(
             session,
-            "deck_identity_reconcile_apply",
+            "local_deck_identity_reconcile_apply",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -465,6 +478,14 @@ public sealed class ScryfallMcpTests
                 "{W}",
                 ["W"]),
             StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Reads the first row of a cards-get result page.
+    /// </summary>
+    private static JsonElement FirstRow(JsonElement result)
+    {
+        return result.GetProperty("page").GetProperty("items")[0];
     }
 
     /// <summary>

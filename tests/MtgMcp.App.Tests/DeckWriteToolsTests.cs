@@ -9,12 +9,12 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Tests;
 
 /// <summary>
-/// Verifies MCP deck writes enforce mode authority and share one transaction vocabulary.
+/// Verifies the local deck create, delete, and backup tools, and that they enforce mode authority.
 /// </summary>
 public sealed class DeckWriteToolsTests
 {
     /// <summary>
-    /// Exercises every deck wrapper as one coherent local workflow over the shared store.
+    /// Exercises the create, edit, backup, restore, and delete tools as one coherent local workflow.
     /// </summary>
     [Fact]
     public async Task LocalTools_CompleteCrudBackupAndRestoreWorkflow()
@@ -37,77 +37,40 @@ public sealed class DeckWriteToolsTests
                 Entries: [new DeckEntryDraft(1, "First", EntryId: initialEntryId)]),
             TestContext.Current.CancellationToken));
 
-        deck = RequireSuccess(await writes.UpdateAsync(
-            deck.DeckId,
-            deck.Revision,
-            "Workflow Updated",
-            "Local evidence",
-            "custom",
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.AddEntryAsync(
-            deck.DeckId,
-            deck.Revision,
-            new DeckEntryDraft(1, "Second"),
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckMetadataInput("Workflow Updated", "Local evidence", "custom"));
+        deck = await ApplyAsync(batchWrites, deck, new AddDeckEntryInput(new DeckEntryDraft(1, "Second")));
         DeckEntry second = Assert.Single(deck.Entries, value => value.CardName == "Second");
-        deck = RequireSuccess(await writes.UpdateEntryAsync(
-            deck.DeckId,
-            deck.Revision,
-            second with { Quantity = 2, Zone = "sideboard" },
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.RemoveEntryAsync(
-            deck.DeckId,
-            deck.Revision,
-            second.EntryId,
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.CreateCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            new DeckCategoryDraft("Ramp"),
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckEntryInput(second with { Quantity = 2, Zone = "sideboard" }));
+        deck = await ApplyAsync(batchWrites, deck, new RemoveDeckEntryInput(second.EntryId));
+        deck = await ApplyAsync(batchWrites, deck, new AddDeckCategoryInput(new DeckCategoryDraft("Ramp")));
         DeckCategory category = Assert.Single(deck.Categories);
-        deck = RequireSuccess(await writes.UpdateCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            category with { Name = "Acceleration", Color = "#123456" },
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.AssignCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            initialEntryId,
-            category.CategoryId,
-            isPrimary: true,
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.UnassignCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            initialEntryId,
-            category.CategoryId,
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckCategoryInput(category with { Name = "Acceleration", Color = "#123456" }));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new AssignDeckCategoryInput(initialEntryId, category.CategoryId, true));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UnassignDeckCategoryInput(initialEntryId, category.CategoryId));
         Guid bindingId = Guid.CreateVersion7();
-        deck = RequireSuccess(await batchWrites.ApplyChangesAsync(
-            deck.DeckId,
-            deck.Revision,
-            [
-                new UpsertDeckProviderBindingInput(
-                    new DeckProviderBinding(
-                        bindingId,
-                        "Example",
-                        "remote-1",
-                        null,
-                        "v1",
-                        "baseline-1",
-                        null,
-                        null),
-                    "{\"name\":\"Workflow Updated\"}"),
-                new RemoveDeckProviderBindingInput(bindingId),
-            ],
-            TestContext.Current.CancellationToken));
-        deck = RequireSuccess(await writes.DeleteCategoryAsync(
-            deck.DeckId,
-            deck.Revision,
-            category.CategoryId,
-            TestContext.Current.CancellationToken));
+        deck = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpsertDeckProviderBindingInput(
+                new DeckProviderBinding(bindingId, "Example", "remote-1", null, "v1", "baseline-1", null, null),
+                "{\"name\":\"Workflow Updated\"}"),
+            new RemoveDeckProviderBindingInput(bindingId));
+        deck = await ApplyAsync(batchWrites, deck, new RemoveDeckCategoryInput(category.CategoryId));
 
         Assert.Single(RequireSuccess(await reads.ListAsync(
             cancellationToken: TestContext.Current.CancellationToken)).Items);
@@ -124,13 +87,10 @@ public sealed class DeckWriteToolsTests
         DeckBackupPage inventory = RequireSuccess(
             await reads.ListBackupsAsync(TestContext.Current.CancellationToken));
         Assert.Contains(inventory.Items, value => value.BackupId == backup.BackupId);
-        DeckDocument changed = RequireSuccess(await writes.UpdateAsync(
-            deck.DeckId,
-            deck.Revision,
-            "Changed After Backup",
-            null,
-            "custom",
-            TestContext.Current.CancellationToken));
+        DeckDocument changed = await ApplyAsync(
+            batchWrites,
+            deck,
+            new UpdateDeckMetadataInput("Changed After Backup", null, "custom"));
         Assert.NotEqual(deck.Name, changed.Name);
         DeckBackupPage changedInventory = RequireSuccess(
             await reads.ListBackupsAsync(TestContext.Current.CancellationToken));
@@ -146,167 +106,6 @@ public sealed class DeckWriteToolsTests
             deck.DeckId,
             deck.Revision,
             TestContext.Current.CancellationToken)).DeletedId);
-    }
-
-    /// <summary>
-    /// Verifies every granular union mutation matches its one-operation batch form.
-    /// </summary>
-    [Fact]
-    public async Task GranularAndBatchMutations_ProduceEquivalentState()
-    {
-        using TemporaryDirectory firstDirectory = new();
-        using TemporaryDirectory secondDirectory = new();
-        using SqliteDeckStore firstStore = new(firstDirectory.Path, "0.9.0-preview.1");
-        using SqliteDeckStore secondStore = new(secondDirectory.Path, "0.9.0-preview.1");
-        Guid deckId = Guid.CreateVersion7();
-        Guid entryId = Guid.CreateVersion7();
-        Guid categoryId = Guid.CreateVersion7();
-        DeckDocument first = RequireSuccess(await firstStore.CreateAsync(
-            new DeckCreateRequest("Deck", Format: "custom", DeckId: deckId),
-            TestContext.Current.CancellationToken));
-        DeckDocument second = RequireSuccess(await secondStore.CreateAsync(
-            new DeckCreateRequest("Deck", Format: "custom", DeckId: deckId),
-            TestContext.Current.CancellationToken));
-        DeckWriteTools firstTools = new(firstStore, OperationMode.Local);
-        DeckWriteTools secondTools = new(secondStore, OperationMode.Local);
-        DeckBatchWriteTools secondBatchTools = new(secondStore, OperationMode.Local);
-        first = RequireSuccess(await firstTools.UpdateAsync(
-            deckId,
-            first.Revision,
-            "Renamed",
-            "Description",
-            "future-format",
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UpdateDeckMetadataInput("Renamed", "Description", "future-format")],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        DeckEntryDraft entryDraft = new(1, "Card", EntryId: entryId);
-        first = RequireSuccess(await firstTools.AddEntryAsync(
-            deckId,
-            first.Revision,
-            entryDraft,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new AddDeckEntryInput(entryDraft)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        DeckEntry updatedEntry = Assert.Single(first.Entries) with
-        {
-            Quantity = 2,
-            Finish = "foil",
-            Zone = "sideboard",
-        };
-        first = RequireSuccess(await firstTools.UpdateEntryAsync(
-            deckId,
-            first.Revision,
-            updatedEntry,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UpdateDeckEntryInput(updatedEntry)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        DeckCategoryDraft categoryDraft = new("Ramp", "#123456", 7, categoryId);
-        first = RequireSuccess(await firstTools.CreateCategoryAsync(
-            deckId,
-            first.Revision,
-            categoryDraft,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new AddDeckCategoryInput(categoryDraft)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        DeckCategory updatedCategory = Assert.Single(first.Categories) with { Name = "Mana" };
-        first = RequireSuccess(await firstTools.UpdateCategoryAsync(
-            deckId,
-            first.Revision,
-            updatedCategory,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UpdateDeckCategoryInput(updatedCategory)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.AssignCategoryAsync(
-            deckId,
-            first.Revision,
-            entryId,
-            categoryId,
-            isPrimary: true,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new AssignDeckCategoryInput(entryId, categoryId, true)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.UnassignCategoryAsync(
-            deckId,
-            first.Revision,
-            entryId,
-            categoryId,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new UnassignDeckCategoryInput(entryId, categoryId)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.DeleteCategoryAsync(
-            deckId,
-            first.Revision,
-            categoryId,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new RemoveDeckCategoryInput(categoryId)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-
-        first = RequireSuccess(await firstTools.RemoveEntryAsync(
-            deckId,
-            first.Revision,
-            entryId,
-            TestContext.Current.CancellationToken));
-        second = RequireSuccess(await secondBatchTools.ApplyChangesAsync(
-            deckId,
-            second.Revision,
-            [new RemoveDeckEntryInput(entryId)],
-            TestContext.Current.CancellationToken));
-        AssertEquivalent(first, second);
-    }
-
-    /// <summary>
-    /// Compares the caller-visible state controlled by one deck transaction.
-    /// </summary>
-    private static void AssertEquivalent(DeckDocument first, DeckDocument second)
-    {
-        Assert.Equal(first.DeckId, second.DeckId);
-        Assert.Equal(first.Name, second.Name);
-        Assert.Equal(first.Description, second.Description);
-        Assert.Equal(first.Format, second.Format);
-        Assert.Equal(first.Revision, second.Revision);
-        Assert.Equal(first.Entries, second.Entries);
-        Assert.Equal(first.Categories, second.Categories);
-        Assert.Equal(first.CategoryAssignments, second.CategoryAssignments);
-        Assert.Equal(first.ProviderBindings, second.ProviderBindings);
     }
 
     /// <summary>
@@ -328,10 +127,26 @@ public sealed class DeckWriteToolsTests
     }
 
     /// <summary>
+    /// Applies changes to one deck through the batch tool and returns the new deck state.
+    /// </summary>
+    private static async Task<DeckDocument> ApplyAsync(
+        DeckBatchWriteTools tools,
+        DeckDocument deck,
+        params DeckChangeInput[] changes)
+    {
+        return RequireSuccess(await tools.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            changes,
+            TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// Extracts successful tool data or fails with the actual result case.
     /// </summary>
     private static T RequireSuccess<T>(OperationResult<T> result)
     {
         return Assert.IsType<OperationSuccess<T>>(result.Value).Data;
     }
+
 }

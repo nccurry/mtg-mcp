@@ -50,7 +50,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
             .ToArray();
         JsonElement deck = await CallSuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -67,7 +67,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
 
         JsonElement validation = await CallSuccessAsync(
             session,
-            "deck_validate",
+            "local_deck_validate",
             new Dictionary<string, object?> { ["deckId"] = deckId }).ConfigureAwait(false);
         Assert.True(validation.GetProperty("isStructurallyValid").GetBoolean());
         Assert.Empty(validation.GetProperty("issues").EnumerateArray());
@@ -77,7 +77,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
             .ToArray();
         JsonElement collection = await CallSuccessAsync(
             session,
-            "scryfall_card_collection",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
                 ["lookups"] = lookups,
@@ -99,9 +99,10 @@ public sealed class RedWhiteWeeniesLiveMcpTests
 
         JsonElement snapshots = await CallSuccessAsync(
             session,
-            "scryfall_snapshot_list",
-            new Dictionary<string, object?> { ["operation"] = "card-collection" }).ConfigureAwait(false);
-        Assert.Single(snapshots.GetProperty("items").EnumerateArray());
+            "scryfall_search_snapshots_get",
+            new Dictionary<string, object?> { ["kind"] = "list", ["operation"] = "card-collection" })
+            .ConfigureAwait(false);
+        Assert.Single(snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray());
         Assert.True(File.Exists(Path.Combine(session.DataRoot, "decks.db")));
         Assert.True(File.Exists(Path.Combine(session.DataRoot, "scryfall.db")));
     }

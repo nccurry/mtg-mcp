@@ -181,7 +181,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallSearchResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallSearchResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallCard>> page = await CardPageAsync(
@@ -196,7 +196,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                 new OperationSuccess<ScryfallSearchResult>(
                     new ScryfallSearchResult(value.Data, SnapshotReference(success.Data), success.Data.Warnings)),
-            _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallSearchResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallCard>, ScryfallSearchResult>(page),
         };
     }
 
@@ -218,7 +218,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallCardResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallCardResult>(policyResult);
         }
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh && lookup.Kind != "fuzzy-name")
@@ -251,7 +251,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallCardResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallCardResult>(acquisition);
         }
 
         string? raw = success.Data.Stored.Members.Count > 0 ? success.Data.Stored.Members[0] : null;
@@ -293,7 +293,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallCollectionResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallCollectionResult>(policyResult);
         }
 
         foreach (ScryfallCardLookup lookup in lookups)
@@ -308,7 +308,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             {
                 return new OperationInvalidInput(
                     "fuzzy-collection-lookup-unsupported",
-                    "Scryfall collection lookup does not support fuzzy names; use card get instead.");
+                    "Scryfall collection lookup does not support fuzzy names; send one fuzzy-name lookup on its own.");
             }
         }
 
@@ -378,7 +378,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
             else
             {
-                return ForwardFailure<AcquiredSnapshot, ScryfallCollectionResult>(acquisition);
+                return OperationFailure.Forward<AcquiredSnapshot, ScryfallCollectionResult>(acquisition);
             }
         }
 
@@ -425,7 +425,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallExactCollectionEvidence>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallExactCollectionEvidence>(policyResult);
         }
 
         IReadOnlyList<ScryfallEvidenceLookup> validatedLookups = lookups!;
@@ -458,7 +458,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             else if (acquisition is not OperationNotCached ||
                      policy.Data != ScryfallFreshnessPolicy.CacheOnly)
             {
-                return ForwardFailure<AcquiredSnapshot, ScryfallExactCollectionEvidence>(acquisition);
+                return OperationFailure.Forward<AcquiredSnapshot, ScryfallExactCollectionEvidence>(acquisition);
             }
         }
 
@@ -949,7 +949,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallPrintsResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallPrintsResult>(policyResult);
         }
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
@@ -967,7 +967,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                         new OperationSuccess<ScryfallPrintsResult>(
                             new ScryfallPrintsResult(value.Data, null, stored.GenerationId)),
-                    _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(cardDataPage),
+                    _ => OperationFailure.Forward<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(cardDataPage),
                 };
             }
         }
@@ -985,7 +985,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallPrintsResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallPrintsResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallCard>> page = await CardPageAsync(
@@ -1001,7 +1001,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                 new OperationSuccess<ScryfallPrintsResult>(
                     new ScryfallPrintsResult(value.Data, SnapshotReference(success.Data), null)),
-            _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(page),
         };
     }
 
@@ -1026,7 +1026,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallRulingsResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallRulingsResult>(policyResult);
         }
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
@@ -1044,7 +1044,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     OperationSuccess<ScryfallPage<ScryfallRuling>> value =>
                         new OperationSuccess<ScryfallRulingsResult>(
                             new ScryfallRulingsResult(value.Data, null, stored.GenerationId)),
-                    _ => ForwardFailure<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(cardDataPage),
+                    _ => OperationFailure.Forward<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(cardDataPage),
                 };
             }
         }
@@ -1069,7 +1069,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallRulingsResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallRulingsResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallRuling>> page = RulingPage(
@@ -1082,7 +1082,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<ScryfallRuling>> value =>
                 new OperationSuccess<ScryfallRulingsResult>(
                     new ScryfallRulingsResult(value.Data, SnapshotReference(success.Data), null)),
-            _ => ForwardFailure<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(page),
         };
     }
 
@@ -1123,7 +1123,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallSetsResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallSetsResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallSet>> page = SetPage(success.Data, cursor, pageSize, includeRaw);
@@ -1131,7 +1131,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             OperationSuccess<ScryfallPage<ScryfallSet>> value =>
                 new OperationSuccess<ScryfallSetsResult>(new ScryfallSetsResult(value.Data, SnapshotReference(success.Data))),
-            _ => ForwardFailure<ScryfallPage<ScryfallSet>, ScryfallSetsResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallSet>, ScryfallSetsResult>(page),
         };
     }
 
@@ -1168,7 +1168,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallCatalogResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallCatalogResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<string>> page = StringPage(success.Data, cursor, pageSize);
@@ -1177,7 +1177,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<string>> value =>
                 new OperationSuccess<ScryfallCatalogResult>(
                     new ScryfallCatalogResult(catalog, value.Data, SnapshotReference(success.Data))),
-            _ => ForwardFailure<ScryfallPage<string>, ScryfallCatalogResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<string>, ScryfallCatalogResult>(page),
         };
     }
 
@@ -1219,7 +1219,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallAutocompleteResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallAutocompleteResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<string>> page = StringPage(success.Data, cursor, pageSize);
@@ -1228,7 +1228,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<string>> value =>
                 new OperationSuccess<ScryfallAutocompleteResult>(
                     new ScryfallAutocompleteResult(value.Data, SnapshotReference(success.Data))),
-            _ => ForwardFailure<ScryfallPage<string>, ScryfallAutocompleteResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<string>, ScryfallAutocompleteResult>(page),
         };
     }
 
@@ -1249,7 +1249,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallBulkMetadataResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallBulkMetadataResult>(acquisition);
         }
 
         List<ScryfallBulkData> datasets = [];
@@ -1332,7 +1332,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<StoredCardsByTag> success)
         {
-            return ForwardFailure<StoredCardsByTag, ScryfallCardsByTagResult>(result);
+            return OperationFailure.Forward<StoredCardsByTag, ScryfallCardsByTagResult>(result);
         }
 
         using JsonDocument tagDocument = JsonDocument.Parse(success.Data.TagJson);
@@ -1420,7 +1420,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, AcquiredSnapshot>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, AcquiredSnapshot>(policyResult);
         }
 
         string requestJson = JsonSerializer.Serialize(request, SerializerOptions);
@@ -1981,7 +1981,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Validates bounded output pagination.
     /// </summary>
-    private static OperationInvalidInput? ValidatePageSize(int pageSize, bool rawSource)
+    internal static OperationInvalidInput? ValidatePageSize(int pageSize, bool rawSource)
     {
         int maximum = rawSource ? 25 : 100;
         return pageSize is >= 1 && pageSize <= maximum
@@ -2030,23 +2030,6 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         return new OperationUnavailable(
             "local-write-required",
             "This Scryfall operation requires local mode to record coordinated evidence.");
-    }
-
-    /// <summary>
-    /// Preserves a structured failure across result payload types.
-    /// </summary>
-    internal static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationSuccess<TSource> => new OperationUnavailable("scryfall-result-mismatch", "Scryfall result could not be projected."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 }
 

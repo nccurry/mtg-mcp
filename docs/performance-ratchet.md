@@ -5,7 +5,7 @@
 > Their benchmark tasks and reports are not present on this branch.
 
 The repository has one current measurement: `task benchmark:oncurve` runs a
-fixed 99-card Release benchmark for `deck_on_curve_estimate`. It is a
+fixed 99-card Release benchmark for `local_deck_on_curve_estimate`. It is a
 repeatable review baseline, not a hard CI gate.
 
 The repository may add a performance measurement when an approved child adds a

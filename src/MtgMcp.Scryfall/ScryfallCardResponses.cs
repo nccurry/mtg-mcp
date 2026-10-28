@@ -143,7 +143,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallSearchResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallSearchResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -163,7 +163,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallSearchResult> success)
         {
-            return Forward<ScryfallSearchResult, ScryfallSearchResponse>(result);
+            return OperationFailure.Forward<ScryfallSearchResult, ScryfallSearchResponse>(result);
         }
 
         ScryfallFormattedCards formatted = PageCards(success.Data.Page);
@@ -191,7 +191,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallCardResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallCardResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -202,7 +202,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCardResult> success)
         {
-            return Forward<ScryfallCardResult, ScryfallCardResponse>(result);
+            return OperationFailure.Forward<ScryfallCardResult, ScryfallCardResponse>(result);
         }
 
         ScryfallFormattedCards formatted = await formatter.FormatAsync(
@@ -222,7 +222,8 @@ internal sealed class ScryfallCardResponseOperations
     }
 
     /// <summary>
-    /// Resolves a card collection and writes each row's card in the requested format.
+    /// Resolves a card collection and writes each row's card in the requested format. One fuzzy-name lookup is
+    /// answered as a single-row collection, because the provider's collection endpoint cannot match fuzzy names.
     /// </summary>
     internal async Task<OperationResult<ScryfallCollectionResponse>> GetCollectionAsync(
         IReadOnlyList<ScryfallCardLookup>? lookups,
@@ -233,10 +234,17 @@ internal sealed class ScryfallCardResponseOperations
         IReadOnlyList<string>? fields,
         CancellationToken cancellationToken)
     {
+        if (cursor is null && lookups is [{ Kind: "fuzzy-name" } fuzzyLookup])
+        {
+            return await GetFuzzyRowAsync(
+                fuzzyLookup, freshnessPolicy, pageSize, responseFormat, fields, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallCollectionResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallCollectionResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -250,7 +258,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCollectionResult> success)
         {
-            return Forward<ScryfallCollectionResult, ScryfallCollectionResponse>(result);
+            return OperationFailure.Forward<ScryfallCollectionResult, ScryfallCollectionResponse>(result);
         }
 
         IReadOnlyList<ScryfallCollectionRow> rows = success.Data.Page.Items;
@@ -281,6 +289,86 @@ internal sealed class ScryfallCardResponseOperations
     }
 
     /// <summary>
+    /// Reads a card miss as a row status, the way the collection path reports it: a card the provider does not have
+    /// is not-found, and a card that cache-only mode could not read is not-cached.
+    /// </summary>
+    private static bool TryDescribeMiss(
+        OperationResult<ScryfallCardResponse> single,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? status,
+        out string? message)
+    {
+        (status, message) = single switch
+        {
+            OperationNotFound missing => ("not-found", missing.Message),
+            OperationNotCached notCached => ("not-cached", notCached.Message),
+            _ => (null, null),
+        };
+        return status is not null;
+    }
+
+    /// <summary>
+    /// Resolves one fuzzy-name lookup as a card read and returns it as a one-row collection.
+    /// </summary>
+    private async Task<OperationResult<ScryfallCollectionResponse>> GetFuzzyRowAsync(
+        ScryfallCardLookup lookup,
+        string freshnessPolicy,
+        int pageSize,
+        string? responseFormat,
+        IReadOnlyList<string>? fields,
+        CancellationToken cancellationToken)
+    {
+        OperationInvalidInput? pageFailure = ScryfallCardEvidenceOperations.ValidatePageSize(
+            pageSize,
+            string.Equals(responseFormat, "full", StringComparison.Ordinal));
+        if (pageFailure is not null)
+        {
+            return pageFailure;
+        }
+
+        OperationInvalidInput? lookupFailure = ScryfallCardEvidenceOperations.ValidateLookup(lookup);
+        if (lookupFailure is not null)
+        {
+            return lookupFailure;
+        }
+
+        OperationResult<ScryfallCardResponse> single = await GetCardAsync(
+            lookup,
+            freshnessPolicy,
+            responseFormat,
+            fields,
+            cancellationToken).ConfigureAwait(false);
+        if (TryDescribeMiss(single, out string? missStatus, out string? missMessage))
+        {
+            ScryfallCollectionRowResponse missRow = new(0, lookup, missStatus, null, null, missMessage);
+            return new OperationSuccess<ScryfallCollectionResponse>(
+                new ScryfallCollectionResponse(
+                    new ScryfallPage<ScryfallCollectionRowResponse>([missRow], 1, null),
+                    null,
+                    null)
+                {
+                    ResponseFormat = responseFormat ?? "standard",
+                });
+        }
+
+        if (single is not OperationSuccess<ScryfallCardResponse> success)
+        {
+            return OperationFailure.Forward<ScryfallCardResponse, ScryfallCollectionResponse>(single);
+        }
+
+        ScryfallCardResponse card = success.Data;
+        ScryfallCollectionRowResponse row = new(0, lookup, "found", card.Origin, card.Card, null);
+        return new OperationSuccess<ScryfallCollectionResponse>(
+            new ScryfallCollectionResponse(
+                new ScryfallPage<ScryfallCollectionRowResponse>([row], 1, null),
+                card.Snapshot,
+                card.CorpusGenerationId)
+            {
+                ResponseFormat = card.ResponseFormat,
+                Limits = card.Limits,
+            });
+    }
+
+    /// <summary>
     /// Reads cards assigned to one tag and writes them in the requested format.
     /// </summary>
     internal async Task<OperationResult<ScryfallCardsByTagResponse>> GetCardsByTagAsync(
@@ -297,7 +385,7 @@ internal sealed class ScryfallCardResponseOperations
         OperationResult<ScryfallCardFormat> parsed = ScryfallCardFormat.Parse(responseFormat, fields);
         if (parsed is not OperationSuccess<ScryfallCardFormat> format)
         {
-            return Forward<ScryfallCardFormat, ScryfallCardsByTagResponse>(parsed);
+            return OperationFailure.Forward<ScryfallCardFormat, ScryfallCardsByTagResponse>(parsed);
         }
 
         ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
@@ -313,7 +401,7 @@ internal sealed class ScryfallCardResponseOperations
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCardsByTagResult> success)
         {
-            return Forward<ScryfallCardsByTagResult, ScryfallCardsByTagResponse>(result);
+            return OperationFailure.Forward<ScryfallCardsByTagResult, ScryfallCardsByTagResponse>(result);
         }
 
         ScryfallFormattedCards formatted = PageCards(success.Data.Page);
@@ -326,14 +414,6 @@ internal sealed class ScryfallCardResponseOperations
                 Truncated = formatted.Truncated ? true : null,
                 Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
             });
-    }
-
-    /// <summary>
-    /// Passes a failure through to a result of another payload type.
-    /// </summary>
-    private static OperationResult<TTarget> Forward<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return ScryfallCardEvidenceOperations.ForwardFailure<TSource, TTarget>(result);
     }
 
     /// <summary>

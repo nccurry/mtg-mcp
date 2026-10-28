@@ -59,7 +59,7 @@ internal sealed class DeckOnCurveEstimateCoordinator
             .ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deckSuccess)
         {
-            return ForwardFailure<DeckDocument, DeckOnCurveEstimateResult>(deckResult);
+            return OperationFailure.Forward<DeckDocument, DeckOnCurveEstimateResult>(deckResult);
         }
 
         DeckDocument deck = deckSuccess.Data;
@@ -74,7 +74,7 @@ internal sealed class DeckOnCurveEstimateCoordinator
         OperationResult<DeckOnCurveDeckSelection> selectionResult = SelectMainboard(deck, request.TargetEntryId);
         if (selectionResult is not OperationSuccess<DeckOnCurveDeckSelection> selected)
         {
-            return ForwardFailure<DeckOnCurveDeckSelection, DeckOnCurveEstimateResult>(selectionResult);
+            return OperationFailure.Forward<DeckOnCurveDeckSelection, DeckOnCurveEstimateResult>(selectionResult);
         }
 
         OperationResult<DeckOnCurveResolvedCards> sourceResult = await cardResolver.ResolveAsync(
@@ -82,7 +82,7 @@ internal sealed class DeckOnCurveEstimateCoordinator
             cancellationToken).ConfigureAwait(false);
         if (sourceResult is not OperationSuccess<DeckOnCurveResolvedCards> source)
         {
-            return ForwardFailure<DeckOnCurveResolvedCards, DeckOnCurveEstimateResult>(sourceResult);
+            return OperationFailure.Forward<DeckOnCurveResolvedCards, DeckOnCurveEstimateResult>(sourceResult);
         }
 
         OperationResult<DeckOnCurvePreparedEstimate> preparation = DeckOnCurveEstimatePreparer.Prepare(
@@ -92,7 +92,7 @@ internal sealed class DeckOnCurveEstimateCoordinator
             request);
         if (preparation is not OperationSuccess<DeckOnCurvePreparedEstimate> prepared)
         {
-            return ForwardFailure<DeckOnCurvePreparedEstimate, DeckOnCurveEstimateResult>(preparation);
+            return OperationFailure.Forward<DeckOnCurvePreparedEstimate, DeckOnCurveEstimateResult>(preparation);
         }
 
         OperationResult<OnCurveRunReport> calculation = OnCurveEstimate.Calculate(
@@ -179,27 +179,6 @@ internal sealed class DeckOnCurveEstimateCoordinator
         return new OperationInvalidInput("invalid-on-curve-request", message);
     }
 
-    /// <summary>
-    /// Preserves each recognized operation failure while changing only the success payload type.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-on-curve-result",
-                "The on-curve estimate returned an unexpected result."),
-            _ => new OperationUnavailable(
-                "unexpected-on-curve-result",
-                "The on-curve estimate returned an unexpected result."),
-        };
-    }
 }
 
 /// <summary>

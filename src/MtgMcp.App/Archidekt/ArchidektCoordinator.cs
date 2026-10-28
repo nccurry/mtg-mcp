@@ -47,7 +47,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektSyncDiff, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektSyncDiff>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -55,7 +55,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return ForwardFailure<ArchidektSyncDiff, BindingState>(stateResult);
+            return OperationFailure.Forward<BindingState, ArchidektSyncDiff>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
@@ -64,7 +64,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return ForwardFailure<ArchidektSyncDiff, RemoteDeckSnapshot>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncDiff>(remoteResult);
         }
 
         return new OperationSuccess<ArchidektSyncDiff>(ArchidektSyncPlanner.Diff(
@@ -115,7 +115,7 @@ internal sealed class ArchidektSynchronizationContext
                 localDeckId,
                 operationScope,
                 cancellationToken).ConfigureAwait(false);
-            return ForwardFailure<ArchidektSyncPreview, RemoteDeckSnapshot>(classified);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncPreview>(classified);
         }
 
         if (localDeckId is null)
@@ -145,13 +145,13 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektSyncPreview, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektSyncPreview>(localResult);
         }
 
         OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(local.Data);
         if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
         {
-            return ForwardFailure<ArchidektSyncPreview, DeckProviderBinding?>(bindingResult);
+            return OperationFailure.Forward<DeckProviderBinding?, ArchidektSyncPreview>(bindingResult);
         }
 
         DeckProviderBinding? binding = bindingSuccess.Data;
@@ -171,7 +171,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (stateResult is not OperationSuccess<BindingState> state)
             {
-                return ForwardFailure<ArchidektSyncPreview, BindingState>(stateResult);
+                return OperationFailure.Forward<BindingState, ArchidektSyncPreview>(stateResult);
             }
 
             ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
@@ -227,7 +227,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<ArchidektSyncPreview> preview)
         {
-            return ForwardFailure<ArchidektApplyResult, ArchidektSyncPreview>(previewResult);
+            return OperationFailure.Forward<ArchidektSyncPreview, ArchidektApplyResult>(previewResult);
         }
 
         if (preview.Data.HasConflicts)
@@ -257,7 +257,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return ForwardFailure<ArchidektApplyResult, RemoteDeckSnapshot>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(remoteResult);
         }
 
         if (!string.Equals(
@@ -289,7 +289,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (created is not OperationSuccess<DeckDocument> success)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckDocument>(created);
+                return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(created);
             }
 
             committed = success.Data;
@@ -301,13 +301,13 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (localResult is not OperationSuccess<DeckDocument> local)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckDocument>(localResult);
+                return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(localResult);
             }
 
             OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(local.Data);
             if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckProviderBinding?>(bindingResult);
+                return OperationFailure.Forward<DeckProviderBinding?, ArchidektApplyResult>(bindingResult);
             }
 
             DeckProviderBinding? existing = bindingSuccess.Data;
@@ -334,7 +334,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (updated is not OperationSuccess<DeckDocument> success)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckDocument>(updated);
+                return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(updated);
             }
 
             committed = success.Data;
@@ -377,7 +377,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektSyncPreview, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektSyncPreview>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -385,7 +385,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return ForwardFailure<ArchidektSyncPreview, BindingState>(stateResult);
+            return OperationFailure.Forward<BindingState, ArchidektSyncPreview>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
@@ -394,7 +394,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return ForwardFailure<ArchidektSyncPreview, RemoteDeckSnapshot>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncPreview>(remoteResult);
         }
 
         ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
@@ -442,7 +442,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<ArchidektSyncPreview> preview)
         {
-            return ForwardFailure<ArchidektApplyResult, ArchidektSyncPreview>(previewResult);
+            return OperationFailure.Forward<ArchidektSyncPreview, ArchidektApplyResult>(previewResult);
         }
 
         if (preview.Data.HasConflicts)
@@ -474,7 +474,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektApplyResult, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -482,7 +482,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return ForwardFailure<ArchidektApplyResult, BindingState>(stateResult);
+            return OperationFailure.Forward<BindingState, ArchidektApplyResult>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> currentResult = await GetBoundRemoteAsync(
@@ -491,7 +491,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (currentResult is not OperationSuccess<RemoteDeckSnapshot> current)
         {
-            return ForwardFailure<ArchidektApplyResult, RemoteDeckSnapshot>(currentResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(currentResult);
         }
 
         RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(
@@ -517,7 +517,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (verifiedResult is not OperationSuccess<RemoteDeckSnapshot> verified)
         {
-            return ForwardFailure<ArchidektApplyResult, RemoteDeckSnapshot>(verifiedResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(verifiedResult);
         }
 
         DeckProviderBinding binding = state.Data.Binding with
@@ -534,7 +534,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (baselineUpdate is not OperationSuccess<DeckDocument> updated)
         {
-            return ForwardFailure<ArchidektApplyResult, DeckDocument>(baselineUpdate);
+            return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(baselineUpdate);
         }
 
         return new OperationSuccess<ArchidektApplyResult>(applied.Data with
@@ -563,7 +563,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (localResult is not OperationSuccess<DeckDocument> success)
             {
-                return ForwardFailure<RemoteDeckSnapshot, DeckDocument>(localResult);
+                return OperationFailure.Forward<DeckDocument, RemoteDeckSnapshot>(localResult);
             }
 
             if (success.Data.Revision != expectedLocalRevision)
@@ -577,7 +577,7 @@ internal sealed class ArchidektSynchronizationContext
             OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(success.Data);
             if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
             {
-                return ForwardFailure<RemoteDeckSnapshot, DeckProviderBinding?>(bindingResult);
+                return OperationFailure.Forward<DeckProviderBinding?, RemoteDeckSnapshot>(bindingResult);
             }
 
             if (bindingSuccess.Data is not null)
@@ -614,7 +614,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         return bindResult is OperationSuccess<DeckDocument>
             ? createdResult
-            : ForwardFailure<RemoteDeckSnapshot, DeckDocument>(bindResult);
+            : OperationFailure.Forward<DeckDocument, RemoteDeckSnapshot>(bindResult);
     }
 
     /// <summary>
@@ -627,7 +627,7 @@ internal sealed class ArchidektSynchronizationContext
         OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(local);
         if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
         {
-            return ForwardFailure<BindingState, DeckProviderBinding?>(bindingResult);
+            return OperationFailure.Forward<DeckProviderBinding?, BindingState>(bindingResult);
         }
 
         DeckProviderBinding? binding = bindingSuccess.Data;
@@ -651,7 +651,7 @@ internal sealed class ArchidektSynchronizationContext
 
         if (baselineResult is not OperationSuccess<DeckSyncBaseline> baseline)
         {
-            return ForwardFailure<BindingState, DeckSyncBaseline>(baselineResult);
+            return OperationFailure.Forward<DeckSyncBaseline, BindingState>(baselineResult);
         }
 
         try
@@ -854,7 +854,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (pageResult is not OperationSuccess<RemoteDeckPage> page)
             {
-                return ForwardFailure<RemoteDeckSnapshot, RemoteDeckPage>(pageResult);
+                return OperationFailure.Forward<RemoteDeckPage, RemoteDeckSnapshot>(pageResult);
             }
 
             if (page.Data.Items.Any(value =>
@@ -882,26 +882,6 @@ internal sealed class ArchidektSynchronizationContext
         string json = System.Text.Json.JsonSerializer.Serialize(value);
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
-    }
-
-    /// <summary>
-    /// Forwards one shared operation failure without unsafe casts.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TTarget, TSource>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-operation-state",
-                "The operation returned an unexpected state."),
-        };
     }
 
     /// <summary>

@@ -13,22 +13,22 @@ namespace MtgMcp.App.Tests;
 internal static class DeckCategorizationSourceFixture
 {
     /// <summary>
-    /// Identifies the reviewed official Scryfall ramp tag used by common-v1.
+    /// Identifies the reviewed official Scryfall ramp tag for one of the four common role tags.
     /// </summary>
     internal static readonly Guid RampTagId = Guid.Parse("2f3e4ad7-5e60-41b4-bdbc-653f16869cf6");
 
     /// <summary>
-    /// Identifies the reviewed official Scryfall draw tag used by common-v1.
+    /// Identifies the reviewed official Scryfall draw tag for one of the four common role tags.
     /// </summary>
     internal static readonly Guid DrawTagId = Guid.Parse("b6448c45-ce65-4848-aa98-2151e4e07437");
 
     /// <summary>
-    /// Identifies the reviewed official Scryfall removal tag used by common-v1.
+    /// Identifies the reviewed official Scryfall removal tag for one of the four common role tags.
     /// </summary>
     internal static readonly Guid RemovalTagId = Guid.Parse("444f824c-f910-4530-9dbe-ede7a84cd7f9");
 
     /// <summary>
-    /// Identifies the reviewed official Scryfall recursion tag used by common-v1.
+    /// Identifies the reviewed official Scryfall recursion tag for one of the four common role tags.
     /// </summary>
     internal static readonly Guid RecursionTagId = Guid.Parse("82b824ad-648f-467f-a190-2e0fa9a795d2");
 

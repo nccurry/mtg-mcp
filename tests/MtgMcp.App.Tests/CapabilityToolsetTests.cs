@@ -23,9 +23,6 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(
             ["decks", "scryfall", "stats", "archidekt", "playgroup", "spellbook"],
             toolsets.Select(CapabilityToolsetPolicy.Format));
-        Assert.Equal(
-            [true, true, true, false, false, false],
-            toolsets.Select(CapabilityToolsetPolicy.IsDefaultEnabled));
         Assert.Equal("stable", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Stable));
         Assert.Equal("experimental", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Experimental));
         Assert.Equal("default", CapabilityToolsetPolicy.Format(CapabilityToolsetSelectionKind.Default));
@@ -42,7 +39,6 @@ public sealed class CapabilityToolsetTests
     {
         CapabilityToolset undefinedToolset = (CapabilityToolset)999;
 
-        Assert.False(CapabilityToolsetPolicy.IsDefaultEnabled(undefinedToolset));
         Assert.Throws<ArgumentOutOfRangeException>(() => CapabilityToolsetPolicy.Format(undefinedToolset));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => CapabilityToolsetPolicy.Format((CapabilityToolsetSelectionKind)999));
@@ -69,7 +65,6 @@ public sealed class CapabilityToolsetTests
         reads[0] = "changed";
 
         Assert.Equal("decks", descriptor.Name);
-        Assert.True(descriptor.DefaultEnabled);
         Assert.Equal("Test capability.", descriptor.Description);
         Assert.Equal(["a_read", "z_read"], descriptor.GetVisibleToolNames(OperationMode.ReadOnly));
         Assert.Equal(
@@ -123,8 +118,8 @@ public sealed class CapabilityToolsetTests
     /// Verifies reserved and explicit selections resolve against only implemented descriptors.
     /// </summary>
     [Theory]
-    [InlineData(null, "default", true, true, true, false, false, false)]
-    [InlineData("default", "default", true, true, true, false, false, false)]
+    [InlineData(null, "default", true, true, true, true, true, true)]
+    [InlineData("default", "default", true, true, true, true, true, true)]
     [InlineData("all", "all", true, true, true, true, true, true)]
     [InlineData("none", "none", false, false, false, false, false, false)]
     [InlineData("decks", "explicit", true, false, false, false, false, false)]
@@ -301,7 +296,8 @@ public sealed class CapabilityToolsetTests
     }
 
     /// <summary>
-    /// Verifies the implemented registry owns every exact stable surface.
+    /// Verifies the implemented registry owns every exact stable surface; the registry counts every toolset before
+    /// credential gating.
     /// </summary>
     [Fact]
     public void Registry_AssignsCurrentSurfaceToImplementedToolsets()
@@ -317,38 +313,35 @@ public sealed class CapabilityToolsetTests
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
         Assert.Equal(CapabilityToolset.Decks, decks.Toolset);
-        Assert.Equal(29, decks.AllToolNames.Length);
+        Assert.Equal(19, decks.AllToolNames.Length);
+        Assert.Equal(10, decks.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Scryfall, scryfall.Toolset);
-        Assert.Equal(18, scryfall.AllToolNames.Length);
-        Assert.Equal(14, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(13, scryfall.AllToolNames.Length);
+        Assert.Equal(9, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Stats, stats.Toolset);
-        Assert.True(stats.DefaultEnabled);
         Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Archidekt, archidekt.Toolset);
-        Assert.False(archidekt.DefaultEnabled);
-        Assert.Equal(11, archidekt.GetVisibleToolCount(OperationMode.ReadOnly));
-        Assert.Equal(12, archidekt.GetVisibleToolCount(OperationMode.Local));
-        Assert.Equal(23, archidekt.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(9, archidekt.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(10, archidekt.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(21, archidekt.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Playgroup, playgroup.Toolset);
-        Assert.False(playgroup.DefaultEnabled);
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(16, playgroup.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Spellbook, spellbook.Toolset);
-        Assert.False(spellbook.DefaultEnabled);
         Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Remote));
-        Assert.Equal(33, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
-        Assert.Equal(55, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
-        Assert.Equal(55, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
+        Assert.Equal(53, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.ReadOnly));
+        Assert.Equal(67, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Local));
+        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(defaultSelection, OperationMode.Remote));
         Assert.Equal(0, CapabilityToolsetRegistry.CountVisibleTools(noneSelection, OperationMode.Local));
         CapabilityToolsetSelection allSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("all"));
-        Assert.Equal(61, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
-        Assert.Equal(84, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
-        Assert.Equal(97, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
+        Assert.Equal(53, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.ReadOnly));
+        Assert.Equal(67, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Local));
+        Assert.Equal(80, CapabilityToolsetRegistry.CountVisibleTools(allSelection, OperationMode.Remote));
     }
 
     /// <summary>
@@ -427,7 +420,8 @@ public sealed class CapabilityToolsetTests
                 LegacyDataState.NotDetected,
                 "Legacy data was not detected; automatic migration remains disabled."),
             archidekt,
-            playgroup);
+            playgroup,
+            ProviderCredentialPresence.From(archidekt, playgroup));
     }
 
     /// <summary>

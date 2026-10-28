@@ -17,7 +17,8 @@ internal sealed record FoundationConfiguration(
     bool DataRootConfigured,
     LegacyDataBoundary LegacyData,
     ArchidektOptions Archidekt,
-    PlaygroupOptions Playgroup)
+    PlaygroupOptions Playgroup,
+    ProviderCredentialPresence Credentials)
 {
     /// <summary>
     /// Creates the path-free status projection safe for future server metadata.

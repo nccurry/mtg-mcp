@@ -666,10 +666,10 @@ public sealed class ArchidektCoordinatorTests
             AssertPermitted(await reads.DiffAsync(Guid.NewGuid(), token));
             AssertPermitted(await reads.PreviewPullAsync(" ", cancellationToken: token));
             AssertPermitted(await reads.PreviewPushAsync(Guid.NewGuid(), token));
-            AssertPermitted(await reads.ListFoldersAsync(token));
-            AssertPermitted(await reads.GetFolderAsync(" ", token));
-            AssertPermitted(await reads.ListSnapshotsAsync(" ", token));
-            AssertPermitted(await reads.GetSnapshotAsync(" ", " ", token));
+            AssertPermitted(await reads.GetFoldersAsync("list", cancellationToken: token));
+            AssertPermitted(await reads.GetFoldersAsync("get", " ", token));
+            AssertPermitted(await reads.GetSnapshotsAsync("list", " ", cancellationToken: token));
+            AssertPermitted(await reads.GetSnapshotsAsync("get", " ", " ", token));
             AssertPermitted(await reads.PreviewSnapshotRestoreAsync(" ", " ", token));
 
             ArchidektLocalWriteTools localWrites = new(coordinator, OperationMode.Local);

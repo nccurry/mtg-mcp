@@ -1,7 +1,8 @@
-using System.Collections.Frozen;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -12,7 +13,7 @@ namespace MtgMcp.App.Hosting;
 /// <summary>
 /// Applies the argument binding and error reporting rules shared by every registered tool.
 /// </summary>
-internal static class ToolCallPolicy
+internal static partial class ToolCallPolicy
 {
     /// <summary>
     /// Names the reason reported when tool arguments cannot be read into the tool's parameter types.
@@ -25,11 +26,9 @@ internal static class ToolCallPolicy
     private const int MaximumKindSearchDepth = 4;
 
     /// <summary>
-    /// Maps each tool name to the method that implements it. The SDK does not expose the bound method to
-    /// call-tool filters, so the policy finds it by tool name.
+    /// Limits how much of an unknown argument name an error message repeats.
     /// </summary>
-    private static readonly FrozenDictionary<string, MethodInfo> ToolMethods =
-        IndexToolMethods(typeof(ToolCallPolicy).Assembly.GetTypes());
+    private const int MaximumEchoedNameLength = 64;
 
     /// <summary>
     /// Gets the serializer options for tool arguments and results; union kinds may appear in any property position.
@@ -47,16 +46,31 @@ internal static class ToolCallPolicy
         ArgumentNullException.ThrowIfNull(next);
         return async (context, cancellationToken) =>
         {
+            // A tool the server did not register for this selection and mode is an unknown tool: describe nothing.
+            ToolArguments? tool = FindRegisteredTool(context);
+            bool registered = tool is not null;
+            if (tool is not null)
+            {
+                OperationInvalidInput? unknown = FindUnknownArgument(
+                    tool,
+                    context.Params!.Name,
+                    context.Params.Arguments);
+                if (unknown is not null)
+                {
+                    return CreateFailureResult(unknown);
+                }
+            }
+
             CallToolResult result;
             try
             {
                 result = await next(context, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (
-                exception is not OperationCanceledException && context.Params is not null)
+                exception is not OperationCanceledException && registered)
             {
                 // The SDK binds arguments inside the pipeline and lets a binding exception reach this filter.
-                OperationInvalidInput? failure = DiagnoseArguments(context.Params.Name, context.Params.Arguments);
+                OperationInvalidInput? failure = DiagnoseArguments(tool!.Method, context.Params!.Arguments);
                 if (failure is null)
                 {
                     throw;
@@ -85,15 +99,15 @@ internal static class ToolCallPolicy
     }
 
     /// <summary>
-    /// Re-reads each argument into its parameter type to find the first value the tool could not bind.
+    /// Re-reads each argument into its parameter type to find the first value the tool could not bind. The tool
+    /// must be in the catalog; a name the catalog does not hold is a caller error, not a clean result.
     /// </summary>
     internal static OperationInvalidInput? DiagnoseArguments(
+        ToolArgumentCatalog catalog,
         string toolName,
         IDictionary<string, JsonElement>? arguments)
     {
-        return ToolMethods.TryGetValue(toolName, out MethodInfo? method)
-            ? DiagnoseArguments(method, arguments)
-            : null;
+        return DiagnoseArguments(Require(catalog, toolName).Method, arguments);
     }
 
     /// <summary>
@@ -135,9 +149,123 @@ internal static class ToolCallPolicy
     }
 
     /// <summary>
+    /// Finds the first argument the tool does not declare, so a misspelled or invented field fails the call
+    /// instead of being ignored. Arguments are checked in ordinal order so the message is deterministic.
+    /// </summary>
+    internal static OperationInvalidInput? FindUnknownArgument(
+        ToolArgumentCatalog catalog,
+        string toolName,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        return FindUnknownArgument(Require(catalog, toolName), toolName, arguments);
+    }
+
+    /// <summary>
+    /// Finds the first argument that the given tool does not declare.
+    /// </summary>
+    private static OperationInvalidInput? FindUnknownArgument(
+        ToolArguments tool,
+        string toolName,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0)
+        {
+            return null;
+        }
+
+        string? unknown = arguments.Keys
+            .Where(name => !tool.Names.Contains(name, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (unknown is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(unknown))
+        {
+            return new OperationInvalidInput(
+                InvalidArgumentsReason,
+                $"An argument with a blank name is not accepted by {toolName}. " +
+                $"Accepted arguments: {tool.AcceptedText}.");
+        }
+
+        string shown = Shorten(unknown);
+        return new OperationInvalidInput(
+            InvalidArgumentsReason,
+            $"Argument '{shown}' is not accepted by {toolName}. Accepted arguments: {tool.AcceptedText}.",
+            shown);
+    }
+
+    /// <summary>
+    /// Finds the catalog entry for the tool a request matched, or null when the server did not register the tool.
+    /// </summary>
+    private static ToolArguments? FindRegisteredTool(RequestContext<CallToolRequestParams> context)
+    {
+        if (context.Params is null || context.MatchedPrimitive is null)
+        {
+            return null;
+        }
+
+        ToolArgumentCatalog? catalog = context.Services?.GetService<ToolArgumentCatalog>();
+        return catalog is not null && catalog.TryGet(context.Params.Name, out ToolArguments tool) ? tool : null;
+    }
+
+    /// <summary>
+    /// Finds a tool in the catalog and fails loudly when it is missing.
+    /// </summary>
+    private static ToolArguments Require(ToolArgumentCatalog catalog, string toolName)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.TryGet(toolName, out ToolArguments tool)
+            ? tool
+            : throw new ArgumentException($"Tool '{toolName}' is not in the catalog.", nameof(toolName));
+    }
+
+    /// <summary>
+    /// Replaces the final path segment, written as <c>.name</c> or <c>['name']</c>, with the shortened name.
+    /// A name that contains dots or brackets is matched as a whole, never split.
+    /// </summary>
+    private static string ShortenLastSegment(string path, string raw, string shortened)
+    {
+        string dotted = "." + raw;
+        if (path.EndsWith(dotted, StringComparison.Ordinal))
+        {
+            return path[..^dotted.Length] + "." + shortened;
+        }
+
+        string bracketed = "['" + raw + "']";
+        return path.EndsWith(bracketed, StringComparison.Ordinal)
+            ? path[..^bracketed.Length] + "['" + shortened + "']"
+            : path;
+    }
+
+    /// <summary>
+    /// Cuts an echoed field name to the length limit without splitting a surrogate pair.
+    /// </summary>
+    private static string Shorten(string name)
+    {
+        if (name.Length <= MaximumEchoedNameLength)
+        {
+            return name;
+        }
+
+        int length = char.IsHighSurrogate(name[MaximumEchoedNameLength - 1])
+            ? MaximumEchoedNameLength - 1
+            : MaximumEchoedNameLength;
+        return name[..length] + "...";
+    }
+
+    /// <summary>
+    /// Matches the serializer message for a JSON property that no input type declares.
+    /// </summary>
+    [GeneratedRegex("The JSON property '(.*)' could not be mapped to any [.]NET member")]
+    private static partial Regex UnmappedMember();
+
+    /// <summary>
     /// Reports whether a parameter is supplied from tool arguments rather than injected by the host.
     /// </summary>
-    private static bool IsArgumentParameter(ParameterInfo parameter)
+    internal static bool IsArgumentParameter(ParameterInfo parameter)
     {
         Type type = parameter.ParameterType;
         return type != typeof(CancellationToken) &&
@@ -158,8 +286,16 @@ internal static class ToolCallPolicy
         }
         catch (JsonException exception)
         {
+            Match unmapped = UnmappedMember().Match(exception.Message);
             string path = CombinePath(parameter.Name!, exception.Path);
             string message = $"The value at '{path}' could not be read: {TrimPathSuffix(exception.Message)}";
+            if (unmapped.Success)
+            {
+                string raw = unmapped.Groups[1].Value;
+                string field = Shorten(raw);
+                path = ShortenLastSegment(path, raw, field);
+                message = $"Property '{field}' is not accepted here.";
+            }
             if (exception.Message.Contains("discriminator", StringComparison.OrdinalIgnoreCase))
             {
                 IReadOnlyList<string> kinds = FindAllowedKinds(parameter.ParameterType);
@@ -300,43 +436,15 @@ internal static class ToolCallPolicy
     }
 
     /// <summary>
-    /// Finds every tool method declared on the given types by its MCP tool name; a repeated name is a build error.
-    /// </summary>
-    internal static FrozenDictionary<string, MethodInfo> IndexToolMethods(IEnumerable<Type> types)
-    {
-        ArgumentNullException.ThrowIfNull(types);
-        Dictionary<string, MethodInfo> methods = new(StringComparer.Ordinal);
-        const BindingFlags flags =
-            BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        foreach (Type type in types)
-        {
-            foreach (MethodInfo method in type.GetMethods(flags))
-            {
-                if (method.GetCustomAttribute<McpServerToolAttribute>() is not { Name: { } name })
-                {
-                    continue;
-                }
-
-                if (!methods.TryAdd(name, method))
-                {
-                    throw new InvalidOperationException(
-                        $"Tool name '{name}' is declared by both {methods[name].DeclaringType?.Name} " +
-                        $"and {method.DeclaringType?.Name}.");
-                }
-            }
-        }
-
-        return methods.ToFrozenDictionary(StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// Copies the SDK's default options and allows union discriminators after other properties.
+    /// Copies the SDK default options, allows union discriminators after other properties, and rejects JSON properties
+    /// that no input type declares.
     /// </summary>
     private static JsonSerializerOptions CreateSerializerOptions()
     {
         JsonSerializerOptions options = new(McpJsonUtilities.DefaultOptions)
         {
             AllowOutOfOrderMetadataProperties = true,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         };
         options.MakeReadOnly();
         return options;

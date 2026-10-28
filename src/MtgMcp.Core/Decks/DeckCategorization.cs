@@ -5,20 +5,10 @@ namespace MtgMcp.Core.Decks;
 /// <summary>Identifies how a category rule source was supplied.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(InlineCategoryRuleSource), "inline")]
-[JsonDerivedType(typeof(CommonPresetCategoryRuleSource), "preset")]
 public abstract record CategoryRuleSource;
 
 /// <summary>Supplies the complete caller-authored category rules.</summary>
 public sealed record InlineCategoryRuleSource(CategoryRuleSet RuleSet) : CategoryRuleSource;
-
-/// <summary>Selects the immutable common preset and caller-owned category bindings.</summary>
-public sealed record CommonPresetCategoryRuleSource(
-    string PresetId,
-    string AssignmentMode,
-    IReadOnlyList<CategoryRoleBinding> Bindings) : CategoryRuleSource;
-
-/// <summary>Binds one preset role to an existing local category.</summary>
-public sealed record CategoryRoleBinding(string RoleKey, Guid CategoryId, int? PrimaryPriority = null);
 
 /// <summary>Defines deterministic category ownership and tag selectors.</summary>
 public sealed record CategoryRuleSet(string AssignmentMode, IReadOnlyList<CategoryRule> Rules);

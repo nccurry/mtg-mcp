@@ -9,8 +9,8 @@ namespace MtgMcp.App.Decks;
 /// Requests one repeatable sampled estimate for a target card in a saved deck.
 /// </summary>
 internal sealed record DeckOnCurveEstimateToolRequest(
-    [property: Description("Stable local deck UUID returned by deck_get.")] Guid DeckId,
-    [property: Description("The exact deck revision returned by deck_get; a changed deck returns a conflict.")]
+    [property: Description("Stable local deck UUID returned by local_deck_get.")] Guid DeckId,
+    [property: Description("The exact deck revision returned by local_deck_get; a changed deck returns a conflict.")]
     long ExpectedRevision,
     [property: Description("Stable ID of one target entry in the deck mainboard.")] Guid TargetEntryId,
     [property: Description("Last turn to model, from 1 through 12.")] int TurnLimit,

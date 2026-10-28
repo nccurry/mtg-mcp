@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 
@@ -11,8 +13,21 @@ namespace MtgMcp.App.Tests;
 /// <summary>
 /// Verifies the shared argument binding and error reporting rules applied to every tool call.
 /// </summary>
-public sealed class ToolCallPolicyTests
+public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
 {
+    /// <summary>
+    /// Holds the argument catalog of one full registration.
+    /// </summary>
+    private readonly ToolArgumentCatalog catalog;
+
+    /// <summary>
+    /// Takes the catalog the fixture built, so the policy can look tools up by name.
+    /// </summary>
+    public ToolCallPolicyTests(ToolCatalogFixture fixture)
+    {
+        catalog = fixture.Catalog;
+    }
+
     /// <summary>
     /// Provides arguments whose only change has a kind that is not a union value.
     /// </summary>
@@ -49,7 +64,8 @@ public sealed class ToolCallPolicyTests
     {
         Dictionary<string, JsonElement> arguments = Arguments(UnknownKindChanges);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal(ToolCallPolicy.InvalidArgumentsReason, failure.ReasonCode);
@@ -77,7 +93,8 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments("deck_apply_changes", arguments);
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
 
         Assert.NotNull(failure);
         Assert.Equal("changes[0].entryDraft.quantity", failure.Path);
@@ -100,20 +117,22 @@ public sealed class ToolCallPolicyTests
             }
             """);
 
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("deck_apply_changes", arguments));
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
     }
 
     /// <summary>
-    /// Verifies a missing required argument is named, and unknown tools are left alone.
+    /// Verifies a missing required argument is named, and a tool missing from the catalog fails loudly.
     /// </summary>
     [Fact]
-    public void DiagnoseArguments_MissingRequiredOrUnknownTool_ReportsOrSkips()
+    public void DiagnoseArguments_MissingRequiredOrUnknownTool_ReportsOrThrows()
     {
-        OperationInvalidInput? missing = ToolCallPolicy.DiagnoseArguments("deck_apply_changes", Arguments("{}"));
+        OperationInvalidInput? missing = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", Arguments("{}"));
 
         Assert.NotNull(missing);
         Assert.Equal("deckId", missing.Path);
-        Assert.Null(ToolCallPolicy.DiagnoseArguments("not_a_tool", Arguments("{}")));
+        Assert.Throws<ArgumentException>(() => ToolCallPolicy.DiagnoseArguments(
+            catalog, "not_a_tool", Arguments("{}")));
     }
 
     /// <summary>
@@ -169,27 +188,32 @@ public sealed class ToolCallPolicyTests
     }
 
     /// <summary>
-    /// Verifies a repeated tool name fails when the index is built.
+    /// Verifies a different method with an already registered tool name fails, and the same method may register again.
     /// </summary>
     [Fact]
-    public void IndexToolMethods_DuplicateToolName_Throws()
+    public void Register_DuplicateToolName_Throws()
     {
+        ToolArgumentCatalog catalog = new();
+        catalog.Register(typeof(SampleTools).GetMethod(nameof(SampleTools.TakesType))!);
+
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => ToolCallPolicy.IndexToolMethods([typeof(SampleTools), typeof(DuplicateSampleTools)]));
+            () => catalog.Register(typeof(DuplicateSampleTools).GetMethod(nameof(DuplicateSampleTools.Repeat))!));
 
         Assert.Contains("'sample_tool'", exception.Message, StringComparison.Ordinal);
+        catalog.Register(typeof(SampleTools).GetMethod(nameof(SampleTools.TakesType))!);
     }
 
     /// <summary>
-    /// Verifies the real tool index holds a known tool and finds no duplicate.
+    /// Verifies registering every tool records each one by name.
     /// </summary>
     [Fact]
-    public void IndexToolMethods_RealAssembly_FindsKnownTool()
+    public void Registration_RecordsEveryRealTool()
     {
-        System.Collections.Frozen.FrozenDictionary<string, MethodInfo> methods =
-            ToolCallPolicy.IndexToolMethods(typeof(ToolCallPolicy).Assembly.GetTypes());
+        using RegisteredToolSet set = new(OperationMode.Remote);
+        string[] published = [.. set.Tools.Select(tool => tool.ProtocolTool.Name).Order(StringComparer.Ordinal)];
 
-        Assert.True(methods.ContainsKey("deck_apply_changes"));
+        Assert.Equal(published.AsEnumerable(), catalog.Methods.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(80, published.Length);
     }
 
     /// <summary>
@@ -220,10 +244,10 @@ public sealed class ToolCallPolicyTests
     {
         await using McpServer server = CreateServer();
         McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
-            (_, _) => throw new InvalidOperationException("An error occurred invoking 'deck_apply_changes'."));
+            (_, _) => throw new InvalidOperationException("An error occurred invoking 'local_deck_apply_changes'."));
 
         CallToolResult result = await filter(
-            Context(server, "deck_apply_changes", UnknownKindChanges),
+            Context(server, "local_deck_apply_changes", UnknownKindChanges),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError);
@@ -233,6 +257,141 @@ public sealed class ToolCallPolicyTests
         Assert.Equal("changes[0]", body.GetProperty("path").GetString());
         TextContentBlock text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
         Assert.Equal(body.GetRawText(), text.Text);
+    }
+
+    /// <summary>
+    /// Verifies a registered tool name the server did not register for this session (a hidden or gated tool) is
+    /// treated as an unknown tool: the filter describes nothing and the call goes on to the SDK's unknown-tool error.
+    /// </summary>
+    [Fact]
+    public async Task Filter_ToolNotRegisteredForTheSession_DescribesNothing()
+    {
+        await using McpServer server = CreateServer();
+        InvalidOperationException unknownTool = new("Unknown tool.");
+        McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
+            (_, _) => throw unknownTool);
+        RequestContext<CallToolRequestParams> context = Context(
+            server,
+            "local_deck_apply_changes",
+            """{ "deckId": "0193e97a-ef95-7700-8000-000000000001", "extra": 1 }""");
+        context.MatchedPrimitive = null;
+
+        InvalidOperationException thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => filter(context, TestContext.Current.CancellationToken).AsTask());
+
+        Assert.Same(unknownTool, thrown);
+    }
+
+    /// <summary>
+    /// Verifies a deck entry as <c>local_deck_get</c> returns it with card data fails with the extra field named
+    /// and no .NET type name in the message.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_EntryWithCardData_NamesTheFieldWithoutATypeName()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "deckId": "0193e97a-ef95-7700-8000-000000000001",
+              "expectedRevision": 1,
+              "changes": [
+                {
+                  "kind": "update-entry",
+                  "entry": {
+                    "entryId": "0193e97a-ef95-7700-8000-000000000011", "quantity": 1, "cardName": "Sol Ring",
+                    "language": "en", "finish": "nonfoil", "zone": "main", "sortOrder": 0,
+                    "cardData": "found", "card": { "name": "Sol Ring" }, "tags": []
+                  }
+                }
+              ]
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
+
+        Assert.NotNull(failure);
+        Assert.Equal("changes[0].entry.cardData", failure.Path);
+        Assert.Equal("Property 'cardData' is not accepted here.", failure.Message);
+        Assert.DoesNotContain("MtgMcp", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("contained in type", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a very long nested unknown name is cut to the same limit as a top-level name, and the cut never
+    /// splits a surrogate pair.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_LongUnknownNestedName_IsCutWithoutSplittingASurrogatePair()
+    {
+        string name = new string('a', 63) + "\U0001F600" + "tail";
+        Dictionary<string, JsonElement> arguments = Arguments(
+            $$"""
+            {
+              "deckId": "0193e97a-ef95-7700-8000-000000000001",
+              "expectedRevision": 1,
+              "changes": [ { "kind": "add-entry", "entryDraft": { "quantity": 1, "cardName": "x", "{{name}}": 1 } } ]
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
+
+        Assert.NotNull(failure);
+        string path = failure.Path!;
+        string shown = path["changes[0].entryDraft.".Length..];
+        Assert.Equal(new string('a', 63) + "...", shown);
+        Assert.False(char.IsHighSurrogate(shown[^4]));
+        Assert.Contains(shown, failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies an unknown nested name that contains a dot or a bracket is reported whole, at its own path segment.
+    /// </summary>
+    [Theory]
+    [InlineData("a.b")]
+    [InlineData("x[0]")]
+    public void DiagnoseArguments_UnknownNestedNameWithPunctuation_KeepsTheNameWhole(string name)
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            $$"""
+            {
+              "deckId": "0193e97a-ef95-7700-8000-000000000001",
+              "expectedRevision": 1,
+              "changes": [ { "kind": "add-entry", "entryDraft": { "quantity": 1, "cardName": "x", "{{name}}": 1 } } ]
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog, "local_deck_apply_changes", arguments);
+
+        Assert.NotNull(failure);
+        Assert.StartsWith("changes[0].entryDraft", failure.Path, StringComparison.Ordinal);
+        Assert.Contains(name, failure.Path, StringComparison.Ordinal);
+        Assert.Equal($"Property '{name}' is not accepted here.", failure.Message);
+    }
+
+    /// <summary>
+    /// Verifies a call whose server has no catalog entry for the tool is treated as an unknown tool: nothing is
+    /// described and the pipeline's own error goes on.
+    /// </summary>
+    [Fact]
+    public async Task Filter_ToolMissingFromTheServersCatalog_DescribesNothing()
+    {
+        await using McpServer server = CreateServer();
+        InvalidOperationException unknownTool = new("Unknown tool.");
+        McpRequestHandler<CallToolRequestParams, CallToolResult> filter = ToolCallPolicy.Filter(
+            (_, _) => throw unknownTool);
+        RequestContext<CallToolRequestParams> context = Context(
+            server,
+            "local_deck_apply_changes",
+            """{ "deckId": "0193e97a-ef95-7700-8000-000000000001", "extra": 1 }""");
+        context.Services = new ServiceCollection().AddSingleton(new ToolArgumentCatalog()).BuildServiceProvider();
+
+        InvalidOperationException thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => filter(context, TestContext.Current.CancellationToken).AsTask());
+
+        Assert.Same(unknownTool, thrown);
     }
 
     /// <summary>
@@ -247,7 +406,9 @@ public sealed class ToolCallPolicyTests
             (_, _) => throw toolFailure);
 
         InvalidOperationException thrown = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => filter(Context(server, "deck_apply_changes", ValidChanges), TestContext.Current.CancellationToken)
+            () => filter(
+                    Context(server, "local_deck_apply_changes", ValidChanges),
+                    TestContext.Current.CancellationToken)
                 .AsTask());
 
         Assert.Same(toolFailure, thrown);
@@ -265,7 +426,7 @@ public sealed class ToolCallPolicyTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => filter(
-                Context(server, "deck_apply_changes", UnknownKindChanges),
+                Context(server, "local_deck_apply_changes", UnknownKindChanges),
                 TestContext.Current.CancellationToken)
                 .AsTask());
     }
@@ -305,7 +466,7 @@ public sealed class ToolCallPolicyTests
             (_, _) => ValueTask.FromResult(returned));
 
         CallToolResult result = await filter(
-            Context(server, "deck_get", """{ "deckId": "0193e97a-ef95-7700-8000-000000000001" }"""),
+            Context(server, "local_deck_get", """{ "deckId": "0193e97a-ef95-7700-8000-000000000001" }"""),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedError, result.IsError == true);
@@ -324,7 +485,7 @@ public sealed class ToolCallPolicyTests
     /// <summary>
     /// Builds a tool call context with the given tool name and JSON arguments.
     /// </summary>
-    private static RequestContext<CallToolRequestParams> Context(
+    private RequestContext<CallToolRequestParams> Context(
         McpServer server,
         string toolName,
         string argumentsJson)
@@ -332,7 +493,11 @@ public sealed class ToolCallPolicyTests
         return new RequestContext<CallToolRequestParams>(
             server,
             new JsonRpcRequest { Method = "tools/call" },
-            new CallToolRequestParams { Name = toolName, Arguments = Arguments(argumentsJson) });
+            new CallToolRequestParams { Name = toolName, Arguments = Arguments(argumentsJson) })
+        {
+            MatchedPrimitive = McpServerTool.Create(() => "x", new McpServerToolCreateOptions { Name = toolName }),
+            Services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider(),
+        };
     }
 
     /// <summary>

@@ -26,7 +26,7 @@ internal sealed class DeckOnCurveEstimateTools
     /// Estimates whether one target can be cast by a stated turn under caller-provided land rules.
     /// </summary>
     [McpServerTool(
-        Name = "deck_on_curve_estimate",
+        Name = "local_deck_on_curve_estimate",
         Title = "Estimate Target Card On Curve",
         ReadOnly = true,
         Destructive = false,
@@ -34,11 +34,12 @@ internal sealed class DeckOnCurveEstimateTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Samples a stated land-only model for one saved deck and target card; returns source facts, " +
+        "Local deck store: samples a stated land-only model for one saved deck and target card; returns source " +
+        "facts, " +
         "replay details, uncertainty, and limits without a deckbuilding recommendation.")]
     internal Task<OperationResult<DeckOnCurveEstimateResult>> EstimateAsync(
-        [Description("Stable local deck UUID returned by deck_get.")] Guid deckId,
-        [Description("The exact deck revision returned by deck_get; a changed deck returns a conflict.")]
+        [Description("Stable local deck UUID returned by local_deck_get.")] Guid deckId,
+        [Description("The exact deck revision returned by local_deck_get; a changed deck returns a conflict.")]
         long expectedRevision,
         [Description("Stable ID of one target entry in the deck mainboard.")] Guid targetEntryId,
         [Description("Last turn to model, from 1 through 12.")] int turnLimit,

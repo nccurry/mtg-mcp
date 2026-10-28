@@ -71,7 +71,7 @@ internal sealed class ScryfallCardFormatter
         }
 
         return $"{string.Join(" and ", names)} {(names.Count == 1 ? "is" : "are")} null because Scryfall card " +
-            "data is not installed. Run scryfall_corpus_sync to install it.";
+            "data is not installed. Run the card-data sync tool to install it.";
     }
 
     /// <summary>

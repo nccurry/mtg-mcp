@@ -104,7 +104,7 @@ Depends on phase 2, because the merged `scryfall_cards_get` carries
    its data source (NAME-001, NAME-002).
 7. Turn on unknown-property rejection for every tool and add its test
    (SCHEMA-004). Apply it in every place that builds its own schema options:
-   `ToolItemChoices.Create`, `DeckBatchWriteTools`, and `StatisticsToolsetManifest`,
+   `ToolRegistration`, `DeckBatchWriteTools`, and `StatisticsToolsetManifest`,
    not only the default `WithTools` path.
 8. Add server instructions built from the active selection (SURF-009).
 9. Add untrusted-text notes to the listed provider tools, review result types

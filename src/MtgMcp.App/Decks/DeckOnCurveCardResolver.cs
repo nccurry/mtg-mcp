@@ -51,7 +51,7 @@ internal sealed class DeckOnCurveCardResolver
             () => scryfall.ResolveExactCollectionAsync(lookups, "cache-only", cancellationToken)).ConfigureAwait(false);
         if (evidenceResult is not OperationSuccess<ScryfallExactCollectionEvidence> evidenceSuccess)
         {
-            return ForwardFailure<ScryfallExactCollectionEvidence, DeckOnCurveResolvedCards>(evidenceResult);
+            return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckOnCurveResolvedCards>(evidenceResult);
         }
 
         ScryfallExactCollectionEvidence evidence = evidenceSuccess.Data;
@@ -100,27 +100,6 @@ internal sealed class DeckOnCurveCardResolver
             "The exact installed Scryfall fact required for this estimate is unavailable.");
     }
 
-    /// <summary>
-    /// Preserves every recognized operation failure without changing its reason code.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-on-curve-source-result",
-                "The Scryfall source lookup returned an unexpected result."),
-            _ => new OperationUnavailable(
-                "unexpected-on-curve-source-result",
-                "The Scryfall source lookup returned an unexpected result."),
-        };
-    }
 }
 
 /// <summary>

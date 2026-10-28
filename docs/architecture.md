@@ -27,12 +27,12 @@ another. App wires the server together.
 
 The server uses stdio and registers static tools for one session. It exposes:
 
-- 29 `deck_*` tools;
-- 18 `scryfall_*` tools;
+- 19 `local_deck_*` tools;
+- 13 `scryfall_*` tools;
 - 8 `stats_*` tools;
-- 23 opt-in `archidekt_*` tools;
-- 16 opt-in `playgroup_*` tools;
-- 3 opt-in `spellbook_*` tools;
+- 21 `archidekt_*` tools (on when Archidekt credentials are present);
+- 16 `playgroup_*` tools (on when a Playgroup key is present);
+- 3 `spellbook_*` tools;
 - `mtg://server/capabilities`; and
 - zero prompts.
 
@@ -73,7 +73,7 @@ Provider facts, community evidence, exact derivations, parser classifications,
 heuristics, and sampled estimates remain distinct. Unknown, unavailable,
 unsupported, and empty results are not interchangeable.
 
-`deck_on_curve_estimate` is the only sampled estimate. App reads the saved deck
+`local_deck_on_curve_estimate` is the only sampled estimate. App reads the saved deck
 and installed Scryfall facts, then passes a resolved request to `MtgMcp.OnCurve`.
 The calculation uses only caller-supplied land rules and returns its seed,
 uncertainty range, and limits. It does not parse card text or make a deck choice.

@@ -32,9 +32,9 @@ another.
 | Concern | Released legacy server | Released clean-break `0.9.0` |
 | --- | --- | --- |
 | Product role | Evidence plus recommendation, intent, plan, scoring, and simulation features | Evidence, provider data, explicit workflow operations, exact mathematics, and one bounded sampled estimate; the client LLM decides |
-| MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local` (default), `remote` |
-| Public tools and API | Legacy workspace-oriented tools, resources, and prompts | 29 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 opt-in `archidekt_*`, 16 opt-in `playgroup_*`, and 3 opt-in `spellbook_*` tools, one `mtg://server/capabilities` resource, and zero prompts |
-| Tool count | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` is 33/55/55 and current `all` is 61/84/97 tools by mode after deterministic categorization, with one resource and zero prompts; counts are checks, not compatibility targets |
+| MCP modes | `read-only`, `plan`, `apply` | `read-only`, `local`, `remote` (default since the focused tool surface; `0.9.0` defaulted to `local`) |
+| Public tools and API | Legacy workspace-oriented tools, resources, and prompts | Current surface: 19 `local_deck_*`, 13 `scryfall_*`, 8 `stats_*`, 21 `archidekt_*`, 16 `playgroup_*`, and 3 `spellbook_*` tools, one `mtg://server/capabilities` resource, and zero prompts (`0.9.0` shipped 29 `deck_*`, 18 `scryfall_*`, 8 `stats_*`, 23 `archidekt_*`, 16 `playgroup_*`, and 3 `spellbook_*` tools) |
+| Tool count | Audit baseline: 118 tools, 16 resources, 18 prompts | Current `default` and `all` are 30/43/43 tools by mode with no provider credentials and 53/67/80 with Archidekt and Playgroup credentials, with one resource and zero prompts; counts are checks, not compatibility targets |
 | Core | Large legacy domain containing plans, recommendations, simulation, provider abstractions, and file persistence | Dependency-light provider-neutral evidence, identifiers, failures, and shared contracts only |
 | Modules | Existing Core/App plus Scryfall, Archidekt, Moxfield, Playgroup, Commander Spellbook, and decklist projects | Core, App, Decks, Scryfall, Archidekt, Playgroup, Spellbook, Statistics, and OnCurve |
 | Persistence | Legacy file-oriented workspaces, plans, collection, and caches | Independent versioned `decks.db`, unified `scryfall.db`, and short-lived `spellbook.db` response cache |
@@ -69,8 +69,8 @@ The original required planning sequence covers:
    evidence; and
 12. stabilization and `0.9.0` cutover.
 
-Every stable tool belongs to one toolset. The default profile contains
-`decks`, `scryfall`, and `stats`; provider toolsets require explicit selection.
+Every stable tool belongs to one toolset. Every toolset is on by default;
+`archidekt` and `playgroup` turn on only when their credentials are present.
 Toolsets control relevance, modes control authority, and registration remains
 static for an MCP session. Stabilization passed its north-star workflow check
 alongside schema, package, and release acceptance.

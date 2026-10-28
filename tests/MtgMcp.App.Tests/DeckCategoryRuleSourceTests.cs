@@ -12,10 +12,11 @@ namespace MtgMcp.App.Tests;
 public sealed class DeckCategoryRuleSourceTests
 {
     /// <summary>
-    /// Resolves parent selectors to exact source IDs and preserves the common-v1 role mapping in place.
+    /// Resolves parent selectors to exact source IDs, and inline rules for the four common roles resolve to the
+    /// reviewed tags.
     /// </summary>
     [Fact]
-    public async Task Preview_UsesExactSourceIdsAndCommonPresetRoles()
+    public async Task Preview_UsesExactSourceIdsForInlineRoleRules()
     {
         using TemporaryDirectory temporary = new();
         DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
@@ -80,16 +81,7 @@ public sealed class DeckCategoryRuleSourceTests
             "unmatched",
             Assert.Single(parentPreview.Decisions, value => value.CategoryId == directOnlyCategory).Status);
 
-        CommonPresetCategoryRuleSource preset = new(
-            "common-v1",
-            "add-only",
-            [
-                new CategoryRoleBinding("ramp", rampCategory),
-                new CategoryRoleBinding("card-draw", drawCategory),
-                new CategoryRoleBinding("removal", removalCategory),
-                new CategoryRoleBinding("recursion", recursionCategory),
-            ]);
-        InlineCategoryRuleSource equivalentInline = new(new CategoryRuleSet(
+        InlineCategoryRuleSource roleRules = new(new CategoryRuleSet(
             "add-only",
             [
                 new CategoryRule(rampCategory, [SourceSelector(DeckCategorizationSourceFixture.RampTagId)], [], []),
@@ -97,43 +89,151 @@ public sealed class DeckCategoryRuleSourceTests
                 new CategoryRule(removalCategory, [SourceSelector(DeckCategorizationSourceFixture.RemovalTagId)], [], []),
                 new CategoryRule(recursionCategory, [SourceSelector(DeckCategorizationSourceFixture.RecursionTagId)], [], []),
             ]));
-        DeckCategoryRulesPreview presetPreview = RequireSuccess(await coordinator.PreviewAsync(
+        DeckCategoryRulesPreview rolePreview = RequireSuccess(await coordinator.PreviewAsync(
             deck.DeckId,
             deck.Revision,
-            preset,
-            "default",
-            TestContext.Current.CancellationToken));
-        DeckCategoryRulesPreview inlinePreview = RequireSuccess(await coordinator.PreviewAsync(
-            deck.DeckId,
-            deck.Revision,
-            equivalentInline,
+            roleRules,
             "default",
             TestContext.Current.CancellationToken));
 
-        Assert.Equal(1, presetPreview.PresetSchemaVersion);
-        Assert.NotEqual("common-v1-ramp-draw-removal-recursion", presetPreview.PresetChecksum);
         Assert.Equal(
-            presetPreview.ExpandedRules.Rules.Select(rule => (
-                rule.CategoryId,
-                rule.AllOf.Single().TagId,
-                rule.AllOf.Single().IncludeDescendants)),
-            inlinePreview.ExpandedRules.Rules.Select(rule => (
-                rule.CategoryId,
-                rule.AllOf.Single().TagId,
-                rule.AllOf.Single().IncludeDescendants)));
+            [
+                DeckCategorizationSourceFixture.RampTagId,
+                DeckCategorizationSourceFixture.DrawTagId,
+                DeckCategorizationSourceFixture.RemovalTagId,
+                DeckCategorizationSourceFixture.RecursionTagId,
+            ],
+            rolePreview.ExpandedRules.Rules.Select(rule => rule.AllOf.Single().TagId!.Value));
+        Assert.All(rolePreview.ExpandedRules.Rules, rule => Assert.True(rule.AllOf.Single().IncludeDescendants));
+        // The reviewed result of the removed common-v1 preset at c4ed454 for this fixture: the test there proved the
+        // preset gave the same expanded rules and decisions as these inline rules.
         Assert.Equal(
-            presetPreview.Decisions.Select(decision => (
+            new[]
+            {
+                (entryId, rampCategory, "matched", DeckCategorizationSourceFixture.RampChildTagId.ToString()),
+                (entryId, drawCategory, "unmatched", string.Empty),
+                (entryId, removalCategory, "unmatched", string.Empty),
+                (entryId, recursionCategory, "unmatched", string.Empty),
+                        }.OrderBy(value => value.Item2),
+            rolePreview.Decisions.Select(decision => (
                 decision.EntryId,
                 decision.CategoryId,
                 decision.Status,
-                string.Join(',', decision.MatchedTagIds))),
-            inlinePreview.Decisions.Select(decision => (
-                decision.EntryId,
-                decision.CategoryId,
-                decision.Status,
-                string.Join(',', decision.MatchedTagIds))));
+                string.Join(',', decision.MatchedTagIds))).OrderBy(value => value.CategoryId));
+        Assert.Equal(
+            new[]
+            {
+                (rampCategory, DeckCategorizationSourceFixture.RampTagId, true),
+                (drawCategory, DeckCategorizationSourceFixture.DrawTagId, true),
+                (removalCategory, DeckCategorizationSourceFixture.RemovalTagId, true),
+                (recursionCategory, DeckCategorizationSourceFixture.RecursionTagId, true),
+                        }.OrderBy(value => value.Item1),
+            rolePreview.ExpandedRules.Rules.Select(rule => (
+                rule.CategoryId,
+                rule.AllOf.Single().TagId!.Value,
+                rule.AllOf.Single().IncludeDescendants)).OrderBy(value => value.CategoryId));
+        Assert.True(rolePreview.IsComplete);
         Assert.Equal(requestsAfterInstall, handler.RequestCount);
     }
+
+    /// <summary>
+    /// Verifies a preview made without a revision gives a token that applies, writes the assignments, and then
+    /// conflicts once the deck has changed.
+    /// </summary>
+    [Fact]
+    public async Task Apply_TokenFromPreviewWithoutRevision_AppliesOnceThenConflictsAfterAnEdit()
+    {
+        using TemporaryDirectory temporary = new();
+        DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
+            DeckCategorizationSourceFixture.CreateHandler();
+        using ScryfallService scryfall = DeckCategorizationSourceFixture.CreateService(temporary.Path, handler);
+        ScryfallCorpusSyncResult sync = await InstallAsync(scryfall);
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckCategorizationCoordinator coordinator = new(store, scryfall);
+        Guid entryId = Guid.CreateVersion7();
+        Guid categoryId = Guid.CreateVersion7();
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest(
+                "Fixture",
+                Entries: [new DeckEntryDraft(
+                    1,
+                    "Fixture Ramp Card",
+                    OracleId: DeckCategorizationSourceFixture.OracleId,
+                    EntryId: entryId)],
+                Categories: [new DeckCategoryDraft("Ramp", CategoryId: categoryId)]),
+            TestContext.Current.CancellationToken));
+        InlineCategoryRuleSource source = new(new CategoryRuleSet(
+            "add-only",
+            [new CategoryRule(categoryId, [SourceSelector(DeckCategorizationSourceFixture.RampTagId)], [], [])]));
+        DeckCategoryRulesPreview preview = RequireSuccess(await coordinator.PreviewAsync(
+            deck.DeckId,
+            null,
+            source,
+            "cache-only",
+            TestContext.Current.CancellationToken));
+
+        DeckDocument applied = RequireSuccess(await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            sync.GenerationId,
+            source,
+            "cache-only",
+            preview.PreviewFingerprint,
+            preview.ApplyToken,
+            TestContext.Current.CancellationToken));
+        DeckDocument edited = RequireSuccess(await store.ApplyChangesAsync(
+            deck.DeckId,
+            applied.Revision,
+            [new UpdateDeckMetadataChange("Edited", null, "custom")],
+            TestContext.Current.CancellationToken));
+        OperationResult<DeckDocument> stale = await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            sync.GenerationId,
+            source,
+            "cache-only",
+            preview.PreviewFingerprint,
+            preview.ApplyToken,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new DeckCategoryAssignment(entryId, categoryId, false),
+            Assert.Single(applied.CategoryAssignments));
+        Assert.Equal(applied.Revision + 1, edited.Revision);
+        Assert.Equal("deck-revision-conflict", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies a source that is not inline is refused as invalid input at the source, before any provider call.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_SourceThatIsNotInline_ReturnsInvalidInputWithoutThrowing()
+    {
+        using TemporaryDirectory temporary = new();
+        DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
+            DeckCategorizationSourceFixture.CreateHandler();
+        using ScryfallService scryfall = DeckCategorizationSourceFixture.CreateService(temporary.Path, handler);
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
+        DeckCategoryRuleResolver resolver = new(scryfall);
+
+        OperationResult<ResolvedDeckCategoryRules> result = await resolver.ResolveAsync(
+            new OtherSource(),
+            deck,
+            "default",
+            TestContext.Current.CancellationToken);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(("invalid-category-rule-source", "source"), (invalid.ReasonCode, invalid.Path));
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    /// <summary>
+    /// Stands in for a source kind that the resolver does not know.
+    /// </summary>
+    private sealed record OtherSource : CategoryRuleSource;
 
     /// <summary>
     /// Stops a synchronize preview before a missing source selector can produce a destructive change.

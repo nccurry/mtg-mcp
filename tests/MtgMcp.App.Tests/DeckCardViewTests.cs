@@ -11,8 +11,8 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Tests;
 
 /// <summary>
-/// Verifies <c>deck_get</c> returns the stored deck unchanged by default and, with include, a page of entries that
-/// carry concise card fields and oracle tags from installed card data.
+/// Verifies <c>local_deck_get</c> returns the stored deck unchanged by default and, with include, a page of
+/// entries that carry concise card fields and oracle tags from installed card data.
 /// </summary>
 public sealed class DeckCardViewTests
 {
@@ -95,7 +95,7 @@ public sealed class DeckCardViewTests
         Assert.All(view.Entries, entry => Assert.Equal("not-installed", entry.CardData));
         Assert.All(view.Entries, entry => Assert.Null(entry.Card));
         Assert.Equal(["Entry 000", "Entry 001"], view.Entries.Select(entry => entry.CardName));
-        Assert.Contains("scryfall_corpus_sync", Assert.Single(view.Limits!), StringComparison.Ordinal);
+        Assert.Contains("scryfall_card_data_sync", Assert.Single(view.Limits!), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -274,12 +274,10 @@ public sealed class DeckCardViewTests
             null,
             first.NextCursor,
             2);
-        DeckDocument renamed = Success(await setup.Writes.UpdateAsync(
+        DeckDocument renamed = Success(await setup.Writes.ApplyChangesAsync(
             deck.DeckId,
             deck.Revision,
-            "Renamed",
-            null,
-            "custom",
+            [new UpdateDeckMetadataInput("Renamed", null, "custom")],
             TestContext.Current.CancellationToken));
         OperationResult<DeckDocumentView> changed = await setup.Get(deck.DeckId, ["tags"], null, first.NextCursor, 2);
 
@@ -301,10 +299,10 @@ public sealed class DeckCardViewTests
         DeckDocument current = deck;
         foreach (DeckEntry entry in deck.Entries.Take(5))
         {
-            current = Success(await setup.Writes.RemoveEntryAsync(
+            current = Success(await setup.Writes.ApplyChangesAsync(
                 current.DeckId,
                 current.Revision,
-                entry.EntryId,
+                [new RemoveDeckEntryInput(entry.EntryId)],
                 TestContext.Current.CancellationToken));
         }
 
@@ -439,7 +437,7 @@ public sealed class DeckCardViewTests
             this.scryfall = scryfall;
             Store = store;
             reads = new DeckReadTools(store, new DeckCardViewCoordinator(store, scryfall));
-            Writes = new DeckWriteTools(store, OperationMode.Local);
+            Writes = new DeckBatchWriteTools(store, OperationMode.Local);
         }
 
         /// <summary>
@@ -448,9 +446,9 @@ public sealed class DeckCardViewTests
         internal SqliteDeckStore Store { get; }
 
         /// <summary>
-        /// Gets the write tools used to change decks between pages.
+        /// Gets the batch write tool used to change decks between pages.
         /// </summary>
-        internal DeckWriteTools Writes { get; }
+        internal DeckBatchWriteTools Writes { get; }
 
         /// <summary>
         /// Creates a setup with or without installed Scryfall card data.
@@ -471,7 +469,7 @@ public sealed class DeckCardViewTests
         }
 
         /// <summary>
-        /// Calls <c>deck_get</c> with the given arguments.
+        /// Calls <c>local_deck_get</c> with the given arguments.
         /// </summary>
         internal Task<OperationResult<DeckDocumentView>> Get(
             Guid deckId,

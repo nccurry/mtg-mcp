@@ -41,7 +41,11 @@ internal sealed record AddDeckEntryInput(
 /// Replaces one existing entry by stable entry identifier.
 /// </summary>
 internal sealed record UpdateDeckEntryInput(
-    [property: Description("The complete replacement entry, including its existing entryId.")] DeckEntry Entry)
+    [property: Description(
+        "The complete replacement entry, including its existing entryId. Send only the stored entry fields " +
+        "(entryId, quantity, cardName, oracleId, printingId, setCode, collectorNumber, language, finish, zone, " +
+        "sortOrder); drop cardData, card, and tags, which local_deck_get adds to entries when you pass include.")]
+    DeckEntry Entry)
     : DeckChangeInput;
 
 /// <summary>

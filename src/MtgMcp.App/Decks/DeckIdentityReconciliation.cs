@@ -212,7 +212,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             .ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deckSuccess)
         {
-            return ForwardFailure<DeckDocument, DeckIdentityReconciliationPreview>(deckResult);
+            return OperationFailure.Forward<DeckDocument, DeckIdentityReconciliationPreview>(deckResult);
         }
 
         DeckDocument deck = deckSuccess.Data;
@@ -227,7 +227,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, entryIds);
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
-            return ForwardFailure<IReadOnlyList<DeckEntry>, DeckIdentityReconciliationPreview>(selection);
+            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckIdentityReconciliationPreview>(selection);
         }
 
         IReadOnlyList<DeckEntry> entries = selected.Data;
@@ -241,7 +241,8 @@ internal sealed class DeckIdentityReconciliationCoordinator
                     .ConfigureAwait(false);
             if (evidenceResult is not OperationSuccess<ScryfallExactCollectionEvidence> evidenceSuccess)
             {
-                return ForwardFailure<ScryfallExactCollectionEvidence, DeckIdentityReconciliationPreview>(evidenceResult);
+                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckIdentityReconciliationPreview>(
+                    evidenceResult);
             }
 
             evidence = evidenceSuccess.Data;
@@ -292,7 +293,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds);
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
-            return ForwardFailure<IReadOnlyList<DeckEntry>, DeckDocument>(selection);
+            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckDocument>(selection);
         }
 
         IReadOnlyList<DeckEntry> entries = selected.Data;
@@ -306,7 +307,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                     .ConfigureAwait(false);
             if (replay is not OperationSuccess<ScryfallExactCollectionEvidence> replaySuccess)
             {
-                return ForwardFailure<ScryfallExactCollectionEvidence, DeckDocument>(replay);
+                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckDocument>(replay);
             }
 
             evidence = replaySuccess.Data;
@@ -658,25 +659,6 @@ internal sealed class DeckIdentityReconciliationCoordinator
             entry.Language);
     }
 
-    /// <summary>
-    /// Preserves every non-success operation case while changing only its generic success type.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-success-shape",
-                "The operation returned an unexpected success shape."),
-        };
-    }
 }
 
 /// <summary>
@@ -701,14 +683,16 @@ internal sealed class DeckIdentityReconciliationReadTools
     /// Resolves exact Scryfall identities and returns an evidence-bound proposal without mutation.
     /// </summary>
     [McpServerTool(
-        Name = "deck_identity_reconcile_preview",
+        Name = "local_deck_identity_reconcile_preview",
         Title = "Preview Local Deck Identity Reconciliation",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = true,
         UseStructuredContent = true)]
-    [Description("Previews exact Scryfall-backed identity normalization without fuzzy matching, legality checks, or deck mutation.")]
+    [Description(
+        "Local deck store: previews exact Scryfall-backed identity normalization without fuzzy matching, legality " +
+        "checks, or deck mutation.")]
     internal Task<OperationResult<DeckIdentityReconciliationPreview>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
@@ -758,20 +742,22 @@ internal sealed class DeckIdentityReconciliationWriteTools
     /// Replays retained evidence and atomically applies only accepted identity field changes.
     /// </summary>
     [McpServerTool(
-        Name = "deck_identity_reconcile_apply",
+        Name = "local_deck_identity_reconcile_apply",
         Title = "Apply Local Deck Identity Reconciliation",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Applies an unchanged exact identity preview in one revision; all non-identity deck fields are preserved.")]
+    [Description(
+        "Local deck store: applies an unchanged exact identity preview in one revision; all non-identity deck fields " +
+        "are preserved.")]
     internal Task<OperationResult<DeckDocument>> ApplyAsync(
         [Description("Stable local deck UUID used for preview.")] Guid deckId,
         [Description("Deck revision used for preview.")] long expectedRevision,
-        [Description("Evidence-bound fingerprint returned by deck_identity_reconcile_preview.")]
+        [Description("Evidence-bound fingerprint returned by local_deck_identity_reconcile_preview.")]
         string previewFingerprint,
-        [Description("Opaque apply token returned by deck_identity_reconcile_preview.")]
+        [Description("Opaque apply token returned by local_deck_identity_reconcile_preview.")]
         string applyToken,
         [Description("Whether resolved rows may be applied when other selected identities remain incomplete.")]
         bool allowPartial = false,

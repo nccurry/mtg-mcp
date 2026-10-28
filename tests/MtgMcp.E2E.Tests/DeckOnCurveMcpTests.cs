@@ -62,7 +62,7 @@ public sealed class DeckOnCurveMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement deck = await CallSuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -97,7 +97,7 @@ public sealed class DeckOnCurveMcpTests
 
         JsonElement estimate = await CallSuccessAsync(
             session,
-            "deck_on_curve_estimate",
+            "local_deck_on_curve_estimate",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
@@ -135,7 +135,7 @@ public sealed class DeckOnCurveMcpTests
 
         JsonElement unchanged = await CallSuccessAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = deckId }).ConfigureAwait(false);
         Assert.Equal(revision, unchanged.GetProperty("revision").GetInt64());
     }
@@ -157,13 +157,13 @@ public sealed class DeckOnCurveMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement deck = await CallSuccessAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = SeededDeckId }).ConfigureAwait(false);
         long revision = deck.GetProperty("revision").GetInt64();
 
         JsonElement estimate = await CallSuccessAsync(
             session,
-            "deck_on_curve_estimate",
+            "local_deck_on_curve_estimate",
             new Dictionary<string, object?>
             {
                 ["deckId"] = SeededDeckId,
@@ -185,7 +185,7 @@ public sealed class DeckOnCurveMcpTests
 
         JsonElement unchanged = await CallSuccessAsync(
             session,
-            "deck_get",
+            "local_deck_get",
             new Dictionary<string, object?> { ["deckId"] = SeededDeckId }).ConfigureAwait(false);
         Assert.Equal(revision, unchanged.GetProperty("revision").GetInt64());
     }

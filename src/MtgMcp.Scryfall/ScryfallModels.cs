@@ -439,3 +439,10 @@ public sealed record ScryfallCardsByTagResult(
     [property: JsonPropertyName("page")] ScryfallPage<ScryfallCard> Page,
     [property: JsonPropertyName("assignments")] IReadOnlyList<ScryfallTagEvidence> Assignments,
     [property: JsonPropertyName("generationId")] Guid GenerationId);
+
+/// <summary>
+/// Names the two IDs of one resolved card that later reads need: its printing and its Oracle identity.
+/// </summary>
+public sealed record ScryfallCardIdentity(
+    [property: JsonPropertyName("scryfallId")] Guid ScryfallId,
+    [property: JsonPropertyName("oracleId")] Guid OracleId);

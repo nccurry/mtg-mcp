@@ -240,6 +240,31 @@ public sealed class ScryfallService : IDisposable
     }
 
     /// <summary>
+    /// Resolves one card lookup of any supported kind, including names, to its printing ID and Oracle ID.
+    /// </summary>
+    public async Task<OperationResult<ScryfallCardIdentity>> ResolveCardIdentityAsync(
+        ScryfallCardLookup lookup,
+        string freshnessPolicy = "default",
+        CancellationToken cancellationToken = default)
+    {
+        OperationResult<ScryfallCardResult> result = await cards.GetCardAsync(
+            lookup,
+            freshnessPolicy,
+            includeRaw: false,
+            cancellationToken).ConfigureAwait(false);
+        if (result is not OperationSuccess<ScryfallCardResult> success)
+        {
+            return OperationFailure.Forward<ScryfallCardResult, ScryfallCardIdentity>(result);
+        }
+
+        return success.Data.Card.OracleId is Guid oracleId
+            ? new OperationSuccess<ScryfallCardIdentity>(new ScryfallCardIdentity(success.Data.Card.Id, oracleId))
+            : new OperationUnavailable(
+                "scryfall-card-without-oracle-id",
+                "The resolved card has no Oracle ID, so its printings and rulings cannot be read.");
+    }
+
+    /// <summary>
     /// Resolves a card collection and writes each card as a concise, standard, or full card.
     /// </summary>
     public Task<OperationResult<ScryfallCollectionResponse>> GetCollectionAsync(
@@ -523,7 +548,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
             .ConfigureAwait(false);
         if (statusResult is not OperationSuccess<ScryfallCorpusStatus> statusSuccess)
         {
-            return ForwardFailure<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(statusResult);
+            return OperationFailure.Forward<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(statusResult);
         }
 
         if (expectedActiveGeneration is Guid expected &&
@@ -539,7 +564,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
             cancellationToken).ConfigureAwait(false);
         if (metadataResult is not OperationSuccess<ScryfallBulkMetadataResult> metadata)
         {
-            return ForwardFailure<ScryfallBulkMetadataResult, ScryfallCorpusSyncResult>(metadataResult);
+            return OperationFailure.Forward<ScryfallBulkMetadataResult, ScryfallCorpusSyncResult>(metadataResult);
         }
 
         DateTimeOffset now = cards.TimeProvider.GetUtcNow();
@@ -551,7 +576,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
                 .ConfigureAwait(false);
             if (currentResult is not OperationSuccess<ScryfallCorpusStatus> current)
             {
-                return ForwardFailure<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(currentResult);
+                return OperationFailure.Forward<ScryfallCorpusStatus, ScryfallCorpusSyncResult>(currentResult);
             }
 
             return new OperationSuccess<ScryfallCorpusSyncResult>(new ScryfallCorpusSyncResult(
@@ -663,24 +688,6 @@ internal sealed class ScryfallCardDataLifecycleOperations
         return new OperationUnavailable(
             "local-write-required",
             "This Scryfall operation requires local mode to record coordinated evidence.");
-    }
-
-    /// <summary>Preserves every non-success case while changing the generic success type.</summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-success-shape",
-                "The operation returned an unexpected success shape."),
-        };
     }
 }
 

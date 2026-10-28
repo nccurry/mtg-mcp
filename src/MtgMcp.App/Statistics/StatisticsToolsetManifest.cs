@@ -1,8 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
@@ -43,7 +41,7 @@ internal static class StatisticsToolsetManifest
         CapabilityToolsetStability.Stable,
         "Provider-independent exact mathematics over caller-supplied groups and explicitly selected deck populations.",
         [
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             "stats_hypergeometric",
             "stats_mana_availability",
             "stats_minimum_count",
@@ -67,7 +65,7 @@ internal static class StatisticsToolsetManifest
         ArgumentNullException.ThrowIfNull(deckStore);
         ArgumentNullException.ThrowIfNull(calculator);
         StatisticsReadTools target = new(new StatisticsDeckResolver(deckStore), calculator);
-        builder.WithTools(
+        builder.WithRegisteredTools(
         [
             Create(nameof(StatisticsReadTools.HypergeometricAsync), target),
             Create(nameof(StatisticsReadTools.MultivariateAsync), target),
@@ -83,23 +81,12 @@ internal static class StatisticsToolsetManifest
     /// <summary>
     /// Creates one explicitly named tool with discriminator descriptions.
     /// </summary>
-    private static McpServerTool Create(string methodName, StatisticsReadTools target)
+    private static RegisteredTool Create(string methodName, StatisticsReadTools target)
     {
         MethodInfo method = typeof(StatisticsReadTools).GetMethod(
             methodName,
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return McpServerTool.Create(method, target, new McpServerToolCreateOptions
-        {
-            SerializerOptions = ToolCallPolicy.SerializerOptions,
-            SchemaCreateOptions = new AIJsonSchemaCreateOptions
-            {
-                TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                TransformOptions = new AIJsonSchemaTransformOptions
-                {
-                    TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                },
-            },
-        });
+        return ToolRegistration.Create(method, target, describeNode: DescribeDiscriminator);
     }
 
     /// <summary>

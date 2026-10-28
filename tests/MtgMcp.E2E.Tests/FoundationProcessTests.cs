@@ -92,7 +92,9 @@ public sealed class FoundationProcessTests
     [Trait("Category", "E2E")]
     public async Task McpHost_WithClosedInput_ExitsWithoutProtocolOrDiagnosticNoise()
     {
-        (int exitCode, string output, string error) = await RunApplicationAsync().ConfigureAwait(false);
+        (int exitCode, string output, string error) = await RunWithEnvironmentAsync(
+            ProviderCredentials,
+            []).ConfigureAwait(false);
 
         Assert.Equal(0, exitCode);
         Assert.Equal(string.Empty, output);
@@ -100,10 +102,67 @@ public sealed class FoundationProcessTests
     }
 
     /// <summary>
+    /// Verifies a start without provider credentials writes one stderr line for each provider toolset that is off,
+    /// naming the settings to add and no secret value.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task McpHost_WithoutProviderCredentials_NamesTheSettingsOnStderr()
+    {
+        (int exitCode, string output, string error) = await RunWithEnvironmentAsync(
+            NoCredentials,
+            []).ConfigureAwait(false);
+
+        string[] lines = error.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, output);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("'archidekt'", lines[0], StringComparison.Ordinal);
+        Assert.Contains("credentials-missing", lines[0], StringComparison.Ordinal);
+        Assert.Contains("ARCHIDEKT:USERNAME", lines[0], StringComparison.Ordinal);
+        Assert.Contains("'playgroup'", lines[1], StringComparison.Ordinal);
+        Assert.Contains("PLAYGROUP:API_KEY", lines[1], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Provides fake credentials for both providers, so every toolset is on and the host writes no notice.
+    /// </summary>
+    private static readonly Dictionary<string, string?> ProviderCredentials = new(StringComparer.Ordinal)
+    {
+        ["MTGMCP__ARCHIDEKT__USERNAME"] = "e2e-fake-user",
+        ["MTGMCP__ARCHIDEKT__PASSWORD"] = "e2e-fake-password",
+        ["MTGMCP__PLAYGROUP__API_KEY"] = "e2e-fake-key",
+    };
+
+    /// <summary>
+    /// Removes provider credentials and points both credential files at paths that do not exist, so the server
+    /// never falls back to a credential file in the user's profile.
+    /// </summary>
+    private static readonly Dictionary<string, string?> NoCredentials = new(StringComparer.Ordinal)
+    {
+        ["MTGMCP__ARCHIDEKT__USERNAME"] = null,
+        ["MTGMCP__ARCHIDEKT__PASSWORD"] = null,
+        ["MTGMCP__PLAYGROUP__API_KEY"] = null,
+        ["MTGMCP__ARCHIDEKT__CREDENTIALS_FILE"] = Path.Combine(Path.GetTempPath(), "mtg-mcp-e2e-absent", "a.json"),
+        ["MTGMCP__PLAYGROUP__CREDENTIALS_FILE"] = Path.Combine(Path.GetTempPath(), "mtg-mcp-e2e-absent", "p.json"),
+    };
+
+    /// <summary>
     /// Runs the built application with isolated configuration sources and captures its result.
     /// </summary>
-    private static async Task<(int ExitCode, string Output, string Error)> RunApplicationAsync(
+    private static Task<(int ExitCode, string Output, string Error)> RunApplicationAsync(
         params string[] arguments)
+    {
+        return RunWithEnvironmentAsync(null, arguments);
+    }
+
+    /// <summary>
+    /// Runs the built application with isolated configuration sources and extra environment values, and captures
+    /// its result.
+    /// </summary>
+    private static async Task<(int ExitCode, string Output, string Error)> RunWithEnvironmentAsync(
+        IReadOnlyDictionary<string, string?>? environment,
+        string[] arguments)
     {
         string repositoryRoot = FindRepositoryRoot();
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Release";
@@ -135,6 +194,18 @@ public sealed class FoundationProcessTests
             startInfo.Environment.Remove("MTGMCP__MODE");
             startInfo.Environment.Remove("MTGMCP__DATA_DIR");
             startInfo.Environment.Remove("MTGMCP__TOOLSETS");
+            foreach ((string key, string? value) in environment ?? new Dictionary<string, string?>())
+            {
+                if (value is null)
+                {
+                    startInfo.Environment.Remove(key);
+                }
+                else
+                {
+                    startInfo.Environment[key] = value;
+                }
+            }
+
             startInfo.ArgumentList.Add(appPath);
             foreach (string argument in arguments)
             {

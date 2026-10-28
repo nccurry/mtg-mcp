@@ -36,19 +36,19 @@ internal sealed class DeckInterchangeWriteTools
     /// Re-parses and atomically creates one local deck only when the preview fingerprint matches.
     /// </summary>
     [McpServerTool(
-        Name = "deck_import_create",
+        Name = "local_deck_import_create",
         Title = "Create Local Deck From Manual Import",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Creates one local deck from an accepted import preview without provider calls.")]
+    [Description("Local deck store: creates one local deck from an accepted import preview without provider calls.")]
     internal Task<OperationResult<DeckImportCreateResult>> CreateAsync(
         [Description("Exact format ID used for the accepted preview."), InterchangeFormatValues]
         string formatId,
         [Description("Exact content used for the accepted preview.")] string content,
-        [Description("Fingerprint returned by deck_import_preview.")] string expectedFingerprint,
+        [Description("Fingerprint returned by local_deck_import_preview.")] string expectedFingerprint,
         [Description("The same parsing defaults and explicit opt-ins used for preview.")]
         DeckImportOptions? options = null,
         CancellationToken cancellationToken = default)

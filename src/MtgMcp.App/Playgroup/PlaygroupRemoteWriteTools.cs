@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 using MtgMcp.Playgroup;
 
@@ -26,7 +27,11 @@ internal sealed class PlaygroupRemoteWriteTools
 
     /// <summary>Imports one caller-supplied event batch into an existing game.</summary>
     [McpServerTool(Name = "playgroup_game_events_batch_create", Title = "Create Playgroup Game Events", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Submits one explicit event batch exactly once. Playgroup exposes no public cleanup operation, so callers must inspect provider state before retrying.")]
+    [McpMeta(ToolMetadata.RequiresUserInteractionKey, JsonValue = "true")]
+    [Description(
+        "Playgroup: submits one explicit event batch exactly once. Playgroup exposes no public cleanup operation, so " +
+        "callers must inspect provider state before retrying." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> CreateGameEventsBatchAsync(
         [Description("Exact Playgroup game identifier receiving the events.")] int gameId,
         [Description("Caller-supplied ordered event batch sent exactly once.")]
@@ -38,7 +43,10 @@ internal sealed class PlaygroupRemoteWriteTools
 
     /// <summary>Creates one caller-configured live session exactly once.</summary>
     [McpServerTool(Name = "playgroup_live_session_create", Title = "Create Playgroup Live Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Creates one explicit live session exactly once; it does not poll, monitor, join, close, or retry the session.")]
+    [Description(
+        "Playgroup: creates one explicit live session exactly once; it does not poll, monitor, join, close, or retry " +
+        "the session." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> CreateLiveSessionAsync(
         [Description("Complete caller-supplied live-session creation request sent exactly once.")]
         PlaygroupLiveSessionCreateRequest request,

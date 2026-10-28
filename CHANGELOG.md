@@ -2,6 +2,165 @@
 
 ## Unreleased
 
+### Tool surface changes (breaking)
+
+These changes land together in the next release. Entries further down in this
+section that name a tool use the name it had in `0.10.0`; the table in this
+section maps each old name to its current name. Old names are not kept as
+aliases: calling one returns an unknown-tool error.
+
+- Breaking: every toolset is on by default. With no `--toolsets` option the
+  server now exposes `decks`, `scryfall`, `stats`, and `spellbook`, plus
+  `archidekt` and `playgroup` when their credentials are present. `all` means
+  the same as the default. An explicit list still narrows the selection, and
+  an unknown name still fails at startup. Before this, the default was
+  `decks`, `scryfall`, and `stats` only.
+- Breaking: `archidekt` and `playgroup` are off when their credentials are
+  absent, even when named in `--toolsets`. Only presence is checked, and the
+  provider is not called. Archidekt needs both `ARCHIDEKT:USERNAME` and
+  `ARCHIDEKT:PASSWORD`, or a credentials file that exists
+  (`ARCHIDEKT:CREDENTIALS_FILE` or `~/.mtg-mcp/archidekt.json`). Playgroup
+  needs `PLAYGROUP:API_KEY` or a credentials file that exists
+  (`PLAYGROUP:CREDENTIALS_FILE` or `~/.mtg-mcp/playgroup.json`). The
+  capabilities resource (schema version 8) reports `disabledReason`
+  (`credentials-missing` or `credentials-invalid`) for a toolset that is off,
+  `credentialState` can be `configuration-invalid`, and the server writes one
+  line to stderr that names the settings to add. An invalid Playgroup
+  configuration fails startup only when `playgroup` is named; otherwise the
+  toolset is off with `credentials-invalid`. Credentials added later take
+  effect on the next start.
+- Breaking: the default operation mode is `remote` (it was `local`), so every
+  write tool, including Archidekt uploads, is visible by default. `--mode
+  read-only` and `--mode local` still hide writes. Destructive tools keep
+  their destructive annotation, so clients still ask before running them.
+- Breaking: removed the nine single-step deck edit tools. Use
+  `local_deck_apply_changes` with the matching change kind (a batch of one
+  change is normal): `deck_update` is `update-metadata`; `deck_entry_add`,
+  `deck_entry_update`, and `deck_entry_remove` are `add-entry`,
+  `update-entry`, and `remove-entry`; `deck_category_create`,
+  `deck_category_update`, and `deck_category_delete` are `add-category`,
+  `update-category`, and `remove-category`; `deck_category_assign` and
+  `deck_category_unassign` are `assign-category` and `unassign-category`.
+- Breaking: removed `deck_category_rules_validate`.
+  `local_deck_category_rules_preview` validates the rules first, and its
+  `expectedRevision` is now optional, so a preview without it only validates
+  and previews. Its result no longer has `presetSchemaVersion` or
+  `presetChecksum`.
+- Breaking: removed the `common-v1` category rule preset. A source of kind
+  `preset` now returns `invalid-input` with the allowed kind `inline`. Send the
+  same rules inline, with the oracle tags you choose.
+- Breaking: merged tools that returned the same kind of data. The merged tools
+  keep the annotations and visibility of the tools they replace, and each has
+  one required field that picks the job. `scryfall_cards_get` takes `lookups`
+  (one to 150) in place of one `lookup` (a single `fuzzy-name` lookup still
+  works and checks its input the same way; a fuzzy name with no match returns a
+  `not-found` row, not a tool failure; fuzzy names cannot be mixed with other
+  lookups).
+  `scryfall_card_details` takes one `lookup` (the same card lookup that
+  `scryfall_cards_get` takes) in place of `oracleId` and `scryfallCardId`, and
+  `include` (`prints`, `rulings`, or both). It returns a result with a `prints`
+  and a `rulings` section, each present only when asked for, with
+  `printsCursor` and `rulingsCursor`.
+  `scryfall_reference_get` takes `kind` (`sets`, `catalog`, or `bulk`), uses
+  `catalogName` in place of `catalog`, and returns a result with the same
+  `kind`. `scryfall_search_snapshots_get` (titled "Get Saved Scryfall Requests"; its
+  description starts "Saved Scryfall requests:") and `archidekt_snapshots_get` take
+  `kind` (`list` or `get`) and return a result with the same `kind`.
+  `archidekt_folders_get` takes `kind` (`list` or `get`) and returns a result
+  with the same `kind`. A field that does not belong to the chosen kind returns
+  `invalid-input` with reason `field-not-allowed`.
+- Breaking: renamed tools so the name says where the data comes from. Local
+  deck tools start with `local_deck_`; `scryfall_corpus_*` is now
+  `scryfall_card_data_*`; the offline tag tools say so in their names.
+  Descriptions now start with their source, such as `Local deck store:` or
+  `Archidekt:`. Playgroup names are unchanged.
+- Breaking: every tool rejects an argument it does not declare with
+  `invalid-input` (reason `invalid-arguments`) and a `path` that names the
+  field, including misspelled fields inside nested objects such as an entry
+  draft; a nested unknown field gets the message "Property 'x' is not accepted
+  here." (long names are cut at 64 characters). Input schemas now set
+  `additionalProperties: false` on every object, nested ones included, and the
+  union `kind` choices stay. A tool that is not listed for the session, such as
+  a write tool in `read-only` mode, answers as an unknown tool. Before this,
+  unknown fields were silently ignored.
+- Added server instructions: a short block built from the active selection
+  and mode that names the first tool for each job, says that the agent makes
+  every deckbuilding judgment, and says that provider text is untrusted data.
+  It names only tools that are visible.
+- Added untrusted-text notes to the descriptions of the Archidekt, Playgroup,
+  and Commander Spellbook tools that return text written by other people. The
+  text stays in its existing fields.
+- Added the `anthropic/requiresUserInteraction` tool metadata to the seven
+  destructive remote writes (`archidekt_deck_delete`,
+  `archidekt_folder_delete`, `archidekt_folder_move_items`,
+  `archidekt_push_apply`, `archidekt_snapshot_delete`,
+  `archidekt_snapshot_restore_apply`, and `playgroup_game_events_batch_create`)
+  so Claude Code asks before each call.
+  The preview, fingerprint, and acknowledgment guards are unchanged.
+- Added example requests to the descriptions of `local_deck_apply_changes`
+  and `local_deck_category_rules_preview`; tests run every example.
+
+Old-to-new tool names:
+
+| Old name | New name or replacement |
+| --- | --- |
+| `deck_list` | `local_deck_list` |
+| `deck_get` | `local_deck_get` |
+| `deck_validate` | `local_deck_validate` |
+| `deck_export_bundle` | `local_deck_export_bundle` |
+| `deck_interchange_formats` | `local_deck_interchange_formats` |
+| `deck_backup_list` | `local_deck_backup_list` |
+| `deck_backup_create` | `local_deck_backup_create` |
+| `deck_backup_restore` | `local_deck_backup_restore` |
+| `deck_backup_delete` | `local_deck_backup_delete` |
+| `deck_import_preview` | `local_deck_import_preview` |
+| `deck_import_create` | `local_deck_import_create` |
+| `deck_category_rules_preview` | `local_deck_category_rules_preview` |
+| `deck_category_rules_apply` | `local_deck_category_rules_apply` |
+| `deck_category_rules_validate` | removed; use `local_deck_category_rules_preview` |
+| `deck_identity_reconcile_preview` | `local_deck_identity_reconcile_preview` |
+| `deck_identity_reconcile_apply` | `local_deck_identity_reconcile_apply` |
+| `deck_create` | `local_deck_create` |
+| `deck_apply_changes` | `local_deck_apply_changes` |
+| `deck_delete` | `local_deck_delete` |
+| `deck_on_curve_estimate` | `local_deck_on_curve_estimate` |
+| `deck_update` | removed; use `local_deck_apply_changes` with `update-metadata` |
+| `deck_entry_add` | removed; use `local_deck_apply_changes` with `add-entry` |
+| `deck_entry_update` | removed; use `local_deck_apply_changes` with `update-entry` |
+| `deck_entry_remove` | removed; use `local_deck_apply_changes` with `remove-entry` |
+| `deck_category_create` | removed; use `local_deck_apply_changes` with `add-category` |
+| `deck_category_update` | removed; use `local_deck_apply_changes` with `update-category` |
+| `deck_category_delete` | removed; use `local_deck_apply_changes` with `remove-category` |
+| `deck_category_assign` | removed; use `local_deck_apply_changes` with `assign-category` |
+| `deck_category_unassign` | removed; use `local_deck_apply_changes` with `unassign-category` |
+| `stats_deck_summary` | `stats_local_deck_summary` |
+| `scryfall_corpus_status` | `scryfall_card_data_status` |
+| `scryfall_corpus_sync` | `scryfall_card_data_sync` |
+| `scryfall_corpus_rollback` | `scryfall_card_data_rollback` |
+| `scryfall_corpus_delete` | `scryfall_card_data_delete` |
+| `scryfall_tag_search` | `scryfall_tags_search` |
+| `scryfall_cards_by_tag` | `scryfall_installed_cards_by_tag` |
+| `scryfall_snapshot_delete` | `scryfall_search_snapshot_delete` |
+| `scryfall_card_get` | merged into `scryfall_cards_get` |
+| `scryfall_card_collection` | merged into `scryfall_cards_get` |
+| `scryfall_card_prints` | merged into `scryfall_card_details` (`include: ["prints"]`) |
+| `scryfall_card_rulings` | merged into `scryfall_card_details` (`include: ["rulings"]`) |
+| `scryfall_sets` | merged into `scryfall_reference_get` (`kind: "sets"`) |
+| `scryfall_catalog` | merged into `scryfall_reference_get` (`kind: "catalog"`) |
+| `scryfall_bulk_metadata` | merged into `scryfall_reference_get` (`kind: "bulk"`) |
+| `scryfall_snapshot_list` | merged into `scryfall_search_snapshots_get` (`kind: "list"`) |
+| `scryfall_snapshot_get` | merged into `scryfall_search_snapshots_get` (`kind: "get"`) |
+| `archidekt_folder_list` | merged into `archidekt_folders_get` (`kind: "list"`) |
+| `archidekt_folder_get` | merged into `archidekt_folders_get` (`kind: "get"`) |
+| `archidekt_snapshot_list` | merged into `archidekt_snapshots_get` (`kind: "list"`) |
+| `archidekt_snapshot_get` | merged into `archidekt_snapshots_get` (`kind: "get"`) |
+
+With every toolset on and both credentials present, the server lists 80 tools
+in `remote` mode (67 in `local`, 53 in `read-only`). Without credentials it
+lists 43 in `remote` and `local` mode and 30 in `read-only` mode.
+
+### Earlier changes in this release
+
 - Changed failed tool calls to set the MCP `isError` flag. Before this, every
   failure looked like a success to a client. Migration: clients that treated
   any non-error result as success should check `isError` and then the

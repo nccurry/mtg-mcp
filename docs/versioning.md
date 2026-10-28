@@ -40,6 +40,16 @@ The completed rewrite required exact schema review, preview releases,
 user-facing clean-break documentation, rollback to the prior package/data, and
 history-preserving Git integration. See [rewrite-guide.md](rewrite-guide.md).
 
+### Approved `0.11.0` focused-agent-tool-surface exception
+
+The approved focused-agent-tool-surface program (see
+`docs/llms/plcs/in-progress/focused-agent-tool-surface/`) renames, merges, and
+removes tools, and changes default selection, in one release without
+deprecation aliases. The owner approved this clean break for that program
+only. Old names return an unknown-tool error, and the changelog lists every old
+name beside its replacement. Changes after this program follow the ordinary
+policy.
+
 ## Deprecating Tools or Parameters
 
 When a shipped tool, resource, prompt, parameter, or result field is being
