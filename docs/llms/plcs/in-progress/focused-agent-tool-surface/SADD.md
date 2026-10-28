@@ -1074,12 +1074,18 @@ phase 6 evidence row of the README.
   derives local entry and category IDs per local deck; the preview fingerprint
   does not contain them, so preview and apply agree. Baselines also keep the old
   provider-only IDs as extra links, so decks made earlier still link.
-- **FIX-007, whole numbers.** `WholeNumberConverters` (int and long, and so
-  their nullable forms) are the first converters of the tool serializer
-  options. They read `328.0` and `3.28e2`, refuse a fractional part, a range
-  overflow, a string, or another token with a message that states the rule, and
-  the serializer adds the JSON path. A test walks every tool input type and
-  fails if an integer type other than `int` or `long` appears.
+- **FIX-007, whole numbers.** `WholeNumberArguments.Normalize` runs first in
+  the tool call filter and rewrites any number written with a fractional part
+  or an exponent but holding a whole value that fits 64 bits (`328.0`,
+  `3.28e2`) as the plain integer, at any depth; a number field that is not an
+  integer reads the plain form as well. A number with a fractional part, or one
+  out of range, is left alone and fails to bind as before, and the filter
+  already turns that into `invalid-arguments` with the JSON path. Custom `int`
+  and `long` converters were tried first and dropped: a custom converter hides
+  the type from the schema generator, which then published empty schemas and
+  lost property descriptions (caught by `StatisticsTools_EveryMode_*`). A test
+  walks every tool input type and fails if an integer type other than `int` or
+  `long` appears.
 
 ### On-Curve Migration
 

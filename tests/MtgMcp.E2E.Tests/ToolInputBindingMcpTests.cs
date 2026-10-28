@@ -356,7 +356,7 @@ public sealed class ToolInputBindingMcpTests
                 },
             }).ConfigureAwait(false);
 
-        AssertInvalidArguments(result, "changes[0].entryDraft.sortOrder", "whole number");
+        AssertInvalidArguments(result, "changes[0].entryDraft.sortOrder");
     }
 
     /// <summary>

@@ -47,6 +47,8 @@ internal static partial class ToolCallPolicy
         ArgumentNullException.ThrowIfNull(next);
         return async (context, cancellationToken) =>
         {
+            // JSON Schema "integer" admits 328.0; the serializer does not, so write whole numbers as integers first.
+            WholeNumberArguments.Normalize(context.Params?.Arguments);
             // A tool the server did not register for this selection and mode is an unknown tool: describe nothing.
             ToolArguments? tool = FindRegisteredTool(context);
             bool registered = tool is not null;
@@ -474,11 +476,6 @@ internal static partial class ToolCallPolicy
             AllowOutOfOrderMetadataProperties = true,
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         };
-        foreach (JsonConverter converter in WholeNumberConverters.All)
-        {
-            options.Converters.Insert(0, converter);
-        }
-
         options.MakeReadOnly();
         return options;
     }

@@ -27,64 +27,47 @@ public sealed class WholeNumberBindingTests : IClassFixture<ToolCatalogFixture>
     }
 
     /// <summary>
-    /// Verifies whole numbers in every spelling are read for each integer type tool inputs use.
-    /// </summary>
-    [Theory]
-    [InlineData("328.0", 328)]
-    [InlineData("3.28e2", 328)]
-    [InlineData("328", 328)]
-    [InlineData("-0.0", 0)]
-    [InlineData("2147483647.0", int.MaxValue)]
-    public void Deserialize_WholeNumber_IsAccepted(string json, int expected)
-    {
-        JsonSerializerOptions options = ToolCallPolicy.SerializerOptions;
-
-        Assert.Equal(expected, JsonSerializer.Deserialize<int>(json, options));
-        Assert.Equal(expected, JsonSerializer.Deserialize<int?>(json, options));
-        Assert.Equal(expected, JsonSerializer.Deserialize<long>(json, options));
-        Assert.Equal(expected, JsonSerializer.Deserialize<long?>(json, options));
-        Assert.Null(JsonSerializer.Deserialize<int?>("null", options));
-    }
-
-    /// <summary>
-    /// Verifies a number the type cannot hold exactly, or a value that is not a number, is refused with the rule.
-    /// </summary>
-    [Theory]
-    [InlineData("1.5", "fractional part")]
-    [InlineData("328.0000001", "fractional part")]
-    [InlineData("2147483648", "out of range")]
-    [InlineData("-2147483649.0", "out of range")]
-    [InlineData("1e300", "out of range")]
-    [InlineData("\"5\"", "not a number")]
-    [InlineData("true", "not a number")]
-    public void Deserialize_NotAWholeIntNumber_IsRefusedWithTheRule(string json, string reason)
-    {
-        JsonException exception = Assert.Throws<JsonException>(
-            () => JsonSerializer.Deserialize<int>(json, ToolCallPolicy.SerializerOptions));
-
-        Assert.Contains(reason, exception.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Verifies a 64-bit value keeps its exact value and a value past the 64-bit range is refused.
+    /// Verifies whole numbers written with a fractional part or an exponent become plain integers, at any depth.
     /// </summary>
     [Fact]
-    public void Deserialize_Long_KeepsTheExactValueAndRefusesOverflow()
+    public void Normalize_WholeNumbers_BecomeIntegersAtAnyDepth()
     {
-        JsonSerializerOptions options = ToolCallPolicy.SerializerOptions;
+        Dictionary<string, JsonElement> arguments = Arguments(
+            "{ \"a\": 328.0, \"b\": 3.28e2, \"c\": { \"d\": [ 1.0, { \"e\": -0.0 } ] }, \"f\": 9007199254740993.0 }");
 
-        Assert.Equal(9007199254740993L, JsonSerializer.Deserialize<long>("9007199254740993", options));
-        Assert.Equal(long.MaxValue, JsonSerializer.Deserialize<long>("9223372036854775807", options));
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<long>("9223372036854775808", options));
+        WholeNumberArguments.Normalize(arguments);
+
+        Assert.Equal("328", arguments["a"].GetRawText());
+        Assert.Equal("328", arguments["b"].GetRawText());
+        Assert.Equal("{\"d\":[1,{\"e\":0}]}", arguments["c"].GetRawText());
+        Assert.Equal("9007199254740993", arguments["f"].GetRawText());
     }
 
     /// <summary>
-    /// Verifies nested integer fields in a batch edit bind as whole numbers.
+    /// Verifies a number with a fractional part, a number too large for 64 bits, and other values are left as they
+    /// were, and the same instance is kept when nothing changes.
+    /// </summary>
+    [Fact]
+    public void Normalize_OtherValues_AreLeftAlone()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            "{ \"a\": 1.5, \"b\": 1e300, \"c\": \"2.0\", \"d\": true, \"e\": null, \"f\": [ 7, \"x\" ], \"g\": 5 }");
+        Dictionary<string, string> before = arguments.ToDictionary(pair => pair.Key, pair => pair.Value.GetRawText());
+
+        WholeNumberArguments.Normalize(arguments);
+        WholeNumberArguments.Normalize(null);
+
+        Assert.Equal(before, arguments.ToDictionary(pair => pair.Key, pair => pair.Value.GetRawText()));
+    }
+
+    /// <summary>
+    /// Verifies nested integer fields in a batch edit bind as whole numbers once normalized.
     /// </summary>
     [Fact]
     public void ApplyChanges_WholeNumberFields_Bind()
     {
         Dictionary<string, JsonElement> arguments = Arguments(ApplyChangesJson("3.0", "1.0", "328.0"));
+        WholeNumberArguments.Normalize(arguments);
 
         Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
     }
@@ -94,26 +77,28 @@ public sealed class WholeNumberBindingTests : IClassFixture<ToolCatalogFixture>
     /// invalid-input failure.
     /// </summary>
     [Theory]
-    [InlineData("1.5", "fractional part")]
-    [InlineData("99999999999", "out of range")]
-    public void ApplyChanges_BadSortOrder_NamesThePath(string sortOrder, string reason)
+    [InlineData("1.5")]
+    [InlineData("99999999999")]
+    [InlineData("328.0000001")]
+    public void ApplyChanges_BadSortOrder_NamesThePath(string sortOrder)
     {
         Dictionary<string, JsonElement> arguments = Arguments(ApplyChangesJson("3", "1", sortOrder));
+        WholeNumberArguments.Normalize(arguments);
 
         OperationInvalidInput failure = Assert.IsType<OperationInvalidInput>(
             ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
 
         Assert.Equal("invalid-arguments", failure.ReasonCode);
         Assert.Equal("changes[0].entryDraft.sortOrder", failure.Path);
-        Assert.Contains(reason, failure.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Verifies every integer a tool input can hold is an <c>int</c> or <c>long</c> (or nullable), the types the
-    /// whole-number converters cover, so no tool can fall back to the serializer's generic failure.
+    /// Verifies every integer a tool input can hold is an <c>int</c> or <c>long</c> (or nullable), and each reads a
+    /// normalized whole number and fails with a serializer error, which the filter turns into a path, for a number
+    /// with a fractional part or out of range. No tool input can reach the generic invocation error that way.
     /// </summary>
     [Fact]
-    public void EveryToolInput_UsesOnlyIntegerTypesTheConvertersCover()
+    public void EveryToolInput_ReadsWholeNumbersAndRefusesTheRest()
     {
         HashSet<Type> seen = [];
         List<(string Tool, Type Type)> integers = [];
@@ -130,12 +115,16 @@ public sealed class WholeNumberBindingTests : IClassFixture<ToolCatalogFixture>
         Assert.Empty(integers
             .Where(value => !covered.Contains(value.Type))
             .Select(value => $"{value.Tool}: {value.Type}"));
+        Dictionary<string, JsonElement> number = Arguments("{ \"n\": 5.0 }");
+        WholeNumberArguments.Normalize(number);
         foreach (Type type in integers.Select(value => value.Type).Distinct())
         {
-            object? read = JsonSerializer.Deserialize("5.0", type, ToolCallPolicy.SerializerOptions);
+            object? read = JsonSerializer.Deserialize(number["n"], type, ToolCallPolicy.SerializerOptions);
 
             Assert.Equal(5, Convert.ToInt32(read, CultureInfo.InvariantCulture));
             Assert.Throws<JsonException>(() => JsonSerializer.Deserialize("5.5", type, ToolCallPolicy.SerializerOptions));
+            Assert.Throws<JsonException>(
+                () => JsonSerializer.Deserialize("99999999999999999999", type, ToolCallPolicy.SerializerOptions));
         }
     }
 

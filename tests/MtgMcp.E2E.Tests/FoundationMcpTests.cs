@@ -580,7 +580,7 @@ public sealed class FoundationMcpTests
             ["archidekt_folder_move_items"] = ["request"],
             ["archidekt_folder_update"] = ["request"],
             ["archidekt_pull_apply"] = ["request"],
-            ["archidekt_pull_preview"] = ["localDeckId", "remoteDeckId"],
+            ["archidekt_pull_preview"] = ["discardLocalChanges", "localDeckId", "remoteDeckId"],
             ["archidekt_push_apply"] = ["request"],
             ["archidekt_push_preview"] = ["localDeckId"],
             ["archidekt_snapshot_create"] = ["request"],
