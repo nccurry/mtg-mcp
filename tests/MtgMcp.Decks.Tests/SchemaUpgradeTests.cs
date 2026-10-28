@@ -144,6 +144,38 @@ public sealed class SchemaUpgradeTests
     }
 
     /// <summary>
+    /// Verifies a connection that read version 1 before another process upgraded the file does not migrate again and
+    /// does not make another pre-migration copy.
+    /// </summary>
+    [Fact]
+    public async Task Migration_AfterAnotherProcessAlreadyUpgraded_IsSkipped()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        string path = Path.Combine(temporary.Path, "decks.db");
+        CategoryNameTests.MakeVersionOneDatabase(path);
+        DeckDatabase database = new(path, TimeProvider.System, "test");
+        await using SqliteConnection stale = new($"Data Source={path};Pooling=False");
+        await stale.OpenAsync(TestContext.Current.CancellationToken);
+        await using (await database.OpenConnectionAsync(writable: true, TestContext.Current.CancellationToken))
+        {
+        }
+
+        string copies = Path.Combine(temporary.Path, "backups", "decks");
+        int before = Directory.GetFiles(copies, "pre-migration-*.db").Length;
+
+        await database.ApplyMigrationAsync(
+            stale,
+            new SqliteMigration(2, true, "SELECT * FROM missing_table;"),
+            DateTimeOffset.UtcNow,
+            "test",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, before);
+        Assert.Equal(before, Directory.GetFiles(copies, "pre-migration-*.db").Length);
+        Assert.Equal(2L, await ScalarOnAsync(stale, "SELECT MAX(version) FROM schema_migrations;"));
+    }
+
+    /// <summary>
     /// Reads one number from a database file.
     /// </summary>
     private static async Task<long> ScalarAsync(string path, string sql)

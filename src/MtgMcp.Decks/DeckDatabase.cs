@@ -315,6 +315,12 @@ internal sealed class DeckDatabase
         ArgumentNullException.ThrowIfNull(migration);
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationVersion);
 
+        // Another process may have applied this migration since the caller read the version; check before any copy.
+        if (await GetSchemaVersionAsync(connection, cancellationToken).ConfigureAwait(false) >= migration.Version)
+        {
+            return;
+        }
+
         if (migration.IsDestructive && Exists)
         {
             await CreatePreMigrationBackupAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -324,6 +330,13 @@ internal sealed class DeckDatabase
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
+            // The transaction holds the write lock, so this read is final: a process that won the race is respected.
+            if (await GetSchemaVersionAsync(connection, cancellationToken).ConfigureAwait(false) >= migration.Version)
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                return;
+            }
+
             await using SqliteCommand schemaCommand = connection.CreateCommand();
             schemaCommand.Transaction = transaction;
             schemaCommand.CommandText = migration.Sql;
