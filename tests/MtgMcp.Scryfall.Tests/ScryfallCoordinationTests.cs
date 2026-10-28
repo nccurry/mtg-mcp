@@ -203,6 +203,7 @@ public sealed class ScryfallCoordinationTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
     }

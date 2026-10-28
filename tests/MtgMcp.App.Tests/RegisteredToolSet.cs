@@ -3,6 +3,7 @@ using ModelContextProtocol.Server;
 using MtgMcp.App.Archidekt;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.App.Playgroup;
 using MtgMcp.App.Scryfall;
 using MtgMcp.App.Spellbook;
@@ -33,7 +34,11 @@ internal sealed class RegisteredToolSet : IDisposable
     {
         TemporaryDirectory temporary = Own(new TemporaryDirectory());
         SqliteDeckStore deckStore = Own(new SqliteDeckStore(temporary.Path, "test"));
-        ScryfallService scryfall = Own(new ScryfallService(temporary.Path, allowLocalWrites: true, "test"));
+        ScryfallService scryfall = Own(new ScryfallService(
+            temporary.Path,
+            allowLocalWrites: true,
+            "test",
+            ToolCallPolicy.SerializerOptions));
         ArchidektService archidekt = Own(new ArchidektService(
             ArchidektOptions.CreateDefault("user", "secret"),
             "test"));

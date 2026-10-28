@@ -1,4 +1,3 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MtgMcp.Core.Results;
@@ -101,15 +100,6 @@ public sealed record ScryfallCardsByTagResponse(
 internal sealed class ScryfallCardResponseOperations
 {
     /// <summary>
-    /// Measures sizes the way a default result serializer writes, when the host gives none.
-    /// </summary>
-    private static readonly JsonSerializerOptions DefaultResultOptions = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
-    /// <summary>
     /// Owns the card reads that produce mapped cards.
     /// </summary>
     private readonly ScryfallCardEvidenceOperations cards;
@@ -124,11 +114,12 @@ internal sealed class ScryfallCardResponseOperations
     /// </summary>
     internal ScryfallCardResponseOperations(
         ScryfallCardEvidenceOperations cards,
-        JsonSerializerOptions? resultOptions)
+        JsonSerializerOptions resultOptions)
     {
         ArgumentNullException.ThrowIfNull(cards);
+        ArgumentNullException.ThrowIfNull(resultOptions);
         this.cards = cards;
-        this.resultOptions = resultOptions ?? DefaultResultOptions;
+        this.resultOptions = resultOptions;
     }
 
     /// <summary>
@@ -175,11 +166,7 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallSearchResult, ScryfallSearchResponse>(result);
         }
 
-        ScryfallFormattedCards formatted = await PageCardsAsync(
-            formatter,
-            success.Data.Page.Items,
-            null,
-            cancellationToken).ConfigureAwait(false);
+        ScryfallFormattedCards formatted = PageCards(success.Data.Page);
         ScryfallPage<ScryfallCardView> page = ToPage(formatted, success.Data.Page);
         return new OperationSuccess<ScryfallSearchResponse>(
             new ScryfallSearchResponse(page, success.Data.Snapshot, success.Data.Warnings)
@@ -267,11 +254,7 @@ internal sealed class ScryfallCardResponseOperations
         }
 
         IReadOnlyList<ScryfallCollectionRow> rows = success.Data.Page.Items;
-        ScryfallFormattedCards formatted = await PageCardsAsync(
-            formatter,
-            [.. rows.Select(row => row.Card)],
-            success.Data.CorpusGenerationId,
-            cancellationToken).ConfigureAwait(false);
+        ScryfallFormattedCards formatted = PageCards(success.Data.Page);
         List<ScryfallCollectionRowResponse> items = new(rows.Count);
         for (int index = 0; index < rows.Count; index++)
         {
@@ -333,11 +316,7 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallCardsByTagResult, ScryfallCardsByTagResponse>(result);
         }
 
-        ScryfallFormattedCards formatted = await PageCardsAsync(
-            formatter,
-            success.Data.Page.Items,
-            success.Data.GenerationId,
-            cancellationToken).ConfigureAwait(false);
+        ScryfallFormattedCards formatted = PageCards(success.Data.Page);
         ScryfallPage<ScryfallCardView> page = ToPage(formatted, success.Data.Page);
         return new OperationSuccess<ScryfallCardsByTagResponse>(
             new ScryfallCardsByTagResponse(success.Data.Tag, page, success.Data.Assignments, success.Data.GenerationId)
@@ -358,16 +337,11 @@ internal sealed class ScryfallCardResponseOperations
     }
 
     /// <summary>
-    /// Takes the cards the size check already formatted, or formats the page when no check ran.
+    /// Takes the cards that the page builder formatted and cut with the item counter.
     /// </summary>
-    private static async Task<ScryfallFormattedCards> PageCardsAsync(
-        ScryfallCardFormatter formatter,
-        IReadOnlyList<ScryfallCard?> pageCards,
-        Guid? generationId,
-        CancellationToken cancellationToken)
+    private static ScryfallFormattedCards PageCards<T>(ScryfallPage<T> page)
     {
-        return formatter.CountedPage ?? await formatter.FormatAsync(pageCards, generationId, cancellationToken)
-            .ConfigureAwait(false);
+        return page.Formatted ?? throw new InvalidOperationException("The page was built without an item counter.");
     }
 
     /// <summary>

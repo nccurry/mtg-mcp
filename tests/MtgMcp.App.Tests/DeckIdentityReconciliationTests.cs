@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -345,6 +346,7 @@ public sealed class DeckIdentityReconciliationTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://identity.fixture/", UriKind.Absolute),
             handler: handler);
     }

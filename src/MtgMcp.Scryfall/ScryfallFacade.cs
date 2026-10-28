@@ -48,11 +48,11 @@ public sealed class ScryfallService : IDisposable
         string dataRoot,
         bool allowLocalWrites,
         string packageVersion,
+        JsonSerializerOptions resultSerializerOptions,
         Uri? apiBaseUri = null,
         TimeSpan? freshnessTtl = null,
         TimeProvider? timeProvider = null,
-        HttpMessageHandler? handler = null,
-        JsonSerializerOptions? resultSerializerOptions = null)
+        HttpMessageHandler? handler = null)
     {
         cards = new ScryfallCardEvidenceOperations(
             dataRoot,

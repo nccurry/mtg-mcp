@@ -5,7 +5,7 @@ namespace MtgMcp.Scryfall;
 
 /// <summary>
 /// Shapes mapped cards for one response: the concise projection with facts from installed data, or the
-/// mapped card unchanged. For concise results it also decides how many cards of a page fit the size limit.
+/// mapped card unchanged. It holds no state between calls.
 /// </summary>
 internal sealed class ScryfallCardFormatter
 {
@@ -48,14 +48,10 @@ internal sealed class ScryfallCardFormatter
     internal ScryfallCardFormat Format { get; }
 
     /// <summary>
-    /// Gets the cards of the page that the size check kept, formatted once, or null when no check ran.
+    /// Gets the item counter that page builders call. For concise cards it cuts the page to the size limit; for the
+    /// other formats it keeps every item.
     /// </summary>
-    internal ScryfallFormattedCards? CountedPage { get; private set; }
-
-    /// <summary>
-    /// Gets the size check that page builders call; null when the format is not size limited.
-    /// </summary>
-    internal ScryfallPageItemCounter? CountItemsThatFit => Format.IsConcise ? CountAsync : null;
+    internal ScryfallPageItemCounter CountItemsThatFit => CountAsync;
 
     /// <summary>
     /// Builds the note that names the fields left null when card data is not installed.
@@ -87,6 +83,21 @@ internal sealed class ScryfallCardFormatter
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(cards);
+        (List<ScryfallCardView?> views, ScryfallInstalledCardFactsRead facts) = await ShapeAsync(
+            cards,
+            generationId,
+            cancellationToken).ConfigureAwait(false);
+        return new ScryfallFormattedCards(views, false, Limits(cards, facts));
+    }
+
+    /// <summary>
+    /// Shapes the cards and keeps the installed-data facts they were shaped with.
+    /// </summary>
+    private async Task<(List<ScryfallCardView?> Views, ScryfallInstalledCardFactsRead Facts)> ShapeAsync(
+        IReadOnlyList<ScryfallCard?> cards,
+        Guid? generationId,
+        CancellationToken cancellationToken)
+    {
         List<ScryfallCardView?> views = new(cards.Count);
         if (!Format.IsConcise)
         {
@@ -101,7 +112,7 @@ internal sealed class ScryfallCardFormatter
                 views.Add(new ScryfallCardView(card));
             }
 
-            return new ScryfallFormattedCards(views, false, null);
+            return (views, ScryfallInstalledCardFactsRead.NotRequested);
         }
 
         ScryfallInstalledCardFactsRead facts = await ReadFactsAsync(cards, generationId, cancellationToken)
@@ -114,46 +125,49 @@ internal sealed class ScryfallCardFormatter
                 continue;
             }
 
-            ScryfallInstalledCardFacts? cardFacts = null;
-            if (ScryfallConciseFieldTable.EffectiveOracleId(card) is Guid oracleId)
-            {
-                facts.ByOracleId.TryGetValue(oracleId, out cardFacts);
-            }
-
             views.Add(new ScryfallCardView(
-                ScryfallConciseProjection.Project(card, cardFacts, Format.SelectedFields!)));
+                ScryfallConciseProjection.Project(card, facts.FactsFor(card), Format.SelectedFields!)));
         }
 
-        return new ScryfallFormattedCards(views, false, Limits(cards, facts));
+        return (views, facts);
     }
 
     /// <summary>
-    /// Counts how many leading page items fit the result size limit, always keeping at least one. The cards are
-    /// formatted once here, and the kept ones are left in <see cref="CountedPage"/> for the response.
+    /// Shapes a page and, for concise cards, keeps the leading items that fit the result size limit, always at
+    /// least one. The limit notes describe only the kept cards.
     /// </summary>
-    private async Task<int> CountAsync(
+    private async Task<ScryfallFormattedCards> CountAsync(
         IReadOnlyList<ScryfallCard?> cards,
         IReadOnlyList<object?> companions,
         Guid? generationId,
         CancellationToken cancellationToken)
     {
-        ScryfallFormattedCards formatted = await FormatAsync(cards, generationId, cancellationToken)
-            .ConfigureAwait(false);
-        List<int> sizes = new(formatted.Views.Count);
-        for (int index = 0; index < formatted.Views.Count; index++)
+        (List<ScryfallCardView?> views, ScryfallInstalledCardFactsRead facts) = await ShapeAsync(
+            cards,
+            generationId,
+            cancellationToken).ConfigureAwait(false);
+        int keep = views.Count;
+        if (Format.IsConcise)
         {
-            int size = 1 + Measure(companions[index]);
-            if (formatted.Views[index] is { } view)
+            List<int> sizes = new(views.Count);
+            for (int index = 0; index < views.Count; index++)
             {
-                size += Measure(view);
+                int size = 1 + Measure(companions[index]);
+                if (views[index] is { } view)
+                {
+                    size += Measure(view);
+                }
+
+                sizes.Add(size);
             }
 
-            sizes.Add(size);
+            keep = ResultSizeLimit.CountFitting(sizes);
         }
 
-        int keep = ResultSizeLimit.CountFitting(sizes);
-        CountedPage = formatted with { Views = [.. formatted.Views.Take(keep)], Truncated = keep < sizes.Count };
-        return keep;
+        return new ScryfallFormattedCards(
+            [.. views.Take(keep)],
+            keep < views.Count,
+            Limits([.. cards.Take(keep)], facts));
     }
 
     /// <summary>
@@ -195,7 +209,7 @@ internal sealed class ScryfallCardFormatter
     }
 
     /// <summary>
-    /// Lists the reasons some requested fields are empty, or null when there are none.
+    /// Lists the reasons some requested fields are empty for the given cards, or null when there are none.
     /// </summary>
     private List<string>? Limits(IReadOnlyList<ScryfallCard?> cards, ScryfallInstalledCardFactsRead facts)
     {
@@ -228,7 +242,7 @@ internal sealed record ScryfallFormattedCards(
     IReadOnlyList<string>? Limits);
 
 /// <summary>
-/// Decides how many leading items of a card page fit the result size limit.
+/// Shapes the cards of a page and decides how many leading items fit the result size limit.
 /// </summary>
 /// <param name="cards">The cards of the page in order; null for a page item that carries no card.</param>
 /// <param name="companions">
@@ -236,8 +250,8 @@ internal sealed record ScryfallFormattedCards(
 /// </param>
 /// <param name="generationId">The card-data generation the page was read from, or null for the active one.</param>
 /// <param name="cancellationToken">Cancels the read of installed card data.</param>
-/// <returns>The number of leading items to keep, at least one when the page is not empty.</returns>
-internal delegate Task<int> ScryfallPageItemCounter(
+/// <returns>The kept cards; their count is the number of leading items to keep.</returns>
+internal delegate Task<ScryfallFormattedCards> ScryfallPageItemCounter(
     IReadOnlyList<ScryfallCard?> cards,
     IReadOnlyList<object?> companions,
     Guid? generationId,

@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using MtgMcp.App.Hosting;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Tests;
@@ -70,6 +71,7 @@ internal static class DeckCategorizationSourceFixture
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://category.fixture/", UriKind.Absolute),
             TimeSpan.FromHours(24),
             timeProvider: null,

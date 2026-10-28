@@ -14,19 +14,21 @@ public static class ScryfallConciseFields
     /// Gets the fields a concise card carries when the caller names none, in output order.
     /// </summary>
     public static IReadOnlyList<string> Default { get; } =
-        [.. ScryfallConciseFieldTable.Definitions.Where(field => field.InDefaultSet).Select(field => field.Name)];
+        [.. ScryfallConciseFieldTable.Definitions.Where(ScryfallConciseFieldTable.InDefaultSet)
+            .Select(ScryfallConciseFieldTable.NameOf)];
 
     /// <summary>
     /// Gets the fields a caller can add by name; they are not in the default set.
     /// </summary>
     public static IReadOnlyList<string> Extra { get; } =
-        [.. ScryfallConciseFieldTable.Definitions.Where(field => !field.InDefaultSet).Select(field => field.Name)];
+        [.. ScryfallConciseFieldTable.Definitions.Where(field => !ScryfallConciseFieldTable.InDefaultSet(field))
+            .Select(ScryfallConciseFieldTable.NameOf)];
 
     /// <summary>
     /// Gets every field name a caller can ask for: the default set, then the extra fields.
     /// </summary>
     public static IReadOnlyList<string> All { get; } =
-        [.. ScryfallConciseFieldTable.Definitions.Select(field => field.Name)];
+        [.. ScryfallConciseFieldTable.Definitions.Select(ScryfallConciseFieldTable.NameOf)];
 }
 
 /// <summary>
@@ -51,16 +53,28 @@ internal enum ScryfallInstalledDataNeed
 }
 
 /// <summary>
-/// Describes one concise field: its name, whether the default set holds it, the installed data it needs, and how
-/// to read it. A price field instead names its key in the Scryfall price object and in the output price object.
+/// Describes a concise field that is read from the card object alone.
 /// </summary>
-internal sealed record ScryfallConciseFieldDefinition(
+internal sealed record ScryfallPlainField(string Name, bool InDefaultSet, Func<ScryfallCard, object?> Read);
+
+/// <summary>
+/// Describes a concise field that is read from installed card data.
+/// </summary>
+internal sealed record ScryfallInstalledDataField(
     string Name,
     bool InDefaultSet,
     ScryfallInstalledDataNeed Need,
-    Func<ScryfallCard, ScryfallInstalledCardFacts?, object?> Read,
-    string? PriceSourceKey = null,
-    string? PriceOutputKey = null);
+    Func<ScryfallInstalledCardFacts?, object?> Read);
+
+/// <summary>
+/// Describes a concise price field, which is written into the shared price object under its own key.
+/// </summary>
+internal sealed record ScryfallPriceField(string Name, bool InDefaultSet, string SourceKey, string OutputKey);
+
+/// <summary>
+/// Holds one concise field of one of the three kinds.
+/// </summary>
+internal readonly union ScryfallConciseField(ScryfallPlainField, ScryfallInstalledDataField, ScryfallPriceField);
 
 /// <summary>
 /// Holds the one table that drives the published field list, the projection, and which fields need installed data.
@@ -76,40 +90,79 @@ internal static class ScryfallConciseFieldTable
     /// <summary>
     /// Gets every concise field in output order.
     /// </summary>
-    internal static IReadOnlyList<ScryfallConciseFieldDefinition> Definitions { get; } =
+    internal static IReadOnlyList<ScryfallConciseField> Definitions { get; } =
     [
-        Plain("scryfallId", true, (card, _) => card.Id),
-        Plain("oracleId", true, (card, _) => EffectiveOracleId(card)),
-        Plain("name", true, (card, _) => card.Name),
-        Plain("manaCost", true, (card, _) => FirstNonEmpty(card.ManaCost, Front(card)?.ManaCost) ?? card.ManaCost),
-        Plain("manaValue", true, (card, _) => card.ManaValue),
-        Plain("typeLine", true, (card, _) => card.TypeLine ?? JoinFaces(card, face => face.TypeLine, " // ")),
-        Plain("colors", true, (card, _) => Colors(card)),
-        Plain("colorIdentity", true, (card, _) => card.ColorIdentity),
-        Plain("producedMana", true, (card, _) => card.ProducedMana),
-        Plain("keywords", true, (card, _) => card.Keywords),
-        Plain("oracleText", true, (card, _) => OracleText(card)),
-        Plain("power", true, (card, _) => card.Power ?? Front(card)?.Power),
-        Plain("toughness", true, (card, _) => card.Toughness ?? Front(card)?.Toughness),
-        Plain("loyalty", true, (card, _) => card.Loyalty ?? Front(card)?.Loyalty),
-        Plain("legalities", true, (card, _) => LegalFormats(card)),
+        Plain("scryfallId", true, card => card.Id),
+        Plain("oracleId", true, card => EffectiveOracleId(card)),
+        Plain("name", true, card => card.Name),
+        Plain("manaCost", true, card => ManaCost(card)),
+        Plain("manaValue", true, card => card.ManaValue),
+        Plain("typeLine", true, card => card.TypeLine ?? JoinFaces(card, face => face.TypeLine, " // ")),
+        Plain("colors", true, card => Colors(card)),
+        Plain("colorIdentity", true, card => card.ColorIdentity),
+        Plain("producedMana", true, card => card.ProducedMana),
+        Plain("keywords", true, card => card.Keywords),
+        Plain("oracleText", true, card => OracleText(card)),
+        Plain("power", true, card => card.Power ?? Front(card)?.Power),
+        Plain("toughness", true, card => card.Toughness ?? Front(card)?.Toughness),
+        Plain("loyalty", true, card => card.Loyalty ?? Front(card)?.Loyalty),
+        Plain("legalities", true, card => LegalFormats(card)),
         Price("prices.usd", true, "usd", "usd"),
         Installed("cheapestPriceUsd", true, ScryfallInstalledDataNeed.CheapestPrice, facts => facts?.CheapestPriceUsd),
-        Plain("rarity", true, (card, _) => card.Rarity),
-        Plain("set", true, (card, _) => card.SetCode),
+        Plain("rarity", true, card => card.Rarity),
+        Plain("set", true, card => card.SetCode),
         Installed("tags", true, ScryfallInstalledDataNeed.Tags, facts => facts?.Tags),
-        Plain("gameChanger", true, (card, _) => card.GameChanger),
-        Plain("edhrecRank", true, (card, _) => EdhrecRank(card)),
+        Plain("gameChanger", true, card => card.GameChanger),
+        Plain("edhrecRank", true, card => EdhrecRank(card)),
         Price("prices.usdFoil", false, "usd_foil", "usdFoil"),
         Price("prices.usdEtched", false, "usd_etched", "usdEtched"),
         Price("prices.eur", false, "eur", "eur"),
         Price("prices.eurFoil", false, "eur_foil", "eurFoil"),
         Price("prices.tix", false, "tix", "tix"),
-        Plain("legalitiesAll", false, (card, _) => card.Legalities),
-        Plain("games", false, (card, _) => card.Games),
-        Plain("reserved", false, (card, _) => card.Reserved),
-        Plain("layout", false, (card, _) => card.Layout),
+        Plain("legalitiesAll", false, card => card.Legalities),
+        Plain("games", false, card => card.Games),
+        Plain("reserved", false, card => card.Reserved),
+        Plain("layout", false, card => card.Layout),
     ];
+
+    /// <summary>
+    /// Gets the name of a concise field.
+    /// </summary>
+    internal static string NameOf(ScryfallConciseField field)
+    {
+        return field switch
+        {
+            ScryfallPlainField plain => plain.Name,
+            ScryfallInstalledDataField installed => installed.Name,
+            ScryfallPriceField price => price.Name,
+        };
+    }
+
+    /// <summary>
+    /// Reports whether the default concise set holds a field.
+    /// </summary>
+    internal static bool InDefaultSet(ScryfallConciseField field)
+    {
+        return field switch
+        {
+            ScryfallPlainField plain => plain.InDefaultSet,
+            ScryfallInstalledDataField installed => installed.InDefaultSet,
+            ScryfallPriceField price => price.InDefaultSet,
+        };
+    }
+
+    /// <summary>
+    /// Gets the installed card data a concise field needs.
+    /// </summary>
+    internal static ScryfallInstalledDataNeed NeedOf(ScryfallConciseField field)
+    {
+        return field switch
+        {
+            ScryfallPlainField => ScryfallInstalledDataNeed.None,
+            ScryfallInstalledDataField installed => installed.Need,
+            ScryfallPriceField => ScryfallInstalledDataNeed.None,
+        };
+    }
 
     /// <summary>
     /// Finds the Oracle ID a card is looked up by. A card whose faces are separate cards (a reversible card) has no
@@ -131,42 +184,42 @@ internal static class ScryfallConciseFieldTable
     /// <summary>
     /// Defines a field read from the card object.
     /// </summary>
-    private static ScryfallConciseFieldDefinition Plain(
-        string name,
-        bool inDefaultSet,
-        Func<ScryfallCard, ScryfallInstalledCardFacts?, object?> read)
+    private static ScryfallConciseField Plain(string name, bool inDefaultSet, Func<ScryfallCard, object?> read)
     {
-        return new ScryfallConciseFieldDefinition(name, inDefaultSet, ScryfallInstalledDataNeed.None, read);
+        return new ScryfallPlainField(name, inDefaultSet, read);
     }
 
     /// <summary>
     /// Defines a field read from installed card data.
     /// </summary>
-    private static ScryfallConciseFieldDefinition Installed(
+    private static ScryfallConciseField Installed(
         string name,
         bool inDefaultSet,
         ScryfallInstalledDataNeed need,
         Func<ScryfallInstalledCardFacts?, object?> read)
     {
-        return new ScryfallConciseFieldDefinition(name, inDefaultSet, need, (_, facts) => read(facts));
+        return new ScryfallInstalledDataField(name, inDefaultSet, need, read);
     }
 
     /// <summary>
     /// Defines a price field that is written into the shared price object.
     /// </summary>
-    private static ScryfallConciseFieldDefinition Price(
-        string name,
-        bool inDefaultSet,
-        string sourceKey,
-        string outputKey)
+    private static ScryfallConciseField Price(string name, bool inDefaultSet, string sourceKey, string outputKey)
     {
-        return new ScryfallConciseFieldDefinition(
-            name,
-            inDefaultSet,
-            ScryfallInstalledDataNeed.None,
-            (_, _) => null,
-            sourceKey,
-            outputKey);
+        return new ScryfallPriceField(name, inDefaultSet, sourceKey, outputKey);
+    }
+
+    /// <summary>
+    /// Reads the mana cost, or the front face's when a multi-face card has none of its own.
+    /// </summary>
+    private static string? ManaCost(ScryfallCard card)
+    {
+        if (!string.IsNullOrEmpty(card.ManaCost))
+        {
+            return card.ManaCost;
+        }
+
+        return !string.IsNullOrEmpty(Front(card)?.ManaCost) ? Front(card)!.ManaCost : card.ManaCost;
     }
 
     /// <summary>
@@ -224,14 +277,6 @@ internal static class ScryfallConciseFieldTable
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Returns the first value that is neither null nor empty.
-    /// </summary>
-    private static string? FirstNonEmpty(string? first, string? second)
-    {
-        return !string.IsNullOrEmpty(first) ? first : !string.IsNullOrEmpty(second) ? second : null;
     }
 
     /// <summary>

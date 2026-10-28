@@ -128,15 +128,7 @@ internal sealed class DeckCardViewCoordinator
     {
         if (include is null)
         {
-            if (fields is not null || cursor is not null || pageSize is not null)
-            {
-                return new OperationInvalidInput(
-                    "include-required",
-                    "fields, cursor, and pageSize apply only when include is given.",
-                    fields is not null ? "fields" : cursor is not null ? "cursor" : "pageSize");
-            }
-
-            return null;
+            return IncludeRequired(fields, cursor, pageSize);
         }
 
         if (include.Count == 0)
@@ -172,6 +164,33 @@ internal sealed class DeckCardViewCoordinator
                 "invalid-page-size",
                 $"Page size must be from 1 through {MaximumPageSize}.",
                 "pageSize");
+    }
+
+    /// <summary>
+    /// Rejects the arguments that only make sense with include when include is missing.
+    /// </summary>
+    private static OperationInvalidInput? IncludeRequired(IReadOnlyList<string>? fields, string? cursor, int? pageSize)
+    {
+        string? name = null;
+        if (fields is not null)
+        {
+            name = "fields";
+        }
+        else if (cursor is not null)
+        {
+            name = "cursor";
+        }
+        else if (pageSize is not null)
+        {
+            name = "pageSize";
+        }
+
+        return name is null
+            ? null
+            : new OperationInvalidInput(
+                "include-required",
+                "fields, cursor, and pageSize apply only when include is given.",
+                name);
     }
 
     /// <summary>
@@ -291,6 +310,9 @@ internal sealed class DeckCardViewCoordinator
         }
 
         int keep = ResultSizeLimit.CountFitting(sizes, HeaderBytes(deck));
+
+        // A page must always advance, or a caller following nextCursor would loop on the same entries.
+        keep = Math.Max(keep, Math.Min(1, entries.Count));
         bool truncated = keep < entries.Count;
         List<DeckEntryView> kept = entries.GetRange(0, keep);
         HashSet<Guid> keptIds = [.. kept.Select(entry => entry.EntryId)];

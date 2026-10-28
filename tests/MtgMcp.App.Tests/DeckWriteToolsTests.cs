@@ -1,5 +1,6 @@
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -22,7 +23,11 @@ public sealed class DeckWriteToolsTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         DeckWriteTools writes = new(store, OperationMode.Local);
         DeckBatchWriteTools batchWrites = new(store, OperationMode.Local);
-        using ScryfallService scryfall = new(temporary.Path, allowLocalWrites: false, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(
+            temporary.Path,
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions);
         DeckReadTools reads = new(store, new DeckCardViewCoordinator(store, scryfall));
         Guid initialEntryId = Guid.CreateVersion7();
         DeckDocument deck = RequireSuccess(await writes.CreateAsync(

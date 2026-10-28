@@ -191,6 +191,39 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
+    /// Finds ordered installed cards from one generation, checking on the same connection that the generation is
+    /// still complete. Returns null when it is not, so a vanished generation is not mistaken for missing cards.
+    /// </summary>
+    internal async Task<List<StoredCardDataObject?>?> FindCardsInCompleteGenerationAsync(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        Guid generationId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lookups);
+        await using SqliteConnection? connection =
+            await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null ||
+            !await ContainsCompleteGenerationOnConnectionAsync(connection, generationId, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        List<StoredCardDataObject?> matches = new(lookups.Count);
+        foreach (ScryfallEvidenceLookup lookup in lookups)
+        {
+            matches.Add(await FindCardOnConnectionAsync(
+                connection,
+                generationId,
+                lookup.Lookup,
+                lookup.RequiredLanguage,
+                cancellationToken).ConfigureAwait(false));
+        }
+
+        return matches;
+    }
+
+    /// <summary>
     /// Reports whether one complete card-data generation remains available for cursor replay.
     /// </summary>
     internal async Task<bool> ContainsCompleteGenerationAsync(
@@ -443,7 +476,8 @@ internal sealed class ScryfallCardDataStore
 
     /// <summary>
     /// Reads the lowest USD price among the installed English printings of each listed Oracle ID, keeping
-    /// Scryfall's text. Non-English printings are skipped before their raw JSON is read.
+    /// Scryfall's text, with one row per Oracle ID. Non-English printings are skipped before their raw JSON is read,
+    /// and the price is extracted once for each printing. Equal prices are broken by card ID.
     /// </summary>
     private static async Task<Dictionary<Guid, string>> ReadCheapestUsdAsync(
         SqliteConnection connection,
@@ -454,18 +488,19 @@ internal sealed class ScryfallCardDataStore
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
             "SELECT oracle_id, usd FROM (" +
-            "SELECT oracle_id, json_extract(raw_json, '$.prices.usd') AS usd FROM card_objects " +
+            "SELECT oracle_id, usd, ROW_NUMBER() OVER " +
+            "(PARTITION BY oracle_id ORDER BY CAST(usd AS REAL), card_id) AS position FROM (" +
+            "SELECT oracle_id, card_id, json_extract(raw_json, '$.prices.usd') AS usd FROM card_objects " +
             "WHERE generation_id = $generation AND lang = 'en' " +
             "AND oracle_id IN (SELECT value FROM json_each($ids))) " +
-            "WHERE usd IS NOT NULL ORDER BY oracle_id, CAST(usd AS REAL);";
+            "WHERE usd IS NOT NULL) WHERE position = 1;";
         command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
         command.Parameters.AddWithValue("$ids", oracleIdList);
         Dictionary<Guid, string> result = [];
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            // Rows arrive cheapest first for each Oracle ID, so the first one seen is the answer.
-            result.TryAdd(ScryfallSql.ParseGuid(reader.GetString(0)), reader.GetString(1));
+            result[ScryfallSql.ParseGuid(reader.GetString(0))] = reader.GetString(1);
         }
 
         return result;

@@ -35,7 +35,7 @@ internal static class ToolItemChoices
                 SerializerOptions = ToolCallPolicy.SerializerOptions,
                 SchemaCreateOptions = new AIJsonSchemaCreateOptions
                 {
-                    TransformSchemaNode = (context, schema) => AddItemChoices(context.Path, schema, itemChoices),
+                    // The transform-options hook is the one that reaches the parameter schemas of tool methods.
                     TransformOptions = new AIJsonSchemaTransformOptions
                     {
                         TransformSchemaNode = (context, schema) => AddItemChoices(context.Path, schema, itemChoices),

@@ -418,6 +418,7 @@ public sealed class ScryfallMcpTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
         Assert.IsType<OperationSuccess<ScryfallCorpusSyncResult>>((await service.SyncCorpusAsync(

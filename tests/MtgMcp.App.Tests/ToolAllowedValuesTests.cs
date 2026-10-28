@@ -226,6 +226,7 @@ public sealed class ToolAllowedValuesTests
             Path.Combine(temporary.Path, "data"),
             allowLocalWrites,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://scryfall.test/"),
             handler: new NotFoundHandler());
     }

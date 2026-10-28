@@ -91,6 +91,15 @@ internal static class ScryfallTestFixture
     internal static Uri ApiBaseUri { get; } = new("https://fixture.test/");
 
     /// <summary>
+    /// Gets the serializer options tests hand to the service, set up like the server's result options.
+    /// </summary>
+    internal static JsonSerializerOptions ResultOptions { get; } = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    /// <summary>
     /// Builds a representative single-face card with an unknown extension field.
     /// </summary>
     internal static string Card(

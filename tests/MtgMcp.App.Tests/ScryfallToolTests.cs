@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
@@ -21,7 +22,11 @@ public sealed class ScryfallToolTests
         string dataRoot = Path.Combine(temporary.Path, "data");
         Directory.CreateDirectory(dataRoot);
         File.WriteAllText(Path.Combine(dataRoot, "scryfall.db"), "not a sqlite database");
-        using ScryfallService service = new(dataRoot, allowLocalWrites: false, "0.9.0-preview.1");
+        using ScryfallService service = new(
+            dataRoot,
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions);
         ScryfallReadTools tools = new(service);
 
         OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await tools.GetCorpusStatusAsync(
@@ -39,7 +44,11 @@ public sealed class ScryfallToolTests
     {
         using TemporaryDirectory temporary = new();
         string dataRoot = Path.Combine(temporary.Path, "data");
-        using ScryfallService service = new(dataRoot, allowLocalWrites: false, "0.9.0-preview.1");
+        using ScryfallService service = new(
+            dataRoot,
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions);
         ScryfallWriteTools tools = new(service, OperationMode.ReadOnly);
 
         OperationUnsupported unsupported = Assert.IsType<OperationUnsupported>((await tools.SyncCorpusAsync(

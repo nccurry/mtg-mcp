@@ -228,7 +228,14 @@ public sealed record ScryfallSnapshotReference(
 public sealed record ScryfallPage<T>(
     [property: JsonPropertyName("items")] IReadOnlyList<T> Items,
     [property: JsonPropertyName("totalCount")] int TotalCount,
-    [property: JsonPropertyName("nextCursor")] string? NextCursor);
+    [property: JsonPropertyName("nextCursor")] string? NextCursor)
+{
+    /// <summary>
+    /// Gets the cards of this page as the card formatter shaped and cut them, for pages built with an item counter.
+    /// </summary>
+    [JsonIgnore]
+    internal ScryfallFormattedCards? Formatted { get; init; }
+}
 
 /// <summary>
 /// Returns one ordered card search page and its replay identity.

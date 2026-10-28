@@ -214,9 +214,9 @@ public sealed class ScryfallResponseFormatToolTests
             Path.Combine(temporary.Path, "data"),
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://scryfall.test/"),
-            handler: new SearchHandler(cardCount),
-            resultSerializerOptions: ToolCallPolicy.SerializerOptions);
+            handler: new SearchHandler(cardCount));
     }
 
     /// <summary>

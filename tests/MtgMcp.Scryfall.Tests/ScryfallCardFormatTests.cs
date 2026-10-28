@@ -857,6 +857,107 @@ public sealed class ScryfallCardFormatTests
     }
 
     /// <summary>
+    /// Verifies a reversible card never takes the price of a normal printing that shares its front face's Oracle ID.
+    /// </summary>
+    [Fact]
+    public async Task ReversibleCard_DoesNotTakeAPriceFromAnotherCard()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = await InstalledServiceAsync(temporary.Path);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ScryfallCardLookup reversible = new("scryfall-id", Id(RecordedCards.Reversible));
+
+        ScryfallCardResponse single = RequireSuccess(await service.GetCardAsync(
+            reversible,
+            "cache-only",
+            "concise",
+            null,
+            token));
+        ScryfallInstalledCardViews deck = RequireSuccess(await service.ReadInstalledCardViewsAsync(
+            [reversible],
+            null,
+            includeCards: true,
+            includeTags: true,
+            token));
+
+        JsonElement json = Element(single.Card);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("cheapestPriceUsd").ValueKind);
+        Assert.Contains("front face", Assert.Single(single.Limits!), StringComparison.Ordinal);
+        ScryfallConciseCard card = deck.Cards[0].Card!;
+        Assert.Null(Assert.Single(card.Fields, field => field.Key == "cheapestPriceUsd").Value);
+        Assert.Equal(["twincasters"], deck.Cards[0].Tags);
+    }
+
+    /// <summary>
+    /// Verifies a lookup against a generation that is no longer complete finds nothing instead of missing cards.
+    /// </summary>
+    [Fact]
+    public async Task FindCardsInCompleteGeneration_ForAGenerationThatIsNotKept_ReturnsNull()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = await InstalledServiceAsync(temporary.Path);
+        ScryfallCardDataStore store = new(new ScryfallDatabase(temporary.Path));
+        ScryfallEvidenceLookup lookup = new(new ScryfallCardLookup("scryfall-id", Id(RecordedCards.LightningBolt)));
+
+        List<StoredCardDataObject?>? gone = await store.FindCardsInCompleteGenerationAsync(
+            [lookup],
+            Guid.NewGuid(),
+            TestContext.Current.CancellationToken);
+        Guid? active = await store.GetActiveGenerationIdAsync(TestContext.Current.CancellationToken);
+        List<StoredCardDataObject?>? kept = await store.FindCardsInCompleteGenerationAsync(
+            [lookup],
+            active!.Value,
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(gone);
+        Assert.NotNull(Assert.Single(kept!));
+    }
+
+    /// <summary>
+    /// Verifies the limit notes of a cut page describe only the cards that were kept.
+    /// </summary>
+    [Fact]
+    public async Task ConcisePageCut_LimitNotesDescribeOnlyTheKeptCards()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = ScryfallTestFixture.Provider(intercept: request =>
+        {
+            if (request.RequestUri!.AbsolutePath != "/cards/search")
+            {
+                return null;
+            }
+
+            JsonArray data = [.. Enumerable.Range(0, 100).Select(index => (JsonNode?)Variant(index))];
+            data.Add(RecordedCards.Object(RecordedCards.Reversible));
+            return ListResponse(data, true);
+        });
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ScryfallSearchResponse first = RequireSuccess(await service.SearchAsync(
+            "x",
+            pageSize: 100,
+            responseFormat: "concise",
+            cancellationToken: token));
+        string? cursor = first.Page.NextCursor;
+        List<ScryfallSearchResponse> rest = [];
+
+        while (cursor is not null)
+        {
+            ScryfallSearchResponse page = RequireSuccess(await service.SearchAsync(
+                "x",
+                cursor: cursor,
+                pageSize: 100,
+                responseFormat: "concise",
+                cancellationToken: token));
+            rest.Add(page);
+            cursor = page.Page.NextCursor;
+        }
+
+        Assert.DoesNotContain(first.Limits!, note => note.Contains("front face", StringComparison.Ordinal));
+        Assert.Contains(rest[^1].Limits!, note => note.Contains("front face", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Reads one card by exact name in the concise format from installed data only.
     /// </summary>
     private static async Task<ScryfallCardResponse> ConciseCardAsync(
@@ -1156,6 +1257,7 @@ public sealed class ScryfallCardFormatTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
     }
@@ -1173,9 +1275,21 @@ public sealed class ScryfallCardFormatTests
         lines.Add(Printing(RecordedCards.Planeswalker, 3, null, "en").ToJsonString());
         lines.Add(Printing(RecordedCards.Planeswalker, 4, "1.00", "es").ToJsonString());
         lines.Add(Printing(RecordedCards.LightningBolt, 5, "0.01", "ja").ToJsonString());
+        lines.Add(FrontFaceTwin().ToJsonString());
         string burn = Tag("burn", [Oracle(RecordedCards.LightningBolt)]);
         string twincasters = Tag("twincasters", [FaceOracleId(RecordedCards.Reversible)]);
         return await InstallAsync(dataRoot, lines, [burn, twincasters]);
+    }
+
+    /// <summary>
+    /// Builds a normal card that shares the reversible card's front face Oracle ID and has a USD price.
+    /// </summary>
+    private static JsonObject FrontFaceTwin()
+    {
+        JsonObject card = Printing(RecordedCards.LightningBolt, 6, "5.00", "en");
+        card["oracle_id"] = FaceOracleId(RecordedCards.Reversible);
+        card["name"] = "Front Face Twin";
+        return card;
     }
 
     /// <summary>

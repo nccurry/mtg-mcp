@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MtgMcp.App.Hosting;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Tests;
@@ -51,6 +52,7 @@ internal static class DeckOnCurveSourceFixture
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://on-curve.fixture/", UriKind.Absolute),
             handler: handler);
     }

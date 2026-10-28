@@ -135,6 +135,7 @@ internal sealed record ScryfallCardFormat
     {
         return SelectedFields is not null &&
             ScryfallConciseFieldTable.Definitions.Any(
-                field => field.Need == need && SelectedFields.Contains(field.Name));
+                field => ScryfallConciseFieldTable.NeedOf(field) == need &&
+                    SelectedFields.Contains(ScryfallConciseFieldTable.NameOf(field)));
     }
 }

@@ -97,8 +97,14 @@ internal sealed class ScryfallInstalledCardViewOperations
             return NotInstalled(lookups);
         }
 
-        ScryfallCard?[] mapped = await FindCardsAsync(lookups, generationId.Value, cancellationToken)
+        ScryfallCard?[]? mapped = await FindCardsAsync(lookups, generationId.Value, cancellationToken)
             .ConfigureAwait(false);
+        if (mapped is null)
+        {
+            // The generation disappeared after the first check, so no card data was actually read.
+            return NotInstalled(lookups);
+        }
+
         bool needsTags = includeTags || selected.Contains("tags");
         bool needsPrice = includeCards && selected.Contains("cheapestPriceUsd");
         ScryfallInstalledCardFactsRead facts = ScryfallInstalledCardFactsRead.NotRequested;
@@ -142,9 +148,10 @@ internal sealed class ScryfallInstalledCardViewOperations
     }
 
     /// <summary>
-    /// Finds and maps the installed card for each lookup; a null lookup or a missing card stays null.
+    /// Finds and maps the installed card for each lookup; a null lookup or a missing card stays null. Returns null when
+    /// the generation is no longer complete.
     /// </summary>
-    private async Task<ScryfallCard?[]> FindCardsAsync(
+    private async Task<ScryfallCard?[]?> FindCardsAsync(
         IReadOnlyList<ScryfallCardLookup?> lookups,
         Guid generationId,
         CancellationToken cancellationToken)
@@ -160,10 +167,15 @@ internal sealed class ScryfallInstalledCardViewOperations
             }
         }
 
-        List<StoredCardDataObject?> found = await store.FindCardsInGenerationAsync(
+        List<StoredCardDataObject?>? found = await store.FindCardsInCompleteGenerationAsync(
             requests,
             generationId,
             cancellationToken).ConfigureAwait(false);
+        if (found is null)
+        {
+            return null;
+        }
+
         ScryfallCard?[] mapped = new ScryfallCard?[lookups.Count];
         for (int position = 0; position < found.Count; position++)
         {
@@ -191,12 +203,7 @@ internal sealed class ScryfallInstalledCardViewOperations
             return new ScryfallInstalledCardView(ScryfallInstalledCardStatus.Unresolved, null, null);
         }
 
-        ScryfallInstalledCardFacts? cardFacts = null;
-        if (ScryfallConciseFieldTable.EffectiveOracleId(card) is Guid oracleId)
-        {
-            facts.ByOracleId.TryGetValue(oracleId, out cardFacts);
-        }
-
+        ScryfallInstalledCardFacts? cardFacts = facts.FactsFor(card);
         return new ScryfallInstalledCardView(
             ScryfallInstalledCardStatus.Found,
             includeCards ? ScryfallConciseProjection.Project(card, cardFacts, selected) : null,

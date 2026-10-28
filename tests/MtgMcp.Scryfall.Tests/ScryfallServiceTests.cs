@@ -568,6 +568,7 @@ public sealed class ScryfallServiceTests
             temporary.Path,
             allowLocalWrites: false,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
 
@@ -1364,6 +1365,7 @@ public sealed class ScryfallServiceTests
             temporary.Path,
             allowLocalWrites: false,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
 
@@ -1762,6 +1764,7 @@ public sealed class ScryfallServiceTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             TimeSpan.FromHours(24),
             timeProvider,

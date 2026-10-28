@@ -22,29 +22,34 @@ internal static class ScryfallConciseProjection
         ArgumentNullException.ThrowIfNull(selected);
         List<KeyValuePair<string, object?>> fields = [];
         Dictionary<string, string?>? prices = null;
-        foreach (ScryfallConciseFieldDefinition field in ScryfallConciseFieldTable.Definitions)
+        foreach (ScryfallConciseField field in ScryfallConciseFieldTable.Definitions)
         {
-            if (!selected.Contains(field.Name))
+            if (!selected.Contains(ScryfallConciseFieldTable.NameOf(field)))
             {
                 continue;
             }
 
-            if (field.PriceSourceKey is null)
+            switch (field)
             {
-                fields.Add(new KeyValuePair<string, object?>(field.Name, field.Read(card, facts)));
-                continue;
-            }
+                case ScryfallPlainField plain:
+                    fields.Add(new KeyValuePair<string, object?>(plain.Name, plain.Read(card)));
+                    break;
+                case ScryfallInstalledDataField installed:
+                    fields.Add(new KeyValuePair<string, object?>(installed.Name, installed.Read(facts)));
+                    break;
+                case ScryfallPriceField price:
+                    // All price fields share one "prices" object, placed where the first selected one falls.
+                    if (prices is null)
+                    {
+                        prices = new Dictionary<string, string?>(StringComparer.Ordinal);
+                        fields.Add(new KeyValuePair<string, object?>("prices", prices));
+                    }
 
-            // All price fields share one "prices" object, placed where the first selected price field falls.
-            if (prices is null)
-            {
-                prices = new Dictionary<string, string?>(StringComparer.Ordinal);
-                fields.Add(new KeyValuePair<string, object?>("prices", prices));
+                    prices[price.OutputKey] = card.Prices.TryGetValue(price.SourceKey, out string? amount)
+                        ? amount
+                        : null;
+                    break;
             }
-
-            prices[field.PriceOutputKey!] = card.Prices.TryGetValue(field.PriceSourceKey, out string? amount)
-                ? amount
-                : null;
         }
 
         return new ScryfallConciseCard(fields);
