@@ -20,13 +20,15 @@ internal static class FoundationProtocolPolicy
                 (context.JsonRpcMessage as JsonRpcResponse)?.Result);
             CanonicalizeToolList(
                 (context.JsonRpcMessage as JsonRpcResponse)?.Result);
+            CanonicalizePromptList(
+                (context.JsonRpcMessage as JsonRpcResponse)?.Result);
 
             await next(context, cancellationToken).ConfigureAwait(false);
         };
     }
 
     /// <summary>
-    /// Removes implicit logging and dynamic tool-list claims from an initialization-shaped result.
+    /// Removes implicit logging and dynamic tool-list and prompt-list claims from an initialization-shaped result.
     /// </summary>
     internal static void RemoveUnsupportedImplicitCapabilities(JsonNode? result)
     {
@@ -39,6 +41,11 @@ internal static class FoundationProtocolPolicy
             {
                 tools.Remove("listChanged");
             }
+
+            if (capabilities["prompts"] is JsonObject prompts)
+            {
+                prompts.Remove("listChanged");
+            }
         }
     }
 
@@ -47,8 +54,24 @@ internal static class FoundationProtocolPolicy
     /// </summary>
     internal static void CanonicalizeToolList(JsonNode? result)
     {
+        SortByName(result, "tools");
+    }
+
+    /// <summary>
+    /// Sorts a prompts-list result by exact name so discovery is stable across reflection order.
+    /// </summary>
+    internal static void CanonicalizePromptList(JsonNode? result)
+    {
+        SortByName(result, "prompts");
+    }
+
+    /// <summary>
+    /// Sorts the named array of a list result by each item's exact name; an item with no name leaves it unchanged.
+    /// </summary>
+    private static void SortByName(JsonNode? result, string property)
+    {
         if (result is not JsonObject resultObject ||
-            resultObject["tools"] is not JsonArray tools)
+            resultObject[property] is not JsonArray tools)
         {
             return;
         }

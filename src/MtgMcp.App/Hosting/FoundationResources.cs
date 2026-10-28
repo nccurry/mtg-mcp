@@ -85,7 +85,7 @@ internal sealed class FoundationResources
                 FoundationServerIdentity.PackageVersion,
                 server.NegotiatedProtocolVersion ?? "unavailable"),
             OperationModeParser.Format(configuration.Mode),
-            new FoundationSurfaceStatus(toolCount, 1, 0),
+            new FoundationSurfaceStatus(toolCount, 1, 3),
             new FoundationToolsetsStatus(
                 configuration.Toolsets.Label,
                 "Toolsets control relevance; operation mode controls authority.",

@@ -41,7 +41,7 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 - Update surface tests for every tool, resource, prompt, annotation, schema,
   operation-mode, or toolset change.
 - Stable rewrite surface tests must also prove capability-prefixed names, one
-  capability resource, zero prompts, exact toolset membership, default and
+  capability resource, the three workflow prompts, exact toolset membership, default and
   explicit profile behavior, and absence of legacy decision surfaces.
 - Use App unit tests for presenters and registration, and mocked process E2E
   tests for transport-visible behavior.

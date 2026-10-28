@@ -4,13 +4,14 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-The unreleased `0.11.0` tool surface builds on the `0.9.0` stdio server design. Every toolset is on by default.
-With Archidekt and Playgroup credentials, the server exposes 86 tools in `remote`
-mode (the default), 73 in `local` mode, and 59 in `read-only` mode. Without
-credentials it exposes 48, 48, and 35, because the Archidekt and Playgroup
-toolsets turn on only when their credentials are present. It also exposes one
-`mtg://server/capabilities` resource and no prompts. It does not migrate `0.8.x`
-data or tool schemas.
+The `0.11.0` tool surface builds on the `0.9.0` stdio server design. Every toolset is
+on by default. With Archidekt and Playgroup credentials, the server exposes 86
+tools in `remote` mode (the default), 73 in `local` mode, and 59 in `read-only`
+mode. Without credentials it exposes 48, 48, and 35, because the Archidekt and
+Playgroup toolsets turn on only when their credentials are present. It also
+exposes one `mtg://server/capabilities` resource and three prompts (see
+[Start a workflow with a prompt](#start-a-workflow-with-a-prompt)). It does not
+migrate `0.8.x` data or tool schemas.
 
 ## Status
 
@@ -197,8 +198,9 @@ Scryfall card tools.
 
 Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
 evaluate caller-owned tag rules. The preview validates the rules first; rules
-are always inline, and the MCP does not decide what a category means (the
-`common-v1` preset was removed).
+are always inline, and the MCP does not decide what a category means. See
+[Category rules without a preset](#category-rules-without-a-preset) for what
+replaced the removed `common-v1` preset.
 
 ### Estimate mana on curve
 
@@ -315,6 +317,205 @@ These tools return facts only. They never say a deck is legal or illegal.
   removals for a caller-chosen keep order; it changes nothing.
 - `playgroup_games_stats_get` totals Playgroup games by deck or player.
 
+### Worked examples
+
+Each example shows the arguments you send and the shape of what comes back.
+The results are trimmed to the fields that matter and use a small deck
+("Golgari Ramp": Kodama of the East Tree as commander, ten Forest, Llanowar
+Elves, Sol Ring, and Rhystic Study) with card data installed. A test binds every
+request below to the real tool schema, so these examples cannot drift from the
+tools.
+
+**Search results that are not in my deck.** Run `scryfall_search` first. It
+saves the request as a snapshot and returns `snapshot.snapshotId`. Then ask for
+the left list minus the right list:
+
+<!-- example: card_lists_compare -->
+```json
+{
+  "left": { "kind": "scryfall-snapshot", "snapshotId": "0193e97a-ef95-7700-8000-0000000000a1" },
+  "right": { "kind": "deck", "deckId": "0193e97a-ef95-7700-8000-000000000001" },
+  "operation": "difference",
+  "responseFormat": "concise"
+}
+```
+
+The saved search held five ramp cards and the deck holds two of them, so three
+remain. Only the first fields of each card are shown here:
+
+```json
+{
+  "kind": "success",
+  "data": {
+    "counts": { "left": 5, "right": 5, "result": 3, "unmatched": 0 },
+    "page": {
+      "items": [
+        { "name": "Arcane Signet", "manaCost": "{2}", "typeLine": "Artifact" },
+        { "name": "Birds of Paradise", "manaCost": "{G}", "typeLine": "Creature - Bird" },
+        { "name": "Cultivate", "manaCost": "{2}{G}", "typeLine": "Sorcery" }
+      ],
+      "totalCount": 3
+    },
+    "unmatched": [],
+    "sources": [
+      { "side": "left", "kind": "scryfall-snapshot", "entries": 5 },
+      { "side": "right", "kind": "deck", "revision": 1, "entries": 5 }
+    ],
+    "responseFormat": "concise"
+  }
+}
+```
+
+Deck entries that have no Scryfall card (a home-made proxy, for example) are
+listed in `unmatched` and never guessed. `matchBy` defaults to `oracle`, so two
+printings of one card count as the same card.
+
+**Mana curve and pips.** Ask `card_list_query` for the deck, grouped by mana
+value, with the copy count, colored pips, and color sources of each group:
+
+<!-- example: card_list_query -->
+```json
+{
+  "source": { "kind": "deck", "deckId": "0193e97a-ef95-7700-8000-000000000001", "zones": ["main", "commander"] },
+  "groupBy": ["manaValue"],
+  "metrics": ["quantity", "pips", "sources"]
+}
+```
+
+```json
+{
+  "kind": "success",
+  "data": {
+    "matched": { "cards": 5, "quantity": 14 },
+    "groups": [
+      { "key": { "manaValue": 0 }, "quantity": 10, "pips": {}, "sources": { "G": 10 } },
+      { "key": { "manaValue": 1 }, "quantity": 2, "pips": { "G": 1 }, "sources": { "G": 1, "C": 1 } },
+      { "key": { "manaValue": 3 }, "quantity": 1, "pips": { "U": 1 }, "sources": {} },
+      { "key": { "manaValue": 6 }, "quantity": 1, "pips": { "G": 2 }, "sources": {} }
+    ],
+    "unmatched": [],
+    "limits": [
+      "Sources count the colors Scryfall lists as produced mana. Whether a land enters tapped is not modeled, ...",
+      "Pips count printed mana symbols only; cost changes and alternate costs are not modeled."
+    ]
+  }
+}
+```
+
+Drop `groupBy` to get one total for the whole deck. Add `where` to filter (for
+example creatures only) or `rows` to list the cards themselves.
+
+**Commander rule facts.** Call `local_deck_validate` with `rules: "commander"`:
+
+<!-- example: local_deck_validate -->
+```json
+{ "deckId": "0193e97a-ef95-7700-8000-000000000001", "rules": "commander" }
+```
+
+The result keeps the structural report and adds `rules`. Each fact has a
+`passed` flag or a `status`, and names the entries involved. Here the deck has
+14 cards instead of 100 and holds one blue card in a green commander's deck:
+
+```json
+{
+  "kind": "success",
+  "data": {
+    "isStructurallyValid": true,
+    "issues": [],
+    "rules": {
+      "rules": "commander",
+      "deckSize": { "passed": false, "count": 14, "expected": 100 },
+      "commanders": { "passed": true, "count": 1, "items": [
+        { "name": "Kodama of the East Tree", "eligible": true, "via": "legendary-creature" } ] },
+      "colorIdentity": { "passed": false, "identity": ["G"], "offIdentity": [
+        { "name": "Rhystic Study", "colorIdentity": ["U"] } ] },
+      "singleton": { "passed": true, "breaks": [] },
+      "legality": { "passed": true, "issues": [] },
+      "gameChangers": { "status": "known", "count": 1, "entries": [ { "name": "Rhystic Study" } ] },
+      "companions": [],
+      "unresolved": [],
+      "limits": ["Facts cover entries whose Scryfall card was found; the others are in unresolved."]
+    }
+  }
+}
+```
+
+A `passed: false` is a fact about the deck against one rule, not a verdict. You
+and the user decide what to change.
+
+### Category rules without a preset
+
+`local_deck_category_rules_preview` and `local_deck_category_rules_apply` take
+inline rules only. The `common-v1` preset was removed, and a source of kind
+`preset` now returns `invalid-input`. The preset mapped four role names to four
+official Scryfall oracle tags, each with its descendant tags and the minimum
+weight `weak`. The same rules sent inline are one rule per role, with your own
+category ID in `categoryId`, the tag's ID in `tagId`, and `includeDescendants`
+on. The four tag IDs below are the ones `common-v1` used:
+
+| Role | Oracle tag ID |
+| --- | --- |
+| ramp | `2f3e4ad7-5e60-41b4-bdbc-653f16869cf6` |
+| card-draw | `b6448c45-ce65-4848-aa98-2151e4e07437` |
+| removal | `444f824c-f910-4530-9dbe-ede7a84cd7f9` |
+| recursion | `82b824ad-648f-467f-a190-2e0fa9a795d2` |
+
+<!-- example: local_deck_category_rules_preview -->
+```json
+{
+  "deckId": "0193e97a-ef95-7700-8000-000000000001",
+  "source": {
+    "kind": "inline",
+    "ruleSet": {
+      "assignmentMode": "add-only",
+      "rules": [
+        {
+          "categoryId": "0193e97a-ef95-7700-8000-000000000021",
+          "allOf": [{
+            "tagType": "oracle", "tagId": "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6",
+            "includeDescendants": true, "minimumWeight": "weak"
+          }],
+          "anyOf": [],
+          "noneOf": []
+        },
+        {
+          "categoryId": "0193e97a-ef95-7700-8000-000000000022",
+          "allOf": [{
+            "tagType": "oracle", "tagId": "b6448c45-ce65-4848-aa98-2151e4e07437",
+            "includeDescendants": true, "minimumWeight": "weak"
+          }],
+          "anyOf": [],
+          "noneOf": []
+        },
+        {
+          "categoryId": "0193e97a-ef95-7700-8000-000000000023",
+          "allOf": [{
+            "tagType": "oracle", "tagId": "444f824c-f910-4530-9dbe-ede7a84cd7f9",
+            "includeDescendants": true, "minimumWeight": "weak"
+          }],
+          "anyOf": [],
+          "noneOf": []
+        },
+        {
+          "categoryId": "0193e97a-ef95-7700-8000-000000000024",
+          "allOf": [{
+            "tagType": "oracle", "tagId": "82b824ad-648f-467f-a190-2e0fa9a795d2",
+            "includeDescendants": true, "minimumWeight": "weak"
+          }],
+          "anyOf": [],
+          "noneOf": []
+        }
+      ]
+    }
+  }
+}
+```
+
+Add `expectedRevision` when you mean to apply the preview afterwards. Tags are
+resolved against installed card data, so run `scryfall_card_data_sync` first.
+Use `scryfall_tags_search` to find other tags, then use their `exactSlug`
+instead of `tagId` if you prefer.
+
 ## Calculate exact statistics
 
 The `stats` toolset provides nine read-only tools for:
@@ -374,6 +575,42 @@ Request starts are at least 250 milliseconds apart. Reads have bounded retry.
 Writes are single-attempt. Live acceptance does not invoke writes because the
 public API provides no cleanup operation.
 
+## Start a workflow with a prompt
+
+The server offers three MCP prompts. A prompt is a ready-made first message that
+lists the steps of a common workflow. It costs no model context until you run
+it, and it carries IDs only, never free text, so a client that splits prompt
+arguments on spaces still works.
+
+| Prompt | Arguments | What the agent is asked to do |
+| --- | --- | --- |
+| `audit-deck` | `deckId` | Read the deck with card data; report Commander rule facts, curve, pips, color sources, castability, and bracket facts; then ask what to change. |
+| `build-from-commander` | `scryfallId` | Read the commander; ask for budget, bracket, and plan; search by tags; build a local deck in batches. |
+| `compare-decks` | `deckIdA`, `deckIdB` | Run `card_lists_compare` and `card_list_query` on both decks and report the differences. |
+
+Each argument is a UUID (the local deck ID, or the Scryfall card ID of the
+commander). Anything else is refused.
+
+In Claude Code, MCP prompts appear as slash commands named
+`/mcp__<server>__<prompt>`, where `<server>` is the name you gave the server
+when you added it. With a server named `mtg-mcp`:
+
+```text
+/mcp__mtg-mcp__audit-deck 0193e97a-ef95-7700-8000-000000000001
+/mcp__mtg-mcp__compare-decks 0193e97a-ef95-7700-8000-000000000001 0193e97a-ef95-7700-8000-000000000002
+/mcp__mtg-mcp__build-from-commander 4a2c8f1e-6b1d-4e35-9c0e-5f2f3a8d7b10
+```
+
+Other clients list them under their own prompt or command menu.
+
+The prompts name only tools of the default selection that needs no provider
+credentials (the `decks`, `scryfall`, `stats`, and `spellbook` toolsets).
+Prompts are always offered, because registration is fixed for the session and
+a prompt costs nothing to list. When the session hides a named tool (a narrower
+`--toolsets`, or `read-only` mode for `local_deck_apply_changes`), the prompt
+tells the agent to say which step it skipped and carry on. Every prompt says
+that the user and agent make every judgment; the server only supplies facts.
+
 ## Errors
 
 A failed tool call sets the MCP `isError` flag and keeps the structured body
@@ -407,7 +644,8 @@ The server labels these kinds of result separately:
 
 Stable `0.9.0` contains no advisor prompts, intent inference, weak-card
 judgments, replacement recommendations, blended quality scores, or strategic
-simulation. Deferred work is listed in [Potential Features](docs/potential-features.md).
+simulation. The three workflow prompts only list tool steps and ask the user
+for decisions; they hold no recommendation logic. Deferred work is listed in [Potential Features](docs/potential-features.md).
 
 ## Develop and verify
 

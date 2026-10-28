@@ -8,6 +8,7 @@ using MtgMcp.App.CardLists;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
+using MtgMcp.App.Prompts;
 using MtgMcp.App.Scryfall;
 using MtgMcp.App.Spellbook;
 using MtgMcp.App.Statistics;
@@ -85,7 +86,8 @@ internal static class FoundationHost
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitUnsupportedImplicitCapabilities()))
             .WithRequestFilters(filters => filters.AddCallToolFilter(ToolCallPolicy.Filter))
-            .WithResources(new FoundationResources(configuration));
+            .WithResources(new FoundationResources(configuration))
+            .WithPrompts<WorkflowPrompts>();
         if (decksEnabled && deckStore is not null && scryfallService is not null)
         {
             DeckToolsetManifest.Register(mcpBuilder, deckStore, scryfallService, configuration.Mode);

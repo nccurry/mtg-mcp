@@ -187,16 +187,16 @@ public sealed partial class ToolSurfaceNamingTests
     public void OldToolNames_AreGoneWithTheirReplacementsAndAreListedInTheChangelog()
     {
         string[] names = ReadToolNames();
-        string unreleased = ReadUnreleasedChangelog();
+        string release = ReadReleaseChangelog();
 
         foreach ((string oldName, string[] replacements) in OldToNewNames)
         {
             Assert.DoesNotContain(oldName, names);
             Assert.All(replacements, replacement => Assert.Contains(replacement, names));
-            Assert.Contains($"`{oldName}`", unreleased, StringComparison.Ordinal);
+            Assert.Contains($"`{oldName}`", release, StringComparison.Ordinal);
             Assert.All(
                 replacements,
-                replacement => Assert.Contains($"`{replacement}`", unreleased, StringComparison.Ordinal));
+                replacement => Assert.Contains($"`{replacement}`", release, StringComparison.Ordinal));
         }
 
         Assert.Equal(OldToNewNames.Length, OldToNewNames.Select(entry => entry.Old).Distinct().Count());
@@ -219,13 +219,13 @@ public sealed partial class ToolSurfaceNamingTests
     }
 
     /// <summary>
-    /// Reads the Unreleased section of the changelog.
+    /// Reads the 0.11.0 section of the changelog, the release that made the tool surface changes.
     /// </summary>
-    private static string ReadUnreleasedChangelog()
+    private static string ReadReleaseChangelog()
     {
         string changelog = File.ReadAllText(Path.Combine(RepositoryRoot, "CHANGELOG.md"));
-        int start = changelog.IndexOf("## Unreleased", StringComparison.Ordinal);
-        Assert.True(start >= 0, "CHANGELOG.md has no Unreleased section.");
+        int start = changelog.IndexOf("## 0.11.0 - ", StringComparison.Ordinal);
+        Assert.True(start >= 0, "CHANGELOG.md has no 0.11.0 section.");
         int next = changelog.IndexOf("\n## ", start + 1, StringComparison.Ordinal);
         return next < 0 ? changelog[start..] : changelog[start..next];
     }

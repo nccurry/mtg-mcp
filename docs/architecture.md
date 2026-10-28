@@ -34,7 +34,7 @@ The server uses stdio and registers static tools for one session. It exposes:
 - 17 `playgroup_*` tools (on when a Playgroup key is present);
 - 4 `spellbook_*` tools;
 - `mtg://server/capabilities`; and
-- zero prompts.
+- three workflow prompts (`audit-deck`, `build-from-commander`, and `compare-decks`).
 
 Toolsets choose which tools appear. Modes control what the server may change.
 See [Toolsets](toolsets.md).

@@ -228,7 +228,7 @@ public sealed class FoundationMcpTests
             McpCredentials.None,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         string expectedVersion = Environment.GetEnvironmentVariable("MTGMCP_E2E_VERSION")
-            ?? "0.10.0";
+            ?? "0.11.0";
 
         Assert.Equal("io.github.nccurry/mtg-mcp", session.Client.ServerInfo.Name);
         Assert.Equal("mtg-mcp", session.Client.ServerInfo.Title);
@@ -241,7 +241,7 @@ public sealed class FoundationMcpTests
             ExpectedToolNames("default", expectedMode, McpCredentials.None));
         Assert.NotNull(session.Client.ServerCapabilities.Resources);
         Assert.NotNull(session.Client.ServerCapabilities.Tools);
-        Assert.Null(session.Client.ServerCapabilities.Prompts);
+        Assert.NotNull(session.Client.ServerCapabilities.Prompts);
 
         IList<McpClientTool> tools = await session.Client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
@@ -761,13 +761,13 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies the exact mode-specific tool count, one resource, and zero prompts.
+    /// Verifies the exact mode-specific tool count, one resource, and three prompts.
     /// </summary>
     private static void AssertSurface(JsonElement surface, int expectedToolCount)
     {
         Assert.Equal(expectedToolCount, surface.GetProperty("toolCount").GetInt32());
         Assert.Equal(1, surface.GetProperty("resourceCount").GetInt32());
-        Assert.Equal(0, surface.GetProperty("promptCount").GetInt32());
+        Assert.Equal(3, surface.GetProperty("promptCount").GetInt32());
     }
 
     /// <summary>

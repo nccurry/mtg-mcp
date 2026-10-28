@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+## 0.11.0 - 2026-10-28
+
 ### Tool surface changes (breaking)
 
-These changes land together in the next release. Entries further down in this
+These changes land together in this release. Entries further down in this
 section that name a tool use the name it had in `0.10.0`; the table in this
 section maps each old name to its current name. Old names are not kept as
 aliases: calling one returns an unknown-tool error.
@@ -47,8 +49,50 @@ aliases: calling one returns an unknown-tool error.
   and previews. Its result no longer has `presetSchemaVersion` or
   `presetChecksum`.
 - Breaking: removed the `common-v1` category rule preset. A source of kind
-  `preset` now returns `invalid-input` with the allowed kind `inline`. Send the
-  same rules inline, with the oracle tags you choose.
+  `preset` now returns `invalid-input` with the allowed kind `inline`. The
+  inline rule set replaces `common-v1`: it mapped four role names to four
+  official Scryfall oracle tags, each with descendant tags included and the
+  minimum weight `weak`. To get the same result, send one inline rule per role,
+  with your own category ID for each (`categoryId`) and the tag ID that
+  `common-v1` used (ramp `2f3e4ad7-5e60-41b4-bdbc-653f16869cf6`, card-draw
+  `b6448c45-ce65-4848-aa98-2151e4e07437`, removal
+  `444f824c-f910-4530-9dbe-ede7a84cd7f9`, recursion
+  `82b824ad-648f-467f-a190-2e0fa9a795d2`). For example, ramp and removal:
+
+  ```json
+  {
+    "deckId": "0193e97a-ef95-7700-8000-000000000001",
+    "source": {
+      "kind": "inline",
+      "ruleSet": {
+        "assignmentMode": "add-only",
+        "rules": [
+          {
+            "categoryId": "0193e97a-ef95-7700-8000-000000000021",
+            "allOf": [{
+              "tagType": "oracle", "tagId": "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6",
+              "includeDescendants": true, "minimumWeight": "weak"
+            }],
+            "anyOf": [],
+            "noneOf": []
+          },
+          {
+            "categoryId": "0193e97a-ef95-7700-8000-000000000023",
+            "allOf": [{
+              "tagType": "oracle", "tagId": "444f824c-f910-4530-9dbe-ede7a84cd7f9",
+              "includeDescendants": true, "minimumWeight": "weak"
+            }],
+            "anyOf": [],
+            "noneOf": []
+          }
+        ]
+      }
+    }
+  }
+  ```
+
+  The README shows all four roles. `DeckCategoryRuleSourceTests` proves inline
+  role rules give the same expanded rules and decisions the preset gave.
 - Breaking: merged tools that returned the same kind of data. The merged tools
   keep the annotations and visibility of the tools they replace, and each has
   one required field that picks the job. `scryfall_cards_get` takes `lookups`
@@ -183,6 +227,20 @@ Old-to-new tool names:
   `remote` mode (73 in `local`, 59 in `read-only`). With Archidekt credentials
   only, 69, 58, and 44. Without credentials, 48 in `remote` and `local` mode
   and 35 in `read-only` mode.
+- Added three MCP prompts, offered in every selection: `audit-deck` (takes
+  `deckId`), `build-from-commander` (takes `scryfallId`), and `compare-decks`
+  (takes `deckIdA` and `deckIdB`). Each is a ready-made first message that lists
+  the steps of a workflow, names only tools of the default selection that needs
+  no credentials, and says that the user and agent make every judgment. An
+  argument must be a UUID, so values never contain spaces. Claude Code lists
+  them as `/mcp__<server>__audit-deck` and so on. The capabilities resource now
+  reports `promptCount` 3 (it was 0). The README says which fields to send and shows what
+  comes back.
+- Added worked examples to the README for "search results not in my deck"
+  (`card_lists_compare`), "mana curve and pips" (`card_list_query`), Commander
+  rule facts (`local_deck_validate` with `rules: "commander"`), and the inline
+  category rules that replace `common-v1`. A test binds each request to the
+  tool's input schema.
 - Logged a warning when the SDK matches a tool the server's catalog does not
   hold, and made every `kind` choice of an input that accepts several shapes carry a generated description.
 

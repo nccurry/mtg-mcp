@@ -405,7 +405,7 @@ public sealed class FoundationArchitectureTests
         using JsonDocument manifest = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(RepositoryRoot, "server.json")));
 
-        Assert.Equal("0.10.0", version);
+        Assert.Equal("0.11.0", version);
         Assert.Empty(project.Descendants("PackageVersion"));
         Assert.Contains("VERSION: ''", taskfile, StringComparison.Ordinal);
         Assert.DoesNotContain("-p:PackageVersion", taskfile, StringComparison.Ordinal);
@@ -464,6 +464,8 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(1, Regex.Count(source, @"\[McpServerResource\("));
         Assert.Equal(86, Regex.Count(source, @"\[McpServerTool\("));
         Assert.Equal(1, Regex.Count(source, @"\.WithResources\("));
+        Assert.Equal(3, Regex.Count(source, @"\[McpServerPrompt\("));
+        Assert.Equal(1, Regex.Count(source, @"\.WithPrompts<"));
         Assert.Equal(1, Regex.Count(source, @"\.WithTools\("));
         Assert.Equal(25, Regex.Count(source, @"\.WithRegisteredTools\("));
         Assert.Contains("mtg://server/capabilities", source, StringComparison.Ordinal);
@@ -589,11 +591,11 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(2, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
         Assert.DoesNotContain("FoundationModuleStatus", source, StringComparison.Ordinal);
         Assert.Contains("tools.Remove(\"listChanged\")", source, StringComparison.Ordinal);
+        Assert.Contains("prompts.Remove(\"listChanged\")", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SendToolListChanged", source, StringComparison.Ordinal);
 
         string[] forbiddenMarkers =
         [
-            "McpServerPrompt",
             "WithToolsFromAssembly",
             "WithPromptsFromAssembly",
             "WithResourcesFromAssembly",
