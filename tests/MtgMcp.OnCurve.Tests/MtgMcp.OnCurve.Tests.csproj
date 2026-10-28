@@ -20,4 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MtgMcp.OnCurve\MtgMcp.OnCurve.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
