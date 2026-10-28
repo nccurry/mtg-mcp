@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.App.Tests;
 
 /// <summary>
 /// Holds one resolved deck entry of a captured on-curve replay case.
@@ -83,7 +83,7 @@ public static class OnCurveReplayFixtures
     /// </summary>
     public static Guid Id(int value)
     {
-        return OnCurveTestData.Id(value);
+        return new Guid(value, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     /// <summary>

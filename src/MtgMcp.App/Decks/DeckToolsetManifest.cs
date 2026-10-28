@@ -29,7 +29,6 @@ internal static class DeckToolsetManifest
             "local_deck_identity_reconcile_preview",
             "local_deck_interchange_formats",
             "local_deck_list",
-            "local_deck_on_curve_estimate",
             "local_deck_validate",
         ],
         [
@@ -61,7 +60,6 @@ internal static class DeckToolsetManifest
         DeckInterchangeService interchangeService = new(deckStore);
         DeckIdentityReconciliationCoordinator identityCoordinator = new(deckStore, scryfallService);
         DeckCategorizationCoordinator categorizationCoordinator = new(deckStore, scryfallService);
-        DeckOnCurveEstimateCoordinator onCurveCoordinator = new(deckStore, scryfallService);
         DeckCardViewCoordinator cardViewCoordinator = new(deckStore, scryfallService);
         builder
             .WithRegisteredTools(ToolRegistration.Create(
@@ -70,8 +68,7 @@ internal static class DeckToolsetManifest
             .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeReadTools(interchangeService)))
             .WithRegisteredTools(ToolRegistration.Create(new DeckIdentityReconciliationReadTools(identityCoordinator)))
             .WithRegisteredTools(ToolRegistration.Create(
-                new DeckDuplicatesReadTools(new DeckDuplicatesCoordinator(deckStore, scryfallService))))
-            .WithRegisteredTools(ToolRegistration.Create(new DeckOnCurveEstimateTools(onCurveCoordinator)));
+                new DeckDuplicatesReadTools(new DeckDuplicatesCoordinator(deckStore, scryfallService))));
         builder.WithRegisteredTools(
             ToolRegistration.Create(new DeckCategorizationReadTools(categorizationCoordinator)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))

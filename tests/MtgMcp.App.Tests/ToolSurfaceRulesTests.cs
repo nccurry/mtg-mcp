@@ -79,6 +79,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
     private static readonly string[] SourceLabels =
     [
         "Local deck store:", "Scryfall:", "Saved Scryfall requests:", "Installed Scryfall card data:", "Exact math:",
+        "Seeded sampling:",
         "Archidekt:",
         "Playgroup:", "Commander Spellbook:",
     ];
@@ -320,6 +321,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
             {
                 _ when name.StartsWith("local_deck_", StringComparison.Ordinal) => ["Local deck store:"],
                 "stats_local_deck_summary" => ["Local deck store:"],
+                "stats_simulate" => ["Seeded sampling:"],
                 _ when name.StartsWith("stats_", StringComparison.Ordinal) => ["Exact math:"],
                 _ when name.StartsWith("scryfall_", StringComparison.Ordinal) =>
                     ["Scryfall:", "Saved Scryfall requests:", "Installed Scryfall card data:"],

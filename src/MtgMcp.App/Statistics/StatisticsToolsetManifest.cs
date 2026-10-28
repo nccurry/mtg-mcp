@@ -41,8 +41,8 @@ internal static class StatisticsToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Stats,
         CapabilityToolsetStability.Stable,
-        "Exact mathematics over caller-supplied groups and explicitly selected deck populations; castability " +
-        "also reads installed Scryfall card data.",
+        "Exact mathematics over caller-supplied groups and explicitly selected deck populations, plus seeded " +
+        "sampling of caller-stated rules; castability and the on-curve preset also read installed Scryfall card data.",
         [
             "stats_castability",
             "stats_local_deck_summary",
@@ -52,13 +52,14 @@ internal static class StatisticsToolsetManifest
             "stats_mulligan",
             "stats_multivariate",
             "stats_package_assembly",
+            "stats_simulate",
             "stats_turn_table",
         ],
         [],
         []);
 
     /// <summary>
-    /// Registers exactly nine read-only tools for every operation mode.
+    /// Registers exactly ten read-only tools for every operation mode.
     /// </summary>
     internal static void Register(
         IMcpServerBuilder builder,
@@ -82,12 +83,11 @@ internal static class StatisticsToolsetManifest
             Create(nameof(StatisticsReadTools.MinimumCountAsync), target),
             Create(nameof(StatisticsReadTools.DeckSummaryAsync), target),
         ]);
+        CardListResolver resolver = new(scryfallService, new CardListAccess(deckStore, null));
         builder.WithRegisteredTools(ToolRegistration.Create(
-            new StatisticsCastabilityTools(new StatisticsCastabilityCoordinator(
-                new CardListResolver(
-                    scryfallService,
-                    new CardListAccess(deckStore, null)),
-                calculator))));
+            new StatisticsCastabilityTools(new StatisticsCastabilityCoordinator(resolver, calculator))));
+        builder.WithRegisteredTools(ToolRegistration.Create(
+            new StatisticsSimulateTools(new StatisticsSimulateCoordinator(resolver))));
     }
 
     /// <summary>

@@ -1,40 +1,13 @@
+using MtgMcp.Core.Results;
+
 namespace MtgMcp.OnCurve.Tests;
 
 /// <summary>
-/// Creates small, stable fact-only inputs for on-curve behavior tests.
+/// Builds small, stable simulation requests and runs them with a fixed library order, so a test can state exactly
+/// which cards are drawn.
 /// </summary>
 internal static class OnCurveTestData
 {
-    /// <summary>
-    /// Identifies the default target entry.
-    /// </summary>
-    internal static readonly Guid TargetEntryId = Id(1);
-
-    /// <summary>
-    /// Identifies the default target printing.
-    /// </summary>
-    internal static readonly Guid TargetPrintingId = Id(101);
-
-    /// <summary>
-    /// Identifies the first default modeled land entry.
-    /// </summary>
-    internal static readonly Guid GreenLandEntryId = Id(2);
-
-    /// <summary>
-    /// Identifies the first default modeled land printing.
-    /// </summary>
-    internal static readonly Guid GreenLandPrintingId = Id(102);
-
-    /// <summary>
-    /// Identifies the default non-land filler entry.
-    /// </summary>
-    internal static readonly Guid FillerEntryId = Id(3);
-
-    /// <summary>
-    /// Identifies the default non-land filler printing.
-    /// </summary>
-    internal static readonly Guid FillerPrintingId = Id(103);
-
     /// <summary>
     /// Creates one stable identifier whose lexical and numeric order agree.
     /// </summary>
@@ -44,99 +17,199 @@ internal static class OnCurveTestData
     }
 
     /// <summary>
-    /// Creates one direct source fact that did not list produced mana.
+    /// Creates a deck entry with the stable identifier for a small number.
     /// </summary>
-    internal static OnCurveProducedMana MissingMana()
+    internal static SimulationDeckEntry Card(int id, int quantity = 1)
     {
-        return new OnCurveProducedManaMissing();
+        return new SimulationDeckEntry(Id(id), quantity);
     }
 
     /// <summary>
-    /// Creates one direct source fact that explicitly set produced mana to null.
+    /// Creates a group of entries that has no order and adds generic mana only.
     /// </summary>
-    internal static OnCurveProducedMana NullMana()
+    internal static SimulationGroup Group(string id, params int[] entryIds)
     {
-        return new OnCurveProducedManaNull();
+        return new SimulationGroup(id, [.. entryIds.Select(Id)], false, null);
     }
 
     /// <summary>
-    /// Creates one direct source fact with the supplied listed mana values.
+    /// Creates a group of entries in the order the caller listed them.
     /// </summary>
-    internal static OnCurveProducedMana Mana(params string[] colors)
+    internal static SimulationGroup Listed(string id, params int[] entryIds)
     {
-        return new OnCurveProducedManaValues(colors);
+        return new SimulationGroup(id, [.. entryIds.Select(Id)], true, null);
     }
 
     /// <summary>
-    /// Creates one resolved deck entry for a compact test request.
+    /// Creates a group whose cards add the default colors, with optional colors for single entries.
     /// </summary>
-    internal static OnCurveDeckEntry Entry(
-        Guid entryId,
-        Guid printingId,
-        int quantity,
-        OnCurveProducedMana producedMana)
+    internal static SimulationGroup Colored(
+        string id,
+        string[] defaultColors,
+        int[] entryIds,
+        params (string[] Colors, int[] EntryIds)[] overrides)
     {
-        return new OnCurveDeckEntry(entryId, printingId, quantity, producedMana);
+        return new SimulationGroup(
+            id,
+            [.. entryIds.Select(Id)],
+            false,
+            new SimulationProduces(
+                defaultColors,
+                [.. overrides.Select(item => new SimulationProducesOverride(
+                    [.. item.EntryIds.Select(Id)],
+                    item.Colors))]));
     }
 
     /// <summary>
-    /// Creates a complete valid request that callers can adjust for one test case.
+    /// Creates a <c>play</c> rule.
     /// </summary>
-    internal static OnCurveRequest Request(
-        IReadOnlyList<OnCurveDeckEntry>? mainboard = null,
-        OnCurveTarget? target = null,
-        IReadOnlyList<Guid>? candidateLandEntryIds = null,
-        IReadOnlyList<OnCurveLandRuleInput>? landRules = null,
-        int turnLimit = 1,
-        int sampleCount = 100,
+    internal static SimulationRule Play(
+        string group,
+        SimulationPick pick = SimulationPick.Random,
+        int maxPerTurn = 1,
+        int addsMana = 1,
+        SimulationManaFrom manaFrom = SimulationManaFrom.SameTurn,
+        string? targetCost = null,
+        params (SimulationManaFrom ManaFrom, IReadOnlyList<int> EntryIds)[] overrides)
+    {
+        return new SimulationPlay(
+            group,
+            pick,
+            maxPerTurn,
+            addsMana,
+            manaFrom,
+            [.. overrides.Select(item => new SimulationManaFromOverride([.. item.EntryIds.Select(Id)], item.ManaFrom))],
+            targetCost);
+    }
+
+    /// <summary>
+    /// Creates a <c>cast-if-able</c> rule.
+    /// </summary>
+    internal static SimulationRule Cast(
+        string group,
+        int cost,
+        SimulationPick pick = SimulationPick.Random,
+        int maxPerTurn = 1,
+        int addsMana = 1,
+        SimulationManaFrom manaFrom = SimulationManaFrom.SameTurn)
+    {
+        return new SimulationCastIfAble(group, pick, maxPerTurn, cost, addsMana, manaFrom, []);
+    }
+
+    /// <summary>
+    /// Creates a <c>draw-cards</c> rule.
+    /// </summary>
+    internal static SimulationRule Draw(
+        string group,
+        int cost,
+        int cards,
+        SimulationDrawEffect effect,
+        SimulationPick pick = SimulationPick.Random,
+        int maxPerTurn = 1)
+    {
+        return new SimulationDrawCards(group, pick, maxPerTurn, cost, cards, effect);
+    }
+
+    /// <summary>
+    /// Creates a condition that always holds, for tests that read the sample record instead.
+    /// </summary>
+    internal static SimulationCondition Always()
+    {
+        return new SimulationCondition("always", new SimulationManaAtLeast(0, 1));
+    }
+
+    /// <summary>
+    /// Creates a named condition.
+    /// </summary>
+    internal static SimulationCondition Condition(string id, SimulationCheck check)
+    {
+        return new SimulationCondition(id, check);
+    }
+
+    /// <summary>
+    /// Creates a <c>can-cast</c> check for one turn, with an optional entry that must be in hand.
+    /// </summary>
+    internal static SimulationCheck CanCastOn(string cost, int turn, int? inHand = null)
+    {
+        return new SimulationCanCast(cost, turn, null, inHand is null ? null : Id(inHand.Value));
+    }
+
+    /// <summary>
+    /// Creates a complete valid request that a test adjusts with named arguments.
+    /// </summary>
+    internal static SimulationRequest Request(
+        IReadOnlyList<SimulationDeckEntry> deck,
+        IReadOnlyList<SimulationGroup>? groups = null,
+        IReadOnlyList<SimulationRule>? rules = null,
+        IReadOnlyList<SimulationCondition>? conditions = null,
+        int turns = 3,
+        int samples = 1,
+        int sampleHands = 0,
+        ulong seed = 1,
+        int handSize = 7,
         bool onThePlay = true,
-        string seed = "0123456789abcdef")
+        SimulationMulligan? mulligan = null)
     {
-        IReadOnlyList<OnCurveDeckEntry> resolvedMainboard = mainboard ??
-        [
-            Entry(TargetEntryId, TargetPrintingId, 1, MissingMana()),
-            Entry(GreenLandEntryId, GreenLandPrintingId, 6, Mana("G")),
-        ];
-        return new OnCurveRequest(
-            Id(999),
-            1,
-            target ?? new OnCurveTarget(TargetEntryId, TargetPrintingId, "{G}"),
-            resolvedMainboard,
-            candidateLandEntryIds ?? [GreenLandEntryId],
-            landRules ?? [new OnCurveLandRuleInput(GreenLandEntryId, OnCurveLandRule.OneManaSameTurn)],
-            turnLimit,
-            sampleCount,
-            onThePlay,
-            seed);
+        return new SimulationRequest(
+            deck,
+            groups ?? [],
+            new SimulationOpeningHand(handSize, onThePlay, mulligan),
+            rules ?? [],
+            turns,
+            conditions ?? [Always()],
+            samples,
+            sampleHands,
+            seed,
+            "test");
     }
 
     /// <summary>
-    /// Creates one physical modeled card for an ordered library test.
+    /// Creates a deck of distinct single cards for entry numbers one through <paramref name="count"/>.
     /// </summary>
-    internal static OnCurveLibraryCard Card(Guid entryId, params OnCurveManaSymbol[] sourceColors)
+    internal static List<SimulationDeckEntry> Distinct(int count)
     {
-        return new OnCurveLibraryCard(entryId, Array.AsReadOnly(sourceColors));
+        return [.. Enumerable.Range(1, count).Select(id => Card(id))];
     }
 
     /// <summary>
-    /// Creates a seven-card hand with the supplied leading cards and inert filler.
+    /// Plays one game with the library in deck order and returns its full record and the trial for condition reads.
     /// </summary>
-    internal static IReadOnlyList<OnCurveLibraryCard> OpeningHand(params OnCurveLibraryCard[] leadingCards)
+    internal static (SimulationSampleOutcome Outcome, SimulationTrial Trial) RunOrdered(SimulationRequest request)
     {
-        List<OnCurveLibraryCard> cards = [.. leadingCards];
-        while (cards.Count < 7)
+        SimulationPlan plan = Plan(request);
+        SimulationTrial trial = new(plan, new SplitMix64Random(request.Seed), CancellationToken.None)
         {
-            cards.Add(Card(FillerEntryId));
-        }
-
-        return Array.AsReadOnly(cards.ToArray());
+            KeepDeckOrder = true,
+        };
+        return (trial.Run(1, record: true), trial);
     }
 
     /// <summary>
-    /// Creates one known green target cost.
+    /// Returns the compiled plan of a request that must be valid.
     /// </summary>
-    internal static OnCurveManaCost GreenCost()
+    internal static SimulationPlan Plan(SimulationRequest request)
     {
-        return new OnCurveManaCost(0, 0, 0, 0, 0, 1, 0);
+        OperationResult<SimulationPlan> result = SimulationPlanner.Plan(request);
+        Assert.True(result.Value is OperationSuccess<SimulationPlan>, result.Value.ToString());
+        return Assert.IsType<OperationSuccess<SimulationPlan>>(result.Value).Data;
+    }
+
+    /// <summary>
+    /// Runs a request that must succeed and returns its report.
+    /// </summary>
+    internal static SimulationReport Report(SimulationRequest request)
+    {
+        OperationResult<SimulationReport> result = SimulationEngine.Run(request, TestContext.Current.CancellationToken);
+        Assert.True(result.Value is OperationSuccess<SimulationReport>, result.Value.ToString());
+        return Assert.IsType<OperationSuccess<SimulationReport>>(result.Value).Data;
+    }
+
+    /// <summary>
+    /// Runs a request that must be refused and returns the failure.
+    /// </summary>
+    internal static OperationInvalidInput Refused(SimulationRequest request)
+    {
+        OperationResult<SimulationReport> result = SimulationEngine.Run(request, TestContext.Current.CancellationToken);
+        return Assert.IsType<OperationInvalidInput>(result.Value);
     }
 }

@@ -30,6 +30,7 @@ public sealed partial class ToolSurfaceNamingTests
         "stats_mulligan",
         "stats_multivariate",
         "stats_package_assembly",
+        "stats_simulate",
         "stats_turn_table",
     ];
 
@@ -80,7 +81,8 @@ public sealed partial class ToolSurfaceNamingTests
         ("deck_create", ["local_deck_create"]),
         ("deck_apply_changes", ["local_deck_apply_changes"]),
         ("deck_delete", ["local_deck_delete"]),
-        ("deck_on_curve_estimate", ["local_deck_on_curve_estimate"]),
+        ("deck_on_curve_estimate", ["stats_simulate"]),
+        ("local_deck_on_curve_estimate", ["stats_simulate"]),
         ("deck_update", ["local_deck_apply_changes"]),
         ("deck_entry_add", ["local_deck_apply_changes"]),
         ("deck_entry_update", ["local_deck_apply_changes"]),
@@ -219,14 +221,16 @@ public sealed partial class ToolSurfaceNamingTests
     }
 
     /// <summary>
-    /// Reads the 0.11.0 section of the changelog, the release that made the tool surface changes.
+    /// Reads the 0.12.0 and 0.11.0 sections of the changelog, the two releases of the tool surface changes.
     /// </summary>
     private static string ReadReleaseChangelog()
     {
         string changelog = File.ReadAllText(Path.Combine(RepositoryRoot, "CHANGELOG.md"));
-        int start = changelog.IndexOf("## 0.11.0 - ", StringComparison.Ordinal);
-        Assert.True(start >= 0, "CHANGELOG.md has no 0.11.0 section.");
-        int next = changelog.IndexOf("\n## ", start + 1, StringComparison.Ordinal);
+        int start = changelog.IndexOf("## 0.12.0 - ", StringComparison.Ordinal);
+        Assert.True(start >= 0, "CHANGELOG.md has no 0.12.0 section.");
+        int first = changelog.IndexOf("## 0.11.0 - ", start, StringComparison.Ordinal);
+        Assert.True(first >= 0, "CHANGELOG.md has no 0.11.0 section.");
+        int next = changelog.IndexOf("\n## ", first + 1, StringComparison.Ordinal);
         return next < 0 ? changelog[start..] : changelog[start..next];
     }
 

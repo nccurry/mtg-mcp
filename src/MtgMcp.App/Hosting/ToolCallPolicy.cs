@@ -274,6 +274,12 @@ internal static partial class ToolCallPolicy
     private static partial Regex UnmappedMember();
 
     /// <summary>
+    /// Matches the serializer message that lists the required properties an object left out.
+    /// </summary>
+    [GeneratedRegex("missing required properties including: ((?:'[^']*'(?:, )?)+)")]
+    private static partial Regex MissingRequiredProperties();
+
+    /// <summary>
     /// Reports whether a parameter is supplied from tool arguments rather than injected by the host.
     /// </summary>
     internal static bool IsArgumentParameter(ParameterInfo parameter)
@@ -307,6 +313,17 @@ internal static partial class ToolCallPolicy
                 path = ShortenLastSegment(path, raw, field);
                 message = $"Property '{field}' is not accepted here.";
             }
+            Match required = MissingRequiredProperties().Match(exception.Message);
+            if (required.Success)
+            {
+                string[] names = [.. Regex.Matches(required.Groups[1].Value, "'([^']*)'")
+                    .Select(match => Shorten(match.Groups[1].Value))];
+                message = names.Length == 1
+                    ? $"Required field '{names[0]}' is missing at '{path}'."
+                    : $"Required fields are missing at '{path}': {string.Join(", ", names)}.";
+                path = $"{path}.{names[0]}";
+            }
+
             if (exception.Message.Contains("discriminator", StringComparison.OrdinalIgnoreCase))
             {
                 IReadOnlyList<string> kinds = FindAllowedKinds(parameter.ParameterType);

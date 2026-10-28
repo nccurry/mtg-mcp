@@ -518,7 +518,6 @@ public sealed class FoundationArchitectureTests
                 "local_deck_import_preview",
                 "local_deck_interchange_formats",
                 "local_deck_list",
-                "local_deck_on_curve_estimate",
                 "local_deck_validate",
                 "playgroup_auth_status",
                 "playgroup_commander_get",
@@ -562,6 +561,7 @@ public sealed class FoundationArchitectureTests
                 "stats_mulligan",
                 "stats_multivariate",
                 "stats_package_assembly",
+                "stats_simulate",
                 "stats_turn_table",
             ],
             toolNames);
@@ -582,10 +582,10 @@ public sealed class FoundationArchitectureTests
         Assert.Equal(toolNames, assignedToolNames);
         Assert.Equal(assignedToolNames.Length, assignedToolNames.Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(".WithTools(", hostSource, StringComparison.Ordinal);
-        Assert.Equal(11, Regex.Count(deckManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(10, Regex.Count(deckManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(1, Regex.Count(deckManifestSource, @"DeckBatchWriteTools\.Create\("));
         Assert.Equal(4, Regex.Count(scryfallManifestSource, @"\.WithRegisteredTools\("));
-        Assert.Equal(2, Regex.Count(statisticsManifestSource, @"\.WithRegisteredTools\("));
+        Assert.Equal(3, Regex.Count(statisticsManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(3, Regex.Count(archidektManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(3, Regex.Count(playgroupManifestSource, @"\.WithRegisteredTools\("));
         Assert.Equal(2, Regex.Count(spellbookManifestSource, @"\.WithRegisteredTools\("));
@@ -721,11 +721,11 @@ public sealed class FoundationArchitectureTests
             File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
             StringComparison.Ordinal);
         Assert.Contains(
-            "DeckOnCurveMcpTests",
+            "StatisticsSimulateMcpTests",
             File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
             StringComparison.Ordinal);
         Assert.Contains(
-            "DeckOnCurveMcpTests",
+            "StatisticsSimulateMcpTests",
             File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "release.ps1")),
             StringComparison.Ordinal);
         Assert.Contains(

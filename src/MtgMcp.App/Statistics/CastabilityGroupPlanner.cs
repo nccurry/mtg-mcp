@@ -155,7 +155,7 @@ internal static class CastabilityGroupPlanner
     /// <summary>
     /// Lists the entry IDs a select chooses and checks that every ID exists in the deck.
     /// </summary>
-    private static OperationResult<List<Guid>> Select(CastabilitySelectInput? select, DeckDocument deck, string path)
+    internal static OperationResult<List<Guid>> Select(CastabilitySelectInput? select, DeckDocument deck, string path)
     {
         switch (select)
         {

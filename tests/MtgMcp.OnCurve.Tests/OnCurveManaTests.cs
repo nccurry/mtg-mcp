@@ -3,12 +3,12 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.OnCurve.Tests;
 
 /// <summary>
-/// Verifies simple mana-cost reading and fact-only source payment matching.
+/// Verifies printed mana-cost reading and the one exact source-to-symbol payment matcher.
 /// </summary>
 public sealed class OnCurveManaTests
 {
     /// <summary>
-    /// Verifies a simple printed cost keeps every supported generic and specific symbol.
+    /// Verifies a printed cost keeps every supported generic and specific symbol.
     /// </summary>
     [Fact]
     public void ReadCost_WithSupportedSymbols_ReturnsCounts()
@@ -25,26 +25,51 @@ public sealed class OnCurveManaTests
         Assert.Equal(1, cost.Colorless);
         Assert.Equal(6, cost.SpecificSymbolCount);
         Assert.Equal(8, cost.TotalSymbolCount);
+        Assert.False(cost.HasPhyrexian);
     }
 
     /// <summary>
-    /// Verifies unsupported or malformed costs stop before a trial starts.
+    /// Verifies hybrid and Phyrexian symbols are read as symbols that listed colors can pay.
+    /// </summary>
+    [Fact]
+    public void ReadCost_WithHybridAndPhyrexianSymbols_ListsTheirColors()
+    {
+        OperationResult<OnCurveManaCost> result = OnCurveManaSymbols.ReadCost("{1}{W/U}{G/P}{B/R/P}");
+
+        OnCurveManaCost cost = Assert.IsType<OperationSuccess<OnCurveManaCost>>(result.Value).Data;
+        Assert.Equal(1, cost.Generic);
+        Assert.Equal(3, cost.SpecificSymbolCount);
+        Assert.True(cost.HasPhyrexian);
+        Assert.Collection(
+            cost.EitherSymbols,
+            symbol => Assert.Equal([OnCurveManaSymbol.White, OnCurveManaSymbol.Blue], symbol),
+            symbol => Assert.Equal([OnCurveManaSymbol.Green], symbol),
+            symbol => Assert.Equal([OnCurveManaSymbol.Black, OnCurveManaSymbol.Red], symbol));
+    }
+
+    /// <summary>
+    /// Verifies unsupported or malformed costs are refused with one reason code.
     /// </summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("{X}{G}")]
-    [InlineData("{G/U}")]
+    [InlineData("{2/W}")]
+    [InlineData("{C/P}")]
+    [InlineData("{W/W}")]
+    [InlineData("{W/U/R}")]
     [InlineData("{P}{G}")]
+    [InlineData("{S}")]
     [InlineData("{G")]
     [InlineData("G")]
     [InlineData("{ 1}")]
+    [InlineData("{99999999999}")]
     public void ReadCost_WithUnsupportedText_ReturnsUnsupported(string? manaCost)
     {
         OperationResult<OnCurveManaCost> result = OnCurveManaSymbols.ReadCost(manaCost);
 
         OperationUnsupported unsupported = Assert.IsType<OperationUnsupported>(result.Value);
-        Assert.Equal("unsupported-on-curve-mana-cost", unsupported.ReasonCode);
+        Assert.Equal("unsupported-mana-cost", unsupported.ReasonCode);
     }
 
     /// <summary>
@@ -103,9 +128,9 @@ public sealed class OnCurveManaTests
         OnCurveManaCost cost = new(1, 0, 0, 0, 0, 2, 0);
         IReadOnlyList<OnCurveActiveSource> sources =
         [
-            Source(1, OnCurveManaSymbol.Green),
-            Source(2, OnCurveManaSymbol.Blue),
-            Source(3, OnCurveManaSymbol.Green),
+            Source(OnCurveManaSymbol.Green),
+            Source(OnCurveManaSymbol.Blue),
+            Source(OnCurveManaSymbol.Green),
         ];
 
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
@@ -114,23 +139,6 @@ public sealed class OnCurveManaTests
         Assert.Equal(3, result.TotalSymbolsCovered);
         Assert.True(result.CoversSpecificCost(cost));
         Assert.True(result.CoversFullCost(cost));
-        Assert.Collection(
-            result.PaymentSources,
-            payment =>
-            {
-                Assert.Equal(OnCurveTestData.Id(1), payment.EntryId);
-                Assert.Equal("G", payment.PaidFor);
-            },
-            payment =>
-            {
-                Assert.Equal(OnCurveTestData.Id(2), payment.EntryId);
-                Assert.Equal("generic", payment.PaidFor);
-            },
-            payment =>
-            {
-                Assert.Equal(OnCurveTestData.Id(3), payment.EntryId);
-                Assert.Equal("G", payment.PaidFor);
-            });
     }
 
     /// <summary>
@@ -140,11 +148,7 @@ public sealed class OnCurveManaTests
     public void Analyze_WithWrongColor_ReturnsPartialSpecificCoverage()
     {
         OnCurveManaCost cost = new(0, 0, 0, 0, 0, 2, 0);
-        IReadOnlyList<OnCurveActiveSource> sources =
-        [
-            Source(1, OnCurveManaSymbol.Green),
-            Source(2, OnCurveManaSymbol.Blue),
-        ];
+        IReadOnlyList<OnCurveActiveSource> sources = [Source(OnCurveManaSymbol.Green), Source(OnCurveManaSymbol.Blue)];
 
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
 
@@ -155,13 +159,66 @@ public sealed class OnCurveManaTests
     }
 
     /// <summary>
+    /// Verifies a dual source is moved to the symbol only it can pay, by an augmenting path.
+    /// </summary>
+    [Fact]
+    public void Analyze_WithADualSource_FindsTheOnlyCompleteAssignment()
+    {
+        OnCurveManaCost cost = new(0, 0, 0, 1, 0, 1, 0);
+        IReadOnlyList<OnCurveActiveSource> sources =
+        [
+            Source(OnCurveManaSymbol.Black, OnCurveManaSymbol.Green),
+            Source(OnCurveManaSymbol.Black),
+        ];
+
+        OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
+
+        Assert.True(result.CoversFullCost(cost));
+    }
+
+    /// <summary>
+    /// Verifies a hybrid symbol is paid by either of its colors and a Phyrexian symbol only by its color.
+    /// </summary>
+    [Theory]
+    [InlineData("{W/U}", "U", true)]
+    [InlineData("{W/U}", "W", true)]
+    [InlineData("{W/U}", "G", false)]
+    [InlineData("{G/P}", "G", true)]
+    [InlineData("{G/P}", "U", false)]
+    public void Analyze_WithEitherSymbol_AcceptsOnlyItsColors(string manaCost, string color, bool expected)
+    {
+        OnCurveManaCost cost = Assert.IsType<OperationSuccess<OnCurveManaCost>>(
+            OnCurveManaSymbols.ReadCost(manaCost).Value).Data;
+        Assert.True(OnCurveManaSymbols.TryParseProducedMana(color, out OnCurveManaSymbol symbol));
+
+        OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, [Source(symbol)]);
+
+        Assert.Equal(expected, result.CoversFullCost(cost));
+    }
+
+    /// <summary>
+    /// Verifies extra generic mana, such as mana already spent, makes a cost harder to pay.
+    /// </summary>
+    [Fact]
+    public void Analyze_WithExtraGeneric_NeedsMoreSources()
+    {
+        OnCurveManaCost cost = new OnCurveManaCost(0, 0, 0, 0, 0, 1, 0).WithExtraGeneric(2);
+        IReadOnlyList<OnCurveActiveSource> three =
+            [Source(OnCurveManaSymbol.Green), Source(OnCurveManaSymbol.Blue), Source()];
+        IReadOnlyList<OnCurveActiveSource> two = [Source(OnCurveManaSymbol.Green), Source(OnCurveManaSymbol.Blue)];
+
+        Assert.True(OnCurveManaPayment.Analyze(cost, three).CoversFullCost(cost));
+        Assert.False(OnCurveManaPayment.Analyze(cost, two).CoversFullCost(cost));
+    }
+
+    /// <summary>
     /// Verifies a very large generic source fact does not overflow full-cost checks.
     /// </summary>
     [Fact]
     public void Analyze_WithLargeGenericCost_RemainsIncomplete()
     {
         OnCurveManaCost cost = new(int.MaxValue, 0, 0, 0, 0, 1, 0);
-        IReadOnlyList<OnCurveActiveSource> sources = [Source(1, OnCurveManaSymbol.Green)];
+        IReadOnlyList<OnCurveActiveSource> sources = [Source(OnCurveManaSymbol.Green)];
 
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
 
@@ -170,10 +227,10 @@ public sealed class OnCurveManaTests
     }
 
     /// <summary>
-    /// Creates one active source with a stable entry ID for matching tests.
+    /// Creates one unit of mana with the given colors for matching tests.
     /// </summary>
-    private static OnCurveActiveSource Source(int id, params OnCurveManaSymbol[] symbols)
+    private static OnCurveActiveSource Source(params OnCurveManaSymbol[] symbols)
     {
-        return new OnCurveActiveSource(OnCurveTestData.Id(id), Array.AsReadOnly(symbols));
+        return new OnCurveActiveSource(Array.AsReadOnly(symbols));
     }
 }

@@ -12,7 +12,7 @@ namespace MtgMcp.E2E.Tests;
 public sealed class StatisticsMcpTests
 {
     /// <summary>
-    /// Lists the exact nine statistics tools in canonical discovery order.
+    /// Lists the exact ten statistics tools in canonical discovery order.
     /// </summary>
     private static readonly string[] ToolNames =
     [
@@ -24,6 +24,7 @@ public sealed class StatisticsMcpTests
         "stats_mulligan",
         "stats_multivariate",
         "stats_package_assembly",
+        "stats_simulate",
         "stats_turn_table",
     ];
 

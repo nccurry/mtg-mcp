@@ -52,7 +52,6 @@ public sealed class FoundationMcpTests
         "local_deck_import_preview",
         "local_deck_interchange_formats",
         "local_deck_list",
-        "local_deck_on_curve_estimate",
         "local_deck_validate",
     ];
 
@@ -79,7 +78,6 @@ public sealed class FoundationMcpTests
         "local_deck_import_preview",
         "local_deck_interchange_formats",
         "local_deck_list",
-        "local_deck_on_curve_estimate",
         "local_deck_validate",
     ];
 
@@ -126,6 +124,7 @@ public sealed class FoundationMcpTests
         "stats_mulligan",
         "stats_multivariate",
         "stats_package_assembly",
+        "stats_simulate",
         "stats_turn_table",
     ];
 
@@ -508,11 +507,6 @@ public sealed class FoundationMcpTests
             ["local_deck_import_preview"] = ["content", "formatId", "options"],
             ["local_deck_interchange_formats"] = [],
             ["local_deck_list"] = ["cursor", "pageSize"],
-            ["local_deck_on_curve_estimate"] =
-            [
-                "deckId", "expectedRevision", "landRules", "onThePlay", "sampleCount", "seed", "targetEntryId",
-                "turnLimit",
-            ],
             ["local_deck_validate"] = ["deckId", "rules"],
         };
         HashSet<string> readOnly = [.. DeckReadToolNames];
