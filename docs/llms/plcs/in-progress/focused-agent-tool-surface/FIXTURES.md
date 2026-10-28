@@ -283,8 +283,8 @@ invalid-parameter errors.
 | Case | Input | Expected |
 | --- | --- | --- |
 | X01 | `deck_apply_changes` with one change `{"entry":{...},"kind":"update-entry"}` (`kind` last). | Same result as the same change with `kind` first. |
-| X02 | A change with `"kind":"rename-entry"` (not a union value). | `invalid-input`, reason `invalid-arguments`, path `changes[0].kind`, message listing allowed kinds; `isError: true`. |
-| X03 | A change whose `quantity` is a string. | `invalid-input` with path `changes[0].entry.quantity`; never "An error occurred invoking". |
+| X02 | A change with `"kind":"rename-entry"` (not a union value). | `invalid-input`, reason `invalid-arguments`, path `changes[0]`, message "has a missing or unknown kind. Allowed kinds: ..." listing the kinds; `isError: true`. |
+| X03 | A change whose `quantity` is a string. | `invalid-input` with path `changes[0].entryDraft.quantity`; never "An error occurred invoking". |
 
 ## Archidekt Category Diff Cases
 
@@ -295,8 +295,8 @@ invalid-parameter errors.
 | A03 | Fake server: pull a deck, apply a no-op local edit, then push preview. | Zero entry operations; predicted provider requests cover only deck-level checks. |
 | A04 | Fake server: pull, add category "Protection" and two entries locally, push apply, add 10 unrelated sideboard entries, push preview. | Exactly the 10 sideboard entry-adds; no remove or re-add of the two pushed entries; no category change. |
 | A05 | After A04's first push, read the local deck's binding baseline. | The two entries and the category map to the provider IDs the fake server assigned. |
-| A06 | Fake server returns a created row that matches no planned create exactly. | Push apply reports it in `unlinked`; the local row stays unbound; nothing is guessed. |
-| A07 | After A06, run push preview. | `conflict` with reason `unlinked-remote-rows` naming the row and telling the agent to pull; no create is planned again. |
+| A06 | Fake server returns a created row that matches no planned create exactly. | Push apply reports the local entry in `unlinkedLocalIds`; the local row stays unbound; nothing is guessed. A category with no verified match stores no link and is not reported. |
+| A07 | After A06, edit locally and run push preview. | Push preview succeeds (no `conflict`). It plans one remove for the provider row and one add for the local entry, so the row is not duplicated. |
 
 ## Deck Duplicate Cases
 

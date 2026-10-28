@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
 using MtgMcp.Scryfall;
 
@@ -71,18 +72,18 @@ internal static class DeckToolsetManifest
         DeckCategorizationCoordinator categorizationCoordinator = new(deckStore, scryfallService);
         DeckOnCurveEstimateCoordinator onCurveCoordinator = new(deckStore, scryfallService);
         builder
-            .WithTools(new DeckReadTools(deckStore))
-            .WithTools(new DeckInterchangeReadTools(interchangeService))
-            .WithTools(new DeckIdentityReconciliationReadTools(identityCoordinator))
-            .WithTools(new DeckOnCurveEstimateTools(onCurveCoordinator));
-        builder.WithTools(new DeckCategorizationReadTools(categorizationCoordinator));
+            .WithTools(new DeckReadTools(deckStore), ToolCallPolicy.SerializerOptions)
+            .WithTools(new DeckInterchangeReadTools(interchangeService), ToolCallPolicy.SerializerOptions)
+            .WithTools(new DeckIdentityReconciliationReadTools(identityCoordinator), ToolCallPolicy.SerializerOptions)
+            .WithTools(new DeckOnCurveEstimateTools(onCurveCoordinator), ToolCallPolicy.SerializerOptions);
+        builder.WithTools(new DeckCategorizationReadTools(categorizationCoordinator), ToolCallPolicy.SerializerOptions);
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder
-                .WithTools(new DeckWriteTools(deckStore, mode))
-                .WithTools(new DeckInterchangeWriteTools(interchangeService, mode))
-                .WithTools(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode))
-                .WithTools(new DeckCategorizationWriteTools(categorizationCoordinator, mode))
+                .WithTools(new DeckWriteTools(deckStore, mode), ToolCallPolicy.SerializerOptions)
+                .WithTools(new DeckInterchangeWriteTools(interchangeService, mode), ToolCallPolicy.SerializerOptions)
+                .WithTools(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode), ToolCallPolicy.SerializerOptions)
+                .WithTools(new DeckCategorizationWriteTools(categorizationCoordinator, mode), ToolCallPolicy.SerializerOptions)
                 .WithTools([DeckBatchWriteTools.Create(deckStore, mode)]);
         }
     }

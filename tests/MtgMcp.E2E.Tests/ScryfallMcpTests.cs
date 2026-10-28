@@ -456,8 +456,8 @@ public sealed class ScryfallMcpTests
             toolName,
             arguments,
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, result.IsError);
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
+        Assert.Equal(!string.Equals(structured.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), result.IsError == true);
         return structured;
     }
 

@@ -338,4 +338,9 @@ internal sealed class ArchidektProviderException : Exception
     /// Gets the stable lowercase kebab-case reason code.
     /// </summary>
     internal string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the current provider state fingerprint when a conflict is about stale provider state.
+    /// </summary>
+    internal string? CurrentRemoteFingerprint { get; init; }
 }

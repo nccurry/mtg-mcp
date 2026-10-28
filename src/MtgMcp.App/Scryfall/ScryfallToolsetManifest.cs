@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Scryfall;
@@ -53,10 +54,10 @@ internal static class ScryfallToolsetManifest
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
 
-        builder.WithTools(new ScryfallReadTools(service));
+        builder.WithTools(new ScryfallReadTools(service), ToolCallPolicy.SerializerOptions);
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(new ScryfallWriteTools(service, mode));
+            builder.WithTools(new ScryfallWriteTools(service, mode), ToolCallPolicy.SerializerOptions);
         }
     }
 }

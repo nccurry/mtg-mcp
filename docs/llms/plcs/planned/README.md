@@ -23,9 +23,8 @@ is complete.
 
 ## Agent Surface
 
-| Packet | Status | Summary |
-| --- | --- | --- |
-| [focused-agent-tool-surface](focused-agent-tool-surface/README.md) | Planned, reviewed, awaiting implementation authorization | Smaller default toolsets with deck writes kept, one opt-in for the Archidekt round trip, tag search and deck tag view, `card_lists_compare` and `card_list_query` for list comparison and grouped deck analysis, Commander rule facts, enum schemas, opt-in concise card results, caller-ruled `stats_simulate` with colored payment, `stats_castability`, pairing and companion facts, Spellbook bracket facts, Playgroup game statistics, Archidekt deduplication, protocol fixes (`isError`, instructions, size limit), and three bug fixes from real use. Existing Playgroup tools frozen. |
+[focused-agent-tool-surface](../in-progress/focused-agent-tool-surface/README.md)
+moved to `in-progress/` on 2026-10-27.
 
 ## Retired Reference Packets
 

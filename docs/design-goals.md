@@ -45,6 +45,10 @@
   mutation authority separately in code rather than trusting annotations.
 - Redact credentials and sensitive local paths from logs, errors, resources,
   test data, and configuration output.
+- Report every failed tool call with the MCP `isError` flag and a structured
+  body (`kind`, `reasonCode`, `message`). Input the server cannot read returns
+  `invalid-input` with reason `invalid-arguments` and a top-level `path` to the
+  rejected value. A union's `kind` may appear in any property position.
 
 ## Clear Tool Groups
 

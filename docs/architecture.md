@@ -85,7 +85,9 @@ revision. Synchronization and categorization use preview fingerprints. Remote
 writes also require provider fingerprints or checksums where supported.
 
 The server refuses stale or tampered requests. It does not choose a conflict
-winner.
+winner. A conflict caused by stale state includes a `current` object with the
+current local revision, remote fingerprint, or both, so the caller can preview
+again and retry.
 
 ## Non-goals
 

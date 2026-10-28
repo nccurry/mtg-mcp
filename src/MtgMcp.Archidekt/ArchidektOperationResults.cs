@@ -42,7 +42,10 @@ internal static class ArchidektOperationResults
                     exception.Message),
                 ArchidektFailureKind.Conflict => new OperationConflict(
                     exception.ReasonCode,
-                    exception.Message),
+                    exception.Message,
+                    exception.CurrentRemoteFingerprint is { } current
+                        ? new ConflictState(RemoteFingerprint: current)
+                        : null),
                 ArchidektFailureKind.Unsupported => new OperationUnsupported(
                     exception.ReasonCode,
                     exception.Message),

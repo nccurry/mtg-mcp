@@ -929,6 +929,31 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
+    /// Verifies a query that uses oracle tags and other filters reaches Scryfall exactly as written.
+    /// </summary>
+    [Fact]
+    public async Task Search_OracleTagQuery_PassesThroughUnchanged()
+    {
+        const string query = "otag:ramp t:sorcery mv<=2 f:commander";
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = new(_ => ScryfallTestFixture.Json(JsonSerializer.Serialize(new
+        {
+            @object = "list",
+            has_more = false,
+            data = new[] { JsonSerializer.Deserialize<JsonElement>(ScryfallTestFixture.WhiteCard()) },
+        })));
+        using ScryfallService service = CreateService(temporary.Path, handler);
+
+        _ = RequireSuccess(await service.SearchAsync(query, cancellationToken: TestContext.Current.CancellationToken));
+
+        RecordedRequest search = Assert.Single(
+            handler.Requests,
+            request => request.Uri.AbsolutePath == "/cards/search");
+        string? sent = System.Web.HttpUtility.ParseQueryString(search.Uri.Query)["q"];
+        Assert.Equal(query, sent);
+    }
+
+    /// <summary>
     /// Verifies successful provider pagination stores every source page and ordered member before publishing.
     /// </summary>
     [Fact]

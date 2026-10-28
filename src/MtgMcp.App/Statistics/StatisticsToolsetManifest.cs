@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
 using MtgMcp.Statistics;
 
@@ -89,6 +90,7 @@ internal static class StatisticsToolsetManifest
             BindingFlags.Instance | BindingFlags.NonPublic)!;
         return McpServerTool.Create(method, target, new McpServerToolCreateOptions
         {
+            SerializerOptions = ToolCallPolicy.SerializerOptions,
             SchemaCreateOptions = new AIJsonSchemaCreateOptions
             {
                 TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),

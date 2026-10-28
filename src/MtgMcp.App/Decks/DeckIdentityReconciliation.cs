@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -219,7 +220,8 @@ internal sealed class DeckIdentityReconciliationCoordinator
         {
             return new OperationConflict(
                 "deck-revision-conflict",
-                "The local deck revision changed before identity reconciliation.");
+                "The local deck revision changed before identity reconciliation.",
+                new ConflictState(Revision: deck.Revision));
         }
 
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, entryIds);
@@ -283,7 +285,8 @@ internal sealed class DeckIdentityReconciliationCoordinator
         {
             return new OperationConflict(
                 "deck-revision-conflict",
-                "The local deck revision changed after identity preview.");
+                "The local deck revision changed after identity preview.",
+                new ConflictState(Revision: deck.Revision));
         }
 
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds);
@@ -711,7 +714,7 @@ internal sealed class DeckIdentityReconciliationReadTools
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description("Optional unique entry UUIDs; omit to select every entry, up to 150.")]
         IReadOnlyList<Guid>? entryIds = null,
-        [Description("Scryfall evidence policy: default, cache-only, or refresh.")]
+        [Description("Scryfall evidence policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {

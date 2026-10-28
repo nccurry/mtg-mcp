@@ -189,11 +189,36 @@ internal sealed class McpProcessSession : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Client.DisposeAsync().ConfigureAwait(false);
+        await DeleteWorkingDirectoryAsync().ConfigureAwait(false);
+    }
 
-        workingDirectory.Refresh();
-        if (workingDirectory.Exists)
+    /// <summary>
+    /// Deletes the isolated working directory. Disposing the client ends the launcher and its server process
+    /// (both were gone within 500 ms when checked), so the retry only covers the short delay before Windows
+    /// releases the folder.
+    /// </summary>
+    private async Task DeleteWorkingDirectoryAsync()
+    {
+        const int maximumAttempts = 50;
+        for (int attempt = 1; ; attempt++)
         {
-            workingDirectory.Delete(recursive: true);
+            workingDirectory.Refresh();
+            if (!workingDirectory.Exists)
+            {
+                return;
+            }
+
+            try
+            {
+                workingDirectory.Delete(recursive: true);
+                return;
+            }
+            catch (Exception exception) when (
+                attempt < maximumAttempts &&
+                exception is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+            }
         }
     }
 
@@ -348,7 +373,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
 
         string commandLine = string.Join(" ", quotedParts);
         File.WriteAllLines(launcherPath, ["@echo off", commandLine]);
-        return ("cmd.exe", ["/d", "/c", launcherName], workingDirectory.FullName);
+
+        // An explicit relative path still runs when NoDefaultCurrentDirectoryInExePath is set.
+        return ("cmd.exe", ["/d", "/c", $@".\{launcherName}"], workingDirectory.FullName);
     }
 
     /// <summary>

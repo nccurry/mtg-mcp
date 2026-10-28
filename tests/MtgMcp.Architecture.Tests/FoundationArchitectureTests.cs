@@ -307,6 +307,52 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
+    /// Verifies every tool registration in App passes the shared serializer options, so every union reads the same way.
+    /// </summary>
+    [Fact]
+    public void ToolRegistrations_PassSharedSerializerOptions()
+    {
+        const string sharedOptions = "ToolCallPolicy.SerializerOptions";
+        string appRoot = Path.Combine(RepositoryRoot, "src", "MtgMcp.App");
+        List<(string File, string Statement, bool IsListRegistration)> registrations = [];
+        string[] files = [.. Directory.GetFiles(appRoot, "*.cs", SearchOption.AllDirectories).Where(IsAuthoredSource)];
+        foreach (string file in files)
+        {
+            string text = File.ReadAllText(file);
+            registrations.AddRange(FindStatements(text, ".WithTools(")
+                .Select(statement => (ToRepositoryPath(file), statement, true)));
+            registrations.AddRange(FindStatements(text, "McpServerTool.Create(")
+                .Select(statement => (ToRepositoryPath(file), statement, false)));
+        }
+
+        // A tool list built by a helper is checked where that helper calls McpServerTool.Create.
+        string[] offenders = registrations
+            .Where(value => !value.IsListRegistration || !value.Statement.Contains("Create(", StringComparison.Ordinal))
+            .Where(value => !value.Statement.Contains(sharedOptions, StringComparison.Ordinal))
+            .Select(value => $"{value.File}: {value.Statement.ReplaceLineEndings(" ")}")
+            .ToArray();
+
+        Assert.True(registrations.Count >= 20, $"Only {registrations.Count} registrations were found.");
+        Assert.Empty(offenders);
+    }
+
+    /// <summary>
+    /// Returns the text of each call that starts at the marker and ends at the next marker or semicolon.
+    /// </summary>
+    private static IEnumerable<string> FindStatements(string text, string marker)
+    {
+        int start = text.IndexOf(marker, StringComparison.Ordinal);
+        while (start >= 0)
+        {
+            int end = text.IndexOf(';', start);
+            int next = text.IndexOf(marker, start + marker.Length, StringComparison.Ordinal);
+            end = next >= 0 && next < end ? next : end;
+            yield return text[start..end];
+            start = text.IndexOf(marker, end, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// Verifies that E2E tests use only the official MCP Core client package.
     /// </summary>
     [Fact]

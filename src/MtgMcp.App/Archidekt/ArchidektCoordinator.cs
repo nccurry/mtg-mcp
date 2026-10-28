@@ -234,7 +234,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "pull-conflict",
-                "The local deck changed since its synchronization baseline.");
+                "The local deck changed since its synchronization baseline.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         if (!string.Equals(
@@ -246,7 +247,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "pull-preview-changed",
-                "The local or remote deck changed after the pull preview.");
+                "The local or remote deck changed after the pull preview.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await Service.GetDeckAsync(
@@ -265,7 +267,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "remote-deck-changed",
-                "The Archidekt deck changed after the pull preview.");
+                "The Archidekt deck changed after the pull preview.",
+                new ConflictState(RemoteFingerprint: remote.Data.RemoteFingerprint));
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -446,7 +449,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "push-conflict",
-                "The Archidekt deck changed since its synchronization baseline.");
+                "The Archidekt deck changed since its synchronization baseline.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         if (preview.Data.LocalRevision != request.ExpectedLocalRevision ||
@@ -461,7 +465,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "push-preview-changed",
-                "The local or remote deck changed after the push preview.");
+                "The local or remote deck changed after the push preview.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         OperationResult<DeckDocument> localResult = await deckStore.GetAsync(
@@ -520,7 +525,8 @@ internal sealed class ArchidektSynchronizationContext
             BaselineFingerprint = verified.Data.RemoteFingerprint,
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
-        string baseline = ArchidektLocalMapper.CreateBaseline(local.Data, verified.Data);
+        (string baseline, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(local.Data, verified.Data, target);
         OperationResult<DeckDocument> baselineUpdate = await deckStore.ApplyChangesAsync(
             local.Data.DeckId,
             local.Data.Revision,
@@ -536,6 +542,7 @@ internal sealed class ArchidektSynchronizationContext
             LocalDeckId = updated.Data.DeckId,
             LocalRevision = updated.Data.Revision,
             FinalRemoteFingerprint = verified.Data.RemoteFingerprint,
+            UnlinkedLocalIds = unlinkedLocalIds,
         });
     }
 
@@ -563,7 +570,8 @@ internal sealed class ArchidektSynchronizationContext
             {
                 return new OperationConflict(
                     "local-deck-changed",
-                    "The local deck changed before remote creation.");
+                    "The local deck changed before remote creation.",
+                    new ConflictState(Revision: success.Data.Revision));
             }
 
             OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(success.Data);

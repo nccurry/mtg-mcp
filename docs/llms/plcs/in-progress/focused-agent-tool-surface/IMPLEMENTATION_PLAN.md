@@ -19,7 +19,7 @@ No tool names change and no valid request changes meaning. Enum values on
 the wire stay the same; values that the code already rejected are now also
 rejected by the schema.
 
-1. Spike: convert `scryfall_search.freshnessPolicy` to an enum, and try
+1. Spike: publish `scryfall_search.freshnessPolicy` as a schema enum, and try
    rejecting an unknown property on the same tool. Capture the generated
    schema and behavior and record both in the README evidence table. If
    either fails, use the `TransformSchemaNode` fallback in the SADD. Do not
@@ -38,7 +38,8 @@ rejected by the schema.
    set in `EntryEqual` (ARCH-001, cases A01 to A03). Link pushed entries and
    categories to their new Archidekt IDs in the baseline transaction
    (ARCH-002, cases A04 to A07).
-3. Convert the remaining choice parameters.
+3. Publish the remaining choice parameters as schema enums with `[AllowedValues]`;
+   a list used more than once gets one shared attribute subclass.
 4. Add the SCHEMA-001 test (every choice parameter has `enum`).
 5. Rewrite `stats_*` descriptions with fields and examples; add the example
    fixtures (SCHEMA-003).
@@ -249,7 +250,10 @@ pass.
 
 ## Reviews
 
-After phases 4 and 6, run focused read-only reviews on the same revision, at
+At the end of every phase, run a full code audit (the repository's combined
+audit) of that phase's changes before the phase is reported done, and fix
+supported findings in scope; this is an owner instruction from 2026-10-27.
+After phases 4 and 6, also run focused read-only reviews on the same revision, at
 most three reviewers at a time: correctness, test quality, and plain language.
 Fix every supported finding in scope, including low-severity ones. Allow at
 most three review passes in total. Re-review only after a confirmed serious

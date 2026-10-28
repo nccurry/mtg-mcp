@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -44,7 +45,8 @@ internal sealed class DeckInterchangeWriteTools
         UseStructuredContent = true)]
     [Description("Creates one local deck from an accepted import preview without provider calls.")]
     internal Task<OperationResult<DeckImportCreateResult>> CreateAsync(
-        [Description("Exact format ID used for the accepted preview.")] string formatId,
+        [Description("Exact format ID used for the accepted preview."), InterchangeFormatValues]
+        string formatId,
         [Description("Exact content used for the accepted preview.")] string content,
         [Description("Fingerprint returned by deck_import_preview.")] string expectedFingerprint,
         [Description("The same parsing defaults and explicit opt-ins used for preview.")]

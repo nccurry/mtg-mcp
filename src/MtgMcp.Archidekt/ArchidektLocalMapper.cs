@@ -122,25 +122,67 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
-    /// Creates the canonical synchronization baseline stored with one provider-neutral binding.
+    /// Creates the baseline JSON after a verified push, linking local rows the push created to their new provider IDs.
     /// </summary>
-    public static string CreateBaseline(DeckDocument local, RemoteDeckSnapshot remote)
+    /// <param name="local">The local deck whose content was pushed.</param>
+    /// <param name="verified">The provider deck read back after the push.</param>
+    /// <param name="target">The pushed target, built from <paramref name="local"/> in entry and category order.</param>
+    /// <returns>
+    /// The baseline JSON and the local entry IDs the push could not link to a provider row, or null when all linked.
+    /// A category with no verified match stores no link, and the next push plans it by name.
+    /// </returns>
+    public static (string Json, IReadOnlyList<Guid>? UnlinkedLocalIds) CreatePushBaseline(
+        DeckDocument local,
+        RemoteDeckSnapshot verified,
+        RemoteDeckSnapshot target)
     {
         ArgumentNullException.ThrowIfNull(local);
-        ArgumentNullException.ThrowIfNull(remote);
+        ArgumentNullException.ThrowIfNull(verified);
+        ArgumentNullException.ThrowIfNull(target);
+        if (target.Entries.Count != local.Entries.Count || target.Categories.Count != local.Categories.Count)
+        {
+            throw new ArgumentException("The pushed target must be built from the local deck.", nameof(target));
+        }
+
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+        Dictionary<Guid, string> entryRelations = verified.Entries.ToDictionary(
+            value => ArchidektContract.StableGuid("entry", value.ProviderRelationId),
+            value => value.ProviderRelationId);
+        Dictionary<Guid, string> categoryRelations = verified.Categories.ToDictionary(
+            value => ArchidektContract.StableGuid("category", value.ProviderCategoryId),
+            value => value.ProviderCategoryId);
+        List<Guid> unlinked = [];
+        for (int index = 0; index < local.Entries.Count; index++)
+        {
+            Guid entryId = local.Entries[index].EntryId;
+            if (links.EntryRelationIds[index] is { } relationId)
+            {
+                entryRelations[entryId] = relationId;
+            }
+            else
+            {
+                unlinked.Add(entryId);
+            }
+        }
+
+        for (int index = 0; index < local.Categories.Count; index++)
+        {
+            if (links.CategoryIds[index] is { } providerCategoryId)
+            {
+                categoryRelations[local.Categories[index].CategoryId] = providerCategoryId;
+            }
+        }
+
         ArchidektSyncBaseline baseline = new(
             1,
-            remote.RemoteId,
-            remote.RemoteFingerprint,
+            verified.RemoteId,
+            verified.RemoteFingerprint,
             LocalFingerprint(local),
-            remote,
-            remote.Entries.ToDictionary(
-                value => ArchidektContract.StableGuid("entry", value.ProviderRelationId),
-                value => value.ProviderRelationId),
-            remote.Categories.ToDictionary(
-                value => ArchidektContract.StableGuid("category", value.ProviderCategoryId),
-                value => value.ProviderCategoryId));
-        return JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
+            verified,
+            entryRelations,
+            categoryRelations);
+        string json = JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
+        return (json, unlinked.Count == 0 ? null : unlinked);
     }
 
     /// <summary>
@@ -202,23 +244,25 @@ public static class ArchidektLocalMapper
         ArgumentNullException.ThrowIfNull(local);
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(currentRemote);
-        Dictionary<Guid, RemoteDeckCategory> baselineCategories = baseline.RemoteSnapshot.Categories
-            .ToDictionary(
-                value => ArchidektContract.StableGuid("category", value.ProviderCategoryId));
+        Dictionary<string, RemoteDeckCategory> baselineCategories = baseline.RemoteSnapshot.Categories
+            .ToDictionary(value => value.ProviderCategoryId, StringComparer.Ordinal);
         List<RemoteDeckCategory> categories = [];
         foreach (DeckCategory localCategory in local.Categories)
         {
-            baselineCategories.TryGetValue(localCategory.CategoryId, out RemoteDeckCategory? prior);
-            string providerId = prior?.ProviderCategoryId ?? string.Empty;
+            RemoteDeckCategory? baselineRow = FindBaselineRow(
+                localCategory.CategoryId,
+                baseline.CategoryRelations,
+                baselineCategories);
+            string providerId = baselineRow?.ProviderCategoryId ?? string.Empty;
             bool isMaybeboard = localCategory.Name.Equals(
                 "maybeboard",
                 StringComparison.OrdinalIgnoreCase);
             categories.Add(new RemoteDeckCategory(
                 providerId,
                 localCategory.Name,
-                prior?.IncludedInDeck ?? !isMaybeboard,
-                prior?.IncludedInPrice ?? !isMaybeboard,
-                prior?.IsPremier ?? false,
+                baselineRow?.IncludedInDeck ?? !isMaybeboard,
+                baselineRow?.IncludedInPrice ?? !isMaybeboard,
+                baselineRow?.IsPremier ?? false,
                 localCategory.SortOrder));
         }
 
@@ -228,20 +272,23 @@ public static class ArchidektLocalMapper
         Dictionary<Guid, List<DeckCategoryAssignment>> assignments = local.CategoryAssignments
             .GroupBy(value => value.EntryId)
             .ToDictionary(group => group.Key, group => group.ToList());
-        Dictionary<Guid, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
-            .ToDictionary(value => ArchidektContract.StableGuid("entry", value.ProviderRelationId));
+        Dictionary<string, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
+            .ToDictionary(value => value.ProviderRelationId, StringComparer.Ordinal);
         List<RemoteDeckEntry> entries = [];
         foreach (DeckEntry localEntry in local.Entries)
         {
-            baselineEntries.TryGetValue(localEntry.EntryId, out RemoteDeckEntry? prior);
+            RemoteDeckEntry? baselineRow = FindBaselineRow(
+                localEntry.EntryId,
+                baseline.EntryRelations,
+                baselineEntries);
             (List<string> names, string? primary) = MapAssignments(
                 localEntry.EntryId,
                 assignments,
                 categoryNames);
 
             entries.Add(new RemoteDeckEntry(
-                prior?.ProviderRelationId ?? string.Empty,
-                prior?.ProviderCardId ?? string.Empty,
+                baselineRow?.ProviderRelationId ?? string.Empty,
+                baselineRow?.ProviderCardId ?? string.Empty,
                 localEntry.Quantity,
                 localEntry.CardName,
                 localEntry.OracleId,
@@ -267,6 +314,24 @@ public static class ArchidektLocalMapper
             ContentFingerprint = contentFingerprint,
             RemoteFingerprint = contentFingerprint,
         };
+    }
+
+    /// <summary>
+    /// Finds the baseline provider row a local row is linked to, or null when the baseline has no link for it.
+    /// </summary>
+    private static TRow? FindBaselineRow<TRow>(
+        Guid localId,
+        IReadOnlyDictionary<Guid, string> links,
+        Dictionary<string, TRow> rowsByProviderId)
+        where TRow : class
+    {
+        if (links.TryGetValue(localId, out string? providerId) &&
+            rowsByProviderId.TryGetValue(providerId, out TRow? linked))
+        {
+            return linked;
+        }
+
+        return null;
     }
 
     /// <summary>

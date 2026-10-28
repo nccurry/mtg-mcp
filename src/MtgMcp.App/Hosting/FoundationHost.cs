@@ -81,6 +81,7 @@ internal static class FoundationHost
             .WithStdioServerTransport()
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitUnsupportedImplicitCapabilities()))
+            .WithRequestFilters(filters => filters.AddCallToolFilter(ToolCallPolicy.Filter))
             .WithResources(new FoundationResources(configuration));
         if (decksEnabled && deckStore is not null && scryfallService is not null)
         {

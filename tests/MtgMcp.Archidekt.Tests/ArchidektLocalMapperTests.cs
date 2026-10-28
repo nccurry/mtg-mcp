@@ -181,6 +181,52 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies reordered or recased secondary categories never plan an entry update.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_CategoryOrderOnlyDifference_PlansNoEntryOperation()
+    {
+        RemoteDeckSnapshot current = ParseDeck();
+        RemoteDeckEntry remote = current.Entries[0] with
+        {
+            CategoryNames = ["Maybeboard", "Sideboard", "Removal"],
+            PrimaryCategoryName = "Removal",
+        };
+        current = current with { Entries = [remote] };
+        RemoteDeckSnapshot target = current with
+        {
+            Entries = [remote with { CategoryNames = ["maybeboard", "Removal", "Sideboard"] }],
+        };
+
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
+
+        Assert.Empty(plan.PublicOperations);
+    }
+
+    /// <summary>
+    /// Verifies the same category set with a different primary category still plans one entry update.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_PrimaryCategoryChange_PlansEntryUpdate()
+    {
+        RemoteDeckSnapshot current = ParseDeck();
+        RemoteDeckEntry remote = current.Entries[0] with
+        {
+            CategoryNames = ["Removal", "Sideboard"],
+            PrimaryCategoryName = "Removal",
+        };
+        current = current with { Entries = [remote] };
+        RemoteDeckSnapshot target = current with
+        {
+            Entries = [remote with { CategoryNames = ["Sideboard", "Removal"], PrimaryCategoryName = "Sideboard" }],
+        };
+
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
+
+        Assert.Equal(["entry-update"], plan.PublicOperations.Select(value => value.Kind));
+    }
+
+    /// <summary>
     /// Verifies final apply checks bind unique provider-generated relations and accept provider ordering inside a caller tie.
     /// </summary>
     [Fact]
@@ -372,6 +418,243 @@ public sealed class ArchidektLocalMapperTests
         RemoteDeckEntry mapped = Assert.Single(target.Entries);
         Assert.Equal(categoryNames, mapped.CategoryNames);
         Assert.Equal(categoryNames[0], mapped.PrimaryCategoryName);
+    }
+
+    /// <summary>
+    /// Verifies rows created by a push are linked to their new provider IDs, so a later push plans only real changes.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_CreatedRows_LinkAndLaterPushPlansOnlyNewEntries()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        (DeckDocument edited, DeckEntry charm, DeckEntry bombardment, Guid protectionId) = AddProtectionRows(local);
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+        DeckEntry[] sideboard = Enumerable.Range(0, 10)
+            .Select(index => NewEntry($"Sideboard Card {index}", "sideboard", 100 + index))
+            .ToArray();
+        DeckDocument later = edited with { Entries = [.. edited.Entries, .. sideboard] };
+        RemoteDeckSnapshot laterTarget = ArchidektLocalMapper.ToRemoteTarget(later, afterPush, verified);
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(verified, laterTarget);
+
+        Assert.Null(unlinkedLocalIds);
+        Assert.Equal("9001", afterPush.CategoryRelations[protectionId]);
+        Assert.Equal("9101", afterPush.EntryRelations[charm.EntryId]);
+        Assert.Equal("9102", afterPush.EntryRelations[bombardment.EntryId]);
+        Assert.Equal(10, plan.PublicOperations.Count);
+        Assert.All(plan.PublicOperations, value => Assert.Equal("entry-add", value.Kind));
+    }
+
+    /// <summary>
+    /// Verifies links follow content, not row order, when the provider returns rows shuffled with filled card details.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_ShuffledVerifiedRowsWithCardDetails_StillLinkByContent()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        (DeckDocument edited, DeckEntry charm, DeckEntry bombardment, _) = AddProtectionRows(local);
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot assigned = AssignProviderIds(pushed);
+        List<RemoteDeckEntry> shuffled = [];
+        foreach (RemoteDeckEntry value in assigned.Entries.Reverse())
+        {
+            shuffled.Add(value.ProviderRelationId is "9101" or "9102"
+                ? value with
+                {
+                    PrintingId = Guid.NewGuid(),
+                    SetCode = "xyz",
+                    ProviderCardId = "card-" + value.ProviderRelationId,
+                }
+                : value);
+        }
+
+        RemoteDeckSnapshot verified = assigned with { Entries = shuffled };
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+
+        Assert.Null(unlinkedLocalIds);
+        Assert.Equal("9101", afterPush.EntryRelations[charm.EntryId]);
+        Assert.Equal("9102", afterPush.EntryRelations[bombardment.EntryId]);
+    }
+
+    /// <summary>
+    /// Verifies a pushed row with no exact provider match is reported as unlinked rather than guessed.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_UnmatchedCreatedRow_ReportsUnlinkedId()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        DeckEntry charm = NewEntry("Boros Charm", "main", 50);
+        DeckDocument edited = local with { Entries = [.. local.Entries, charm] };
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
+        verified = verified with
+        {
+            Entries = verified.Entries
+                .Select(value => value.CardName == "Boros Charm" ? value with { CardName = "Lightning Helix" } : value)
+                .ToArray(),
+        };
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+
+        Assert.Equal([charm.EntryId], unlinkedLocalIds);
+        Assert.False(afterPush.EntryRelations.ContainsKey(charm.EntryId));
+    }
+
+    /// <summary>
+    /// Verifies a pushed category the provider did not return stores no link and is not reported.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_UnmatchedCategory_StoresNoLink()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        Guid protectionId = Guid.NewGuid();
+        DeckDocument edited = local with
+        {
+            Categories = [.. local.Categories, new DeckCategory(protectionId, "Protection", null, 9)],
+        };
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(edited, pullBaseline, pulled);
+        RemoteDeckSnapshot verified = AssignProviderIds(pushed);
+        verified = verified with
+        {
+            Categories = verified.Categories.Where(value => value.Name != "Protection").ToArray(),
+        };
+
+        (string json, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(edited, verified, pushed);
+        ArchidektSyncBaseline afterPush = ArchidektLocalMapper.ParseBaseline(json);
+
+        Assert.Null(unlinkedLocalIds);
+        Assert.False(afterPush.CategoryRelations.ContainsKey(protectionId));
+    }
+
+    /// <summary>
+    /// Verifies a pushed target that was not built from the local deck is rejected.
+    /// </summary>
+    [Fact]
+    public void CreatePushBaseline_TargetRowCountDiffersFromLocal_Throws()
+    {
+        (RemoteDeckSnapshot pulled, DeckDocument local, ArchidektSyncBaseline pullBaseline) = PullFixture();
+        RemoteDeckSnapshot pushed = ArchidektLocalMapper.ToRemoteTarget(local, pullBaseline, pulled);
+        RemoteDeckSnapshot shortTarget = pushed with { Entries = pushed.Entries.Skip(1).ToArray() };
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            ArchidektLocalMapper.CreatePushBaseline(local, pulled, shortTarget));
+
+        Assert.Equal("target", exception.ParamName);
+    }
+
+    /// <summary>
+    /// Adds two new entries and one new category to a pulled local deck, as a user's local edit would.
+    /// </summary>
+    private static (DeckDocument Edited, DeckEntry Charm, DeckEntry Bombardment, Guid CategoryId) AddProtectionRows(
+        DeckDocument local)
+    {
+        Guid protectionId = Guid.NewGuid();
+        DeckEntry charm = NewEntry("Boros Charm", "main", 50);
+        DeckEntry bombardment = NewEntry("Goblin Bombardment", "main", 51);
+        DeckDocument edited = local with
+        {
+            Entries = [.. local.Entries, charm, bombardment],
+            Categories = [.. local.Categories, new DeckCategory(protectionId, "Protection", null, 9)],
+            CategoryAssignments =
+            [
+                .. local.CategoryAssignments,
+                new DeckCategoryAssignment(charm.EntryId, protectionId, true),
+                new DeckCategoryAssignment(bombardment.EntryId, protectionId, true),
+            ],
+        };
+        return (edited, charm, bombardment, protectionId);
+    }
+
+    /// <summary>
+    /// Builds a local deck and baseline exactly as a pull of the shared fixture would.
+    /// </summary>
+    private static (RemoteDeckSnapshot Remote, DeckDocument Local, ArchidektSyncBaseline Baseline) PullFixture()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        DeckProviderBinding binding = new(
+            Guid.Parse("55555555-5555-5555-5555-555555555555"),
+            "archidekt",
+            remote.RemoteId,
+            remote.RemoteUri,
+            remote.Evidence.ContractVersion,
+            remote.RemoteFingerprint,
+            DateTimeOffset.UtcNow,
+            null);
+        DeckCreateRequest request = ArchidektLocalMapper.ToCreateRequest(remote, binding);
+        DeckDocument local = new(
+            Guid.NewGuid(),
+            remote.Name,
+            remote.Description,
+            remote.Format,
+            Revision: 1,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            request.Entries!.Select(value => new DeckEntry(
+                value.EntryId!.Value,
+                value.Quantity,
+                value.CardName,
+                value.OracleId,
+                value.PrintingId,
+                value.SetCode,
+                value.CollectorNumber,
+                value.Language,
+                value.Finish,
+                value.Zone,
+                value.SortOrder)).ToArray(),
+            request.Categories!.Select(value => new DeckCategory(
+                value.CategoryId!.Value,
+                value.Name,
+                value.Color,
+                value.SortOrder)).ToArray(),
+            request.CategoryAssignments!,
+            [binding]);
+        ArchidektSyncBaseline baseline = ArchidektLocalMapper.ParseBaseline(
+            ArchidektLocalMapper.CreateBaseline(request, remote));
+        return (remote, local, baseline);
+    }
+
+    /// <summary>
+    /// Creates one local entry identified only by name, as a user's local addition would be.
+    /// </summary>
+    private static DeckEntry NewEntry(string cardName, string zone, int sortOrder)
+    {
+        return new DeckEntry(Guid.NewGuid(), 1, cardName, null, null, null, null, "en", "nonfoil", zone, sortOrder);
+    }
+
+    /// <summary>
+    /// Simulates Archidekt assigning IDs to the categories and relations a push created.
+    /// </summary>
+    private static RemoteDeckSnapshot AssignProviderIds(RemoteDeckSnapshot pushed)
+    {
+        int nextCategory = 9001;
+        int nextRelation = 9101;
+        return pushed with
+        {
+            Categories = pushed.Categories
+                .Select(value => string.IsNullOrEmpty(value.ProviderCategoryId)
+                    ? value with { ProviderCategoryId = (nextCategory++).ToString(System.Globalization.CultureInfo.InvariantCulture) }
+                    : value)
+                .ToArray(),
+            Entries = pushed.Entries
+                .Select(value => string.IsNullOrEmpty(value.ProviderRelationId)
+                    ? value with
+                    {
+                        ProviderRelationId = (nextRelation++).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ProviderCardId = "card",
+                    }
+                    : value)
+                .ToArray(),
+        };
     }
 
     /// <summary>

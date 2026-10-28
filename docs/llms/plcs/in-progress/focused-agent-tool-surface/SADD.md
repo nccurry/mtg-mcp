@@ -640,18 +640,27 @@ marker in its data, so the agent can repeat the preview in one step
 
 ## Enum Schemas
 
-Each choice parameter becomes a C# enum in the project that owns the
-behavior, with `JsonStringEnumMemberName` values equal to today's strings.
+Each choice parameter or request-record property keeps its string type and
+gains an `[AllowedValues(...)]` annotation listing today's exact strings:
 
 ```csharp
-[JsonConverter(typeof(JsonStringEnumConverter<ScryfallFreshnessPolicy>))]
-internal enum ScryfallFreshnessPolicy
-{
-    [JsonStringEnumMemberName("default")] Default,
-    [JsonStringEnumMemberName("cache-only")] CacheOnly,
-    [JsonStringEnumMemberName("refresh")] Refresh,
-}
+[Description("Cache policy: default, cache-only, or refresh."),
+ AllowedValues("default", "cache-only", "refresh")] string freshnessPolicy = "default",
 ```
+
+The phase 1 spike showed that SDK 2.2.0 publishes both this annotation and a
+`JsonStringEnumConverter` enum type as a JSON Schema `enum`
+(`tests/MtgMcp.App.Tests/ToolSchemaSdkTests.cs`). The annotation was chosen
+because it changes no C# type, no wire value, and no adapter API: the
+Archidekt request records used as tool inputs keep their string properties,
+and the services keep validating values at run time. The `JsonStringEnumConverter`
+design remains a valid alternative for new parameters that own an enum type.
+A list used by more than one parameter is declared once, as a small sealed
+subclass of `AllowedValuesAttribute` (`FreshnessPolicyValues`,
+`InterchangeFormatValues`, and `TagKindValues` in App;
+`FolderVisibilityValues` in Archidekt). `ToolAllowedValuesTests` and
+`ArchidektAllowedValuesTests` check that every published value is accepted at
+run time.
 
 Expected schema:
 
@@ -664,15 +673,16 @@ Expected schema:
 }
 ```
 
-Phase 1 step 1 confirms SDK 2.2.0 produces this. If it does not, the
-fallback is the `TransformSchemaNode` hook already used in
-`StatisticsToolsetManifest`, applied by a shared App helper.
-
-Known choice parameters today include `freshnessPolicy`, `unique`, `order`,
-and `direction` in `ScryfallReadTools.cs`, plus choice strings in
-`DeckCategorization.cs`, `DeckCategoryRuleResolver.cs`, and
-`DeckIdentityReconciliation.cs`. The SCHEMA-001 test finds any that are
-missed. Frozen Playgroup tools get enums only where they already have choice
+Phase 1 annotated 28 choice fields: `freshnessPolicy` (12 tools),
+`unique`, `order`, `direction`, `tagType` (2), the snapshot `operation`
+filter, `metadataPolicy`, the interchange `formatId` (3), the on-curve land
+`rule`, and the Archidekt deck `format` and `visibility`, folder
+`visibility` (create and update), and folder-move `kind`. The SCHEMA-001
+test (`ToolSchemaSurfaceTests`) walks every tool schema and fails on any
+string field whose description lists values without publishing `enum`; it
+found two fields a text search had missed. The Archidekt `format` list is
+lower case while the adapter accepts any case; the server does not enforce
+the schema, so mixed-case input keeps working. Frozen Playgroup tools get enums only where they already have choice
 strings; their names and inputs do not otherwise change.
 
 ## Statistics Descriptions
@@ -685,7 +695,7 @@ Each `stats_*` description keeps its first sentence and adds:
 Example for `stats_hypergeometric`:
 
 > Calculates an exact draw probability from explicit population and event
-> inputs. Fields: `population` (raw size or saved deck selection),
+> inputs. Fields of `request`: `population` (raw size or saved deck selection),
 > `successGroup`, `drawCount`, `event`. Example:
 > `{"population":{"kind":"raw","size":99},"successGroup":10,"drawCount":7,"event":{"kind":"at-least","count":1}}`
 
@@ -1247,30 +1257,31 @@ the separate `PrimaryCategoryName` comparison. Push payloads keep the local
 order, so nothing sent to Archidekt changes when a real update happens.
 
 **Provider IDs after push (ARCH-002).** After a verified push,
-`ArchidektCoordinator` writes a new baseline from
-`ArchidektLocalMapper.CreateBaseline(local, verified)`
-(`ArchidektCoordinator.cs:523`, `ArchidektLocalMapper.cs:127-142`). Its entry
-and category ID maps are keyed by `StableGuid` of each provider ID, which
-matches rows that came from a pull. Entries and categories created locally
-keep their own local IDs, so the map has no link from them to the new
-provider rows. In real use the next preview planned an add and a remove for
-two pushed cards, and showed a pushed category as local-removed plus
-local-added (`providerCategoryId` empty). The only workaround was to delete
-the local deck and pull again, because pulling onto the deck refused with
-`pull-conflict`.
+`ArchidektCoordinator` writes a new baseline with
+`ArchidektLocalMapper.CreatePushBaseline(local, verified, target)`. Before the
+fix, the baseline's entry and category ID maps were keyed only by
+`StableGuid` of each provider ID, which matches rows that came from a pull.
+Entries and categories created locally kept their own local IDs, so the map
+had no link from them to the new provider rows. In real use the next preview
+planned an add and a remove for two pushed cards, and showed a pushed
+category as local-removed plus local-added (`providerCategoryId` empty). The
+only workaround was to delete the local deck and pull again, because pulling
+onto the deck refused with `pull-conflict`.
 
-Fix: push apply links each planned create to the row Archidekt returned for
-it. It uses the IDs in the create responses where the adapter has them, and
-otherwise matches the verified snapshot rows to the planned creates by the
-same exact keys the planner used. The links go into the baseline maps, keyed
-by local entry and category ID, in the same `ApplyChangesAsync` transaction
-that stores the new baseline. If any planned create cannot be linked
-exactly, the result reports it as `unlinked`, and the baseline keeps the
-local row unbound rather than guessing. An unbound row that Archidekt
-already holds would otherwise be created again by the next push. So while
-the baseline records any `unlinked` rows, push preview returns `conflict`
-with reason `unlinked-remote-rows`, naming the rows and telling the agent to
-pull before pushing again.
+Fix: push apply links each pushed target row to the verified provider row
+with the same relation ID, or else the only row with identical content
+(`ArchidektSyncPlanner.LinkRows`, which uses the same matching as push
+verification). The links go into the baseline maps, keyed by local entry and
+category ID, in the same `ApplyChangesAsync` transaction that stores the new
+baseline. `CreatePushBaseline` returns the baseline JSON and the local entry
+IDs it could not link; it is serialized once. A category with no verified
+match stores no link, and the next push plans categories by name. An entry it
+could not link is reported as `unlinkedLocalIds` on the apply result (omitted
+when empty) and is never guessed. Nothing blocks the next push: an unlinked
+row is already on Archidekt, but the plan for the next push removes every
+provider row the target does not keep and adds the unlinked local entry, so
+the row is removed and added once, not duplicated. Baselines from before this
+change carry no link map, so they fail baseline parsing as before.
 
 ## Error Paths
 
@@ -1281,7 +1292,7 @@ message that says what to change. Examples:
 - overlapping groups: `overlapping-groups`, naming the entries;
 - work limit exceeded: `simulation-too-large`, stating the limit and the
   computed size;
-- stale deck: `conflict`, with the current revision in the data (ERR-001);
+- stale deck: `conflict`, with the current revision in `current` (ERR-001);
 - list source whose owning toolset is off: `invalid-input` with reason
   `toolset-not-selected` or `credentials-missing`;
 - Archidekt deck or local deck changed between comparison pages: `conflict`,
@@ -1363,8 +1374,8 @@ Every failure above sets `isError: true` (ERR-002).
   no entry operation; a changed primary category still does; pull, then a
   no-op edit, then push preview plans zero entry operations; pull, add an
   entry and a category, push, add an unrelated entry, then push preview
-  plans only that entry's add and no category change; unlinked rows block
-  the next preview (ARCH-002).
+  plans only that entry's add and no category change; an unlinked row is
+  removed and added again by the next push, not duplicated (ARCH-002).
 - Protocol tests: `isError` on one failing call per tool; instructions length
   and tool names per selection; untrusted-text notes on the listed tools;
   size limit cases; `_meta` on destructive remote writes; prompt list and

@@ -87,6 +87,7 @@ public sealed class DeckOnCurveEstimateCoordinatorTests
 
         OperationConflict conflict = Assert.IsType<OperationConflict>(result.Value);
         Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
         Assert.Equal(0, handler.RequestCount);
     }
 

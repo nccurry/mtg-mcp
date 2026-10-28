@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -149,7 +150,10 @@ internal sealed class DeckCategorizationCoordinator
 
         if (expectedRevision is long revision && (revision <= 0 || revision != deck.Data.Revision))
         {
-            return new OperationConflict("deck-revision-conflict", "The local deck revision changed before categorization.");
+            return new OperationConflict(
+                "deck-revision-conflict",
+                "The local deck revision changed before categorization.",
+                new ConflictState(Revision: deck.Data.Revision));
         }
 
         OperationResult<ResolvedDeckCategoryRules> resolution = await ruleResolver.ResolveAsync(
@@ -306,7 +310,8 @@ internal sealed class DeckCategorizationReadTools
     internal Task<OperationResult<DeckCategoryRulesPreview>> ValidateAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy = "default",
+        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {
         return coordinator.ValidateAsync(deckId, source, freshnessPolicy, cancellationToken);
@@ -319,7 +324,8 @@ internal sealed class DeckCategorizationReadTools
         [Description("Stable local deck UUID.")] Guid deckId,
          [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
          [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy = "default",
+        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {
         return coordinator.PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken);
@@ -350,7 +356,8 @@ internal sealed class DeckCategorizationWriteTools
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description("Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
         [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy,
+        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        string freshnessPolicy,
         [Description("Fingerprint returned by deck_category_rules_preview.")] string previewFingerprint,
         [Description("Opaque token returned by deck_category_rules_preview.")] string applyToken,
         CancellationToken cancellationToken = default)

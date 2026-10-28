@@ -392,8 +392,73 @@ public static class ArchidektSyncPlanner
         Dictionary<int, int> targetOrderCounts = target.Entries
             .GroupBy(value => value.SortOrder)
             .ToDictionary(group => group.Key, group => group.Count());
-        HashSet<string> matchedRelations = new(StringComparer.Ordinal);
+        IReadOnlyList<RemoteDeckEntry?> matches = MatchEntries(current, target);
         List<RemoteDeckEntry> reconciledEntries = [];
+        for (int index = 0; index < target.Entries.Count; index++)
+        {
+            RemoteDeckEntry targetEntry = target.Entries[index];
+            RemoteDeckEntry? matched = matches[index];
+            if (matched is null)
+            {
+                reconciledEntries.Add(targetEntry);
+                continue;
+            }
+
+            int sortOrder = targetOrderCounts[targetEntry.SortOrder] > 1
+                ? matched.SortOrder
+                : targetEntry.SortOrder;
+            reconciledEntries.Add(targetEntry with
+            {
+                ProviderRelationId = matched.ProviderRelationId,
+                ProviderCardId = matched.ProviderCardId,
+                CategoryNames = matched.CategoryNames,
+                SortOrder = sortOrder,
+            });
+        }
+
+        return PlanRemoteApply(current, target with { Entries = reconciledEntries });
+    }
+
+    /// <summary>
+    /// Links each pushed target row to the verified provider row with the same relation ID,
+    /// or else the only row with identical content.
+    /// </summary>
+    internal static ArchidektRowLinks LinkRows(RemoteDeckSnapshot verified, RemoteDeckSnapshot target)
+    {
+        ArgumentNullException.ThrowIfNull(verified);
+        ArgumentNullException.ThrowIfNull(target);
+        IReadOnlyList<RemoteDeckEntry?> matches = MatchEntries(verified, target);
+        List<string?> entryRelationIds = [];
+        foreach (RemoteDeckEntry? matched in matches)
+        {
+            entryRelationIds.Add(matched?.ProviderRelationId);
+        }
+
+        Dictionary<string, string> verifiedCategories = new(StringComparer.OrdinalIgnoreCase);
+        foreach (RemoteDeckCategory category in verified.Categories)
+        {
+            if (!string.IsNullOrWhiteSpace(category.ProviderCategoryId))
+            {
+                verifiedCategories[category.Name] = category.ProviderCategoryId;
+            }
+        }
+
+        List<string?> categoryIds = [];
+        foreach (RemoteDeckCategory category in target.Categories)
+        {
+            categoryIds.Add(verifiedCategories.GetValueOrDefault(category.Name));
+        }
+
+        return new ArchidektRowLinks(entryRelationIds, categoryIds);
+    }
+
+    /// <summary>
+    /// Matches target rows to provider rows by relation ID, then by unique exact content in stable relation order.
+    /// </summary>
+    private static IReadOnlyList<RemoteDeckEntry?> MatchEntries(RemoteDeckSnapshot current, RemoteDeckSnapshot target)
+    {
+        HashSet<string> matchedRelations = new(StringComparer.Ordinal);
+        List<RemoteDeckEntry?> matches = [];
         foreach (RemoteDeckEntry targetEntry in target.Entries)
         {
             RemoteDeckEntry? matched = current.Entries.FirstOrDefault(value =>
@@ -414,26 +479,15 @@ public static class ArchidektSyncPlanner
                 matched = candidates.FirstOrDefault();
             }
 
-            if (matched is null)
+            if (matched is not null)
             {
-                reconciledEntries.Add(targetEntry);
-                continue;
+                matchedRelations.Add(matched.ProviderRelationId);
             }
 
-            matchedRelations.Add(matched.ProviderRelationId);
-            int sortOrder = targetOrderCounts[targetEntry.SortOrder] > 1
-                ? matched.SortOrder
-                : targetEntry.SortOrder;
-            reconciledEntries.Add(targetEntry with
-            {
-                ProviderRelationId = matched.ProviderRelationId,
-                ProviderCardId = matched.ProviderCardId,
-                CategoryNames = matched.CategoryNames,
-                SortOrder = sortOrder,
-            });
+            matches.Add(matched);
         }
 
-        return PlanRemoteApply(current, target with { Entries = reconciledEntries });
+        return matches;
     }
 
     /// <summary>
@@ -537,10 +591,17 @@ public static class ArchidektSyncPlanner
             string.Equals(left.Language, right.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.Finish, right.Finish, StringComparison.Ordinal) &&
             string.Equals(left.Zone, right.Zone, StringComparison.Ordinal) &&
-            left.CategoryNames.SequenceEqual(right.CategoryNames, StringComparer.OrdinalIgnoreCase) &&
+            CategoryMembershipEqual(left.CategoryNames, right.CategoryNames) &&
             string.Equals(left.PrimaryCategoryName, right.PrimaryCategoryName, StringComparison.OrdinalIgnoreCase);
     }
 }
+
+/// <summary>
+/// Carries the provider IDs matched to pushed target rows, in target order; null means no exact match.
+/// </summary>
+internal sealed record ArchidektRowLinks(
+    IReadOnlyList<string?> EntryRelationIds,
+    IReadOnlyList<string?> CategoryIds);
 
 /// <summary>
 /// Carries one deterministic internal plan plus its model-facing descriptors and request bound.

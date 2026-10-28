@@ -83,7 +83,9 @@ public sealed class SpellbookToolTests
             1,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal("deck-revision-conflict", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
+        OperationConflict staleConflict = Assert.IsType<OperationConflict>(stale.Value);
+        Assert.Equal("deck-revision-conflict", staleConflict.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: sideboardOnly.Revision), staleConflict.Current);
         Assert.Equal(
             "invalid-spellbook-deck-selection",
             Assert.IsType<OperationInvalidInput>(empty.Value).ReasonCode);

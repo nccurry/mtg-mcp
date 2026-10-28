@@ -67,7 +67,8 @@ internal sealed class DeckOnCurveEstimateCoordinator
         {
             return new OperationConflict(
                 "deck-revision-conflict",
-                "The local deck revision changed; load it again before running an on-curve estimate.");
+                "The local deck revision changed; load it again before running an on-curve estimate.",
+                new ConflictState(Revision: deck.Revision));
         }
 
         OperationResult<DeckOnCurveDeckSelection> selectionResult = SelectMainboard(deck, request.TargetEntryId);

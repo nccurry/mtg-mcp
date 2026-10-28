@@ -3,3 +3,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("MtgMcp.Scryfall.Tests")]
 [assembly: InternalsVisibleTo("MtgMcp.E2E.Tests")]
 [assembly: InternalsVisibleTo("MtgMcp.App")]
+[assembly: InternalsVisibleTo("MtgMcp.App.Tests")]

@@ -2266,8 +2266,8 @@ public sealed class LiveMethodAcceptanceTests
             toolName,
             arguments,
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
+        Assert.Equal(!string.Equals(content.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
         return content;
     }
 

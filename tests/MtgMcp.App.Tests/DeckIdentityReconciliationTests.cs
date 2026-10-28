@@ -206,6 +206,34 @@ public sealed class DeckIdentityReconciliationTests
             true,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("deck-revision-conflict", stale.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: applied.Revision), stale.Current);
+    }
+
+    /// <summary>
+    /// Verifies a preview for a stale revision reports the current revision and makes no provider call.
+    /// </summary>
+    [Fact]
+    public async Task Preview_StaleRevision_ReturnsConflictWithCurrentRevision()
+    {
+        using TemporaryDirectory temporary = new();
+        IdentityProviderHandler handler = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        using ScryfallService scryfall = CreateScryfall(temporary.Path, handler);
+        DeckIdentityReconciliationCoordinator coordinator = new(store, scryfall);
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Stale Fixture", Entries: [new DeckEntryDraft(1, "canonical card")]),
+            TestContext.Current.CancellationToken));
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>((await coordinator.PreviewAsync(
+            deck.DeckId,
+            deck.Revision + 1,
+            null,
+            "default",
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
+        Assert.Empty(handler.RequestBodies);
     }
 
     /// <summary>
