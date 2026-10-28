@@ -1061,11 +1061,11 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies destructive Archidekt remote writes ask the client to confirm with the user, and no other tool does.
+    /// Verifies destructive remote writes ask the client to confirm with the user, and no other tool does.
     /// </summary>
     [Fact]
     [Trait("Category", "E2E")]
-    public async Task ArchidektRemoteDestructiveTools_CarryTheConfirmationHint()
+    public async Task DestructiveRemoteTools_CarryTheConfirmationHint()
     {
         await using McpProcessSession session = await McpProcessSession.StartAsync(
             "remote",
@@ -1082,6 +1082,7 @@ public sealed class FoundationMcpTests
             "archidekt_push_apply",
             "archidekt_snapshot_delete",
             "archidekt_snapshot_restore_apply",
+            "playgroup_game_events_batch_create",
         ];
 
         string[] hinted = tools
@@ -1091,6 +1092,100 @@ public sealed class FoundationMcpTests
             .ToArray();
 
         Assert.Equal(expected, hinted);
+    }
+
+    /// <summary>
+    /// Verifies a tool hidden by the operation mode is an unknown tool: a call to it with an extra argument fails with
+    /// the protocol error and does not describe the hidden tool.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task HiddenTool_WithAnExtraArgument_IsAnUnknownTool()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "read-only",
+            "all",
+            McpCredentials.Both,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        McpProtocolException exception = await Assert.ThrowsAsync<McpProtocolException>(
+            async () => await session.Client.CallToolAsync(
+                "local_deck_apply_changes",
+                new Dictionary<string, object?> { ["extra"] = 1 },
+                cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false))
+            .ConfigureAwait(false);
+
+        Assert.DoesNotContain("Accepted arguments", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies every object schema that lists properties, including union subtypes and nested inputs, rejects
+    /// unknown properties, and that each union subtype still lists its <c>kind</c> property.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task InputSchemas_CloseNestedObjectsAndKeepUnionKinds()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "remote",
+            "all",
+            McpCredentials.Both,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+        List<string> open = [];
+
+        foreach (McpClientTool tool in tools)
+        {
+            FindOpenObjects(tool.Name, tool.ProtocolTool.InputSchema, open);
+        }
+
+        McpClientTool batch = Assert.Single(tools, tool => tool.Name == "local_deck_apply_changes");
+        JsonElement items = batch.ProtocolTool.InputSchema.GetProperty("properties").GetProperty("changes")
+            .GetProperty("items");
+        JsonElement variants = items.TryGetProperty("anyOf", out JsonElement anyOf)
+            ? anyOf
+            : items.GetProperty("oneOf");
+        Assert.True(open.Count == 0, string.Join(", ", open));
+        Assert.All(variants.EnumerateArray(), variant =>
+        {
+            Assert.True(variant.GetProperty("properties").TryGetProperty("kind", out _));
+            Assert.Equal(JsonValueKind.False, variant.GetProperty("additionalProperties").ValueKind);
+        });
+    }
+
+    /// <summary>
+    /// Records every object schema node that lists properties but does not close them.
+    /// </summary>
+    private static void FindOpenObjects(string path, JsonElement node, List<string> open)
+    {
+        if (node.ValueKind == JsonValueKind.Array)
+        {
+            int index = 0;
+            foreach (JsonElement item in node.EnumerateArray())
+            {
+                FindOpenObjects($"{path}[{index++}]", item, open);
+            }
+
+            return;
+        }
+
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (node.TryGetProperty("properties", out JsonElement properties) &&
+            properties.ValueKind == JsonValueKind.Object &&
+            !node.TryGetProperty("additionalProperties", out _))
+        {
+            open.Add(path);
+        }
+
+        foreach (JsonProperty child in node.EnumerateObject())
+        {
+            FindOpenObjects($"{path}.{child.Name}", child.Value, open);
+        }
     }
 
     /// <summary>

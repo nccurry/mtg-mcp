@@ -35,7 +35,7 @@ internal sealed class SpellbookReadTools
     /// </summary>
     [McpServerTool(Name = "spellbook_variant_search", Title = "Search Commander Spellbook Variants", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Commander Spellbook: returns a bounded Commander Spellbook variant page for an exact source query. It does " +
+        "Commander Spellbook: returns one bounded variant page for an exact source query. It does " +
         "not rank results or recommend cards." +
         UntrustedTextNotes.Spellbook)]
     internal Task<OperationResult<SpellbookEvidence>> SearchVariantsAsync(
@@ -57,7 +57,7 @@ internal sealed class SpellbookReadTools
     /// </summary>
     [McpServerTool(Name = "spellbook_variant_get", Title = "Get Commander Spellbook Variant", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Commander Spellbook: returns the exact Commander Spellbook JSON object for one variant ID without " +
+        "Commander Spellbook: returns the exact JSON object for one variant ID without " +
         "interpreting it." +
         UntrustedTextNotes.Spellbook)]
     internal Task<OperationResult<SpellbookEvidence>> GetVariantAsync(

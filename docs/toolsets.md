@@ -70,7 +70,10 @@ them.
 Every tool belongs to one toolset. Tool names say where the data comes from:
 `local_deck_*` is the local deck store, `scryfall_*` is Scryfall card data,
 `stats_*` is exact math, and `archidekt_*`, `playgroup_*`, and `spellbook_*` name
-their provider.
+their provider. Each description starts with the data the tool works on:
+`Local deck store:`, `Scryfall:`, `Installed Scryfall card data:`,
+`Saved Scryfall requests:`, `Archidekt:`, `Playgroup:`, `Commander Spellbook:`,
+or `Exact math:`. The prefix names the input data, not the toolset.
 
 | Toolset | Read-only | Local write | Remote write |
 | --- | ---: | ---: | ---: |

@@ -17,6 +17,12 @@ internal sealed class FoundationResources
     internal const string CapabilityUri = "mtg://server/capabilities";
 
     /// <summary>
+    /// Every toolset is on by default; the field stays in the resource for clients that read it. A toolset that is off
+    /// because of missing credentials reports that in <c>disabledReason</c>.
+    /// </summary>
+    private const bool DefaultEnabled = true;
+
+    /// <summary>
     /// Serializes the deterministic capability contract using web JSON conventions.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -63,8 +69,8 @@ internal sealed class FoundationResources
                 authenticationStatusTool,
                 CapabilityToolsetPolicy.Format(descriptor.Stability),
                 enabled,
-                descriptor.DefaultEnabled,
-                configuration.Toolsets.FindGateReason(descriptor.Toolset),
+                DefaultEnabled,
+                configuration.Toolsets.FindDisabledReason(descriptor.Toolset),
                 enabled ? descriptor.GetVisibleToolCount(configuration.Mode) : 0,
                 descriptor.Description,
                 descriptor.Toolset == CapabilityToolset.Playgroup
@@ -111,9 +117,7 @@ internal sealed class FoundationResources
                 CapabilityToolset.Spellbook =>
                 ("not-required", null),
             CapabilityToolset.Archidekt => (
-                FoundationConfigurationLoader.HasArchidektCredentials(configuration.Archidekt)
-                    ? "configured-unverified"
-                    : "not-configured",
+                configuration.Credentials.Archidekt ? "configured-unverified" : "not-configured",
                 "archidekt_auth_status"),
             CapabilityToolset.Playgroup => (
                 GetPlaygroupCredentialState(configuration),
@@ -127,13 +131,13 @@ internal sealed class FoundationResources
     /// </summary>
     private static string GetPlaygroupCredentialState(FoundationConfiguration configuration)
     {
-        string? gateReason = configuration.Toolsets.FindGateReason(CapabilityToolset.Playgroup);
-        if (gateReason == CapabilityToolsetGate.CredentialsInvalid)
+        string? gateReason = configuration.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup);
+        if (gateReason == DisabledToolset.CredentialsInvalid)
         {
             return "configuration-invalid";
         }
 
-        return FoundationConfigurationLoader.HasPlaygroupCredentials(configuration.Playgroup)
+        return configuration.Credentials.Playgroup
             ? "configured-unverified"
             : "not-configured";
     }

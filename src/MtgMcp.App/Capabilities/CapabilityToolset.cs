@@ -105,15 +105,6 @@ internal static class CapabilityToolsetPolicy
     }
 
     /// <summary>
-    /// Reports whether a stable toolset enters the ordinary profile when its credentials are present.
-    /// Every implemented toolset does; provider toolsets are then turned off when credentials are missing.
-    /// </summary>
-    internal static bool IsDefaultEnabled(CapabilityToolset toolset)
-    {
-        return Enum.IsDefined(toolset);
-    }
-
-    /// <summary>
     /// Formats the public selection state without echoing caller input.
     /// </summary>
     internal static string Format(CapabilityToolsetSelectionKind kind)

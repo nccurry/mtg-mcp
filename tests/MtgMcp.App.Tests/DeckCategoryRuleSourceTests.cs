@@ -105,10 +105,102 @@ public sealed class DeckCategoryRuleSourceTests
             ],
             rolePreview.ExpandedRules.Rules.Select(rule => rule.AllOf.Single().TagId!.Value));
         Assert.All(rolePreview.ExpandedRules.Rules, rule => Assert.True(rule.AllOf.Single().IncludeDescendants));
+        // The reviewed result of the removed common-v1 preset at c4ed454 for this fixture: the test there proved the
+        // preset gave the same expanded rules and decisions as these inline rules.
         Assert.Equal(
-            "matched",
-            Assert.Single(rolePreview.Decisions, value => value.CategoryId == rampCategory).Status);
+            new[]
+            {
+                (entryId, rampCategory, "matched", DeckCategorizationSourceFixture.RampChildTagId.ToString()),
+                (entryId, drawCategory, "unmatched", string.Empty),
+                (entryId, removalCategory, "unmatched", string.Empty),
+                (entryId, recursionCategory, "unmatched", string.Empty),
+                        }.OrderBy(value => value.Item2),
+            rolePreview.Decisions.Select(decision => (
+                decision.EntryId,
+                decision.CategoryId,
+                decision.Status,
+                string.Join(',', decision.MatchedTagIds))).OrderBy(value => value.CategoryId));
+        Assert.Equal(
+            new[]
+            {
+                (rampCategory, DeckCategorizationSourceFixture.RampTagId, true),
+                (drawCategory, DeckCategorizationSourceFixture.DrawTagId, true),
+                (removalCategory, DeckCategorizationSourceFixture.RemovalTagId, true),
+                (recursionCategory, DeckCategorizationSourceFixture.RecursionTagId, true),
+                        }.OrderBy(value => value.Item1),
+            rolePreview.ExpandedRules.Rules.Select(rule => (
+                rule.CategoryId,
+                rule.AllOf.Single().TagId!.Value,
+                rule.AllOf.Single().IncludeDescendants)).OrderBy(value => value.CategoryId));
+        Assert.True(rolePreview.IsComplete);
         Assert.Equal(requestsAfterInstall, handler.RequestCount);
+    }
+
+    /// <summary>
+    /// Verifies a preview made without a revision gives a token that applies, writes the assignments, and then
+    /// conflicts once the deck has changed.
+    /// </summary>
+    [Fact]
+    public async Task Apply_TokenFromPreviewWithoutRevision_AppliesOnceThenConflictsAfterAnEdit()
+    {
+        using TemporaryDirectory temporary = new();
+        DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
+            DeckCategorizationSourceFixture.CreateHandler();
+        using ScryfallService scryfall = DeckCategorizationSourceFixture.CreateService(temporary.Path, handler);
+        ScryfallCorpusSyncResult sync = await InstallAsync(scryfall);
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckCategorizationCoordinator coordinator = new(store, scryfall);
+        Guid entryId = Guid.CreateVersion7();
+        Guid categoryId = Guid.CreateVersion7();
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest(
+                "Fixture",
+                Entries: [new DeckEntryDraft(
+                    1,
+                    "Fixture Ramp Card",
+                    OracleId: DeckCategorizationSourceFixture.OracleId,
+                    EntryId: entryId)],
+                Categories: [new DeckCategoryDraft("Ramp", CategoryId: categoryId)]),
+            TestContext.Current.CancellationToken));
+        InlineCategoryRuleSource source = new(new CategoryRuleSet(
+            "add-only",
+            [new CategoryRule(categoryId, [SourceSelector(DeckCategorizationSourceFixture.RampTagId)], [], [])]));
+        DeckCategoryRulesPreview preview = RequireSuccess(await coordinator.PreviewAsync(
+            deck.DeckId,
+            null,
+            source,
+            "cache-only",
+            TestContext.Current.CancellationToken));
+
+        DeckDocument applied = RequireSuccess(await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            sync.GenerationId,
+            source,
+            "cache-only",
+            preview.PreviewFingerprint,
+            preview.ApplyToken,
+            TestContext.Current.CancellationToken));
+        DeckDocument edited = RequireSuccess(await store.ApplyChangesAsync(
+            deck.DeckId,
+            applied.Revision,
+            [new UpdateDeckMetadataChange("Edited", null, "custom")],
+            TestContext.Current.CancellationToken));
+        OperationResult<DeckDocument> stale = await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            sync.GenerationId,
+            source,
+            "cache-only",
+            preview.PreviewFingerprint,
+            preview.ApplyToken,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new DeckCategoryAssignment(entryId, categoryId, false),
+            Assert.Single(applied.CategoryAssignments));
+        Assert.Equal(applied.Revision + 1, edited.Revision);
+        Assert.Equal("deck-revision-conflict", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
     }
 
     /// <summary>

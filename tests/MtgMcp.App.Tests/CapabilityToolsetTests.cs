@@ -23,9 +23,6 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(
             ["decks", "scryfall", "stats", "archidekt", "playgroup", "spellbook"],
             toolsets.Select(CapabilityToolsetPolicy.Format));
-        Assert.Equal(
-            [true, true, true, true, true, true],
-            toolsets.Select(CapabilityToolsetPolicy.IsDefaultEnabled));
         Assert.Equal("stable", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Stable));
         Assert.Equal("experimental", CapabilityToolsetPolicy.Format(CapabilityToolsetStability.Experimental));
         Assert.Equal("default", CapabilityToolsetPolicy.Format(CapabilityToolsetSelectionKind.Default));
@@ -42,7 +39,6 @@ public sealed class CapabilityToolsetTests
     {
         CapabilityToolset undefinedToolset = (CapabilityToolset)999;
 
-        Assert.False(CapabilityToolsetPolicy.IsDefaultEnabled(undefinedToolset));
         Assert.Throws<ArgumentOutOfRangeException>(() => CapabilityToolsetPolicy.Format(undefinedToolset));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => CapabilityToolsetPolicy.Format((CapabilityToolsetSelectionKind)999));
@@ -69,7 +65,6 @@ public sealed class CapabilityToolsetTests
         reads[0] = "changed";
 
         Assert.Equal("decks", descriptor.Name);
-        Assert.True(descriptor.DefaultEnabled);
         Assert.Equal("Test capability.", descriptor.Description);
         Assert.Equal(["a_read", "z_read"], descriptor.GetVisibleToolNames(OperationMode.ReadOnly));
         Assert.Equal(
@@ -324,22 +319,18 @@ public sealed class CapabilityToolsetTests
         Assert.Equal(13, scryfall.AllToolNames.Length);
         Assert.Equal(9, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Stats, stats.Toolset);
-        Assert.True(stats.DefaultEnabled);
         Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(8, stats.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Archidekt, archidekt.Toolset);
-        Assert.True(archidekt.DefaultEnabled);
         Assert.Equal(9, archidekt.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(10, archidekt.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(21, archidekt.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Playgroup, playgroup.Toolset);
-        Assert.True(playgroup.DefaultEnabled);
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(14, playgroup.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(16, playgroup.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Spellbook, spellbook.Toolset);
-        Assert.True(spellbook.DefaultEnabled);
         Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Local));
         Assert.Equal(3, spellbook.GetVisibleToolCount(OperationMode.Remote));
@@ -429,7 +420,8 @@ public sealed class CapabilityToolsetTests
                 LegacyDataState.NotDetected,
                 "Legacy data was not detected; automatic migration remains disabled."),
             archidekt,
-            playgroup);
+            playgroup,
+            ProviderCredentialPresence.From(archidekt, playgroup));
     }
 
     /// <summary>

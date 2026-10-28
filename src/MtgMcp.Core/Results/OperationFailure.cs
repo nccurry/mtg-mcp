@@ -1,16 +1,15 @@
-using MtgMcp.Core.Results;
-
-namespace MtgMcp.App.Hosting;
+namespace MtgMcp.Core.Results;
 
 /// <summary>
 /// Carries a failed operation result from one result type to another without unsafe casts.
 /// </summary>
-internal static class OperationResultForwarding
+public static class OperationFailure
 {
     /// <summary>
-    /// Returns the same failure as a result of the target type; a success has no failure to carry.
+    /// Returns the same failure as a result of the target type; a success has no failure to carry, so it becomes an
+    /// unavailable result that says the state was unexpected.
     /// </summary>
-    internal static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
+    public static OperationResult<TTarget> Forward<TSource, TTarget>(OperationResult<TSource> result)
     {
         ArgumentNullException.ThrowIfNull(result);
         return result switch

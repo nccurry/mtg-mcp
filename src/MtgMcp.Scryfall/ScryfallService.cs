@@ -308,7 +308,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             {
                 return new OperationInvalidInput(
                     "fuzzy-collection-lookup-unsupported",
-                    "Scryfall collection lookup does not support fuzzy names; use card get instead.");
+                    "Scryfall collection lookup does not support fuzzy names; send one fuzzy-name lookup on its own.");
             }
         }
 
@@ -1981,7 +1981,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Validates bounded output pagination.
     /// </summary>
-    private static OperationInvalidInput? ValidatePageSize(int pageSize, bool rawSource)
+    internal static OperationInvalidInput? ValidatePageSize(int pageSize, bool rawSource)
     {
         int maximum = rawSource ? 25 : 100;
         return pageSize is >= 1 && pageSize <= maximum

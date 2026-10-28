@@ -109,7 +109,8 @@ internal static class DeckOnCurveEstimatePreparer
             candidates);
         if (rulesResult is not OperationSuccess<IReadOnlyList<OnCurveLandRuleInput>> rules)
         {
-            return ForwardFailure<IReadOnlyList<OnCurveLandRuleInput>, DeckOnCurvePreparedEstimate>(rulesResult);
+            return OperationFailure.Forward<IReadOnlyList<OnCurveLandRuleInput>, DeckOnCurvePreparedEstimate>(
+                rulesResult);
         }
 
         List<Guid> candidateIds = [];
@@ -323,27 +324,6 @@ internal static class DeckOnCurveEstimatePreparer
         return new OperationInvalidInput("invalid-on-curve-request", message);
     }
 
-    /// <summary>
-    /// Preserves each recognized operation failure while changing only the success payload type.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-on-curve-result",
-                "The on-curve estimate returned an unexpected result."),
-            _ => new OperationUnavailable(
-                "unexpected-on-curve-result",
-                "The on-curve estimate returned an unexpected result."),
-        };
-    }
 }
 
 /// <summary>

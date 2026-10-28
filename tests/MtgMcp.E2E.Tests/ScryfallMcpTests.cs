@@ -83,8 +83,8 @@ public sealed class ScryfallMcpTests
             ["scryfall_cards_get"] = ["cursor", "fields", "freshnessPolicy", "lookups", "pageSize", "responseFormat"],
             ["scryfall_card_details"] =
                 [
-                    "freshnessPolicy", "include", "includeRaw", "oracleId", "pageSize", "printsCursor",
-                    "rulingsCursor", "scryfallCardId",
+                    "freshnessPolicy", "include", "includeRaw", "lookup", "pageSize", "printsCursor",
+                    "rulingsCursor",
                 ],
             ["scryfall_installed_cards_by_tag"] =
                 ["cursor", "fields", "includeDescendants", "minimumWeight", "pageSize", "responseFormat", "tagIdentity", "tagType"],
@@ -261,7 +261,7 @@ public sealed class ScryfallMcpTests
             "scryfall_card_details",
             new Dictionary<string, object?>
             {
-                ["oracleId"] = ScryfallTestFixture.WhiteOracleId,
+                ["lookup"] = new { kind = "oracle-id", value = ScryfallTestFixture.WhiteOracleId },
                 ["include"] = RulingsOnly,
                 ["freshnessPolicy"] = "cache-only",
             }).ConfigureAwait(false);

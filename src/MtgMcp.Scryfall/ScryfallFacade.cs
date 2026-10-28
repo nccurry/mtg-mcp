@@ -240,6 +240,31 @@ public sealed class ScryfallService : IDisposable
     }
 
     /// <summary>
+    /// Resolves one card lookup of any supported kind, including names, to its printing ID and Oracle ID.
+    /// </summary>
+    public async Task<OperationResult<ScryfallCardIdentity>> ResolveCardIdentityAsync(
+        ScryfallCardLookup lookup,
+        string freshnessPolicy = "default",
+        CancellationToken cancellationToken = default)
+    {
+        OperationResult<ScryfallCardResult> result = await cards.GetCardAsync(
+            lookup,
+            freshnessPolicy,
+            includeRaw: false,
+            cancellationToken).ConfigureAwait(false);
+        if (result is not OperationSuccess<ScryfallCardResult> success)
+        {
+            return OperationFailure.Forward<ScryfallCardResult, ScryfallCardIdentity>(result);
+        }
+
+        return success.Data.Card.OracleId is Guid oracleId
+            ? new OperationSuccess<ScryfallCardIdentity>(new ScryfallCardIdentity(success.Data.Card.Id, oracleId))
+            : new OperationUnavailable(
+                "scryfall-card-without-oracle-id",
+                "The resolved card has no Oracle ID, so its printings and rulings cannot be read.");
+    }
+
+    /// <summary>
     /// Resolves a card collection and writes each card as a concise, standard, or full card.
     /// </summary>
     public Task<OperationResult<ScryfallCollectionResponse>> GetCollectionAsync(

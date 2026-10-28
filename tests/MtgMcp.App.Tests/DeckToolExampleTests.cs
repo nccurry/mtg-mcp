@@ -151,7 +151,7 @@ public sealed class DeckToolExampleTests
     }
 
     /// <summary>
-    /// Verifies a source other than inline, such as the removed preset, is refused by the rule resolver too.
+    /// Verifies the rule resolver refuses a missing rule source.
     /// </summary>
     [Fact]
     public async Task RulesPreview_NullSource_ReturnsInvalidInput()

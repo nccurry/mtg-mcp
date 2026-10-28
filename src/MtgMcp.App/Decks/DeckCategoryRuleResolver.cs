@@ -51,16 +51,12 @@ internal sealed class DeckCategoryRuleResolver
                 "Freshness policy must be default, cache-only, or refresh.");
         }
 
-        OperationResult<CategoryRuleSet> expanded = Expand(source);
-        if (expanded is not OperationSuccess<CategoryRuleSet> expandedRules)
-        {
-            return ForwardFailure<CategoryRuleSet, ResolvedDeckCategoryRules>(expanded);
-        }
-
-        OperationResult<CategoryRuleSet> grammar = CategoryRuleSetValidator.Validate(expandedRules.Data);
+        // Inline rules are the only source kind, so the binder has already refused any other kind.
+        OperationResult<CategoryRuleSet> grammar = CategoryRuleSetValidator.Validate(
+            ((InlineCategoryRuleSource)source).RuleSet);
         if (grammar is not OperationSuccess<CategoryRuleSet> validRules)
         {
-            return ForwardFailure<CategoryRuleSet, ResolvedDeckCategoryRules>(grammar);
+            return OperationFailure.Forward<CategoryRuleSet, ResolvedDeckCategoryRules>(grammar);
         }
 
         OperationInvalidInput? categoryFailure = ValidateCategoryOwnership(validRules.Data, deck);
@@ -86,7 +82,7 @@ internal sealed class DeckCategoryRuleResolver
             cancellationToken).ConfigureAwait(false);
         if (sourceTags is not OperationSuccess<ScryfallTagResolution> resolvedTags)
         {
-            return ForwardFailure<ScryfallTagResolution, ResolvedDeckCategoryRules>(sourceTags);
+            return OperationFailure.Forward<ScryfallTagResolution, ResolvedDeckCategoryRules>(sourceTags);
         }
 
         if (resolvedTags.Data.TagIds.Count != selectors.Count)
@@ -99,18 +95,6 @@ internal sealed class DeckCategoryRuleResolver
         return new OperationSuccess<ResolvedDeckCategoryRules>(new ResolvedDeckCategoryRules(
             BindTagIds(validRules.Data, resolvedTags.Data.TagIds),
             resolvedTags.Data.GenerationId));
-    }
-
-    /// <summary>
-    /// Reads the caller-supplied inline rule set; inline rules are the only supported source.
-    /// </summary>
-    private static OperationResult<CategoryRuleSet> Expand(CategoryRuleSource source)
-    {
-        return source is InlineCategoryRuleSource inline
-            ? new OperationSuccess<CategoryRuleSet>(inline.RuleSet)
-            : new OperationInvalidInput(
-                "invalid-category-rule-source",
-                "Only inline category rules are supported.");
     }
 
     /// <summary>
@@ -179,21 +163,4 @@ internal sealed class DeckCategoryRuleResolver
         return bound;
     }
 
-    /// <summary>
-    /// Maps a non-success result to a category-rule resolution result.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable("unexpected-result", "The operation returned an unexpected result."),
-            _ => new OperationUnavailable("unexpected-result", "The operation returned an unexpected result."),
-        };
-    }
 }

@@ -78,7 +78,7 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one provider deck.</summary>
     [McpServerTool(Name = "playgroup_deck_get", Title = "Get Playgroup Deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Playgroup: gets one Playgroup deck by provider identifier with an explicit archived-deck option." +
+    [Description("Playgroup: gets one deck by provider identifier with an explicit archived-deck option." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckAsync(
         [Description("Exact Playgroup deck identifier.")] int deckId,
@@ -170,7 +170,8 @@ internal sealed class PlaygroupReadTools
     /// <summary>Lists one bounded page of playgroup games.</summary>
     [McpServerTool(Name = "playgroup_playgroup_games_list", Title = "List Playgroup Games", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Playgroup: lists one provider-bounded game page; page, limit, and event inclusion remain caller-controlled." +
+        "Playgroup: lists one page of games for a playgroup. You choose the page, the page size, and whether " +
+        "events are included." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> ListPlaygroupGamesAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,

@@ -28,12 +28,12 @@ public sealed class ToolsetCredentialGateTests
             [CapabilityToolset.Decks, CapabilityToolset.Scryfall, CapabilityToolset.Stats, CapabilityToolset.Spellbook],
             configuration.Toolsets.EnabledToolsets);
         Assert.Equal(
-            CapabilityToolsetGate.CredentialsMissing,
-            configuration.Toolsets.FindGateReason(CapabilityToolset.Archidekt));
+            DisabledToolset.CredentialsMissing,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt));
         Assert.Equal(
-            CapabilityToolsetGate.CredentialsMissing,
-            configuration.Toolsets.FindGateReason(CapabilityToolset.Playgroup));
-        Assert.Null(configuration.Toolsets.FindGateReason(CapabilityToolset.Decks));
+            DisabledToolset.CredentialsMissing,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup));
+        Assert.Null(configuration.Toolsets.FindDisabledReason(CapabilityToolset.Decks));
         Assert.Equal(30, Count(configuration, OperationMode.ReadOnly));
         Assert.Equal(43, Count(configuration, OperationMode.Local));
         Assert.Equal(43, Count(configuration, OperationMode.Remote));
@@ -61,10 +61,10 @@ public sealed class ToolsetCredentialGateTests
         Assert.Equal((39, 53, 64), Counts(archidektOnly));
         Assert.Equal((53, 67, 80), Counts(everything));
         Assert.Equal((53, 67, 80), Counts(all));
-        Assert.Empty(everything.Toolsets.Gates);
+        Assert.Empty(everything.Toolsets.DisabledToolsets);
         Assert.Equal(
-            CapabilityToolsetGate.CredentialsMissing,
-            archidektOnly.Toolsets.FindGateReason(CapabilityToolset.Playgroup));
+            DisabledToolset.CredentialsMissing,
+            archidektOnly.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup));
     }
 
     /// <summary>
@@ -81,8 +81,8 @@ public sealed class ToolsetCredentialGateTests
 
         Assert.False(configuration.Toolsets.Includes(CapabilityToolset.Archidekt));
         Assert.Equal(
-            CapabilityToolsetGate.CredentialsMissing,
-            configuration.Toolsets.FindGateReason(CapabilityToolset.Archidekt));
+            DisabledToolset.CredentialsMissing,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt));
     }
 
     /// <summary>
@@ -164,8 +164,8 @@ public sealed class ToolsetCredentialGateTests
         Assert.Equal(CapabilityToolsetSelectionKind.Explicit, configuration.Toolsets.Kind);
         Assert.Equal([CapabilityToolset.Decks], configuration.Toolsets.EnabledToolsets);
         Assert.Equal(
-            CapabilityToolsetGate.CredentialsMissing,
-            configuration.Toolsets.FindGateReason(CapabilityToolset.Archidekt));
+            DisabledToolset.CredentialsMissing,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt));
         Assert.Equal(19, Count(configuration, OperationMode.Remote));
     }
 
@@ -191,12 +191,66 @@ public sealed class ToolsetCredentialGateTests
 
         Assert.False(defaulted.Toolsets.Includes(CapabilityToolset.Playgroup));
         Assert.Equal(
-            CapabilityToolsetGate.CredentialsInvalid,
-            defaulted.Toolsets.FindGateReason(CapabilityToolset.Playgroup));
-        Assert.Null(notNamed.Toolsets.FindGateReason(CapabilityToolset.Playgroup));
+            DisabledToolset.CredentialsInvalid,
+            defaulted.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup));
+        Assert.Null(notNamed.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup));
         Assert.Equal(
             "invalid-playgroup-configuration",
             Assert.IsType<OperationInvalidInput>(named.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies an invalid Playgroup configuration under the default selection and under <c>all</c> is a reason,
+    /// not a startup failure.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("default")]
+    [InlineData("all")]
+    public void InvalidPlaygroupConfiguration_UnderDefaultOrAll_IsOnlyAReason(string? toolsets)
+    {
+        using TemporaryDirectory profile = new();
+        Dictionary<string, string?> settings = new() { ["PLAYGROUP:CREDENTIALS_FILE"] = "bad\0path" };
+        if (toolsets is not null)
+        {
+            settings["TOOLSETS"] = toolsets;
+        }
+
+        FoundationConfiguration configuration = Resolve(profile, settings);
+
+        Assert.False(configuration.Toolsets.Includes(CapabilityToolset.Playgroup));
+        Assert.Equal(
+            DisabledToolset.CredentialsInvalid,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup));
+    }
+
+    /// <summary>
+    /// Verifies the capabilities resource reports <c>credentials-invalid</c> and <c>credentials-missing</c> as
+    /// <c>disabledReason</c>, and null for a toolset that is on.
+    /// </summary>
+    [Fact]
+    public async Task CapabilitiesResource_ReportsTheDisabledReason()
+    {
+        using TemporaryDirectory profile = new();
+        FoundationConfiguration configuration = Resolve(
+            profile,
+            new Dictionary<string, string?> { ["PLAYGROUP:CREDENTIALS_FILE"] = "bad\0path" });
+        await using ModelContextProtocol.Server.McpServer server = ModelContextProtocol.Server.McpServer.Create(
+            new ModelContextProtocol.Server.StreamServerTransport(Stream.Null, Stream.Null),
+            new ModelContextProtocol.Server.McpServerOptions());
+
+        string json = new FoundationResources(configuration).GetCapabilities(server);
+
+        using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(json);
+        Dictionary<string, string?> reasons = document.RootElement.GetProperty("toolsets").GetProperty("items")
+            .EnumerateArray()
+            .ToDictionary(
+                item => item.GetProperty("name").GetString()!,
+                item => item.GetProperty("disabledReason").GetString());
+        Assert.Equal("credentials-missing", reasons["archidekt"]);
+        Assert.Equal("credentials-invalid", reasons["playgroup"]);
+        Assert.Null(reasons["decks"]);
+        Assert.Equal(8, document.RootElement.GetProperty("schemaVersion").GetInt32());
     }
 
     /// <summary>
@@ -225,8 +279,8 @@ public sealed class ToolsetCredentialGateTests
     [Fact]
     public void Notice_NamesToolsetReasonAndSettings()
     {
-        CapabilityToolsetGate archidekt = new(CapabilityToolset.Archidekt, CapabilityToolsetGate.CredentialsMissing);
-        CapabilityToolsetGate playgroup = new(CapabilityToolset.Playgroup, CapabilityToolsetGate.CredentialsInvalid);
+        DisabledToolset archidekt = new(CapabilityToolset.Archidekt, DisabledToolset.CredentialsMissing);
+        DisabledToolset playgroup = new(CapabilityToolset.Playgroup, DisabledToolset.CredentialsInvalid);
 
         string archidektNotice = archidekt.DescribeNotice();
         string playgroupNotice = playgroup.DescribeNotice();
@@ -240,26 +294,26 @@ public sealed class ToolsetCredentialGateTests
         Assert.Contains("PLAYGROUP:API_KEY", playgroupNotice, StringComparison.Ordinal);
         Assert.Equal(
             "No credential setting applies.",
-            new CapabilityToolsetGate(CapabilityToolset.Decks, "x").DescribeFix());
+            new DisabledToolset(CapabilityToolset.Decks, "x").DescribeFix());
     }
 
     /// <summary>
     /// Verifies the gated toolsets are removed and recorded without changing the order of the others.
     /// </summary>
     [Fact]
-    public void WithGates_RemovesGatedToolsetsAndKeepsTheOthersInOrder()
+    public void WithDisabledToolsets_RemovesGatedToolsetsAndKeepsTheOthersInOrder()
     {
         CapabilityToolsetSelection selection = new(
             CapabilityToolsetSelectionKind.Default,
             [CapabilityToolset.Decks, CapabilityToolset.Archidekt, CapabilityToolset.Stats]);
 
-        CapabilityToolsetSelection gated = selection.WithGates(
-            [new CapabilityToolsetGate(CapabilityToolset.Archidekt, CapabilityToolsetGate.CredentialsMissing)]);
+        CapabilityToolsetSelection gated = selection.WithDisabledToolsets(
+            [new DisabledToolset(CapabilityToolset.Archidekt, DisabledToolset.CredentialsMissing)]);
 
         Assert.Equal([CapabilityToolset.Decks, CapabilityToolset.Stats], gated.EnabledToolsets);
         Assert.Equal(CapabilityToolsetSelectionKind.Default, gated.Kind);
-        Assert.Single(gated.Gates);
-        Assert.Throws<ArgumentNullException>(() => selection.WithGates(null!));
+        Assert.Single(gated.DisabledToolsets);
+        Assert.Throws<ArgumentNullException>(() => selection.WithDisabledToolsets(null!));
     }
 
     /// <summary>

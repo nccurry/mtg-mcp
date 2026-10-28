@@ -36,7 +36,7 @@ internal sealed class ScryfallWriteTools
     /// </summary>
     [McpServerTool(
         Name = "scryfall_card_data_sync",
-        Title = "Synchronize Scryfall Corpus",
+        Title = "Synchronize Scryfall Card Data",
         ReadOnly = false,
         Destructive = false,
         Idempotent = false,
@@ -56,22 +56,22 @@ internal sealed class ScryfallWriteTools
     }
 
     /// <summary>
-    /// Swaps active and previous complete corpus generations.
+    /// Swaps active and previous complete card-data generations.
     /// </summary>
     [McpServerTool(
         Name = "scryfall_card_data_rollback",
-        Title = "Roll Back Scryfall Corpus",
+        Title = "Roll Back Scryfall Card Data",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Installed Scryfall card data: guardedly swaps the active and previous complete corpus generations without " +
+        "Installed Scryfall card data: guardedly swaps the active and previous complete card-data generations without " +
         "changing deck or request snapshot data.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> RollbackCorpusAsync(
-        [Description("Current active corpus generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
-        [Description("Current previous corpus generation UUID that should become active.")] Guid expectedPreviousGeneration,
+        [Description("Current active card-data generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
+        [Description("Current previous card-data generation UUID that should become active.")] Guid expectedPreviousGeneration,
         [Description("Explicit acknowledgement that active evidence will change.")] bool acknowledgeActivationChange,
         CancellationToken cancellationToken = default)
     {
@@ -80,22 +80,22 @@ internal sealed class ScryfallWriteTools
     }
 
     /// <summary>
-    /// Deletes installed corpus generations under an active-generation guard.
+    /// Deletes installed card-data generations under an active-generation guard.
     /// </summary>
     [McpServerTool(
         Name = "scryfall_card_data_delete",
-        Title = "Delete Scryfall Corpus",
+        Title = "Delete Scryfall Card Data",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Installed Scryfall card data: deletes installed corpus generations only with the current active generation " +
+        "Installed Scryfall card data: deletes installed card-data generations only with the current active generation " +
         "and an explicit data-loss acknowledgement.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
-        [Description("Current active corpus generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
-        [Description("Explicit acknowledgement that installed corpus generations will be deleted.")] bool acknowledgeDataLoss,
+        [Description("Current active card-data generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
+        [Description("Explicit acknowledgement that installed card-data generations will be deleted.")] bool acknowledgeDataLoss,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => service.DeleteCorpusAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken));
@@ -106,15 +106,15 @@ internal sealed class ScryfallWriteTools
     /// </summary>
     [McpServerTool(
         Name = "scryfall_search_snapshot_delete",
-        Title = "Delete Scryfall Snapshot",
+        Title = "Delete Saved Scryfall Request",
         ReadOnly = false,
         Destructive = true,
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Scryfall: deletes one immutable request snapshot only when its expected checksum matches and data loss is " +
-        "acknowledged.")]
+        "Saved Scryfall requests: deletes one local snapshot of a Scryfall request (any request type) only when " +
+        "its expected checksum matches and data loss is acknowledged.")]
     internal Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteSnapshotAsync(
         [Description("Immutable snapshot UUID to delete.")] Guid snapshotId,
         [Description("Current snapshot checksum used as a stale-write guard.")] string expectedChecksum,

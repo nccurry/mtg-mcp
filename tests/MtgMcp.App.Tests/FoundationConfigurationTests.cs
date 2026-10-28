@@ -504,7 +504,8 @@ public sealed class FoundationConfigurationTests
             false,
             new LegacyDataBoundary((LegacyDataState)999, "Migration remains disabled."),
             ArchidektOptions.CreateDefault(),
-            PlaygroupOptions.CreateDefault(null));
+            PlaygroupOptions.CreateDefault(null),
+            new ProviderCredentialPresence(false, false));
 
         FoundationConfigurationStatus status = configuration.ToPublicStatus();
 

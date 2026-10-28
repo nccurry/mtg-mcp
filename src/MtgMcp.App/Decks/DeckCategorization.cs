@@ -91,7 +91,7 @@ internal sealed class DeckCategorizationCoordinator
             deckId, expectedRevision, source, freshnessPolicy, cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<DeckCategoryRulesPreview> preview)
         {
-            return ForwardFailure<DeckCategoryRulesPreview, DeckDocument>(previewResult);
+            return OperationFailure.Forward<DeckCategoryRulesPreview, DeckDocument>(previewResult);
         }
 
         if (!string.Equals(preview.Data.PreviewFingerprint, previewFingerprint, StringComparison.Ordinal))
@@ -132,7 +132,7 @@ internal sealed class DeckCategorizationCoordinator
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deck)
         {
-            return ForwardFailure<DeckDocument, DeckCategoryRulesPreview>(deckResult);
+            return OperationFailure.Forward<DeckDocument, DeckCategoryRulesPreview>(deckResult);
         }
 
         if (expectedRevision is long revision && (revision <= 0 || revision != deck.Data.Revision))
@@ -150,7 +150,7 @@ internal sealed class DeckCategorizationCoordinator
             cancellationToken).ConfigureAwait(false);
         if (resolution is not OperationSuccess<ResolvedDeckCategoryRules> resolvedRules)
         {
-            return ForwardFailure<ResolvedDeckCategoryRules, DeckCategoryRulesPreview>(resolution);
+            return OperationFailure.Forward<ResolvedDeckCategoryRules, DeckCategoryRulesPreview>(resolution);
         }
 
         List<CategoryEntryEvidence> evidence = [];
@@ -170,7 +170,7 @@ internal sealed class DeckCategorizationCoordinator
                 cancellationToken).ConfigureAwait(false);
             if (sourceEvidence is not OperationSuccess<ScryfallDeckTagEvidence> tags)
             {
-                return ForwardFailure<ScryfallDeckTagEvidence, DeckCategoryRulesPreview>(sourceEvidence);
+                return OperationFailure.Forward<ScryfallDeckTagEvidence, DeckCategoryRulesPreview>(sourceEvidence);
             }
 
             if (tags.Data.Entries.Count != entries.Count || tags.Data.GenerationId != generation)
@@ -260,21 +260,6 @@ internal sealed class DeckCategorizationCoordinator
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 
-    /// <summary>Maps a non-success result to the categorization result type.</summary>
-    private static OperationResult<T> ForwardFailure<TSource, T>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable("unexpected-result", "The operation returned an unexpected result."),
-            _ => new OperationUnavailable("unexpected-result", "The operation returned an unexpected result."),
-        };
-    }
 }
 
 /// <summary>Registers deterministic category validation and preview tools.</summary>

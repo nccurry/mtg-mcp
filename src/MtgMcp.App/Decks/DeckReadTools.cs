@@ -73,12 +73,11 @@ internal sealed class DeckReadTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Local deck store: gets one local deck: its stored state with entries, zones, categories, assignments, and " +
+        "Local deck store: gets one local deck with its stored state: entries, zones, categories, assignments, and " +
         "provider-neutral bindings, plus the entry IDs that edits need. Add include [cards, tags] to also get, " +
         "for each entry, its concise Scryfall card fields (exact printing) and oracle tag slugs from installed " +
         "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
-        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
-        "To filter, group, or total a card list, use a card-list analysis tool instead.")]
+        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data).")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(

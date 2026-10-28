@@ -1,7 +1,7 @@
-using System.Collections.Frozen;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -12,7 +12,7 @@ namespace MtgMcp.App.Hosting;
 /// <summary>
 /// Applies the argument binding and error reporting rules shared by every registered tool.
 /// </summary>
-internal static class ToolCallPolicy
+internal static partial class ToolCallPolicy
 {
     /// <summary>
     /// Names the reason reported when tool arguments cannot be read into the tool's parameter types.
@@ -30,13 +30,6 @@ internal static class ToolCallPolicy
     private const int MaximumEchoedNameLength = 64;
 
     /// <summary>
-    /// Maps each tool name to the method that implements it. The SDK does not expose the bound method to
-    /// call-tool filters, so the policy finds it by tool name.
-    /// </summary>
-    private static readonly FrozenDictionary<string, MethodInfo> ToolMethods =
-        IndexToolMethods(typeof(ToolCallPolicy).Assembly.GetTypes());
-
-    /// <summary>
     /// Gets the serializer options for tool arguments and results; union kinds may appear in any property position.
     /// Every tool registration must use these options so the binding diagnosis reads arguments the same way the
     /// SDK does.
@@ -52,9 +45,11 @@ internal static class ToolCallPolicy
         ArgumentNullException.ThrowIfNull(next);
         return async (context, cancellationToken) =>
         {
-            if (context.Params is not null)
+            // A tool the server did not register for this selection and mode is an unknown tool: describe nothing.
+            bool registered = context.Params is not null && context.MatchedPrimitive is not null;
+            if (registered)
             {
-                OperationInvalidInput? unknown = FindUnknownArgument(context.Params.Name, context.Params.Arguments);
+                OperationInvalidInput? unknown = FindUnknownArgument(context.Params!.Name, context.Params.Arguments);
                 if (unknown is not null)
                 {
                     return CreateFailureResult(unknown);
@@ -67,10 +62,10 @@ internal static class ToolCallPolicy
                 result = await next(context, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (
-                exception is not OperationCanceledException && context.Params is not null)
+                exception is not OperationCanceledException && registered)
             {
                 // The SDK binds arguments inside the pipeline and lets a binding exception reach this filter.
-                OperationInvalidInput? failure = DiagnoseArguments(context.Params.Name, context.Params.Arguments);
+                OperationInvalidInput? failure = DiagnoseArguments(context.Params!.Name, context.Params.Arguments);
                 if (failure is null)
                 {
                     throw;
@@ -105,8 +100,8 @@ internal static class ToolCallPolicy
         string toolName,
         IDictionary<string, JsonElement>? arguments)
     {
-        return ToolMethods.TryGetValue(toolName, out MethodInfo? method)
-            ? DiagnoseArguments(method, arguments)
+        return ToolArgumentCatalog.Shared.TryGet(toolName, out ToolArguments tool)
+            ? DiagnoseArguments(tool.Method, arguments)
             : null;
     }
 
@@ -156,23 +151,15 @@ internal static class ToolCallPolicy
         string toolName,
         IDictionary<string, JsonElement>? arguments)
     {
-        if (arguments is null || arguments.Count == 0 || !ToolMethods.TryGetValue(toolName, out MethodInfo? method))
+        if (arguments is null
+            || arguments.Count == 0
+            || !ToolArgumentCatalog.Shared.TryGet(toolName, out ToolArguments tool))
         {
             return null;
         }
 
-        List<string> accepted = [];
-        foreach (ParameterInfo parameter in method.GetParameters())
-        {
-            if (IsArgumentParameter(parameter) && parameter.Name is not null)
-            {
-                accepted.Add(parameter.Name);
-            }
-        }
-
-        accepted.Sort(StringComparer.Ordinal);
         string? unknown = arguments.Keys
-            .Where(name => !accepted.Contains(name, StringComparer.Ordinal))
+            .Where(name => !tool.Names.Contains(name, StringComparer.Ordinal))
             .Order(StringComparer.Ordinal)
             .FirstOrDefault();
         if (unknown is null)
@@ -180,25 +167,47 @@ internal static class ToolCallPolicy
             return null;
         }
 
-        string acceptedText = accepted.Count == 0 ? "none" : string.Join(", ", accepted);
         if (string.IsNullOrWhiteSpace(unknown))
         {
             return new OperationInvalidInput(
                 InvalidArgumentsReason,
-                $"An argument with a blank name is not accepted by {toolName}. Accepted arguments: {acceptedText}.");
+                $"An argument with a blank name is not accepted by {toolName}. " +
+                $"Accepted arguments: {tool.AcceptedText}.");
         }
 
-        string shown = unknown.Length <= MaximumEchoedNameLength ? unknown : unknown[..MaximumEchoedNameLength] + "...";
+        string shown = Shorten(unknown);
         return new OperationInvalidInput(
             InvalidArgumentsReason,
-            $"Argument '{shown}' is not accepted by {toolName}. Accepted arguments: {acceptedText}.",
+            $"Argument '{shown}' is not accepted by {toolName}. Accepted arguments: {tool.AcceptedText}.",
             shown);
     }
 
     /// <summary>
+    /// Cuts an echoed field name to the length limit without splitting a surrogate pair.
+    /// </summary>
+    internal static string Shorten(string name)
+    {
+        if (name.Length <= MaximumEchoedNameLength)
+        {
+            return name;
+        }
+
+        int length = char.IsHighSurrogate(name[MaximumEchoedNameLength - 1])
+            ? MaximumEchoedNameLength - 1
+            : MaximumEchoedNameLength;
+        return name[..length] + "...";
+    }
+
+    /// <summary>
+    /// Matches the serializer message for a JSON property that no input type declares.
+    /// </summary>
+    [GeneratedRegex("The JSON property '([^']*)' could not be mapped to any [.]NET member")]
+    private static partial Regex UnmappedMember();
+
+    /// <summary>
     /// Reports whether a parameter is supplied from tool arguments rather than injected by the host.
     /// </summary>
-    private static bool IsArgumentParameter(ParameterInfo parameter)
+    internal static bool IsArgumentParameter(ParameterInfo parameter)
     {
         Type type = parameter.ParameterType;
         return type != typeof(CancellationToken) &&
@@ -219,8 +228,16 @@ internal static class ToolCallPolicy
         }
         catch (JsonException exception)
         {
+            Match unmapped = UnmappedMember().Match(exception.Message);
             string path = CombinePath(parameter.Name!, exception.Path);
             string message = $"The value at '{path}' could not be read: {TrimPathSuffix(exception.Message)}";
+            if (unmapped.Success)
+            {
+                string field = Shorten(unmapped.Groups[1].Value);
+                int split = path.LastIndexOf('.');
+                path = split < 0 ? field : path[..(split + 1)] + field;
+                message = $"Property '{field}' is not accepted here.";
+            }
             if (exception.Message.Contains("discriminator", StringComparison.OrdinalIgnoreCase))
             {
                 IReadOnlyList<string> kinds = FindAllowedKinds(parameter.ParameterType);
@@ -358,36 +375,6 @@ internal static class ToolCallPolicy
         {
             CollectPolymorphicTypes(property.PropertyType, depth + 1, visited, found);
         }
-    }
-
-    /// <summary>
-    /// Finds every tool method declared on the given types by its MCP tool name; a repeated name is a build error.
-    /// </summary>
-    internal static FrozenDictionary<string, MethodInfo> IndexToolMethods(IEnumerable<Type> types)
-    {
-        ArgumentNullException.ThrowIfNull(types);
-        Dictionary<string, MethodInfo> methods = new(StringComparer.Ordinal);
-        const BindingFlags flags =
-            BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        foreach (Type type in types)
-        {
-            foreach (MethodInfo method in type.GetMethods(flags))
-            {
-                if (method.GetCustomAttribute<McpServerToolAttribute>() is not { Name: { } name })
-                {
-                    continue;
-                }
-
-                if (!methods.TryAdd(name, method))
-                {
-                    throw new InvalidOperationException(
-                        $"Tool name '{name}' is declared by both {methods[name].DeclaringType?.Name} " +
-                        $"and {method.DeclaringType?.Name}.");
-                }
-            }
-        }
-
-        return methods.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     /// <summary>

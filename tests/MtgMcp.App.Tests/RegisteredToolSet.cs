@@ -83,3 +83,32 @@ internal sealed class RegisteredToolSet : IDisposable
         return value;
     }
 }
+
+/// <summary>
+/// Makes sure every tool has been registered once in this test process, so tests that look tools up by name through
+/// the shared argument catalog find them.
+/// </summary>
+internal static class RegisteredTools
+{
+    /// <summary>
+    /// Holds one full registration for the life of the test process.
+    /// </summary>
+    private static readonly Lazy<RegisteredToolSet> All = new(() => new RegisteredToolSet(OperationMode.Remote));
+
+    /// <summary>
+    /// Registers every tool once.
+    /// </summary>
+    internal static void Ensure()
+    {
+        _ = All.Value;
+    }
+
+    /// <summary>
+    /// Gets the method behind each registered tool.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, System.Reflection.MethodInfo> Methods()
+    {
+        Ensure();
+        return ToolArgumentCatalog.Shared.Methods;
+    }
+}

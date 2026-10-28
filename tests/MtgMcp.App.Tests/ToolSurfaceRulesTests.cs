@@ -16,14 +16,21 @@ namespace MtgMcp.App.Tests;
 public sealed class ToolSurfaceRulesTests
 {
     /// <summary>
+    /// Registers every tool once, so the policy can look tools up by name.
+    /// </summary>
+    public ToolSurfaceRulesTests()
+    {
+        RegisteredTools.Ensure();
+    }
+
+    /// <summary>
     /// Names each merged tool with what the rules say about it: whether it reaches providers, which fields are
     /// required, which field picks the job, and which fields apply to only some choices.
     /// </summary>
     private static readonly MergedTool[] MergedTools =
     [
         new("scryfall_cards_get", true, ["lookups"], null, []),
-        new("scryfall_card_details", true, ["include", "oracleId"], "include",
-            ["scryfallCardId", "printsCursor", "rulingsCursor"]),
+        new("scryfall_card_details", true, ["include", "lookup"], "include", ["printsCursor", "rulingsCursor"]),
         new("scryfall_reference_get", true, ["kind"], "kind",
             ["codeOrId", "catalogName", "includeRaw", "cursor", "pageSize"]),
         new("scryfall_search_snapshots_get", false, ["kind"], "kind",
@@ -39,7 +46,8 @@ public sealed class ToolSurfaceRulesTests
     [
         "archidekt_deck_list", "archidekt_deck_get", "archidekt_folders_get", "archidekt_snapshots_get",
         "archidekt_sync_diff", "archidekt_pull_preview", "archidekt_push_preview",
-        "archidekt_snapshot_restore_preview", "archidekt_deck_create", "archidekt_folder_create",
+        "archidekt_snapshot_restore_preview", "archidekt_push_apply", "archidekt_snapshot_restore_apply",
+        "archidekt_deck_create", "archidekt_folder_create",
         "archidekt_folder_update", "archidekt_snapshot_create", "archidekt_snapshot_update",
         "playgroup_me_get", "playgroup_commander_get", "playgroup_commander_get_by_name",
         "playgroup_commander_turn_damage_get", "playgroup_deck_get", "playgroup_deck_elo_history_get",
@@ -50,12 +58,12 @@ public sealed class ToolSurfaceRulesTests
     ];
 
     /// <summary>
-    /// Names the destructive Archidekt remote writes that ask the client to confirm with the user.
+    /// Names the destructive remote writes that ask the client to confirm with the user.
     /// </summary>
     private static readonly string[] ConfirmationTools =
     [
         "archidekt_deck_delete", "archidekt_folder_delete", "archidekt_folder_move_items", "archidekt_push_apply",
-        "archidekt_snapshot_delete", "archidekt_snapshot_restore_apply",
+        "archidekt_snapshot_delete", "archidekt_snapshot_restore_apply", "playgroup_game_events_batch_create",
     ];
 
     /// <summary>
@@ -63,7 +71,8 @@ public sealed class ToolSurfaceRulesTests
     /// </summary>
     private static readonly string[] SourceLabels =
     [
-        "Local deck store:", "Scryfall:", "Installed Scryfall card data:", "Exact math:", "Archidekt:",
+        "Local deck store:", "Scryfall:", "Saved Scryfall requests:", "Installed Scryfall card data:", "Exact math:",
+        "Archidekt:",
         "Playgroup:", "Commander Spellbook:",
     ];
 
@@ -77,8 +86,7 @@ public sealed class ToolSurfaceRulesTests
     {
         using RegisteredToolSet remote = new(OperationMode.Remote);
         using RegisteredToolSet readOnly = new(OperationMode.ReadOnly);
-        IReadOnlyDictionary<string, MethodInfo> methods = ToolCallPolicy.IndexToolMethods(
-            typeof(ToolCallPolicy).Assembly.GetTypes());
+        IReadOnlyDictionary<string, MethodInfo> methods = RegisteredTools.Methods();
 
         foreach (MergedTool merged in MergedTools)
         {
@@ -137,8 +145,7 @@ public sealed class ToolSurfaceRulesTests
     [Fact]
     public void MergedTools_UnionResults_AreTheKindToolsThatReadDifferentData()
     {
-        IReadOnlyDictionary<string, MethodInfo> methods = ToolCallPolicy.IndexToolMethods(
-            typeof(ToolCallPolicy).Assembly.GetTypes());
+        IReadOnlyDictionary<string, MethodInfo> methods = RegisteredTools.Methods();
 
         string[] unions = [.. MergedTools
             .Where(merged => ResultDataType(methods[merged.Name])
@@ -146,7 +153,12 @@ public sealed class ToolSurfaceRulesTests
             .Select(merged => merged.Name)];
 
         Assert.Equal(
-            ["scryfall_reference_get", "scryfall_search_snapshots_get", "archidekt_snapshots_get"],
+            [
+                "scryfall_reference_get",
+                "scryfall_search_snapshots_get",
+                "archidekt_folders_get",
+                "archidekt_snapshots_get",
+            ],
             unions);
     }
 
@@ -255,7 +267,7 @@ public sealed class ToolSurfaceRulesTests
     }
 
     /// <summary>
-    /// Verifies inline category rules still bind, with and without a revision (FLOW-003).
+    /// Verifies inline category rules still bind (FLOW-003); the revision is optional.
     /// </summary>
     [Fact]
     public void DiagnoseArguments_InlineCategoryRuleSource_Binds()
@@ -269,6 +281,16 @@ public sealed class ToolSurfaceRulesTests
             """);
 
         Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_category_rules_preview", arguments));
+
+        Dictionary<string, JsonElement> withRevision = Arguments(
+            """
+            {
+              "deckId": "0193e97a-ef95-7700-8000-000000000001",
+              "expectedRevision": 3,
+              "source": { "kind": "inline", "ruleSet": { "assignmentMode": "add-only", "rules": [] } }
+            }
+            """);
+        Assert.Null(ToolCallPolicy.DiagnoseArguments("local_deck_category_rules_preview", withRevision));
     }
 
     /// <summary>
@@ -292,7 +314,7 @@ public sealed class ToolSurfaceRulesTests
                 "stats_local_deck_summary" => ["Local deck store:"],
                 _ when name.StartsWith("stats_", StringComparison.Ordinal) => ["Exact math:"],
                 _ when name.StartsWith("scryfall_", StringComparison.Ordinal) =>
-                    ["Scryfall:", "Installed Scryfall card data:"],
+                    ["Scryfall:", "Saved Scryfall requests:", "Installed Scryfall card data:"],
                 _ when name.StartsWith("archidekt_", StringComparison.Ordinal) => ["Archidekt:"],
                 _ when name.StartsWith("playgroup_", StringComparison.Ordinal) => ["Playgroup:"],
                 _ when name.StartsWith("spellbook_", StringComparison.Ordinal) => ["Commander Spellbook:"],
@@ -360,8 +382,7 @@ public sealed class ToolSurfaceRulesTests
     [Fact]
     public void ToolResultTypes_HaveNoCredentialProperties()
     {
-        IReadOnlyDictionary<string, MethodInfo> methods = ToolCallPolicy.IndexToolMethods(
-            typeof(ToolCallPolicy).Assembly.GetTypes());
+        IReadOnlyDictionary<string, MethodInfo> methods = RegisteredTools.Methods();
         string[] forbidden = ["password", "secret", "apikey", "cookie", "bearer", "authorization", "credentialsfile"];
         string[] allowedExact = ["ApplyToken"];
         List<string> offenders = [];
@@ -377,7 +398,7 @@ public sealed class ToolSurfaceRulesTests
     }
 
     /// <summary>
-    /// Verifies the destructive Archidekt remote writes carry the confirmation hint, and no other tool does (SAFE-002).
+    /// Verifies the seven destructive remote writes carry the confirmation hint, and no other tool does (SAFE-002).
     /// </summary>
     [Fact]
     public void DestructiveArchidektWrites_CarryTheConfirmationHint()

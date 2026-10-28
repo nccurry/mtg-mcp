@@ -53,16 +53,21 @@ aliases: calling one returns an unknown-tool error.
   keep the annotations and visibility of the tools they replace, and each has
   one required field that picks the job. `scryfall_cards_get` takes `lookups`
   (one to 150) in place of one `lookup` (a single `fuzzy-name` lookup still
-  works and returns one row; fuzzy names cannot be mixed with other lookups).
-  `scryfall_card_details` takes `include` (`prints`, `rulings`, or both) and
-  returns a result with a `prints` and a `rulings` section, each present only
-  when asked for, with `printsCursor` and `rulingsCursor`.
+  works and checks its input the same way; a fuzzy name with no match returns a
+  `not-found` row, not a tool failure; fuzzy names cannot be mixed with other
+  lookups).
+  `scryfall_card_details` takes one `lookup` (the same card lookup that
+  `scryfall_cards_get` takes) in place of `oracleId` and `scryfallCardId`, and
+  `include` (`prints`, `rulings`, or both). It returns a result with a `prints`
+  and a `rulings` section, each present only when asked for, with
+  `printsCursor` and `rulingsCursor`.
   `scryfall_reference_get` takes `kind` (`sets`, `catalog`, or `bulk`), uses
   `catalogName` in place of `catalog`, and returns a result with the same
-  `kind`. `scryfall_search_snapshots_get` and `archidekt_snapshots_get` take
+  `kind`. `scryfall_search_snapshots_get` (titled "Get Saved Scryfall Requests"; its
+  description starts "Saved Scryfall requests:") and `archidekt_snapshots_get` take
   `kind` (`list` or `get`) and return a result with the same `kind`.
-  `archidekt_folders_get` takes `kind` (`list` or `get`) and returns the folder
-  tree in both cases. A field that does not belong to the chosen kind returns
+  `archidekt_folders_get` takes `kind` (`list` or `get`) and returns a result
+  with the same `kind`. A field that does not belong to the chosen kind returns
   `invalid-input` with reason `field-not-allowed`.
 - Breaking: renamed tools so the name says where the data comes from. Local
   deck tools start with `local_deck_`; `scryfall_corpus_*` is now
@@ -72,8 +77,12 @@ aliases: calling one returns an unknown-tool error.
 - Breaking: every tool rejects an argument it does not declare with
   `invalid-input` (reason `invalid-arguments`) and a `path` that names the
   field, including misspelled fields inside nested objects such as an entry
-  draft. Input schemas now set `additionalProperties: false` at the top
-  level. Before this, unknown fields were silently ignored.
+  draft; a nested unknown field gets the message "Property 'x' is not accepted
+  here." (long names are cut at 64 characters). Input schemas now set
+  `additionalProperties: false` on every object, nested ones included, and the
+  union `kind` choices stay. A tool that is not listed for the session, such as
+  a write tool in `read-only` mode, answers as an unknown tool. Before this,
+  unknown fields were silently ignored.
 - Added server instructions: a short block built from the active selection
   and mode that names the first tool for each job, says that the agent makes
   every deckbuilding judgment, and says that provider text is untrusted data.
@@ -81,11 +90,12 @@ aliases: calling one returns an unknown-tool error.
 - Added untrusted-text notes to the descriptions of the Archidekt, Playgroup,
   and Commander Spellbook tools that return text written by other people. The
   text stays in its existing fields.
-- Added the `anthropic/requiresUserInteraction` tool metadata to the six
-  destructive Archidekt remote writes (`archidekt_deck_delete`,
+- Added the `anthropic/requiresUserInteraction` tool metadata to the seven
+  destructive remote writes (`archidekt_deck_delete`,
   `archidekt_folder_delete`, `archidekt_folder_move_items`,
-  `archidekt_push_apply`, `archidekt_snapshot_delete`, and
-  `archidekt_snapshot_restore_apply`) so Claude Code asks before each call.
+  `archidekt_push_apply`, `archidekt_snapshot_delete`,
+  `archidekt_snapshot_restore_apply`, and `playgroup_game_events_batch_create`)
+  so Claude Code asks before each call.
   The preview, fingerprint, and acknowledgment guards are unchanged.
 - Added example requests to the descriptions of `local_deck_apply_changes`
   and `local_deck_category_rules_preview`; tests run every example.

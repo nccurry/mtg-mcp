@@ -212,7 +212,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             .ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deckSuccess)
         {
-            return ForwardFailure<DeckDocument, DeckIdentityReconciliationPreview>(deckResult);
+            return OperationFailure.Forward<DeckDocument, DeckIdentityReconciliationPreview>(deckResult);
         }
 
         DeckDocument deck = deckSuccess.Data;
@@ -227,7 +227,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, entryIds);
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
-            return ForwardFailure<IReadOnlyList<DeckEntry>, DeckIdentityReconciliationPreview>(selection);
+            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckIdentityReconciliationPreview>(selection);
         }
 
         IReadOnlyList<DeckEntry> entries = selected.Data;
@@ -241,7 +241,8 @@ internal sealed class DeckIdentityReconciliationCoordinator
                     .ConfigureAwait(false);
             if (evidenceResult is not OperationSuccess<ScryfallExactCollectionEvidence> evidenceSuccess)
             {
-                return ForwardFailure<ScryfallExactCollectionEvidence, DeckIdentityReconciliationPreview>(evidenceResult);
+                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckIdentityReconciliationPreview>(
+                    evidenceResult);
             }
 
             evidence = evidenceSuccess.Data;
@@ -292,7 +293,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds);
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
-            return ForwardFailure<IReadOnlyList<DeckEntry>, DeckDocument>(selection);
+            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckDocument>(selection);
         }
 
         IReadOnlyList<DeckEntry> entries = selected.Data;
@@ -306,7 +307,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                     .ConfigureAwait(false);
             if (replay is not OperationSuccess<ScryfallExactCollectionEvidence> replaySuccess)
             {
-                return ForwardFailure<ScryfallExactCollectionEvidence, DeckDocument>(replay);
+                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckDocument>(replay);
             }
 
             evidence = replaySuccess.Data;
@@ -658,25 +659,6 @@ internal sealed class DeckIdentityReconciliationCoordinator
             entry.Language);
     }
 
-    /// <summary>
-    /// Preserves every non-success operation case while changing only its generic success type.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-success-shape",
-                "The operation returned an unexpected success shape."),
-        };
-    }
 }
 
 /// <summary>

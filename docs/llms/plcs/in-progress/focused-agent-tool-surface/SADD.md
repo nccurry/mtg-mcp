@@ -620,7 +620,7 @@ without it validates and previews; with it, a stale revision returns
 | Item | Decision | Reason |
 | --- | --- | --- |
 | Nine single-step edit tools | Remove | Duplicates of `deck_apply_changes`. |
-| `common-v1` category preset | Remove | It is a server-chosen mapping from four role names (ramp, card draw, removal, recursion) to four tags (`src/MtgMcp.App/Decks/DeckCategoryRuleResolver.cs:26-32`). That choice belongs to the agent, which can send the same rules inline. |
+| `common-v1` category preset | Remove | It is a server-chosen mapping from four role names (ramp, card draw, removal, recursion) to four tags (`src/MtgMcp.App/Decks/DeckCategoryRuleResolver.cs:26-32`). That choice belongs to the agent, which can send the same rules inline. | The `kind: inline` wrapper stays so a later source kind can be added without changing the input shape, and a preset request still names `inline` as the allowed kind.
 | Local backups | Keep in `decks` | They copy the whole `decks.db` file (`src/MtgMcp.App/Decks/DeckWriteTools.cs:314`), which neither deck revisions nor Archidekt snapshots replace. |
 | Identity reconciliation | Keep in `decks` | Exact matching only, "without fuzzy matching" (`src/MtgMcp.App/Decks/DeckIdentityReconciliation.cs:708`). Needed before upload when entries lack exact IDs. |
 | Interchange import and export | Keep in `decks` | Import is the path for decks from other sites; export is the path to them. |
@@ -632,7 +632,7 @@ without it validates and previews; with it, a stale revision returns
 | New tool | Replaces | Input |
 | --- | --- | --- |
 | `scryfall_cards_get` | `scryfall_card_get`, `scryfall_card_collection` | `lookups`: 1 to 150 existing `ScryfallCardLookup` values; cursor and page size as today. |
-| `scryfall_card_details` | `scryfall_card_prints`, `scryfall_card_rulings` | `oracleId` (the card, by Oracle ID) and required `include`: a non-empty set of `prints` and `rulings`. `scryfallCardId` applies to `rulings` only; `printsCursor` and `rulingsCursor` page each section. The result has one shape with a `prints` section and a `rulings` section, each present only when asked for. |
+| `scryfall_card_details` | `scryfall_card_prints`, `scryfall_card_rulings` | one `ScryfallCardLookup` (the same lookup `scryfall_cards_get` takes) and required `include`: a non-empty set of `prints` and `rulings`. The server resolves the lookup to one Oracle ID, then reads prints by Oracle ID and rulings by Oracle ID and card ID; `printsCursor` and `rulingsCursor` page each section. The result has one shape with a `prints` section and a `rulings` section, each present only when asked for. |
 | `scryfall_reference_get` | `scryfall_sets`, `scryfall_catalog`, `scryfall_bulk_metadata` | Required `kind`: `sets`, `catalog`, or `bulk`; `catalogName` required only when `kind` is `catalog`. The result is a union with the same `kind`, holding today's sets, catalog, or bulk metadata result. |
 | `scryfall_search_snapshots_get` | `scryfall_snapshot_list`, `scryfall_snapshot_get` | Required `kind`: `list` (with paging) or `get` (with required `snapshotId`). The result is a union with the same `kind`, holding today's list page or snapshot. |
 
@@ -656,6 +656,8 @@ A stale local revision or a changed remote deck already returns `conflict`.
 Each such result must include the current local revision or remote state
 marker in its data, so the agent can repeat the preview in one step
 (ERR-001).
+The result of `archidekt_folders_get` is a union keyed by `kind`: `list` holds the folder tree and `get` holds one folder.
+
 
 ## Enum Schemas
 

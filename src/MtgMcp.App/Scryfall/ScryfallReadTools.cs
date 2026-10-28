@@ -170,18 +170,18 @@ internal sealed class ScryfallReadTools
     }
 
     /// <summary>
-    /// Reports installed corpus generations without network access.
+    /// Reports installed card-data generations without network access.
     /// </summary>
     [McpServerTool(
         Name = "scryfall_card_data_status",
-        Title = "Get Scryfall Corpus Status",
+        Title = "Get Scryfall Card Data Status",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Installed Scryfall card data: reports active and previous corpus generations, integrity, freshness " +
+        "Installed Scryfall card data: reports active and previous card-data generations, integrity, freshness " +
         "eligibility, and dataset " +
         "counts without network access.")]
     internal Task<OperationResult<ScryfallCorpusStatus>> GetCorpusStatusAsync(
@@ -210,7 +210,7 @@ internal sealed class ScryfallReadTools
         [Description("Optional tag kind: oracle or art."), TagKindValues]
         string? tagType = null,
         [Description("Include raw tag objects, which may contain large assignment arrays.")] bool includeRaw = false,
-        [Description("Opaque cursor bound to the installed corpus generation.")] string? cursor = null,
+        [Description("Opaque cursor bound to the installed card-data generation.")] string? cursor = null,
         [Description("Tags to return, from 1 through 100.")] int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
@@ -245,7 +245,7 @@ internal sealed class ScryfallReadTools
         [Description("Minimum assignment weight accepted by the official tag dataset.")] string minimumWeight = "weak",
         [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "standard",
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
-        [Description("Opaque cursor bound to the installed corpus generation and tag expression.")] string? cursor = null,
+        [Description("Opaque cursor bound to the installed card-data generation and tag expression.")] string? cursor = null,
         [Description("Cards to return, from 1 through 100, or through 25 when responseFormat is full.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)

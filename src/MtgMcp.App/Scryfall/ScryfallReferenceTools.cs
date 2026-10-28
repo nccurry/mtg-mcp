@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
@@ -9,7 +10,7 @@ namespace MtgMcp.App.Scryfall;
 
 /// <summary>
 /// Exposes the Scryfall tools that return one chosen kind of detail: card details, reference data, and saved
-/// search snapshots. Each tool has one required field that picks the job, and the result names the job it did.
+/// request snapshots. Each tool has one required field that picks the job, and the result names the job it did.
 /// </summary>
 internal sealed class ScryfallReferenceTools
 {
@@ -22,6 +23,31 @@ internal sealed class ScryfallReferenceTools
     /// Names the rulings section of the card details tool.
     /// </summary>
     internal const string IncludeRulings = "rulings";
+
+    /// <summary>
+    /// Names the reference kind that reads sets.
+    /// </summary>
+    private const string KindSets = "sets";
+
+    /// <summary>
+    /// Names the reference kind that reads one catalog.
+    /// </summary>
+    private const string KindCatalog = "catalog";
+
+    /// <summary>
+    /// Names the reference kind that reads bulk data metadata.
+    /// </summary>
+    private const string KindBulk = "bulk";
+
+    /// <summary>
+    /// Names the snapshot kind that lists snapshot metadata.
+    /// </summary>
+    private const string KindList = "list";
+
+    /// <summary>
+    /// Names the snapshot kind that replays one snapshot.
+    /// </summary>
+    private const string KindGet = "get";
 
     /// <summary>
     /// Stores the unified provider and local evidence boundary.
@@ -43,7 +69,7 @@ internal sealed class ScryfallReferenceTools
         new Dictionary<string, IReadOnlyList<string>> { ["include"] = [IncludePrints, IncludeRulings] };
 
     /// <summary>
-    /// Returns printings, rulings, or both for one Oracle identity.
+    /// Returns printings, rulings, or both for one card.
     /// </summary>
     [McpServerTool(
         Name = "scryfall_card_details",
@@ -54,18 +80,20 @@ internal sealed class ScryfallReferenceTools
         OpenWorld = true,
         UseStructuredContent = true)]
     [Description(
-        "Scryfall: gets the printings, the rulings, or both for one card by Oracle ID, from installed card data " +
-        "or an official request snapshot. Set include to [\"prints\"], [\"rulings\"], or both; the result has " +
-        "a prints section and a rulings section, each present only when asked for. Example: " +
-        "{\"oracleId\":\"00000000-0000-0000-0000-000000000000\",\"include\":[\"rulings\"]}.")]
+        "Scryfall: gets the printings, the rulings, or both for one card, found by one lookup of any kind " +
+        "(Scryfall ID, Oracle ID, exact name, fuzzy name, or set and collector number), from installed card data " +
+        "or an official request snapshot. Set include to [\"prints\"], [\"rulings\"], or both; the result has a " +
+        "prints section and a rulings section, each present only when asked for. Example: " +
+        "{\"lookup\":{\"kind\":\"exact-name\",\"value\":\"Sol Ring\"},\"include\":[\"rulings\"]}.")]
     internal Task<OperationResult<ScryfallCardDetailsResult>> GetCardDetailsAsync(
-        [Description("Exact Oracle UUID of the card.")] Guid oracleId,
+        [Description(
+            "One card lookup: {kind, value} for scryfall-id, oracle-id, exact-name, or fuzzy-name, or " +
+            "{kind: printing, setCode, collectorNumber}.")]
+        ScryfallCardLookup lookup,
         [Description(
             "Sections to return: prints (printings), rulings, or both. At least one is required; " +
             "each may be listed once.")]
         IReadOnlyList<string> include,
-        [Description("Only with rulings: optional exact Scryfall printing UUID used by the provider rulings route.")]
-        Guid? scryfallCardId = null,
         [Description("Cache policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
         [Description("Include each lossless raw provider object in the requested sections.")]
@@ -79,9 +107,8 @@ internal sealed class ScryfallReferenceTools
         CancellationToken cancellationToken = default)
     {
         return ScryfallToolExecution.RunAsync(() => ReadDetailsAsync(
-            oracleId,
+            lookup,
             include,
-            scryfallCardId,
             freshnessPolicy,
             includeRaw,
             printsCursor,
@@ -107,7 +134,7 @@ internal sealed class ScryfallReferenceTools
         "returns official metadata for the bulk datasets without downloading them. The result has the same kind " +
         "and holds the matching data. Example: {\"kind\":\"catalog\",\"catalogName\":\"creature-types\"}.")]
     internal Task<OperationResult<ScryfallReferenceResult>> GetReferenceAsync(
-        [Description("What to read: sets, catalog, or bulk."), AllowedValues("sets", "catalog", "bulk")]
+        [Description("What to read: sets, catalog, or bulk."), AllowedValues(KindSets, KindCatalog, KindBulk)]
         string kind,
         [Description("Only with kind sets: optional exact set code or set UUID; omit to list all sets.")]
         string? codeOrId = null,
@@ -134,24 +161,25 @@ internal sealed class ScryfallReferenceTools
     }
 
     /// <summary>
-    /// Lists saved search snapshots or replays one by ID.
+    /// Lists saved request snapshots or replays one by ID.
     /// </summary>
     [McpServerTool(
         Name = "scryfall_search_snapshots_get",
-        Title = "Get Scryfall Search Snapshots",
+        Title = "Get Saved Scryfall Requests",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Scryfall: reads saved exact-request snapshots without network access. kind list pages snapshot " +
-        "metadata, with optional operation and time filters; kind get replays the ordered members of one " +
+        "Saved Scryfall requests: reads the local snapshots saved for every kind of Scryfall request (search, " +
+        "card lookups, sets, catalogs, and more), with no network access. kind list pages snapshot metadata, with " +
+        "optional operation (the request type) and time filters; kind get replays the ordered members of one " +
         "snapshot (snapshotId is required). The result has the same kind. Example: " +
         "{\"kind\":\"list\",\"operation\":\"search\",\"pageSize\":10}.")]
     internal Task<OperationResult<ScryfallSnapshotsResult>> GetSearchSnapshotsAsync(
         [Description("What to read: list (snapshot metadata) or get (one snapshot's members)."),
-         AllowedValues("list", "get")]
+         AllowedValues(KindList, KindGet)]
         string kind,
         [Description("Only with kind get, and then required: immutable snapshot UUID from a Scryfall result.")]
         Guid? snapshotId = null,
@@ -184,12 +212,11 @@ internal sealed class ScryfallReferenceTools
     }
 
     /// <summary>
-    /// Reads the requested sections and returns the first failure when any section fails.
+    /// Resolves the card, then reads the requested sections and returns the first failure when any step fails.
     /// </summary>
     private async Task<OperationResult<ScryfallCardDetailsResult>> ReadDetailsAsync(
-        Guid oracleId,
+        ScryfallCardLookup lookup,
         IReadOnlyList<string>? include,
-        Guid? scryfallCardId,
         string freshnessPolicy,
         bool includeRaw,
         string? printsCursor,
@@ -197,23 +224,29 @@ internal sealed class ScryfallReferenceTools
         int pageSize,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = ValidateDetails(include, scryfallCardId, printsCursor, rulingsCursor);
+        OperationInvalidInput? invalid = ValidateDetails(include, printsCursor, rulingsCursor);
         if (invalid is not null)
         {
             return invalid;
         }
 
         IReadOnlyList<string> sections = include!;
+        OperationResult<ScryfallCardIdentity> identityResult = await service.ResolveCardIdentityAsync(
+            lookup, freshnessPolicy, cancellationToken).ConfigureAwait(false);
+        if (identityResult is not OperationSuccess<ScryfallCardIdentity> identity)
+        {
+            return OperationFailure.Forward<ScryfallCardIdentity, ScryfallCardDetailsResult>(identityResult);
+        }
+
         ScryfallPrintsResult? prints = null;
         if (sections.Contains(IncludePrints))
         {
             OperationResult<ScryfallPrintsResult> printsResult = await service.GetPrintsAsync(
-                oracleId, freshnessPolicy, printsCursor, pageSize, includeRaw, cancellationToken)
+                identity.Data.OracleId, freshnessPolicy, printsCursor, pageSize, includeRaw, cancellationToken)
                 .ConfigureAwait(false);
             if (printsResult is not OperationSuccess<ScryfallPrintsResult> printsSuccess)
             {
-                return OperationResultForwarding.ForwardFailure<ScryfallPrintsResult, ScryfallCardDetailsResult>(
-                    printsResult);
+                return OperationFailure.Forward<ScryfallPrintsResult, ScryfallCardDetailsResult>(printsResult);
             }
 
             prints = printsSuccess.Data;
@@ -223,27 +256,30 @@ internal sealed class ScryfallReferenceTools
         if (sections.Contains(IncludeRulings))
         {
             OperationResult<ScryfallRulingsResult> rulingsResult = await service.GetRulingsAsync(
-                oracleId, scryfallCardId, freshnessPolicy, rulingsCursor, pageSize, includeRaw, cancellationToken)
-                .ConfigureAwait(false);
+                identity.Data.OracleId,
+                identity.Data.ScryfallId,
+                freshnessPolicy,
+                rulingsCursor,
+                pageSize,
+                includeRaw,
+                cancellationToken).ConfigureAwait(false);
             if (rulingsResult is not OperationSuccess<ScryfallRulingsResult> rulingsSuccess)
             {
-                return OperationResultForwarding.ForwardFailure<ScryfallRulingsResult, ScryfallCardDetailsResult>(
-                    rulingsResult);
+                return OperationFailure.Forward<ScryfallRulingsResult, ScryfallCardDetailsResult>(rulingsResult);
             }
 
             rulings = rulingsSuccess.Data;
         }
 
         return new OperationSuccess<ScryfallCardDetailsResult>(
-            new ScryfallCardDetailsResult(oracleId, prints, rulings));
+            new ScryfallCardDetailsResult(identity.Data.OracleId, identity.Data.ScryfallId, prints, rulings));
     }
 
     /// <summary>
-    /// Checks the include list and the fields that apply to only one section.
+    /// Checks the include list and the cursors that apply to only one section.
     /// </summary>
     private static OperationInvalidInput? ValidateDetails(
         IReadOnlyList<string>? include,
-        Guid? scryfallCardId,
         string? printsCursor,
         string? rulingsCursor)
     {
@@ -267,17 +303,17 @@ internal sealed class ScryfallReferenceTools
             }
         }
 
-        if (!seen.Contains(IncludeRulings) && (scryfallCardId is not null || rulingsCursor is not null))
+        if (!seen.Contains(IncludeRulings) && rulingsCursor is not null)
         {
             return new OperationInvalidInput(
-                "field-not-allowed",
-                "scryfallCardId and rulingsCursor are allowed only when include has rulings.",
-                scryfallCardId is not null ? "scryfallCardId" : "rulingsCursor");
+                KindFields.FieldNotAllowed,
+                "rulingsCursor is allowed only when include has rulings.",
+                "rulingsCursor");
         }
 
         return !seen.Contains(IncludePrints) && printsCursor is not null
             ? new OperationInvalidInput(
-                "field-not-allowed",
+                KindFields.FieldNotAllowed,
                 "printsCursor is allowed only when include has prints.",
                 "printsCursor")
             : null;
@@ -296,7 +332,20 @@ internal sealed class ScryfallReferenceTools
         int? pageSize,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = ValidateReference(kind, codeOrId, catalogName, includeRaw, cursor, pageSize);
+        OperationInvalidInput? invalid = KindFields.CheckKind(kind, KindSets, KindCatalog, KindBulk) ??
+            kind switch
+            {
+                KindSets => KindFields.RejectGiven(kind, ("catalogName", catalogName is not null)),
+                KindCatalog => KindFields.RequireText(kind, "catalogName", catalogName) ??
+                    KindFields.RejectGiven(kind, ("codeOrId", codeOrId is not null), ("includeRaw", includeRaw)),
+                _ => KindFields.RejectGiven(
+                    kind,
+                    ("codeOrId", codeOrId is not null),
+                    ("catalogName", catalogName is not null),
+                    ("includeRaw", includeRaw),
+                    ("cursor", cursor is not null),
+                    ("pageSize", pageSize is not null)),
+            };
         if (invalid is not null)
         {
             return invalid;
@@ -305,68 +354,27 @@ internal sealed class ScryfallReferenceTools
         int size = pageSize ?? 25;
         switch (kind)
         {
-            case "sets":
+            case KindSets:
                 OperationResult<ScryfallSetsResult> sets = await service.GetSetsAsync(
                     codeOrId, freshnessPolicy, cursor, size, includeRaw, cancellationToken).ConfigureAwait(false);
                 return sets is OperationSuccess<ScryfallSetsResult> setsSuccess
                     ? new OperationSuccess<ScryfallReferenceResult>(new ScryfallSetsReference(setsSuccess.Data))
-                    : OperationResultForwarding.ForwardFailure<ScryfallSetsResult, ScryfallReferenceResult>(sets);
-            case "catalog":
+                    : OperationFailure.Forward<ScryfallSetsResult, ScryfallReferenceResult>(sets);
+            case KindCatalog:
                 OperationResult<ScryfallCatalogResult> catalog = await service.GetCatalogAsync(
                     catalogName!, freshnessPolicy, cursor, size, cancellationToken).ConfigureAwait(false);
                 return catalog is OperationSuccess<ScryfallCatalogResult> catalogSuccess
                     ? new OperationSuccess<ScryfallReferenceResult>(new ScryfallCatalogReference(catalogSuccess.Data))
-                    : OperationResultForwarding.ForwardFailure<ScryfallCatalogResult, ScryfallReferenceResult>(
-                        catalog);
-            default:
+                    : OperationFailure.Forward<ScryfallCatalogResult, ScryfallReferenceResult>(catalog);
+            case KindBulk:
                 OperationResult<ScryfallBulkMetadataResult> bulk = await service.GetBulkMetadataAsync(
                     freshnessPolicy, cancellationToken).ConfigureAwait(false);
                 return bulk is OperationSuccess<ScryfallBulkMetadataResult> bulkSuccess
                     ? new OperationSuccess<ScryfallReferenceResult>(new ScryfallBulkReference(bulkSuccess.Data))
-                    : OperationResultForwarding.ForwardFailure<ScryfallBulkMetadataResult, ScryfallReferenceResult>(
-                        bulk);
+                    : OperationFailure.Forward<ScryfallBulkMetadataResult, ScryfallReferenceResult>(bulk);
+            default:
+                throw new UnreachableException("The kind was checked before this switch.");
         }
-    }
-
-    /// <summary>
-    /// Checks that the fields given belong to the chosen kind.
-    /// </summary>
-    private static OperationInvalidInput? ValidateReference(
-        string kind,
-        string? codeOrId,
-        string? catalogName,
-        bool includeRaw,
-        string? cursor,
-        int? pageSize)
-    {
-        if (kind is not ("sets" or "catalog" or "bulk"))
-        {
-            return new OperationInvalidInput("invalid-kind", "kind must be sets, catalog, or bulk.", "kind");
-        }
-
-        if (kind == "catalog" && string.IsNullOrWhiteSpace(catalogName))
-        {
-            return new OperationInvalidInput(
-                "missing-field", "catalogName is required when kind is catalog.", "catalogName");
-        }
-
-        string? misplaced = kind switch
-        {
-            "sets" => catalogName is not null ? "catalogName" : null,
-            "catalog" => codeOrId is not null ? "codeOrId" : includeRaw ? "includeRaw" : null,
-            _ => FindFirstGiven(
-                ("codeOrId", codeOrId is not null),
-                ("catalogName", catalogName is not null),
-                ("includeRaw", includeRaw),
-                ("cursor", cursor is not null),
-                ("pageSize", pageSize is not null)),
-        };
-        return misplaced is null
-            ? null
-            : new OperationInvalidInput(
-                "field-not-allowed",
-                $"{misplaced} is not allowed when kind is {kind}.",
-                misplaced);
     }
 
     /// <summary>
@@ -383,80 +391,37 @@ internal sealed class ScryfallReferenceTools
         int pageSize,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = ValidateSnapshots(
-            kind, snapshotId, operation, retrievedAfterUtc, retrievedBeforeUtc, includeRaw);
+        OperationInvalidInput? invalid = KindFields.CheckKind(kind, KindList, KindGet) ?? (kind == KindList
+            ? KindFields.RejectGiven(kind, ("snapshotId", snapshotId is not null), ("includeRaw", includeRaw))
+            : snapshotId is null
+                ? new OperationInvalidInput(
+                    KindFields.MissingField,
+                    "snapshotId is required when kind is get.",
+                    "snapshotId")
+                : KindFields.RejectGiven(
+                    kind,
+                    ("operation", operation is not null),
+                    ("retrievedAfterUtc", retrievedAfterUtc is not null),
+                    ("retrievedBeforeUtc", retrievedBeforeUtc is not null)));
         if (invalid is not null)
         {
             return invalid;
         }
 
-        if (kind == "list")
+        if (kind == KindList)
         {
             OperationResult<ScryfallPage<ScryfallSnapshotSummary>> list = await service.ListSnapshotsAsync(
                 operation, retrievedAfterUtc, retrievedBeforeUtc, cursor, pageSize, cancellationToken)
                 .ConfigureAwait(false);
             return list is OperationSuccess<ScryfallPage<ScryfallSnapshotSummary>> listSuccess
                 ? new OperationSuccess<ScryfallSnapshotsResult>(new ScryfallSnapshotListReference(listSuccess.Data))
-                : OperationResultForwarding.ForwardFailure<
-                    ScryfallPage<ScryfallSnapshotSummary>, ScryfallSnapshotsResult>(list);
+                : OperationFailure.Forward<ScryfallPage<ScryfallSnapshotSummary>, ScryfallSnapshotsResult>(list);
         }
 
         OperationResult<ScryfallSnapshotPage> get = await service.GetSnapshotAsync(
             snapshotId!.Value, cursor, pageSize, includeRaw, cancellationToken).ConfigureAwait(false);
         return get is OperationSuccess<ScryfallSnapshotPage> getSuccess
             ? new OperationSuccess<ScryfallSnapshotsResult>(new ScryfallSnapshotGetReference(getSuccess.Data))
-            : OperationResultForwarding.ForwardFailure<ScryfallSnapshotPage, ScryfallSnapshotsResult>(get);
-    }
-
-    /// <summary>
-    /// Checks that the fields given belong to the chosen kind.
-    /// </summary>
-    private static OperationInvalidInput? ValidateSnapshots(
-        string kind,
-        Guid? snapshotId,
-        string? operation,
-        DateTimeOffset? retrievedAfterUtc,
-        DateTimeOffset? retrievedBeforeUtc,
-        bool includeRaw)
-    {
-        if (kind is not ("list" or "get"))
-        {
-            return new OperationInvalidInput("invalid-kind", "kind must be list or get.", "kind");
-        }
-
-        if (kind == "get" && snapshotId is null)
-        {
-            return new OperationInvalidInput(
-                "missing-field", "snapshotId is required when kind is get.", "snapshotId");
-        }
-
-        string? misplaced = kind == "list"
-            ? FindFirstGiven(("snapshotId", snapshotId is not null), ("includeRaw", includeRaw))
-            : FindFirstGiven(
-                ("operation", operation is not null),
-                ("retrievedAfterUtc", retrievedAfterUtc is not null),
-                ("retrievedBeforeUtc", retrievedBeforeUtc is not null));
-        return misplaced is null
-            ? null
-            : new OperationInvalidInput(
-                "field-not-allowed",
-                $"{misplaced} is not allowed when kind is {kind}.",
-                misplaced);
-    }
-
-    /// <summary>
-    /// Returns the name of the first field that was given, or null when none was.
-    /// </summary>
-    private static string? FindFirstGiven(params (string Name, bool Given)[] fields)
-    {
-        foreach ((string name, bool given) in fields)
-        {
-            if (given)
-            {
-                return name;
-            }
-        }
-
-        return null;
+            : OperationFailure.Forward<ScryfallSnapshotPage, ScryfallSnapshotsResult>(get);
     }
 }

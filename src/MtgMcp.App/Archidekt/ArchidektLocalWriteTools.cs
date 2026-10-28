@@ -35,7 +35,8 @@ internal sealed class ArchidektLocalWriteTools
     /// </summary>
     [McpServerTool(Name = "archidekt_pull_apply", Title = "Apply Archidekt Pull", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Archidekt: refetches Archidekt, verifies all preview guards, then creates or replaces one local deck in a " +
+        "Archidekt: refetches the remote deck, verifies all preview guards, then creates or replaces one local " +
+        "deck in a " +
         "single transaction.")]
     internal Task<OperationResult<ArchidektApplyResult>> ApplyPullAsync(
         [Description("Fingerprint-, revision-, and remote-state-guarded pull application request.")]

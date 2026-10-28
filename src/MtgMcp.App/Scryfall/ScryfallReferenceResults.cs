@@ -4,10 +4,12 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Scryfall;
 
 /// <summary>
-/// Returns the sections of one card's details that the caller asked for; a section not asked for is absent.
+/// Returns the sections of one card's details that the caller asked for, with the IDs the lookup resolved to.
+/// A section not asked for is absent.
 /// </summary>
 internal sealed record ScryfallCardDetailsResult(
     [property: JsonPropertyName("oracleId")] Guid OracleId,
+    [property: JsonPropertyName("scryfallId")] Guid ScryfallId,
     [property: JsonPropertyName("prints")]
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     ScryfallPrintsResult? Prints,

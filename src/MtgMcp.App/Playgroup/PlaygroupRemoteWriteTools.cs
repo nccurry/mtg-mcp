@@ -27,6 +27,7 @@ internal sealed class PlaygroupRemoteWriteTools
 
     /// <summary>Imports one caller-supplied event batch into an existing game.</summary>
     [McpServerTool(Name = "playgroup_game_events_batch_create", Title = "Create Playgroup Game Events", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
+    [McpMeta(ToolMetadata.RequiresUserInteractionKey, JsonValue = "true")]
     [Description(
         "Playgroup: submits one explicit event batch exactly once. Playgroup exposes no public cleanup operation, so " +
         "callers must inspect provider state before retrying." +

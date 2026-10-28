@@ -8,17 +8,17 @@ using MtgMcp.Decks;
 namespace MtgMcp.App.Archidekt;
 
 /// <summary>
-/// Owns the exact Archidekt tool assignment and explicit opt-in registration group.
+/// Owns the exact Archidekt tool assignment and credential-gated registration group.
 /// </summary>
 internal static class ArchidektToolsetManifest
 {
     /// <summary>
-    /// Gets the descriptor that owns all 23 provider tools and their mode visibility.
+    /// Gets the descriptor that owns all 21 provider tools and their mode visibility.
     /// </summary>
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Archidekt,
         CapabilityToolsetStability.Stable,
-        "Fresh Archidekt evidence plus explicit guarded deck, folder, snapshot, and synchronization workflows. This provider toolset is opt-in; operation mode separately controls authority.",
+        "Fresh Archidekt evidence plus explicit guarded deck, folder, snapshot, and synchronization workflows. This toolset turns on only when Archidekt credentials are present; operation mode separately controls authority.",
         [
             "archidekt_auth_status",
             "archidekt_deck_get",

@@ -53,7 +53,7 @@
   judgments, blended quality scores, or strategic simulation into the stable
   rewrite.
 - Modes are `read-only`, `local`, and `remote` (default). Tools use the
-  `local_deck_*`, `scryfall_*`, `card_*`, `archidekt_*`, `playgroup_*`,
+  `local_deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`,
   `spellbook_*`, and `stats_*` prefixes, and each description starts with its
   data source. Accepted AMEND-004 removes the separate Tagger prefix,
   adapter, toolset, and database; do not implement the superseded design.

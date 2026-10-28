@@ -34,17 +34,18 @@ internal static class ServerInstructions
     /// Lists each job in display order with the tools an agent should reach for first. A job is shown only when
     /// at least one of its tools is visible.
     /// </summary>
-    private static readonly ImmutableArray<(string Job, string[] Tools)> Jobs =
+    internal static readonly ImmutableArray<(string Job, string[] Tools)> Jobs =
     [
-        ("Find cards (Scryfall syntax; otag: finds cards by oracle tag)", ["scryfall_search"]),
+        ("Find cards (Scryfall syntax, where otag finds oracle tags)", ["scryfall_search"]),
         ("Read cards and card details", ["scryfall_cards_get", "scryfall_card_details"]),
         ("See a local deck with card data", ["local_deck_get"]),
         ("Build or edit a local deck", ["local_deck_create", "local_deck_apply_changes"]),
         ("Exact math on draws and decks", ["stats_hypergeometric", "stats_turn_table"]),
+        ("Summarize a local deck", ["stats_local_deck_summary"]),
         ("Install card data that tags and card views need", ["scryfall_card_data_status", "scryfall_card_data_sync"]),
-        ("Archidekt", ["archidekt_pull_preview", "archidekt_push_preview"]),
-        ("Playgroup", ["playgroup_user_playgroups_list", "playgroup_playgroup_games_list"]),
-        ("Combos", ["spellbook_deck_combos_find"]),
+        ("Sync a local deck with Archidekt", ["archidekt_pull_preview", "archidekt_push_preview"]),
+        ("Read Playgroup games and playgroups", ["playgroup_user_playgroups_list", "playgroup_playgroup_games_list"]),
+        ("Find combos in a local deck", ["spellbook_deck_combos_find"]),
     ];
 
     /// <summary>

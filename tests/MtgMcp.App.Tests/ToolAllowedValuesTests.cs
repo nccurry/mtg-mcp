@@ -23,8 +23,7 @@ public sealed class ToolAllowedValuesTests
     public void RepeatedChoiceLists_UseTheirSharedAttribute()
     {
         List<string> offenders = [];
-        foreach ((string toolName, MethodInfo method) in ToolCallPolicy
-            .IndexToolMethods(typeof(ToolCallPolicy).Assembly.GetTypes()))
+        foreach ((string toolName, MethodInfo method) in RegisteredTools.Methods())
         {
             foreach (ParameterInfo parameter in method.GetParameters())
             {

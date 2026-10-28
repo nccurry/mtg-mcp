@@ -14,6 +14,12 @@ namespace MtgMcp.App.Tests;
 public sealed class ScryfallReferenceToolTests
 {
     /// <summary>
+    /// Looks up the fixture's white card by its Scryfall ID.
+    /// </summary>
+    private static readonly ScryfallCardLookup WhiteLookup =
+        new("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D"));
+
+    /// <summary>
     /// Asks the card details tool for printings only.
     /// </summary>
     private static readonly string[] PrintsOnly = ["prints"];
@@ -27,6 +33,16 @@ public sealed class ScryfallReferenceToolTests
     /// Asks the card details tool for both sections.
     /// </summary>
     private static readonly string[] PrintsAndRulings = ["prints", "rulings"];
+
+    /// <summary>
+    /// Names one item the fixture provider returns for each reference kind.
+    /// </summary>
+    private static readonly Dictionary<string, string> ExpectedItem = new()
+    {
+        ["sets"] = "Test Set",
+        ["catalog"] = "Knight",
+        ["bulk"] = "all_cards",
+    };
 
     /// <summary>
     /// Verifies each reference kind reads its data and the result names the same kind.
@@ -47,6 +63,7 @@ public sealed class ScryfallReferenceToolTests
         JsonElement data = Data(result);
         Assert.Equal(kind, data.GetProperty("kind").GetString());
         Assert.True(data.TryGetProperty(sectionName, out _), data.GetRawText());
+        Assert.Contains(ExpectedItem[kind], data.GetRawText(), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -129,18 +146,16 @@ public sealed class ScryfallReferenceToolTests
         CancellationToken token = TestContext.Current.CancellationToken;
 
         JsonElement printsOnly = Data(await fixture.Tools.GetCardDetailsAsync(
-            ScryfallTestFixture.WhiteOracleId,
+            WhiteLookup,
             PrintsOnly,
             cancellationToken: token));
         JsonElement rulingsOnly = Data(await fixture.Tools.GetCardDetailsAsync(
-            ScryfallTestFixture.WhiteOracleId,
+            WhiteLookup,
             RulingsOnly,
-            ScryfallTestFixture.WhiteCardId,
             cancellationToken: token));
         JsonElement both = Data(await fixture.Tools.GetCardDetailsAsync(
-            ScryfallTestFixture.WhiteOracleId,
+            WhiteLookup,
             PrintsAndRulings,
-            ScryfallTestFixture.WhiteCardId,
             cancellationToken: token));
 
         Assert.True(printsOnly.TryGetProperty("prints", out _));
@@ -164,27 +179,25 @@ public sealed class ScryfallReferenceToolTests
         using ServiceFixture fixture = new();
 
         OperationResult<ScryfallCardDetailsResult> result = await fixture.Tools.GetCardDetailsAsync(
-            ScryfallTestFixture.WhiteOracleId,
+            WhiteLookup,
             PrintsAndRulings,
             freshnessPolicy: "cache-only",
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.IsNotType<OperationSuccess<ScryfallCardDetailsResult>>(result.Value);
+        Assert.Equal("scryfall-request-not-cached", Assert.IsType<OperationNotCached>(result.Value).ReasonCode);
     }
 
     /// <summary>
     /// Verifies bad include lists and sections' own fields are refused and named.
     /// </summary>
     [Theory]
-    [InlineData(new string[0], null, null, null, "include")]
-    [InlineData(new[] { "prints", "prints" }, null, null, null, "include")]
-    [InlineData(new[] { "reviews" }, null, null, null, "include")]
-    [InlineData(new[] { "prints" }, true, null, null, "scryfallCardId")]
-    [InlineData(new[] { "prints" }, null, "x", null, "rulingsCursor")]
-    [InlineData(new[] { "rulings" }, null, null, "x", "printsCursor")]
+    [InlineData(new string[0], null, null, "include")]
+    [InlineData(new[] { "prints", "prints" }, null, null, "include")]
+    [InlineData(new[] { "reviews" }, null, null, "include")]
+    [InlineData(new[] { "prints" }, "x", null, "rulingsCursor")]
+    [InlineData(new[] { "rulings" }, null, "x", "printsCursor")]
     public async Task CardDetails_InvalidIncludeOrMisplacedField_ReturnsInvalidInputNamingTheField(
         string[] include,
-        bool? withCardId,
         string? rulingsCursor,
         string? printsCursor,
         string expectedPath)
@@ -192,9 +205,8 @@ public sealed class ScryfallReferenceToolTests
         using ServiceFixture fixture = new();
 
         OperationResult<ScryfallCardDetailsResult> result = await fixture.Tools.GetCardDetailsAsync(
-            ScryfallTestFixture.WhiteOracleId,
+            WhiteLookup,
             include,
-            withCardId == true ? ScryfallTestFixture.WhiteCardId : null,
             printsCursor: printsCursor,
             rulingsCursor: rulingsCursor,
             cancellationToken: TestContext.Current.CancellationToken);
@@ -212,7 +224,7 @@ public sealed class ScryfallReferenceToolTests
         using ServiceFixture fixture = new();
 
         OperationResult<ScryfallCardDetailsResult> result = await fixture.Tools.GetCardDetailsAsync(
-            ScryfallTestFixture.WhiteOracleId,
+            WhiteLookup,
             null!,
             cancellationToken: TestContext.Current.CancellationToken);
 
@@ -332,10 +344,10 @@ public sealed class ScryfallReferenceToolTests
     }
 
     /// <summary>
-    /// Verifies a fuzzy-name lookup that matches nothing returns the provider's not-found result.
+    /// Verifies a fuzzy-name lookup that matches nothing returns one row with the status not-found.
     /// </summary>
     [Fact]
-    public async Task CardsGet_FuzzyNameLookupWithoutAMatch_ReturnsTheFailure()
+    public async Task CardsGet_FuzzyNameLookupWithoutAMatch_ReturnsANotFoundRow()
     {
         using TemporaryDirectory temporary = new();
         using ScryfallService service = new(
@@ -357,7 +369,11 @@ public sealed class ScryfallReferenceToolTests
             [new ScryfallCardLookup("fuzzy-name", "zzzz")],
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.IsNotType<OperationSuccess<ScryfallCollectionResponse>>(result.Value);
+        ScryfallCollectionResponse response = Assert.IsType<OperationSuccess<ScryfallCollectionResponse>>(
+            result.Value).Data;
+        ScryfallCollectionRowResponse row = Assert.Single(response.Page.Items);
+        Assert.Equal(("not-found", 0), (row.Status, row.Index));
+        Assert.Null(row.Card);
     }
 
     /// <summary>

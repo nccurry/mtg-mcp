@@ -236,7 +236,8 @@ internal sealed class ScryfallCardResponseOperations
     {
         if (cursor is null && lookups is [{ Kind: "fuzzy-name" } fuzzyLookup])
         {
-            return await GetFuzzyRowAsync(fuzzyLookup, freshnessPolicy, responseFormat, fields, cancellationToken)
+            return await GetFuzzyRowAsync(
+                fuzzyLookup, freshnessPolicy, pageSize, responseFormat, fields, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -293,16 +294,44 @@ internal sealed class ScryfallCardResponseOperations
     private async Task<OperationResult<ScryfallCollectionResponse>> GetFuzzyRowAsync(
         ScryfallCardLookup lookup,
         string freshnessPolicy,
+        int pageSize,
         string? responseFormat,
         IReadOnlyList<string>? fields,
         CancellationToken cancellationToken)
     {
+        OperationInvalidInput? pageFailure = ScryfallCardEvidenceOperations.ValidatePageSize(
+            pageSize,
+            string.Equals(responseFormat, "full", StringComparison.Ordinal));
+        if (pageFailure is not null)
+        {
+            return pageFailure;
+        }
+
+        OperationInvalidInput? lookupFailure = ScryfallCardEvidenceOperations.ValidateLookup(lookup);
+        if (lookupFailure is not null)
+        {
+            return lookupFailure;
+        }
+
         OperationResult<ScryfallCardResponse> single = await GetCardAsync(
             lookup,
             freshnessPolicy,
             responseFormat,
             fields,
             cancellationToken).ConfigureAwait(false);
+        if (single is OperationNotFound missing)
+        {
+            ScryfallCollectionRowResponse missRow = new(0, lookup, "not-found", null, null, missing.Message);
+            return new OperationSuccess<ScryfallCollectionResponse>(
+                new ScryfallCollectionResponse(
+                    new ScryfallPage<ScryfallCollectionRowResponse>([missRow], 1, null),
+                    null,
+                    null)
+                {
+                    ResponseFormat = responseFormat ?? "standard",
+                });
+        }
+
         if (single is not OperationSuccess<ScryfallCardResponse> success)
         {
             return Forward<ScryfallCardResponse, ScryfallCollectionResponse>(single);

@@ -18,8 +18,9 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
   `archidekt`, `playgroup`, or `spellbook`. Build one deterministic registration
   set at startup by intersecting enabled toolsets with operation-mode
   visibility; never use toolsets as authorization.
-- Keep the default profile limited to `decks`, `scryfall`, and `stats`.
-  Provider-specific `archidekt`, `playgroup`, and `spellbook` surfaces are opt-in.
+- Every toolset is on by default. `archidekt` and `playgroup` are off when their
+  credentials are absent, even when named; check presence only, never call the
+  provider or read secrets for this.
   Do not advertise dynamic list changes while registration is session-static.
 - Accepted AMEND-004 removes the separate Tagger descriptor and routes official
   community-tag evidence through `scryfall`; do not add a placeholder or alias.

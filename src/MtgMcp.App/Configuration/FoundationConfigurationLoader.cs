@@ -158,11 +158,11 @@ internal static class FoundationConfigurationLoader
         PlaygroupOptions playgroupOptions = playgroupResult is OperationSuccess<PlaygroupOptions> playgroup
             ? playgroup.Data
             : PlaygroupOptions.CreateDefault(null);
-        CapabilityToolsetSelection effectiveToolsets = ApplyCredentialGates(
+        ProviderCredentialPresence presence = ProviderCredentialPresence.From(archidekt.Data, playgroupOptions);
+        CapabilityToolsetSelection effectiveToolsets = DisableUnconfiguredToolsets(
             toolsets.Data,
-            archidekt.Data,
-            playgroupOptions,
-            playgroupResult is OperationSuccess<PlaygroupOptions>);
+            presence,
+            playgroupResult);
 
         return new OperationSuccess<FoundationConfiguration>(
             new FoundationConfiguration(
@@ -175,71 +175,37 @@ internal static class FoundationConfigurationLoader
                 !string.IsNullOrWhiteSpace(configuredDataRoot),
                 legacyData,
                 archidekt.Data,
-                playgroupOptions));
+                playgroupOptions,
+                presence));
     }
 
     /// <summary>
     /// Turns off the Archidekt and Playgroup toolsets whose credentials are absent or whose configuration is invalid.
-    /// Only the presence of a setting or file is checked; no provider is called and no secret is read.
     /// </summary>
-    private static CapabilityToolsetSelection ApplyCredentialGates(
+    private static CapabilityToolsetSelection DisableUnconfiguredToolsets(
         CapabilityToolsetSelection requested,
-        ArchidektOptions archidekt,
-        PlaygroupOptions playgroup,
-        bool playgroupValid)
+        ProviderCredentialPresence presence,
+        OperationResult<PlaygroupOptions> playgroupResult)
     {
-        List<CapabilityToolsetGate> gates = [];
-        if (requested.Includes(CapabilityToolset.Archidekt) && !HasArchidektCredentials(archidekt))
+        List<DisabledToolset> disabled = [];
+        if (requested.Includes(CapabilityToolset.Archidekt) && !presence.Archidekt)
         {
-            gates.Add(new CapabilityToolsetGate(
-                CapabilityToolset.Archidekt,
-                CapabilityToolsetGate.CredentialsMissing));
+            disabled.Add(new DisabledToolset(CapabilityToolset.Archidekt, DisabledToolset.CredentialsMissing));
         }
 
         if (requested.Includes(CapabilityToolset.Playgroup))
         {
-            if (!playgroupValid)
+            if (playgroupResult is not OperationSuccess<PlaygroupOptions>)
             {
-                gates.Add(new CapabilityToolsetGate(
-                    CapabilityToolset.Playgroup,
-                    CapabilityToolsetGate.CredentialsInvalid));
+                disabled.Add(new DisabledToolset(CapabilityToolset.Playgroup, DisabledToolset.CredentialsInvalid));
             }
-            else if (!HasPlaygroupCredentials(playgroup))
+            else if (!presence.Playgroup)
             {
-                gates.Add(new CapabilityToolsetGate(
-                    CapabilityToolset.Playgroup,
-                    CapabilityToolsetGate.CredentialsMissing));
+                disabled.Add(new DisabledToolset(CapabilityToolset.Playgroup, DisabledToolset.CredentialsMissing));
             }
         }
 
-        return requested.WithGates(gates);
-    }
-
-    /// <summary>
-    /// Reports whether Archidekt has both a username and password, or a credential file that exists.
-    /// </summary>
-    internal static bool HasArchidektCredentials(ArchidektOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        bool pair = !string.IsNullOrWhiteSpace(options.Username) && !string.IsNullOrWhiteSpace(options.Password);
-        return pair || CredentialFileExists(options.CredentialsFile);
-    }
-
-    /// <summary>
-    /// Reports whether Playgroup has an API key or a credential file that exists.
-    /// </summary>
-    internal static bool HasPlaygroupCredentials(PlaygroupOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        return !string.IsNullOrWhiteSpace(options.ApiKey) || CredentialFileExists(options.CredentialsFile);
-    }
-
-    /// <summary>
-    /// Reports whether a named credential file exists, without opening it.
-    /// </summary>
-    private static bool CredentialFileExists(string? path)
-    {
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        return requested.WithDisabledToolsets(disabled);
     }
 
     /// <summary>

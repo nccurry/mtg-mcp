@@ -77,9 +77,9 @@ internal static class FoundationCli
             return 0;
         }
 
-        foreach (CapabilityToolsetGate gate in configuration.Data.Toolsets.Gates)
+        foreach (DisabledToolset disabled in configuration.Data.Toolsets.DisabledToolsets)
         {
-            error.WriteLine(gate.DescribeNotice());
+            error.WriteLine(disabled.DescribeNotice());
         }
 
         try

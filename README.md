@@ -4,7 +4,7 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-Version `0.9.0` is a fresh stdio server design. Every toolset is on by default.
+The unreleased `0.11.0` tool surface builds on the `0.9.0` stdio server design. Every toolset is on by default.
 With Archidekt and Playgroup credentials, the server exposes 80 tools in `remote`
 mode (the default), 67 in `local` mode, and 53 in `read-only` mode. Without
 credentials it exposes 43, 43, and 30, because the Archidekt and Playgroup

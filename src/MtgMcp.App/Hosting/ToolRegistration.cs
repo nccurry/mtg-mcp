@@ -49,13 +49,17 @@ internal static class ToolRegistration
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(target);
+        ToolArgumentCatalog.Shared.Register(method);
         return McpServerTool.Create(method, target, new McpServerToolCreateOptions
         {
             SerializerOptions = ToolCallPolicy.SerializerOptions,
             SchemaCreateOptions = new AIJsonSchemaCreateOptions
             {
                 TransformSchemaNode = describeNode is null ? null : (_, schema) => describeNode(schema),
-                // The transform-options hook is the one that reaches the root and parameter schemas of tool methods.
+                // Two hooks build the schema. TransformOptions runs on the root input object and on each parameter
+                // schema of the tool method, which is where closing objects and list item choices are applied.
+                // The create-options hook runs on the schemas generated for each parameter type, so the optional
+                // describeNode step runs on both.
                 TransformOptions = new AIJsonSchemaTransformOptions
                 {
                     TransformSchemaNode = (context, schema) =>
@@ -66,7 +70,7 @@ internal static class ToolRegistration
     }
 
     /// <summary>
-    /// Closes the root input object, adds list item choices, and applies the optional description step.
+    /// Closes every object node, adds list item choices, and applies the optional description step.
     /// </summary>
     private static JsonNode TransformNode(
         ReadOnlySpan<string> path,
@@ -75,12 +79,7 @@ internal static class ToolRegistration
         Func<JsonNode, JsonNode>? describeNode)
     {
         JsonNode result = describeNode is null ? schema : describeNode(schema);
-        if (path.Length == 0)
-        {
-            CloseObject(result);
-            return result;
-        }
-
+        CloseObject(result);
         if (itemChoices is not null &&
             path.Length == 2 &&
             path[0] == "properties" &&
@@ -93,11 +92,12 @@ internal static class ToolRegistration
     }
 
     /// <summary>
-    /// Makes an object schema reject properties it does not list.
+    /// Makes an object schema that lists its properties reject any other property, to match the runtime, which
+    /// rejects unknown fields at every level. A union subtype lists its <c>kind</c> property, so it stays valid.
     /// </summary>
     private static void CloseObject(JsonNode schema)
     {
-        if (schema is JsonObject node && node["properties"] is JsonObject)
+        if (schema is JsonObject node && node["properties"] is JsonObject && !node.ContainsKey("additionalProperties"))
         {
             node["additionalProperties"] = false;
         }
