@@ -3,6 +3,7 @@ using ModelContextProtocol.Server;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
+using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Decks;
 
@@ -17,12 +18,28 @@ internal sealed class DeckReadTools
     private readonly SqliteDeckStore store;
 
     /// <summary>
-    /// Creates read tools around one process-local deck store.
+    /// Builds deck reads that add installed card data to entries.
     /// </summary>
-    internal DeckReadTools(SqliteDeckStore store)
+    private readonly DeckCardViewCoordinator cardViews;
+
+    /// <summary>
+    /// Creates read tools around one process-local deck store and the coordinator that adds card data to entries.
+    /// </summary>
+    internal DeckReadTools(SqliteDeckStore store, DeckCardViewCoordinator cardViews)
     {
         this.store = store;
+        this.cardViews = cardViews;
     }
+
+    /// <summary>
+    /// Gets the allowed item values of the list parameters, published in the tool schema.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> ItemChoices { get; } =
+        new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["include"] = [DeckCardViewCoordinator.IncludeCards, DeckCardViewCoordinator.IncludeTags],
+            ["fields"] = ScryfallConciseFields.All,
+        };
 
     /// <summary>
     /// Lists one canonical page of local decks.
@@ -55,12 +72,32 @@ internal sealed class DeckReadTools
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Gets one local deck with entries, zones, categories, assignments, and provider-neutral bindings.")]
-    internal Task<OperationResult<DeckDocument>> GetAsync(
+    [Description(
+        "Gets one local deck: its stored state with entries, zones, categories, assignments, and " +
+        "provider-neutral bindings, plus the entry IDs that edits need. Add include [cards, tags] to also get, " +
+        "for each entry, its concise Scryfall card fields (exact printing) and oracle tag slugs from installed " +
+        "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
+        "scryfall_corpus_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
+        "To filter, group, or total a card list, use a card-list analysis tool instead.")]
+    internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
+        [Description(
+            "Optional extras for each entry: cards (concise card fields) and tags (oracle tag slugs). " +
+            "When both are given the card leaves out tags unless fields names them. " +
+            "Omit to get the stored deck only.")]
+        IReadOnlyList<string>? include = null,
+        [Description(
+            "Only with include cards: concise card fields to return instead of the default set; " +
+            "same names as scryfall_search fields.")]
+        IReadOnlyList<string>? fields = null,
+        [Description(
+            "Opaque cursor from nextCursor of a previous deck_get call with the same deckId, include, and fields.")]
+        string? cursor = null,
+        [Description("Only with include: entries per page, from 1 through 100; the default is 25.")]
+        int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
-        return store.GetAsync(deckId, cancellationToken);
+        return cardViews.GetAsync(deckId, include, fields, cursor, pageSize, cancellationToken);
     }
 
     /// <summary>

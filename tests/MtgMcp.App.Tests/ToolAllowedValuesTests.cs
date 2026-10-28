@@ -33,6 +33,7 @@ public sealed class ToolAllowedValuesTests
                     "freshnessPolicy" => typeof(FreshnessPolicyValuesAttribute),
                     "formatId" => typeof(InterchangeFormatValuesAttribute),
                     "tagType" => typeof(TagKindValuesAttribute),
+                    "responseFormat" => typeof(ResponseFormatValuesAttribute),
                     _ => null,
                 };
                 if (expected is not null && parameter.GetCustomAttribute(expected) is null)
@@ -188,7 +189,7 @@ public sealed class ToolAllowedValuesTests
     /// <summary>
     /// Runs one search with the given choices and no other options.
     /// </summary>
-    private static Task<OperationResult<ScryfallSearchResult>> SearchAsync(
+    private static Task<OperationResult<ScryfallSearchResponse>> SearchAsync(
         ScryfallService service,
         string unique,
         string order,
@@ -225,6 +226,7 @@ public sealed class ToolAllowedValuesTests
             Path.Combine(temporary.Path, "data"),
             allowLocalWrites,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://scryfall.test/"),
             handler: new NotFoundHandler());
     }

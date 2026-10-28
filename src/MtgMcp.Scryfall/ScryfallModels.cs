@@ -52,6 +52,10 @@ public sealed record ScryfallCardFace(
     [property: JsonPropertyName("colors")] IReadOnlyList<string> Colors,
     [property: JsonPropertyName("imageUris")] IReadOnlyDictionary<string, string> ImageUris,
     [property: JsonPropertyName("illustrationId")] Guid? IllustrationId,
+    [property: JsonPropertyName("oracleId")] Guid? OracleId,
+    [property: JsonPropertyName("power")] string? Power,
+    [property: JsonPropertyName("toughness")] string? Toughness,
+    [property: JsonPropertyName("loyalty")] string? Loyalty,
     [property: JsonPropertyName("raw"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Raw);
 
 /// <summary>
@@ -119,7 +123,56 @@ public sealed record ScryfallCard(
     [property: JsonPropertyName("tags")] IReadOnlyList<ScryfallTagEvidence> Tags,
     [property: JsonPropertyName("tagCoverage")] string TagCoverage,
     [property: JsonPropertyName("evidence")] EvidenceDescriptor Evidence,
-    [property: JsonPropertyName("raw"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Raw);
+    [property: JsonPropertyName("raw"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Raw)
+{
+    /// <summary>
+    /// Gets the card rarity, such as common or mythic.
+    /// </summary>
+    [JsonPropertyName("rarity")]
+    public string? Rarity { get; init; }
+
+    /// <summary>
+    /// Gets the power as printed, which can be a symbol such as an asterisk.
+    /// </summary>
+    [JsonPropertyName("power")]
+    public string? Power { get; init; }
+
+    /// <summary>
+    /// Gets the toughness as printed.
+    /// </summary>
+    [JsonPropertyName("toughness")]
+    public string? Toughness { get; init; }
+
+    /// <summary>
+    /// Gets the starting loyalty as printed.
+    /// </summary>
+    [JsonPropertyName("loyalty")]
+    public string? Loyalty { get; init; }
+
+    /// <summary>
+    /// Gets the Scryfall layout name, such as normal or transform.
+    /// </summary>
+    [JsonPropertyName("layout")]
+    public string? Layout { get; init; }
+
+    /// <summary>
+    /// Gets the game platforms Scryfall lists for this printing, such as paper, mtgo, and arena.
+    /// </summary>
+    [JsonPropertyName("games")]
+    public IReadOnlyList<string> Games { get; init; } = [];
+
+    /// <summary>
+    /// Gets whether the card is on the Reserved List.
+    /// </summary>
+    [JsonPropertyName("reserved")]
+    public bool Reserved { get; init; }
+
+    /// <summary>
+    /// Gets whether Scryfall marks the card as a Commander Game Changer, or null when the card object omits it.
+    /// </summary>
+    [JsonPropertyName("gameChanger")]
+    public bool? GameChanger { get; init; }
+}
 
 /// <summary>
 /// Preserves one provider ruling as a source fact.
@@ -175,7 +228,14 @@ public sealed record ScryfallSnapshotReference(
 public sealed record ScryfallPage<T>(
     [property: JsonPropertyName("items")] IReadOnlyList<T> Items,
     [property: JsonPropertyName("totalCount")] int TotalCount,
-    [property: JsonPropertyName("nextCursor")] string? NextCursor);
+    [property: JsonPropertyName("nextCursor")] string? NextCursor)
+{
+    /// <summary>
+    /// Gets the cards of this page as the card formatter shaped and cut them, for pages built with an item counter.
+    /// </summary>
+    [JsonIgnore]
+    internal ScryfallFormattedCards? Formatted { get; init; }
+}
 
 /// <summary>
 /// Returns one ordered card search page and its replay identity.

@@ -1,4 +1,5 @@
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -15,7 +16,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         DeckDocument deck = RequireSuccess(await store.CreateAsync(
             new DeckCreateRequest("Fixture"),
@@ -36,7 +37,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
@@ -61,7 +62,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
@@ -83,7 +84,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         DeckDocument deck = RequireSuccess(await store.CreateAsync(
             new DeckCreateRequest("Fixture"),
@@ -102,7 +103,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
@@ -126,7 +127,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         DeckDocument deck = RequireSuccess(await store.CreateAsync(
             new DeckCreateRequest("Fixture"),
@@ -150,7 +151,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(

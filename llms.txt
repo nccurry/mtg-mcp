@@ -42,7 +42,7 @@ or API documents to plan new work.
 - [Adapters](docs/adapters.md): Current Scryfall, Archidekt, Playgroup, and Moxfield boundaries.
 - [Heuristic models](docs/heuristic-models.md): Post-cutover experimental constraints; not stable `0.9.0` scope.
 - [Toolsets](docs/toolsets.md): Fixed tool-group selection, modes, and common profiles.
-- [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
+- [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, and the historical `detailLevel` levels.
 
 ## Agent Planning
 

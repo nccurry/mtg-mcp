@@ -191,6 +191,39 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
+    /// Finds ordered installed cards from one generation, checking on the same connection that the generation is
+    /// still complete. Returns null when it is not, so a vanished generation is not mistaken for missing cards.
+    /// </summary>
+    internal async Task<List<StoredCardDataObject?>?> FindCardsInCompleteGenerationAsync(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        Guid generationId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lookups);
+        await using SqliteConnection? connection =
+            await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null ||
+            !await ContainsCompleteGenerationOnConnectionAsync(connection, generationId, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        List<StoredCardDataObject?> matches = new(lookups.Count);
+        foreach (ScryfallEvidenceLookup lookup in lookups)
+        {
+            matches.Add(await FindCardOnConnectionAsync(
+                connection,
+                generationId,
+                lookup.Lookup,
+                lookup.RequiredLanguage,
+                cancellationToken).ConfigureAwait(false));
+        }
+
+        return matches;
+    }
+
+    /// <summary>
     /// Reports whether one complete card-data generation remains available for cursor replay.
     /// </summary>
     internal async Task<bool> ContainsCompleteGenerationAsync(
@@ -352,6 +385,125 @@ internal sealed class ScryfallCardDataStore
             .Single(value => value.Type == "rulings")
             .ProviderUpdatedAtUtc;
         return new StoredCardDataCollection(generationId.Value, generation.CreatedAtUtc, providerUpdatedAtUtc, items);
+    }
+
+    /// <summary>
+    /// Reads oracle tag slugs and the lowest USD price across English printings for each Oracle ID from one
+    /// generation, with one query for all tags and one for all prices.
+    /// </summary>
+    /// <param name="generationId">The generation to read, or null for the active generation.</param>
+    /// <param name="oracleIds">The Oracle IDs to read.</param>
+    /// <param name="includeTags">Whether to read tag slugs.</param>
+    /// <param name="includePrice">Whether to read the lowest USD price.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    internal async Task<ScryfallInstalledCardFactsRead> ReadInstalledCardFactsAsync(
+        Guid? generationId,
+        IReadOnlyCollection<Guid> oracleIds,
+        bool includeTags,
+        bool includePrice,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(oracleIds);
+        await using SqliteConnection? connection =
+            await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null)
+        {
+            return ScryfallInstalledCardFactsRead.NotInstalled;
+        }
+
+        Guid? generation = generationId ??
+            await ReadStateGuidAsync(connection, "active_generation_id", cancellationToken).ConfigureAwait(false);
+        if (generation is null ||
+            !await ContainsCompleteGenerationOnConnectionAsync(connection, generation.Value, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return ScryfallInstalledCardFactsRead.NotInstalled;
+        }
+
+        string idList = JsonSerializer.Serialize(oracleIds.Select(ScryfallSql.FormatGuid));
+        Dictionary<Guid, List<string>> tags = includeTags
+            ? await ReadOracleTagSlugsAsync(connection, generation.Value, idList, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
+        Dictionary<Guid, string> prices = includePrice
+            ? await ReadCheapestUsdAsync(connection, generation.Value, idList, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
+        Dictionary<Guid, ScryfallInstalledCardFacts> result = [];
+        foreach (Guid oracleId in oracleIds)
+        {
+            result[oracleId] = new ScryfallInstalledCardFacts(
+                tags.TryGetValue(oracleId, out List<string>? slugs) ? slugs : [],
+                prices.TryGetValue(oracleId, out string? price) ? price : null);
+        }
+
+        return new ScryfallInstalledCardFactsRead(true, result);
+    }
+
+    /// <summary>
+    /// Reads the official oracle tag slugs assigned directly to each listed Oracle ID, sorted by slug.
+    /// </summary>
+    private static async Task<Dictionary<Guid, List<string>>> ReadOracleTagSlugsAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        string oracleIdList,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT DISTINCT a.target_id, t.slug FROM tag_assignments a " +
+            "JOIN tags t ON t.generation_id = a.generation_id AND t.tag_id = a.tag_id " +
+            "WHERE a.generation_id = $generation AND a.target_type = 'oracle' AND t.tag_type = 'oracle' " +
+            "AND a.target_id IN (SELECT value FROM json_each($ids)) ORDER BY a.target_id, t.slug;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$ids", oracleIdList);
+        Dictionary<Guid, List<string>> result = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            Guid oracleId = ScryfallSql.ParseGuid(reader.GetString(0));
+            if (!result.TryGetValue(oracleId, out List<string>? slugs))
+            {
+                slugs = [];
+                result.Add(oracleId, slugs);
+            }
+
+            slugs.Add(reader.GetString(1));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reads the lowest USD price among the installed English printings of each listed Oracle ID, keeping
+    /// Scryfall's text, with one row per Oracle ID. Non-English printings are skipped before their raw JSON is read,
+    /// and the price is extracted once for each printing. Equal prices are broken by card ID.
+    /// </summary>
+    private static async Task<Dictionary<Guid, string>> ReadCheapestUsdAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        string oracleIdList,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT oracle_id, usd FROM (" +
+            "SELECT oracle_id, usd, ROW_NUMBER() OVER " +
+            "(PARTITION BY oracle_id ORDER BY CAST(usd AS REAL), card_id) AS position FROM (" +
+            "SELECT oracle_id, card_id, json_extract(raw_json, '$.prices.usd') AS usd FROM card_objects " +
+            "WHERE generation_id = $generation AND lang = 'en' " +
+            "AND oracle_id IN (SELECT value FROM json_each($ids))) " +
+            "WHERE usd IS NOT NULL) WHERE position = 1;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$ids", oracleIdList);
+        Dictionary<Guid, string> result = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result[ScryfallSql.ParseGuid(reader.GetString(0))] = reader.GetString(1);
+        }
+
+        return result;
     }
 
     /// <summary>

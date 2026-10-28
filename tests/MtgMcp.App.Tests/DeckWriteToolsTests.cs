@@ -1,8 +1,10 @@
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
+using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Tests;
 
@@ -21,7 +23,12 @@ public sealed class DeckWriteToolsTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         DeckWriteTools writes = new(store, OperationMode.Local);
         DeckBatchWriteTools batchWrites = new(store, OperationMode.Local);
-        DeckReadTools reads = new(store);
+        using ScryfallService scryfall = new(
+            temporary.Path,
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions);
+        DeckReadTools reads = new(store, new DeckCardViewCoordinator(store, scryfall));
         Guid initialEntryId = Guid.CreateVersion7();
         DeckDocument deck = RequireSuccess(await writes.CreateAsync(
             new DeckCreateRequest(
@@ -104,9 +111,9 @@ public sealed class DeckWriteToolsTests
 
         Assert.Single(RequireSuccess(await reads.ListAsync(
             cancellationToken: TestContext.Current.CancellationToken)).Items);
-        DeckDocument read = RequireSuccess(await reads.GetAsync(
+        DeckDocumentView read = RequireSuccess(await reads.GetAsync(
             deck.DeckId,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(deck.DeckId, read.DeckId);
         Assert.Equal(deck.Revision, read.Revision);
         Assert.True(RequireSuccess(await reads.ValidateAsync(
