@@ -600,7 +600,30 @@ After a verified push, the new baseline links each entry and category the push
 created to the row Archidekt assigned, so the next preview plans only real
 changes. If a created entry cannot be matched exactly, `archidekt_push_apply`
 lists it in `unlinkedLocalIds`; the next push removes and re-adds that row
-instead of duplicating it.
+instead of duplicating it. If the verification finds a difference
+(`verification-mismatch`), the baseline still records the verified remote state
+and links created entries, but the local deck is not marked synchronized: what
+Archidekt did not take stays visible as a local change, a pull conflicts, and
+the next push plans only that difference.
+
+Category names are case-sensitive, as on Archidekt: `Sideboard` and `SIDEBOARD`
+are two categories. A push compares names exactly. Archidekt keeps no card zone
+of its own; it comes from the categories (a category named Commander, Sideboard
+or Maybeboard, or the commander category; otherwise main). A push that would
+send a card whose zone differs from that is refused with
+`entry-zone-contradicts-category`, naming the cards.
+
+A difference where the local deck and Archidekt changed the same field to the
+same value is `converged`: no conflict, no operation, and the next apply
+advances the baseline. Entry order numbers (`sortOrder`) and category rank are
+not compared as remote changes, because Archidekt renumbers them; a local edit
+to them, or to a category color, still counts as a local change.
+
+To take the Archidekt state for a deck that is stuck as locally changed, call
+`archidekt_pull_preview` with `discardLocalChanges` set to true and
+`localDeckId`, then `archidekt_pull_apply` with the same flag in the request.
+The preview lists what would be discarded. Without the flag nothing is
+discarded, and the flag needs an existing local deck (`discard-needs-local-deck`).
 
 ## Read Playgroup evidence
 

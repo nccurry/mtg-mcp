@@ -1039,55 +1039,79 @@ phase 6 evidence row of the README.
 
 - **FIX-001, protocol.** The server no longer pins `ProtocolVersion`. This
   supersedes the `latest-mcp-and-toolchain` decision (SADD lines 62 to 85 and
-  145), recorded in the rewrite registry. `FoundationProtocolPolicy` still
-  removes `logging` and `listChanged` from the `initialize` result.
+  145), recorded in the rewrite registry and as a pointer in that completed
+  packet (README, LMT-007, LMT-009). `FoundationProtocolPolicy` still removes
+  `logging` and `listChanged` from the `initialize` result.
 - **FIX-002, category names.** `deck_categories.name` is `BINARY`, not
-  `NOCASE`, through schema migration 2 (a table rebuild with foreign keys off;
-  an existing database gets a pre-migration copy first; the migration checksum
-  of every applied version is validated). Archidekt mapping looks a category up
+  `NOCASE`, through schema migration 2 (a table rebuild with foreign keys off,
+  restored afterward, also after a failure; an existing database gets a
+  pre-migration copy first; the checksum of every applied migration is
+  validated). The upgrade runs when any connection is opened for writing
+  (`DeckDatabase.OpenConnectionAsync`), so every write path, a pull apply, and a
+  batch edit see schema 2, and a restore upgrades the restored file at once. A
+  read of a schema 1 file does not upgrade it. Schema 2 is one way: 0.11.0
+  cannot open it. Archidekt mapping from a provider payload looks a category up
   by exact name first and then by a unique case-insensitive match
-  (`CategoryNames`). Known limit: category membership and primary-category
-  equality in the push verification stay case-insensitive, because the provider
-  may recase names on read, so moving a card between two categories that differ
-  only by case is not seen as a change by that comparison. `MapFailure` names
-  the violated constraint (`DescribeConstraint`).
+  (`CategoryNames`). Planning a push compares category names exactly: a name
+  with no exact match is a new category and the old one is deleted, never
+  renamed (S1/S7). Only the check after a push (`lenientNames`) accepts a
+  category or primary category that differs only by case, never one another
+  target category matched exactly, because the provider may recase names on
+  read. `MapFailure` names the violated constraint (`DescribeConstraint`).
 - **FIX-003, push.** `ArchidektSyncPlanner.FindZoneContradictions` runs on the
-  plan: an `entry-add` or an `entry-update` that changes zone or primary
-  category, with a `main` or `commander` zone and a primary category whose
-  `includedInDeck` is false, is refused. The opposite case (a sideboard zone
-  under an included category) is not refused, because a pulled deck can hold it.
-  After `verification-mismatch` the baseline is written as for `applied`;
-  `LinkByCardIdentity` links a created row that came back different when it is
-  the only unlinked row with that card. Remote fingerprints are recomputed with
-  the current rules before comparing (`Recompute`), so a baseline from an
-  earlier version still matches an unchanged deck; entry `sortOrder` is left
-  out of the content fingerprint and of the difference rows. The
-  `discardLocalChanges` option is in the preview fingerprint and the operation
-  text, requires `localDeckId` (`discard-needs-local-deck`), and leaves the
-  default behavior unchanged. A push that stops as `partial` records nothing.
+  plan and refuses an `entry-add` or `entry-update` whose zone differs from the
+  zone a read gives its categories (`MapZone`, the same function the read uses),
+  so a Sideboard category that is included in the deck, or an outside-the-deck
+  category without a special name, is judged by that rule and not by
+  `includedInDeck`. After `verification-mismatch` the baseline records the
+  verified remote state and links created rows (`LinkByCardIdentity`, when the
+  card is the only unlinked one), but its local fingerprint is the value
+  `unsynchronized`, which no deck has: every difference Archidekt did not take
+  stays a local change, so a pull conflicts and a push plans only those
+  differences. Remote fingerprints are recomputed with the current rules before
+  comparing (`Recompute`), so an earlier baseline still matches an unchanged
+  deck; entry `sortOrder` is left out of the content fingerprint and the
+  difference rows. `discardLocalChanges` is in the preview fingerprint and the
+  operation text, needs `localDeckId` (`discard-needs-local-deck`), and leaves
+  the default unchanged. A push that stops as `partial` records nothing.
 - **FIX-004, local fingerprint.** `FingerprintLocalContent` sorts entries,
   categories, and assignments by ID for both the stored deck and the creation
-  draft. A deck pulled by an earlier version keeps a baseline made with the old
-  order; `discardLocalChanges` is its way out.
+  draft. A baseline now has `schemaVersion` 2 and also stores
+  `localInvisibleFingerprint` (entry order numbers, category colors, category
+  ranks: the local fields no remote row shows). A version 1 baseline (made by
+  an earlier version) is read as unchanged when the deck matches the order that
+  version recorded (`LegacyLocalFingerprint`, the store order), or when its rows
+  show no local change; so an upgraded deck is not stuck, at the cost that an
+  edit to a hidden field on such a deck is not seen until the next
+  synchronization writes a version 2 baseline.
 - **FIX-005, converged.** A difference whose local and remote values are equal
   has state `converged`; it counts as a represented change on both sides but is
-  neither a local nor a remote change for conflict purposes.
+  neither a local nor a remote change for conflict purposes. It does not hide a
+  local edit to a hidden field: when the stored `localInvisibleFingerprint`
+  differs, `/localOnly/content` is reported as `local-changed` beside it.
 - **FIX-006, IDs.** `ArchidektContract.StableGuid(scope, localDeckId, id)`
   derives local entry and category IDs per local deck; the preview fingerprint
   does not contain them, so preview and apply agree. Baselines also keep the old
-  provider-only IDs as extra links, so decks made earlier still link.
+  provider-only IDs as extra links, so decks made earlier still link, push, and
+  pull (tested with a deck built the earlier way).
 - **FIX-007, whole numbers.** `WholeNumberArguments.Normalize` runs first in
   the tool call filter and rewrites any number written with a fractional part
   or an exponent but holding a whole value that fits 64 bits (`328.0`,
-  `3.28e2`) as the plain integer, at any depth; a number field that is not an
-  integer reads the plain form as well. A number with a fractional part, or one
-  out of range, is left alone and fails to bind as before, and the filter
-  already turns that into `invalid-arguments` with the JSON path. Custom `int`
-  and `long` converters were tried first and dropped: a custom converter hides
-  the type from the schema generator, which then published empty schemas and
-  lost property descriptions (caught by `StatisticsTools_EveryMode_*`). A test
-  walks every tool input type and fails if an integer type other than `int` or
-  `long` appears.
+  `3.28e2`) as the plain integer, at any depth, judging wholeness from the
+  digits as written (so `0.99999999999999999999999999999999` is not rounded to
+  1). A number field that is not an integer reads the plain form as well. A
+  number with a fractional part, or one out of range, is left alone and fails to
+  bind as before, and the filter already turns that into `invalid-arguments`
+  with the JSON path. Custom `int` and `long` converters were tried first and
+  dropped: a custom converter hides the type from the schema generator, which
+  then published empty schemas and lost property descriptions (caught by
+  `StatisticsTools_EveryMode_*`). A test walks every tool input type and fails
+  if an integer type other than `int` or `long` appears.
+- **Pass 2 simulation repair.** The operation estimate charges every firing of
+  every rule (see the work limits above); `SimulationBudgetTests` runs the two
+  shapes that took 48.8 and 23.2 seconds as at-limit tests. `WithExtraGeneric`
+  and `CoversFullCost` were test-only and are deleted.
+
 
 ### On-Curve Migration
 

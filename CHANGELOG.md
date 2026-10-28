@@ -12,27 +12,33 @@
   `logging` and `listChanged`. This supersedes the `0.10.0` decision to accept only `2026-07-28`.
 - Fixed pulling an Archidekt deck whose categories differ only by case (for example `Sideboard` and `SIDEBOARD`). The
   local database treated those names as the same and the apply failed with a generic constraint error. Category names
-  are now case-sensitive, as on Archidekt; an existing database is upgraded on first use (a copy is kept first), and
-  local constraint errors now name the cause (duplicate category name, duplicate entry ID, and so on).
+  are now case-sensitive, as on Archidekt. An existing database is upgraded the first time it is opened for writing
+  (every write path, and after a restore of an older backup); a copy is kept first. Local constraint errors now name
+  the cause (duplicate category name, duplicate entry ID, and so on). Planning a push compares category names
+  exactly; only the check after a push stays tolerant of a name the provider recased.
 - Fixed importing the same Archidekt deck a second time. Local entry and category IDs were derived from the Archidekt
   row alone, so a second local copy collided on its primary keys. They are now derived from the local deck and the
   Archidekt row; existing decks keep their IDs and links.
 - Fixed a freshly pulled deck showing `local-changed` at `/localOnly/content` before any edit, and a deck staying
   `local-changed` after its edits were reverted. The local content fingerprint depended on the order the rows were
   listed in, and the order at pull time differed from the order the store returns. The fingerprint now sorts by row ID.
-  A deck pulled by an older version keeps the old baseline and still shows the difference once; use the pull option
-  that takes the remote state (see below) to reset it.
+  A deck whose baseline an earlier version recorded is also compared in the old order, and is judged by its rows alone
+  when that does not match, so it is not stuck; an edit to a field no row shows (category color, entry order) on such
+  a deck is not seen until its next synchronization writes a new baseline.
 - Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
   field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
-  `converged`: no conflict and no operation, and applying either direction advances the baseline.
+  `converged`: no conflict and no operation, and applying either direction advances the baseline. A converged row never
+  hides another local edit: an edit to a field no row shows (category color, entry order, category rank) beside it
+  still reads as a local change.
 - Fixed `archidekt_push_apply` leaving the local deck unlinked after `verification-mismatch`. Four parts:
   - The push is refused before it starts (preview and apply, reason `entry-zone-contradicts-category`) when a card it
-    adds or moves is in the deck zone (`main` or `commander`) while its primary category is not included in the deck.
-    Archidekt gives a card the zone of its primary category, so the card would come back in another zone. The message
-    names the cards and the category.
-  - After a `verification-mismatch` the applied work is still recorded: the local deck is synchronized to the verified
-    remote state, and a created card is linked to its Archidekt row when it is the only row with that card, so the next
-    push does not add it again and plans only the remaining difference.
+    adds or updates has a zone that a read of Archidekt would not give it. Archidekt keeps no zone: it comes from the
+    categories (a category named Commander, Sideboard or Maybeboard, or the commander category; otherwise main). The
+    message names the cards and the zone their categories give.
+  - After a `verification-mismatch` the baseline records the verified remote state and a created card is linked to its
+    Archidekt row when it is the only row with that card, so the next push does not add it again. The local deck is
+    not marked synchronized: every difference Archidekt did not take stays visible as a local change, so a pull
+    conflicts (instead of silently reverting it) and the next push plans only those differences.
   - `archidekt_pull_preview` and `archidekt_pull_apply` take `discardLocalChanges` (default false). With it, a pull
     over a locally changed deck lists the local changes as differences, has no conflict, and replaces the local deck
     with the Archidekt state. The preview and the apply must pass the same value. Without it nothing changes.
@@ -43,6 +49,21 @@
   'local_deck_apply_changes'". Every tool now accepts a whole number in any spelling (`328.0`, `3.28e2`) for its
   integer fields; a number with a fractional part or outside the field's range returns the bounded `invalid-arguments`
   failure with the JSON path of the value (for example `changes[0].entryDraft.sortOrder`).
+
+### Migration notes (0.11.0 to 0.12.0)
+
+- Breaking: the local deck database moves to schema 2 the first time 0.12.0 opens it for writing, and this cannot be
+  undone. 0.11.0 cannot open the upgraded database or restore a backup made by 0.12.0. A copy made just before the
+  upgrade is kept as `backups/decks/pre-migration-*.db` in the data folder; restoring it into 0.11.0 means copying it
+  over `decks.db` with the server stopped.
+- A new difference state, `converged`, can appear in `archidekt_diff`, `archidekt_pull_preview`, and
+  `archidekt_push_preview`. Clients that switch on the state strings must treat it as "both sides made the same change".
+- New failure reasons: `entry-zone-contradicts-category` (from `archidekt_push_preview` and `archidekt_push_apply`) and
+  `discard-needs-local-deck` (from `archidekt_pull_preview` and `archidekt_pull_apply`).
+- `archidekt_pull_preview` has a new optional `discardLocalChanges` argument, and the `archidekt_pull_apply` request has
+  the same optional field; both default to false and leave the old behavior unchanged.
+- Local entry and category IDs of decks pulled from now on are derived from the local deck, so they differ from the IDs
+  0.11.0 derived for the same Archidekt deck. Existing decks keep their IDs and links.
 
 ### Seeded simulation (breaking)
 

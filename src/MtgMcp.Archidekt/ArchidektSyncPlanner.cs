@@ -233,7 +233,8 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
-    /// Classifies one row as a local, remote, or concurrent add, removal, or change.
+    /// Classifies one row as a local, remote, or concurrent add, removal, or change, or as converged when both sides
+    /// changed it to the same value.
     /// </summary>
     private static string DifferenceState(
         string? baseline,
