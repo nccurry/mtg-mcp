@@ -611,7 +611,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["lookup"] = new { kind = "exact-name", value = "Obeka, Splitter of Seconds" },
                     ["freshnessPolicy"] = "cache-only",
-                    ["includeRaw"] = true,
+                    ["responseFormat"] = "full",
                 },
                 token).ConfigureAwait(false);
             JsonElement obekaCard = obeka.GetProperty("card");

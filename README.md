@@ -176,6 +176,16 @@ Use `deck_identity_reconcile_preview` before apply. Resolution uses printing ID,
 set and collector number, Oracle ID, then exact name. It never uses fuzzy
 matching or selects an arbitrary printing.
 
+Use `deck_get` for the stored deck. Pass `include` with `cards`, `tags`, or both
+to add, for each entry, concise Scryfall card fields (the entry's exact
+printing) and official oracle tag slugs, read from installed card data and
+returned in pages of entries with `nextCursor`. Each entry then carries
+`cardData`: `installed`, `not-installed` (run `scryfall_corpus_sync`), or
+`unresolved` (no exact Scryfall identity, or not in the installed data). A page
+is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
+`nextCursor`. `fields` narrows the card fields; it uses the same names as the
+Scryfall card tools.
+
 Use `deck_category_rules_validate`, `deck_category_rules_preview`, and
 `deck_category_rules_apply` to evaluate caller-owned tag rules. Rules can be
 inline or use the transparent `common-v1` preset. The MCP does not decide what a
@@ -237,6 +247,21 @@ is 24 hours. Immutable snapshots do not expire.
 `scryfall_card_collection` accepts 150 ordered lookup rows. It uses local card-data
 hits first, deduplicates provider misses, and sends provider batches of at most
 75. Results use stable cursor pagination.
+
+The card tools `scryfall_search`, `scryfall_card_get`, `scryfall_card_collection`,
+and `scryfall_cards_by_tag` take `responseFormat`:
+
+| Value | Result |
+| --- | --- |
+| `standard` (default) | Every mapped card field. New fields are added to it, never removed. |
+| `concise` | A small set of fields for comparing many cards: IDs, name, cost, type, colors, color identity, produced mana, keywords, oracle text, power, toughness, loyalty, the formats the card is legal in, USD price, cheapest USD price across installed printings, rarity, set, oracle tag slugs, Game Changer flag, and EDHREC rank. `fields` picks other names, including `prices.usdFoil`, `prices.usdEtched`, `prices.eur`, `prices.eurFoil`, `prices.tix`, `legalitiesAll`, `games`, `reserved`, and `layout`. |
+| `full` | `standard` plus the raw provider objects. Pages are limited to 25 rows. |
+
+In `concise`, `tags` and `cheapestPriceUsd` come from installed card data and are
+`null`, with the reason in `limits`, when it is not installed. A `concise` page
+is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
+`nextCursor`. `includeRaw` was replaced by `responseFormat: "full"` on these
+four tools.
 
 For arbitrary queries, Scryfall remains the source of truth. The cache reuses
 only the exact same request. Card facts and community tags stay separate kinds

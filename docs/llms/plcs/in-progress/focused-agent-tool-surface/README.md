@@ -317,6 +317,7 @@ design review on the same day; see Validation Evidence.
 | 2026-10-27 | Phase 1 audit repair: every-union serializer proof (SCHEMA-007) | Done, as an architecture test | `ToolRegistrations_PassSharedSerializerOptions` scans App source and fails if any `WithTools` or `McpServerTool.Create` call omits `ToolCallPolicy.SerializerOptions` (checked by temporarily removing one; it failed). `SerializerOptions_ReadUnionKindInAnyPosition` checks `AllowOutOfOrderMetadataProperties` is on. `ApplyChanges_KindAfterOtherProperties_AppliesChange` runs a real union with `kind` last through the server. |
 | 2026-10-27 | Phase 1 audit repair: E2E launcher cleanup | Checked | After the client is disposed, the `cmd.exe` launcher and its `dotnet` child were both gone within 500 ms, so disposing the stdio transport ends the process tree and the test needs no process tracking. The folder-delete retry stays only for the short delay before Windows releases the folder. |
 | 2026-10-27 | Phase 1 audit repair: Archidekt push links | Verified in source and tests | A push no longer blocks on unlinked rows: a later push removes and re-adds an unlinked row (`PreviewPush_AfterPushLeftRowUnlinked_PlansRemoveAndAddWithoutDuplicate`). A successful push cannot normally leave an entry unlinked, because the push verification and the link step use the same row matching; the `unlinkedLocalIds` field is a safety report and is covered at mapper and serialization level. |
+| 2026-10-27 | Phase 2 implementation (card response formats, deck card view, size limit), on `fats/phase2` over base 61ba777; not yet audited | Checks passed | `task ci` from PowerShell: format check, strict lint build, surface report, 874 non-live tests with coverage (App 91.25%, Archidekt 91.40%, Core 99.81%, Decks 93.83%, OnCurve 97.13%, Playgroup 95.81%, Scryfall 94.97%, Spellbook 94.63%, Statistics 96.45%), process smoke, MCP smoke 54/54. Full E2E 64/64. New tests: 24 Scryfall (projection, field list, mapping, standard-field baseline, CARD-003, CARD-004, installed and missing data, size cuts for search, collection, and tag pages), 21 App (`deck_get` states, paging, cursor, size; tool schemas; size at the serializer). Measured (the 25-card sizes with a local serializer set up like the server's, the other two with the server's own): 25 generated realistic cards were 111,868 bytes in `standard` and 18,002 in `concise` (16%); a `concise` page of 100 held 53 cards in 37,495 bytes; a 100-entry `deck_get` page with cards and tags held 40 entries in 37,029 bytes. Decisions made while implementing, adopted in the SADD and SRD: `rarity`, `power`, `toughness`, and `loyalty` were also unmapped, so they are added to `standard`; `gameChanger` is read from the card object, not installed data; `cardData` is `installed` for found entries; an entry whose identity is not in the installed data is `unresolved`. The `fields` and `include` lists are checked at run time and listed in descriptions; the schema publishes `enum` for `responseFormat` only, not for list items. |
 
 ## Agent Task Results
 
@@ -338,10 +339,19 @@ structured result, which equal characters for this ASCII JSON.
 | --- | --- | --- |
 | `scryfall_search`, default `standard` format, 25 rows (`set:dmu t:creature`) | 123,956 | Yes, about 31,000 tokens, over Claude Code's default 25,000-token output cap |
 | `deck_get`, 100 entries, no `include` | 16,033 | No |
+| Phase 2 (fixture, not live): `scryfall_search`, 25 generated realistic cards, `standard` | 111,868 | Yes (reported, not truncated) |
+| Phase 2 (fixture): same page, `concise` | 18,002 | No |
+| Phase 2 (fixture): `scryfall_search`, `concise`, `pageSize` 100 | 37,495 (53 cards, then `truncated` and `nextCursor`) | No |
+| Phase 2 (fixture): `deck_get`, 100 entries, `include` cards and tags, `pageSize` 100 | 37,029 (40 entries, then `truncated` and `nextCursor`) | No |
 
 Not measured in phase 1: tools that need Archidekt or Playgroup credentials,
-and `scryfall_cards_by_tag`, which needs installed card data. Their sizes are
-measured when phase 2 adds paging or `concise` to them.
+and `scryfall_cards_by_tag`, which needs installed card data. Phase 2 added
+`concise`, paging, and size cuts to the card tools and `deck_get`; its rows are
+fixture sizes from the size tests (no live Scryfall run). The search page and
+`deck_get` rows use the server's serializer; the 25-card rows, and the
+`scryfall_cards_by_tag` and `scryfall_card_collection` concise page checks
+(at or under 40,000 bytes), use a local serializer set up like the server's. Archidekt
+and Playgroup tools are unchanged and still unmeasured.
 
 The `scryfall_search` result is today's default output, which the owner chose
 to keep (2026-10-25). Under SIZE-001 it is reported, not truncated, and its

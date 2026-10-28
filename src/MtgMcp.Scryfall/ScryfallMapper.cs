@@ -40,6 +40,9 @@ internal static class ScryfallMapper
                     Strings(face, "colors"),
                     StringMap(face, "image_uris"),
                     OptionalGuid(face, "illustration_id"),
+                    OptionalString(face, "power"),
+                    OptionalString(face, "toughness"),
+                    OptionalString(face, "loyalty"),
                     includeRaw ? face.Clone() : null));
             }
         }
@@ -84,7 +87,17 @@ internal static class ScryfallMapper
             tags ?? [],
             tagCoverage,
             new SourceFactDescriptor("scryfall", retrievedAtUtc, snapshotId),
-            includeRaw ? raw.Clone() : null);
+            includeRaw ? raw.Clone() : null)
+        {
+            Rarity = OptionalString(raw, "rarity"),
+            Power = OptionalString(raw, "power"),
+            Toughness = OptionalString(raw, "toughness"),
+            Loyalty = OptionalString(raw, "loyalty"),
+            Layout = OptionalString(raw, "layout"),
+            Games = Strings(raw, "games"),
+            Reserved = OptionalBoolean(raw, "reserved"),
+            GameChanger = OptionalBooleanOrNull(raw, "game_changer"),
+        };
     }
 
     /// <summary>
@@ -425,6 +438,17 @@ internal static class ScryfallMapper
         return element.TryGetProperty(name, out JsonElement value) &&
             value.ValueKind is JsonValueKind.True or JsonValueKind.False &&
             value.GetBoolean();
+    }
+
+    /// <summary>
+    /// Reads an optional Boolean value, keeping a missing or non-Boolean field distinct from false.
+    /// </summary>
+    private static bool? OptionalBooleanOrNull(JsonElement element, string name)
+    {
+        return element.TryGetProperty(name, out JsonElement value) &&
+            value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : null;
     }
 
     /// <summary>

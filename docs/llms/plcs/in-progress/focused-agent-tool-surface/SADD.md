@@ -237,9 +237,22 @@ its own ranking.
 | `tags` | Official oracle tag slugs for the entry's card, from installed card data. |
 
 If card data is not installed, the entry carries `cardData: "not-installed"`
-and the result points to `scryfall_corpus_sync`. Entries without an exact
-Scryfall identity carry `cardData: "unresolved"`. The server reports these
-states; it does not guess a card.
+and the result's `limits` points to `scryfall_corpus_sync`. Entries without an exact
+Scryfall identity, or whose identity is not in the installed data, carry
+`cardData: "unresolved"`. An entry that was found carries `cardData: "installed"`.
+The server reports these states; it does not guess a card. The exact identity of
+an entry is its printing ID, else its set and collector number, else its Oracle ID.
+
+The request also takes `fields` (valid with `cards`; the same names as the card
+formats), `cursor`, and `pageSize` (1 to 100, default 25), all valid only with
+`include`. Without `include` the result is the whole stored deck, as before. With
+`include`, each page repeats the deck details, categories, and bindings, lists the
+assignments of the entries on the page only, and adds `totalEntries` and `nextCursor`.
+The cursor holds a fingerprint of `deckId`, `include`, and `fields`, the deck revision,
+and the next entry position. A cursor from another request is `invalid-input`; a
+cursor from an older revision is `conflict` with the current revision. When both
+`cards` and `tags` are asked for, the card holds no `tags` field (the entry has
+the slugs) unless `fields` names `tags`.
 
 This gives the agent one call for "my deck's cards with their fields and
 tags" next to the entry IDs it needs for edits.
@@ -717,7 +730,7 @@ complex parameters; MCP has no example field, so they go in descriptions.
 | Value | Content |
 | --- | --- |
 | `concise` | Default set: `scryfallId`, `oracleId`, `name`, `manaCost`, `manaValue`, `typeLine`, `colors`, `colorIdentity`, `producedMana`, `keywords`, `oracleText` (front face, then faces), `power`, `toughness`, `loyalty`, `legalities` (only formats the card is legal in), `prices.usd`, `cheapestPriceUsd` (lowest USD price across all installed printings of the card), `rarity`, `set`, `tags` (official oracle tag slugs from installed data), `gameChanger`, `edhrecRank`. Extra fields available by name through `fields`: `prices.usdFoil`, `prices.usdEtched`, `prices.eur`, `prices.eurFoil`, `prices.tix`, `legalitiesAll` (every format with its status), `games`, `reserved`, `layout`. |
-| `standard` (default) | Every field of today's mapped card result, unchanged, plus additive fields (`games`, `reserved`, `layout`, `gameChanger`). |
+| `standard` (default) | Every field of today's mapped card result, unchanged, plus additive fields (`games`, `reserved`, `layout`, `gameChanger`, and `rarity`, `power`, `toughness`, `loyalty`, which the concise set needs and the mapper did not carry; each card face also gains `power`, `toughness`, and `loyalty`). |
 | `full` | Today's result with raw provider objects. Page size limit 25. |
 
 The default stays `standard` by owner decision (2026-10-25), so existing
@@ -735,17 +748,24 @@ to the concise record, tested without network or storage. Snapshots and caches
 still store full data; only the response changes. `deck_get` with
 `include: ["cards"]` and `card_list_query` use the same projection.
 
-`tags`, `cheapestPriceUsd`, and `gameChanger` come from installed data. When
-it is not installed, those fields are `null` and the result's `limits` says
-why. These fields make "find alternatives" two calls: read a card's tags, then
+`tags` and `cheapestPriceUsd` come from installed data. When it is not
+installed, those fields are `null` and the result's `limits` says why.
+`gameChanger` is read from the card object itself (the mapped `game_changer`
+field), so it needs no installed data and is `null` only when the card object
+omits it. `cheapestPriceUsd` is the lowest nonfoil `prices.usd` text among the
+installed printings, kept as Scryfall writes it, or `null` when none has one.
+These fields make "find alternatives" two calls: read a card's tags, then
 search for cards with the same tags in the deck's color identity.
 
 `includeRaw` is removed from these tools because `full` replaces it.
 
+How concise values are written: a card result carries `responseFormat`; `legalities` is the list of format names whose status is exactly `legal`; `prices` is one object holding the chosen price columns, with a known-null price written as `null`; `oracleText` is the card's own text, or each face's text joined with a line holding two slashes when the card has none; `manaCost`, `colors`, `typeLine`, `power`, `toughness`, and `loyalty` fall back to the front face (`typeLine` to all faces joined with ` // `) when the card has none of its own. Fields are always written in the published order, whatever order `fields` names them in. Every card tool reads `tags` and `cheapestPriceUsd` from the card-data generation the page came from when that is known, and from the active one otherwise. A concise page is cut with the size check in "Protocol Behavior": it keeps the leading cards that fit, sets `truncated: true` and a `narrow` hint, and its `nextCursor` continues from the first card left out, so pages never skip or repeat a card.
+
 Today's mapping already carries every `legalities` key
 (`src/MtgMcp.Scryfall/ScryfallMapper.cs:78`), every price column
-(`ScryfallMapper.cs:51-56`), and face text. FACT-002 adds only `games`,
-`reserved`, and `layout`, which are not mapped. The default `concise` set
+(`ScryfallMapper.cs:51-56`), and face text. FACT-002 adds `games`,
+`reserved`, and `layout`, which are not mapped, plus `rarity`, `power`,
+`toughness`, and `loyalty`, which the concise set needs. The default `concise` set
 does not grow, so CARD-003 still holds; agents ask for extra fields by name
 in `fields`.
 
@@ -1183,7 +1203,7 @@ returned or logged.
 and stops at 25,000 by default. The limit is 40,000 UTF-8 characters, about
 10,000 tokens. It applies to new tools and changed outputs, which page;
 `deck_get` with `include` pages its entries with the same cursor rules as
-`card_lists_compare`. Where paging does not fit, the result sets
+`card_lists_compare`. Sizes are measured as the UTF-8 bytes of the structured result, written with the server's serializer; each page keeps `EnvelopeReserveBytes` (3,000) free for the parts outside the item list. Where paging does not fit, the result sets
 `truncated: true` and a `narrow` hint such as
 `"Use responseFormat concise with fields, or add a filter."`. Phase 1
 measures the largest default result of every existing tool, including

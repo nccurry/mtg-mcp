@@ -503,7 +503,7 @@ public sealed class FoundationMcpTests
             ["deck_entry_remove"] = ["deckId", "entryId", "expectedRevision"],
             ["deck_entry_update"] = ["deckId", "entry", "expectedRevision"],
             ["deck_export_bundle"] = ["deckId", "formatId", "options"],
-            ["deck_get"] = ["deckId"],
+            ["deck_get"] = ["cursor", "deckId", "fields", "include", "pageSize"],
             ["deck_identity_reconcile_apply"] = ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint"],
             ["deck_identity_reconcile_preview"] = ["deckId", "entryIds", "expectedRevision", "freshnessPolicy"],
             ["deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options"],

@@ -33,6 +33,7 @@ public sealed class ToolAllowedValuesTests
                     "freshnessPolicy" => typeof(FreshnessPolicyValuesAttribute),
                     "formatId" => typeof(InterchangeFormatValuesAttribute),
                     "tagType" => typeof(TagKindValuesAttribute),
+                    "responseFormat" => typeof(ResponseFormatValuesAttribute),
                     _ => null,
                 };
                 if (expected is not null && parameter.GetCustomAttribute(expected) is null)

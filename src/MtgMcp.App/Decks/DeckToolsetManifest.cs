@@ -72,7 +72,7 @@ internal static class DeckToolsetManifest
         DeckCategorizationCoordinator categorizationCoordinator = new(deckStore, scryfallService);
         DeckOnCurveEstimateCoordinator onCurveCoordinator = new(deckStore, scryfallService);
         builder
-            .WithTools(new DeckReadTools(deckStore), ToolCallPolicy.SerializerOptions)
+            .WithTools(new DeckReadTools(deckStore, scryfallService), ToolCallPolicy.SerializerOptions)
             .WithTools(new DeckInterchangeReadTools(interchangeService), ToolCallPolicy.SerializerOptions)
             .WithTools(new DeckIdentityReconciliationReadTools(identityCoordinator), ToolCallPolicy.SerializerOptions)
             .WithTools(new DeckOnCurveEstimateTools(onCurveCoordinator), ToolCallPolicy.SerializerOptions);

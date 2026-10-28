@@ -81,17 +81,22 @@ public sealed class ScryfallMcpTests
         {
             ["scryfall_autocomplete"] = ["cursor", "freshnessPolicy", "includeExtras", "pageSize", "query"],
             ["scryfall_bulk_metadata"] = ["freshnessPolicy"],
-            ["scryfall_card_collection"] = ["cursor", "freshnessPolicy", "includeRaw", "lookups", "pageSize"],
-            ["scryfall_card_get"] = ["freshnessPolicy", "includeRaw", "lookup"],
+            ["scryfall_card_collection"] = ["cursor", "fields", "freshnessPolicy", "lookups", "pageSize", "responseFormat"],
+            ["scryfall_card_get"] = ["fields", "freshnessPolicy", "lookup", "responseFormat"],
             ["scryfall_card_prints"] = ["cursor", "freshnessPolicy", "includeRaw", "oracleId", "pageSize"],
             ["scryfall_card_rulings"] = ["cursor", "freshnessPolicy", "includeRaw", "oracleId", "pageSize", "scryfallCardId"],
-            ["scryfall_cards_by_tag"] = ["cursor", "includeDescendants", "includeRaw", "minimumWeight", "pageSize", "tagIdentity", "tagType"],
+            ["scryfall_cards_by_tag"] =
+                ["cursor", "fields", "includeDescendants", "minimumWeight", "pageSize", "responseFormat", "tagIdentity", "tagType"],
             ["scryfall_catalog"] = ["catalog", "cursor", "freshnessPolicy", "pageSize"],
             ["scryfall_corpus_delete"] = ["acknowledgeDataLoss", "expectedActiveGeneration"],
             ["scryfall_corpus_rollback"] = ["acknowledgeActivationChange", "expectedActiveGeneration", "expectedPreviousGeneration"],
             ["scryfall_corpus_status"] = [],
             ["scryfall_corpus_sync"] = ["expectedActiveGeneration", "metadataPolicy"],
-            ["scryfall_search"] = ["cursor", "direction", "freshnessPolicy", "includeExtras", "includeMultilingual", "includeRaw", "includeVariations", "order", "pageSize", "query", "unique"],
+            ["scryfall_search"] =
+                [
+                    "cursor", "direction", "fields", "freshnessPolicy", "includeExtras", "includeMultilingual",
+                    "includeVariations", "order", "pageSize", "query", "responseFormat", "unique",
+                ],
             ["scryfall_sets"] = ["codeOrId", "cursor", "freshnessPolicy", "includeRaw", "pageSize"],
             ["scryfall_snapshot_delete"] = ["acknowledgeDataLoss", "expectedChecksum", "snapshotId"],
             ["scryfall_snapshot_get"] = ["cursor", "includeRaw", "pageSize", "snapshotId"],
@@ -176,9 +181,26 @@ public sealed class ScryfallMcpTests
             {
                 ["lookup"] = new { kind = "exact-name", value = "Venerable Knight" },
                 ["freshnessPolicy"] = "cache-only",
-                ["includeRaw"] = true,
+                ["responseFormat"] = "full",
             }).ConfigureAwait(false);
         Assert.True(fullWhite.GetProperty("card").TryGetProperty("raw", out _));
+        Assert.Equal("full", fullWhite.GetProperty("responseFormat").GetString());
+
+        JsonElement conciseWhite = await CallSuccessAsync(
+            session,
+            "scryfall_card_get",
+            new Dictionary<string, object?>
+            {
+                ["lookup"] = new { kind = "exact-name", value = "Venerable Knight" },
+                ["freshnessPolicy"] = "cache-only",
+                ["responseFormat"] = "concise",
+            }).ConfigureAwait(false);
+        JsonElement conciseCard = conciseWhite.GetProperty("card");
+        Assert.Equal("concise", conciseWhite.GetProperty("responseFormat").GetString());
+        Assert.Equal("Venerable Knight", conciseCard.GetProperty("name").GetString());
+        Assert.Equal("white-weenie", conciseCard.GetProperty("tags")[0].GetString());
+        Assert.Equal("0.10", conciseCard.GetProperty("cheapestPriceUsd").GetString());
+        Assert.False(conciseCard.TryGetProperty("imageUris", out _));
 
         JsonElement red = await CallSuccessAsync(
             session,

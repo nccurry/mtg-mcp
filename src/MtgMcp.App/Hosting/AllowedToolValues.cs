@@ -22,3 +22,10 @@ internal sealed class InterchangeFormatValuesAttribute()
 [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
 internal sealed class TagKindValuesAttribute()
     : AllowedValuesAttribute("oracle", "art");
+
+/// <summary>
+/// Publishes the card response formats as a schema enum; the Scryfall card format parser accepts the same values.
+/// </summary>
+[AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
+internal sealed class ResponseFormatValuesAttribute()
+    : AllowedValuesAttribute("concise", "standard", "full");

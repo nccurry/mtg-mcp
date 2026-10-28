@@ -24,6 +24,33 @@
   the new baseline; the next push preview plans only real changes. An entry
   that cannot be matched exactly is listed in the new `unlinkedLocalIds`
   field of the push result, and the next push removes and re-adds that row.
+- Added `responseFormat` (`concise`, `standard`, `full`) and `fields` to
+  `scryfall_search`, `scryfall_card_get`, `scryfall_card_collection`, and
+  `scryfall_cards_by_tag`. The default is `standard`, which keeps every field
+  of the old output. `concise` returns a small set of fields for comparing many
+  cards (about 16 percent of the bytes of `standard` in the test fixture);
+  `fields` picks other concise fields by name, including extra prices,
+  `legalitiesAll`, `games`, `reserved`, and `layout`. A `concise` page is cut
+  to stay under 40,000 bytes, then sets `truncated`, `narrow`, and a
+  `nextCursor` for the rest. In `concise`, `tags` (official oracle tag slugs)
+  and `cheapestPriceUsd` (lowest nonfoil USD price across installed printings)
+  come from installed card data and are `null`, with the reason in `limits`,
+  when it is not installed. Results now also carry `responseFormat`.
+- Breaking: removed `includeRaw` from those four tools. Migration: send
+  `responseFormat: "full"` instead of `includeRaw: true`; it returns the same
+  raw provider objects with the same 25-row page cap. `includeRaw` on
+  `scryfall_card_prints`, `scryfall_card_rulings`, `scryfall_sets`,
+  `scryfall_snapshot_get`, and `scryfall_tag_search` is unchanged.
+- Added fields to every `standard` card: `rarity`, `power`, `toughness`,
+  `loyalty`, `layout`, `games`, `reserved`, and `gameChanger` (`null` when
+  Scryfall omits it). Each card face also gains `power`, `toughness`, and
+  `loyalty`.
+- Added `include` (`cards`, `tags`), `fields`, `cursor`, and `pageSize` to
+  `deck_get`. With `include`, the result holds a page of entries (25 by
+  default, at most 100, cut to stay under 40,000 bytes) with
+  `cardData` (`installed`, `not-installed`, or `unresolved`), concise `card`
+  fields, and oracle `tags` for each entry, plus `totalEntries` and
+  `nextCursor`. Without `include` the result is the same as before.
 - Changed tool schemas to publish a JSON Schema `enum` for parameters with a
   fixed set of values (cache policy, search order, interchange format IDs,
   Archidekt format and visibility, and others). Accepted values are unchanged.
