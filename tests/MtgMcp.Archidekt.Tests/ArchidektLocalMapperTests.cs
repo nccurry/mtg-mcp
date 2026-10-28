@@ -693,34 +693,59 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
-    /// Verifies a plan that puts a card in the deck zone under a primary category outside the deck is reported, and a
-    /// card whose zone and primary category are unchanged is not.
+    /// Verifies a row is refused exactly when its zone differs from the zone a read gives it: a Sideboard category
+    /// that is included in the deck, or has no setting, is not a contradiction, and a category that is outside the
+    /// deck but has no special name is not one either.
     /// </summary>
-    [Fact]
-    public void FindZoneContradictions_ReportsOnlyChangedRows()
+    [Theory]
+    [InlineData("sideboard", "Sideboard", true, null)]
+    [InlineData("sideboard", "Sideboard", null, null)]
+    [InlineData("main", "Out", false, null)]
+    [InlineData("main", "Sideboard", true, "sideboard")]
+    [InlineData("main", "Sideboard", false, "sideboard")]
+    [InlineData("maybeboard", "Sideboard", false, "sideboard")]
+    [InlineData("sideboard", "Removal", true, "main")]
+    public void FindZoneContradictions_FollowsTheZoneAReadGives(
+        string zone,
+        string category,
+        bool? includedInDeck,
+        string? expectedZone)
     {
         RemoteDeckSnapshot parsed = ParseDeck();
-        RemoteDeckCategory outside = parsed.Categories[0] with { Name = "Out", IncludedInDeck = false };
+        RemoteDeckCategory named = parsed.Categories[0] with { Name = category, IncludedInDeck = includedInDeck };
         RemoteDeckEntry existing = parsed.Entries[0] with
         {
             Zone = "main",
-            CategoryNames = ["Out"],
-            PrimaryCategoryName = "Out",
+            CategoryNames = ["Other"],
+            PrimaryCategoryName = "Other",
         };
-        RemoteDeckSnapshot current = parsed with { Categories = [outside], Entries = [existing] };
-        RemoteDeckSnapshot unchanged = current with { Entries = [existing with { Quantity = existing.Quantity + 1 }] };
-        RemoteDeckSnapshot moved = current with
+        RemoteDeckEntry wanted = existing with
         {
-            Entries = [existing with { Zone = "sideboard" }, existing with { ProviderRelationId = string.Empty }],
+            Zone = zone,
+            CategoryNames = [category],
+            PrimaryCategoryName = category,
         };
+        RemoteDeckSnapshot current = parsed with { Categories = [named], Entries = [existing] };
+        RemoteDeckSnapshot target = current with { Entries = [wanted] };
 
-        Assert.Empty(ArchidektSyncPlanner.FindZoneContradictions(
-            ArchidektSyncPlanner.PlanRemoteApply(current, unchanged),
-            unchanged));
-        ArchidektZoneContradiction added = Assert.Single(ArchidektSyncPlanner.FindZoneContradictions(
-            ArchidektSyncPlanner.PlanRemoteApply(current, moved),
-            moved));
-        Assert.Equal(("Out", "main"), (added.CategoryName, added.Zone));
+        IReadOnlyList<ArchidektZoneContradiction> found = ArchidektSyncPlanner.FindZoneContradictions(
+            ArchidektSyncPlanner.PlanRemoteApply(current, target),
+            target);
+
+        Assert.Equal(expectedZone is null ? [] : [expectedZone], found.Select(value => value.ExpectedZone));
+    }
+
+    /// <summary>
+    /// Verifies a row the plan does not send is never reported.
+    /// </summary>
+    [Fact]
+    public void FindZoneContradictions_IgnoresRowsThePlanDoesNotSend()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckEntry row = parsed.Entries[0] with { Zone = "main", CategoryNames = ["Sideboard"] };
+        RemoteDeckSnapshot same = parsed with { Entries = [row] };
+
+        Assert.Empty(ArchidektSyncPlanner.FindZoneContradictions(ArchidektSyncPlanner.PlanRemoteApply(same, same), same));
     }
 
     /// <summary>

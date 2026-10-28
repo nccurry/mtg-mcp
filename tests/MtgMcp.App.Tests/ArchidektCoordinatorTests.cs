@@ -567,7 +567,7 @@ public sealed class ArchidektCoordinatorTests
                 Assert.Equal("entry-zone-contradicts-category", preview.ReasonCode);
                 Assert.Equal(preview.ReasonCode, apply.ReasonCode);
                 Assert.Contains("'Anger'", preview.Message, StringComparison.Ordinal);
-                Assert.Contains("'Sideboard'", preview.Message, StringComparison.Ordinal);
+                Assert.Contains("'sideboard'", preview.Message, StringComparison.Ordinal);
                 Assert.Equal(before, handler.Requests.Count(value => value.Method != HttpMethod.Get));
             }
         }

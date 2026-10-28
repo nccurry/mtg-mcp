@@ -478,11 +478,12 @@ discardLocalChanges
     private static string DescribeContradictions(IReadOnlyList<ArchidektZoneContradiction> contradictions)
     {
         IEnumerable<string> shown = contradictions.Take(5).Select(value =>
-            $"'{value.CardName}' (zone '{value.Zone}', primary category '{value.CategoryName}')");
+            $"'{value.CardName}' (zone '{value.Zone}', but its categories give zone '{value.ExpectedZone}')");
         string more = contradictions.Count > 5 ? $" and {contradictions.Count - 5} more" : string.Empty;
-        return $"Archidekt gives a card the zone of its primary category, and these cards are in the deck zone but " +
-            $"their primary category is not included in the deck: {string.Join("; ", shown)}{more}. Move them to " +
-            "the sideboard or maybeboard zone, or give them a primary category that is included in the deck.";
+        return "Archidekt keeps no zone of its own: a card's zone comes from its categories (a category named " +
+            "Commander, Sideboard or Maybeboard, or the commander category; otherwise main). These cards would come " +
+            $"back in another zone: {string.Join("; ", shown)}{more}. Change the zone, or add or remove the matching " +
+            "category.";
     }
 
     /// <summary>

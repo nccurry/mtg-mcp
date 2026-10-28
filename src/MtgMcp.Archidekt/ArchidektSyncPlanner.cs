@@ -441,9 +441,9 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
-    /// Finds entries the plan adds or moves whose zone says "in the deck" while their primary category is not
-    /// included in the deck. Archidekt derives an entry's zone from its primary category, so such a row would come
-    /// back in another zone and the push could not verify.
+    /// Finds entries the plan adds or updates whose zone is not the zone a read of Archidekt gives them. Archidekt
+    /// keeps no zone of its own: the zone comes from the categories, by the same rule the read uses (<c>MapZone</c>),
+    /// so such a row would come back in another zone and the push could not verify.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         ArchidektRemotePlan plan,
@@ -456,24 +456,16 @@ public static class ArchidektSyncPlanner
         foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
         {
             RemoteDeckEntry? entry = operation.TargetEntry;
-            if (entry is null ||
-                operation.Public.Kind is not ("entry-add" or "entry-update") ||
-                entry.Zone is not ("main" or "commander") ||
-                entry.PrimaryCategoryName is not { Length: > 0 } primary ||
-                !CategoryNames.TryFind(categories, primary, out RemoteDeckCategory? category) ||
-                category.IncludedInDeck != false)
+            if (entry is null || operation.Public.Kind is not ("entry-add" or "entry-update"))
             {
                 continue;
             }
 
-            if (operation.CurrentEntry is { } current &&
-                string.Equals(current.Zone, entry.Zone, StringComparison.Ordinal) &&
-                string.Equals(current.PrimaryCategoryName, entry.PrimaryCategoryName, StringComparison.Ordinal))
+            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, categories);
+            if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
-                continue;
+                found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));
             }
-
-            found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, category.Name));
         }
 
         return found;
@@ -831,6 +823,6 @@ public sealed record ArchidektPlannedOperation(
     RemoteDeckEntry? CurrentEntry);
 
 /// <summary>
-/// Names one entry whose zone contradicts its primary category's inclusion in the deck.
+/// Names one entry whose zone differs from the zone its categories give it.
 /// </summary>
-public sealed record ArchidektZoneContradiction(string CardName, string Zone, string CategoryName);
+public sealed record ArchidektZoneContradiction(string CardName, string Zone, string ExpectedZone);

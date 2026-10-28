@@ -446,7 +446,7 @@ internal static class ArchidektJsonContract
     /// <summary>
     /// Maps provider category conventions into the format-neutral local zone vocabulary.
     /// </summary>
-    private static string MapZone(
+    internal static string MapZone(
         IReadOnlyList<string> names,
         IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
     {
