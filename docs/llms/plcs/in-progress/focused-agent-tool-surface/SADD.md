@@ -1115,6 +1115,25 @@ phase 6 evidence row of the README.
   and `CoversFullCost` were test-only and are deleted.
 
 
+### Pre-publish Changes (phase 7)
+
+- **Snapshot tool names (PRE-001).** `scryfall_request_snapshots_get` and
+  `scryfall_request_snapshot_delete` replace the `search` names, because the
+  snapshots hold every kind of saved Scryfall request. Nothing has been
+  published under the 0.11.0 names yet.
+- **Project name (PRE-002).** `MtgMcp.Simulation` replaces `MtgMcp.OnCurve`;
+  the `on-curve` preset keeps its name.
+- **Legacy baseline guard (PRE-003).** A schema 1 baseline has no
+  `localInvisibleFingerprint`, so the planner cannot tell an edit to a field
+  no row shows (category color, entry or category order) from no edit. When
+  the local fingerprint differs from such a baseline and no row explains it,
+  the planner adds `/localOnly/content` with state `local-changed-unverified`.
+  Pull treats it as a local change, so only `discardLocalChanges` overwrites
+  it; push sends local state as usual. The next successful push or pull
+  writes a schema 2 baseline and the row goes away. A deck whose old
+  fingerprint cannot be reproduced also gets the row once, which is the
+  honest answer for a state the server cannot check.
+
 ### On-Curve Migration
 
 `deck_on_curve_estimate` becomes the preset `on-curve`. The preset turns

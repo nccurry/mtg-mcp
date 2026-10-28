@@ -11,14 +11,15 @@
 - Owner: mtg-mcp
 - Created: 2026-10-25
 - Last updated: 2026-10-28
-- Current phase: All six phases delivered (phases 1 and 2 on 2026-10-27, phases 3 to 6 on 2026-10-28). The packet stays in progress until the owner publishes 0.11.0 and 0.12.0 (both prepared, not tagged or published) and records the EVAL-002 baseline and the deferred T-row reruns.
+- Current phase: Phase 7 (added 2026-10-28) in progress on `fats/phase7`. Phases 1 to 6 are delivered and merged into `main` at 0f69ffa (phases 1 and 2 on 2026-10-27, phases 3 to 6 on 2026-10-28). The packet stays in progress until the owner publishes 0.11.0 and 0.12.0 (both prepared, not tagged or published) and records the EVAL-002 baseline and the deferred T-row reruns.
 - Implementation authorized: Yes (owner, 2026-10-27)
 - Phase 1 status: Delivered 2026-10-27 (strict audit passed except EVAL-002).
 - Phase 2 status: Delivered 2026-10-27 (strict audit passed).
 - Phase 3 status: Delivered 2026-10-28 (strict audit passed after three passes).
 - Phase 4 status: Delivered 2026-10-28 (strict audit passed after two passes; agent task rerun deferred with EVAL-002).
 - Phase 5 status: Delivered 2026-10-28 except publishing (strict audit passed after two passes; 0.11.0 packed and smoke-tested, not tagged or published).
-- Phase 6 status: Delivered 2026-10-28 except publishing (strict audit passed after three passes, including the seven added defect fixes FIX-001 to FIX-007; 0.12.0 packed and smoke-tested, not tagged or published; T-row rerun deferred with EVAL-002; Linux CI run happens on push).
+- Phase 6 status: Delivered 2026-10-28 except publishing (strict audit passed after three passes, including the seven added defect fixes FIX-001 to FIX-007; 0.12.0 packed and smoke-tested, not tagged or published; T-row rerun deferred with EVAL-002; Linux CI passed on the merge, run 40744364208 at 0f69ffa).
+- Phase 7 status: In progress 2026-10-28 (pre-publish renames, legacy baseline guard, live checks).
 - EVAL-002 baseline: Deferred to the owner. This session has no agent-eval harness, so the `0.10.0` baseline rows below stay "Not run".
 
 ## Summary
@@ -281,7 +282,17 @@ Commander deck analysis:
     the existing push. Fix the two reported bugs as part of the full plan,
     not as a separate patch.
 
-No open questions remain. The 2026-10-27 additions had an independent
+Added by the owner on 2026-10-28, after phase 6:
+
+11. Before publishing, rename the Scryfall snapshot tools and the
+    `MtgMcp.OnCurve` project, guard pulls on decks with a baseline from an
+    earlier version, and run live acceptance (phase 7, PRE-001 to PRE-004).
+
+Proposed on 2026-10-28, not yet approved: keep `standard` as the default card
+format until EVAL-002 measures call counts, and add no stored price column
+(live lookups return current prices).
+
+No other open questions remain. The 2026-10-27 additions had an independent
 design review on the same day; see Validation Evidence.
 
 ## Planning Readiness

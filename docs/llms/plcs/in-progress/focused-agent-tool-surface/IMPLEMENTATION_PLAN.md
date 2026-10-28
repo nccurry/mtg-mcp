@@ -237,6 +237,32 @@ Checks: `task ci`, `task coverage:oncurve` (or its renamed task),
 Exit: SIM-001 to SIM-010, FIX-001 to FIX-007, SCHEMA-006 for `stats_simulate`, and SURF-006
 pass.
 
+### Phase 7: Pre-publish renames, legacy baseline guard, and live checks
+
+Approved by the owner on 2026-10-28 (README, Owner Decisions, item 11). The
+changes ship in `0.12.0`, which is not yet published.
+
+1. Rename the Scryfall snapshot tools (PRE-001) everywhere: tool attributes,
+   manifests, descriptions, server instructions, prompts, tests, README,
+   `docs/toolsets.md`, and CHANGELOG 0.12.0 (Breaking, "renamed from the
+   0.11.0 names").
+2. Rename `MtgMcp.OnCurve` to `MtgMcp.Simulation` (PRE-002) with `git mv`,
+   then update the solution, project references, namespaces, `Taskfile.yml`,
+   scripts, workflows, coverage settings, architecture tests, and maintained
+   docs. Rename the `Castability` select records only if the SADD's phase 6
+   note still calls for it and the change stays mechanical.
+3. Add the legacy baseline guard (PRE-003) with its tests and a CHANGELOG
+   0.12.0 Fixed entry.
+4. Add the disposable pull, edit, and push live test (PRE-004).
+5. Repack 0.12.0 and rerun the installed-tool smoke test.
+
+Checks: `task ci`, `task test:integration`, the full E2E from PowerShell,
+`task coverage:simulation`, `task benchmark:simulation`, `task pack
+VERSION=0.12.0`, `task release:tool-smoke VERSION=0.12.0`, and the live run
+in PRE-004 (parent).
+
+Exit: PRE-001 to PRE-004 pass, and the strict audit passes.
+
 ## Release Plan
 
 - `0.11.0`: phases 1 to 5, including `card_lists_compare`,
@@ -254,14 +280,16 @@ pass.
   provider toolsets turned off without credentials, `includeRaw`
   replaced by `responseFormat: "full"`, rejection of unknown request fields,
   and removal of the `common-v1` preset.
-- `0.12.0`: phase 6. Breaking change: `deck_on_curve_estimate` removed.
+- `0.12.0`: phases 6 and 7. Breaking changes: `deck_on_curve_estimate`
+  removed, and the Scryfall snapshot tools renamed to
+  `scryfall_request_snapshots_get` and `scryfall_request_snapshot_delete`.
 
 ## Reviews
 
 At the end of every phase, run a full code audit (the repository's combined
 audit) of that phase's changes before the phase is reported done, and fix
 supported findings in scope; this is an owner instruction from 2026-10-27.
-After phases 4 and 6, also run focused read-only reviews on the same revision, at
+After phases 4, 6, and 7, also run focused read-only reviews on the same revision, at
 most three reviewers at a time: correctness, test quality, and plain language.
 Fix every supported finding in scope, including low-severity ones. Allow at
 most three review passes in total. Re-review only after a confirmed serious
