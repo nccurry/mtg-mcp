@@ -1,0 +1,789 @@
+{
+  "source": "Captured from the on-curve estimator (model on-curve-v1, policy target-first-v1, random splitmix64-v1) at commit 9d279de, before the stats_simulate engine replaced it. Entry ids are small integers; the test turns id n into the GUID whose first group is n.",
+  "appFixture": {
+    "description": "Recorded by running the old tool's App test at 9d279de (the old coordinator returned this success count). The App test deck: Fixture Growth {1}{G} x1, Fixture Forest (G) x7 same turn, one multi-face card, one empty land; installed card data fixture.",
+    "turnLimit": 2,
+    "sampleCount": 100,
+    "onThePlay": true,
+    "seed": "0123456789abcdef",
+    "expectedSuccessCount": 82
+  },
+  "cases": [
+    {
+      "name": "mono-green-99-turn-4-play",
+      "targetEntry": 1,
+      "targetManaCost": "{2}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 38,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 60
+        }
+      ],
+      "turnLimit": 4,
+      "sampleCount": 10000,
+      "onThePlay": true,
+      "seed": "0123456789abcdef",
+      "expectedSuccessCount": 796,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 8956,
+        "NoModeledLandPlayed": 8,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 240
+      }
+    },
+    {
+      "name": "mono-green-99-turn-4-draw",
+      "targetEntry": 1,
+      "targetManaCost": "{2}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 38,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 60
+        }
+      ],
+      "turnLimit": 4,
+      "sampleCount": 10000,
+      "onThePlay": false,
+      "seed": "0123456789abcdef",
+      "expectedSuccessCount": 962,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 8830,
+        "NoModeledLandPlayed": 6,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 202
+      }
+    },
+    {
+      "name": "blue-pips-duals-next-turn",
+      "targetEntry": 1,
+      "targetManaCost": "{1}{U}{U}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 6
+        },
+        {
+          "id": 2,
+          "quantity": 8,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 9,
+          "produces": [
+            "U"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 4,
+          "produces": [
+            "U",
+            "G"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 5,
+          "quantity": 3,
+          "produces": [
+            "B"
+          ],
+          "landRule": "NotModeled"
+        },
+        {
+          "id": 6,
+          "quantity": 70
+        }
+      ],
+      "turnLimit": 5,
+      "sampleCount": 8000,
+      "onThePlay": true,
+      "seed": "fedcba9876543210",
+      "expectedSuccessCount": 1073,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 3967,
+        "NoModeledLandPlayed": 322,
+        "SourceNotReady": 20,
+        "MissingRequiredColor": 2186,
+        "NotEnoughMana": 432
+      }
+    },
+    {
+      "name": "commander-two-color-turn-4",
+      "targetEntry": 1,
+      "targetManaCost": "{2}{B}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 4
+        },
+        {
+          "id": 2,
+          "quantity": 8,
+          "produces": [
+            "B"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 8,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 5,
+          "produces": [
+            "B",
+            "G"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 5,
+          "quantity": 3,
+          "produces": [
+            "B",
+            "G",
+            "U"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 6,
+          "quantity": 1,
+          "produces": [
+            "C"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 7,
+          "quantity": 70
+        }
+      ],
+      "turnLimit": 4,
+      "sampleCount": 20000,
+      "onThePlay": true,
+      "seed": "00000000000000a1",
+      "expectedSuccessCount": 694,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 12893,
+        "NoModeledLandPlayed": 433,
+        "SourceNotReady": 24,
+        "MissingRequiredColor": 2400,
+        "NotEnoughMana": 3556
+      }
+    },
+    {
+      "name": "commander-two-color-turn-4-draw",
+      "targetEntry": 1,
+      "targetManaCost": "{2}{B}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 4
+        },
+        {
+          "id": 2,
+          "quantity": 8,
+          "produces": [
+            "B"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 8,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 5,
+          "produces": [
+            "B",
+            "G"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 5,
+          "quantity": 3,
+          "produces": [
+            "B",
+            "G",
+            "U"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 6,
+          "quantity": 1,
+          "produces": [
+            "C"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 7,
+          "quantity": 70
+        }
+      ],
+      "turnLimit": 4,
+      "sampleCount": 20000,
+      "onThePlay": false,
+      "seed": "00000000000000a2",
+      "expectedSuccessCount": 1090,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 12408,
+        "NoModeledLandPlayed": 312,
+        "SourceNotReady": 17,
+        "MissingRequiredColor": 2162,
+        "NotEnoughMana": 4011
+      }
+    },
+    {
+      "name": "colorless-symbols",
+      "targetEntry": 1,
+      "targetManaCost": "{1}{C}{C}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 5
+        },
+        {
+          "id": 2,
+          "quantity": 4,
+          "produces": [
+            "C"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 10,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 2,
+          "produces": [
+            "C",
+            "G"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 5,
+          "quantity": 79
+        }
+      ],
+      "turnLimit": 6,
+      "sampleCount": 6000,
+      "onThePlay": true,
+      "seed": "00000000000000b3",
+      "expectedSuccessCount": 249,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 3166,
+        "NoModeledLandPlayed": 355,
+        "SourceNotReady": 8,
+        "MissingRequiredColor": 2128,
+        "NotEnoughMana": 94
+      }
+    },
+    {
+      "name": "turn-1-one-drop-draw",
+      "targetEntry": 1,
+      "targetManaCost": "{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 17,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 22
+        }
+      ],
+      "turnLimit": 1,
+      "sampleCount": 5000,
+      "onThePlay": false,
+      "seed": "00000000000000c4",
+      "expectedSuccessCount": 973,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 4007,
+        "NoModeledLandPlayed": 20,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 0
+      }
+    },
+    {
+      "name": "every-land-not-modeled",
+      "targetEntry": 1,
+      "targetManaCost": "{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 17,
+          "produces": [
+            "G"
+          ],
+          "landRule": "NotModeled"
+        },
+        {
+          "id": 3,
+          "quantity": 22
+        }
+      ],
+      "turnLimit": 5,
+      "sampleCount": 1000,
+      "onThePlay": true,
+      "seed": "00000000000000d5",
+      "expectedSuccessCount": 0,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 715,
+        "NoModeledLandPlayed": 285,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 0
+      }
+    },
+    {
+      "name": "target-three-copies",
+      "targetEntry": 1,
+      "targetManaCost": "{1}{R}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 3
+        },
+        {
+          "id": 2,
+          "quantity": 14,
+          "produces": [
+            "R"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 6,
+          "produces": [
+            "W"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 37
+        }
+      ],
+      "turnLimit": 3,
+      "sampleCount": 7000,
+      "onThePlay": true,
+      "seed": "00000000000000e6",
+      "expectedSuccessCount": 2267,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 4247,
+        "NoModeledLandPlayed": 75,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 188,
+        "NotEnoughMana": 223
+      }
+    },
+    {
+      "name": "five-color-turn-12",
+      "targetEntry": 1,
+      "targetManaCost": "{W}{U}{B}{R}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 4
+        },
+        {
+          "id": 2,
+          "quantity": 6,
+          "produces": [
+            "W"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 6,
+          "produces": [
+            "U"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 6,
+          "produces": [
+            "B"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 5,
+          "quantity": 6,
+          "produces": [
+            "R"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 6,
+          "quantity": 6,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 7,
+          "quantity": 3,
+          "produces": [
+            "W",
+            "U"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 8,
+          "quantity": 3,
+          "produces": [
+            "B",
+            "R"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 9,
+          "quantity": 3,
+          "produces": [
+            "R",
+            "G"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 10,
+          "quantity": 1,
+          "produces": [
+            "W",
+            "U",
+            "B",
+            "R",
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 11,
+          "quantity": 53
+        }
+      ],
+      "turnLimit": 12,
+      "sampleCount": 5000,
+      "onThePlay": true,
+      "seed": "00000000000000f7",
+      "expectedSuccessCount": 1409,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 2165,
+        "NoModeledLandPlayed": 0,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 1426,
+        "NotEnoughMana": 0
+      }
+    },
+    {
+      "name": "seven-card-library-runs-out",
+      "targetEntry": 1,
+      "targetManaCost": "{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 2,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 4
+        }
+      ],
+      "turnLimit": 12,
+      "sampleCount": 1000,
+      "onThePlay": false,
+      "seed": "0000000000000108",
+      "expectedSuccessCount": 1000,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 0,
+        "NoModeledLandPlayed": 0,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 0
+      }
+    },
+    {
+      "name": "free-spell",
+      "targetEntry": 1,
+      "targetManaCost": "{0}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 5,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 30
+        }
+      ],
+      "turnLimit": 2,
+      "sampleCount": 1000,
+      "onThePlay": true,
+      "seed": "0000000000000119",
+      "expectedSuccessCount": 203,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 797,
+        "NoModeledLandPlayed": 0,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 0
+      }
+    },
+    {
+      "name": "every-land-next-turn",
+      "targetEntry": 1,
+      "targetManaCost": "{1}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 16,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 23
+        }
+      ],
+      "turnLimit": 3,
+      "sampleCount": 9000,
+      "onThePlay": true,
+      "seed": "000000000000012a",
+      "expectedSuccessCount": 1820,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 6939,
+        "NoModeledLandPlayed": 16,
+        "SourceNotReady": 13,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 212
+      }
+    },
+    {
+      "name": "several-entries-same-color",
+      "targetEntry": 1,
+      "targetManaCost": "{2}{G}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 4
+        },
+        {
+          "id": 2,
+          "quantity": 5,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 5,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 4,
+          "quantity": 5,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 5,
+          "quantity": 4,
+          "produces": [
+            "G",
+            "U"
+          ],
+          "landRule": "OneManaNextTurn"
+        },
+        {
+          "id": 6,
+          "quantity": 37
+        }
+      ],
+      "turnLimit": 5,
+      "sampleCount": 12000,
+      "onThePlay": true,
+      "seed": "000000000000013b",
+      "expectedSuccessCount": 2816,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 5146,
+        "NoModeledLandPlayed": 86,
+        "SourceNotReady": 6,
+        "MissingRequiredColor": 565,
+        "NotEnoughMana": 3381
+      }
+    },
+    {
+      "name": "minimum-samples",
+      "targetEntry": 1,
+      "targetManaCost": "{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 17,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 22
+        }
+      ],
+      "turnLimit": 2,
+      "sampleCount": 100,
+      "onThePlay": true,
+      "seed": "000000000000014c",
+      "expectedSuccessCount": 19,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 81,
+        "NoModeledLandPlayed": 0,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 0
+      }
+    },
+    {
+      "name": "heavy-library-turn-12",
+      "targetEntry": 1,
+      "targetManaCost": "{3}{G}",
+      "entries": [
+        {
+          "id": 1,
+          "quantity": 1
+        },
+        {
+          "id": 2,
+          "quantity": 99,
+          "produces": [
+            "G"
+          ],
+          "landRule": "OneManaSameTurn"
+        },
+        {
+          "id": 3,
+          "quantity": 400
+        }
+      ],
+      "turnLimit": 12,
+      "sampleCount": 2000,
+      "onThePlay": true,
+      "seed": "000000000000015d",
+      "expectedSuccessCount": 39,
+      "expectedFailureCounts": {
+        "TargetNotDrawn": 1915,
+        "NoModeledLandPlayed": 2,
+        "SourceNotReady": 0,
+        "MissingRequiredColor": 0,
+        "NotEnoughMana": 44
+      }
+    }
+  ]
+}

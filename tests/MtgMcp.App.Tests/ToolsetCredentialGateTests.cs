@@ -166,7 +166,7 @@ public sealed class ToolsetCredentialGateTests
         Assert.Equal(
             DisabledToolset.CredentialsMissing,
             configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt));
-        Assert.Equal(20, Count(configuration, OperationMode.Remote));
+        Assert.Equal(19, Count(configuration, OperationMode.Remote));
     }
 
     /// <summary>

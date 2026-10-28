@@ -62,7 +62,6 @@ internal static class LiveAcceptanceManifest
                 "local_deck_import_preview",
                 "local_deck_interchange_formats",
                 "local_deck_list",
-                "local_deck_on_curve_estimate",
                 "local_deck_validate",
                 "playgroup_auth_status",
                 "playgroup_commander_get",

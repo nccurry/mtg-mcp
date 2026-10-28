@@ -562,7 +562,7 @@ internal sealed class ArchidektDeckOperations
 
         List<string> ordered = [entry.PrimaryCategoryName];
         ordered.AddRange(entry.CategoryNames.Where(value =>
-            !string.Equals(value, entry.PrimaryCategoryName, StringComparison.OrdinalIgnoreCase)));
+            !string.Equals(value, entry.PrimaryCategoryName, StringComparison.Ordinal)));
         return ordered;
     }
 

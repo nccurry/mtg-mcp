@@ -34,3 +34,8 @@ internal static class OnCurveWilsonIntervalCalculator
         return new OnCurveWilsonInterval(lowerBound, upperBound);
     }
 }
+
+/// <summary>
+/// Records the lower and upper bounds of one two-sided Wilson interval.
+/// </summary>
+internal sealed record OnCurveWilsonInterval(double LowerBound, double UpperBound);

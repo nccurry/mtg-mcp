@@ -30,7 +30,7 @@ internal static class FoundationProtocolPolicy
     /// <summary>
     /// Removes implicit logging and dynamic list claims (tools, prompts, and resources) from a capability result.
     /// Two shapes carry capabilities: the initialize result, which has a top-level <c>serverInfo</c>, and the
-    /// <c>server/discover</c> result of the pinned protocol, which has <c>supportedVersions</c> and keeps the server
+    /// <c>server/discover</c> result of the `2026-07-28` protocol, which has <c>supportedVersions</c> and keeps the server
     /// information in <c>_meta</c>. The server registers everything at start and sends no list-changed notification.
     /// </summary>
     internal static void RemoveUnsupportedImplicitCapabilities(JsonNode? result)

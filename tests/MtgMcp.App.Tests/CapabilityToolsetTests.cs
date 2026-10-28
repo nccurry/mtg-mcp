@@ -313,15 +313,15 @@ public sealed class CapabilityToolsetTests
         CapabilityToolsetSelection noneSelection = RequireSuccess(CapabilityToolsetRegistry.Resolve("none"));
 
         Assert.Equal(CapabilityToolset.Decks, decks.Toolset);
-        Assert.Equal(20, decks.AllToolNames.Length);
-        Assert.Equal(11, decks.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(19, decks.AllToolNames.Length);
+        Assert.Equal(10, decks.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Scryfall, scryfall.Toolset);
         Assert.Equal(15, scryfall.AllToolNames.Length);
         Assert.Equal(11, scryfall.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(CapabilityToolset.Stats, stats.Toolset);
-        Assert.Equal(9, stats.GetVisibleToolCount(OperationMode.ReadOnly));
-        Assert.Equal(9, stats.GetVisibleToolCount(OperationMode.Local));
-        Assert.Equal(9, stats.GetVisibleToolCount(OperationMode.Remote));
+        Assert.Equal(10, stats.GetVisibleToolCount(OperationMode.ReadOnly));
+        Assert.Equal(10, stats.GetVisibleToolCount(OperationMode.Local));
+        Assert.Equal(10, stats.GetVisibleToolCount(OperationMode.Remote));
         Assert.Equal(CapabilityToolset.Archidekt, archidekt.Toolset);
         Assert.Equal(9, archidekt.GetVisibleToolCount(OperationMode.ReadOnly));
         Assert.Equal(10, archidekt.GetVisibleToolCount(OperationMode.Local));

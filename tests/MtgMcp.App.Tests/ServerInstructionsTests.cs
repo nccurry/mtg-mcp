@@ -85,7 +85,7 @@ public sealed partial class ServerInstructionsTests
             Read cards and card details: scryfall_cards_get, scryfall_card_details.
             See a local deck with card data: local_deck_get.
             Build or edit a local deck: local_deck_create, local_deck_apply_changes.
-            Exact math on draws and decks: stats_hypergeometric, stats_turn_table.
+            Exact math on draws and decks, or sampled games: stats_hypergeometric, stats_turn_table, stats_simulate.
             Summarize a local deck: stats_local_deck_summary.
             Analyze a card list: card_list_query, card_lists_compare, stats_castability.
             Commander rule facts (rules "commander"): local_deck_validate.
@@ -114,7 +114,7 @@ public sealed partial class ServerInstructionsTests
             Find cards (Scryfall syntax, where otag finds oracle tags): scryfall_search.
             Read cards and card details: scryfall_cards_get, scryfall_card_details.
             See a local deck with card data: local_deck_get.
-            Exact math on draws and decks: stats_hypergeometric, stats_turn_table.
+            Exact math on draws and decks, or sampled games: stats_hypergeometric, stats_turn_table, stats_simulate.
             Summarize a local deck: stats_local_deck_summary.
             Analyze a card list: card_list_query, card_lists_compare, stats_castability.
             Commander rule facts (rules "commander"): local_deck_validate.

@@ -16,7 +16,7 @@ public sealed class FoundationHostingTests
     {
         Assert.Equal("io.github.nccurry/mtg-mcp", FoundationServerIdentity.Name);
         Assert.Equal("mtg-mcp", FoundationServerIdentity.Title);
-        Assert.Equal("0.11.0", FoundationServerIdentity.PackageVersion);
+        Assert.Equal("0.12.0", FoundationServerIdentity.PackageVersion);
         Assert.DoesNotContain('+', FoundationServerIdentity.PackageVersion);
     }
 
@@ -52,7 +52,7 @@ public sealed class FoundationHostingTests
     }
 
     /// <summary>
-    /// Verifies the policy also fixes the result of <c>server/discover</c>, which the pinned protocol uses instead of
+    /// Verifies the policy also fixes the result of <c>server/discover</c>, which the 2026-07-28 protocol uses instead of
     /// initialize: it has <c>supportedVersions</c>, keeps the server information in <c>_meta</c>, and has no
     /// top-level <c>serverInfo</c>. Logging and every list-changed claim are removed; other fields stay.
     /// </summary>

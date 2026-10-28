@@ -2,6 +2,132 @@
 
 ## Unreleased
 
+## 0.12.0 - 2026-10-28
+
+### Fixed
+
+- Fixed the standard `initialize` handshake. The server pinned MCP `2026-07-28`, so an `initialize` request got error
+  -32022 and clients that use it (Claude Code) connected with no tools. The pin is removed: `initialize` now succeeds
+  for the versions the SDK serves, `server/discover` on `2026-07-28` still works, and the capabilities still omit
+  `logging` and `listChanged`. This supersedes the `0.10.0` decision to accept only `2026-07-28`.
+- Fixed pulling an Archidekt deck whose categories differ only by case (for example `Sideboard` and `SIDEBOARD`). The
+  local database treated those names as the same and the apply failed with a generic constraint error. Category names
+  are now case-sensitive, as on Archidekt. An existing database is upgraded the first time it is opened for writing
+  (every write path, and after a restore of an older backup); a copy is kept first. Local constraint errors now name
+  the cause (duplicate category name, duplicate entry ID, and so on). Planning a push compares category names
+  exactly; only the check after a push stays tolerant of a name the provider recased.
+- Fixed importing the same Archidekt deck a second time. Local entry and category IDs were derived from the Archidekt
+  row alone, so a second local copy collided on its primary keys. They are now derived from the local deck and the
+  Archidekt row; existing decks keep their IDs and links.
+- Fixed a freshly pulled deck showing `local-changed` at `/localOnly/content` before any edit, and a deck staying
+  `local-changed` after its edits were reverted. The local content fingerprint depended on the order the rows were
+  listed in, and the order at pull time differed from the order the store returns. The fingerprint now sorts by row ID.
+  A deck whose baseline an earlier version recorded is also compared in the old order, and is judged by its rows alone
+  when that does not match, so it is not stuck; an edit to a field no row shows (category color, entry order) on such
+  a deck is not seen until its next synchronization writes a new baseline.
+- Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
+  field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
+  `converged`: no conflict and no operation, and applying either direction advances the baseline. A converged row never
+  hides another local edit: an edit to a field no row shows (category color, entry order, category rank) beside it
+  still reads as a local change.
+- Fixed `archidekt_push_apply` leaving the local deck unlinked after `verification-mismatch`. Four parts:
+  - The push is refused before it starts (preview and apply, reason `entry-zone-contradicts-category`) when a card it
+    adds or updates has a zone that a read of Archidekt would not give it. Archidekt keeps no zone: it comes from the
+    categories (a category named Commander, Sideboard or Maybeboard, or the commander category; otherwise main). The
+    message names the cards and the zone their categories give.
+  - After a `verification-mismatch` the baseline records the verified remote state and a created card is linked to its
+    Archidekt row when it is the only row with that card, so the next push does not add it again. The local deck is
+    not marked synchronized: every difference Archidekt did not take stays visible as a local change, so a pull
+    conflicts (instead of silently reverting it) and the next push plans only those differences.
+  - `archidekt_pull_preview` and `archidekt_pull_apply` take `discardLocalChanges` (default false). With it, a pull
+    over a locally changed deck lists the local changes as differences, has no conflict, and replaces the local deck
+    with the Archidekt state. The preview and the apply must pass the same value. Without it nothing changes.
+  - Entry order numbers (`sortOrder`) are no longer compared: Archidekt renumbers them on untouched cards, which showed
+    as many remote changes. Category rank was already ignored.
+- Fixed whole numbers written with a fractional part (`328.0`) breaking integer fields. A JSON Schema `integer` allows
+  them, but a field such as `entryDraft.sortOrder` failed with only "An error occurred invoking
+  'local_deck_apply_changes'". Every tool now accepts a whole number in any spelling (`328.0`, `3.28e2`) for its
+  integer fields; a number with a fractional part or outside the field's range returns the bounded `invalid-arguments`
+  failure with the JSON path of the value (for example `changes[0].entryDraft.sortOrder`).
+
+### Migration notes (0.11.0 to 0.12.0)
+
+- Breaking: the local deck database moves to schema 2 the first time 0.12.0 opens it for writing, and this cannot be
+  undone. 0.11.0 cannot open the upgraded database or restore a backup made by 0.12.0. A copy made just before the
+  upgrade is kept as `backups/decks/pre-migration-*.db` in the data folder; restoring it into 0.11.0 means copying it
+  over `decks.db` with the server stopped and deleting `decks.db-wal` and `decks.db-shm` beside it.
+- A new difference state, `converged`, can appear in `archidekt_diff`, `archidekt_pull_preview`, and
+  `archidekt_push_preview`. Clients that switch on the state strings must treat it as "both sides made the same change".
+- New failure reasons: `entry-zone-contradicts-category` (from `archidekt_push_preview` and `archidekt_push_apply`) and
+  `discard-needs-local-deck` (from `archidekt_pull_preview` and `archidekt_pull_apply`).
+- `archidekt_pull_preview` has a new optional `discardLocalChanges` argument, and the `archidekt_pull_apply` request has
+  the same optional field; both default to false and leave the old behavior unchanged.
+- Local entry and category IDs of decks pulled from now on are derived from the local deck, so they differ from the IDs
+  0.11.0 derived for the same Archidekt deck. Existing decks keep their IDs and links.
+
+### Seeded simulation (breaking)
+
+- Breaking: `local_deck_on_curve_estimate` removed. The tool was named
+  `deck_on_curve_estimate` in `0.10.0` and earlier. Use `stats_simulate` with `preset` of kind `on-curve`. Within the work
+  limit, for the same deck, seed, and inputs the preset returns the same success counts: it is
+  replayed against 16 captured runs of the old estimator, including colored
+  targets, lands that enter tapped, and decks that run out of cards. The old
+  arguments map as follows:
+
+  | Old argument | New argument |
+  | --- | --- |
+  | `deckId`, `expectedRevision` | `deck.deckId`, `deck.expectedRevision` (the revision is now optional) |
+  | `targetEntryId` | `preset.targetEntryId` |
+  | `landRules` | `preset.landRules` |
+  | `turnLimit` | `preset.turnLimit` (1 to 20, was 1 to 12) |
+  | `onThePlay` | `preset.onThePlay` |
+  | `sampleCount` | `samples` (1 to 100,000, was 100 to 100,000, and now required) |
+  | (limit) | samples x turns x deck cards is at most 50,000,000 (the old tool accepted 100,000 x 12 x 500), and an operation estimate is at most 400,000,000; lower samples or turns for a larger request |
+  | `seed` | `seed` |
+
+  The result is different. `results[0].hits` and `rate` replace `successCount`
+  and `successRate`, `wilson95` replaces `interval`, `appliedRules` states the
+  rules the preset expanded to, and `preset` lists the target, the lands with
+  their colors and rules, and the entries left out of the land model. The miss
+  reasons and the two traces are gone; `sampleHands` returns up to 10 full
+  sample games instead, and asks for them with the required `sampleHands`
+  argument.
+- Added `stats_simulate` (toolset `stats`, read-only in every mode). It
+  shuffles the main zone of one saved deck and plays seeded games under rules
+  the caller states as structured data: groups of entries chosen by entry or
+  category ID, an opening hand with an optional London mulligan (with a
+  required `freeFirstMulligan` and `bottom`), per-turn rules `play`,
+  `cast-if-able`, and `draw-cards` (each with required `pick` and
+  `maxPerTurn`, and `manaFrom` or `effect` and `cards` where they apply), and
+  conditions `mana-at-least`, `drawn-at-least`, `on-battlefield-at-least`,
+  and `can-cast`, combined with `all` and `any`. Groups may declare the colors
+  of mana their cards add (`produces`, with per-entry overrides), and
+  `can-cast` pays a mana cost with one exact assignment together with all mana
+  the rules spent that turn; hybrid symbols take either color and Phyrexian
+  symbols need their color (life payment is not modeled). The result states the
+  seed, the random generator version (`splitmix64-v1`), the model version, a
+  request fingerprint, the full applied rules, each condition's hits, rate,
+  and 95% Wilson interval, mulligan keep counts, how many games emptied the
+  library, the skipped entries with reasons, the model limits, and the first
+  `sampleHands` games in full. The same request and seed give the same result
+  on every platform. A request is refused above 50,000,000 for samples times
+  turns times deck cards; the message states the limit. The result stays under
+  40,000 bytes: sample hands, and for the preset a long list of lands, are cut
+  with a stated omitted count and a `narrow` hint.
+- Added the `stats_simulate` line to the server instructions, and the
+  description label `Seeded sampling:`, which marks the result as an estimate
+  and not exact math.
+- Counts: unchanged with every toolset on (35 / 48 / 48 with no provider
+  credentials, 44 / 58 / 69 with Archidekt only, and 59 / 73 / 86 with both,
+  in `read-only`, `local`, and `remote`). By toolset, `decks` has 19 tools
+  (10 read-only and 9 local writes) and `stats` has 10 read-only tools.
+- Added a clearer error for a missing required field inside a nested request
+  object: `invalid-input` (reason `invalid-arguments`) with the message
+  "Required field 'x' is missing at 'path'." and a `path` that names the field.
+- The `MtgMcp.OnCurve` project is now the sampling engine behind
+  `stats_simulate`. Its tasks (`task coverage:oncurve`,
+  `task benchmark:oncurve`) keep their names.
+
 ## 0.11.0 - 2026-10-28
 
 ### Tool surface changes (breaking)

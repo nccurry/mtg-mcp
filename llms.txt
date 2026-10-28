@@ -18,7 +18,7 @@ or API documents to plan new work.
 ## Start Here
 
 - [Agent instructions](AGENTS.md): Repository rules, architecture boundaries, safety, planning, and validation.
-- [README](README.md): Current local deck, Scryfall, Archidekt, Playgroup, and Spellbook tools, the three workflow prompts, worked examples, configuration, product direction, and development commands.
+- [README](README.md): Current local deck, Scryfall, Archidekt, Playgroup, Spellbook, exact statistics, and seeded simulation (`stats_simulate`) tools, the three workflow prompts, worked examples, configuration, product direction, and development commands.
 - [North star](docs/north-star.md): Product mission, evidence hierarchy, and non-goals.
 - [Design goals](docs/design-goals.md): Architecture, quality, testing, and MCP principles.
 - [Rewrite guide](docs/rewrite-guide.md): The released `0.9.0` boundary, lasting rules, and how to start new work without reopening the rewrite.

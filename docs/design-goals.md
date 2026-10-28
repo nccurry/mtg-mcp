@@ -71,9 +71,9 @@
 - Heuristic recommendations, blended scores, and simulation are not stable
   rewrite capabilities. Do not preserve the legacy model/profile architecture
   merely because it exists.
-- The approved `local_deck_on_curve_estimate` follows this rule: it is versioned,
-  bounded, replayable, and visibly separate from provider facts and exact
-  mathematics. Any future sampled or heuristic evidence must meet the same bar.
+- The approved `stats_simulate` follows this rule: it is versioned, bounded,
+  replayable, applies only fixed engine rules and rules the caller states, and is
+  visibly separate from provider facts and exact mathematics. Any future sampled or heuristic evidence must meet the same bar.
 - Never add a generic rules engine or arbitrary expression language.
 
 See [Evidence-First Rewrite Guide](rewrite-guide.md) for what the server does

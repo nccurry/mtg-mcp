@@ -5,8 +5,8 @@ by supplying grounded evidence. The MCP gathers and computes; the calling LLM
 connects that evidence to a player's goals and makes the judgment.
 
 For stable `0.9.0`, this means provider data, exact cached evidence, explicit
-deck/provider operations, exact mathematics, and one bounded sampled
-on-curve estimate. It does not include advisor prompts, inferred deck intent,
+deck/provider operations, and exact mathematics. From `0.12.0` it also includes seeded sampling of rules the
+caller states (`stats_simulate`; `0.9.0` had one on-curve estimate). It does not include advisor prompts, inferred deck intent,
 weak-card judgments, replacement recommendations, blended quality scores, or
 strategic automation. Those legacy features are removal targets, not
 abstractions to preserve.
@@ -39,9 +39,10 @@ integration merely because the server supports it.
    sources require separately approved future PLCs.
 3. **Derived mathematics**: counts, exact probabilities, and reproducible
    statistics calculated from declared inputs.
-4. **Sampled estimates**: `local_deck_on_curve_estimate` is the approved bounded
+4. **Sampled estimates**: `stats_simulate` is the approved bounded
    example. It shows its model version, seed, sample count, confidence interval,
-   assumptions, and input fingerprint. It is not a general game simulator.
+   applied rules, limits, and input fingerprint. It applies only fixed engine rules and
+   rules the caller states; it is not a general game simulator or rules engine.
 5. **Parser-derived and heuristic evidence**: a separately labeled category,
    not source fact and not authority for an MCP-owned deckbuilding choice.
 6. **Blended model scores**: excluded from stable `0.9.0`; any future experiment

@@ -224,11 +224,17 @@ Approved by the owner on 2026-10-25 (README, Owner Decisions, item 3).
 8. Add description examples to `stats_simulate` (SCHEMA-006).
 9. Update docs, rerun the task set including T16, T17, T21, T29, and T36,
    and release `0.12.0`.
+10. Fix the defects found after the phase 6 audit, each in its own commit,
+    with CHANGELOG entries under 0.12.0 Fixed: FIX-001 (initialize handshake),
+    FIX-002 (case-distinct categories, schema 2), FIX-003 (push mismatch record,
+    zone refusal, `discardLocalChanges`, entry order ignored), FIX-004 (row-order
+    independent local fingerprint), FIX-005 (converged edits), FIX-006 (per-deck
+    local IDs), and FIX-007 (whole numbers as doubles).
 
 Checks: `task ci`, `task coverage:oncurve` (or its renamed task),
 `task benchmark:oncurve`, CI on Windows and Linux for SIM-002.
 
-Exit: SIM-001 to SIM-010, SCHEMA-006 for `stats_simulate`, and SURF-006
+Exit: SIM-001 to SIM-010, FIX-001 to FIX-007, SCHEMA-006 for `stats_simulate`, and SURF-006
 pass.
 
 ## Release Plan

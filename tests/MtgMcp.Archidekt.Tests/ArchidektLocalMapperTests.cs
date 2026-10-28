@@ -673,6 +673,283 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies a created row the provider returned with other zone or quantity is still linked to its provider row
+    /// when it is the only row with that card, so the next push does not add it again.
+    /// </summary>
+    [Fact]
+    public void LinkRows_ForACreatedRowReturnedDifferently_LinksByCardIdentity()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckEntry returned = parsed.Entries[0] with { Zone = "sideboard", Quantity = parsed.Entries[0].Quantity + 1 };
+        RemoteDeckSnapshot verified = parsed with { Entries = [returned] };
+        RemoteDeckSnapshot target = parsed with
+        {
+            Entries = [parsed.Entries[0] with { ProviderRelationId = string.Empty }],
+        };
+
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+
+        Assert.Equal([returned.ProviderRelationId], links.EntryRelationIds);
+    }
+
+    /// <summary>
+    /// Verifies a row is refused exactly when its zone differs from the zone a read gives it: a Sideboard category
+    /// that is included in the deck, or has no setting, is not a contradiction, and a category that is outside the
+    /// deck but has no special name is not one either.
+    /// </summary>
+    [Theory]
+    [InlineData("sideboard", "Sideboard", true, null)]
+    [InlineData("sideboard", "Sideboard", null, null)]
+    [InlineData("main", "Out", false, null)]
+    [InlineData("main", "Sideboard", true, "sideboard")]
+    [InlineData("main", "Sideboard", false, "sideboard")]
+    [InlineData("maybeboard", "Sideboard", false, "sideboard")]
+    [InlineData("sideboard", "Removal", true, "main")]
+    public void FindZoneContradictions_FollowsTheZoneAReadGives(
+        string zone,
+        string category,
+        bool? includedInDeck,
+        string? expectedZone)
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckCategory named = parsed.Categories[0] with { Name = category, IncludedInDeck = includedInDeck };
+        RemoteDeckEntry existing = parsed.Entries[0] with
+        {
+            Zone = "main",
+            CategoryNames = ["Other"],
+            PrimaryCategoryName = "Other",
+        };
+        RemoteDeckEntry wanted = existing with
+        {
+            Zone = zone,
+            CategoryNames = [category],
+            PrimaryCategoryName = category,
+        };
+        RemoteDeckSnapshot current = parsed with { Categories = [named], Entries = [existing] };
+        RemoteDeckSnapshot target = current with { Entries = [wanted] };
+
+        IReadOnlyList<ArchidektZoneContradiction> found = ArchidektSyncPlanner.FindZoneContradictions(
+            ArchidektSyncPlanner.PlanRemoteApply(current, target),
+            target);
+
+        Assert.Equal(expectedZone is null ? [] : [expectedZone], found.Select(value => value.ExpectedZone));
+    }
+
+    /// <summary>
+    /// Verifies a row the plan does not send is never reported.
+    /// </summary>
+    [Fact]
+    public void FindZoneContradictions_IgnoresRowsThePlanDoesNotSend()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckEntry row = parsed.Entries[0] with { Zone = "main", CategoryNames = ["Sideboard"] };
+        RemoteDeckSnapshot same = parsed with { Entries = [row] };
+
+        Assert.Empty(ArchidektSyncPlanner.FindZoneContradictions(ArchidektSyncPlanner.PlanRemoteApply(same, same), same));
+    }
+
+    /// <summary>
+    /// Builds a deck snapshot with the named categories and no entries.
+    /// </summary>
+    private static RemoteDeckSnapshot WithCategories(params string[] names)
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        return parsed with
+        {
+            Entries = [],
+            Categories =
+            [
+                .. names.Select((name, index) => new RemoteDeckCategory(
+                    (100 + index).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    name,
+                    false,
+                    true,
+                    false,
+                    index)),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// Lists the planned category operations as kind and name.
+    /// </summary>
+    private static string[] CategoryOperations(RemoteDeckSnapshot current, RemoteDeckSnapshot target)
+    {
+        return
+        [
+            .. ArchidektSyncPlanner.PlanRemoteApply(current, target).PublicOperations
+                .Where(value => value.Kind.StartsWith("category-", StringComparison.Ordinal))
+                .Select(value => $"{value.Kind}:{value.Subject}"),
+        ];
+    }
+
+    /// <summary>
+    /// Verifies adding a category that differs only by case from an existing one creates it and never renames the
+    /// existing category.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_AddingACaseVariantCategory_CreatesIt()
+    {
+        string[] operations = CategoryOperations(
+            WithCategories("Sideboard"),
+            WithCategories("Sideboard", "SIDEBOARD"));
+
+        Assert.Equal(["category-create:SIDEBOARD"], operations);
+    }
+
+    /// <summary>
+    /// Verifies deleting one of two case-variant categories deletes that one and leaves the other.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_RemovingACaseVariantCategory_DeletesOnlyThatOne()
+    {
+        string[] operations = CategoryOperations(
+            WithCategories("Sideboard", "SIDEBOARD"),
+            WithCategories("Sideboard"));
+
+        Assert.Equal(["category-delete:SIDEBOARD"], operations);
+    }
+
+    /// <summary>
+    /// Verifies a category written with different case is a new category and the old one is deleted, not renamed.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_ARecasedCategory_IsCreatedAndTheOldOneDeleted()
+    {
+        string[] operations = CategoryOperations(WithCategories("Sideboard"), WithCategories("sideboard"));
+
+        Assert.Equal(["category-create:sideboard", "category-delete:Sideboard"], operations.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies linking after a push never gives a target category a verified category that another target category
+    /// matched exactly.
+    /// </summary>
+    [Fact]
+    public void LinkRows_ACaseVariantCategory_NeverTakesAnExactlyMatchedOne()
+    {
+        RemoteDeckSnapshot verified = WithCategories("Sideboard");
+        RemoteDeckSnapshot target = WithCategories("Sideboard", "SIDEBOARD");
+
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+
+        Assert.Equal(["100", null], links.CategoryIds);
+    }
+
+    /// <summary>
+    /// Verifies a category move between two case-variant categories is planned and sent with the exact names.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_MovingAnEntryBetweenCaseVariantCategories_IsAnUpdate()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckSnapshot current = WithCategories("Sideboard", "SIDEBOARD");
+        RemoteDeckEntry before = parsed.Entries[0] with
+        {
+            CategoryNames = ["Sideboard"],
+            PrimaryCategoryName = "Sideboard",
+        };
+        RemoteDeckSnapshot start = current with { Entries = [before] };
+        RemoteDeckSnapshot moved = current with
+        {
+            Entries = [before with { CategoryNames = ["SIDEBOARD"], PrimaryCategoryName = "SIDEBOARD" }],
+        };
+
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(start, moved);
+
+        Assert.Equal(["entry-update"], plan.PublicOperations.Select(value => value.Kind));
+    }
+
+    /// <summary>
+    /// Builds a baseline-matching remote, and the same deck after both sides raised one quantity by the same amount.
+    /// </summary>
+    private static (RemoteDeckSnapshot Before, RemoteDeckSnapshot After) ConvergedPair()
+    {
+        RemoteDeckSnapshot before = ParseDeck();
+        RemoteDeckSnapshot after = before with
+        {
+            Entries = [before.Entries[0] with { Quantity = before.Entries[0].Quantity + 1 }, .. before.Entries.Skip(1)],
+        };
+        return (before, after);
+    }
+
+    /// <summary>
+    /// Verifies a converged row does not hide a local edit to a field no row shows: the deck still reads as changed.
+    /// </summary>
+    [Fact]
+    public void Diff_ConvergedRowBesideAHiddenLocalEdit_KeepsLocalChanged()
+    {
+        (RemoteDeckSnapshot before, RemoteDeckSnapshot after) = ConvergedPair();
+        ArchidektSyncBaseline baseline = Baseline(before, "local-before") with { LocalInvisibleFingerprint = "hidden-before" };
+
+        ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", after, after, baseline, "hidden-after");
+
+        Assert.Contains(diff.Differences, value => value.State == "converged");
+        Assert.Contains(diff.Differences, value => value.Path == "/localOnly/content" && value.State == "local-changed");
+    }
+
+    /// <summary>
+    /// Verifies a converged row with no hidden edit is not a local change, and an edit to a hidden field with no row
+    /// at all is still reported.
+    /// </summary>
+    [Fact]
+    public void Diff_ConvergedRowAlone_IsNotALocalChange_ButAHiddenEditAloneIs()
+    {
+        (RemoteDeckSnapshot before, RemoteDeckSnapshot after) = ConvergedPair();
+        ArchidektSyncBaseline baseline = Baseline(before, "local-before") with { LocalInvisibleFingerprint = "hidden" };
+
+        ArchidektSyncDiff converged = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", after, after, baseline, "hidden");
+        ArchidektSyncDiff hiddenOnly = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", before, before, baseline, "hidden-after");
+
+        Assert.DoesNotContain(converged.Differences, value => value.Path == "/localOnly/content");
+        Assert.Contains(hiddenOnly.Differences, value => value.Path == "/localOnly/content");
+    }
+
+    /// <summary>
+    /// Verifies a baseline made by an earlier version is read as unchanged when the deck matches the order that
+    /// version recorded, or when its rows show no change, and a visible edit is still reported.
+    /// </summary>
+    [Fact]
+    public void Diff_AnEarlierVersionBaseline_IsNotStuckAsLocalChanged()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        ArchidektSyncBaseline legacy = Baseline(remote, "legacy-local") with { SchemaVersion = 1 };
+        RemoteDeckSnapshot edited = remote with
+        {
+            Entries = [remote.Entries[0] with { Quantity = remote.Entries[0].Quantity + 1 }, .. remote.Entries.Skip(1)],
+        };
+
+        ArchidektSyncDiff sameOrder = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "legacy-local");
+        ArchidektSyncDiff rowsShowNothing = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "other-order");
+        ArchidektSyncDiff visibleEdit = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", edited, remote, legacy, "hidden", "other-order");
+
+        Assert.Empty(sameOrder.Differences);
+        Assert.Empty(rowsShowNothing.Differences);
+        Assert.Contains(visibleEdit.Differences, value => value.State == "local-changed");
+    }
+
+    /// <summary>
+    /// Verifies a baseline left by a verification mismatch reads as a local change even when every row matches.
+    /// </summary>
+    [Fact]
+    public void Diff_AnUnsynchronizedBaselineWhoseRowsAllMatch_StillReportsALocalChange()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        ArchidektSyncBaseline baseline = Baseline(remote, ArchidektLocalMapper.UnsynchronizedFingerprint);
+
+        ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "any-local-fingerprint", remote, remote, baseline);
+
+        Assert.Contains(diff.Differences, value => value.Path == "/localOnly/content" && value.State == "local-changed");
+    }
+
+    /// <summary>
     /// Parses the reusable complete deck fixture.
     /// </summary>
     private static RemoteDeckSnapshot ParseDeck()
@@ -692,7 +969,7 @@ public sealed class ArchidektLocalMapperTests
     private static ArchidektSyncBaseline Baseline(RemoteDeckSnapshot remote, string localFingerprint)
     {
         return new ArchidektSyncBaseline(
-            1,
+            2,
             remote.RemoteId,
             remote.RemoteFingerprint,
             localFingerprint,

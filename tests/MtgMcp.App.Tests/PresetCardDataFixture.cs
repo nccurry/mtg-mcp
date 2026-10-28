@@ -11,7 +11,7 @@ namespace MtgMcp.App.Tests;
 /// <summary>
 /// Supplies small installed Scryfall card facts for on-curve App integration tests.
 /// </summary>
-internal static class DeckOnCurveSourceFixture
+internal static class PresetCardDataFixture
 {
     /// <summary>
     /// Identifies the fixture target printing.
@@ -46,7 +46,7 @@ internal static class DeckOnCurveSourceFixture
     /// <summary>
     /// Creates a write-enabled Scryfall service over the local fixture provider.
     /// </summary>
-    internal static ScryfallService CreateService(string dataRoot, DeckOnCurveSourceHandler handler)
+    internal static ScryfallService CreateService(string dataRoot, PresetCardHandler handler)
     {
         return new ScryfallService(
             dataRoot,
@@ -60,15 +60,15 @@ internal static class DeckOnCurveSourceFixture
     /// <summary>
     /// Creates one handler that serves all fixture card-data downloads.
     /// </summary>
-    internal static DeckOnCurveSourceHandler CreateHandler()
+    internal static PresetCardHandler CreateHandler()
     {
-        return new DeckOnCurveSourceHandler();
+        return new PresetCardHandler();
     }
 
     /// <summary>
     /// Handles fixture metadata and compressed card-data downloads while counting every request.
     /// </summary>
-    internal sealed class DeckOnCurveSourceHandler : HttpMessageHandler
+    internal sealed class PresetCardHandler : HttpMessageHandler
     {
         /// <summary>
         /// Defines the fixed card-data types required for one installed generation.

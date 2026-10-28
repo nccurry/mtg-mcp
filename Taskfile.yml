@@ -330,7 +330,7 @@ tasks:
         {{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter-query "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(DeckOnCurveMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)|(WorkflowPromptsMcpTests)"
+        -- --filter-query "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(StatisticsSimulateMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)|(WorkflowPromptsMcpTests)"
 
   install:
     desc: Install the current branch on this workstation

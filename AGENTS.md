@@ -41,13 +41,15 @@
   categorization children define the original 93-tool rewrite baseline. The
   completed Commander Spellbook evidence child added three tools and the
   on-curve estimate one decks tool (97 in total). The focused agent tool
-  surface then removed, merged, and renamed tools, so with every toolset on
-  the server exposes 86 tools in `remote` mode (59 in `read-only`, 73 in
-  `local`). Statistics remains exact and caller-supplied, and makes no legality verdicts. The
+  surface then removed, merged, and renamed tools, and replaced the on-curve
+  estimate with `stats_simulate`, so with every toolset on the server exposes
+  86 tools in `remote` mode (59 in `read-only`, 73 in `local`). Statistics
+  remains exact and caller-supplied, makes no legality verdicts, and holds one
+  seeded sampler, `stats_simulate`, that applies only rules the request states. The
   stabilization child and `0.9.0` release are complete.
 - Stable `0.9.0` returns evidence, provider data, explicit operations, exact
-  mathematics, and one limited on-curve estimate. The client LLM makes
-  deckbuilding decisions.
+  mathematics, and one limited seeded sampler (`stats_simulate`, from `0.12.0`; the
+  on-curve estimate before it). The client LLM makes deckbuilding decisions.
 - Do not carry advisor prompts, intent inference, recommendations, weak-card
   judgments, blended quality scores, or strategic simulation into the stable
   rewrite.
@@ -77,6 +79,12 @@
 - Prefer the least code and abstraction needed. Add an abstraction only when it
   removes real duplication, clarifies ownership, or matches an established
   pattern.
+- `MtgMcp.OnCurve` is the seeded sampling engine behind `stats_simulate`. It takes
+  plain counts and rule records and never reads the deck store or Scryfall. A
+  choice the engine makes is either a fixed engine rule listed in the tool
+  description or a required request field; add a rule kind as one record, one
+  evaluator case, and fixtures. Keep its random sequence versioned and free of
+  runtime-dependent hashing or ordering.
 - Follow the approved project boundaries: Decks owns local storage and import/
   export, Statistics owns exact calculations, provider projects own HTTP and
   caches, and App hosts and wires the MCP server together.

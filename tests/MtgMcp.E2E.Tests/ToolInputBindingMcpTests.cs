@@ -279,6 +279,87 @@ public sealed class ToolInputBindingMcpTests
     }
 
     /// <summary>
+    /// Verifies whole numbers written with a fractional part (<c>328.0</c>) bind for both a nested integer field and
+    /// a top-level integer argument, and the entry keeps the whole value.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task ApplyChanges_WholeNumberWrittenAsDouble_Applies()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "local",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        (Guid deckId, long revision) = await CreateDeckAsync(session).ConfigureAwait(false);
+
+        CallToolResult result = await CallAsync(
+            session,
+            "local_deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = JsonElement.Parse($"{revision}.0"),
+                ["changes"] = new[]
+                {
+                    new
+                    {
+                        kind = "add-entry",
+                        entryDraft = new
+                        {
+                            quantity = JsonElement.Parse("1.0"),
+                            cardName = "Sol Ring",
+                            sortOrder = JsonElement.Parse("328.0"),
+                        },
+                    },
+                },
+            }).ConfigureAwait(false);
+
+        Assert.NotEqual(true, result.IsError);
+        JsonElement entries = Assert.IsType<JsonElement>(result.StructuredContent).GetProperty("data").GetProperty("entries");
+        Assert.Contains(
+            entries.EnumerateArray(),
+            entry => entry.GetProperty("cardName").GetString() == "Sol Ring" &&
+                entry.GetProperty("sortOrder").GetInt32() == 328);
+    }
+
+    /// <summary>
+    /// Verifies a number with a fractional part in an integer field returns the bounded invalid-input failure with its
+    /// JSON path, never the SDK's generic invocation error.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "E2E")]
+    public async Task ApplyChanges_FractionalNumberInIntegerField_ReturnsInvalidArgumentsWithPath()
+    {
+        await using McpProcessSession session = await McpProcessSession.StartAsync(
+            "local",
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        (Guid deckId, long revision) = await CreateDeckAsync(session).ConfigureAwait(false);
+
+        CallToolResult result = await CallAsync(
+            session,
+            "local_deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["changes"] = new[]
+                {
+                    new
+                    {
+                        kind = "add-entry",
+                        entryDraft = new
+                        {
+                            quantity = 1,
+                            cardName = "Sol Ring",
+                            sortOrder = JsonElement.Parse("328.5"),
+                        },
+                    },
+                },
+            }).ConfigureAwait(false);
+
+        AssertInvalidArguments(result, "changes[0].entryDraft.sortOrder");
+    }
+
+    /// <summary>
     /// Calls one tool through the official MCP client and returns the raw protocol result.
     /// </summary>
     private static async Task<CallToolResult> CallAsync(

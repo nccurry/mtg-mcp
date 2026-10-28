@@ -24,8 +24,6 @@ public sealed class FoundationMcpTests
     /// <summary>
     /// Identifies the newest initialize-based MCP wire revision used to prove rejection.
     /// </summary>
-    private const string LegacyInitializeProtocolVersion = "2025-11-25";
-
     /// <summary>
     /// Lists the path-free legacy inspection states permitted by the public contract.
     /// </summary>
@@ -52,7 +50,6 @@ public sealed class FoundationMcpTests
         "local_deck_import_preview",
         "local_deck_interchange_formats",
         "local_deck_list",
-        "local_deck_on_curve_estimate",
         "local_deck_validate",
     ];
 
@@ -79,7 +76,6 @@ public sealed class FoundationMcpTests
         "local_deck_import_preview",
         "local_deck_interchange_formats",
         "local_deck_list",
-        "local_deck_on_curve_estimate",
         "local_deck_validate",
     ];
 
@@ -126,6 +122,7 @@ public sealed class FoundationMcpTests
         "stats_mulligan",
         "stats_multivariate",
         "stats_package_assembly",
+        "stats_simulate",
         "stats_turn_table",
     ];
 
@@ -228,7 +225,7 @@ public sealed class FoundationMcpTests
             McpCredentials.None,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         string expectedVersion = Environment.GetEnvironmentVariable("MTGMCP_E2E_VERSION")
-            ?? "0.11.0";
+            ?? "0.12.0";
 
         Assert.Equal("io.github.nccurry/mtg-mcp", session.Client.ServerInfo.Name);
         Assert.Equal("mtg-mcp", session.Client.ServerInfo.Title);
@@ -330,21 +327,34 @@ public sealed class FoundationMcpTests
     }
 
     /// <summary>
-    /// Verifies that an older initialize-based client cannot obtain a fallback session.
+    /// Verifies a standard initialize handshake succeeds for every older protocol version the SDK serves, advertises
+    /// tools, prompts, and resources without logging or list-changed claims, and lists the full surface.
     /// </summary>
-    [Fact]
+    [Theory]
     [Trait("Category", "E2E")]
-    public async Task OlderProtocolClient_IsRejected()
+    [InlineData("2024-11-05")]
+    [InlineData("2025-03-26")]
+    [InlineData("2025-06-18")]
+    [InlineData("2025-11-25")]
+    public async Task InitializeClient_AtEachSupportedVersion_ListsTheFullSurface(string version)
     {
-        await Assert.ThrowsAsync<UnsupportedProtocolVersionException>(
-            async () =>
-            {
-                await McpProcessSession.StartWithProtocolAsync(
-                    "local",
-                    null,
-                    LegacyInitializeProtocolVersion,
-                    TestContext.Current.CancellationToken).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+        await using McpProcessSession session = await McpProcessSession.StartWithProtocolAsync(
+            "remote",
+            "all",
+            version,
+            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await session.Client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
+
+        Assert.Equal(version, session.Client.NegotiatedProtocolVersion);
+        Assert.NotNull(session.Client.ServerCapabilities.Tools);
+        Assert.NotNull(session.Client.ServerCapabilities.Prompts);
+        Assert.NotNull(session.Client.ServerCapabilities.Resources);
+#pragma warning disable MCP9005 // The logging capability is deprecated; the test proves the server does not claim it.
+        Assert.Null(session.Client.ServerCapabilities.Logging);
+#pragma warning restore MCP9005
+        Assert.NotEqual(true, session.Client.ServerCapabilities.Tools.ListChanged);
+        Assert.Equal(86, tools.Count);
     }
 
     /// <summary>
@@ -386,15 +396,15 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "all", "all", 59)]
     [InlineData("local", "all", "all", 73)]
     [InlineData("remote", "all", "all", 86)]
-    [InlineData("read-only", "decks", "explicit", 11)]
-    [InlineData("local", "decks", "explicit", 20)]
-    [InlineData("remote", "decks", "explicit", 20)]
+    [InlineData("read-only", "decks", "explicit", 10)]
+    [InlineData("local", "decks", "explicit", 19)]
+    [InlineData("remote", "decks", "explicit", 19)]
     [InlineData("read-only", "scryfall", "explicit", 11)]
     [InlineData("local", "scryfall", "explicit", 15)]
     [InlineData("remote", "scryfall", "explicit", 15)]
-    [InlineData("read-only", "stats", "explicit", 9)]
-    [InlineData("local", "stats", "explicit", 9)]
-    [InlineData("remote", "stats", "explicit", 9)]
+    [InlineData("read-only", "stats", "explicit", 10)]
+    [InlineData("local", "stats", "explicit", 10)]
+    [InlineData("remote", "stats", "explicit", 10)]
     [InlineData("read-only", "archidekt", "explicit", 9)]
     [InlineData("local", "archidekt", "explicit", 10)]
     [InlineData("remote", "archidekt", "explicit", 21)]
@@ -508,11 +518,6 @@ public sealed class FoundationMcpTests
             ["local_deck_import_preview"] = ["content", "formatId", "options"],
             ["local_deck_interchange_formats"] = [],
             ["local_deck_list"] = ["cursor", "pageSize"],
-            ["local_deck_on_curve_estimate"] =
-            [
-                "deckId", "expectedRevision", "landRules", "onThePlay", "sampleCount", "seed", "targetEntryId",
-                "turnLimit",
-            ],
             ["local_deck_validate"] = ["deckId", "rules"],
         };
         HashSet<string> readOnly = [.. DeckReadToolNames];
@@ -575,7 +580,7 @@ public sealed class FoundationMcpTests
             ["archidekt_folder_move_items"] = ["request"],
             ["archidekt_folder_update"] = ["request"],
             ["archidekt_pull_apply"] = ["request"],
-            ["archidekt_pull_preview"] = ["localDeckId", "remoteDeckId"],
+            ["archidekt_pull_preview"] = ["discardLocalChanges", "localDeckId", "remoteDeckId"],
             ["archidekt_push_apply"] = ["request"],
             ["archidekt_push_preview"] = ["localDeckId"],
             ["archidekt_snapshot_create"] = ["request"],
@@ -805,7 +810,7 @@ public sealed class FoundationMcpTests
             descriptors[0],
             "decks",
             decksEnabled,
-            decksEnabled ? (mode == "read-only" ? 11 : 20) : 0,
+            decksEnabled ? (mode == "read-only" ? 10 : 19) : 0,
             null);
         AssertDescriptor(
             descriptors[1],
@@ -813,7 +818,7 @@ public sealed class FoundationMcpTests
             scryfallEnabled,
             scryfallEnabled ? (mode == "read-only" ? 11 : 15) : 0,
             null);
-        AssertDescriptor(descriptors[2], "stats", statsEnabled, statsEnabled ? 9 : 0, null);
+        AssertDescriptor(descriptors[2], "stats", statsEnabled, statsEnabled ? 10 : 0, null);
         AssertDescriptor(
             descriptors[3],
             "archidekt",

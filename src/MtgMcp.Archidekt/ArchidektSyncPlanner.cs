@@ -1,3 +1,5 @@
+using MtgMcp.Core.Decks;
+
 namespace MtgMcp.Archidekt;
 
 /// <summary>
@@ -5,6 +7,28 @@ namespace MtgMcp.Archidekt;
 /// </summary>
 public static class ArchidektSyncPlanner
 {
+    /// <summary>
+    /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
+    /// one, the one for fields no row shows, and the one an earlier version recorded.
+    /// </summary>
+    public static ArchidektSyncDiff Diff(
+        DeckDocument local,
+        RemoteDeckSnapshot localProjection,
+        RemoteDeckSnapshot remote,
+        ArchidektSyncBaseline baseline)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        return Diff(
+            local.DeckId,
+            local.Revision,
+            ArchidektLocalMapper.LocalFingerprint(local),
+            localProjection,
+            remote,
+            baseline,
+            ArchidektLocalMapper.LocalInvisibleFingerprint(local),
+            ArchidektLocalMapper.LegacyLocalFingerprint(local));
+    }
+
     /// <summary>
     /// Computes a conservative whole-content three-way comparison without selecting a conflict winner.
     /// </summary>
@@ -14,18 +38,29 @@ public static class ArchidektSyncPlanner
         string localFingerprint,
         RemoteDeckSnapshot localProjection,
         RemoteDeckSnapshot remote,
-        ArchidektSyncBaseline baseline)
+        ArchidektSyncBaseline baseline,
+        string? localInvisibleFingerprint = null,
+        string? legacyLocalFingerprint = null)
     {
         ArgumentNullException.ThrowIfNull(localProjection);
         ArgumentNullException.ThrowIfNull(remote);
         ArgumentNullException.ThrowIfNull(baseline);
+        // A baseline made by an earlier version recorded the rows in the order of the moment, so it is also compared
+        // with that order, and a deck it cannot match is judged by its rows alone.
+        bool legacyBaseline = baseline.SchemaVersion < 2;
         bool localChanged = !string.Equals(
             localFingerprint,
             baseline.LocalFingerprint,
             StringComparison.Ordinal);
+        if (localChanged && legacyBaseline &&
+            string.Equals(legacyLocalFingerprint, baseline.LocalFingerprint, StringComparison.Ordinal))
+        {
+            localChanged = false;
+        }
+
         bool remoteChanged = !string.Equals(
-            remote.RemoteFingerprint,
-            baseline.RemoteFingerprint,
+            ArchidektJsonContract.Recompute(remote).Remote,
+            ArchidektJsonContract.Recompute(baseline.RemoteSnapshot).Remote,
             StringComparison.Ordinal);
         RemoteDeckSnapshot effectiveLocal = localChanged
             ? localProjection
@@ -41,8 +76,14 @@ public static class ArchidektSyncPlanner
             remoteChanged);
         bool representedLocalChange = differences.Any(value =>
             value.State.StartsWith("local-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
-        if (localChanged && !representedLocalChange)
+            value.State is "concurrent-changed" or "converged");
+        // Rows explain the change only when no field outside them changed: a field no row shows (category color,
+        // entry order, category rank) must still keep the deck from reading as unchanged.
+        bool hiddenChange = !legacyBaseline &&
+            baseline.LocalInvisibleFingerprint is not null &&
+            localInvisibleFingerprint is not null &&
+            !string.Equals(baseline.LocalInvisibleFingerprint, localInvisibleFingerprint, StringComparison.Ordinal);
+        if (localChanged && ((!representedLocalChange && !legacyBaseline) || hiddenChange))
         {
             differences.Add(new ArchidektDifference(
                 "/localOnly/content",
@@ -54,7 +95,7 @@ public static class ArchidektSyncPlanner
 
         bool representedRemoteChange = differences.Any(value =>
             value.State.StartsWith("remote-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+            value.State is "concurrent-changed" or "converged");
         if (remoteChanged && !representedRemoteChange)
         {
             differences.Add(new ArchidektDifference(
@@ -176,13 +217,24 @@ public static class ArchidektSyncPlanner
     /// </summary>
     private static string? SerializeEntity<T>(IReadOnlyDictionary<string, T> values, string key)
     {
-        return values.TryGetValue(key, out T? value)
-            ? System.Text.Json.JsonSerializer.Serialize(value, ArchidektContract.JsonOptions)
-            : null;
+        if (!values.TryGetValue(key, out T? value))
+        {
+            return null;
+        }
+
+        // The entry order number and the category rank are renumbered by Archidekt without a user edit.
+        object? shown = value switch
+        {
+            RemoteDeckEntry entry => entry with { SortOrder = 0 },
+            RemoteDeckCategory category => category with { SortOrder = 0 },
+            _ => value,
+        };
+        return System.Text.Json.JsonSerializer.Serialize(shown, ArchidektContract.JsonOptions);
     }
 
     /// <summary>
-    /// Classifies one row as a local, remote, or concurrent add, removal, or change.
+    /// Classifies one row as a local, remote, or concurrent add, removal, or change, or as converged when both sides
+    /// changed it to the same value.
     /// </summary>
     private static string DifferenceState(
         string? baseline,
@@ -193,7 +245,7 @@ public static class ArchidektSyncPlanner
     {
         if (localChanged && remoteChanged)
         {
-            return "concurrent-changed";
+            return string.Equals(local, remote, StringComparison.Ordinal) ? "converged" : "concurrent-changed";
         }
 
         string side = localChanged ? "local" : "remote";
@@ -259,11 +311,24 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
-    /// Plans remote operations in metadata, categories, additions/updates, removals, and verification order.
+    /// Plans remote operations in metadata, categories, additions/updates, removals, and verification order. Category
+    /// names are compared exactly, because Archidekt allows two categories that differ only by case.
     /// </summary>
     public static ArchidektRemotePlan PlanRemoteApply(
         RemoteDeckSnapshot current,
         RemoteDeckSnapshot target)
+    {
+        return PlanRemoteApply(current, target, lenientNames: false);
+    }
+
+    /// <summary>
+    /// Plans operations; with <paramref name="lenientNames"/> (used only to verify a finished push) a category or
+    /// primary category name that differs only by case counts as the same, because the provider may recase names.
+    /// </summary>
+    private static ArchidektRemotePlan PlanRemoteApply(
+        RemoteDeckSnapshot current,
+        RemoteDeckSnapshot target,
+        bool lenientNames)
     {
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(target);
@@ -279,13 +344,11 @@ public static class ArchidektSyncPlanner
                 CurrentEntry: null));
         }
 
-        Dictionary<string, RemoteDeckCategory> currentCategories = current.Categories
-            .ToDictionary(value => value.Name, StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, RemoteDeckCategory> targetCategories = target.Categories
-            .ToDictionary(value => value.Name, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RemoteDeckCategory> currentCategories = CategoryNames.Index(current.Categories, value => value.Name);
+        Dictionary<string, RemoteDeckCategory> targetCategories = CategoryNames.Index(target.Categories, value => value.Name);
         foreach (RemoteDeckCategory targetCategory in target.Categories)
         {
-            if (!currentCategories.TryGetValue(targetCategory.Name, out RemoteDeckCategory? currentCategory))
+            if (!FindCategory(currentCategories, targetCategories, targetCategory.Name, lenientNames, out RemoteDeckCategory? currentCategory))
             {
                 planned.Add(new ArchidektPlannedOperation(
                     new ArchidektRemoteOperation(sequence++, "category-create", targetCategory.Name, "Create one category."),
@@ -307,7 +370,7 @@ public static class ArchidektSyncPlanner
 
         foreach (RemoteDeckCategory currentCategory in current.Categories)
         {
-            if (!targetCategories.ContainsKey(currentCategory.Name))
+            if (!FindCategory(targetCategories, currentCategories, currentCategory.Name, lenientNames, out _))
             {
                 planned.Add(new ArchidektPlannedOperation(
                     new ArchidektRemoteOperation(sequence++, "category-delete", currentCategory.Name, "Delete one unused category."),
@@ -342,7 +405,7 @@ public static class ArchidektSyncPlanner
             }
 
             retainedRelations.Add(currentEntry.ProviderRelationId);
-            if (!EntryEqual(currentEntry, targetEntry))
+            if (!EntryEqual(currentEntry, targetEntry, lenientNames, targetCategories.Keys))
             {
                 planned.Add(new ArchidektPlannedOperation(
                     new ArchidektRemoteOperation(sequence++, "entry-update", targetEntry.CardName, "Update one card relation."),
@@ -416,7 +479,38 @@ public static class ArchidektSyncPlanner
             });
         }
 
-        return PlanRemoteApply(current, target with { Entries = reconciledEntries });
+        return PlanRemoteApply(current, target with { Entries = reconciledEntries }, lenientNames: true);
+    }
+
+    /// <summary>
+    /// Finds entries the plan adds or updates whose zone is not the zone a read of Archidekt gives them. Archidekt
+    /// keeps no zone of its own: the zone comes from the categories, by the same rule the read uses (<c>MapZone</c>),
+    /// so such a row would come back in another zone and the push could not verify.
+    /// </summary>
+    public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
+        ArchidektRemotePlan plan,
+        RemoteDeckSnapshot target)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(target);
+        Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(target.Categories, value => value.Name);
+        List<ArchidektZoneContradiction> found = [];
+        foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
+        {
+            RemoteDeckEntry? entry = operation.TargetEntry;
+            if (entry is null || operation.Public.Kind is not ("entry-add" or "entry-update"))
+            {
+                continue;
+            }
+
+            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, categories);
+            if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
+            {
+                found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));
+            }
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -427,14 +521,14 @@ public static class ArchidektSyncPlanner
     {
         ArgumentNullException.ThrowIfNull(verified);
         ArgumentNullException.ThrowIfNull(target);
-        IReadOnlyList<RemoteDeckEntry?> matches = MatchEntries(verified, target);
+        IReadOnlyList<RemoteDeckEntry?> matches = LinkByCardIdentity(verified, target, MatchEntries(verified, target));
         List<string?> entryRelationIds = [];
         foreach (RemoteDeckEntry? matched in matches)
         {
             entryRelationIds.Add(matched?.ProviderRelationId);
         }
 
-        Dictionary<string, string> verifiedCategories = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> verifiedCategories = new(StringComparer.Ordinal);
         foreach (RemoteDeckCategory category in verified.Categories)
         {
             if (!string.IsNullOrWhiteSpace(category.ProviderCategoryId))
@@ -443,13 +537,65 @@ public static class ArchidektSyncPlanner
             }
         }
 
+        // An exact name wins. A name with no exact match may take a verified category that differs only by case, but
+        // never one that another target category matched exactly, and only when exactly one such category is left.
+        HashSet<string> targetNames = new(target.Categories.Select(value => value.Name), StringComparer.Ordinal);
         List<string?> categoryIds = [];
         foreach (RemoteDeckCategory category in target.Categories)
         {
-            categoryIds.Add(verifiedCategories.GetValueOrDefault(category.Name));
+            if (verifiedCategories.TryGetValue(category.Name, out string? exactId))
+            {
+                categoryIds.Add(exactId);
+                continue;
+            }
+
+            string[] loose =
+            [
+                .. verifiedCategories.Keys.Where(name =>
+                    !targetNames.Contains(name) && string.Equals(name, category.Name, StringComparison.OrdinalIgnoreCase)),
+            ];
+            categoryIds.Add(loose.Length == 1 ? verifiedCategories[loose[0]] : null);
         }
 
         return new ArchidektRowLinks(entryRelationIds, categoryIds);
+    }
+
+    /// <summary>
+    /// Links rows the exact match left alone when a verification found them different: a target row with no
+    /// provider ID is linked to an unmatched provider row when they are the only pair with the same card identity.
+    /// The difference stays in the next push plan as an update, and the created row is not added again.
+    /// </summary>
+    private static IReadOnlyList<RemoteDeckEntry?> LinkByCardIdentity(
+        RemoteDeckSnapshot verified,
+        RemoteDeckSnapshot target,
+        IReadOnlyList<RemoteDeckEntry?> exact)
+    {
+        HashSet<string> used = new(
+            exact.Where(value => value is not null).Select(value => value!.ProviderRelationId),
+            StringComparer.Ordinal);
+        List<RemoteDeckEntry?> linked = [.. exact];
+        for (int index = 0; index < linked.Count; index++)
+        {
+            RemoteDeckEntry targetEntry = target.Entries[index];
+            if (linked[index] is not null || !string.IsNullOrWhiteSpace(targetEntry.ProviderRelationId))
+            {
+                continue;
+            }
+
+            RemoteDeckEntry[] rows = [.. verified.Entries.Where(value =>
+                !used.Contains(value.ProviderRelationId) && CardIdentityEqual(value, targetEntry))];
+            int rivals = target.Entries.Where((value, other) =>
+                linked[other] is null &&
+                string.IsNullOrWhiteSpace(value.ProviderRelationId) &&
+                CardIdentityEqual(targetEntry, value)).Count();
+            if (rows.Length == 1 && rivals == 1)
+            {
+                linked[index] = rows[0];
+                used.Add(rows[0].ProviderRelationId);
+            }
+        }
+
+        return linked;
     }
 
     /// <summary>
@@ -506,6 +652,69 @@ public static class ArchidektSyncPlanner
                 observed.PrimaryCategoryName,
                 expected.PrimaryCategoryName,
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Finds a category by name in one snapshot. Exact names always match. With <paramref name="lenient"/>, a name
+    /// with no exact match may take a category that differs only by case, never one the other snapshot has under that
+    /// exact name, and only when exactly one is left.
+    /// </summary>
+    private static bool FindCategory(
+        IReadOnlyDictionary<string, RemoteDeckCategory> index,
+        IReadOnlyDictionary<string, RemoteDeckCategory> other,
+        string name,
+        bool lenient,
+        out RemoteDeckCategory found)
+    {
+        if (index.TryGetValue(name, out RemoteDeckCategory? exact))
+        {
+            found = exact;
+            return true;
+        }
+
+        if (lenient)
+        {
+            RemoteDeckCategory[] loose =
+            [
+                .. index
+                    .Where(pair => !other.ContainsKey(pair.Key) &&
+                        string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
+                    .Select(pair => pair.Value),
+            ];
+            if (loose.Length == 1)
+            {
+                found = loose[0];
+                return true;
+            }
+        }
+
+        found = default!;
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves a category name written in another case to the category the deck has: an exact name stays as it is, and
+    /// a name that matches no category exactly maps to the one category that differs only by case, when there is one.
+    /// A name that matches two categories stays unresolved, so it is never taken for either.
+    /// </summary>
+    private static string? Resolve(string? name, IReadOnlyCollection<string> categoryNames)
+    {
+        if (name is null || categoryNames.Contains(name))
+        {
+            return name;
+        }
+
+        string[] loose = [.. categoryNames.Where(value => string.Equals(value, name, StringComparison.OrdinalIgnoreCase))];
+        return loose.Length == 1 ? loose[0] : name;
+    }
+
+    /// <summary>
+    /// Compares category membership exactly and independently of order.
+    /// </summary>
+    private static bool ExactMembershipEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        return left.Count == right.Count &&
+            left.Order(StringComparer.Ordinal).SequenceEqual(right.Order(StringComparer.Ordinal), StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -578,10 +787,24 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
-    /// Reports whether one provider relation already has the requested exact content.
+    /// Reports whether one provider relation already has the requested content. A category named in another case counts as
+    /// the same only when it resolves to exactly one category of the deck (see <see cref="Resolve"/>).
     /// </summary>
-    private static bool EntryEqual(RemoteDeckEntry left, RemoteDeckEntry right)
+    private static bool EntryEqual(
+        RemoteDeckEntry left,
+        RemoteDeckEntry right,
+        bool lenientNames,
+        IReadOnlyCollection<string> categoryNames)
     {
+        // The remote row is the truth about names it already uses; the target's names resolve against those and the
+        // deck's categories.
+        HashSet<string> known = new(categoryNames, StringComparer.Ordinal);
+        known.UnionWith(left.CategoryNames);
+        if (left.PrimaryCategoryName is not null)
+        {
+            known.Add(left.PrimaryCategoryName);
+        }
+
         return left.Quantity == right.Quantity &&
             string.Equals(left.ProviderCardId, right.ProviderCardId, StringComparison.Ordinal) &&
             string.Equals(left.CardName, right.CardName, StringComparison.Ordinal) &&
@@ -591,8 +814,15 @@ public static class ArchidektSyncPlanner
             string.Equals(left.Language, right.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.Finish, right.Finish, StringComparison.Ordinal) &&
             string.Equals(left.Zone, right.Zone, StringComparison.Ordinal) &&
-            CategoryMembershipEqual(left.CategoryNames, right.CategoryNames) &&
-            string.Equals(left.PrimaryCategoryName, right.PrimaryCategoryName, StringComparison.OrdinalIgnoreCase);
+            (lenientNames
+                ? CategoryMembershipEqual(left.CategoryNames, right.CategoryNames)
+                : ExactMembershipEqual(
+                    left.CategoryNames,
+                    [.. right.CategoryNames.Select(value => Resolve(value, known)!)])) &&
+            string.Equals(
+                left.PrimaryCategoryName,
+                Resolve(right.PrimaryCategoryName, known),
+                lenientNames ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 }
 
@@ -633,3 +863,8 @@ public sealed record ArchidektPlannedOperation(
     RemoteDeckCategory? CurrentCategory,
     RemoteDeckEntry? TargetEntry,
     RemoteDeckEntry? CurrentEntry);
+
+/// <summary>
+/// Names one entry whose zone differs from the zone its categories give it.
+/// </summary>
+public sealed record ArchidektZoneContradiction(string CardName, string Zone, string ExpectedZone);

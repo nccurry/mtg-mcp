@@ -853,9 +853,9 @@ a default, so nothing is hidden.
   "mulligans": { "keptByRule": 18950, "keptAtLimit": 1050 },
   "libraryEmpty": 0,
   "sampleHands": [
-    { "sample": 1, "hands": [ { "mulligan": 0, "entryIds": ["..."], "names": ["..."] } ],
+    { "sample": 1, "hands": [ { "mulligan": 0, "entryIds": ["..."] } ],
       "kept": { "entryIds": ["..."], "bottomed": [] },
-      "turns": [ { "turn": 1, "drawn": ["..."], "moved": [ { "rule": 0, "entryId": "..." } ], "mana": 1 } ] }
+      "turns": [ { "turn": 1, "drawn": ["..."], "moved": [ { "rule": 0, "entryId": "..." } ], "manaAvailable": 1, "manaSpent": 0 } ] }
   ],
   "limits": [
     "Groups without produces add generic mana only.",
@@ -884,7 +884,7 @@ These are fixed and stated in the tool description:
    untapped sources pay the most colored symbols of `targetCost`, then the
    most total symbols, then prefers `manaFrom: "same-turn"`, then the lowest
    entry ID. This is today's `target-first-v1` land choice
-   (`src/MtgMcp.OnCurve/OnCurveTrial.cs:225-290`), stated as a rule.
+   (`OnCurveTrial.cs:225-290` at 9d279de, now `SimulationTrial.ChooseTargetFirst`), stated as a rule.
 4. `manaFrom: "same-turn"` makes the added mana usable on the turn the card
    is played; `"next-turn"` makes it usable from the next turn.
 5. London mulligan: draw `openingHand.size` cards, test `keepWhen`, and if
@@ -917,7 +917,7 @@ These are fixed and stated in the tool description:
    turn's untapped sources pays both the `manaCost` and all generic mana
    spent that turn by rules. Colored symbols are matched first, then generic,
    using the matcher in `OnCurveManaPayment`
-   (`src/MtgMcp.OnCurve/OnCurveMana.cs:266`). The engine never decides which
+   (`OnCurveManaPayment` in `src/MtgMcp.OnCurve/OnCurveMana.cs`). The engine never decides which
    colored source paid an earlier generic cost; the joint assignment covers
    every choice. Hybrid symbols accept either color. Phyrexian symbols need
    their color, and life payment is listed in `limits` as not modeled.
@@ -953,6 +953,168 @@ evaluator case, and fixtures.
 - The existing SplitMix64 generator, fingerprint, and Wilson interval code are
   reused.
 
+### As Built (phase 6)
+
+The phase 6 implementation follows this section with the changes below. Each
+was made while building the tool and is covered by the tests named in the
+phase 6 evidence row of the README.
+
+- **Preset request.** The `on-curve` preset is a `preset` argument of kind
+  `on-curve` (`targetEntryId`, `landRules`, `turnLimit`, `onThePlay`). With a
+  preset, `groups`, `openingHand`, `eachTurn`, `turns`, and `conditions` are not
+  allowed (`field-not-allowed`); without one, `openingHand`, `eachTurn`,
+  `turns`, and `conditions` are required (`missing-field`) and `groups` is
+  optional. `samples` and `sampleHands` are always required. The preset reads
+  installed card data, expands to ordinary groups, one `play` rule, and one
+  `can-cast` condition (the expanded rules appear in `appliedRules`), and adds a
+  `preset` block listing the target, the lands with their colors and rules, and
+  the entries it leaves out. A deck entry with no card data stops the preset
+  (`on-curve-card-fact-unavailable`, naming up to five), as the removed tool did.
+- **Per-entry mana timing.** `play` and `cast-if-able` take an optional
+  `manaFromByEntry` list. The preset needs it: one `play` rule must choose
+  among lands whose mana arrives on the same turn and on the next turn, and
+  `target-first` prefers a card whose own timing is `same-turn` (rule 3).
+- **Rule 5.** The mulligan block is optional; without it the first hand is
+  kept and `mulligans` is absent. `rule` (`london`) and `bottom.otherwise`
+  (`random`) are required text values. Bottomed cards are chosen with the
+  seeded generator, one value per card.
+- **Rule 9.** `any` means one of W, U, B, R, or G, never `C`. A card in no
+  group, or a group with no `produces`, adds generic mana only.
+- **Conditions.** `mana-at-least` counts mana still unspent after the turn's
+  rules, so it matches `can-cast`, which also reads the unspent mana. A
+  `can-cast` with `byTurn` passes if any turn up to it passes. Cards "seen" for
+  `drawn-at-least` are those in the kept opening hand (including cards put on
+  the bottom) and every card drawn later, each counted once.
+- **Result shape.** Sample hands carry `manaAvailable` and `manaSpent` for each
+  turn instead of `mana`, and the card names are in one `sampleCards` list
+  (entry ID and name) instead of a `names` array in each hand, which keeps the
+  result small. `wilson95` is `[lower, upper]`; rates and bounds are rounded to
+  six places so every platform writes the same digits. The result also lists
+  `skipped` entries (a category can hold cards of another zone) and says
+  `truncated`, `sampleHandsOmitted`, `candidateLandsOmitted`, and `narrow` when
+  a cut was needed.
+- **Zones and seed.** Only the `main` zone is shuffled. `deck.expectedRevision`
+  is optional. A missing `seed` is generated and returned.
+- **Bounds.** samples 1 to 100,000; `sampleHands` 0 to 10 and no more than
+  samples; turns 1 to 20; at most 150 deck entries and 500 cards; at most 20
+  groups, rules, and conditions; checks nest at most 4 deep with at most 20 in
+  one condition; at most 150 IDs in one select and 300 in a request; opening
+  hand 1 to 15; mulligans 0 to 10; small counts 0 or 1 to 99. The work limit is
+  50,000,000 (`simulation-too-large`).
+- **Engine boundaries.** The SplitMix64 generator and the Wilson code were
+  reused. The old input fingerprint was replaced by one over the whole request
+  (deck, groups, rules, conditions, versions, and the deck revision), because
+  the old one hashed the removed model's inputs. `MtgMcp.OnCurve` kept its name;
+  the rename to `MtgMcp.Simulation` was not done (see the README evidence row).
+- **Required fields.** The input records use `required` members, so a request
+  that leaves one out is refused with `invalid-arguments` and a `path` that
+  names it, and the schema lists them as required.
+- **Work limits (SIM-005, repair after the strict audit).** The headline limit is samples x turns x deck
+  cards <= 50,000,000, stated in the error. It alone did not bound the real cost, so a second limit was added: an
+  operation estimate <= 400,000,000 that counts, for each turn, a scan of the hand and of the mana in play for
+  each firing of each rule (up to min of its `maxPerTurn`, its group's cards, and the deck's cards), a payment test for
+  each `can-cast` check, and, at each firing of a `target-first` rule, a payment test for each candidate (each about
+  cost symbols x units of mana). Pass 2 found that counting a rule once per turn let 99 firings a turn run 49 seconds;
+  `SimulationBudgetTests` now runs both measured shapes at the limit. The units of mana the rules could put in play are capped at 1,000, a cost has at most 16 symbols, 99
+  generic mana, and 128 characters, and group and condition IDs have at most 64. A request at the limits finishes in
+  seconds (`SimulationBudgetTests`). The 16 preset captures still replay.
+- **SIM-004 and the work limit.** The removed tool accepted 100,000 samples x 12 turns x 500 cards (600,000,000);
+  `stats_simulate` refuses a request above 50,000,000 for the same product. The preset replays every request the
+  limit accepts; a larger request must lower samples or turns. This narrows SIM-004 by design and is stated in the
+  README and CHANGELOG.
+- **Fingerprint.** It covers the deck (entries and counts), groups, rules, conditions, turns, opening hand, the
+  versions, and the deck revision. It leaves out the seed, the sample count, and `sampleHands`, so runs of one model
+  share it.
+- **Recorded fixture.** The App fixture count (82 of 100) was captured by running the old tool's App test at 9d279de
+  and reading its success count; the 16 engine captures were generated from the old calculator at 9d279de.
+- **Two cost readers.** `stats_castability` reads costs with `CastabilityManaCost` (it skips hybrid and Phyrexian
+  symbols), and the simulation reads them with `OnCurveManaSymbols` (it pays them). They differ on purpose, and a
+  shared tokenizer in Core is possible later.
+- **Shared select contract.** The select records keep their `Castability` names although both tools use them; a
+  rename waits for the `MtgMcp.Simulation` rename.
+- **Description label.** `stats_simulate` starts with `Seeded sampling:` and
+  not `Exact math:`, so an estimate is not labeled as exact math (NAME-002).
+
+### As Built (phase 6 defect fixes)
+
+- **FIX-001, protocol.** The server no longer pins `ProtocolVersion`. This
+  supersedes the `latest-mcp-and-toolchain` decision (SADD lines 62 to 85 and
+  145), recorded in the rewrite registry and as a pointer in that completed
+  packet (README, LMT-007, LMT-009). `FoundationProtocolPolicy` still removes
+  `logging` and `listChanged` from the `initialize` result.
+- **FIX-002, category names.** `deck_categories.name` is `BINARY`, not
+  `NOCASE`, through schema migration 2 (a table rebuild with foreign keys off,
+  restored afterward, also after a failure; an existing database gets a
+  pre-migration copy first; the checksum of every applied migration is
+  validated). The upgrade runs when any connection is opened for writing
+  (`DeckDatabase.OpenConnectionAsync`), so every write path, a pull apply, and a
+  batch edit see schema 2, and a restore upgrades the restored file at once. A
+  read of a schema 1 file does not upgrade it. Schema 2 is one way: 0.11.0
+  cannot open it. Archidekt mapping from a provider payload looks a category up
+  by exact name first and then by a unique case-insensitive match
+  (`CategoryNames`). Planning a push compares category names exactly: a name
+  with no exact match is a new category and the old one is deleted, never
+  renamed (S1/S7). Only the check after a push (`lenientNames`) accepts a
+  category or primary category that differs only by case, never one another
+  target category matched exactly, because the provider may recase names on
+  read. `MapFailure` names the violated constraint (`DescribeConstraint`).
+- **FIX-003, push.** `ArchidektSyncPlanner.FindZoneContradictions` runs on the
+  plan and refuses an `entry-add` or `entry-update` whose zone differs from the
+  zone a read gives its categories (`MapZone`, the same function the read uses),
+  so a Sideboard category that is included in the deck, or an outside-the-deck
+  category without a special name, is judged by that rule and not by
+  `includedInDeck`. After `verification-mismatch` the baseline records the
+  verified remote state and links created rows (`LinkByCardIdentity`, when the
+  card is the only unlinked one), but its local fingerprint is the value
+  `unsynchronized`, which no deck has: every difference Archidekt did not take
+  stays a local change, so a pull conflicts and a push plans only those
+  differences. Remote fingerprints are recomputed with the current rules before
+  comparing (`Recompute`), so an earlier baseline still matches an unchanged
+  deck; entry `sortOrder` is left out of the content fingerprint and the
+  difference rows. `discardLocalChanges` is in the preview fingerprint and the
+  operation text, needs `localDeckId` (`discard-needs-local-deck`), and leaves
+  the default unchanged. A push that stops as `partial` records nothing.
+- **FIX-004, local fingerprint.** `FingerprintLocalContent` sorts entries,
+  categories, and assignments by ID for both the stored deck and the creation
+  draft. A baseline now has `schemaVersion` 2 and also stores
+  `localInvisibleFingerprint` (entry order numbers, category colors, category
+  ranks: the local fields no remote row shows). A version 1 baseline (made by
+  an earlier version) is read as unchanged when the deck matches the order that
+  version recorded (`LegacyLocalFingerprint`, the store order), or when its rows
+  show no local change; so an upgraded deck is not stuck, at the cost that an
+  edit to a hidden field on such a deck is not seen until the next
+  synchronization writes a version 2 baseline.
+- **FIX-005, converged.** A difference whose local and remote values are equal
+  has state `converged`; it counts as a represented change on both sides but is
+  neither a local nor a remote change for conflict purposes. It does not hide a
+  local edit to a hidden field: when the stored `localInvisibleFingerprint`
+  differs, `/localOnly/content` is reported as `local-changed` beside it.
+- **FIX-006, IDs.** `ArchidektContract.StableGuid(scope, localDeckId, id)`
+  derives local entry and category IDs per local deck; the preview fingerprint
+  does not contain them, so preview and apply agree. Baselines also keep the old
+  provider-only IDs as extra links, so decks made earlier still link, push, and
+  pull (tested with a deck built the earlier way).
+- **FIX-007, whole numbers.** `WholeNumberArguments.Normalize` runs first in
+  the tool call filter and rewrites any number written with a fractional part
+  or an exponent but holding a whole value that fits 64 bits (`328.0`,
+  `3.28e2`) as the plain integer, at any depth, judging wholeness from the
+  digits as written (so `0.99999999999999999999999999999999` is not rounded to
+  1). A number field that is not an integer reads the plain form as well. A
+  number with a fractional part, or one out of range, is left alone and fails to
+  bind as before, and the filter already turns that into `invalid-arguments`
+  with the JSON path. Custom `int` and `long` converters were tried first and
+  dropped: a custom converter hides the type from the schema generator, which
+  then published empty schemas and lost property descriptions (caught by
+  `StatisticsTools_EveryMode_*`). A test walks every tool input type and fails
+  if an integer type other than `int` or `long` appears.
+- **Pass 2 simulation repair.** The operation estimate charges every firing of
+  every rule (see the work limits above); `SimulationBudgetTests` runs the two
+  shapes that a probe measured at 48.8 and 23.2 seconds as at-limit benchmark tests (45.8 and 31.5 seconds as tests
+  before the fix). The planner keeps the estimate on the plan (`EstimatedOperations`), the trial counts its own work
+  (`WorkDone`), and `Estimate_IsAtLeastTheCountedWork` holds the estimate to the count with no clock. `WithExtraGeneric`
+  and `CoversFullCost` were test-only and are deleted.
+
+
 ### On-Curve Migration
 
 `deck_on_curve_estimate` becomes the preset `on-curve`. The preset turns
@@ -961,7 +1123,7 @@ draw, seed) into the equivalent groups, rules, and one condition, then calls
 the same engine. The preset's rules appear in `appliedRules` like any other
 request. SIM-004 replay fixtures prove identical hit counts.
 
-Today's estimator pays colored target costs from the colors each source
+The removed estimator (line numbers refer to 9d279de) paid colored target costs from the colors each source
 produces (`OnCurveCalculator.cs:143-186`, `OnCurveMana.cs:266`). It chooses
 which land to play by the target's cost (`ChooseLand` and `IsBetter`,
 `OnCurveTrial.cs:225-290`), and counts a hit only when the target is in hand

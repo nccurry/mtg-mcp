@@ -323,7 +323,7 @@ function Invoke-ToolSmoke {
             "--no-build" `
             "--" `
             "--filter-query" `
-            "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(DeckOnCurveMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)|(WorkflowPromptsMcpTests)"
+            "/*/*/(FoundationMcpTests)|(DeckMcpTests)|(DeckInterchangeMcpTests)|(StatisticsSimulateMcpTests)|(ToolsetNorthStarMcpTests)|(ScryfallMcpTests)|(SpellbookMcpTests)|(StatisticsMcpTests)|(WorkflowPromptsMcpTests)"
     }
     finally {
         $env:MTGMCP_E2E_COMMAND = $previousCommand

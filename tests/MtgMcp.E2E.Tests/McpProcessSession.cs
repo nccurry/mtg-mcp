@@ -258,6 +258,9 @@ internal sealed class McpProcessSession : IAsyncDisposable
             new McpClientOptions
             {
                 ProtocolVersion = protocolVersion,
+                // The default 5 second probe can expire while a server process starts on a loaded machine, and the
+                // client then reports the version as unsupported. This server speaks 2026-07-28, so wait for it.
+                DiscoverProbeTimeout = Timeout.InfiniteTimeSpan,
             },
             cancellationToken: cancellationToken).ConfigureAwait(false);
     }

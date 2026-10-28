@@ -46,9 +46,7 @@ internal static class ArchidektJsonContract
         List<RemoteDeckCategory> categories = MapCategories(deck);
         Dictionary<string, RemoteDeckCategory> categoriesById = categories
             .ToDictionary(value => value.ProviderCategoryId, StringComparer.Ordinal);
-        Dictionary<string, RemoteDeckCategory> categoriesByName = categories
-            .GroupBy(value => value.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, RemoteDeckCategory> categoriesByName = CategoryNames.Index(categories, value => value.Name);
         List<RemoteDeckEntry> entries = MapEntries(deck, categoriesById, categoriesByName);
         Dictionary<string, JsonElement> extensions = CopyUnknown(deck, KnownDeckFields);
         string sourceChecksum = ArchidektContract.Hash(sourceJson);
@@ -60,18 +58,7 @@ internal static class ArchidektJsonContract
             parentFolderId,
             categories,
             entries);
-        string remoteFingerprint = ArchidektContract.Fingerprint(new
-        {
-            remoteId,
-            contentFingerprint,
-            providerCategories = categories.Select(value => value.ProviderCategoryId),
-            providerRelations = entries.Select(value => new
-            {
-                value.ProviderRelationId,
-                value.ProviderCardId,
-            }),
-            extensions = StableDeckExtensions(extensions),
-        });
+        string remoteFingerprint = RemoteFingerprintOf(remoteId, contentFingerprint, categories, entries, extensions);
         ArchidektRetrievalEvidence evidence = Evidence(method, retrievedAtUtc, sourceChecksum);
         return new RemoteDeckSnapshot(
             remoteId,
@@ -444,10 +431,10 @@ internal static class ArchidektJsonContract
 
             string resolved = categoriesById.TryGetValue(candidate, out RemoteDeckCategory? byId)
                 ? byId.Name
-                : categoriesByName.TryGetValue(candidate, out RemoteDeckCategory? byName)
+                : CategoryNames.TryFind(categoriesByName, candidate, out RemoteDeckCategory? byName)
                     ? byName.Name
                     : candidate;
-            if (!names.Contains(resolved, StringComparer.OrdinalIgnoreCase))
+            if (!names.Contains(resolved, StringComparer.Ordinal))
             {
                 names.Add(resolved);
             }
@@ -459,14 +446,14 @@ internal static class ArchidektJsonContract
     /// <summary>
     /// Maps provider category conventions into the format-neutral local zone vocabulary.
     /// </summary>
-    private static string MapZone(
+    internal static string MapZone(
         IReadOnlyList<string> names,
         IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
     {
         foreach (string name in names)
         {
             if (name.Equals("commander", StringComparison.OrdinalIgnoreCase) ||
-                (categoriesByName.TryGetValue(name, out RemoteDeckCategory? category) && category.IsPremier))
+                (CategoryNames.TryFind(categoriesByName, name, out RemoteDeckCategory? category) && category.IsPremier))
             {
                 return "commander";
             }
@@ -612,18 +599,12 @@ internal static class ArchidektJsonContract
             parentFolderId: null,
             deck.Categories,
             deck.Entries);
-        string remoteFingerprint = ArchidektContract.Fingerprint(new
-        {
+        string remoteFingerprint = RemoteFingerprintOf(
             deck.RemoteId,
             contentFingerprint,
-            providerCategories = deck.Categories.Select(value => value.ProviderCategoryId),
-            providerRelations = deck.Entries.Select(value => new
-            {
-                value.ProviderRelationId,
-                value.ProviderCardId,
-            }),
-            extensions = StableDeckExtensions(deck.Extensions),
-        });
+            deck.Categories,
+            deck.Entries,
+            deck.Extensions);
         return deck with
         {
             Name = deckName,
@@ -676,9 +657,47 @@ internal static class ArchidektJsonContract
                 value.Zone,
                 value.CategoryNames,
                 value.PrimaryCategoryName,
-                value.SortOrder,
             }),
         });
+    }
+
+    /// <summary>
+    /// Computes the provider-side fingerprint. The order of the rows still counts, but the entry order number is left
+    /// out of the content: Archidekt renumbers it without a user edit, so a renumbering must not look like a change.
+    /// </summary>
+    private static string RemoteFingerprintOf(
+        string remoteId,
+        string contentFingerprint,
+        IReadOnlyList<RemoteDeckCategory> categories,
+        IReadOnlyList<RemoteDeckEntry> entries,
+        IReadOnlyDictionary<string, JsonElement> extensions)
+    {
+        return ArchidektContract.Fingerprint(new
+        {
+            remoteId,
+            contentFingerprint,
+            providerCategories = categories.Select(value => value.ProviderCategoryId),
+            providerRelations = entries.Select(value => new { value.ProviderRelationId, value.ProviderCardId }),
+            extensions = StableDeckExtensions(extensions),
+        });
+    }
+
+    /// <summary>
+    /// Recomputes both fingerprints of a snapshot with the current rules, so a baseline recorded by an earlier
+    /// version compares equal to an unchanged deck.
+    /// </summary>
+    internal static (string Content, string Remote) Recompute(RemoteDeckSnapshot deck)
+    {
+        ArgumentNullException.ThrowIfNull(deck);
+        string content = FingerprintContent(
+            deck.Name,
+            deck.Description,
+            deck.Format,
+            deck.Visibility,
+            deck.ParentFolderId,
+            deck.Categories,
+            deck.Entries);
+        return (content, RemoteFingerprintOf(deck.RemoteId, content, deck.Categories, deck.Entries, deck.Extensions));
     }
 
     /// <summary>
