@@ -104,11 +104,6 @@ public static class ScryfallListQuery
     public const int MaximumEntries = 20_000;
 
     /// <summary>
-    /// Names the group that holds cards with no value for the group field, as it is written in the result.
-    /// </summary>
-    private const string NoneKey = "none";
-
-    /// <summary>
     /// Stands for a missing group value, so it never merges with a real value that is the text <c>none</c>.
     /// </summary>
     private sealed class MissingValue
@@ -655,7 +650,7 @@ public static class ScryfallListQuery
 
     /// <summary>
     /// Lists the group keys one entry belongs to: the combinations of its values for each group field, with
-    /// <c>none</c> standing for a field with no value.
+    /// a missing-value marker standing for a field with no value.
     /// </summary>
     private static List<object?[]> Keys(ScryfallListEntry entry, IReadOnlyList<ScryfallListField> fields)
     {
@@ -679,7 +674,7 @@ public static class ScryfallListQuery
     }
 
     /// <summary>
-    /// Lists the values an entry has for a field, or the single value <c>none</c> when it has none.
+    /// Lists the values an entry has for a field, or the missing-value marker when it has none.
     /// </summary>
     private static List<object> ValuesOf(object? value)
     {
@@ -733,7 +728,7 @@ public static class ScryfallListQuery
     {
         return part switch
         {
-            MissingValue => NoneKey,
+            MissingValue => null,
             decimal number when decimal.Truncate(number) == number => (long)number,
             _ => part,
         };
@@ -1118,7 +1113,7 @@ public static class ScryfallListQuery
                 sources[color] = sources.GetValueOrDefault(color) + entry.Quantity;
             }
 
-            if (ScryfallCardFaces.ManaColors.Take(5).All(color => produced.Contains(color, StringComparer.Ordinal)))
+            if (ScryfallCardFaces.Colors.All(color => produced.Contains(color, StringComparer.Ordinal)))
             {
                 sources["anyColor"] = sources.GetValueOrDefault("anyColor") + entry.Quantity;
             }
@@ -1163,7 +1158,7 @@ public static class ScryfallListQuery
         private ScryfallOrderedObject SourcesObject()
         {
             ScryfallOrderedObject result = new();
-            foreach (string name in (string[])["W", "U", "B", "R", "G", "C", "anyColor", "noProducedMana"])
+            foreach (string name in (string[])[.. ScryfallCardFaces.ManaColors, "anyColor", "noProducedMana"])
             {
                 if (sources.TryGetValue(name, out long count) && count > 0)
                 {

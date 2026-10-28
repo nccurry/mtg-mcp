@@ -160,6 +160,14 @@ internal static class CastabilityGroupPlanner
         switch (select)
         {
             case CastabilityEntryIdsSelect { Ids.Count: > 0 } byEntry:
+                if (byEntry.Ids.Distinct().Count() != byEntry.Ids.Count)
+                {
+                    return new OperationInvalidInput(
+                        "invalid-sources",
+                        "An entry ID is listed more than once in this select.",
+                        path + ".ids");
+                }
+
                 HashSet<Guid> known = [.. deck.Entries.Select(entry => entry.EntryId)];
                 Guid? missing = byEntry.Ids.Cast<Guid?>().FirstOrDefault(id => !known.Contains(id!.Value));
                 return missing is null

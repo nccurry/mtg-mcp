@@ -219,11 +219,44 @@ public sealed class SpellbookBracketToolTests
 
         int bytes = JsonSerializer.SerializeToUtf8Bytes(result, ToolCallPolicy.SerializerOptions).Length;
         Assert.True(bytes <= 40_000, $"The result is {bytes} bytes.");
-        Assert.Equal(120, result.Cards.Count);
+        Assert.Equal(120, result.Cards.Count + (result.CardsOmitted ?? 0));
         Assert.True(result.CombosOmitted > 0);
         Assert.Equal(400, result.Combos.Count + result.CombosOmitted);
         Assert.True(result.Truncated);
         Assert.False(string.IsNullOrEmpty(result.Narrow));
+    }
+
+    /// <summary>
+    /// Verifies a provider answer with so many flagged cards (250 of them) that they alone pass the size limit cuts the flagged
+    /// cards too, and counts them in cardsOmitted, with the whole result at most 40,000 bytes (SIZE-001).
+    /// </summary>
+    [Fact]
+    public async Task GetFacts_FlaggedCardsAlonePastTheLimit_AreCutAndCounted()
+    {
+        JsonArray cards = [];
+        List<DeckEntryDraft> drafts = [];
+        for (int index = 0; index < 250; index++)
+        {
+            string name = $"A flagged card with a rather long name to take space and more words to make it longer still {index:D3}";
+            cards.Add(Card(name, null, gameChanger: true));
+            drafts.Add(new DeckEntryDraft(1, name, Zone: "main"));
+        }
+
+        string raw = new JsonObject { ["bracketTag"] = "R", ["cards"] = cards, ["combos"] = new JsonArray() }
+            .ToJsonString();
+        using Setup setup = new(raw);
+        DeckDocument deck = await setup.CreateDeckAsync(drafts);
+
+        SpellbookBracketFactsResult result = Success(await setup.Tools.GetFactsAsync(
+            deck.DeckId,
+            deck.Revision,
+            TestContext.Current.CancellationToken));
+
+        int bytes = JsonSerializer.SerializeToUtf8Bytes(result, ToolCallPolicy.SerializerOptions).Length;
+        Assert.True(bytes <= 40_000, $"The result is {bytes} bytes.");
+        Assert.True(result.CardsOmitted > 0);
+        Assert.Equal(250, result.Cards.Count + result.CardsOmitted);
+        Assert.True(result.Truncated);
     }
 
     /// <summary>

@@ -269,7 +269,8 @@ internal sealed class StatisticsCastabilityCoordinator
 
         List<CastabilitySkipped> listed = [.. skipped.Take(MaximumSkippedListed)];
         List<int> sizes = [.. rows.Select(row => ResultSize.Measure(row) + 1)];
-        int fixedBytes = listed.Sum(item => ResultSize.Measure(item) + 1) + ResultSize.Measure(limits);
+        int fixedBytes = listed.Sum(item => ResultSize.Measure(item) + 1) + ResultSize.Measure(limits) +
+            ResultSize.Measure(plan.Views);
         int keep = ResultSizeLimit.CountFitting(sizes, fixedBytes);
         return new CastabilityToolResult(
             [info],

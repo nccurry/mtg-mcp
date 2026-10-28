@@ -9,12 +9,25 @@ namespace MtgMcp.Scryfall;
 public static partial class ScryfallCardFaces
 {
     /// <summary>
-    /// Lists the five colors and colorless that count as mana colors, in display order.
+    /// Lists the card supertypes, which come before the card types on a type line.
     /// </summary>
-    public static IReadOnlyList<string> ManaColors { get; } = ["W", "U", "B", "R", "G", "C"];
+    private static readonly HashSet<string> Supertypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Basic", "Elite", "Host", "Legendary", "Ongoing", "Snow", "World",
+    };
 
     /// <summary>
-    /// Gives the type line of the face a commander is designated from: the front face of a card with faces.
+    /// Lists the five colors in the order white, blue, black, red, green.
+    /// </summary>
+    public static IReadOnlyList<string> Colors { get; } = ["W", "U", "B", "R", "G"];
+
+    /// <summary>
+    /// Lists the five colors and colorless that count as mana colors, in display order.
+    /// </summary>
+    public static IReadOnlyList<string> ManaColors { get; } = [.. Colors, "C"];
+
+    /// <summary>
+    /// Gives the type line of the front face, or the card's own type line when it has no faces.
     /// </summary>
     public static string FrontTypeLine(ScryfallCard card)
     {
@@ -56,7 +69,7 @@ public static partial class ScryfallCardFaces
     /// </summary>
     public static IReadOnlyList<string> FrontTypes(ScryfallCard card)
     {
-        return Words(FrontTypeLine(card), beforeDash: true);
+        return TypeLineWords(FrontTypeLine(card), beforeDash: true);
     }
 
     /// <summary>
@@ -64,7 +77,7 @@ public static partial class ScryfallCardFaces
     /// </summary>
     public static IReadOnlyList<string> FrontSubtypes(ScryfallCard card)
     {
-        return Words(FrontTypeLine(card), beforeDash: false);
+        return TypeLineWords(FrontTypeLine(card), beforeDash: false);
     }
 
     /// <summary>
@@ -98,7 +111,7 @@ public static partial class ScryfallCardFaces
         ArgumentNullException.ThrowIfNull(card);
         return frontOnly
             ? FrontTypes(card).Contains("Land", StringComparer.Ordinal)
-            : TypeLines(card).Any(line => Words(line, beforeDash: true).Contains("Land", StringComparer.Ordinal));
+            : TypeLines(card).Any(line => TypeLineWords(line, beforeDash: true).Contains("Land", StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -137,9 +150,17 @@ public static partial class ScryfallCardFaces
     }
 
     /// <summary>
+    /// Reports whether a word of a type line is a supertype, which comes before the card types.
+    /// </summary>
+    public static bool IsSupertype(string word)
+    {
+        return Supertypes.Contains(word);
+    }
+
+    /// <summary>
     /// Splits a type line into words before or after its dash.
     /// </summary>
-    private static List<string> Words(string typeLine, bool beforeDash)
+    public static IReadOnlyList<string> TypeLineWords(string typeLine, bool beforeDash)
     {
         string[] halves = typeLine.Split('—');
         string part = beforeDash ? halves[0] : halves.Length > 1 ? halves[1] : string.Empty;

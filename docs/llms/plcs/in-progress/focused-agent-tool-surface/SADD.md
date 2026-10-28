@@ -306,6 +306,9 @@ and local decks are addressed by ID and revision.
 `card_lists_compare` and `card_list_query` share one list source type and one
 resolver in App, so a new source kind works in both tools.
 
+One request may read at most 20,000 cards from all its sources together. A source that would pass the limit is
+refused before it is read (a snapshot) or as soon as it is counted, as `list-too-large` with the path of that source.
+
 | Kind | Input | Owning toolset | Notes |
 | --- | --- | --- | --- |
 | `scryfall-snapshot` | `snapshotId` | `scryfall` | The full saved result of a search. Immutable. |
@@ -430,7 +433,7 @@ or a comparison result.
 | Part | Meaning |
 | --- | --- |
 | `where` | Filters, all of which must match. `op` is one of `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `contains`. For list fields (colors, tags, keywords, subtypes), `contains` means the list holds the value. |
-| `groupBy` | Zero to two fields. A card with several values in a list field counts once in each group; the result says so with `multiValued: true`. Cards with no value go in a `none` group. |
+| `groupBy` | Zero to two fields. A card with several values in a list field counts once in each group; the result says so with `multiValued: true`. Cards with no value go in one group whose key is JSON `null`, written last, so it never merges with a real value that is the text `none`. |
 | `metrics` | `quantity` (copies, from deck quantities; 1 for search results), `cards` (distinct cards), `sum:`, `avg:`, `min:`, `max:` over numeric fields, `pips`, and `sources`. |
 | `rows` | Optional per-card rows with chosen fields, sorting, and paging. Omit it to get only grouped totals. |
 
@@ -1088,9 +1091,11 @@ and the conditioning used. Rows are sorted by probability, then name.
 The work limit is 480 (distinct costs times source groups; a design decision made in phase 4); a request over it is
 refused as `invalid-input` with the limit. The exact-work budget is shared by the whole request, not given to each cost,
 and a turn must be from 1 to 99. When `requireLandDrops` is true and the deck holds fewer sources than the turn
-number, the condition cannot happen, so the probability is `null` (undefined, never 0) and the row sorts last. Entries
-that are not lands but have no card data are listed in `skipped` as `no-scryfall-identity` or `not-in-card-data`. `skipped` lists, with the reason, cards with no mana cost, with `X`, or with
-hybrid or Phyrexian symbols. The exact engine's requirement type
+number, the condition cannot happen, so the probability is `null` (undefined, never 0) and the row sorts last. Every entry
+with no card data, land or not, is listed in `skipped` as `no-scryfall-identity` or `not-in-card-data`. `skipped` also
+lists, with the reason, cards with no mana cost (`no-mana-cost`), with `X` (`x-cost`), with hybrid or Phyrexian symbols
+(`hybrid-or-phyrexian-symbol`), with two costs (`split-card-has-two-costs`), with another symbol
+(`unsupported-symbol`), or with a mana value past turn 99 under the mana-value rule (`mana-value-above-turn-limit`). The exact engine's requirement type
 (`ManaRequirementInput`, `src/MtgMcp.Statistics/TurnManaInverseModels.cs:78`)
 holds only W, U, B, R, G, C, and generic counts. Card data must be
 installed; otherwise the result is `not-cached` naming the sync tool.

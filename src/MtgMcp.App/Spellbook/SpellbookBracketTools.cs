@@ -40,6 +40,13 @@ internal sealed record SpellbookBracketFactsResult(
     public int? UnflaggedCardsOmitted { get; init; }
 
     /// <summary>
+    /// Gets how many flagged cards the result leaves out to stay under the size limit, or null when it lists every flagged card.
+    /// </summary>
+    [JsonPropertyName("cardsOmitted")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CardsOmitted { get; init; }
+
+    /// <summary>
     /// Gets how many combos the result leaves out to stay under the size limit, or null when it lists every combo.
     /// </summary>
     [JsonPropertyName("combosOmitted")]
@@ -166,26 +173,39 @@ internal sealed class SpellbookBracketTools
         [
             .. cards.Where(card => card.GameChanger || card.MassLandDenial || card.ExtraTurn || card.Banned),
         ];
+        const string Narrow = "Cards with no flag were left out first, then flagged cards and combos from the end of " +
+            "their lists, to stay under the size limit.";
         SpellbookBracketFactsResult trimmed = full with
         {
             Cards = flagged,
             UnflaggedCardsOmitted = cards.Count - flagged.Count,
             Truncated = true,
-            Narrow = "Cards with no flag were left out to stay under the size limit.",
+            Narrow = Narrow,
         };
         if (ResultSize.Measure(trimmed) <= limit)
         {
             return trimmed;
         }
 
-        int fixedBytes = ResultSize.Measure(trimmed with { Combos = [] });
-        List<int> sizes = [.. facts.Combos.Select(combo => ResultSize.Measure(combo) + 1)];
-        int keep = ResultSizeLimit.CountFitting(sizes, fixedBytes);
-        return trimmed with
+        // Measure the final shape: both omitted counts and the final hint are in the fixed part, so a cut cannot push
+        // the result back over the limit.
+        SpellbookBracketFactsResult shell = trimmed with
         {
-            Combos = [.. facts.Combos.Take(keep)],
-            CombosOmitted = facts.Combos.Count - keep,
-            Narrow = "Cards with no flag and some combos were left out to stay under the size limit.",
+            Cards = [],
+            Combos = [],
+            CardsOmitted = flagged.Count,
+            CombosOmitted = facts.Combos.Count,
+        };
+        List<int> cardSizes = [.. flagged.Select(card => ResultSize.Measure(card) + 1)];
+        int keptCards = ResultSizeLimit.CountFitting(cardSizes, ResultSize.Measure(shell));
+        SpellbookBracketFactsResult withCards = shell with { Cards = [.. flagged.Take(keptCards)] };
+        List<int> comboSizes = [.. facts.Combos.Select(combo => ResultSize.Measure(combo) + 1)];
+        int keptCombos = ResultSizeLimit.CountFitting(comboSizes, ResultSize.Measure(withCards));
+        return withCards with
+        {
+            Combos = [.. facts.Combos.Take(keptCombos)],
+            CardsOmitted = flagged.Count > keptCards ? flagged.Count - keptCards : null,
+            CombosOmitted = facts.Combos.Count > keptCombos ? facts.Combos.Count - keptCombos : null,
         };
     }
 

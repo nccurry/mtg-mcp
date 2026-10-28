@@ -147,7 +147,7 @@ internal static class CommanderRules
     /// <summary>
     /// Lists the five colors in their standard order.
     /// </summary>
-    private static readonly string[] ColorOrder = ["W", "U", "B", "R", "G"];
+    private static readonly List<string> ColorOrder = [.. ScryfallCardFaces.Colors];
 
     /// <summary>
     /// Evaluates every Commander rule fact for the entries of one deck.
@@ -320,7 +320,7 @@ internal static class CommanderRules
     /// </summary>
     private static List<string> SortColors(IEnumerable<string> colors)
     {
-        return [.. colors.OrderBy(color => Array.IndexOf(ColorOrder, color)).ThenBy(color => color,
+        return [.. colors.OrderBy(color => ColorOrder.IndexOf(color)).ThenBy(color => color,
             StringComparer.Ordinal)];
     }
 

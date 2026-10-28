@@ -295,6 +295,90 @@ public sealed class StatisticsCastabilityTests
     }
 
     /// <summary>
+    /// Verifies a deck with 400 different costs is cut to the size limit: the rows that fit are kept, the result is
+    /// marked truncated with a narrow hint, and the whole result is at most 40,000 bytes (SIZE-001).
+    /// </summary>
+    [Fact]
+    public async Task Calculate_FourHundredDistinctCosts_CutsRowsAndSaysSo()
+    {
+        List<JsonObject> spells = [];
+        List<DeckEntryDraft> entries = [new DeckEntryDraft(40, "Forest", PrintingId: CardJson.PrintingOf(Forest))];
+        foreach (int generic in Enumerable.Range(1, 16))
+        {
+            foreach (int green in Enumerable.Range(0, 5))
+            {
+                foreach (int white in Enumerable.Range(0, 5))
+                {
+                    string cost = "{" + generic + "}" + string.Concat(Enumerable.Repeat("{G}", green)) +
+                        string.Concat(Enumerable.Repeat("{W}", white));
+                    JsonObject spell = CardJson.Make(
+                        $"Cost spell {generic:D2} {green} {white}",
+                        "Sorcery",
+                        cost,
+                        generic + green + white,
+                        ["G"]);
+                    spells.Add(spell);
+                    entries.Add(new DeckEntryDraft(
+                        1,
+                        spell["name"]!.GetValue<string>(),
+                        PrintingId: CardJson.PrintingOf(spell)));
+                }
+            }
+        }
+
+        using CardDataFixture data = await CardDataFixture.CreateAsync([Forest, .. spells]);
+        DeckDocument deck = Success(await data.Store.CreateAsync(
+            new DeckCreateRequest("Costs", Format: "commander", Entries: entries),
+            TestContext.Current.CancellationToken));
+        StatisticsCastabilityCoordinator coordinator = new(
+            new CardListResolver(data.Scryfall, data.Access()),
+            new ExactStatisticsCalculator("test"));
+
+        CastabilityToolResult result = Success(await coordinator.CalculateAsync(
+            new DeckSourceInput(deck.DeckId),
+            [new CastabilitySourceGroupInput(
+                "lands",
+                new CastabilityEntryIdsSelect([deck.Entries.Single(entry => entry.CardName == "Forest").EntryId]),
+                new CastabilityProducesInput(["G"]))],
+            new FixedTurnInput(5),
+            true,
+            false,
+            TestContext.Current.CancellationToken));
+
+        int bytes = JsonSerializer.SerializeToUtf8Bytes(result, ToolCallPolicy.SerializerOptions).Length;
+        Assert.True(bytes <= 40_000, $"The result is {bytes} bytes.");
+        Assert.True(result.Truncated);
+        Assert.False(string.IsNullOrEmpty(result.Narrow));
+        Assert.InRange(result.Rows.Count, 1, 399);
+    }
+
+    /// <summary>
+    /// Verifies the same entry ID listed twice in one select is refused as invalid sources, not reported as two
+    /// overlapping groups.
+    /// </summary>
+    [Fact]
+    public async Task Calculate_RepeatedEntryIdInOneSelect_IsInvalidSources()
+    {
+        using Setup setup = await Setup.CreateAsync();
+        DeckDocument deck = await setup.CreateDeckAsync();
+        Guid forest = deck.Entries.First(entry => entry.CardName == "Forest").EntryId;
+
+        OperationInvalidInput invalid = Failure(await setup.Coordinator.CalculateAsync(
+            new DeckSourceInput(deck.DeckId, Zones: ["main"]),
+            [new CastabilitySourceGroupInput(
+                "lands",
+                new CastabilityEntryIdsSelect([forest, forest]),
+                new CastabilityProducesInput(["G"]))],
+            new ManaValueTurnInput(),
+            true,
+            false,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(("invalid-sources", "sources[0].select.ids"), (invalid.ReasonCode, invalid.Path));
+        Assert.Contains("more than once", invalid.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies a source that is not a deck or backup is refused naming the allowed kinds, and card data that is not
     /// installed gives not-cached naming the sync tool (case K07).
     /// </summary>

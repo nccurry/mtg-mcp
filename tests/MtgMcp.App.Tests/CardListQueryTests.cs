@@ -397,6 +397,29 @@ public sealed class CardListQueryTests
     }
 
     /// <summary>
+    /// Verifies a query over a saved search that uses no tags or prices runs without installed card data, and one
+    /// that groups by tags answers not-cached naming the sync tool.
+    /// </summary>
+    [Fact]
+    public async Task Query_SnapshotWithoutCardData_NeedsItOnlyForTagsAndPrices()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync(install: false);
+        OperationResult<ScryfallSearchResponse> search = await world.Data.Scryfall.SearchAsync(
+            "fixture",
+            cancellationToken: TestContext.Current.CancellationToken);
+        ScryfallSnapshotSourceInput source = new(Success(search).Snapshot.SnapshotId);
+
+        CardListQueryResult plain = Success(await Query(world, source, groupBy: ["manaValue"]));
+        OperationNotCached tagged = Assert.IsType<OperationNotCached>((await Query(
+            world,
+            source,
+            groupBy: ["tags"])).Value);
+
+        Assert.Equal(3, plain.Matched.Quantity);
+        Assert.Contains("scryfall_card_data_sync", tagged.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Runs one query with a group, metric, and row choice.
     /// </summary>
     private static Task<OperationResult<CardListQueryResult>> Query(

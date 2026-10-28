@@ -54,8 +54,8 @@ public sealed class ScryfallListQueryTests
 
         Assert.True(result.MultiValued);
         Assert.Equal(
-            [("B", 1L), ("G", 2L), ("none", 1L)],
-            result.Groups.Select(group => ((string)KeyOf(group, "colors")!, (long)group.Get("quantity")!)));
+            [("B", 1L), ("G", 2L), (null, 1L)],
+            result.Groups.Select(group => ((string?)KeyOf(group, "colors"), (long)group.Get("quantity")!)));
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public sealed class ScryfallListQueryTests
 
         ScryfallListQueryResult result = Success(deck, Request(groupBy: ["tags"]));
 
-        Assert.Equal(["ramp", "none"], result.Groups.Select(group => (string)KeyOf(group, "tags")!));
+        Assert.Equal(["ramp", null], result.Groups.Select(group => (string?)KeyOf(group, "tags")));
     }
 
     /// <summary>
@@ -529,7 +529,9 @@ public sealed class ScryfallListQueryTests
         ScryfallListQueryResult result = Success(deck, Request(groupBy: ["tags"]));
 
         Assert.Equal(2, result.Groups.Count);
-        Assert.All(result.Groups, group => Assert.Equal("none", (string)KeyOf(group, "tags")!));
+        // The real tag is the text none; the missing-value group has a JSON null key, and comes last.
+        Assert.Equal("none", (string)KeyOf(result.Groups[0], "tags")!);
+        Assert.Null(KeyOf(result.Groups[1], "tags"));
         Assert.Equal([1L, 1L], result.Groups.Select(group => (long)group.Get("quantity")!));
     }
 

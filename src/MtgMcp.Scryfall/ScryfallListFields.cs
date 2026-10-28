@@ -67,14 +67,6 @@ internal sealed record ScryfallListField(
 internal static class ScryfallListFields
 {
     /// <summary>
-    /// Lists the card supertypes, which come before the card types on a type line.
-    /// </summary>
-    private static readonly HashSet<string> Supertypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Basic", "Elite", "Host", "Legendary", "Ongoing", "Snow", "World",
-    };
-
-    /// <summary>
     /// Maps each concise field the list query reuses to its reader, so both tools read cards the same way.
     /// </summary>
     private static readonly Dictionary<string, ScryfallPlainField> Concise = BuildConcise();
@@ -342,10 +334,9 @@ internal static class ScryfallListFields
         List<string> words = [];
         foreach (string typeLine in ScryfallCardFaces.TypeLines(card))
         {
-            string head = typeLine.Split('—')[0];
-            foreach (string word in head.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            foreach (string word in ScryfallCardFaces.TypeLineWords(typeLine, beforeDash: true))
             {
-                if (Supertypes.Contains(word) != wantTypes && !words.Contains(word, StringComparer.Ordinal))
+                if (ScryfallCardFaces.IsSupertype(word) != wantTypes && !words.Contains(word, StringComparer.Ordinal))
                 {
                     words.Add(word);
                 }
@@ -363,13 +354,7 @@ internal static class ScryfallListFields
         List<string> words = [];
         foreach (string typeLine in ScryfallCardFaces.TypeLines(card))
         {
-            string[] halves = typeLine.Split('—');
-            if (halves.Length < 2)
-            {
-                continue;
-            }
-
-            foreach (string word in halves[1].Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            foreach (string word in ScryfallCardFaces.TypeLineWords(typeLine, beforeDash: false))
             {
                 if (!words.Contains(word, StringComparer.Ordinal))
                 {

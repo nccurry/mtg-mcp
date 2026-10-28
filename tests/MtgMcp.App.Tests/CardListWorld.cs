@@ -102,6 +102,7 @@ internal sealed class CardListWorld : IDisposable
         CardDataFixture data = await CardDataFixture.CreateAsync(cards, tags, [alpha, bravo, charlie], install);
         return new CardListWorld(data, cards);
     }
+
     /// <summary>
     /// Creates a deck whose entries point at the world's cards in several ways, plus two entries that cannot match.
     /// </summary>

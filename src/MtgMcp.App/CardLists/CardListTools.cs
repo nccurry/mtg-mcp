@@ -94,7 +94,8 @@ internal sealed class CardListTools
         "IDs), deck (a local deck, optional expectedRevision and zones), deck-backup (a deck as it was in a local " +
         "backup), archidekt-deck (read live), archidekt-snapshot, or compare (a nested comparison, at most 3 " +
         "levels). Deck, backup, and Archidekt sources need their toolsets on; installed card data resolves their " +
-        "cards, and entries without a Scryfall card are listed in unmatched, never guessed.";
+        "cards, and entries without a Scryfall card are listed in unmatched, never guessed. A request may read at " +
+        "most 20,000 cards from all its sources together; more is refused as list-too-large naming the source.";
 
     /// <summary>
     /// Runs the list operations.
@@ -198,8 +199,9 @@ internal sealed class CardListTools
         "mana symbols by color; a hybrid symbol counts once for each of its colors and also under hybrid; a " +
         "Phyrexian symbol counts for its color and also under phyrexian), and sources (cards whose produced mana " +
         "includes each color; whether a land enters tapped is not modeled). Sums are exact decimal strings and " +
-        "cards with no " +
-        "value are counted in missingValues. rows adds a sorted, paged table of cards. Fields: name, manaValue, " +
+        "cards with no value are counted in missingValues. A group whose key is JSON null holds the cards with no value " +
+        "for the group field; it is not the same as a real value written none. rows adds a sorted, paged table of " +
+        "cards. Fields: name, manaValue, " +
         "typeLine, cardTypes, subtypes, supertypes, colors, colorIdentity, keywords, tags, rarity, set, power, " +
         "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank, gameChanger, " +
         "producedMana, oracleText (contains only), legalIn, bannedIn, games, reserved, layout, and for deck sources " +

@@ -5,8 +5,8 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Decks;
 
 /// <summary>
-/// Reads the printed text of a Scryfall card for the Commander rule facts: the front face, deck-limit statements,
-/// partner abilities, and companion restrictions. Each reader returns what the text says and nothing more.
+/// Reads the printed text of a Scryfall card for the Commander rule facts: deck-limit statements, partner abilities,
+/// and companion restrictions. Each reader returns what the text says and nothing more.
 /// </summary>
 internal static partial class CommanderCardText
 {

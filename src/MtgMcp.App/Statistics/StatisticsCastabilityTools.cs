@@ -75,8 +75,9 @@ internal sealed class StatisticsCastabilityTools
         "as many cards from your declared source groups as the turn number count (Frank Karsten's method), so the " +
         "probability is conditional on that; false counts every draw and equals stats_mana_availability. " +
         "Rows are sorted by probability, lowest first, then name. It states no target and no pass; what counts as a " +
-        "source and what probability is good enough are your judgments. Cards with no cost, X, hybrid, or " +
-        "Phyrexian symbols, and entries with no card data, are listed in skipped. source is a deck or deck-backup " +
+        "source and what probability is good enough are your judgments. Cards with no cost (no-mana-cost), X (x-cost), hybrid or " +
+        "Phyrexian symbols, other symbols, or two costs (split-card-has-two-costs), a mana value past turn 99, and " +
+        "entries with no card data are listed in skipped with that reason. source is a deck or deck-backup " +
         "list source and needs installed card data (run scryfall_card_data_sync to install it)." +
         UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + ExampleMinimal +

@@ -262,8 +262,7 @@ public sealed class CardListAndRuleToolsMcpTests
             new Dictionary<string, object?> { ["playgroupId"] = 1, ["groupBy"] = "commander", ["maxGames"] = 5 })
             .ConfigureAwait(false);
 
-        Assert.True(unavailable.IsError);
-        Assert.NotEqual("success", Kind(unavailable));
+        AssertFailure(unavailable, "unavailable", null);
         AssertBindingFailure(badGroup);
     }
 
