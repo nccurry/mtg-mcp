@@ -52,6 +52,7 @@ public sealed record ScryfallCardFace(
     [property: JsonPropertyName("colors")] IReadOnlyList<string> Colors,
     [property: JsonPropertyName("imageUris")] IReadOnlyDictionary<string, string> ImageUris,
     [property: JsonPropertyName("illustrationId")] Guid? IllustrationId,
+    [property: JsonPropertyName("oracleId")] Guid? OracleId,
     [property: JsonPropertyName("power")] string? Power,
     [property: JsonPropertyName("toughness")] string? Toughness,
     [property: JsonPropertyName("loyalty")] string? Loyalty,

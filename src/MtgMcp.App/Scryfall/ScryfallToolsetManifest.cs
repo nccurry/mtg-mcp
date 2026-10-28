@@ -54,7 +54,7 @@ internal static class ScryfallToolsetManifest
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
 
-        builder.WithTools(new ScryfallReadTools(service), ToolCallPolicy.SerializerOptions);
+        builder.WithTools(ToolItemChoices.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder.WithTools(new ScryfallWriteTools(service, mode), ToolCallPolicy.SerializerOptions);

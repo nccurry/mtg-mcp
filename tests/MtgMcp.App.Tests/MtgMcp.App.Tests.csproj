@@ -18,6 +18,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Compile Include="..\MtgMcp.Scryfall.Tests\RecordedCards.cs" Link="Fixtures\RecordedCards.cs" />
+        <None Include="..\MtgMcp.Scryfall.Tests\Fixtures\cards\*.json" Link="Fixtures\cards\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\..\src\MtgMcp.App\MtgMcp.App.csproj" />
     </ItemGroup>
 </Project>

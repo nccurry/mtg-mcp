@@ -239,7 +239,7 @@ its own ranking.
 If card data is not installed, the entry carries `cardData: "not-installed"`
 and the result's `limits` points to `scryfall_corpus_sync`. Entries without an exact
 Scryfall identity, or whose identity is not in the installed data, carry
-`cardData: "unresolved"`. An entry that was found carries `cardData: "installed"`.
+`cardData: "unresolved"`. An entry that was found carries `cardData: "found"`.
 The server reports these states; it does not guess a card. The exact identity of
 an entry is its printing ID, else its set and collector number, else its Oracle ID.
 
@@ -741,7 +741,7 @@ for broad filtering.
 set plus the extra fields above) and is only valid with
 `responseFormat: "concise"`; with another format it returns `invalid-input`. `scryfallId`, `oracleId`,
 and `name` are always included. Unknown names return `invalid-input` listing
-the allowed names.
+the allowed names. The schema also publishes the allowed names as `enum` on the items of `fields` (and of `include` on `deck_get`), through a schema hook that the tool registration helper installs, because `[AllowedValues]` cannot describe list items. Output schemas of all tools that return an operation result are open (`true`) because that result type has its own converter; card views add no new gap.
 
 The projection is a pure function in `MtgMcp.Scryfall` from the mapped card
 to the concise record, tested without network or storage. Snapshots and caches
@@ -750,10 +750,14 @@ still store full data; only the response changes. `deck_get` with
 
 `tags` and `cheapestPriceUsd` come from installed data. When it is not
 installed, those fields are `null` and the result's `limits` says why.
-`gameChanger` is read from the card object itself (the mapped `game_changer`
-field), so it needs no installed data and is `null` only when the card object
-omits it. `cheapestPriceUsd` is the lowest nonfoil `prices.usd` text among the
-installed printings, kept as Scryfall writes it, or `null` when none has one.
+`gameChanger` and `edhrecRank` are read from the card object itself, so they need
+no installed data and are `null` only when Scryfall omits them. `cheapestPriceUsd`
+is the lowest `prices.usd` text among the installed English printings, kept as
+Scryfall writes it, or `null` when none has one. Both installed-data facts are
+read with one query each for all cards on a page, and non-English printings are
+skipped before their JSON is read. A reversible card has no Oracle ID of its own,
+so its front face's ID stands in for `oracleId` and `tags`, `cheapestPriceUsd` is
+`null` for it, and `limits` says so.
 These fields make "find alternatives" two calls: read a card's tags, then
 search for cards with the same tags in the deck's color identity.
 
@@ -1200,10 +1204,11 @@ on it. Result types are reviewed so no credential or secret value is
 returned or logged.
 
 **Result size limit (SIZE-001).** Claude Code warns above 10,000 output tokens
-and stops at 25,000 by default. The limit is 40,000 UTF-8 characters, about
-10,000 tokens. It applies to new tools and changed outputs, which page;
+and stops at 25,000 by default. The limit is 40,000 UTF-8 bytes of the structured result, about
+10,000 tokens. The text block of a tool result repeats the structured JSON, and a
+client passes only one of the two to the model. It applies to new tools and changed outputs, which page;
 `deck_get` with `include` pages its entries with the same cursor rules as
-`card_lists_compare`. Sizes are measured as the UTF-8 bytes of the structured result, written with the server's serializer; each page keeps `EnvelopeReserveBytes` (3,000) free for the parts outside the item list. Where paging does not fit, the result sets
+`card_lists_compare`. Sizes are measured with the server's own serializer options, passed to the Scryfall service by the host, and each page keeps 3,000 bytes free for the parts outside the item list. A shared Core helper counts how many leading items fit. Where paging does not fit, the result sets
 `truncated: true` and a `narrow` hint such as
 `"Use responseFormat concise with fields, or add a filter."`. Phase 1
 measures the largest default result of every existing tool, including

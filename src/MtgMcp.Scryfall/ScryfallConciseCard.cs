@@ -22,24 +22,6 @@ public sealed class ScryfallConciseCard
     /// Gets the field names and values in output order. A null value is written as an explicit JSON null.
     /// </summary>
     public IReadOnlyList<KeyValuePair<string, object?>> Fields { get; }
-
-    /// <summary>
-    /// Reads one field value by name, or returns false when the card does not carry that field.
-    /// </summary>
-    public bool TryGetValue(string name, out object? value)
-    {
-        foreach (KeyValuePair<string, object?> field in Fields)
-        {
-            if (string.Equals(field.Key, name, StringComparison.Ordinal))
-            {
-                value = field.Value;
-                return true;
-            }
-        }
-
-        value = null;
-        return false;
-    }
 }
 
 /// <summary>

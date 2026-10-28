@@ -3,78 +3,25 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.Scryfall;
 
 /// <summary>
-/// Lists the field names a concise card result can carry.
-/// </summary>
-public static class ScryfallConciseFields
-{
-    /// <summary>
-    /// Gets the fields every concise card carries, even when the caller narrows the field list.
-    /// </summary>
-    public static IReadOnlyList<string> Always { get; } = ["scryfallId", "oracleId", "name"];
-
-    /// <summary>
-    /// Gets the fields a concise card carries when the caller names none, in output order.
-    /// </summary>
-    public static IReadOnlyList<string> Default { get; } =
-    [
-        "scryfallId", "oracleId", "name", "manaCost", "manaValue", "typeLine", "colors", "colorIdentity",
-        "producedMana", "keywords", "oracleText", "power", "toughness", "loyalty", "legalities", "prices.usd",
-        "cheapestPriceUsd", "rarity", "set", "tags", "gameChanger", "edhrecRank",
-    ];
-
-    /// <summary>
-    /// Gets the fields a caller can add by name; they are not in the default set.
-    /// </summary>
-    public static IReadOnlyList<string> Extra { get; } =
-    [
-        "prices.usdFoil", "prices.usdEtched", "prices.eur", "prices.eurFoil", "prices.tix", "legalitiesAll",
-        "games", "reserved", "layout",
-    ];
-
-    /// <summary>
-    /// Gets every field name a caller can ask for: the default set, then the extra fields.
-    /// </summary>
-    public static IReadOnlyList<string> All { get; } = [.. Default, .. Extra];
-}
-
-/// <summary>
 /// Describes how a card result is shaped: the response format and, for concise, the chosen fields.
 /// </summary>
 internal sealed record ScryfallCardFormat
 {
     /// <summary>
-    /// Names the compact card projection.
-    /// </summary>
-    internal const string Concise = "concise";
-
-    /// <summary>
-    /// Names the default format, which keeps every field of the mapped card.
-    /// </summary>
-    internal const string Standard = "standard";
-
-    /// <summary>
-    /// Names the mapped card together with the raw provider objects.
-    /// </summary>
-    internal const string Full = "full";
-
-    /// <summary>
-    /// Gets the standard format, which is the default.
-    /// </summary>
-    internal static ScryfallCardFormat StandardFormat { get; } = new(Standard, null);
-
-    /// <summary>
     /// Creates a format after its values were checked by <see cref="Parse"/>.
     /// </summary>
-    private ScryfallCardFormat(string name, IReadOnlySet<string>? selectedFields)
+    private ScryfallCardFormat(ScryfallResponseFormat format, IReadOnlySet<string>? selectedFields)
     {
-        Name = name;
+        Format = format;
         SelectedFields = selectedFields;
+        NeedsTags = Needs(ScryfallInstalledDataNeed.Tags);
+        NeedsPrice = Needs(ScryfallInstalledDataNeed.CheapestPrice);
     }
 
     /// <summary>
-    /// Gets the response format name.
+    /// Gets the response format.
     /// </summary>
-    internal string Name { get; }
+    internal ScryfallResponseFormat Format { get; }
 
     /// <summary>
     /// Gets the concise fields to write, or null for the other formats.
@@ -82,14 +29,29 @@ internal sealed record ScryfallCardFormat
     internal IReadOnlySet<string>? SelectedFields { get; }
 
     /// <summary>
+    /// Gets the name callers send and receive for the format.
+    /// </summary>
+    internal string Name => ScryfallResponseFormatNames.ToName(Format);
+
+    /// <summary>
     /// Gets a value showing whether results use the concise projection.
     /// </summary>
-    internal bool IsConcise => string.Equals(Name, Concise, StringComparison.Ordinal);
+    internal bool IsConcise => Format == ScryfallResponseFormat.Concise;
 
     /// <summary>
     /// Gets a value showing whether results carry the raw provider objects.
     /// </summary>
-    internal bool IncludeRaw => string.Equals(Name, Full, StringComparison.Ordinal);
+    internal bool IncludeRaw => Format == ScryfallResponseFormat.Full;
+
+    /// <summary>
+    /// Gets a value showing whether tag slugs are selected.
+    /// </summary>
+    internal bool NeedsTags { get; }
+
+    /// <summary>
+    /// Gets a value showing whether the cheapest USD price is selected.
+    /// </summary>
+    internal bool NeedsPrice { get; }
 
     /// <summary>
     /// Gets a value showing whether any selected field needs installed card data.
@@ -97,22 +59,11 @@ internal sealed record ScryfallCardFormat
     internal bool NeedsInstalledData => NeedsTags || NeedsPrice;
 
     /// <summary>
-    /// Gets a value showing whether tag slugs are selected.
-    /// </summary>
-    internal bool NeedsTags => SelectedFields?.Contains("tags") == true;
-
-    /// <summary>
-    /// Gets a value showing whether the cheapest USD price is selected.
-    /// </summary>
-    internal bool NeedsPrice => SelectedFields?.Contains("cheapestPriceUsd") == true;
-
-    /// <summary>
-    /// Checks the response format and field list and builds the format.
+    /// Checks the response format name and field list and builds the format.
     /// </summary>
     internal static OperationResult<ScryfallCardFormat> Parse(string? responseFormat, IReadOnlyList<string>? fields)
     {
-        string name = responseFormat ?? Standard;
-        if (name is not (Concise or Standard or Full))
+        if (!ScryfallResponseFormatNames.TryParse(responseFormat, out ScryfallResponseFormat format))
         {
             return new OperationInvalidInput(
                 "invalid-response-format",
@@ -120,7 +71,7 @@ internal sealed record ScryfallCardFormat
                 "responseFormat");
         }
 
-        if (fields is not null && !string.Equals(name, Concise, StringComparison.Ordinal))
+        if (fields is not null && format != ScryfallResponseFormat.Concise)
         {
             return new OperationInvalidInput(
                 "fields-require-concise",
@@ -128,9 +79,9 @@ internal sealed record ScryfallCardFormat
                 "fields");
         }
 
-        if (!string.Equals(name, Concise, StringComparison.Ordinal))
+        if (format != ScryfallResponseFormat.Concise)
         {
-            return new OperationSuccess<ScryfallCardFormat>(new ScryfallCardFormat(name, null));
+            return new OperationSuccess<ScryfallCardFormat>(new ScryfallCardFormat(format, null));
         }
 
         OperationInvalidInput? unknown = FindUnknownField(fields);
@@ -150,7 +101,7 @@ internal sealed record ScryfallCardFormat
             selected.Add(field);
         }
 
-        return new OperationSuccess<ScryfallCardFormat>(new ScryfallCardFormat(name, selected));
+        return new OperationSuccess<ScryfallCardFormat>(new ScryfallCardFormat(format, selected));
     }
 
     /// <summary>
@@ -175,5 +126,15 @@ internal sealed record ScryfallCardFormat
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reports whether any selected concise field needs the given installed data.
+    /// </summary>
+    private bool Needs(ScryfallInstalledDataNeed need)
+    {
+        return SelectedFields is not null &&
+            ScryfallConciseFieldTable.Definitions.Any(
+                field => field.Need == need && SelectedFields.Contains(field.Name));
     }
 }

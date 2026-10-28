@@ -1,0 +1,171 @@
+{
+  "id": "6904ea20-e504-47da-95a0-08739fdde260",
+  "oracleId": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+  "name": "Delver of Secrets // Insectile Aberration",
+  "setCode": "inr",
+  "collectorNumber": "60",
+  "language": "en",
+  "releasedAt": "2025-01-24",
+  "manaValue": 1.0,
+  "typeLine": "Creature — Human Wizard // Creature — Human Insect",
+  "colors": [],
+  "producedMana": {
+    "kind": "missing"
+  },
+  "colorIdentity": [
+    "U"
+  ],
+  "keywords": [
+    "Flying",
+    "Transform"
+  ],
+  "legalities": {
+    "standard": "not_legal",
+    "future": "not_legal",
+    "historic": "legal",
+    "timeless": "legal",
+    "gladiator": "legal",
+    "pioneer": "legal",
+    "modern": "legal",
+    "legacy": "legal",
+    "pauper": "legal",
+    "vintage": "legal",
+    "penny": "not_legal",
+    "commander": "legal",
+    "oathbreaker": "legal",
+    "standardbrawl": "not_legal",
+    "brawl": "legal",
+    "competitivebrawl": "legal",
+    "alchemy": "not_legal",
+    "paupercommander": "legal",
+    "duel": "legal",
+    "oldschool": "not_legal",
+    "premodern": "not_legal",
+    "predh": "not_legal",
+    "tlr": "legal"
+  },
+  "imageUris": {},
+  "prices": {
+    "usd": "0.30",
+    "usd_foil": "0.31",
+    "usd_etched": null,
+    "eur": "0.39",
+    "eur_foil": "0.63",
+    "tix": "0.04"
+  },
+  "priceEvidence": [
+    {
+      "field": "eur",
+      "amount": "0.39",
+      "currency": "EUR",
+      "finish": "nonfoil",
+      "context": "scryfall-market-price",
+      "freshness": "fresh"
+    },
+    {
+      "field": "eur_foil",
+      "amount": "0.63",
+      "currency": "EUR",
+      "finish": "foil",
+      "context": "scryfall-market-price",
+      "freshness": "fresh"
+    },
+    {
+      "field": "tix",
+      "amount": "0.04",
+      "currency": "TIX",
+      "finish": "digital",
+      "context": "scryfall-market-price",
+      "freshness": "fresh"
+    },
+    {
+      "field": "usd",
+      "amount": "0.30",
+      "currency": "USD",
+      "finish": "nonfoil",
+      "context": "scryfall-market-price",
+      "freshness": "fresh"
+    },
+    {
+      "field": "usd_etched",
+      "currency": "USD",
+      "finish": "etched",
+      "context": "scryfall-market-price",
+      "freshness": "fresh"
+    },
+    {
+      "field": "usd_foil",
+      "amount": "0.31",
+      "currency": "USD",
+      "finish": "foil",
+      "context": "scryfall-market-price",
+      "freshness": "fresh"
+    }
+  ],
+  "rankEvidence": [
+    {
+      "field": "edhrec_rank",
+      "rank": 16273,
+      "context": "edhrec-deck-inclusion",
+      "freshness": "fresh"
+    },
+    {
+      "field": "penny_rank",
+      "rank": 180,
+      "context": "penny-dreadful-popularity",
+      "freshness": "fresh"
+    }
+  ],
+  "faces": [
+    {
+      "name": "Delver of Secrets",
+      "manaCost": "{U}",
+      "typeLine": "Creature — Human Wizard",
+      "oracleText": "At the beginning of your upkeep, look at the top card of your library. You may reveal that card. If an instant or sorcery card is revealed this way, transform this creature.",
+      "colors": [
+        "U"
+      ],
+      "imageUris": {
+        "small": "https://cards.scryfall.io/small/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "normal": "https://cards.scryfall.io/normal/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "large": "https://cards.scryfall.io/large/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "png": "https://cards.scryfall.io/png/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.png?1783908173",
+        "art_crop": "https://cards.scryfall.io/art_crop/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "border_crop": "https://cards.scryfall.io/border_crop/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "thumb": "https://cards.scryfall.io/thumb/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "grid": "https://cards.scryfall.io/grid/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "display": "https://cards.scryfall.io/display/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "art": "https://cards.scryfall.io/art/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "crop": "https://cards.scryfall.io/crop/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "jpeg": "https://cards.scryfall.io/normal/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173"
+      },
+      "illustrationId": "1c2fee9b-89ea-4ab1-a751-451c3cd65a88"
+    },
+    {
+      "name": "Insectile Aberration",
+      "manaCost": "",
+      "typeLine": "Creature — Human Insect",
+      "oracleText": "Flying",
+      "colors": [
+        "U"
+      ],
+      "imageUris": {
+        "small": "https://cards.scryfall.io/small/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "normal": "https://cards.scryfall.io/normal/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "large": "https://cards.scryfall.io/large/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "png": "https://cards.scryfall.io/png/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.png?1783908173",
+        "art_crop": "https://cards.scryfall.io/art_crop/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "border_crop": "https://cards.scryfall.io/border_crop/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+        "thumb": "https://cards.scryfall.io/thumb/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "grid": "https://cards.scryfall.io/grid/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "display": "https://cards.scryfall.io/display/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "art": "https://cards.scryfall.io/art/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "crop": "https://cards.scryfall.io/crop/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+        "jpeg": "https://cards.scryfall.io/normal/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173"
+      },
+      "illustrationId": "c2b5f731-771b-4949-90f3-0ad40d676100"
+    }
+  ],
+  "tags": [],
+  "tagCoverage": "not-cached"
+}

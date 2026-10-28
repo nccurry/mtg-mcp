@@ -23,7 +23,7 @@ public sealed class DeckWriteToolsTests
         DeckWriteTools writes = new(store, OperationMode.Local);
         DeckBatchWriteTools batchWrites = new(store, OperationMode.Local);
         using ScryfallService scryfall = new(temporary.Path, allowLocalWrites: false, "0.9.0-preview.1");
-        DeckReadTools reads = new(store, scryfall);
+        DeckReadTools reads = new(store, new DeckCardViewCoordinator(store, scryfall));
         Guid initialEntryId = Guid.CreateVersion7();
         DeckDocument deck = RequireSuccess(await writes.CreateAsync(
             new DeckCreateRequest(

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -8,7 +7,8 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.Scryfall.Tests;
 
 /// <summary>
-/// Verifies the concise, standard, and full card response formats, the facts they carry, and their size limit.
+/// Verifies the concise, standard, and full card response formats and the facts they carry, using real card
+/// objects recorded from Scryfall.
 /// </summary>
 public sealed class ScryfallCardFormatTests
 {
@@ -22,47 +22,41 @@ public sealed class ScryfallCardFormatTests
     };
 
     /// <summary>
-    /// Lists the top-level fields of a mapped card before the response format work, which standard must keep.
+    /// Lists the concise card keys in published order for the default field set.
     /// </summary>
-    private static readonly string[] BaselineCardFields =
+    private static readonly string[] DefaultConciseKeys =
     [
-        "id", "oracleId", "illustrationId", "name", "setCode", "collectorNumber", "language", "releasedAt",
-        "manaCost", "manaValue", "typeLine", "oracleText", "colors", "producedMana", "colorIdentity", "keywords",
-        "legalities", "imageUris", "prices", "priceEvidence", "rankEvidence", "faces", "tags", "tagCoverage",
-        "evidence",
+        "scryfallId", "oracleId", "name", "manaCost", "manaValue", "typeLine", "colors", "colorIdentity",
+        "producedMana", "keywords", "oracleText", "power", "toughness", "loyalty", "legalities", "prices",
+        "cheapestPriceUsd", "rarity", "set", "tags", "gameChanger", "edhrecRank",
     ];
 
     /// <summary>
-    /// Lists the fields standard adds to the baseline.
+    /// Lists the card properties that standard added after the baseline output was recorded.
     /// </summary>
-    private static readonly string[] AddedCardFields =
-    [
-        "rarity", "power", "toughness", "loyalty", "layout", "games", "reserved", "gameChanger",
-    ];
+    private static readonly string[] AddedCardProperties =
+        ["rarity", "power", "toughness", "loyalty", "layout", "games", "reserved", "gameChanger"];
 
     /// <summary>
-    /// Verifies the default concise set holds exactly the published fields, in order.
+    /// Verifies the default concise set holds exactly the published fields, in the published order.
     /// </summary>
     [Fact]
-    public void Project_DefaultSelection_WritesPublishedFieldsInOrder()
+    public void Project_DefaultSelection_WritesTheLiteralFieldList()
     {
-        ScryfallCard card = MapFixtureCard();
-        IReadOnlySet<string> selected = ParseSelected(null);
-        ScryfallCardExtras extras = new(["white-weenie"], "0.05");
+        ScryfallCard card = Map(RecordedCards.LightningBolt);
+        ScryfallInstalledCardFacts facts = new(["burn"], "0.25");
 
-        ScryfallConciseCard concise = ScryfallConciseProjection.Project(card, extras, selected);
+        ScryfallConciseCard concise = ScryfallConciseProjection.Project(card, facts, Selected(null));
 
-        string[] expected = [.. ScryfallConciseFields.Default
-            .Select(name => name.StartsWith("prices.", StringComparison.Ordinal) ? "prices" : name)
-            .Distinct()];
-        Assert.Equal(expected, concise.Fields.Select(field => field.Key));
-        Assert.Equal(card.Id, concise.Fields[0].Value);
-        Assert.Equal("Venerable Knight", Value(concise, "name"));
-        Assert.Equal(["white-weenie"], StringsOf(Value(concise, "tags")));
-        Assert.Equal("0.05", Value(concise, "cheapestPriceUsd"));
-        Assert.Equal(42L, Value(concise, "edhrecRank"));
-        Assert.Equal(["commander"], StringsOf(Value(concise, "legalities")));
-        Assert.Equal("0.10", Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(Value(concise, "prices"))["usd"]);
+        Assert.Equal(DefaultConciseKeys, concise.Fields.Select(field => field.Key));
+        JsonElement json = JsonSerializer.SerializeToElement(concise, ResultOptions);
+        Assert.Equal("Lightning Bolt", json.GetProperty("name").GetString());
+        Assert.Equal("{R}", json.GetProperty("manaCost").GetString());
+        Assert.Equal(["burn"], Strings(json.GetProperty("tags")));
+        Assert.Equal("0.25", json.GetProperty("cheapestPriceUsd").GetString());
+        Assert.Equal(15, json.GetProperty("legalities").GetArrayLength());
+        Assert.Equal(card.Prices["usd"], json.GetProperty("prices").GetProperty("usd").GetString());
+        Assert.True(json.GetProperty("edhrecRank").GetInt64() > 0);
     }
 
     /// <summary>
@@ -71,14 +65,14 @@ public sealed class ScryfallCardFormatTests
     [Fact]
     public void Project_FieldList_KeepsAlwaysFieldsAndPublishedOrder()
     {
-        ScryfallCard card = MapFixtureCard();
-
         ScryfallConciseCard concise = ScryfallConciseProjection.Project(
-            card,
+            Map(RecordedCards.LightningBolt),
             null,
-            ParseSelected(["typeLine", "manaCost"]));
+            Selected(["typeLine", "manaCost"]));
 
-        Assert.Equal(["scryfallId", "oracleId", "name", "manaCost", "typeLine"], concise.Fields.Select(field => field.Key));
+        Assert.Equal(
+            ["scryfallId", "oracleId", "name", "manaCost", "typeLine"],
+            concise.Fields.Select(field => field.Key));
     }
 
     /// <summary>
@@ -87,51 +81,91 @@ public sealed class ScryfallCardFormatTests
     [Fact]
     public void Project_ExtraFields_AreAvailableByName()
     {
-        ScryfallCard card = MapFixtureCard();
+        ScryfallCard card = Map(RecordedCards.LightningBolt);
+        string[] fields = ["prices.usd", "prices.usdEtched", "layout", "games", "reserved", "legalitiesAll"];
 
-        ScryfallConciseCard concise = ScryfallConciseProjection.Project(
-            card,
-            null,
-            ParseSelected(["prices.usd", "prices.usdFoil", "prices.tix", "legalitiesAll", "games", "reserved", "layout"]));
+        ScryfallConciseCard concise = ScryfallConciseProjection.Project(card, null, Selected(fields));
 
-        IReadOnlyDictionary<string, string?> prices =
-            Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(Value(concise, "prices"));
-        Assert.Equal("0.10", prices["usd"]);
-        Assert.Null(prices["usdFoil"]);
-        Assert.Null(prices["tix"]);
-        Assert.Equal("legal", Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(Value(concise, "legalitiesAll"))["commander"]);
-        Assert.Equal(["paper", "mtgo"], StringsOf(Value(concise, "games")));
-        Assert.False(Assert.IsType<bool>(Value(concise, "reserved")));
-        Assert.Equal("normal", Value(concise, "layout"));
+        JsonElement json = JsonSerializer.SerializeToElement(concise, ResultOptions);
+        Assert.Equal(
+            ["scryfallId", "oracleId", "name", "prices", "legalitiesAll", "games", "reserved", "layout"],
+            json.EnumerateObject().Select(property => property.Name));
+        JsonElement prices = json.GetProperty("prices");
+        Assert.Equal(card.Prices["usd"], prices.GetProperty("usd").GetString());
+        Assert.Equal(JsonValueKind.Null, prices.GetProperty("usdEtched").ValueKind);
+        Assert.Equal("normal", json.GetProperty("layout").GetString());
+        Assert.False(json.GetProperty("reserved").GetBoolean());
+        Assert.Contains("paper", Strings(json.GetProperty("games")));
+        Assert.Equal("legal", json.GetProperty("legalitiesAll").GetProperty("commander").GetString());
     }
 
     /// <summary>
-    /// Verifies the concise card reads text, cost, colors, and power from the faces when the card has none of its own.
+    /// Verifies a transform card, whose top-level cost is empty, reads cost, text, colors, and power from its faces.
     /// </summary>
     [Fact]
-    public void Project_TwoFacedCard_FallsBackToFaces()
+    public void Project_TransformCard_FallsBackToFaces()
     {
-        JsonObject raw = JsonNode.Parse(ScryfallTestFixture.WhiteCard())!.AsObject();
-        raw.Remove("mana_cost");
-        raw.Remove("oracle_text");
-        raw.Remove("colors");
-        raw.Remove("type_line");
-        raw["layout"] = "transform";
-        raw["card_faces"] = new JsonArray
-        {
-            Face("Front Side", "{1}{W}", "Creature - Human", "Front text.", "2", "3", ["W"]),
-            Face("Back Side", string.Empty, "Creature - Werewolf", "Back text.", "4", "5", ["R"]),
-        };
-        ScryfallCard card = Map(raw);
+        ScryfallCard card = Map(RecordedCards.Transform);
 
-        ScryfallConciseCard concise = ScryfallConciseProjection.Project(card, null, ParseSelected(null));
+        JsonElement json = JsonSerializer.SerializeToElement(
+            ScryfallConciseProjection.Project(card, null, Selected(null)),
+            ResultOptions);
 
-        Assert.Equal("{1}{W}", Value(concise, "manaCost"));
-        Assert.Equal("Front text.\n//\nBack text.", Value(concise, "oracleText"));
-        Assert.Equal("Creature - Human // Creature - Werewolf", Value(concise, "typeLine"));
-        Assert.Equal(["W"], StringsOf(Value(concise, "colors")));
-        Assert.Equal("2", Value(concise, "power"));
-        Assert.Equal("3", Value(concise, "toughness"));
+        Assert.True(string.IsNullOrEmpty(card.ManaCost));
+        Assert.Equal(card.Faces[0].ManaCost, json.GetProperty("manaCost").GetString());
+        string expectedText = string.Join("\n//\n", card.Faces.Select(face => face.OracleText));
+        Assert.Equal(expectedText, json.GetProperty("oracleText").GetString());
+        Assert.Equal(card.Faces[0].Colors, Strings(json.GetProperty("colors")));
+        Assert.Equal(card.Faces[0].Power, json.GetProperty("power").GetString());
+        Assert.Equal(card.Faces[0].Toughness, json.GetProperty("toughness").GetString());
+    }
+
+    /// <summary>
+    /// Verifies an adventure card keeps the cost and colors it has at the top level.
+    /// </summary>
+    [Fact]
+    public void Project_AdventureCard_KeepsTopLevelCostAndColors()
+    {
+        ScryfallCard card = Map(RecordedCards.Adventure);
+
+        JsonElement json = JsonSerializer.SerializeToElement(
+            ScryfallConciseProjection.Project(card, null, Selected(null)),
+            ResultOptions);
+
+        Assert.Equal("{2}{R} // {1}{R}", json.GetProperty("manaCost").GetString());
+        Assert.Equal(["R"], Strings(json.GetProperty("colors")));
+        string faceText = string.Join("\n//\n", card.Faces.Select(face => face.OracleText));
+        Assert.Equal(faceText, json.GetProperty("oracleText").GetString());
+    }
+
+    /// <summary>
+    /// Verifies a planeswalker carries loyalty and no power or toughness.
+    /// </summary>
+    [Fact]
+    public void Project_Planeswalker_CarriesLoyalty()
+    {
+        JsonElement json = JsonSerializer.SerializeToElement(
+            ScryfallConciseProjection.Project(Map(RecordedCards.Planeswalker), null, Selected(null)),
+            ResultOptions);
+
+        Assert.Equal("3", json.GetProperty("loyalty").GetString());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("power").ValueKind);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("toughness").ValueKind);
+    }
+
+    /// <summary>
+    /// Verifies a card whose prices are all null writes a null USD price rather than dropping the field.
+    /// </summary>
+    [Fact]
+    public void Project_CardWithNullPrices_WritesNullUsd()
+    {
+        ScryfallConciseCard concise = ScryfallConciseProjection.Project(
+            Map(RecordedCards.NoPrices),
+            null,
+            Selected(["prices.usd"]));
+
+        JsonElement json = JsonSerializer.SerializeToElement(concise, ResultOptions);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("prices").GetProperty("usd").ValueKind);
     }
 
     /// <summary>
@@ -140,10 +174,11 @@ public sealed class ScryfallCardFormatTests
     [Fact]
     public void Project_WithoutInstalledFacts_WritesNullTagsAndPrice()
     {
-        ScryfallConciseCard concise = ScryfallConciseProjection.Project(MapFixtureCard(), null, ParseSelected(null));
+        ScryfallConciseCard concise = ScryfallConciseProjection.Project(
+            Map(RecordedCards.LightningBolt),
+            null,
+            Selected(null));
 
-        Assert.Null(Value(concise, "tags"));
-        Assert.Null(Value(concise, "cheapestPriceUsd"));
         string json = JsonSerializer.Serialize(concise, ResultOptions);
         Assert.Contains("\"tags\":null", json, StringComparison.Ordinal);
         Assert.Contains("\"cheapestPriceUsd\":null", json, StringComparison.Ordinal);
@@ -167,8 +202,32 @@ public sealed class ScryfallCardFormatTests
         {
             Assert.Equal("fields[1]", invalid.Path);
             Assert.Contains("rulesText", invalid.Message, StringComparison.Ordinal);
-            Assert.All(ScryfallConciseFields.All, name => Assert.Contains(name, invalid.Message, StringComparison.Ordinal));
+            Assert.All(
+                ScryfallConciseFields.All,
+                name => Assert.Contains(name, invalid.Message, StringComparison.Ordinal));
         }
+    }
+
+    /// <summary>
+    /// Verifies the published field lists are the literal default and extra sets, from the one field table.
+    /// </summary>
+    [Fact]
+    public void ConciseFields_DefaultAndExtraSets_AreThePublishedLists()
+    {
+        Assert.Equal(
+            [
+                "scryfallId", "oracleId", "name", "manaCost", "manaValue", "typeLine", "colors", "colorIdentity",
+                "producedMana", "keywords", "oracleText", "power", "toughness", "loyalty", "legalities",
+                "prices.usd", "cheapestPriceUsd", "rarity", "set", "tags", "gameChanger", "edhrecRank",
+            ],
+            ScryfallConciseFields.Default);
+        Assert.Equal(
+            [
+                "prices.usdFoil", "prices.usdEtched", "prices.eur", "prices.eurFoil", "prices.tix",
+                "legalitiesAll", "games", "reserved", "layout",
+            ],
+            ScryfallConciseFields.Extra);
+        Assert.Equal([.. ScryfallConciseFields.Default, .. ScryfallConciseFields.Extra], ScryfallConciseFields.All);
     }
 
     /// <summary>
@@ -177,96 +236,100 @@ public sealed class ScryfallCardFormatTests
     [Fact]
     public void Mapper_NewFields_ArePresentAndAbsent()
     {
-        JsonObject raw = JsonNode.Parse(ScryfallTestFixture.WhiteCard())!.AsObject();
-        raw["games"] = new JsonArray("paper", "arena");
-        raw["reserved"] = true;
-        raw["layout"] = "saga";
-        raw["game_changer"] = true;
-        raw["rarity"] = "rare";
-        raw["power"] = "*";
-        raw["toughness"] = "1+*";
-        raw["loyalty"] = "4";
+        ScryfallCard walker = Map(RecordedCards.Planeswalker);
+        JsonObject withoutOptional = RecordedCards.Object(RecordedCards.LightningBolt);
+        foreach (string name in new[] { "game_changer", "games", "layout", "rarity", "reserved" })
+        {
+            withoutOptional.Remove(name);
+        }
 
-        ScryfallCard present = Map(raw);
-        ScryfallCard absent = Map(JsonNode.Parse(ScryfallTestFixture.RedCard())!.AsObject());
+        ScryfallCard absent = Map(withoutOptional);
 
-        Assert.Equal(["paper", "arena"], present.Games);
-        Assert.True(present.Reserved);
-        Assert.Equal("saga", present.Layout);
-        Assert.True(present.GameChanger);
-        Assert.Equal("rare", present.Rarity);
-        Assert.Equal(("*", "1+*", "4"), (present.Power, present.Toughness, present.Loyalty));
+        Assert.Equal("mythic", walker.Rarity);
+        Assert.Equal("3", walker.Loyalty);
+        Assert.Equal("normal", walker.Layout);
+        Assert.Contains("paper", walker.Games);
+        Assert.False(walker.Reserved);
+        Assert.False(walker.GameChanger);
         Assert.Empty(absent.Games);
         Assert.False(absent.Reserved);
         Assert.Null(absent.Layout);
         Assert.Null(absent.GameChanger);
         Assert.Null(absent.Rarity);
+        Assert.Null(Map(RecordedCards.Reversible).OracleId);
+        Guid? faceId = Map(RecordedCards.Reversible).Faces[0].OracleId;
+        Assert.Equal(FaceOracleId(RecordedCards.Reversible), faceId.ToString());
     }
 
     /// <summary>
-    /// Verifies a standard card keeps every field of the baseline output and only adds the published new ones.
+    /// Verifies the mapped standard cards equal the cards recorded from the code before this change, apart from the
+    /// published added properties.
     /// </summary>
     [Fact]
-    public void StandardCard_KeepsBaselineFieldsAndOnlyAddsPublishedOnes()
+    public void StandardCards_MatchTheBaselineGoldenFile()
     {
-        ScryfallCard card = MapFixtureCard();
+        JsonArray actual = [];
+        foreach (string name in RecordedCards.All)
+        {
+            using JsonDocument document = JsonDocument.Parse(RecordedCards.Raw(name));
+            ScryfallCard card = ScryfallMapper.Card(
+                document.RootElement,
+                new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                "golden-snapshot",
+                includeRaw: false);
+            actual.Add(JsonSerializer.SerializeToNode(card, ResultOptions));
+        }
 
-        JsonElement json = JsonSerializer.SerializeToElement(card, ResultOptions);
-
-        string[] names = [.. json.EnumerateObject().Select(property => property.Name)];
-        Assert.All(BaselineCardFields, name => Assert.Contains(name, names));
-        Assert.Empty(names.Except(BaselineCardFields).Except(AddedCardFields));
-        Assert.Equal("Venerable Knight", json.GetProperty("name").GetString());
-        Assert.Equal("{W}", json.GetProperty("manaCost").GetString());
-        Assert.Equal("0.10", json.GetProperty("prices").GetProperty("usd").GetString());
-        Assert.False(json.TryGetProperty("raw", out _));
+        RemoveAddedProperties(actual);
+        JsonNode? goldenCards = Golden("standard-cards");
+        Assert.True(JsonNode.DeepEquals(goldenCards, actual), Difference(goldenCards, actual, "$"));
     }
 
     /// <summary>
-    /// Verifies the standard format returns the same page of cards as the service call that never raw-expanded.
+    /// Verifies the standard search page and the standard single card match the baseline, apart from evidence stamps
+    /// and the published added properties.
     /// </summary>
     [Fact]
-    public async Task Search_Standard_ReturnsTheMappedCardsOfTheEarlierCall()
+    public async Task StandardSearchAndCard_MatchTheBaselineGoldenFiles()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, ScryfallTestFixture.Provider());
+        using ScryfallService service = CreateService(temporary.Path, RecordedProvider());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        ScryfallSearchResult mapped = RequireSuccess(await service.SearchAsync("name:knight", cancellationToken: token));
-        ScryfallSearchResponse response = RequireSuccess(await service.SearchResponseAsync("name:knight", cancellationToken: token));
+        ScryfallSearchResponse search = RequireSuccess(await service.SearchAsync("x", cancellationToken: token));
+        ScryfallCardResponse card = RequireSuccess(await service.GetCardAsync(
+            new ScryfallCardLookup("exact-name", "Delver of Secrets"),
+            cancellationToken: token));
 
-        Assert.Equal("standard", response.ResponseFormat);
-        Assert.Null(response.Limits);
-        Assert.Null(response.Truncated);
-        JsonElement expected = JsonSerializer.SerializeToElement(mapped.Page, ResultOptions);
-        JsonElement actual = JsonSerializer.SerializeToElement(response.Page, ResultOptions);
-        Assert.Equal(expected.GetProperty("totalCount").GetInt32(), actual.GetProperty("totalCount").GetInt32());
-        for (int index = 0; index < expected.GetProperty("items").GetArrayLength(); index++)
+        JsonNode? page = JsonSerializer.SerializeToNode(search.Page.Items, ResultOptions);
+        JsonNode? single = JsonSerializer.SerializeToNode(card.Card, ResultOptions);
+        foreach (JsonNode? node in new[] { page, single })
         {
-            JsonElement before = expected.GetProperty("items")[index];
-            JsonElement after = actual.GetProperty("items")[index];
-            foreach (JsonProperty property in before.EnumerateObject())
-            {
-                Assert.Equal(property.Value.GetRawText(), after.GetProperty(property.Name).GetRawText());
-            }
+            RemoveEvidence(node);
+            RemoveAddedProperties(node);
         }
+
+        JsonNode? goldenPage = Golden("standard-search-page");
+        JsonNode? goldenSingle = Golden("standard-card-get");
+        Assert.True(JsonNode.DeepEquals(goldenPage, page), Difference(goldenPage, page, "$"));
+        Assert.True(JsonNode.DeepEquals(goldenSingle, single), Difference(goldenSingle, single, "$"));
     }
 
     /// <summary>
-    /// Verifies a concise page of 25 realistic cards is at most 40 percent of the standard page's size.
+    /// Verifies a concise page of 25 recorded-shape cards is at most 40 percent of the standard page's size.
     /// </summary>
     [Fact]
     public async Task Search_ConcisePage_IsAtMostFortyPercentOfStandard()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, SearchProvider(25));
+        using ScryfallService service = CreateService(temporary.Path, VariantProvider(25));
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        ScryfallSearchResponse standard = RequireSuccess(await service.SearchResponseAsync(
+        ScryfallSearchResponse standard = RequireSuccess(await service.SearchAsync(
             "t:creature",
             responseFormat: "standard",
             cancellationToken: token));
-        ScryfallSearchResponse concise = RequireSuccess(await service.SearchResponseAsync(
+        ScryfallSearchResponse concise = RequireSuccess(await service.SearchAsync(
             "t:creature",
             responseFormat: "concise",
             cancellationToken: token));
@@ -274,61 +337,223 @@ public sealed class ScryfallCardFormatTests
         int standardBytes = JsonSerializer.SerializeToUtf8Bytes(standard.Page, ResultOptions).Length;
         int conciseBytes = JsonSerializer.SerializeToUtf8Bytes(concise.Page, ResultOptions).Length;
         Assert.Equal(25, concise.Page.Items.Count);
-        Assert.True(conciseBytes * 10 <= standardBytes * 4, $"concise {conciseBytes} bytes, standard {standardBytes} bytes");
+        Assert.True(conciseBytes * 10 <= standardBytes * 4, $"concise {conciseBytes}, standard {standardBytes}");
     }
 
     /// <summary>
-    /// Verifies the full format returns the same cards, including raw objects, as the earlier raw option did.
+    /// Verifies the full format carries each recorded raw card object unchanged and keeps the 25-row page cap.
     /// </summary>
     [Fact]
-    public async Task Search_Full_MatchesTheRawCallAndKeepsThePageCap()
+    public async Task Search_Full_CarriesTheRecordedRawObjectsAndKeepsThePageCap()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, ScryfallTestFixture.Provider());
+        using ScryfallService service = CreateService(temporary.Path, RecordedProvider());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        ScryfallSearchResult raw = RequireSuccess(await service.SearchAsync(
-            "name:knight",
-            includeRaw: true,
-            cancellationToken: token));
-        ScryfallSearchResponse full = RequireSuccess(await service.SearchResponseAsync(
-            "name:knight",
+        ScryfallSearchResponse full = RequireSuccess(await service.SearchAsync(
+            "x",
             responseFormat: "full",
             cancellationToken: token));
-        OperationInvalidInput tooLarge = Assert.IsType<OperationInvalidInput>((await service.SearchResponseAsync(
-            "name:knight",
+        OperationInvalidInput tooLarge = Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+            "x",
             pageSize: 26,
             responseFormat: "full",
             cancellationToken: token)).Value);
 
-        Assert.Equal("full", full.ResponseFormat);
-        Assert.Equal(
-            JsonSerializer.Serialize(raw.Page.Items, ResultOptions),
-            JsonSerializer.Serialize(full.Page.Items, ResultOptions));
-        Assert.All(full.Page.Items, view => Assert.NotNull(Assert.IsType<ScryfallCard>(view.Value).Raw));
+        Assert.Equal(RecordedCards.All.Count, full.Page.Items.Count);
+        for (int index = 0; index < RecordedCards.All.Count; index++)
+        {
+            ScryfallCard card = Assert.IsType<ScryfallCard>(full.Page.Items[index].Value);
+            JsonNode? raw = JsonNode.Parse(card.Raw!.Value.GetRawText());
+            Assert.True(JsonNode.DeepEquals(RecordedCards.Object(RecordedCards.All[index]), raw));
+        }
+
         Assert.Equal("invalid-page-size", tooLarge.ReasonCode);
     }
 
     /// <summary>
-    /// Verifies a concise search without installed card data returns null tags and price with a stated reason.
+    /// Verifies every card method names its format and carries raw objects only in the full format.
     /// </summary>
-    [Fact]
-    public async Task Search_Concise_WithoutInstalledData_ReportsTheReason()
+    [Theory]
+    [InlineData("concise")]
+    [InlineData("standard")]
+    [InlineData("full")]
+    public async Task EveryCardMethod_NamesItsFormatAndCarriesRawOnlyInFull(string format)
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, ScryfallTestFixture.Provider());
+        using ScryfallService service = await InstalledServiceAsync(temporary.Path);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ScryfallCardLookup bolt = new("exact-name", "Lightning Bolt");
 
-        ScryfallSearchResponse response = RequireSuccess(await service.SearchResponseAsync(
-            "name:knight",
+        ScryfallSearchResponse search = RequireSuccess(await service.SearchAsync(
+            "x",
+            responseFormat: format,
+            cancellationToken: token));
+        ScryfallCardResponse single = RequireSuccess(await service.GetCardAsync(
+            bolt,
+            "cache-only",
+            format,
+            null,
+            token));
+        ScryfallCollectionResponse collection = RequireSuccess(await service.GetCollectionAsync(
+            [bolt],
+            "cache-only",
+            null,
+            25,
+            format,
+            null,
+            token));
+        ScryfallCardsByTagResponse byTag = RequireSuccess(await service.GetCardsByTagAsync(
+            "burn",
+            "oracle",
+            false,
+            "weak",
+            null,
+            25,
+            format,
+            null,
+            token));
+
+        string[] formats =
+            [search.ResponseFormat, single.ResponseFormat, collection.ResponseFormat, byTag.ResponseFormat];
+        Assert.All(formats, value => Assert.Equal(format, value));
+        JsonElement[] cards =
+        [
+            Element(search.Page.Items[0]),
+            Element(single.Card),
+            Element(collection.Page.Items[0].Card!.Value),
+            Element(byTag.Page.Items[0]),
+        ];
+        Assert.All(cards, card => Assert.Equal(format == "full", card.TryGetProperty("raw", out _)));
+        Assert.All(cards, card => Assert.Equal(format != "concise", card.TryGetProperty("imageUris", out _)));
+    }
+
+    /// <summary>
+    /// Verifies a field list narrows the cards of every card method in the same published order.
+    /// </summary>
+    [Fact]
+    public async Task EveryCardMethod_FieldListNarrowsCardsInPublishedOrder()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = await InstalledServiceAsync(temporary.Path);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        string[] fields = ["tags", "typeLine"];
+        ScryfallCardLookup bolt = new("exact-name", "Lightning Bolt");
+
+        ScryfallSearchResponse search = RequireSuccess(await service.SearchAsync(
+            "x",
             responseFormat: "concise",
-            cancellationToken: TestContext.Current.CancellationToken));
+            fields: fields,
+            cancellationToken: token));
+        ScryfallCardResponse single = RequireSuccess(await service.GetCardAsync(
+            bolt,
+            "cache-only",
+            "concise",
+            fields,
+            token));
+        ScryfallCollectionResponse collection = RequireSuccess(await service.GetCollectionAsync(
+            [bolt],
+            "cache-only",
+            null,
+            25,
+            "concise",
+            fields,
+            token));
+        ScryfallCardsByTagResponse byTag = RequireSuccess(await service.GetCardsByTagAsync(
+            "burn",
+            "oracle",
+            false,
+            "weak",
+            null,
+            25,
+            "concise",
+            fields,
+            token));
 
-        JsonElement first = JsonSerializer.SerializeToElement(response.Page.Items[0], ResultOptions);
+        JsonElement[] cards =
+        [
+            Element(search.Page.Items[0]),
+            Element(single.Card),
+            Element(collection.Page.Items[0].Card!.Value),
+            Element(byTag.Page.Items[0]),
+        ];
+        string[] expected = ["scryfallId", "oracleId", "name", "typeLine", "tags"];
+        Assert.All(cards, card => Assert.Equal(expected, card.EnumerateObject().Select(property => property.Name)));
+    }
+
+    /// <summary>
+    /// Verifies a full collection page keeps the 25-row cap.
+    /// </summary>
+    [Fact]
+    public async Task Collection_Full_RejectsMoreThanTwentyFiveRows()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = await InstalledServiceAsync(temporary.Path);
+
+        OperationInvalidInput tooLarge = Assert.IsType<OperationInvalidInput>((await service.GetCollectionAsync(
+            [new ScryfallCardLookup("exact-name", "Lightning Bolt")],
+            "cache-only",
+            null,
+            26,
+            "full",
+            null,
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("invalid-page-size", tooLarge.ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies the provider-backed card methods report the not-installed reason in concise, and the tag tool, which
+    /// needs installed data, fails instead of returning empty facts.
+    /// </summary>
+    [Fact]
+    public async Task ConciseCards_WithoutInstalledData_ReportTheReason()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = CreateService(temporary.Path, RecordedProvider());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ScryfallCardLookup bolt = new("scryfall-id", Id(RecordedCards.LightningBolt));
+
+        ScryfallSearchResponse search = RequireSuccess(await service.SearchAsync(
+            "x",
+            responseFormat: "concise",
+            cancellationToken: token));
+        ScryfallCardResponse single = RequireSuccess(await service.GetCardAsync(
+            bolt,
+            "default",
+            "concise",
+            null,
+            token));
+        ScryfallCollectionResponse collection = RequireSuccess(await service.GetCollectionAsync(
+            [bolt],
+            "default",
+            null,
+            25,
+            "concise",
+            null,
+            token));
+        OperationResult<ScryfallCardsByTagResponse> byTag = await service.GetCardsByTagAsync(
+            "burn",
+            "oracle",
+            false,
+            "weak",
+            null,
+            25,
+            "concise",
+            null,
+            token);
+
+        foreach (IReadOnlyList<string>? limits in new[] { search.Limits, single.Limits, collection.Limits })
+        {
+            string limit = Assert.Single(limits!, text => text.Contains("not installed", StringComparison.Ordinal));
+            Assert.Contains("tags and cheapestPriceUsd are null", limit, StringComparison.Ordinal);
+            Assert.Contains("scryfall_corpus_sync", limit, StringComparison.Ordinal);
+        }
+
+        JsonElement first = Element(search.Page.Items[0]);
         Assert.Equal(JsonValueKind.Null, first.GetProperty("tags").ValueKind);
         Assert.Equal(JsonValueKind.Null, first.GetProperty("cheapestPriceUsd").ValueKind);
-        string limit = Assert.Single(response.Limits!);
-        Assert.Contains("tags and cheapestPriceUsd are null", limit, StringComparison.Ordinal);
-        Assert.Contains("scryfall_corpus_sync", limit, StringComparison.Ordinal);
+        Assert.IsNotType<OperationSuccess<ScryfallCardsByTagResponse>>(byTag.Value);
     }
 
     /// <summary>
@@ -338,167 +563,107 @@ public sealed class ScryfallCardFormatTests
     public async Task Search_Concise_FieldsWithoutInstalledFacts_HaveNoLimit()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, ScryfallTestFixture.Provider());
+        using ScryfallService service = CreateService(temporary.Path, RecordedProvider());
 
-        ScryfallSearchResponse response = RequireSuccess(await service.SearchResponseAsync(
-            "name:knight",
+        ScryfallSearchResponse response = RequireSuccess(await service.SearchAsync(
+            "x",
             responseFormat: "concise",
             fields: ["manaCost"],
             cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Null(response.Limits);
-        JsonElement first = JsonSerializer.SerializeToElement(response.Page.Items[0], ResultOptions);
-        Assert.Equal(
-            ["scryfallId", "oracleId", "name", "manaCost"],
-            first.EnumerateObject().Select(property => property.Name));
     }
 
     /// <summary>
-    /// Verifies installed card data supplies tags and the lowest USD price across printings to every card format.
+    /// Verifies installed data supplies tags and the lowest USD price among English printings: numeric order, skipped
+    /// null prices, and skipped non-English printings.
     /// </summary>
     [Fact]
-    public async Task ConciseCards_WithInstalledData_CarryTagsAndCheapestPrice()
+    public async Task ConciseCards_WithInstalledData_CarryTagsAndCheapestEnglishPrice()
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallService service = await InstalledServiceAsync(temporary.Path);
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        ScryfallSearchResponse search = RequireSuccess(await service.SearchResponseAsync(
-            "ci<=rw mv=1",
-            responseFormat: "concise",
-            cancellationToken: token));
-        ScryfallCardResponse single = RequireSuccess(await service.GetCardResponseAsync(
-            new ScryfallCardLookup("exact-name", "Venerable Knight"),
-            "cache-only",
-            "concise",
-            null,
-            token));
-        ScryfallCollectionResponse collection = RequireSuccess(await service.GetCollectionResponseAsync(
-            [
-                new ScryfallCardLookup("exact-name", "Monastery Swiftspear"),
-                new ScryfallCardLookup("scryfall-id", Guid.Empty.ToString("D")),
-            ],
-            "cache-only",
-            null,
-            25,
-            "concise",
-            null,
-            token));
-        ScryfallCardsByTagResponse byTag = RequireSuccess(await service.GetCardsByTagResponseAsync(
-            "aggro",
-            "oracle",
-            true,
-            "weak",
-            null,
-            25,
-            "concise",
-            null,
-            token));
+        ScryfallCardResponse walker = await ConciseCardAsync(service, "Jace, the Mind Sculptor", token);
+        ScryfallCardResponse bolt = await ConciseCardAsync(service, "Lightning Bolt", token);
+        ScryfallCardResponse noPrices = await ConciseCardAsync(service, "Abandoned Sarcophagus", token);
 
-        Assert.Null(search.Limits);
-        JsonElement knight = JsonSerializer.SerializeToElement(single.Card, ResultOptions);
-        Assert.Equal(["white-weenie"], Strings(knight.GetProperty("tags")));
-        Assert.Equal("0.05", knight.GetProperty("cheapestPriceUsd").GetString());
-        JsonElement searchKnight = JsonSerializer.SerializeToElement(
-            search.Page.Items.First(view => Name(view) == "Venerable Knight"),
-            ResultOptions);
-        Assert.Equal("0.05", searchKnight.GetProperty("cheapestPriceUsd").GetString());
-        JsonElement swiftspear = JsonSerializer.SerializeToElement(collection.Page.Items[0].Card, ResultOptions);
-        Assert.Empty(Strings(swiftspear.GetProperty("tags")));
-        Assert.Equal("0.10", swiftspear.GetProperty("cheapestPriceUsd").GetString());
-        Assert.Equal("not-cached", collection.Page.Items[1].Status);
-        Assert.Null(collection.Page.Items[1].Card);
-        Assert.Equal(2, byTag.Page.Items.Count);
-        foreach (ScryfallCardView tagged in byTag.Page.Items)
-        {
-            JsonElement element = JsonSerializer.SerializeToElement(tagged, ResultOptions);
-            Assert.Equal(["white-weenie"], Strings(element.GetProperty("tags")));
-        }
-
-        Assert.All(byTag.Assignments, assignment => Assert.Equal("inherited", assignment.Relationship));
+        Assert.Null(walker.Limits);
+        JsonElement walkerJson = Element(walker.Card);
+        Assert.Equal("9.00", walkerJson.GetProperty("cheapestPriceUsd").GetString());
+        Assert.Empty(Strings(walkerJson.GetProperty("tags")));
+        Assert.Equal(["burn"], Strings(Element(bolt.Card).GetProperty("tags")));
+        Assert.Equal(JsonValueKind.Null, Element(noPrices.Card).GetProperty("cheapestPriceUsd").ValueKind);
     }
 
     /// <summary>
-    /// Verifies the full format works on the other card tools and still names its format.
+    /// Verifies a reversible card, which has no top-level Oracle ID, is looked up by its front face and says so.
     /// </summary>
     [Fact]
-    public async Task FullFormat_OnCardAndTagTools_ReturnsRawObjects()
+    public async Task ConciseCards_ReversibleCard_UseTheFrontFaceAndSayWhy()
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallService service = await InstalledServiceAsync(temporary.Path);
-        CancellationToken token = TestContext.Current.CancellationToken;
 
-        ScryfallCardResponse single = RequireSuccess(await service.GetCardResponseAsync(
-            new ScryfallCardLookup("exact-name", "Venerable Knight"),
+        ScryfallCardResponse response = RequireSuccess(await service.GetCardAsync(
+            new ScryfallCardLookup("scryfall-id", Id(RecordedCards.Reversible)),
             "cache-only",
-            "full",
+            "concise",
             null,
-            token));
-        ScryfallCardsByTagResponse byTag = RequireSuccess(await service.GetCardsByTagResponseAsync(
-            "aggro",
-            "oracle",
+            TestContext.Current.CancellationToken));
+
+        JsonElement json = Element(response.Card);
+        Assert.Equal(FaceOracleId(RecordedCards.Reversible), json.GetProperty("oracleId").GetString());
+        Assert.Equal(["twincasters"], Strings(json.GetProperty("tags")));
+        Assert.Contains("front face", Assert.Single(response.Limits!), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies card facts for a generation that is not kept report not installed instead of empty facts.
+    /// </summary>
+    [Fact]
+    public async Task InstalledFacts_ForAGenerationThatIsNotKept_AreNotInstalled()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = await InstalledServiceAsync(temporary.Path);
+        ScryfallCardDataStore store = new(new ScryfallDatabase(temporary.Path));
+
+        ScryfallInstalledCardFactsRead gone = await store.ReadInstalledCardFactsAsync(
+            Guid.NewGuid(),
+            [Guid.NewGuid()],
             true,
-            "weak",
-            null,
-            25,
-            "full",
-            null,
-            token));
+            true,
+            TestContext.Current.CancellationToken);
 
-        Assert.NotNull(Assert.IsType<ScryfallCard>(single.Card.Value).Raw);
-        Assert.NotNull(byTag.Tag.Raw);
-        Assert.All(byTag.Page.Items, view => Assert.NotNull(Assert.IsType<ScryfallCard>(view.Value).Raw));
-        Assert.Equal("full", byTag.ResponseFormat);
+        Assert.False(gone.Installed);
+        Assert.Empty(gone.ByOracleId);
     }
 
     /// <summary>
-    /// Verifies the field list is rejected before any provider read when it is not valid.
+    /// Verifies a concise search page over the limit is cut, says so, and the next pages continue in exact order.
     /// </summary>
     [Fact]
-    public async Task Search_InvalidFormatRequest_FailsBeforeReadingTheProvider()
+    public async Task Search_ConcisePageOverTheLimit_IsCutAndContinuesInOrder()
     {
         using TemporaryScryfallDirectory temporary = new();
-        RecordingHandler handler = ScryfallTestFixture.Provider();
-        using ScryfallService service = CreateService(temporary.Path, handler);
-
-        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await service.SearchResponseAsync(
-            "name:knight",
-            responseFormat: "standard",
-            fields: ["name"],
-            cancellationToken: TestContext.Current.CancellationToken)).Value);
-
-        Assert.Equal("fields-require-concise", invalid.ReasonCode);
-        Assert.Empty(handler.Requests);
-    }
-
-    /// <summary>
-    /// Verifies a concise page that would pass 40,000 bytes is cut, says so, and the next page continues without gaps.
-    /// </summary>
-    [Fact]
-    public async Task Search_ConcisePageOverTheLimit_IsCutAndContinues()
-    {
-        using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, SearchProvider(100));
+        using ScryfallService service = CreateService(temporary.Path, VariantProvider(100));
         CancellationToken token = TestContext.Current.CancellationToken;
         List<string> names = [];
-        string? cursor = null;
         int pages = 0;
+        string? cursor = null;
 
         do
         {
-            ScryfallSearchResponse page = RequireSuccess(await service.SearchResponseAsync(
+            ScryfallSearchResponse page = RequireSuccess(await service.SearchAsync(
                 "t:creature",
                 cursor: cursor,
                 pageSize: 100,
                 responseFormat: "concise",
                 cancellationToken: token));
-            Assert.True(JsonSerializer.SerializeToUtf8Bytes(page, ResultOptions).Length <= ResultSizeLimit.MaximumBytes);
-            if (page.Page.NextCursor is not null)
-            {
-                Assert.True(page.Truncated);
-                Assert.Equal(ResultSizeLimit.CardNarrowHint, page.Narrow);
-            }
 
+            Assert.True(Bytes(page) <= ResultSizeLimit.MaximumBytes);
+            Assert.Equal(page.Page.NextCursor is not null, page.Truncated == true);
             names.AddRange(page.Page.Items.Select(Name));
             cursor = page.Page.NextCursor;
             pages++;
@@ -506,27 +671,28 @@ public sealed class ScryfallCardFormatTests
         while (cursor is not null);
 
         Assert.True(pages > 1);
-        Assert.Equal(Enumerable.Range(0, 100).Select(index => $"Test Card {index:D3}"), names);
+        Assert.Equal(Enumerable.Range(0, 100).Select(VariantName), names);
     }
 
     /// <summary>
-    /// Verifies a collection page over the limit is cut the same way and its cursor reads the next rows.
+    /// Verifies a collection page over the limit is cut the same way and its cursor reads the next rows in order.
     /// </summary>
     [Fact]
-    public async Task Collection_ConcisePageOverTheLimit_IsCutAndContinues()
+    public async Task Collection_ConcisePageOverTheLimit_IsCutAndContinuesInOrder()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = CreateService(temporary.Path, CollectionProvider(75));
+        using ScryfallService service = CreateService(temporary.Path, VariantProvider(75));
         CancellationToken token = TestContext.Current.CancellationToken;
         ScryfallCardLookup[] lookups =
-            [.. Enumerable.Range(0, 75).Select(index => new ScryfallCardLookup("scryfall-id", CardId(index).ToString("D")))];
+            [.. Enumerable.Range(0, 75).Select(index => new ScryfallCardLookup("scryfall-id", VariantId(index)))];
+        List<string> names = [];
         List<int> indexes = [];
+        int pages = 0;
         string? cursor = null;
-        bool sawTruncation = false;
 
         do
         {
-            ScryfallCollectionResponse page = RequireSuccess(await service.GetCollectionResponseAsync(
+            ScryfallCollectionResponse page = RequireSuccess(await service.GetCollectionAsync(
                 lookups,
                 "default",
                 cursor,
@@ -534,33 +700,37 @@ public sealed class ScryfallCardFormatTests
                 "concise",
                 null,
                 token));
-            Assert.True(JsonSerializer.SerializeToUtf8Bytes(page, ResultOptions).Length <= ResultSizeLimit.MaximumBytes);
-            sawTruncation |= page.Truncated == true;
+
+            Assert.True(Bytes(page) <= ResultSizeLimit.MaximumBytes);
+            Assert.Equal(page.Page.NextCursor is not null, page.Truncated == true);
             indexes.AddRange(page.Page.Items.Select(row => row.Index));
+            names.AddRange(page.Page.Items.Select(row => Name(row.Card!.Value)));
             cursor = page.Page.NextCursor;
+            pages++;
         }
         while (cursor is not null);
 
-        Assert.True(sawTruncation);
+        Assert.True(pages > 1);
         Assert.Equal(Enumerable.Range(0, 75), indexes);
+        Assert.Equal(Enumerable.Range(0, 75).Select(VariantName), names);
     }
 
     /// <summary>
-    /// Verifies a tag page over the limit is cut with its assignments and continues from the right card.
+    /// Verifies a tag page over the limit is cut with its assignments and continues from the right card, in order.
     /// </summary>
     [Fact]
-    public async Task CardsByTag_ConcisePageOverTheLimit_IsCutAndContinues()
+    public async Task CardsByTag_ConcisePageOverTheLimit_IsCutAndContinuesInOrder()
     {
         using TemporaryScryfallDirectory temporary = new();
-        using ScryfallService service = await TaggedCorpusServiceAsync(temporary.Path, 100);
+        using ScryfallService service = await TaggedVariantServiceAsync(temporary.Path, 100);
         CancellationToken token = TestContext.Current.CancellationToken;
         List<string> names = [];
+        int pages = 0;
         string? cursor = null;
-        bool sawTruncation = false;
 
         do
         {
-            ScryfallCardsByTagResponse page = RequireSuccess(await service.GetCardsByTagResponseAsync(
+            ScryfallCardsByTagResponse page = RequireSuccess(await service.GetCardsByTagAsync(
                 "bulk",
                 "oracle",
                 false,
@@ -570,111 +740,148 @@ public sealed class ScryfallCardFormatTests
                 "concise",
                 null,
                 token));
-            Assert.True(JsonSerializer.SerializeToUtf8Bytes(page, ResultOptions).Length <= ResultSizeLimit.MaximumBytes);
+
+            Assert.True(Bytes(page) <= ResultSizeLimit.MaximumBytes);
             Assert.Equal(page.Page.Items.Count, page.Assignments.Count);
-            sawTruncation |= page.Truncated == true;
+            Assert.Equal(page.Page.NextCursor is not null, page.Truncated == true);
             names.AddRange(page.Page.Items.Select(Name));
             cursor = page.Page.NextCursor;
+            pages++;
         }
         while (cursor is not null);
 
-        Assert.True(sawTruncation);
-        Assert.Equal(100, names.Distinct().Count());
+        // The installed tag order is by Oracle ID, which the variants give in the same order as their names.
+        Assert.True(pages > 1);
+        Assert.Equal(Enumerable.Range(0, 100).Select(VariantName), names);
     }
 
     /// <summary>
-    /// Verifies deck-entry lookups report installed, unresolved, and not-installed states and carry card and tags.
+    /// Verifies deck-entry lookups report found, unresolved, and not-installed states and carry card and tags.
     /// </summary>
     [Fact]
     public async Task InstalledCardViews_ReportEachStateWithoutGuessing()
     {
-        using TemporaryScryfallDirectory notInstalledDirectory = new();
-        using ScryfallService empty = CreateService(notInstalledDirectory.Path, ScryfallTestFixture.Provider());
+        using TemporaryScryfallDirectory emptyDirectory = new();
+        using ScryfallService empty = CreateService(emptyDirectory.Path, RecordedProvider());
         using TemporaryScryfallDirectory installedDirectory = new();
         using ScryfallService installed = await InstalledServiceAsync(installedDirectory.Path);
         CancellationToken token = TestContext.Current.CancellationToken;
-        ScryfallCardLookup[] lookups =
-        [
-            new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D")),
-            new ScryfallCardLookup("scryfall-id", Guid.Empty.ToString("D")),
-        ];
+        ScryfallCardLookup bolt = new("scryfall-id", Id(RecordedCards.LightningBolt));
+        ScryfallCardLookup missing = new("scryfall-id", Guid.Empty.ToString("D"));
 
-        ScryfallInstalledCardViews missing = RequireSuccess(await empty.ReadInstalledCardViewsAsync(
-            lookups,
+        ScryfallInstalledCardViews notInstalled = RequireSuccess(await empty.ReadInstalledCardViewsAsync(
+            [bolt],
             null,
             includeCards: true,
             includeTags: true,
             token));
         ScryfallInstalledCardViews found = RequireSuccess(await installed.ReadInstalledCardViewsAsync(
-            [lookups[0], null, lookups[1]],
+            [bolt, null, missing],
             null,
             includeCards: true,
             includeTags: true,
             token));
         ScryfallInstalledCardViews tagsOnly = RequireSuccess(await installed.ReadInstalledCardViewsAsync(
-            [lookups[0]],
+            [bolt],
             null,
             includeCards: false,
             includeTags: true,
             token));
 
-        Assert.False(missing.Installed);
-        Assert.All(missing.Cards, view => Assert.Equal("not-installed", view.Status));
-        Assert.True(found.Installed);
-        Assert.Equal(["installed", "unresolved", "unresolved"], found.Cards.Select(view => view.Status));
-        Assert.Equal(["white-weenie"], found.Cards[0].Tags);
-        Assert.False(found.Cards[0].Card!.TryGetValue("tags", out _));
-        Assert.Equal("0.05", found.Cards[0].Card!.TryGetValue("cheapestPriceUsd", out object? price) ? price : null);
+        Assert.False(notInstalled.Installed);
+        Assert.Equal("not-installed", Assert.Single(notInstalled.Cards).Status);
+        Assert.Equal(["found", "unresolved", "unresolved"], found.Cards.Select(view => view.Status));
+        Assert.Equal(["burn"], found.Cards[0].Tags);
+        Assert.DoesNotContain(found.Cards[0].Card!.Fields, field => field.Key == "tags");
         Assert.Null(found.Cards[1].Tags);
         Assert.Null(tagsOnly.Cards[0].Card);
-        Assert.Equal(["white-weenie"], tagsOnly.Cards[0].Tags);
+        Assert.Equal(["burn"], tagsOnly.Cards[0].Tags);
     }
 
     /// <summary>
-    /// Verifies naming tags as a field puts them on the card as well, and bad names are rejected.
+    /// Verifies the card keeps its tags when the entry does not also carry them, and a field list is validated.
     /// </summary>
     [Fact]
-    public async Task InstalledCardViews_FieldList_ChoosesCardFieldsAndValidatesNames()
+    public async Task InstalledCardViews_TagsRuleAndFieldList()
     {
         using TemporaryScryfallDirectory temporary = new();
         using ScryfallService installed = await InstalledServiceAsync(temporary.Path);
         CancellationToken token = TestContext.Current.CancellationToken;
-        ScryfallCardLookup white = new("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D"));
+        ScryfallCardLookup bolt = new("scryfall-id", Id(RecordedCards.LightningBolt));
 
-        ScryfallInstalledCardViews tagged = RequireSuccess(await installed.ReadInstalledCardViewsAsync(
-            [white],
-            ["tags", "layout"],
+        ScryfallInstalledCardViews cardsOnly = RequireSuccess(await installed.ReadInstalledCardViewsAsync(
+            [bolt],
+            null,
             includeCards: true,
             includeTags: false,
             token));
-        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await installed.ReadInstalledCardViewsAsync(
-            [white],
+        ScryfallInstalledCardViews named = RequireSuccess(await installed.ReadInstalledCardViewsAsync(
+            [bolt],
+            ["tags", "layout"],
+            includeCards: true,
+            includeTags: true,
+            token));
+        OperationResult<ScryfallInstalledCardViews> bad = await installed.ReadInstalledCardViewsAsync(
+            [bolt],
             ["nope"],
             includeCards: true,
             includeTags: false,
-            token)).Value);
+            token);
 
+        Assert.Equal(DefaultConciseKeys, cardsOnly.Cards[0].Card!.Fields.Select(field => field.Key));
         Assert.Equal(
             ["scryfallId", "oracleId", "name", "tags", "layout"],
-            tagged.Cards[0].Card!.Fields.Select(field => field.Key));
-        Assert.Null(tagged.Cards[0].Tags);
-        Assert.Equal("invalid-fields", invalid.ReasonCode);
+            named.Cards[0].Card!.Fields.Select(field => field.Key));
+        Assert.Equal(["burn"], named.Cards[0].Tags);
+        Assert.Equal("invalid-fields", Assert.IsType<OperationInvalidInput>(bad.Value).ReasonCode);
     }
 
     /// <summary>
-    /// Maps the white fixture card with its default fixture data.
+    /// Verifies a bad format request fails before any provider read.
     /// </summary>
-    private static ScryfallCard MapFixtureCard()
+    [Fact]
+    public async Task Search_InvalidFormatRequest_FailsBeforeReadingTheProvider()
     {
-        JsonObject raw = JsonNode.Parse(ScryfallTestFixture.WhiteCard())!.AsObject();
-        raw["games"] = new JsonArray("paper", "mtgo");
-        raw["layout"] = "normal";
-        raw["rarity"] = "common";
-        return Map(raw);
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = RecordedProvider();
+        using ScryfallService service = CreateService(temporary.Path, handler);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+            "x",
+            responseFormat: "standard",
+            fields: ["name"],
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("fields-require-concise", invalid.ReasonCode);
+        Assert.Empty(handler.Requests);
     }
 
     /// <summary>
-    /// Maps one card object as the service does for provider cards.
+    /// Reads one card by exact name in the concise format from installed data only.
+    /// </summary>
+    private static async Task<ScryfallCardResponse> ConciseCardAsync(
+        ScryfallService service,
+        string name,
+        CancellationToken token)
+    {
+        return RequireSuccess(await service.GetCardAsync(
+            new ScryfallCardLookup("exact-name", name),
+            "cache-only",
+            "concise",
+            null,
+            token));
+    }
+
+    /// <summary>
+    /// Maps one recorded card the way the service does for provider cards.
+    /// </summary>
+    private static ScryfallCard Map(string recordedName)
+    {
+        return Map(RecordedCards.Object(recordedName));
+    }
+
+    /// <summary>
+    /// Maps one card object the way the service does for provider cards.
     /// </summary>
     private static ScryfallCard Map(JsonObject raw)
     {
@@ -683,53 +890,28 @@ public sealed class ScryfallCardFormatTests
     }
 
     /// <summary>
-    /// Builds one card-face object.
-    /// </summary>
-    private static JsonObject Face(
-        string name,
-        string manaCost,
-        string typeLine,
-        string oracleText,
-        string power,
-        string toughness,
-        string[] colors)
-    {
-        return new JsonObject
-        {
-            ["name"] = name,
-            ["mana_cost"] = manaCost,
-            ["type_line"] = typeLine,
-            ["oracle_text"] = oracleText,
-            ["power"] = power,
-            ["toughness"] = toughness,
-            ["colors"] = new JsonArray([.. colors.Select(color => (JsonNode?)JsonValue.Create(color))]),
-        };
-    }
-
-    /// <summary>
     /// Parses the field selection the same way a request does.
     /// </summary>
-    private static IReadOnlySet<string> ParseSelected(string[]? fields)
+    private static IReadOnlySet<string> Selected(string[]? fields)
     {
         return Assert.IsType<OperationSuccess<ScryfallCardFormat>>(
             ScryfallCardFormat.Parse("concise", fields).Value).Data.SelectedFields!;
     }
 
     /// <summary>
-    /// Reads one named field of a concise card.
+    /// Measures a result as the server writes it.
     /// </summary>
-    private static object? Value(ScryfallConciseCard card, string name)
+    private static int Bytes<T>(T value)
     {
-        Assert.True(card.TryGetValue(name, out object? value), name);
-        return value;
+        return JsonSerializer.SerializeToUtf8Bytes(value, ResultOptions).Length;
     }
 
     /// <summary>
-    /// Reads a concise field value that is a list of strings.
+    /// Reads a card view as a JSON element.
     /// </summary>
-    private static string[] StringsOf(object? value)
+    private static JsonElement Element(ScryfallCardView view)
     {
-        return [.. Assert.IsAssignableFrom<IEnumerable<string>>(value)];
+        return JsonSerializer.SerializeToElement(view, ResultOptions);
     }
 
     /// <summary>
@@ -737,7 +919,7 @@ public sealed class ScryfallCardFormatTests
     /// </summary>
     private static string Name(ScryfallCardView view)
     {
-        return JsonSerializer.SerializeToElement(view, ResultOptions).GetProperty("name").GetString()!;
+        return Element(view).GetProperty("name").GetString()!;
     }
 
     /// <summary>
@@ -749,125 +931,220 @@ public sealed class ScryfallCardFormatTests
     }
 
     /// <summary>
-    /// Builds the stable ID of the generated test card at one position.
+    /// Reads the Scryfall ID of one recorded card.
     /// </summary>
-    private static Guid CardId(int index)
+    private static string Id(string recordedName)
     {
-        return Guid.Parse($"00000000-0000-4000-8000-{index + 1:D12}");
+        return RecordedCards.Object(recordedName)["id"]!.GetValue<string>();
     }
 
     /// <summary>
-    /// Builds a card object the size and shape of a real Scryfall card, so size checks are realistic.
+    /// Reads the Oracle ID of one recorded card.
     /// </summary>
-    private static JsonObject RealisticCard(int index)
+    private static string Oracle(string recordedName)
     {
-        string[] formats =
-        [
-            "standard", "future", "historic", "timeless", "gladiator", "pioneer", "modern", "legacy", "pauper",
-            "vintage", "penny", "commander", "oathbreaker", "standardbrawl", "brawl", "alchemy", "paupercommander",
-            "duel", "oldschool", "premodern", "predh",
-        ];
-        JsonObject legalities = [];
-        foreach (string format in formats)
+        return RecordedCards.Object(recordedName)["oracle_id"]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Reads the Oracle ID of the front face of one recorded card.
+    /// </summary>
+    private static string FaceOracleId(string recordedName)
+    {
+        return RecordedCards.Object(recordedName)["card_faces"]![0]!["oracle_id"]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Names the generated variant card at one position.
+    /// </summary>
+    private static string VariantName(int index)
+    {
+        return $"Variant {index:D3}";
+    }
+
+    /// <summary>
+    /// Builds the Scryfall ID of the generated variant at one position.
+    /// </summary>
+    private static string VariantId(int index)
+    {
+        return $"00000000-0000-4000-8000-{index + 1:D12}";
+    }
+
+    /// <summary>
+    /// Builds a copy of a recorded card with its own IDs and name, so a test can list many distinct cards.
+    /// </summary>
+    private static JsonObject Variant(int index)
+    {
+        JsonObject card = RecordedCards.Object(RecordedCards.All[index % 4]);
+        card["id"] = VariantId(index);
+        card["oracle_id"] = $"00000000-0000-4000-9000-{index + 1:D12}";
+        card["name"] = VariantName(index);
+        return card;
+    }
+
+    /// <summary>
+    /// Reads a golden file recorded from the code before this change.
+    /// </summary>
+    private static JsonNode? Golden(string name)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "golden", name + ".golden.json");
+        return JsonNode.Parse(File.ReadAllText(path));
+    }
+
+    /// <summary>
+    /// Describes where two JSON values first differ, for a failure message.
+    /// </summary>
+    private static string Difference(JsonNode? expected, JsonNode? actual, string path)
+    {
+        if (expected is JsonObject left && actual is JsonObject right)
         {
-            legalities[format] = format is "commander" or "modern" or "legacy" ? "legal" : "not_legal";
+            foreach (string name in left.Select(property => property.Key).Union(right.Select(property => property.Key)))
+            {
+                string inner = Difference(left[name], right[name], $"{path}.{name}");
+                if (inner.Length > 0)
+                {
+                    return inner;
+                }
+            }
+
+            return string.Empty;
         }
 
-        Guid id = CardId(index);
-        return new JsonObject
+        if (expected is JsonArray first && actual is JsonArray second && first.Count == second.Count)
         {
-            ["object"] = "card",
-            ["id"] = id.ToString("D"),
-            ["oracle_id"] = Guid.Parse($"00000000-0000-4000-9000-{index + 1:D12}").ToString("D"),
-            ["illustration_id"] = Guid.Parse($"00000000-0000-4000-a000-{index + 1:D12}").ToString("D"),
-            ["name"] = $"Test Card {index:D3}",
-            ["set"] = "tst",
-            ["collector_number"] = (index + 1).ToString("D", CultureInfo.InvariantCulture),
-            ["lang"] = "en",
-            ["released_at"] = "2026-07-04",
-            ["mana_cost"] = "{2}{G}",
-            ["cmc"] = 3.0,
-            ["type_line"] = "Creature - Elf Druid",
-            ["oracle_text"] = "{T}: Add one mana of any color. Whenever this creature attacks, you may search your library " +
-                "for a basic land card, put it onto the battlefield tapped, then shuffle.",
-            ["power"] = "2",
-            ["toughness"] = "2",
-            ["colors"] = new JsonArray("G"),
-            ["color_identity"] = new JsonArray("G"),
-            ["keywords"] = new JsonArray("Flash", "Reach"),
-            ["produced_mana"] = new JsonArray("W", "U", "B", "R", "G"),
-            ["legalities"] = legalities,
-            ["games"] = new JsonArray("paper", "mtgo", "arena"),
-            ["reserved"] = false,
-            ["game_changer"] = false,
-            ["layout"] = "normal",
-            ["rarity"] = "rare",
-            ["image_uris"] = new JsonObject
+            for (int index = 0; index < first.Count; index++)
             {
-                ["small"] = $"https://cards.scryfall.io/small/front/0/0/{id:D}.jpg?1700000000",
-                ["normal"] = $"https://cards.scryfall.io/normal/front/0/0/{id:D}.jpg?1700000000",
-                ["large"] = $"https://cards.scryfall.io/large/front/0/0/{id:D}.jpg?1700000000",
-                ["png"] = $"https://cards.scryfall.io/png/front/0/0/{id:D}.png?1700000000",
-                ["art_crop"] = $"https://cards.scryfall.io/art_crop/front/0/0/{id:D}.jpg?1700000000",
-                ["border_crop"] = $"https://cards.scryfall.io/border_crop/front/0/0/{id:D}.jpg?1700000000",
-            },
-            ["prices"] = new JsonObject
-            {
-                ["usd"] = "1.25",
-                ["usd_foil"] = "2.50",
-                ["usd_etched"] = null,
-                ["eur"] = "1.10",
-                ["eur_foil"] = "2.20",
-                ["tix"] = "0.03",
-            },
-            ["edhrec_rank"] = 1000 + index,
-            ["penny_rank"] = 2000 + index,
-        };
+                string inner = Difference(first[index], second[index], $"{path}[{index}]");
+                if (inner.Length > 0)
+                {
+                    return inner;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        return JsonNode.DeepEquals(expected, actual)
+            ? string.Empty
+            : $"{path}: {expected?.ToJsonString()} vs {actual?.ToJsonString()}";
     }
 
     /// <summary>
-    /// Builds a fake provider whose search returns the given number of realistic cards.
+    /// Removes the properties that standard added since the golden files were recorded.
     /// </summary>
-    private static RecordingHandler SearchProvider(int count)
+    private static void RemoveAddedProperties(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (string name in AddedCardProperties)
+            {
+                obj.Remove(name);
+            }
+
+            // A card face gained its own Oracle ID; the card keeps the one it always had.
+            if (obj["faces"] is JsonArray faces)
+            {
+                foreach (JsonNode? face in faces)
+                {
+                    face?.AsObject().Remove("oracleId");
+                }
+            }
+
+            foreach (KeyValuePair<string, JsonNode?> property in obj.ToList())
+            {
+                RemoveAddedProperties(property.Value);
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (JsonNode? item in array)
+            {
+                RemoveAddedProperties(item);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes the evidence stamps, which carry retrieval times and random snapshot IDs.
+    /// </summary>
+    private static void RemoveEvidence(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            obj.Remove("evidence");
+            foreach (KeyValuePair<string, JsonNode?> property in obj.ToList())
+            {
+                RemoveEvidence(property.Value);
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (JsonNode? item in array)
+            {
+                RemoveEvidence(item);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a fake provider that answers with the six recorded cards.
+    /// </summary>
+    private static RecordingHandler RecordedProvider()
     {
         return ScryfallTestFixture.Provider(intercept: request =>
         {
-            if (request.RequestUri!.AbsolutePath != "/cards/search")
+            string path = request.RequestUri!.AbsolutePath;
+            JsonArray all = [.. RecordedCards.All.Select(name => (JsonNode?)RecordedCards.Object(name))];
+            if (path is "/cards/search" or "/cards/collection")
             {
-                return null;
+                return ListResponse(all, path == "/cards/search");
             }
 
-            JsonArray data = [.. Enumerable.Range(0, count).Select(index => (JsonNode?)RealisticCard(index))];
-            return ScryfallTestFixture.Json(new JsonObject
+            if (path == "/cards/named")
             {
-                ["object"] = "list",
-                ["total_cards"] = count,
-                ["has_more"] = false,
-                ["data"] = data,
-            }.ToJsonString());
+                return ScryfallTestFixture.Json(RecordedCards.Raw(RecordedCards.Transform));
+            }
+
+            string? recorded = RecordedCards.All.FirstOrDefault(name => path == $"/cards/{Id(name)}");
+            return recorded is null ? null : ScryfallTestFixture.Json(RecordedCards.Raw(recorded));
         });
     }
 
     /// <summary>
-    /// Builds a fake provider whose collection endpoint returns the given number of realistic cards.
+    /// Builds a fake provider whose search and collection answers hold the given number of generated variants.
     /// </summary>
-    private static RecordingHandler CollectionProvider(int count)
+    private static RecordingHandler VariantProvider(int count)
     {
         return ScryfallTestFixture.Provider(intercept: request =>
         {
-            if (request.RequestUri!.AbsolutePath != "/cards/collection")
+            string path = request.RequestUri!.AbsolutePath;
+            if (path is not ("/cards/search" or "/cards/collection"))
             {
                 return null;
             }
 
-            JsonArray data = [.. Enumerable.Range(0, count).Select(index => (JsonNode?)RealisticCard(index))];
-            return ScryfallTestFixture.Json(new JsonObject
-            {
-                ["object"] = "list",
-                ["data"] = data,
-                ["not_found"] = new JsonArray(),
-            }.ToJsonString());
+            JsonArray data = [.. Enumerable.Range(0, count).Select(index => (JsonNode?)Variant(index))];
+            return ListResponse(data, path == "/cards/search");
         });
+    }
+
+    /// <summary>
+    /// Builds a provider list response for a search or a collection call.
+    /// </summary>
+    private static HttpResponseMessage ListResponse(JsonArray data, bool search)
+    {
+        JsonObject list = new() { ["object"] = "list", ["data"] = data };
+        if (search)
+        {
+            list["total_cards"] = data.Count;
+            list["has_more"] = false;
+        }
+        else
+        {
+            list["not_found"] = new JsonArray();
+        }
+
+        return ScryfallTestFixture.Json(list.ToJsonString());
     }
 
     /// <summary>
@@ -884,63 +1161,90 @@ public sealed class ScryfallCardFormatTests
     }
 
     /// <summary>
-    /// Creates a service with the fixture corpus installed, where the white card has a second, cheaper printing.
+    /// Creates a service with a corpus installed from the recorded cards plus extra printings: planeswalker prices
+    /// that test numeric order, a null price, and a cheaper Spanish printing, a cheaper Japanese Bolt, a tag on
+    /// Bolt, and a tag on the reversible card's front face.
     /// </summary>
     private static async Task<ScryfallService> InstalledServiceAsync(string dataRoot)
     {
-        JsonObject cheaper = JsonNode.Parse(ScryfallTestFixture.WhiteCard())!.AsObject();
-        cheaper["id"] = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc").ToString("D");
-        cheaper["set"] = "tst";
-        cheaper["collector_number"] = "9";
-        cheaper["prices"] = new JsonObject { ["usd"] = "0.05", ["usd_foil"] = null };
-        byte[] allCards = ScryfallTestFixture.GzipLines(
-            [ScryfallTestFixture.WhiteCard(), ScryfallTestFixture.RedCard(), cheaper.ToJsonString()]);
-        return await InstallAsync(dataRoot, allCards, null);
+        List<string> lines = [.. RecordedCards.All.Select(RecordedCards.Raw)];
+        lines.Add(Printing(RecordedCards.Planeswalker, 1, "10.00", "en").ToJsonString());
+        lines.Add(Printing(RecordedCards.Planeswalker, 2, "9.00", "en").ToJsonString());
+        lines.Add(Printing(RecordedCards.Planeswalker, 3, null, "en").ToJsonString());
+        lines.Add(Printing(RecordedCards.Planeswalker, 4, "1.00", "es").ToJsonString());
+        lines.Add(Printing(RecordedCards.LightningBolt, 5, "0.01", "ja").ToJsonString());
+        string burn = Tag("burn", [Oracle(RecordedCards.LightningBolt)]);
+        string twincasters = Tag("twincasters", [FaceOracleId(RecordedCards.Reversible)]);
+        return await InstallAsync(dataRoot, lines, [burn, twincasters]);
     }
 
     /// <summary>
-    /// Creates a service whose installed corpus has many cards tagged with one oracle tag.
+    /// Creates a service whose installed corpus holds generated variants that all carry one oracle tag.
     /// </summary>
-    private static async Task<ScryfallService> TaggedCorpusServiceAsync(string dataRoot, int count)
+    private static async Task<ScryfallService> TaggedVariantServiceAsync(string dataRoot, int count)
     {
-        JsonObject[] cards = [.. Enumerable.Range(0, count).Select(RealisticCard)];
-        string tag = JsonSerializer.Serialize(new
+        JsonObject[] variants = [.. Enumerable.Range(0, count).Select(Variant)];
+        string tag = Tag("bulk", [.. variants.Select(card => card["oracle_id"]!.GetValue<string>())]);
+        return await InstallAsync(dataRoot, [.. variants.Select(card => card.ToJsonString())], [tag]);
+    }
+
+    /// <summary>
+    /// Copies a recorded card as another printing with its own ID, USD price, and language.
+    /// </summary>
+    private static JsonObject Printing(string recordedName, int number, string? usd, string language)
+    {
+        JsonObject card = RecordedCards.Object(recordedName);
+        card["id"] = $"00000000-0000-4000-b000-{number:D12}";
+        card["lang"] = language;
+        card["collector_number"] = $"extra-{number}";
+        card["prices"] = new JsonObject { ["usd"] = usd };
+        return card;
+    }
+
+    /// <summary>
+    /// Builds one oracle tag line that is assigned to the given Oracle IDs.
+    /// </summary>
+    private static string Tag(string slug, IReadOnlyList<string> oracleIds)
+    {
+        JsonArray taggings = [];
+        foreach (string id in oracleIds)
         {
-            @object = "tag",
-            id = Guid.Parse("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
-            label = "Bulk",
-            slug = "bulk",
-            type = "oracle",
-            description = (string?)null,
-            parent_ids = Array.Empty<Guid>(),
-            child_ids = Array.Empty<Guid>(),
-            aliases = Array.Empty<string>(),
-            taggings = cards
-                .Select(card => new { oracle_id = Guid.Parse(card["oracle_id"]!.GetValue<string>()), weight = "strong" })
-                .ToArray(),
-        });
-        return await InstallAsync(
-            dataRoot,
-            ScryfallTestFixture.GzipLines([.. cards.Select(card => card.ToJsonString())]),
-            ScryfallTestFixture.GzipLines([tag]));
+            taggings.Add(new JsonObject { ["oracle_id"] = id, ["weight"] = "strong" });
+        }
+
+        return new JsonObject
+        {
+            ["object"] = "tag",
+            ["id"] = Guid.CreateVersion7().ToString("D"),
+            ["label"] = slug,
+            ["slug"] = slug,
+            ["type"] = "oracle",
+            ["description"] = null,
+            ["parent_ids"] = new JsonArray(),
+            ["child_ids"] = new JsonArray(),
+            ["aliases"] = new JsonArray(),
+            ["taggings"] = taggings,
+        }.ToJsonString();
     }
 
     /// <summary>
-    /// Installs a corpus built from the given card lines and optional tag lines through the fake provider.
+    /// Installs a corpus built from the given card lines and oracle tag lines through the fake provider.
     /// </summary>
-    private static async Task<ScryfallService> InstallAsync(string dataRoot, byte[] allCards, byte[]? oracleTags)
+    private static async Task<ScryfallService> InstallAsync(
+        string dataRoot,
+        IReadOnlyList<string> cardLines,
+        IReadOnlyList<string> tagLines)
     {
+        byte[] allCards = ScryfallTestFixture.GzipLines(cardLines);
+        byte[] oracleTags = ScryfallTestFixture.GzipLines(tagLines);
         RecordingHandler handler = ScryfallTestFixture.Provider(intercept: request =>
         {
-            string path = request.RequestUri!.AbsolutePath;
-            if (path == "/download/all_cards.jsonl.gz")
+            return request.RequestUri!.AbsolutePath switch
             {
-                return ScryfallTestFixture.Bytes(allCards);
-            }
-
-            return path == "/download/oracle_tags.jsonl.gz" && oracleTags is not null
-                ? ScryfallTestFixture.Bytes(oracleTags)
-                : null;
+                "/download/all_cards.jsonl.gz" => ScryfallTestFixture.Bytes(allCards),
+                "/download/oracle_tags.jsonl.gz" => ScryfallTestFixture.Bytes(oracleTags),
+                _ => null,
+            };
         });
         ScryfallService service = CreateService(dataRoot, handler);
         _ = RequireSuccess(await service.SyncCorpusAsync("refresh", null, TestContext.Current.CancellationToken));

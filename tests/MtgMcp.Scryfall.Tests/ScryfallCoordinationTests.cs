@@ -93,10 +93,10 @@ public sealed class ScryfallCoordinationTests
         using ScryfallService first = CreateService(temporary.Path, firstHandler);
         using ScryfallService second = CreateService(temporary.Path, secondHandler);
 
-        Task<OperationResult<ScryfallSearchResult>> firstTask = first.SearchAsync(
+        Task<OperationResult<ScryfallSearchResult>> firstTask = first.ReadSearchAsync(
             "shared-query",
             cancellationToken: TestContext.Current.CancellationToken);
-        Task<OperationResult<ScryfallSearchResult>> secondTask = second.SearchAsync(
+        Task<OperationResult<ScryfallSearchResult>> secondTask = second.ReadSearchAsync(
             "shared-query",
             cancellationToken: TestContext.Current.CancellationToken);
         OperationResult<ScryfallSearchResult>[] results = await Task.WhenAll(firstTask, secondTask);
@@ -116,7 +116,7 @@ public sealed class ScryfallCoordinationTests
         using TemporaryScryfallDirectory temporary = new();
         using (ScryfallService seed = CreateService(temporary.Path, ScryfallTestFixture.Provider()))
         {
-            _ = Assert.IsType<OperationSuccess<ScryfallSearchResult>>((await seed.SearchAsync(
+            _ = Assert.IsType<OperationSuccess<ScryfallSearchResult>>((await seed.ReadSearchAsync(
                 "refresh-query",
                 cancellationToken: TestContext.Current.CancellationToken)).Value).Data;
         }
@@ -142,12 +142,12 @@ public sealed class ScryfallCoordinationTests
         using ScryfallService first = CreateService(temporary.Path, firstHandler);
         using ScryfallService second = CreateService(temporary.Path, secondHandler);
 
-        Task<OperationResult<ScryfallSearchResult>> firstTask = first.SearchAsync(
+        Task<OperationResult<ScryfallSearchResult>> firstTask = first.ReadSearchAsync(
             "refresh-query",
             freshnessPolicy: "refresh",
             cancellationToken: TestContext.Current.CancellationToken);
         await entered.Task.WaitAsync(TestContext.Current.CancellationToken);
-        Task<OperationResult<ScryfallSearchResult>> secondTask = second.SearchAsync(
+        Task<OperationResult<ScryfallSearchResult>> secondTask = second.ReadSearchAsync(
             "refresh-query",
             freshnessPolicy: "refresh",
             cancellationToken: TestContext.Current.CancellationToken);

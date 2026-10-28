@@ -424,11 +424,11 @@ public sealed class ScryfallMcpTests
             "refresh",
             null,
             cancellationToken).ConfigureAwait(false)).Value);
-        Assert.IsType<OperationSuccess<ScryfallCollectionResult>>((await service.GetCollectionAsync(
+        Assert.IsType<OperationSuccess<ScryfallCollectionResponse>>((await service.GetCollectionAsync(
             CommanderLookups(),
             pageSize: 100,
             cancellationToken: cancellationToken).ConfigureAwait(false)).Value);
-        Assert.IsType<OperationSuccess<ScryfallSearchResult>>((await service.SearchAsync(
+        Assert.IsType<OperationSuccess<ScryfallSearchResponse>>((await service.SearchAsync(
             "ci<=rw mv=1",
             cancellationToken: cancellationToken).ConfigureAwait(false)).Value);
     }

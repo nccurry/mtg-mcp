@@ -51,7 +51,8 @@ public sealed class ScryfallService : IDisposable
         Uri? apiBaseUri = null,
         TimeSpan? freshnessTtl = null,
         TimeProvider? timeProvider = null,
-        HttpMessageHandler? handler = null)
+        HttpMessageHandler? handler = null,
+        JsonSerializerOptions? resultSerializerOptions = null)
     {
         cards = new ScryfallCardEvidenceOperations(
             dataRoot,
@@ -64,68 +65,8 @@ public sealed class ScryfallService : IDisposable
         cardData = new ScryfallCardDataLifecycleOperations(cards);
         snapshots = new ScryfallSnapshotOperations(cards);
         deckTags = new ScryfallDeckTagOperations(cards.CardDataStore);
-        responses = new ScryfallCardResponseOperations(cards);
+        responses = new ScryfallCardResponseOperations(cards, resultSerializerOptions);
         installedViews = new ScryfallInstalledCardViewOperations(cards.CardDataStore);
-    }
-
-    /// <inheritdoc cref="ScryfallCardEvidenceOperations.SearchAsync"/>
-    public Task<OperationResult<ScryfallSearchResult>> SearchAsync(
-        string query,
-        string unique = "cards",
-        string order = "name",
-        string direction = "auto",
-        bool includeExtras = false,
-        bool includeMultilingual = false,
-        bool includeVariations = false,
-        string freshnessPolicy = "default",
-        string? cursor = null,
-        int pageSize = 25,
-        bool includeRaw = false,
-        CancellationToken cancellationToken = default)
-    {
-        return cards.SearchAsync(
-            query,
-            unique,
-            order,
-            direction,
-            includeExtras,
-            includeMultilingual,
-            includeVariations,
-            freshnessPolicy,
-            cursor,
-            pageSize,
-            includeRaw,
-            null,
-            cancellationToken);
-    }
-
-    /// <inheritdoc cref="ScryfallCardEvidenceOperations.GetCardAsync"/>
-    public Task<OperationResult<ScryfallCardResult>> GetCardAsync(
-        ScryfallCardLookup lookup,
-        string freshnessPolicy = "default",
-        bool includeRaw = false,
-        CancellationToken cancellationToken = default)
-    {
-        return cards.GetCardAsync(lookup, freshnessPolicy, includeRaw, cancellationToken);
-    }
-
-    /// <inheritdoc cref="ScryfallCardEvidenceOperations.GetCollectionAsync"/>
-    public Task<OperationResult<ScryfallCollectionResult>> GetCollectionAsync(
-        IReadOnlyList<ScryfallCardLookup>? lookups,
-        string freshnessPolicy = "default",
-        string? cursor = null,
-        int pageSize = 25,
-        bool includeRaw = false,
-        CancellationToken cancellationToken = default)
-    {
-        return cards.GetCollectionAsync(
-            lookups,
-            freshnessPolicy,
-            cursor,
-            pageSize,
-            includeRaw,
-            null,
-            cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallCardEvidenceOperations.ResolveExactCollectionAsync"/>
@@ -251,33 +192,10 @@ public sealed class ScryfallService : IDisposable
         return cards.SearchTagsAsync(query, tagType, cursor, pageSize, includeRaw, cancellationToken);
     }
 
-    /// <inheritdoc cref="ScryfallCardEvidenceOperations.GetCardsByTagAsync"/>
-    public Task<OperationResult<ScryfallCardsByTagResult>> GetCardsByTagAsync(
-        string tagIdentity,
-        string tagType,
-        bool includeDescendants = false,
-        string minimumWeight = "weak",
-        string? cursor = null,
-        int pageSize = 25,
-        bool includeRaw = false,
-        CancellationToken cancellationToken = default)
-    {
-        return cards.GetCardsByTagAsync(
-            tagIdentity,
-            tagType,
-            includeDescendants,
-            minimumWeight,
-            cursor,
-            pageSize,
-            includeRaw,
-            null,
-            cancellationToken);
-    }
-
     /// <summary>
     /// Runs a Scryfall search and writes the page as concise, standard, or full cards.
     /// </summary>
-    public Task<OperationResult<ScryfallSearchResponse>> SearchResponseAsync(
+    public Task<OperationResult<ScryfallSearchResponse>> SearchAsync(
         string query,
         string unique = "cards",
         string order = "name",
@@ -311,7 +229,7 @@ public sealed class ScryfallService : IDisposable
     /// <summary>
     /// Resolves one card and writes it as a concise, standard, or full card.
     /// </summary>
-    public Task<OperationResult<ScryfallCardResponse>> GetCardResponseAsync(
+    public Task<OperationResult<ScryfallCardResponse>> GetCardAsync(
         ScryfallCardLookup lookup,
         string freshnessPolicy = "default",
         string? responseFormat = null,
@@ -324,7 +242,7 @@ public sealed class ScryfallService : IDisposable
     /// <summary>
     /// Resolves a card collection and writes each card as a concise, standard, or full card.
     /// </summary>
-    public Task<OperationResult<ScryfallCollectionResponse>> GetCollectionResponseAsync(
+    public Task<OperationResult<ScryfallCollectionResponse>> GetCollectionAsync(
         IReadOnlyList<ScryfallCardLookup>? lookups,
         string freshnessPolicy = "default",
         string? cursor = null,
@@ -346,7 +264,7 @@ public sealed class ScryfallService : IDisposable
     /// <summary>
     /// Reads cards assigned to one installed tag and writes them as concise, standard, or full cards.
     /// </summary>
-    public Task<OperationResult<ScryfallCardsByTagResponse>> GetCardsByTagResponseAsync(
+    public Task<OperationResult<ScryfallCardsByTagResponse>> GetCardsByTagAsync(
         string tagIdentity,
         string tagType,
         bool includeDescendants = false,

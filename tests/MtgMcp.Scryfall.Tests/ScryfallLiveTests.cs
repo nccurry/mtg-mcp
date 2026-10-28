@@ -29,7 +29,7 @@ public sealed class ScryfallLiveTests
         ScryfallBulkMetadataResult metadata = RequireSuccess(await service.GetBulkMetadataAsync(
             "refresh",
             TestContext.Current.CancellationToken));
-        ScryfallCardResult card = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult card = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("exact-name", "Venerable Knight"),
             "refresh",
             includeRaw: true,
@@ -94,7 +94,7 @@ public sealed class ScryfallLiveTests
                 Assert.True(dataset.SourceBytes > 0);
                 Assert.Matches("^[0-9a-f]{64}$", dataset.Checksum);
             });
-            ScryfallCardResult card = RequireSuccess(await reader.GetCardAsync(
+            ScryfallCardResult card = RequireSuccess(await reader.ReadCardAsync(
                 new ScryfallCardLookup("exact-name", "Venerable Knight"),
                 "cache-only",
                 cancellationToken: TestContext.Current.CancellationToken));

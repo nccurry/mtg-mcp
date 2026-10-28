@@ -180,7 +180,7 @@ Use `deck_get` for the stored deck. Pass `include` with `cards`, `tags`, or both
 to add, for each entry, concise Scryfall card fields (the entry's exact
 printing) and official oracle tag slugs, read from installed card data and
 returned in pages of entries with `nextCursor`. Each entry then carries
-`cardData`: `installed`, `not-installed` (run `scryfall_corpus_sync`), or
+`cardData`: `found`, `not-installed` (run `scryfall_corpus_sync`), or
 `unresolved` (no exact Scryfall identity, or not in the installed data). A page
 is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`. `fields` narrows the card fields; it uses the same names as the
@@ -253,8 +253,8 @@ and `scryfall_cards_by_tag` take `responseFormat`:
 
 | Value | Result |
 | --- | --- |
-| `standard` (default) | Every mapped card field. New fields are added to it, never removed. |
-| `concise` | A small set of fields for comparing many cards: IDs, name, cost, type, colors, color identity, produced mana, keywords, oracle text, power, toughness, loyalty, the formats the card is legal in, USD price, cheapest USD price across installed printings, rarity, set, oracle tag slugs, Game Changer flag, and EDHREC rank. `fields` picks other names, including `prices.usdFoil`, `prices.usdEtched`, `prices.eur`, `prices.eurFoil`, `prices.tix`, `legalitiesAll`, `games`, `reserved`, and `layout`. |
+| `standard` (default) | Every card field this server returns. New fields are added, never removed. A page of 25 rows can pass 40,000 bytes: use `concise` or a smaller `pageSize`. |
+| `concise` | A small set of fields for comparing many cards: IDs, name, cost, type, colors, color identity, produced mana, keywords, oracle text, power, toughness, loyalty, the formats the card is legal in, USD price, cheapest USD price among installed English printings, rarity, set, oracle tag slugs, Game Changer flag, and EDHREC rank. `fields` picks other names, including `prices.usdFoil`, `prices.usdEtched`, `prices.eur`, `prices.eurFoil`, `prices.tix`, `legalitiesAll`, `games`, `reserved`, and `layout`. |
 | `full` | `standard` plus the raw provider objects. Pages are limited to 25 rows. |
 
 In `concise`, `tags` and `cheapestPriceUsd` come from installed card data and are

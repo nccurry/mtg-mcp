@@ -189,7 +189,7 @@ public sealed class ToolAllowedValuesTests
     /// <summary>
     /// Runs one search with the given choices and no other options.
     /// </summary>
-    private static Task<OperationResult<ScryfallSearchResult>> SearchAsync(
+    private static Task<OperationResult<ScryfallSearchResponse>> SearchAsync(
         ScryfallService service,
         string unique,
         string order,

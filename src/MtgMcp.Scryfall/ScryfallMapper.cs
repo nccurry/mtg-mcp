@@ -40,6 +40,7 @@ internal static class ScryfallMapper
                     Strings(face, "colors"),
                     StringMap(face, "image_uris"),
                     OptionalGuid(face, "illustration_id"),
+                    OptionalGuid(face, "oracle_id"),
                     OptionalString(face, "power"),
                     OptionalString(face, "toughness"),
                     OptionalString(face, "loyalty"),

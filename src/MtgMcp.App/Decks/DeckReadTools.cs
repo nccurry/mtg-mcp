@@ -20,16 +20,26 @@ internal sealed class DeckReadTools
     /// <summary>
     /// Builds deck reads that add installed card data to entries.
     /// </summary>
-    private readonly DeckCardViewService cardViews;
+    private readonly DeckCardViewCoordinator cardViews;
 
     /// <summary>
-    /// Creates read tools around one process-local deck store and the Scryfall card data it can read.
+    /// Creates read tools around one process-local deck store and the coordinator that adds card data to entries.
     /// </summary>
-    internal DeckReadTools(SqliteDeckStore store, ScryfallService scryfall)
+    internal DeckReadTools(SqliteDeckStore store, DeckCardViewCoordinator cardViews)
     {
         this.store = store;
-        cardViews = new DeckCardViewService(store, scryfall);
+        this.cardViews = cardViews;
     }
+
+    /// <summary>
+    /// Gets the allowed item values of the list parameters, published in the tool schema.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> ItemChoices { get; } =
+        new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["include"] = [DeckCardViewCoordinator.IncludeCards, DeckCardViewCoordinator.IncludeTags],
+            ["fields"] = ScryfallConciseFields.All,
+        };
 
     /// <summary>
     /// Lists one canonical page of local decks.
@@ -66,13 +76,14 @@ internal sealed class DeckReadTools
         "Gets one local deck: its stored state with entries, zones, categories, assignments, and " +
         "provider-neutral bindings, plus the entry IDs that edits need. Add include [cards, tags] to also get, " +
         "for each entry, its concise Scryfall card fields (exact printing) and oracle tag slugs from installed " +
-        "card data, in pages of entries. Each entry then carries cardData: installed, not-installed (run " +
+        "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
         "scryfall_corpus_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
         "To filter, group, or total a card list, use a card-list analysis tool instead.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(
             "Optional extras for each entry: cards (concise card fields) and tags (oracle tag slugs). " +
+            "When both are given the card leaves out tags unless fields names them. " +
             "Omit to get the stored deck only.")]
         IReadOnlyList<string>? include = null,
         [Description(

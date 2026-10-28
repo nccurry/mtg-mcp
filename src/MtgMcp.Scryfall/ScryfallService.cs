@@ -136,7 +136,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
-        ScryfallPageFit? fit = null,
+        ScryfallPageItemCounter? countItems = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -189,7 +189,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cursor,
             pageSize,
             includeRaw,
-            fit,
+            countItems,
             cancellationToken).ConfigureAwait(false);
         return page switch
         {
@@ -274,7 +274,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
-        ScryfallPageFit? fit = null,
+        ScryfallPageItemCounter? countItems = null,
         CancellationToken cancellationToken = default)
     {
         if (lookups is null || lookups.Count is < 1 or > 150)
@@ -321,7 +321,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 cursor,
                 pageSize,
                 includeRaw,
-                fit,
+                countItems,
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -404,7 +404,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             pageSize,
             acquired is null ? null : SnapshotReference(acquired),
             cardDataGenerationId,
-            fit,
+            countItems,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -721,7 +721,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string cursor,
         int pageSize,
         bool includeRaw,
-        ScryfallPageFit? fit,
+        ScryfallPageItemCounter? countItems,
         CancellationToken cancellationToken)
     {
         if (!ScryfallCursor.TryDecodeCollection(cursor, requestHash, out ScryfallCollectionCursorState? state) ||
@@ -785,7 +785,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             pageSize,
             snapshotReference,
             state.CorpusGenerationId,
-            fit,
+            countItems,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -899,7 +899,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         int pageSize,
         ScryfallSnapshotReference? snapshot,
         Guid? cardDataGenerationId,
-        ScryfallPageFit? fit,
+        ScryfallPageItemCounter? countItems,
         CancellationToken cancellationToken)
     {
         if (state.Offset > rows.Count)
@@ -908,11 +908,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         ScryfallCollectionRow[] items = rows.Skip(state.Offset).Take(pageSize).ToArray();
-        if (fit is not null)
+        if (countItems is not null)
         {
-            int keep = await fit(
+            int keep = await countItems(
                 items.Select(row => row.Card).ToArray(),
-                items.Select(row => ScryfallJsonSize.Measure(row with { Card = null })).ToArray(),
+                items.Select(row => (object?)(row with { Card = null })).ToArray(),
                 cardDataGenerationId,
                 cancellationToken).ConfigureAwait(false);
             items = items[..keep];
@@ -1307,7 +1307,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
-        ScryfallPageFit? fit = null,
+        ScryfallPageItemCounter? countItems = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(tagIdentity) ||
@@ -1373,11 +1373,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 includeRaw));
         }
 
-        if (fit is not null)
+        if (countItems is not null)
         {
-            int keep = await fit(
+            int keep = await countItems(
                 [.. cards],
-                [.. assignments.Select(value => ScryfallJsonSize.Measure(value))],
+                [.. assignments.Select(value => (object?)value)],
                 success.Data.GenerationId,
                 cancellationToken).ConfigureAwait(false);
             cards = cards.GetRange(0, keep);
@@ -1560,7 +1560,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor,
         int pageSize,
         bool includeRaw,
-        ScryfallPageFit? fit,
+        ScryfallPageItemCounter? countItems,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -1579,11 +1579,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             items.Add(MapSnapshotCard(raw, header, includeRaw));
         }
 
-        if (fit is not null)
+        if (countItems is not null)
         {
-            int keep = await fit(
+            int keep = await countItems(
                 [.. items],
-                [.. items.Select(_ => 0)],
+                [.. items.Select(_ => (object?)null)],
                 null,
                 cancellationToken).ConfigureAwait(false);
             items = items.GetRange(0, keep);

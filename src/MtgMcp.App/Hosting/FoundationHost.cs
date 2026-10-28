@@ -51,7 +51,8 @@ internal static class FoundationHost
                 configuration.DataRoot,
                 OperationModeGuard.Allows(configuration.Mode, OperationRequirement.LocalWrite),
                 FoundationServerIdentity.PackageVersion,
-                freshnessTtl: configuration.ScryfallFreshnessTtl)
+                freshnessTtl: configuration.ScryfallFreshnessTtl,
+                resultSerializerOptions: ToolCallPolicy.SerializerOptions)
             : null;
         using ArchidektService? archidektService = archidektEnabled
             ? new ArchidektService(configuration.Archidekt, FoundationServerIdentity.PackageVersion)

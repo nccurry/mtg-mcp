@@ -355,14 +355,15 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
-    /// Reads oracle tag slugs and the lowest USD price across printings for each Oracle ID from one generation.
+    /// Reads oracle tag slugs and the lowest USD price across English printings for each Oracle ID from one
+    /// generation, with one query for all tags and one for all prices.
     /// </summary>
     /// <param name="generationId">The generation to read, or null for the active generation.</param>
     /// <param name="oracleIds">The Oracle IDs to read.</param>
     /// <param name="includeTags">Whether to read tag slugs.</param>
     /// <param name="includePrice">Whether to read the lowest USD price.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    internal async Task<ScryfallCardExtrasRead> ReadCardExtrasAsync(
+    internal async Task<ScryfallInstalledCardFactsRead> ReadInstalledCardFactsAsync(
         Guid? generationId,
         IReadOnlyCollection<Guid> oracleIds,
         bool includeTags,
@@ -374,7 +375,7 @@ internal sealed class ScryfallCardDataStore
             await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
         if (connection is null)
         {
-            return ScryfallCardExtrasRead.NotInstalled;
+            return ScryfallInstalledCardFactsRead.NotInstalled;
         }
 
         Guid? generation = generationId ??
@@ -383,77 +384,91 @@ internal sealed class ScryfallCardDataStore
             !await ContainsCompleteGenerationOnConnectionAsync(connection, generation.Value, cancellationToken)
                 .ConfigureAwait(false))
         {
-            return ScryfallCardExtrasRead.NotInstalled;
+            return ScryfallInstalledCardFactsRead.NotInstalled;
         }
 
-        Dictionary<Guid, ScryfallCardExtras> result = [];
+        string idList = JsonSerializer.Serialize(oracleIds.Select(ScryfallSql.FormatGuid));
+        Dictionary<Guid, List<string>> tags = includeTags
+            ? await ReadOracleTagSlugsAsync(connection, generation.Value, idList, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
+        Dictionary<Guid, string> prices = includePrice
+            ? await ReadCheapestUsdAsync(connection, generation.Value, idList, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
+        Dictionary<Guid, ScryfallInstalledCardFacts> result = [];
         foreach (Guid oracleId in oracleIds)
         {
-            if (result.ContainsKey(oracleId))
-            {
-                continue;
-            }
-
-            IReadOnlyList<string> tags = includeTags
-                ? await ReadOracleTagSlugsAsync(connection, generation.Value, oracleId, cancellationToken)
-                    .ConfigureAwait(false)
-                : [];
-            string? price = includePrice
-                ? await ReadCheapestUsdAsync(connection, generation.Value, oracleId, cancellationToken)
-                    .ConfigureAwait(false)
-                : null;
-            result.Add(oracleId, new ScryfallCardExtras(tags, price));
+            result[oracleId] = new ScryfallInstalledCardFacts(
+                tags.TryGetValue(oracleId, out List<string>? slugs) ? slugs : [],
+                prices.TryGetValue(oracleId, out string? price) ? price : null);
         }
 
-        return new ScryfallCardExtrasRead(true, result);
+        return new ScryfallInstalledCardFactsRead(true, result);
     }
 
     /// <summary>
-    /// Reads the official oracle tag slugs assigned directly to one Oracle ID, sorted by slug.
+    /// Reads the official oracle tag slugs assigned directly to each listed Oracle ID, sorted by slug.
     /// </summary>
-    private static async Task<IReadOnlyList<string>> ReadOracleTagSlugsAsync(
+    private static async Task<Dictionary<Guid, List<string>>> ReadOracleTagSlugsAsync(
         SqliteConnection connection,
         Guid generationId,
-        Guid oracleId,
+        string oracleIdList,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
-            "SELECT DISTINCT t.slug FROM tag_assignments a " +
+            "SELECT DISTINCT a.target_id, t.slug FROM tag_assignments a " +
             "JOIN tags t ON t.generation_id = a.generation_id AND t.tag_id = a.tag_id " +
-            "WHERE a.generation_id = $generation AND a.target_type = 'oracle' AND a.target_id = $oracle " +
-            "AND t.tag_type = 'oracle' ORDER BY t.slug;";
+            "WHERE a.generation_id = $generation AND a.target_type = 'oracle' AND t.tag_type = 'oracle' " +
+            "AND a.target_id IN (SELECT value FROM json_each($ids)) ORDER BY a.target_id, t.slug;";
         command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
-        command.Parameters.AddWithValue("$oracle", ScryfallSql.FormatGuid(oracleId));
-        List<string> slugs = [];
+        command.Parameters.AddWithValue("$ids", oracleIdList);
+        Dictionary<Guid, List<string>> result = [];
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            slugs.Add(reader.GetString(0));
+            Guid oracleId = ScryfallSql.ParseGuid(reader.GetString(0));
+            if (!result.TryGetValue(oracleId, out List<string>? slugs))
+            {
+                slugs = [];
+                result.Add(oracleId, slugs);
+            }
+
+            slugs.Add(reader.GetString(1));
         }
 
-        return slugs;
+        return result;
     }
 
     /// <summary>
-    /// Reads the lowest nonfoil USD price among the installed printings of one Oracle ID, keeping Scryfall's text.
+    /// Reads the lowest USD price among the installed English printings of each listed Oracle ID, keeping
+    /// Scryfall's text. Non-English printings are skipped before their raw JSON is read.
     /// </summary>
-    private static async Task<string?> ReadCheapestUsdAsync(
+    private static async Task<Dictionary<Guid, string>> ReadCheapestUsdAsync(
         SqliteConnection connection,
         Guid generationId,
-        Guid oracleId,
+        string oracleIdList,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
-            "SELECT json_extract(raw_json, '$.prices.usd') FROM card_objects " +
-            "WHERE generation_id = $generation AND oracle_id = $oracle " +
-            "AND json_extract(raw_json, '$.prices.usd') IS NOT NULL " +
-            "ORDER BY CAST(json_extract(raw_json, '$.prices.usd') AS REAL), card_id LIMIT 1;";
+            "SELECT oracle_id, usd FROM (" +
+            "SELECT oracle_id, json_extract(raw_json, '$.prices.usd') AS usd FROM card_objects " +
+            "WHERE generation_id = $generation AND lang = 'en' " +
+            "AND oracle_id IN (SELECT value FROM json_each($ids))) " +
+            "WHERE usd IS NOT NULL ORDER BY oracle_id, CAST(usd AS REAL);";
         command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
-        command.Parameters.AddWithValue("$oracle", ScryfallSql.FormatGuid(oracleId));
-        object? value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return value as string;
+        command.Parameters.AddWithValue("$ids", oracleIdList);
+        Dictionary<Guid, string> result = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            // Rows arrive cheapest first for each Oracle ID, so the first one seen is the answer.
+            result.TryAdd(ScryfallSql.ParseGuid(reader.GetString(0)), reader.GetString(1));
+        }
+
+        return result;
     }
 
     /// <summary>

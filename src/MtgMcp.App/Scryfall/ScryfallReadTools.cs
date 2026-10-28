@@ -13,11 +13,17 @@ namespace MtgMcp.App.Scryfall;
 internal sealed class ScryfallReadTools
 {
     /// <summary>
+    /// Gets the allowed item values of the list parameters, published in each tool schema.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> ItemChoices { get; } =
+        new Dictionary<string, IReadOnlyList<string>> { ["fields"] = ScryfallConciseFields.All };
+
+    /// <summary>
     /// Describes the responseFormat parameter of every card-returning tool.
     /// </summary>
     private const string ResponseFormatDescription =
-        "Card shape: concise (compact fields for comparing many cards), standard (every mapped field; the default), " +
-        "or full (standard plus raw provider objects; pages are limited to 25 rows).";
+        "Card shape: concise (compact fields for comparing many cards), standard (every card field this server " +
+        "returns; the default), or full (standard plus raw provider objects; pages are limited to 25 rows).";
 
     /// <summary>
     /// Describes the fields parameter of every card-returning tool.
@@ -63,8 +69,8 @@ internal sealed class ScryfallReadTools
         "Example query: otag:removal t:instant id<=wb mv<=2 f:commander. Use scryfall_tag_search to find " +
         "a tag's exact slug, and scryfall_cards_by_tag only to read tag assignments from installed card data. " +
         "Use responseFormat concise for broad queries: it returns only the fields an agent needs to compare cards. " +
-        "The default standard format returns every mapped field and a page of 25 rows can exceed 40,000 " +
-        "characters, so with standard ask for a smaller pageSize.")]
+        "The default standard format returns every card field this server returns, and a page of 25 rows can " +
+        "exceed 40,000 bytes, so with standard ask for a smaller pageSize.")]
     internal Task<OperationResult<ScryfallSearchResponse>> SearchAsync(
         [Description("Official Scryfall search expression evaluated by Scryfall, not by mtg-mcp.")] string query,
         [Description("Scryfall uniqueness mode: cards, art, or prints."), AllowedValues("cards", "art", "prints")]
@@ -88,7 +94,7 @@ internal sealed class ScryfallReadTools
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
-        return ScryfallToolExecution.RunAsync(() => service.SearchResponseAsync(
+        return ScryfallToolExecution.RunAsync(() => service.SearchAsync(
             query, unique, order, direction, includeExtras, includeMultilingual,
             includeVariations, freshnessPolicy, cursor, pageSize, responseFormat, fields, cancellationToken));
     }
@@ -120,7 +126,7 @@ internal sealed class ScryfallReadTools
         CancellationToken cancellationToken = default)
     {
         return ScryfallToolExecution.RunAsync(() =>
-            service.GetCardResponseAsync(lookup, freshnessPolicy, responseFormat, fields, cancellationToken));
+            service.GetCardAsync(lookup, freshnessPolicy, responseFormat, fields, cancellationToken));
     }
 
     /// <summary>
@@ -138,7 +144,8 @@ internal sealed class ScryfallReadTools
         "Resolves and stably pages an ordered card collection from the corpus and official collection " +
         "endpoint with explicit per-position misses and provider batching bounded to 75 identifiers. " +
         "responseFormat concise returns compact cards and cuts a page that would exceed the result size " +
-        "limit, with truncated, narrow, and a nextCursor for the rest.")]
+        "limit, with truncated, narrow, and a nextCursor for the rest. The standard format can exceed 40,000 " +
+        "bytes; use concise or a smaller pageSize.")]
     internal Task<OperationResult<ScryfallCollectionResponse>> GetCollectionAsync(
         [Description("One through 150 exact card lookup descriptors; quantities normally require only one identity row.")]
         IReadOnlyList<ScryfallCardLookup> lookups,
@@ -155,7 +162,7 @@ internal sealed class ScryfallReadTools
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
         CancellationToken cancellationToken = default)
     {
-        return ScryfallToolExecution.RunAsync(() => service.GetCollectionResponseAsync(
+        return ScryfallToolExecution.RunAsync(() => service.GetCollectionAsync(
             lookups, freshnessPolicy, cursor, pageSize, responseFormat, fields, cancellationToken));
     }
 
@@ -426,7 +433,8 @@ internal sealed class ScryfallReadTools
         "evidence; it does not map tags to deck categories. To filter cards by tag together with type, " +
         "color, mana value, or format, use scryfall_search with otag: instead. responseFormat concise returns " +
         "compact cards and cuts a page that would exceed the result size limit, with truncated, narrow, and " +
-        "a nextCursor for the rest.")]
+        "a nextCursor for the rest. The standard format can exceed 40,000 bytes; use concise or a smaller " +
+        "pageSize.")]
     internal Task<OperationResult<ScryfallCardsByTagResponse>> GetCardsByTagAsync(
         [Description("Exact community tag identity returned by scryfall_tag_search.")] string tagIdentity,
         [Description("Required tag kind: oracle or art."), TagKindValues]
@@ -440,7 +448,7 @@ internal sealed class ScryfallReadTools
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
-        return ScryfallToolExecution.RunAsync(() => service.GetCardsByTagResponseAsync(
+        return ScryfallToolExecution.RunAsync(() => service.GetCardsByTagAsync(
             tagIdentity,
             tagType,
             includeDescendants,

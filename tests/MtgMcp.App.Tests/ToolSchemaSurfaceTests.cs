@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Tests;
 
@@ -84,6 +85,15 @@ public sealed partial class ToolSchemaSurfaceTests
         Assert.Contains(
             "moxfield-bulk-edit-v1",
             EnumValues(tools["deck_export_bundle"].ProtocolTool.InputSchema, "formatId"));
+        Assert.Equal(
+            ["concise", "standard", "full"],
+            EnumValues(tools["scryfall_search"].ProtocolTool.InputSchema, "responseFormat"));
+        Assert.Equal(
+            ["cards", "tags"],
+            ItemEnumValues(tools["deck_get"].ProtocolTool.InputSchema, "include"));
+        Assert.Equal(
+            ScryfallConciseFields.All,
+            ItemEnumValues(tools["scryfall_search"].ProtocolTool.InputSchema, "fields"));
     }
 
     /// <summary>
@@ -189,6 +199,19 @@ public sealed partial class ToolSchemaSurfaceTests
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Reads the enum values published for the items of one list input property.
+    /// </summary>
+    private static string[] ItemEnumValues(JsonElement schema, string property)
+    {
+        JsonElement node = schema.GetProperty("properties").GetProperty(property);
+        JsonElement items = node.TryGetProperty("items", out JsonElement direct)
+            ? direct
+            : node.GetProperty("anyOf").EnumerateArray().First(value => value.TryGetProperty("items", out _))
+                .GetProperty("items");
+        return [.. items.GetProperty("enum").EnumerateArray().Select(value => value.GetString()!)];
     }
 
     /// <summary>

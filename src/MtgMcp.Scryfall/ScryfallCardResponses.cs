@@ -1,3 +1,5 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using MtgMcp.Core.Results;
 
@@ -10,11 +12,18 @@ namespace MtgMcp.Scryfall;
 public abstract record ScryfallFormattedResponse
 {
     /// <summary>
+    /// Says what to do to read a cut page: take the next cursor, ask for fewer fields, or ask for a smaller page.
+    /// </summary>
+    public const string NarrowHint =
+        "The page was cut to stay under the result size limit. Use nextCursor to read the rest, or ask for fewer " +
+        "fields or a smaller pageSize.";
+
+    /// <summary>
     /// Gets the response format the cards were written in: concise, standard, or full.
     /// </summary>
     [JsonPropertyName("responseFormat")]
     [JsonPropertyOrder(100)]
-    public string ResponseFormat { get; init; } = ScryfallCardFormat.Standard;
+    public string ResponseFormat { get; init; } = "standard";
 
     /// <summary>
     /// Gets the reasons some requested fields are empty, or null when there are none.
@@ -92,17 +101,34 @@ public sealed record ScryfallCardsByTagResponse(
 internal sealed class ScryfallCardResponseOperations
 {
     /// <summary>
+    /// Measures sizes the way a default result serializer writes, when the host gives none.
+    /// </summary>
+    private static readonly JsonSerializerOptions DefaultResultOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    /// <summary>
     /// Owns the card reads that produce mapped cards.
     /// </summary>
     private readonly ScryfallCardEvidenceOperations cards;
 
     /// <summary>
+    /// Writes values the way the host writes tool results, so page sizes are measured as clients receive them.
+    /// </summary>
+    private readonly JsonSerializerOptions resultOptions;
+
+    /// <summary>
     /// Creates response operations around the card evidence operations.
     /// </summary>
-    internal ScryfallCardResponseOperations(ScryfallCardEvidenceOperations cards)
+    internal ScryfallCardResponseOperations(
+        ScryfallCardEvidenceOperations cards,
+        JsonSerializerOptions? resultOptions)
     {
         ArgumentNullException.ThrowIfNull(cards);
         this.cards = cards;
+        this.resultOptions = resultOptions ?? DefaultResultOptions;
     }
 
     /// <summary>
@@ -129,7 +155,7 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallCardFormat, ScryfallSearchResponse>(parsed);
         }
 
-        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data);
+        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
         OperationResult<ScryfallSearchResult> result = await cards.SearchAsync(
             query,
             unique,
@@ -142,25 +168,26 @@ internal sealed class ScryfallCardResponseOperations
             cursor,
             pageSize,
             format.Data.IncludeRaw,
-            formatter.Fit,
+            formatter.CountItemsThatFit,
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallSearchResult> success)
         {
             return Forward<ScryfallSearchResult, ScryfallSearchResponse>(result);
         }
 
-        ScryfallPage<ScryfallCardView> page = await FormatPageAsync(
+        ScryfallFormattedCards formatted = await PageCardsAsync(
             formatter,
-            success.Data.Page,
+            success.Data.Page.Items,
             null,
             cancellationToken).ConfigureAwait(false);
+        ScryfallPage<ScryfallCardView> page = ToPage(formatted, success.Data.Page);
         return new OperationSuccess<ScryfallSearchResponse>(
             new ScryfallSearchResponse(page, success.Data.Snapshot, success.Data.Warnings)
             {
                 ResponseFormat = format.Data.Name,
-                Limits = Limits(formatter),
-                Truncated = formatter.Truncated ? true : null,
-                Narrow = formatter.Truncated ? ResultSizeLimit.CardNarrowHint : null,
+                Limits = formatted.Limits,
+                Truncated = formatted.Truncated ? true : null,
+                Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
             });
     }
 
@@ -180,7 +207,7 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallCardFormat, ScryfallCardResponse>(parsed);
         }
 
-        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data);
+        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
         OperationResult<ScryfallCardResult> result = await cards.GetCardAsync(
             lookup,
             freshnessPolicy,
@@ -191,19 +218,19 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallCardResult, ScryfallCardResponse>(result);
         }
 
-        IReadOnlyList<ScryfallCardView?> views = await formatter.FormatAsync(
+        ScryfallFormattedCards formatted = await formatter.FormatAsync(
             [success.Data.Card],
             success.Data.CorpusGenerationId,
             cancellationToken).ConfigureAwait(false);
         return new OperationSuccess<ScryfallCardResponse>(
             new ScryfallCardResponse(
-                views[0]!.Value,
+                formatted.Views[0]!.Value,
                 success.Data.Origin,
                 success.Data.Snapshot,
                 success.Data.CorpusGenerationId)
             {
                 ResponseFormat = format.Data.Name,
-                Limits = Limits(formatter),
+                Limits = formatted.Limits,
             });
     }
 
@@ -225,14 +252,14 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallCardFormat, ScryfallCollectionResponse>(parsed);
         }
 
-        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data);
+        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
         OperationResult<ScryfallCollectionResult> result = await cards.GetCollectionAsync(
             lookups,
             freshnessPolicy,
             cursor,
             pageSize,
             format.Data.IncludeRaw,
-            formatter.Fit,
+            formatter.CountItemsThatFit,
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCollectionResult> success)
         {
@@ -240,7 +267,8 @@ internal sealed class ScryfallCardResponseOperations
         }
 
         IReadOnlyList<ScryfallCollectionRow> rows = success.Data.Page.Items;
-        IReadOnlyList<ScryfallCardView?> views = await formatter.FormatAsync(
+        ScryfallFormattedCards formatted = await PageCardsAsync(
+            formatter,
             [.. rows.Select(row => row.Card)],
             success.Data.CorpusGenerationId,
             cancellationToken).ConfigureAwait(false);
@@ -253,23 +281,19 @@ internal sealed class ScryfallCardResponseOperations
                 row.Lookup,
                 row.Status,
                 row.Origin,
-                views[index],
+                formatted.Views[index],
                 row.Message));
         }
 
+        ScryfallPage<ScryfallCollectionRowResponse> page =
+            new(items, success.Data.Page.TotalCount, success.Data.Page.NextCursor);
         return new OperationSuccess<ScryfallCollectionResponse>(
-            new ScryfallCollectionResponse(
-                new ScryfallPage<ScryfallCollectionRowResponse>(
-                    items,
-                    success.Data.Page.TotalCount,
-                    success.Data.Page.NextCursor),
-                success.Data.Snapshot,
-                success.Data.CorpusGenerationId)
+            new ScryfallCollectionResponse(page, success.Data.Snapshot, success.Data.CorpusGenerationId)
             {
                 ResponseFormat = format.Data.Name,
-                Limits = Limits(formatter),
-                Truncated = formatter.Truncated ? true : null,
-                Narrow = formatter.Truncated ? ResultSizeLimit.CardNarrowHint : null,
+                Limits = formatted.Limits,
+                Truncated = formatted.Truncated ? true : null,
+                Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
             });
     }
 
@@ -293,7 +317,7 @@ internal sealed class ScryfallCardResponseOperations
             return Forward<ScryfallCardFormat, ScryfallCardsByTagResponse>(parsed);
         }
 
-        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data);
+        ScryfallCardFormatter formatter = new(cards.CardDataStore, format.Data, resultOptions);
         OperationResult<ScryfallCardsByTagResult> result = await cards.GetCardsByTagAsync(
             tagIdentity,
             tagType,
@@ -302,25 +326,26 @@ internal sealed class ScryfallCardResponseOperations
             cursor,
             pageSize,
             format.Data.IncludeRaw,
-            formatter.Fit,
+            formatter.CountItemsThatFit,
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<ScryfallCardsByTagResult> success)
         {
             return Forward<ScryfallCardsByTagResult, ScryfallCardsByTagResponse>(result);
         }
 
-        ScryfallPage<ScryfallCardView> page = await FormatPageAsync(
+        ScryfallFormattedCards formatted = await PageCardsAsync(
             formatter,
-            success.Data.Page,
+            success.Data.Page.Items,
             success.Data.GenerationId,
             cancellationToken).ConfigureAwait(false);
+        ScryfallPage<ScryfallCardView> page = ToPage(formatted, success.Data.Page);
         return new OperationSuccess<ScryfallCardsByTagResponse>(
             new ScryfallCardsByTagResponse(success.Data.Tag, page, success.Data.Assignments, success.Data.GenerationId)
             {
                 ResponseFormat = format.Data.Name,
-                Limits = Limits(formatter),
-                Truncated = formatter.Truncated ? true : null,
-                Narrow = formatter.Truncated ? ResultSizeLimit.CardNarrowHint : null,
+                Limits = formatted.Limits,
+                Truncated = formatted.Truncated ? true : null,
+                Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
             });
     }
 
@@ -333,32 +358,31 @@ internal sealed class ScryfallCardResponseOperations
     }
 
     /// <summary>
-    /// Writes every card of a page in the formatter's format, keeping the page's counts and cursor.
+    /// Takes the cards the size check already formatted, or formats the page when no check ran.
     /// </summary>
-    private static async Task<ScryfallPage<ScryfallCardView>> FormatPageAsync(
+    private static async Task<ScryfallFormattedCards> PageCardsAsync(
         ScryfallCardFormatter formatter,
-        ScryfallPage<ScryfallCard> page,
+        IReadOnlyList<ScryfallCard?> pageCards,
         Guid? generationId,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<ScryfallCardView?> views = await formatter.FormatAsync(
-            [.. page.Items],
-            generationId,
-            cancellationToken).ConfigureAwait(false);
+        return formatter.CountedPage ?? await formatter.FormatAsync(pageCards, generationId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds a page of card views with the counts and cursor of the page the cards came from.
+    /// </summary>
+    private static ScryfallPage<ScryfallCardView> ToPage(
+        ScryfallFormattedCards formatted,
+        ScryfallPage<ScryfallCard> source)
+    {
         List<ScryfallCardView> items = [];
-        foreach (ScryfallCardView? view in views)
+        foreach (ScryfallCardView? view in formatted.Views)
         {
             items.Add(view!.Value);
         }
 
-        return new ScryfallPage<ScryfallCardView>(items, page.TotalCount, page.NextCursor);
-    }
-
-    /// <summary>
-    /// Lists the limit notes for a response, or null when none apply.
-    /// </summary>
-    private static IReadOnlyList<string>? Limits(ScryfallCardFormatter formatter)
-    {
-        return formatter.NotInstalledNote is { } note ? [note] : null;
+        return new ScryfallPage<ScryfallCardView>(items, source.TotalCount, source.NextCursor);
     }
 }
