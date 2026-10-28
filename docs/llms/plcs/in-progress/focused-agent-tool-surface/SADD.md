@@ -1033,6 +1033,54 @@ phase 6 evidence row of the README.
 - **Description label.** `stats_simulate` starts with `Seeded sampling:` and
   not `Exact math:`, so an estimate is not labeled as exact math (NAME-002).
 
+### As Built (phase 6 defect fixes)
+
+- **FIX-001, protocol.** The server no longer pins `ProtocolVersion`. This
+  supersedes the `latest-mcp-and-toolchain` decision (SADD lines 62 to 85 and
+  145), recorded in the rewrite registry. `FoundationProtocolPolicy` still
+  removes `logging` and `listChanged` from the `initialize` result.
+- **FIX-002, category names.** `deck_categories.name` is `BINARY`, not
+  `NOCASE`, through schema migration 2 (a table rebuild with foreign keys off;
+  an existing database gets a pre-migration copy first; the migration checksum
+  of every applied version is validated). Archidekt mapping looks a category up
+  by exact name first and then by a unique case-insensitive match
+  (`CategoryNames`). Known limit: category membership and primary-category
+  equality in the push verification stay case-insensitive, because the provider
+  may recase names on read, so moving a card between two categories that differ
+  only by case is not seen as a change by that comparison. `MapFailure` names
+  the violated constraint (`DescribeConstraint`).
+- **FIX-003, push.** `ArchidektSyncPlanner.FindZoneContradictions` runs on the
+  plan: an `entry-add` or an `entry-update` that changes zone or primary
+  category, with a `main` or `commander` zone and a primary category whose
+  `includedInDeck` is false, is refused. The opposite case (a sideboard zone
+  under an included category) is not refused, because a pulled deck can hold it.
+  After `verification-mismatch` the baseline is written as for `applied`;
+  `LinkByCardIdentity` links a created row that came back different when it is
+  the only unlinked row with that card. Remote fingerprints are recomputed with
+  the current rules before comparing (`Recompute`), so a baseline from an
+  earlier version still matches an unchanged deck; entry `sortOrder` is left
+  out of the content fingerprint and of the difference rows. The
+  `discardLocalChanges` option is in the preview fingerprint and the operation
+  text, requires `localDeckId` (`discard-needs-local-deck`), and leaves the
+  default behavior unchanged. A push that stops as `partial` records nothing.
+- **FIX-004, local fingerprint.** `FingerprintLocalContent` sorts entries,
+  categories, and assignments by ID for both the stored deck and the creation
+  draft. A deck pulled by an earlier version keeps a baseline made with the old
+  order; `discardLocalChanges` is its way out.
+- **FIX-005, converged.** A difference whose local and remote values are equal
+  has state `converged`; it counts as a represented change on both sides but is
+  neither a local nor a remote change for conflict purposes.
+- **FIX-006, IDs.** `ArchidektContract.StableGuid(scope, localDeckId, id)`
+  derives local entry and category IDs per local deck; the preview fingerprint
+  does not contain them, so preview and apply agree. Baselines also keep the old
+  provider-only IDs as extra links, so decks made earlier still link.
+- **FIX-007, whole numbers.** `WholeNumberConverters` (int and long, and so
+  their nullable forms) are the first converters of the tool serializer
+  options. They read `328.0` and `3.28e2`, refuse a fractional part, a range
+  overflow, a string, or another token with a message that states the rule, and
+  the serializer adds the JSON path. A test walks every tool input type and
+  fails if an integer type other than `int` or `long` appears.
+
 ### On-Curve Migration
 
 `deck_on_curve_estimate` becomes the preset `on-curve`. The preset turns
