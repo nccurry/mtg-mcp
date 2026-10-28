@@ -1,11 +1,10 @@
 using System.ComponentModel;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
-using MtgMcp.Decks;
+using MtgMcp.Scryfall;
 using MtgMcp.Spellbook;
 
 namespace MtgMcp.App.Spellbook;
@@ -39,6 +38,27 @@ internal sealed record SpellbookBracketFactsResult(
     [JsonPropertyName("unflaggedCardsOmitted")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? UnflaggedCardsOmitted { get; init; }
+
+    /// <summary>
+    /// Gets how many combos the result leaves out to stay under the size limit, or null when it lists every combo.
+    /// </summary>
+    [JsonPropertyName("combosOmitted")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CombosOmitted { get; init; }
+
+    /// <summary>
+    /// Gets true when cards or combos were left out to stay under the size limit.
+    /// </summary>
+    [JsonPropertyName("truncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Truncated { get; init; }
+
+    /// <summary>
+    /// Gets what to change to see what was left out, or null when nothing was.
+    /// </summary>
+    [JsonPropertyName("narrow")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Narrow { get; init; }
 }
 
 /// <summary>
@@ -52,26 +72,17 @@ internal sealed class SpellbookBracketTools
     private readonly SpellbookDeckInputResolver resolver;
 
     /// <summary>
-    /// Reads the deck again to find the entries that hold each card.
-    /// </summary>
-    private readonly SqliteDeckStore store;
-
-    /// <summary>
     /// Sends the request to Commander Spellbook.
     /// </summary>
     private readonly SpellbookService service;
 
     /// <summary>
-    /// Creates the tool around the resolver, the deck store, and the service.
+    /// Creates the tool around the resolver and the service.
     /// </summary>
-    internal SpellbookBracketTools(
-        SpellbookService service,
-        SpellbookDeckInputResolver resolver,
-        SqliteDeckStore store)
+    internal SpellbookBracketTools(SpellbookService service, SpellbookDeckInputResolver resolver)
     {
         this.service = service ?? throw new ArgumentNullException(nameof(service));
         this.resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
-        this.store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
     /// <summary>
@@ -90,7 +101,8 @@ internal sealed class SpellbookBracketTools
         "Spellbook and returns facts only: per card, whether it is a Game Changer, mass land denial, an extra-turn " +
         "card, or banned, with the deck entry IDs; and per combo found, its cards, whether it is definitely or " +
         "arguably a two-card combo, its speed, and the mana it needs. It never states a bracket or a verdict; the " +
-        "provider's bracket label is removed. Use card_list_query with the tags field to count tutors." +
+        "provider's bracket label is removed. When the scryfall toolset is on, use card_list_query with the tags " +
+        "field to count tutors." +
         UntrustedTextNotes.Spellbook +
         " Example: {\"deckId\":\"0193e97a-ef95-7700-8000-000000000001\",\"expectedRevision\":7}.")]
     internal async Task<OperationResult<SpellbookBracketFactsResult>> GetFactsAsync(
@@ -98,50 +110,39 @@ internal sealed class SpellbookBracketTools
         [Description("Exact local deck revision to read before the source request.")] long expectedRevision,
         CancellationToken cancellationToken = default)
     {
-        OperationResult<SpellbookDeckComboSelection> selection = await resolver.ResolveAsync(
+        OperationResult<SpellbookResolvedDeck> resolved = await resolver.ResolveWithDeckAsync(
             deckId,
             expectedRevision,
             cancellationToken).ConfigureAwait(false);
-        if (selection is not OperationSuccess<SpellbookDeckComboSelection> chosen)
+        if (resolved is not OperationSuccess<SpellbookResolvedDeck> chosen)
         {
-            return OperationFailure.Forward<SpellbookDeckComboSelection, SpellbookBracketFactsResult>(selection);
-        }
-
-        OperationResult<DeckDocument> loaded = await store.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
-        if (loaded is not OperationSuccess<DeckDocument> deck)
-        {
-            return OperationFailure.Forward<DeckDocument, SpellbookBracketFactsResult>(loaded);
-        }
-
-        if (deck.Data.Revision != expectedRevision)
-        {
-            return new OperationConflict(
-                "deck-revision-conflict",
-                "The local deck revision changed; load it again before reading bracket facts.",
-                new ConflictState(Revision: deck.Data.Revision));
+            return OperationFailure.Forward<SpellbookResolvedDeck, SpellbookBracketFactsResult>(resolved);
         }
 
         OperationResult<SpellbookBracketFacts> facts = await service.EstimateBracketFactsAsync(
-            chosen.Data.Request,
+            chosen.Data.Selection.Request,
             cancellationToken).ConfigureAwait(false);
         if (facts is not OperationSuccess<SpellbookBracketFacts> success)
         {
             return OperationFailure.Forward<SpellbookBracketFacts, SpellbookBracketFactsResult>(facts);
         }
 
-        return new OperationSuccess<SpellbookBracketFactsResult>(Present(chosen.Data.Evidence, success.Data,
-            deck.Data));
+        return new OperationSuccess<SpellbookBracketFactsResult>(Present(
+            chosen.Data.Selection.Evidence,
+            success.Data,
+            chosen.Data.Deck));
     }
 
     /// <summary>
-    /// Builds the result: each card with the entries that hold it, cut to the size limit by leaving out cards with no
-    /// flag.
+    /// Builds the result: each card with the entries that hold it, cut to the size limit. Cards with no flag go first,
+    /// then combos from the end of the list, and the size is measured again after each cut.
     /// </summary>
     private static SpellbookBracketFactsResult Present(
         SpellbookDeckSelectionEvidence evidence,
         SpellbookBracketFacts facts,
         DeckDocument deck)
     {
+        List<DeckEntry> sent = [.. deck.Entries.Where(entry => entry.Zone is "commander" or "main")];
         List<SpellbookBracketCardView> cards =
         [
             .. facts.Cards.Select(card => new SpellbookBracketCardView(
@@ -152,14 +153,11 @@ internal sealed class SpellbookBracketTools
                 card.MassLandDenial,
                 card.ExtraTurn,
                 card.Banned,
-                [.. deck.Entries
-                    .Where(entry => entry.Zone is "commander" or "main" &&
-                        string.Equals(entry.CardName, card.Name, StringComparison.OrdinalIgnoreCase))
-                    .Select(entry => entry.EntryId)])),
+                [.. sent.Where(entry => HoldsCard(entry, card)).Select(entry => entry.EntryId)])),
         ];
         SpellbookBracketFactsResult full = new(evidence, facts.Evidence, cards, facts.Combos);
-        int bytes = JsonSerializer.SerializeToUtf8Bytes(full, ToolCallPolicy.SerializerOptions).Length;
-        if (bytes <= ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes)
+        int limit = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes;
+        if (ResultSize.Measure(full) <= limit)
         {
             return full;
         }
@@ -168,6 +166,50 @@ internal sealed class SpellbookBracketTools
         [
             .. cards.Where(card => card.GameChanger || card.MassLandDenial || card.ExtraTurn || card.Banned),
         ];
-        return full with { Cards = flagged, UnflaggedCardsOmitted = cards.Count - flagged.Count };
+        SpellbookBracketFactsResult trimmed = full with
+        {
+            Cards = flagged,
+            UnflaggedCardsOmitted = cards.Count - flagged.Count,
+            Truncated = true,
+            Narrow = "Cards with no flag were left out to stay under the size limit.",
+        };
+        if (ResultSize.Measure(trimmed) <= limit)
+        {
+            return trimmed;
+        }
+
+        int fixedBytes = ResultSize.Measure(trimmed with { Combos = [] });
+        List<int> sizes = [.. facts.Combos.Select(combo => ResultSize.Measure(combo) + 1)];
+        int keep = ResultSizeLimit.CountFitting(sizes, fixedBytes);
+        return trimmed with
+        {
+            Combos = [.. facts.Combos.Take(keep)],
+            CombosOmitted = facts.Combos.Count - keep,
+            Narrow = "Cards with no flag and some combos were left out to stay under the size limit.",
+        };
+    }
+
+    /// <summary>
+    /// Reports whether a local entry holds the card Commander Spellbook classified: by Oracle ID when both sides have
+    /// one, otherwise by name with the front face of a two-faced card matching either spelling.
+    /// </summary>
+    private static bool HoldsCard(DeckEntry entry, SpellbookBracketCard card)
+    {
+        if (entry.OracleId is Guid held && card.OracleId is Guid classified)
+        {
+            return held == classified;
+        }
+
+        return FrontFace(entry.CardName) == FrontFace(card.Name);
+    }
+
+    /// <summary>
+    /// Normalizes a card name and keeps only the front face of a two-faced name.
+    /// </summary>
+    private static string FrontFace(string name)
+    {
+        string normalized = ScryfallCardSets.NormalizeName(name);
+        int slashes = normalized.IndexOf(" // ", StringComparison.Ordinal);
+        return slashes < 0 ? normalized : normalized[..slashes];
     }
 }

@@ -1,8 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
 using ModelContextProtocol.Server;
-using MtgMcp.App.CardLists;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
@@ -17,6 +15,11 @@ namespace MtgMcp.App.Decks;
 /// </summary>
 internal sealed class DeckDuplicatesCoordinator
 {
+    /// <summary>
+    /// Gives the most unmatched entries one result lists.
+    /// </summary>
+    private const int MaximumUnmatchedListed = 50;
+
     /// <summary>
     /// Names the exemption that skips basic lands and applies each card's own copy limit.
     /// </summary>
@@ -95,7 +98,7 @@ internal sealed class DeckDuplicatesCoordinator
         {
             OperationResult<ScryfallInstalledListCards> cardRead = await ScryfallToolExecution.RunAsync(() =>
                 scryfall.ReadInstalledListCardsAsync(
-                    [.. deck.Entries.Select(entry => CardListResolver.LookupFor(
+                    [.. deck.Entries.Select(entry => ScryfallEntryLookup.For(
                         entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId))],
                     includeRaw: false,
                     includeFacts: false,
@@ -200,7 +203,7 @@ internal sealed class DeckDuplicatesCoordinator
         {
             ScryfallMatchBy.Oracle => card is not null
                 ? (ScryfallCardSets.KeyOf(card, ScryfallMatchBy.Oracle), null)
-                : (null, CardListResolver.LookupFor(entry.PrintingId, entry.SetCode, entry.CollectorNumber,
+                : (null, ScryfallEntryLookup.For(entry.PrintingId, entry.SetCode, entry.CollectorNumber,
                     entry.OracleId) is null
                     ? "no-scryfall-identity"
                     : "not-in-card-data"),
@@ -239,17 +242,25 @@ internal sealed class DeckDuplicatesCoordinator
         List<int> sizes = [];
         foreach (DuplicateGroup group in preview.Duplicates)
         {
-            int size = Measure(group) + 1;
+            int size = ResultSize.Measure(group) + 1;
             size += preview.Changes
                 .Where(change => EditsEntry(change, group))
-                .Sum(change => Measure(change) + 1);
+                .Sum(change => ResultSize.Measure(change) + 1);
             sizes.Add(size);
         }
 
-        sizes.AddRange(preview.Ambiguous.Select(group => Measure(group) + 1));
-        int unmatchedBytes = preview.Unmatched.Sum(entry => Measure(entry) + 1);
+        sizes.AddRange(preview.Ambiguous.Select(group => ResultSize.Measure(group) + 1));
+        List<DuplicateUnmatched> unmatched = [.. preview.Unmatched.Take(MaximumUnmatchedListed)];
+        int unmatchedBytes = unmatched.Sum(entry => ResultSize.Measure(entry) + 1);
         int keep = ResultSizeLimit.CountFitting(sizes, unmatchedBytes);
-        DeckDuplicatesPreview result = preview with { Limits = limits.Count == 0 ? null : limits };
+        DeckDuplicatesPreview result = preview with
+        {
+            Unmatched = unmatched,
+            UnmatchedOmitted = preview.Unmatched.Count > unmatched.Count
+                ? preview.Unmatched.Count - unmatched.Count
+                : null,
+            Limits = limits.Count == 0 ? null : limits,
+        };
         if (keep >= groups.Count)
         {
             return result;
@@ -289,14 +300,6 @@ internal sealed class DeckDuplicatesCoordinator
             UpdateDeckEntryInput update => update.Entry.EntryId,
             _ => Guid.Empty,
         };
-    }
-
-    /// <summary>
-    /// Measures the serialized size of a value as the server writes it.
-    /// </summary>
-    private static int Measure(object value)
-    {
-        return JsonSerializer.SerializeToUtf8Bytes(value, value.GetType(), ToolCallPolicy.SerializerOptions).Length;
     }
 }
 
@@ -341,7 +344,7 @@ internal sealed class DeckDuplicatesReadTools
         "Local deck store: finds cards that have more than one copy across all zones and categories of a deck and " +
         "plans the edits that keep one copy of each, writing nothing. You choose which copy to keep with " +
         "keepPriority, a list of {zone} or {category} groups, best first; the best-ranked entry is kept and the " +
-        "others get remove-entry, or update-entry when the kept entry has a quantity above the allowed number. " +
+        "others get remove-entry, or update-entry when the kept entry holds more copies than the card's text allows. " +
         "When entries tie for the best rank the card is listed in ambiguous with no change; add a more specific " +
         "group and ask again. matchBy oracle (default) needs installed card data, name and printing do not. " +
         "exempt commander-singleton-exceptions skips basic lands and keeps up to N copies of cards whose text allows " +

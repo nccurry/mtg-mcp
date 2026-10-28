@@ -324,6 +324,11 @@ internal sealed class CardDataFixture : IDisposable
                 return Task.FromResult(Json(searchJson));
             }
 
+            if (path == "/cards/autocomplete")
+            {
+                return Task.FromResult(Json("{\"object\":\"catalog\",\"data\":[\"Alpha\"]}"));
+            }
+
             if (path.StartsWith("/download/", StringComparison.Ordinal))
             {
                 string type = Path.GetFileName(path).Replace(".jsonl.gz", string.Empty, StringComparison.Ordinal);

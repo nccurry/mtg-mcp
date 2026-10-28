@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MtgMcp.App.CardLists;
@@ -507,17 +508,41 @@ public sealed class CardListCompareTests
     }
 
     /// <summary>
-    /// Verifies a saved request that holds no cards is refused with a message that points to scryfall_search.
+    /// Verifies a saved request that holds no cards (an autocomplete) is refused with a message that points to
+    /// scryfall_search, naming the snapshot ID as the bad input.
     /// </summary>
     [Fact]
     public async Task Compare_SnapshotThatIsNotASearch_IsInvalid()
     {
         using CardListWorld world = await CardListWorld.CreateAsync();
         CardsSourceInput one = new([CardJson.PrintingOf(world.Alpha)]);
-        OperationResult<ScryfallSearchResponse> autocomplete = await world.Data.Scryfall.SearchAsync(
+        OperationResult<ScryfallAutocompleteResult> autocomplete = await world.Data.Scryfall.AutocompleteAsync(
+            "alp",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Guid notASearch = Success(autocomplete).Snapshot.SnapshotId;
+
+        OperationInvalidInput invalid = Failure(await Compare(
+            world,
+            new ScryfallSnapshotSourceInput(notASearch),
+            one,
+            "union"));
+
+        Assert.Equal(("snapshot-has-no-cards", "snapshotId"), (invalid.ReasonCode, invalid.Path));
+        Assert.Contains("scryfall_search", invalid.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a saved search is read card by card, and the full format returns its raw objects.
+    /// </summary>
+    [Fact]
+    public async Task Compare_SearchSnapshot_ReadsItsCardsInEveryResponseFormat()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        CardsSourceInput one = new([CardJson.PrintingOf(world.Alpha)]);
+        OperationResult<ScryfallSearchResponse> search = await world.Data.Scryfall.SearchAsync(
             "fixture",
             cancellationToken: TestContext.Current.CancellationToken);
-        Guid searchSnapshot = Success(autocomplete).Snapshot.SnapshotId;
+        Guid searchSnapshot = Success(search).Snapshot.SnapshotId;
 
         CardListsCompareResult ok = Success(await Compare(world, new ScryfallSnapshotSourceInput(searchSnapshot),
             one, "union"));
@@ -533,6 +558,81 @@ public sealed class CardListCompareTests
             null,
             25,
             TestContext.Current.CancellationToken)).ResponseFormat);
+    }
+
+    /// <summary>
+    /// Verifies a snapshot larger than the cards the request may still read is refused before any card is read, with
+    /// the snapshot ID as the bad input.
+    /// </summary>
+    [Fact]
+    public async Task ReadSnapshotCards_MoreCardsThanTheLimit_IsRefusedWithTheSnapshotId()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        OperationResult<ScryfallSearchResponse> search = await world.Data.Scryfall.SearchAsync(
+            "fixture",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Guid snapshot = Success(search).Snapshot.SnapshotId;
+
+        OperationInvalidInput invalid = Failure(await world.Data.Scryfall.ReadSnapshotCardsAsync(
+            snapshot,
+            includeRaw: false,
+            includeFacts: false,
+            maximumCards: 2,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(("list-too-large", "snapshotId"), (invalid.ReasonCode, invalid.Path));
+    }
+
+    /// <summary>
+    /// Verifies the match mode reaches the set operation: two printings of one card are the same card by oracle and
+    /// by name, but two different cards by printing.
+    /// </summary>
+    [Fact]
+    public async Task Compare_MatchModes_TreatPrintingsOfOneCardAsTheSameOrDifferent()
+    {
+        JsonObject first = CardJson.Make("Twin", oracleText: "One.");
+        JsonObject second = CardJson.Make("Twin", oracleText: "One.");
+        second["oracle_id"] = first["oracle_id"]!.DeepClone();
+        second["collector_number"] = "900";
+        using CardDataFixture data = await CardDataFixture.CreateAsync([first, second]);
+        CardListCoordinator coordinator = data.Coordinator(data.Access());
+        CardsSourceInput left = new([CardJson.PrintingOf(first)]);
+        CardsSourceInput right = new([CardJson.PrintingOf(second)]);
+
+        Task<OperationResult<CardListsCompareResult>> Run(string matchBy)
+        {
+            return coordinator.CompareAsync(
+                left, right, "intersection", matchBy, "concise", null, null, 25, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Single(Success(await Run("oracle")).Page.Items);
+        Assert.Single(Success(await Run("name")).Page.Items);
+        Assert.Empty(Success(await Run("printing")).Page.Items);
+    }
+
+    /// <summary>
+    /// Verifies an Archidekt service that is down, and an Archidekt snapshot that is not found, are returned as
+    /// their own failure kinds.
+    /// </summary>
+    [Fact]
+    public async Task Compare_ArchidektSourceMissingOrDown_ForwardsTheProviderFailure()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        CardsSourceInput one = new([CardJson.PrintingOf(world.Alpha)]);
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            world.Archidekt.Add(HttpMethod.Get, "api/decks/42/", "{}", HttpStatusCode.ServiceUnavailable);
+        }
+
+        world.Archidekt.Add(HttpMethod.Get, "api/decks/snapshots/77/", "{}", HttpStatusCode.NotFound);
+
+        OperationResult<CardListsCompareResult> missingDeck = await Compare(
+            world, new ArchidektDeckSourceInput("42"), one, "union");
+        OperationResult<CardListsCompareResult> missingSnapshot = await Compare(
+            world, new ArchidektSnapshotSourceInput("42", "77"), one, "union");
+
+        Assert.IsType<OperationUnavailable>(missingDeck.Value);
+        Assert.IsType<OperationNotFound>(missingSnapshot.Value);
     }
 
     /// <summary>

@@ -17,7 +17,9 @@ internal static class PlaygroupToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Playgroup,
         CapabilityToolsetStability.Stable,
-        "Provider-shaped evidence from every documented Playgroup Public API 1.0.0 operation. Deck updates are explicitly unsupported; this toolset turns on only when a Playgroup key is present.",
+        "Provider-shaped evidence from every documented Playgroup Public API 1.0.0 operation, plus one derived " +
+        "game statistics read. Deck updates are explicitly unsupported; this toolset turns on only when a " +
+        "Playgroup key is present.",
         [
             "playgroup_auth_status",
             "playgroup_commander_get",

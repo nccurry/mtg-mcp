@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace MtgMcp.Scryfall;
 
@@ -65,7 +64,7 @@ internal sealed record ScryfallListField(
 /// <summary>
 /// Holds the one table of list fields and the readers for mana costs and produced mana.
 /// </summary>
-internal static partial class ScryfallListFields
+internal static class ScryfallListFields
 {
     /// <summary>
     /// Lists the card supertypes, which come before the card types on a type line.
@@ -148,8 +147,9 @@ internal static partial class ScryfallListFields
     internal static IReadOnlyList<string> Names { get; } = [.. All.Select(field => field.Name)];
 
     /// <summary>
-    /// Counts the colored mana symbols of a mana cost by color, with hybrid and Phyrexian symbols counted as the
-    /// SADD states. Generic, variable, snow, and empty symbols are not pips.
+    /// Counts the colored mana symbols of a mana cost by color, with a hybrid symbol counted once for each of its
+    /// colors and also as hybrid, and a Phyrexian symbol counted for its color and also as Phyrexian. Generic,
+    /// variable, snow, and empty symbols are not pips.
     /// </summary>
     internal static ManaPips CountPips(string? manaCost)
     {
@@ -159,11 +159,14 @@ internal static partial class ScryfallListFields
             return pips;
         }
 
-        foreach (Match symbol in SymbolPattern().Matches(manaCost))
+        foreach (string symbol in ScryfallCardFaces.ManaSymbols(manaCost))
         {
-            string[] parts = symbol.Groups[1].Value.Split('/');
+            string[] parts = symbol.Split('/');
             bool phyrexian = parts.Contains("P", StringComparer.Ordinal);
-            string[] colors = [.. parts.Where(part => ManaColors.Contains(part, StringComparer.Ordinal)).Distinct()];
+            string[] colors =
+            [
+                .. parts.Where(part => ScryfallCardFaces.ManaColors.Contains(part, StringComparer.Ordinal)).Distinct(),
+            ];
             if (colors.Length == 0 && !phyrexian)
             {
                 continue;
@@ -203,17 +206,6 @@ internal static partial class ScryfallListFields
     {
         return card.ProducedMana.Value is ScryfallProducedManaValues values ? values.Colors : [];
     }
-
-    /// <summary>
-    /// Lists the five colors and colorless that count as mana colors, in display order.
-    /// </summary>
-    internal static IReadOnlyList<string> ManaColors { get; } = ["W", "U", "B", "R", "G", "C"];
-
-    /// <summary>
-    /// Matches one mana symbol inside braces.
-    /// </summary>
-    [GeneratedRegex(@"\{([^}]+)\}", RegexOptions.CultureInvariant)]
-    private static partial Regex SymbolPattern();
 
     /// <summary>
     /// Builds the table of reused concise field readers.
@@ -348,7 +340,7 @@ internal static partial class ScryfallListFields
     private static List<string> TypeWords(ScryfallCard card, bool wantTypes)
     {
         List<string> words = [];
-        foreach (string typeLine in TypeLines(card))
+        foreach (string typeLine in ScryfallCardFaces.TypeLines(card))
         {
             string head = typeLine.Split('—')[0];
             foreach (string word in head.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -369,7 +361,7 @@ internal static partial class ScryfallListFields
     private static List<string> Subtypes(ScryfallCard card)
     {
         List<string> words = [];
-        foreach (string typeLine in TypeLines(card))
+        foreach (string typeLine in ScryfallCardFaces.TypeLines(card))
         {
             string[] halves = typeLine.Split('—');
             if (halves.Length < 2)
@@ -389,30 +381,6 @@ internal static partial class ScryfallListFields
         return words;
     }
 
-    /// <summary>
-    /// Lists the type line of each face, or the card's own type line when it has no faces.
-    /// </summary>
-    private static List<string> TypeLines(ScryfallCard card)
-    {
-        List<string> lines = [];
-        if (card.Faces.Count > 0)
-        {
-            foreach (ScryfallCardFace face in card.Faces)
-            {
-                if (!string.IsNullOrEmpty(face.TypeLine))
-                {
-                    lines.Add(face.TypeLine);
-                }
-            }
-        }
-
-        if (lines.Count == 0 && !string.IsNullOrEmpty(card.TypeLine))
-        {
-            lines.AddRange(card.TypeLine.Split(" // ", StringSplitOptions.RemoveEmptyEntries));
-        }
-
-        return lines;
-    }
 }
 
 /// <summary>
@@ -456,7 +424,7 @@ internal sealed class ManaPips
     /// </summary>
     internal void AddScaled(ManaPips other, int copies)
     {
-        foreach (string color in ScryfallListFields.ManaColors)
+        foreach (string color in ScryfallCardFaces.ManaColors)
         {
             Add(color, other.Get(color) * copies);
         }

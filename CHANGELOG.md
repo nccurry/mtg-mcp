@@ -158,9 +158,13 @@ Old-to-new tool names:
 ### Card list tools and Commander rule facts
 
 - Added `card_lists_compare` and `card_list_query` (Scryfall toolset). They
-  compare, filter, group, and total card lists from a Scryfall set, a name
-  list, a local deck, a deck backup, an Archidekt deck or snapshot, or another
-  comparison. Archidekt sources need Archidekt credentials.
+  compare, filter, group, and total card lists. A list is a saved
+  `scryfall_search` (`scryfall-snapshot`), up to 150 Scryfall or Oracle IDs
+  (`cards`), a local deck (`deck`), a deck as it was in a local backup
+  (`deck-backup`), an Archidekt deck or snapshot (`archidekt-deck`,
+  `archidekt-snapshot`), or another comparison (`compare`). Comparing applies
+  one operation: union, intersection, difference, or symmetric difference.
+  Archidekt sources need Archidekt credentials.
 - Added the optional `rules` input to `local_deck_validate`. With
   `rules: "commander"` it reports deck size, commander eligibility, color
   identity, copy limits, format legality, Game Changers, commander pairing,
@@ -180,7 +184,7 @@ Old-to-new tool names:
   only, 69, 58, and 44. Without credentials, 48 in `remote` and `local` mode
   and 35 in `read-only` mode.
 - Logged a warning when the SDK matches a tool the server's catalog does not
-  hold, and made every union kind property carry a generated description.
+  hold, and made every `kind` choice of an input that accepts several shapes carry a generated description.
 
 ### Earlier changes in this release
 

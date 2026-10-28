@@ -42,10 +42,14 @@ internal static class ServerInstructions
         ("Build or edit a local deck", ["local_deck_create", "local_deck_apply_changes"]),
         ("Exact math on draws and decks", ["stats_hypergeometric", "stats_turn_table"]),
         ("Summarize a local deck", ["stats_local_deck_summary"]),
+        ("Analyze a card list", ["card_list_query", "card_lists_compare", "stats_castability"]),
+        ("Commander rule facts (rules \"commander\")", ["local_deck_validate"]),
+        ("Find duplicate cards in a local deck", ["local_deck_duplicates_preview"]),
         ("Install card data that tags and card views need", ["scryfall_card_data_status", "scryfall_card_data_sync"]),
         ("Sync a local deck with Archidekt", ["archidekt_pull_preview", "archidekt_push_preview"]),
         ("Read Playgroup games and playgroups", ["playgroup_user_playgroups_list", "playgroup_playgroup_games_list"]),
-        ("Find combos in a local deck", ["spellbook_deck_combos_find"]),
+        ("Total Playgroup games by deck or player", ["playgroup_games_stats_get"]),
+        ("Combos and bracket facts", ["spellbook_deck_combos_find", "spellbook_deck_bracket_facts_get"]),
     ];
 
     /// <summary>

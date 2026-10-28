@@ -41,7 +41,8 @@ internal static class StatisticsToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Stats,
         CapabilityToolsetStability.Stable,
-        "Provider-independent exact mathematics over caller-supplied groups and explicitly selected deck populations.",
+        "Exact mathematics over caller-supplied groups and explicitly selected deck populations; castability " +
+        "also reads installed Scryfall card data.",
         [
             "stats_castability",
             "stats_local_deck_summary",
@@ -63,14 +64,12 @@ internal static class StatisticsToolsetManifest
         IMcpServerBuilder builder,
         SqliteDeckStore deckStore,
         ExactStatisticsCalculator calculator,
-        ScryfallService scryfallService,
-        CardListAccess access)
+        ScryfallService scryfallService)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(deckStore);
         ArgumentNullException.ThrowIfNull(calculator);
         ArgumentNullException.ThrowIfNull(scryfallService);
-        ArgumentNullException.ThrowIfNull(access);
         StatisticsReadTools target = new(new StatisticsDeckResolver(deckStore), calculator);
         builder.WithRegisteredTools(
         [
@@ -85,8 +84,9 @@ internal static class StatisticsToolsetManifest
         ]);
         builder.WithRegisteredTools(ToolRegistration.Create(
             new StatisticsCastabilityTools(new StatisticsCastabilityCoordinator(
-                new CardListResolver(scryfallService, access),
-                scryfallService,
+                new CardListResolver(
+                    scryfallService,
+                    new CardListAccess(deckStore, null)),
                 calculator))));
     }
 

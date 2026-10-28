@@ -180,7 +180,7 @@ public sealed class DeckDuplicatesTests
         DeckDuplicatesPreview reported = Success(await world.Preview(deck, ["main"], exempt: "none"));
 
         Assert.Empty(exempted.Duplicates);
-        Assert.Equal(["Forest"], reported.Duplicates.Select(group => group.Card.Name).Where(name => name == "Forest"));
+        Assert.Equal(["Forest"], reported.Duplicates.Select(group => group.Card.Name));
         Assert.Equal("Relentless Rats", Assert.Single(reported.Ambiguous).Card.Name);
     }
 
@@ -193,8 +193,11 @@ public sealed class DeckDuplicatesTests
     {
         using World world = await World.CreateAsync();
         using World noData = await World.CreateAsync(install: false);
-        List<DeckEntryDraft> drafts = [.. Enumerable.Range(0, 7).Select(_ => Draft(Dwarves)), Draft(Dwarves,
-            zone: "maybe")];
+        List<DeckEntryDraft> drafts =
+        [
+            .. Enumerable.Range(0, 7).Select(_ => Draft(Dwarves)),
+            Draft(Dwarves, zone: "maybe"),
+        ];
         DeckDocument deck = await world.CreateDeckAsync(drafts);
         DeckDocument bare = await noData.CreateDeckAsync(drafts);
 
@@ -335,6 +338,27 @@ public sealed class DeckDuplicatesTests
     }
 
     /// <summary>
+    /// Verifies a deck with very many entries that have no Scryfall card lists only the first unmatched entries and
+    /// says how many it left out, so the list cannot push the result over the size limit.
+    /// </summary>
+    [Fact]
+    public async Task Preview_VeryManyUnmatchedEntries_AreCappedWithAnOmittedCount()
+    {
+        using World world = await World.CreateAsync();
+        List<DeckEntryDraft> drafts =
+        [
+            .. Enumerable.Range(0, 120).Select(index => new DeckEntryDraft(1, $"No identity {index:D3}", Zone: "main")),
+        ];
+        DeckDocument deck = await world.CreateDeckAsync(drafts);
+
+        DeckDuplicatesPreview preview = Success(await world.Preview(deck, ["main"]));
+
+        Assert.Equal(50, preview.Unmatched.Count);
+        Assert.Equal(70, preview.UnmatchedOmitted);
+        Assert.Empty(preview.Duplicates);
+    }
+
+    /// <summary>
     /// Verifies the plan applied with local_deck_apply_changes leaves a push preview that holds only the planned
     /// removal, with no category order updates (case D07 and ARCH-001).
     /// </summary>
@@ -386,10 +410,20 @@ public sealed class DeckDuplicatesTests
             ArchidektSyncPreview push = Success(await archidekt.PreviewPushAsync(localId,
                 TestContext.Current.CancellationToken));
 
-            Assert.Single(preview.Changes);
-            Assert.All(push.Operations, operation => Assert.Contains("remove", operation.Kind,
-                StringComparison.Ordinal));
-            Assert.Single(push.Operations);
+            Guid maybeboard = local.Categories.Single(category => category.Name == "Maybeboard").CategoryId;
+            Guid maybeboardEntry = local.CategoryAssignments.Single(item => item.CategoryId == maybeboard).EntryId;
+            RemoveDeckEntryInput removed = Assert.IsType<RemoveDeckEntryInput>(Assert.Single(preview.Changes));
+            Assert.Equal(maybeboardEntry, removed.EntryId);
+            ArchidektRemoteOperation removal = Assert.Single(push.Operations);
+            Assert.Contains("remove", removal.Kind, StringComparison.Ordinal);
+            Assert.Contains("Swords to Plowshares", removal.Subject, StringComparison.Ordinal);
+            DeckDocument after = Success(await store.GetAsync(localId, TestContext.Current.CancellationToken));
+            DeckEntry kept = Assert.Single(after.Entries);
+            Guid removalCategory = after.Categories.Single(category => category.Name == "Removal").CategoryId;
+            Assert.NotEqual(maybeboardEntry, kept.EntryId);
+            Assert.Contains(
+                after.CategoryAssignments,
+                item => item.EntryId == kept.EntryId && item.CategoryId == removalCategory);
         }
         finally
         {

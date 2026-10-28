@@ -26,83 +26,14 @@ internal static partial class CommanderCardText
         ["Character select", "Father & son", "Friends forever", "Survivors"];
 
     /// <summary>
-    /// Gives the type line of the face a commander is designated from: the front face of a card with faces.
-    /// </summary>
-    internal static string FrontTypeLine(ScryfallCard card)
-    {
-        return card.Faces.Count > 0 ? card.Faces[0].TypeLine ?? string.Empty : card.TypeLine ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Gives the oracle text of the front face of a card.
-    /// </summary>
-    internal static string FrontText(ScryfallCard card)
-    {
-        return card.Faces.Count > 0 ? card.Faces[0].OracleText ?? string.Empty : card.OracleText ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Gives the oracle text of every face, joined with line breaks.
-    /// </summary>
-    internal static string AllText(ScryfallCard card)
-    {
-        if (card.Faces.Count == 0)
-        {
-            return card.OracleText ?? string.Empty;
-        }
-
-        return string.Join('\n', card.Faces.Select(face => face.OracleText ?? string.Empty));
-    }
-
-    /// <summary>
-    /// Gives the name of the front face of a card.
-    /// </summary>
-    internal static string FrontName(ScryfallCard card)
-    {
-        return card.Faces.Count > 0 ? card.Faces[0].Name : card.Name;
-    }
-
-    /// <summary>
-    /// Reports whether the front face is legendary.
-    /// </summary>
-    internal static bool IsLegendary(ScryfallCard card)
-    {
-        return Words(FrontTypeLine(card), beforeDash: true).Contains("Legendary", StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// Lists the card types and supertypes on the front face, before the dash.
-    /// </summary>
-    internal static IReadOnlyList<string> FrontTypes(ScryfallCard card)
-    {
-        return Words(FrontTypeLine(card), beforeDash: true);
-    }
-
-    /// <summary>
-    /// Lists the subtypes on the front face, after the dash.
-    /// </summary>
-    internal static IReadOnlyList<string> FrontSubtypes(ScryfallCard card)
-    {
-        return Words(FrontTypeLine(card), beforeDash: false);
-    }
-
-    /// <summary>
-    /// Reports whether a card is a basic land, which a Commander deck may hold in any number.
-    /// </summary>
-    internal static bool IsBasicLand(ScryfallCard card)
-    {
-        return FrontTypes(card).Contains("Basic", StringComparer.Ordinal);
-    }
-
-    /// <summary>
     /// Reports whether a card is a legendary Background enchantment.
     /// </summary>
     internal static bool IsBackground(ScryfallCard card)
     {
-        IReadOnlyList<string> types = FrontTypes(card);
+        IReadOnlyList<string> types = ScryfallCardFaces.FrontTypes(card);
         return types.Contains("Legendary", StringComparer.Ordinal) &&
             types.Contains("Enchantment", StringComparer.Ordinal) &&
-            FrontSubtypes(card).Contains("Background", StringComparer.Ordinal);
+            ScryfallCardFaces.FrontSubtypes(card).Contains("Background", StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -110,7 +41,7 @@ internal static partial class CommanderCardText
     /// </summary>
     internal static bool SaysCanBeCommander(ScryfallCard card)
     {
-        return AllText(card).Contains("can be your commander", StringComparison.OrdinalIgnoreCase);
+        return ScryfallCardFaces.AllText(card).Contains("can be your commander", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -121,12 +52,12 @@ internal static partial class CommanderCardText
     /// </summary>
     internal static int? CopyLimit(ScryfallCard card)
     {
-        if (IsBasicLand(card))
+        if (ScryfallCardFaces.IsBasicLand(card))
         {
             return null;
         }
 
-        string text = AllText(card);
+        string text = ScryfallCardFaces.AllText(card);
         if (AnyNumberPattern().IsMatch(text))
         {
             return null;
@@ -146,7 +77,7 @@ internal static partial class CommanderCardText
     /// </summary>
     internal static string? PartnerWithName(ScryfallCard card)
     {
-        Match match = PartnerWithPattern().Match(AllText(card));
+        Match match = PartnerWithPattern().Match(ScryfallCardFaces.AllText(card));
         return match.Success ? match.Groups[1].Value.Trim() : null;
     }
 
@@ -155,7 +86,8 @@ internal static partial class CommanderCardText
     /// </summary>
     internal static IReadOnlyList<string> PartnerVariants(ScryfallCard card)
     {
-        return [.. PartnerVariantPattern().Matches(AllText(card)).Select(match => match.Groups[1].Value.Trim())];
+        MatchCollection matches = PartnerVariantPattern().Matches(ScryfallCardFaces.AllText(card));
+        return [.. matches.Select(match => match.Groups[1].Value.Trim())];
     }
 
     /// <summary>
@@ -171,7 +103,7 @@ internal static partial class CommanderCardText
     /// </summary>
     internal static string? CompanionRestriction(ScryfallCard card)
     {
-        Match match = CompanionPattern().Match(AllText(card));
+        Match match = CompanionPattern().Match(ScryfallCardFaces.AllText(card));
         return match.Success ? match.Groups[1].Value.Trim() : null;
     }
 
@@ -181,9 +113,9 @@ internal static partial class CommanderCardText
     internal static Dictionary<string, int> SymbolCounts(string? manaCost)
     {
         Dictionary<string, int> counts = new(StringComparer.Ordinal);
-        foreach (Match match in SymbolPattern().Matches(manaCost ?? string.Empty))
+        foreach (string symbol in ScryfallCardFaces.ManaSymbols(manaCost))
         {
-            counts[match.Value] = counts.GetValueOrDefault(match.Value) + 1;
+            counts[symbol] = counts.GetValueOrDefault(symbol) + 1;
         }
 
         return counts;
@@ -224,12 +156,6 @@ internal static partial class CommanderCardText
     private static partial Regex CompanionPattern();
 
     /// <summary>
-    /// Matches one mana symbol.
-    /// </summary>
-    [GeneratedRegex(@"\{[^}]+\}", RegexOptions.CultureInvariant)]
-    private static partial Regex SymbolPattern();
-
-    /// <summary>
     /// Reads a number written as digits or as an English word up to twenty.
     /// </summary>
     private static int? NumberOf(string text)
@@ -241,15 +167,5 @@ internal static partial class CommanderCardText
 
         int word = Array.FindIndex(NumberWords, value => value.Equals(text, StringComparison.OrdinalIgnoreCase));
         return word < 0 ? null : word + 1;
-    }
-
-    /// <summary>
-    /// Splits a type line into words before or after its dash.
-    /// </summary>
-    private static List<string> Words(string typeLine, bool beforeDash)
-    {
-        string[] halves = typeLine.Split('—');
-        string part = beforeDash ? halves[0] : halves.Length > 1 ? halves[1] : string.Empty;
-        return [.. part.Split(' ', StringSplitOptions.RemoveEmptyEntries)];
     }
 }

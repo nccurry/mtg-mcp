@@ -159,6 +159,7 @@ internal sealed class ScryfallListCardOperations
         Guid snapshotId,
         bool includeRaw,
         bool includeFacts,
+        int maximumCards,
         CancellationToken cancellationToken)
     {
         StoredSnapshot? stored = await snapshots.FindByIdAsync(snapshotId, cancellationToken).ConfigureAwait(false);
@@ -176,12 +177,13 @@ internal sealed class ScryfallListCardOperations
                 "snapshotId");
         }
 
-        if (stored.Members.Count > ScryfallListQuery.MaximumEntries)
+        int limit = Math.Min(maximumCards, ScryfallListQuery.MaximumEntries);
+        if (stored.Members.Count > limit)
         {
             return new OperationInvalidInput(
                 "list-too-large",
-                $"The snapshot has {stored.Members.Count} cards, which is more than the limit of " +
-                $"{ScryfallListQuery.MaximumEntries}.",
+                $"The snapshot has {stored.Members.Count} cards, which is more than the {limit} this request may " +
+                "still read.",
                 "snapshotId");
         }
 

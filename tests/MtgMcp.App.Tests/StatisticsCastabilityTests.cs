@@ -113,8 +113,8 @@ public sealed class StatisticsCastabilityTests
     }
 
     /// <summary>
-    /// Verifies cards with no cost, an X, a hybrid symbol, or a Phyrexian symbol are skipped with reasons and get no
-    /// row; lands are not spells (case K04).
+    /// Verifies cards with no cost, an X, a hybrid symbol, or a Phyrexian symbol, and entries with no card, are
+    /// skipped with reasons and get no row; lands are not spells (case K04).
     /// </summary>
     [Fact]
     public async Task Calculate_UnexpressibleCosts_AreSkippedWithReasons()
@@ -125,8 +125,8 @@ public sealed class StatisticsCastabilityTests
         CastabilityToolResult result = Success(await setup.Run(deck, requireLandDrops: false));
 
         Assert.Equal(
-            [("Fireball", "x-cost"), ("Free", "no-mana-cost"), ("Hybrid", "hybrid-or-phyrexian-symbol"),
-                ("Phyrexian", "hybrid-or-phyrexian-symbol")],
+            [("Filler", "no-scryfall-identity"), ("Fireball", "x-cost"), ("Free", "no-mana-cost"),
+                ("Hybrid", "hybrid-or-phyrexian-symbol"), ("Phyrexian", "hybrid-or-phyrexian-symbol")],
             result.Skipped.Select(item => (item.Name, item.Reason)).Order());
         Assert.DoesNotContain(result.Rows, row => row.Cards.Any(card => card.Name is "Fireball" or "Hybrid" or "Free"));
         Assert.DoesNotContain(result.Rows, row => row.Cards.Any(card => card.Name is "Forest" or "Swamp"));
@@ -142,11 +142,15 @@ public sealed class StatisticsCastabilityTests
         using Setup setup = await Setup.CreateAsync();
         DeckDocument deck = await setup.CreateDeckAsync();
         DeckBackup backup = Success(await setup.Data.Store.Backups.CreateAsync(TestContext.Current.CancellationToken));
+        Guid sprout = deck.Entries.Single(entry => entry.CardName == "Sprout").EntryId;
         _ = Success(await setup.Data.Store.ApplyChangesAsync(
             deck.DeckId,
             deck.Revision,
-            [new UpdateDeckMetadataChange("Changed", string.Empty, "commander")],
+            [new RemoveDeckEntryChange(sprout)],
             TestContext.Current.CancellationToken));
+        CastabilityToolResult live = Success(await setup.Run(
+            Success(await setup.Data.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken)),
+            requireLandDrops: true));
 
         CastabilityToolResult result = Success(await setup.Coordinator.CalculateAsync(
             new DeckBackupSourceInput(backup.BackupId, deck.DeckId, ["main"]),
@@ -158,6 +162,136 @@ public sealed class StatisticsCastabilityTests
 
         Assert.All(result.Rows, row => Assert.Equal((4, 11), (row.Turn, row.CardsSeen)));
         Assert.Equal("deck-backup", result.Sources[0].Kind);
+        // The backup still holds Sprout, which the live deck no longer has.
+        Assert.Contains(result.Rows, row => row.Cost == "{G}");
+        Assert.DoesNotContain(live.Rows, row => row.Cost == "{G}");
+    }
+
+    /// <summary>
+    /// Verifies an entry whose printing is not in the installed card data is listed as skipped with its own reason,
+    /// not silently dropped, and a turn above the latest allowed turn is refused.
+    /// </summary>
+    [Fact]
+    public async Task Calculate_EntryNotInCardData_IsListedAndTurnsAboveTheLimitAreRefused()
+    {
+        using Setup setup = await Setup.CreateAsync();
+        DeckDocument deck = await setup.CreateDeckAsync();
+        _ = Success(await setup.Data.Store.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryChange(new DeckEntryDraft(1, "Not installed", PrintingId: Guid.NewGuid(), Zone: "main"))],
+            TestContext.Current.CancellationToken));
+        DeckDocument changed = Success(await setup.Data.Store.GetAsync(
+            deck.DeckId,
+            TestContext.Current.CancellationToken));
+
+        CastabilityToolResult result = Success(await setup.Run(changed, requireLandDrops: false));
+        OperationInvalidInput late = Failure(await setup.Coordinator.CalculateAsync(
+            new DeckSourceInput(deck.DeckId, Zones: ["main"]),
+            setup.Groups(deck),
+            new FixedTurnInput(ExactStatisticsCalculator.MaximumCastabilityTurn + 1),
+            true,
+            false,
+            TestContext.Current.CancellationToken));
+
+        CastabilitySkipped missing = Assert.Single(result.Skipped, item => item.Name == "Not installed");
+        Assert.Equal("not-in-card-data", missing.Reason);
+        Assert.Equal("turn.turn", late.Path);
+    }
+
+    /// <summary>
+    /// Verifies a spell whose mana value is above the latest allowed turn is skipped with a reason under the
+    /// mana-value rule, instead of asking the calculator for a turn it refuses.
+    /// </summary>
+    [Fact]
+    public async Task Calculate_ManaValueAboveTheTurnLimit_IsSkippedWithAReason()
+    {
+        JsonObject giant = CardJson.Make("Giant", "Sorcery", "{G}", 1000m, ["G"]);
+        using CardDataFixture data = await CardDataFixture.CreateAsync([Forest, Sprout, giant]);
+        DeckCreateRequest request = new(
+            "Big mana value",
+            Format: "commander",
+            Entries:
+            [
+                new DeckEntryDraft(20, "Forest", PrintingId: CardJson.PrintingOf(Forest), Zone: "main"),
+                new DeckEntryDraft(1, "Sprout", PrintingId: CardJson.PrintingOf(Sprout), Zone: "main"),
+                new DeckEntryDraft(1, "Giant", PrintingId: CardJson.PrintingOf(giant), Zone: "main"),
+            ]);
+        DeckDocument deck = Success(await data.Store.CreateAsync(request, TestContext.Current.CancellationToken));
+        StatisticsCastabilityCoordinator coordinator = new(
+            new CardListResolver(data.Scryfall, data.Access()),
+            new ExactStatisticsCalculator("test"));
+
+        CastabilityToolResult result = Success(await coordinator.CalculateAsync(
+            new DeckSourceInput(deck.DeckId),
+            [new CastabilitySourceGroupInput(
+                "lands",
+                new CastabilityEntryIdsSelect([deck.Entries.Single(entry => entry.CardName == "Forest").EntryId]),
+                new CastabilityProducesInput(["G"]))],
+            new ManaValueTurnInput(),
+            true,
+            false,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal("mana-value-above-turn-limit", Assert.Single(result.Skipped).Reason);
+        Assert.Equal(["{G}"], result.Rows.Select(row => row.Cost));
+    }
+
+    /// <summary>
+    /// Verifies a 100-card deck with many different costs and many skipped cards stays under the size limit, and
+    /// lists skipped cards only up to the cap with the count left out (SIZE-001).
+    /// </summary>
+    [Fact]
+    public async Task Calculate_LargeDeckWithManyCostsAndSkippedCards_StaysUnderTheSizeLimit()
+    {
+        List<JsonObject> spells = [];
+        List<DeckEntryDraft> entries = [new DeckEntryDraft(40, "Forest", PrintingId: CardJson.PrintingOf(Forest))];
+        for (int index = 0; index < 100; index++)
+        {
+            JsonObject spell = CardJson.Make(
+                $"A spell with a rather long name to fill the result {index:D3}",
+                "Sorcery",
+                "{" + (1 + (index % 7)) + "}" + string.Concat(Enumerable.Repeat("{G}", index % 4)),
+                1m + (index % 7) + (index % 4),
+                ["G"]);
+            spells.Add(spell);
+            entries.Add(new DeckEntryDraft(
+                1,
+                spell["name"]!.GetValue<string>(),
+                PrintingId: CardJson.PrintingOf(spell)));
+        }
+
+        for (int index = 0; index < 80; index++)
+        {
+            JsonObject free = CardJson.Make($"Free spell number {index:D3}", "Sorcery", null, 0m);
+            spells.Add(free);
+            entries.Add(new DeckEntryDraft(1, free["name"]!.GetValue<string>(), PrintingId: CardJson.PrintingOf(free)));
+        }
+
+        using CardDataFixture data = await CardDataFixture.CreateAsync([Forest, .. spells]);
+        DeckDocument deck = Success(await data.Store.CreateAsync(
+            new DeckCreateRequest("Large", Format: "commander", Entries: entries),
+            TestContext.Current.CancellationToken));
+        StatisticsCastabilityCoordinator coordinator = new(
+            new CardListResolver(data.Scryfall, data.Access()),
+            new ExactStatisticsCalculator("test"));
+
+        CastabilityToolResult result = Success(await coordinator.CalculateAsync(
+            new DeckSourceInput(deck.DeckId),
+            [new CastabilitySourceGroupInput(
+                "lands",
+                new CastabilityEntryIdsSelect([deck.Entries.Single(entry => entry.CardName == "Forest").EntryId]),
+                new CastabilityProducesInput(["G"]))],
+            new ManaValueTurnInput(),
+            true,
+            false,
+            TestContext.Current.CancellationToken));
+
+        int bytes = JsonSerializer.SerializeToUtf8Bytes(result, ToolCallPolicy.SerializerOptions).Length;
+        Assert.True(bytes <= 40_000, $"The result is {bytes} bytes.");
+        Assert.Equal(50, result.Skipped.Count);
+        Assert.Equal(30, result.SkippedOmitted);
+        Assert.NotEmpty(result.Rows);
     }
 
     /// <summary>
@@ -396,7 +530,6 @@ public sealed class StatisticsCastabilityTests
             Data = data;
             Coordinator = new StatisticsCastabilityCoordinator(
                 new CardListResolver(data.Scryfall, data.Access()),
-                data.Scryfall,
                 new ExactStatisticsCalculator("test"));
         }
 

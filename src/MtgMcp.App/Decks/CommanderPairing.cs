@@ -154,7 +154,7 @@ internal static class CommanderPairing
     private static bool Names(List<PairingAbility> abilities, ScryfallCard card)
     {
         string full = ScryfallCardSets.NormalizeName(card.Name);
-        string front = ScryfallCardSets.NormalizeName(CommanderCardText.FrontName(card));
+        string front = ScryfallCardSets.NormalizeName(ScryfallCardFaces.FrontName(card));
         return abilities.Any(ability => ability.Kind == "partner-with" && ability.Detail is not null &&
             ScryfallCardSets.NormalizeName(ability.Detail) is var named && (named == full || named == front));
     }
@@ -228,9 +228,9 @@ internal static class CommanderPairing
     /// </summary>
     private static bool IsTimeLordDoctor(ScryfallCard card)
     {
-        IReadOnlyList<string> types = CommanderCardText.FrontTypes(card);
+        IReadOnlyList<string> types = ScryfallCardFaces.FrontTypes(card);
         return types.Contains("Legendary", StringComparer.Ordinal) &&
             types.Contains("Creature", StringComparer.Ordinal) &&
-            CommanderCardText.FrontSubtypes(card).Order(StringComparer.Ordinal).SequenceEqual(TimeLordDoctorTypes);
+            ScryfallCardFaces.FrontSubtypes(card).Order(StringComparer.Ordinal).SequenceEqual(TimeLordDoctorTypes);
     }
 }

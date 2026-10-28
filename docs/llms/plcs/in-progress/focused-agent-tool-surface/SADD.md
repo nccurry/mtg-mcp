@@ -547,6 +547,11 @@ rule, plus the entries involved. The tool does not name a bracket, judge power l
 whether a deck is "good". The `game_changer` field is not mapped today, so
 phase 2 adds it to the card mapping.
 
+When a commander has no card data, the color identity fact has `passed: null` (unknown) and lists no entry outside the
+identity, and a companion check is `not-checked` instead of failed. An adventure or flip card is read by the cost of
+its front face (rule 715.4) when a companion restriction looks at mana symbols. The structural report and the rule
+facts come from one read of the deck, so they describe one revision.
+
 **Pairing rules.** A pair passes when one row matches both cards:
 
 | Card A | Card B | Source |
@@ -1022,8 +1027,9 @@ deck, then goes to Archidekt through the existing push.
 - `matchBy: "oracle"` reads Oracle IDs from installed card data; if it is
   not installed the result is `not-cached` naming the sync tool. Entries with
   no Scryfall identity go in `unmatched`. `name` needs no card data.
-- The best-ranked entry is kept with quantity 1. Ties are evaluated at the cut line: if the entries that would fill the kept slot tie for best
-  rank, the card is reported in `ambiguous` and no change is planned for it.
+- The best-ranked entry is kept with quantity 1. Ties are evaluated at the cut line (a design decision made in
+  phase 4): if the entries that would fill the kept slot tie for best rank, the card is reported in `ambiguous` and no
+  change is planned for it; entries that tie only below the kept entry are removed.
   The agent adds a more specific group and asks again. The server never
   breaks ties by entry order, price, or printing.
 - `matchBy: "oracle"` needs Scryfall identity on every entry. Entries without
@@ -1079,7 +1085,11 @@ probability is good enough.
 The result has one row per distinct mana cost: the cost, the cards that share
 it, the turn checked, the exact probability as a decimal string and fraction,
 and the conditioning used. Rows are sorted by probability, then name.
-The work limit is 480 (distinct costs times source groups); a request over it is refused as `invalid-input` with the limit. `skipped` lists, with the reason, cards with no mana cost, with `X`, or with
+The work limit is 480 (distinct costs times source groups; a design decision made in phase 4); a request over it is
+refused as `invalid-input` with the limit. The exact-work budget is shared by the whole request, not given to each cost,
+and a turn must be from 1 to 99. When `requireLandDrops` is true and the deck holds fewer sources than the turn
+number, the condition cannot happen, so the probability is `null` (undefined, never 0) and the row sorts last. Entries
+that are not lands but have no card data are listed in `skipped` as `no-scryfall-identity` or `not-in-card-data`. `skipped` lists, with the reason, cards with no mana cost, with `X`, or with
 hybrid or Phyrexian symbols. The exact engine's requirement type
 (`ManaRequirementInput`, `src/MtgMcp.Statistics/TurnManaInverseModels.cs:78`)
 holds only W, U, B, R, G, C, and generic counts. Card data must be
@@ -1125,6 +1135,13 @@ transport, pacing, cache, and failure mapping (BRACKET-001). It returns:
 step, before the App result is built. A test fails if the field reaches a
 result.
 
+A response that leaves out a flag (`gameChanger`, `massLandDenial`, `extraTurn`, `banned`, `definitelyTwoCard`,
+`arguablyTwoCard`) or a combo's `speed` or `manaValueNeeded`, or that holds an item that is not an object, is refused
+as `unavailable` with `source-invalid-response`, before it is cached. A missing flag is never read as false. Entries
+are matched to the provider's cards by Oracle ID when both have one, otherwise by name with the front face of a
+two-faced name matching either spelling. When a result passes the size limit, cards with no flag are left out first
+(`unflaggedCardsOmitted`), then combos from the end of the list (`combosOmitted`), with `truncated` and `narrow` set.
+
 The Commander Spellbook packet excluded `/estimate-bracket` because it returns
 a bracket label
 ([non-goals](../../completed/commander-spellbook-evidence/SADD.md#non-goals)).
@@ -1162,7 +1179,7 @@ filter and no stated order. So:
 It pages the existing games list service call with the existing pacing and
 adds no Playgroup endpoint. Games come back today as raw JSON, so the adapter
 adds a typed game record with only the fields above. Rates are rounded half to even to 6 places. Each row has `games`,
-`wins`, `winRate` (exact decimal string), `baselineRate` (the mean of
+`wins`, `winRate` (decimal string rounded half to even to 6 places), `baselineRate` (the mean of
 1 / players over the group's games), and `averageTotalRounds`. The result
 also reports `gamesRead`, `gamesSkipped` with reasons (no winner, missing
 deck), `gamesOutsideRange`, and `limitReached`. It never ranks rows or says

@@ -177,8 +177,9 @@ The `decks` toolset supports:
 - on-curve estimates based on card data and caller-supplied land rules.
 
 Every change to an existing deck requires `expectedRevision`. The local store
-is not tied to one import format. Validation checks structure, not Commander
-legality, card quality, or strategic fit.
+is not tied to one import format. Validation checks structure. With `rules: "commander"` it also
+reports Commander rule facts from installed card data. It gives no legal or illegal verdict, and it
+says nothing about card quality or strategic fit.
 
 Use `local_deck_identity_reconcile_preview` before apply. Resolution uses printing ID,
 set and collector number, Oracle ID, then exact name. It never uses fuzzy
@@ -301,9 +302,9 @@ minutes.
 
 These tools return facts only. They never say a deck is legal or illegal.
 
-- `card_lists_compare` compares two card lists (a Scryfall set, a name list,
-  a local deck, a deck backup, an Archidekt deck or snapshot, or another
-  comparison) and returns the cards only in one, only in the other, and in both.
+- `card_lists_compare` applies one operation (union, intersection, difference, or symmetric difference)
+  to two card lists. A list is a saved `scryfall_search`, up to 150 Scryfall or Oracle IDs, a local
+  deck, a deck backup, an Archidekt deck or snapshot, or another comparison.
 - `card_list_query` filters, groups, and totals any one card list by named
   fields, with a cursor for large results.
 - `local_deck_validate` takes an optional `rules: "commander"` and then adds
@@ -329,7 +330,7 @@ The `stats` toolset provides nine read-only tools for:
 
 Every probability returns an exact reduced fraction and a stable decimal. The
 caller supplies the population, groups, turn draws, mana capabilities, and keep
-rules. The MCP does not infer legality, roles, or whether a result is good.
+rules. The MCP does not infer roles or whether a result is good, and it gives no legality verdict.
 
 Deck-backed statistics can select entries by entry ID, zone name, or category
 ID. This lets an LLM use existing Archidekt groups or deterministic categories
@@ -363,7 +364,7 @@ instead of duplicating it.
 
 The `playgroup` toolset turns on when a Playgroup key is present. It exposes tools
 for the pinned Public API 1.0.0.
-All modes include 14 safe read tools. `remote` adds two write tools.
+All modes include 15 safe read tools. `remote` adds two write tools.
 
 Results preserve provider JSON and include operation, API version, retrieval
 time, checksums, and limitations. The adapter does not rank decks or infer

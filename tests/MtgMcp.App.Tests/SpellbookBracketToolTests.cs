@@ -125,6 +125,138 @@ public sealed class SpellbookBracketToolTests
     }
 
     /// <summary>
+    /// Verifies a local entry is matched to a Spellbook card by Oracle ID when both have one, and by name with the
+    /// front face of a two-faced name matching either spelling, so a two-faced card is not left without its entries.
+    /// </summary>
+    [Fact]
+    public async Task GetFacts_EntriesMatchByOracleIdThenByFrontFaceName()
+    {
+        Guid oracle = Guid.NewGuid();
+        string raw = new JsonObject
+        {
+            ["bracketTag"] = "R",
+            ["cards"] = new JsonArray(
+                Card("Delver of Secrets // Insectile Aberration", null),
+                Card("Renamed upstream", oracle),
+                Card("Plain Card", null)),
+            ["combos"] = new JsonArray(),
+        }.ToJsonString();
+        using Setup setup = new(raw);
+        DeckDocument deck = await setup.CreateDeckAsync(
+        [
+            new DeckEntryDraft(1, "Delver of Secrets", Zone: "main"),
+            new DeckEntryDraft(1, "An older name", OracleId: oracle, Zone: "main"),
+            new DeckEntryDraft(1, "plain   CARD", Zone: "commander"),
+        ]);
+
+        SpellbookBracketFactsResult result = Success(await setup.Tools.GetFactsAsync(
+            deck.DeckId,
+            deck.Revision,
+            TestContext.Current.CancellationToken));
+
+        Guid EntryOf(string cardName)
+        {
+            return deck.Entries.Single(entry => entry.CardName == cardName).EntryId;
+        }
+
+        Assert.Equal(
+            [EntryOf("Delver of Secrets")],
+            result.Cards.Single(card => card.Name.StartsWith("Delver", StringComparison.Ordinal)).EntryIds);
+        Assert.Equal(
+            [EntryOf("An older name")],
+            result.Cards.Single(card => card.Name == "Renamed upstream").EntryIds);
+        Assert.Equal(
+            [EntryOf("plain   CARD")],
+            result.Cards.Single(card => card.Name == "Plain Card").EntryIds);
+    }
+
+    /// <summary>
+    /// Verifies a provider answer with very many combos is cut to the size limit after the unflagged cards are
+    /// dropped: the size is measured again, combos are cut from the end, and the result says how many it left out
+    /// (SIZE-001).
+    /// </summary>
+    [Fact]
+    public async Task GetFacts_VeryManyCombos_AreCutToTheSizeLimitAndCounted()
+    {
+        JsonArray cards = [];
+        List<DeckEntryDraft> drafts = [];
+        for (int index = 0; index < 120; index++)
+        {
+            string name = $"A flagged card with a rather long name to take space {index:D3}";
+            cards.Add(Card(name, null, gameChanger: true));
+            drafts.Add(new DeckEntryDraft(1, name, Zone: "main"));
+        }
+
+        JsonArray combos = [];
+        for (int index = 0; index < 400; index++)
+        {
+            combos.Add(new JsonObject
+            {
+                ["definitelyTwoCard"] = false,
+                ["arguablyTwoCard"] = false,
+                ["speed"] = 1,
+                ["combo"] = new JsonObject
+                {
+                    ["id"] = $"{index}-{index + 1}-{index + 2}",
+                    ["manaNeeded"] = "{W}{U}{B}{R}{G}{W}{U}{B}{R}{G}",
+                    ["manaValueNeeded"] = 10,
+                    ["uses"] = new JsonArray(
+                        UseOf($"Combo piece one with a long name {index:D3}"),
+                        UseOf($"Combo piece two with a long name {index:D3}"),
+                        UseOf($"Combo piece three with a long name {index:D3}")),
+                },
+            });
+        }
+
+        string raw = new JsonObject { ["bracketTag"] = "R", ["cards"] = cards, ["combos"] = combos }.ToJsonString();
+        using Setup setup = new(raw);
+        DeckDocument deck = await setup.CreateDeckAsync(drafts);
+
+        SpellbookBracketFactsResult result = Success(await setup.Tools.GetFactsAsync(
+            deck.DeckId,
+            deck.Revision,
+            TestContext.Current.CancellationToken));
+
+        int bytes = JsonSerializer.SerializeToUtf8Bytes(result, ToolCallPolicy.SerializerOptions).Length;
+        Assert.True(bytes <= 40_000, $"The result is {bytes} bytes.");
+        Assert.Equal(120, result.Cards.Count);
+        Assert.True(result.CombosOmitted > 0);
+        Assert.Equal(400, result.Combos.Count + result.CombosOmitted);
+        Assert.True(result.Truncated);
+        Assert.False(string.IsNullOrEmpty(result.Narrow));
+    }
+
+    /// <summary>
+    /// Builds one classified card of a Spellbook answer.
+    /// </summary>
+    private static JsonObject Card(string name, Guid? oracleId, bool gameChanger = false)
+    {
+        JsonObject card = new() { ["name"] = name };
+        if (oracleId is Guid id)
+        {
+            card["oracleId"] = id.ToString();
+        }
+
+        return new JsonObject
+        {
+            ["card"] = card,
+            ["quantity"] = 1,
+            ["banned"] = false,
+            ["gameChanger"] = gameChanger,
+            ["massLandDenial"] = false,
+            ["extraTurn"] = false,
+        };
+    }
+
+    /// <summary>
+    /// Builds one card use of a combo.
+    /// </summary>
+    private static JsonObject UseOf(string name)
+    {
+        return new JsonObject { ["card"] = new JsonObject { ["name"] = name } };
+    }
+
+    /// <summary>
     /// Unwraps a successful result.
     /// </summary>
     private static T Success<T>(OperationResult<T> result)
@@ -170,7 +302,7 @@ public sealed class SpellbookBracketToolTests
                 new SpellbookDatabase(directory.Path),
                 transport,
                 TimeProvider.System);
-            Tools = new SpellbookBracketTools(service, new SpellbookDeckInputResolver(store), store);
+            Tools = new SpellbookBracketTools(service, new SpellbookDeckInputResolver(store));
         }
 
         /// <summary>

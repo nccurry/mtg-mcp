@@ -153,7 +153,7 @@ public sealed class PlaygroupStatsToolTests
             10,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.IsNotType<OperationSuccess<PlaygroupGameStatsView>>(result.Value);
+        Assert.IsType<OperationUnavailable>(result.Value);
     }
 
     /// <summary>

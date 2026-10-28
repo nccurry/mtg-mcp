@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
@@ -101,19 +100,21 @@ internal sealed class PlaygroupStatsTools
         "Playgroup: totals one playgroup's games by deck or by player, read from the games list up to maxGames. " +
         "Each row has games, wins, win rate, the pod-size baseline (the mean of 1 divided by the number of " +
         "players), and the average total rounds, as exact decimal strings rounded to six places. from and to " +
-        "(YYYY-MM-DD, inclusive) filter on each game's ended_at after reading, because the list has no date filter " +
-        "and no stated order; games outside the range, games with no winner, and games with a missing deck or " +
-        "player are counted apart and never hidden. If maxGames stops the read, the result says the date range may " +
-        "be incomplete. Game data has no commander field: use playgroup_deck_get to map a deck to its commander. " +
+        "(YYYY-MM-DD, inclusive, as UTC days) filter on each game's ended_at after reading, because the list has " +
+        "no date filter and no stated order; games outside the range, games with no winner, and games with a " +
+        "missing deck or player are counted separately and never hidden. If maxGames stops the read, the result " +
+        "says the date range may be incomplete. Game data has no commander field: use playgroup_deck_get to map a " +
+        "deck to its commander. " +
         "It does not rank rows or say which deck is better." + UntrustedTextNotes.Playgroup +
         " Example: {\"playgroupId\":567,\"groupBy\":\"deck\",\"from\":\"2026-07-01\",\"maxGames\":200}.")]
     internal async Task<OperationResult<PlaygroupGameStatsView>> GetStatsAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
         [Description("What to total by: deck or player."), AllowedValues("deck", "player")] string groupBy,
         [Description("Required: the most games to read, from 1 through 1000.")] int maxGames,
-        [Description("Optional first day to count, YYYY-MM-DD, compared with each game's " +
+        [Description("Optional first day to count, YYYY-MM-DD, compared as a UTC day with each game's " +
             "ended_at.")] string? from = null,
-        [Description("Optional last day to count, YYYY-MM-DD, compared with each game's ended_at.")] string? to = null,
+        [Description("Optional last day to count, YYYY-MM-DD, compared as a UTC day with each game's " +
+            "ended_at.")] string? to = null,
         CancellationToken cancellationToken = default)
     {
         PlaygroupGameGroupBy group;
@@ -245,8 +246,8 @@ internal sealed class PlaygroupStatsTools
         {
             SkippedOmitted = stats.GamesSkipped > skipped.Count ? stats.GamesSkipped - skipped.Count : null,
         };
-        int headerBytes = Measure(view);
-        List<int> sizes = [.. stats.Rows.Select(row => Measure(row) + 1)];
+        int headerBytes = ResultSize.Measure(view);
+        List<int> sizes = [.. stats.Rows.Select(row => ResultSize.Measure(row) + 1)];
         int keep = ResultSizeLimit.CountFitting(sizes, headerBytes);
         return view with
         {
@@ -256,13 +257,5 @@ internal sealed class PlaygroupStatsTools
                 ? "Rows were left out to stay under the size limit. Use from and to to narrow the games."
                 : null,
         };
-    }
-
-    /// <summary>
-    /// Measures the serialized size of a value as the server writes it.
-    /// </summary>
-    private static int Measure(object value)
-    {
-        return JsonSerializer.SerializeToUtf8Bytes(value, value.GetType(), ToolCallPolicy.SerializerOptions).Length;
     }
 }

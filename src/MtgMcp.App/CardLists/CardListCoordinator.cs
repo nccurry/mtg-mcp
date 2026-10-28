@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Results;
@@ -126,7 +125,10 @@ internal sealed class CardListCoordinator
             return OperationFailure.Forward<CardListCursor, CardListsCompareResult>(read);
         }
 
-        CardListReadOptions options = new(parsed.Data.IncludeRaw, IncludeFacts: false);
+        CardListReadOptions options = new(
+            parsed.Data.IncludeRaw,
+            IncludeFacts: false,
+            new CardListBudget(ScryfallListQuery.MaximumEntries));
         OperationResult<ResolvedCardList> leftList = await resolver.ResolveAsync(left, "left", options,
             cancellationToken)
             .ConfigureAwait(false);
@@ -255,7 +257,10 @@ internal sealed class CardListCoordinator
         OperationResult<ResolvedCardList> resolved = await resolver.ResolveAsync(
             source,
             "source",
-            new CardListReadOptions(IncludeRaw: false, IncludeFacts: true),
+            new CardListReadOptions(
+                IncludeRaw: false,
+                NeedsFacts(where, groupBy, metrics, rows),
+                new CardListBudget(ScryfallListQuery.MaximumEntries)),
             cancellationToken).ConfigureAwait(false);
         if (resolved is not OperationSuccess<ResolvedCardList> list)
         {
@@ -295,6 +300,12 @@ internal sealed class CardListCoordinator
             return OperationFailure.Forward<ScryfallListQueryResult, CardListQueryResult>(run);
         }
 
+        // A cursor past the end of the rows is refused here exactly as card_lists_compare refuses it.
+        if (answer.Data.Rows is { } rowsRead && position.Data.Offset > rowsRead.TotalRows)
+        {
+            return new OperationInvalidInput("invalid-cursor", "The cursor is past the end of the result.", "cursor");
+        }
+
         return new OperationSuccess<CardListQueryResult>(Build(list.Data, answer.Data, fingerprint, position.Data));
     }
 
@@ -322,20 +333,22 @@ internal sealed class CardListCoordinator
         {
             UnmatchedOmitted = list.Unmatched.Count > unmatched.Count ? list.Unmatched.Count - unmatched.Count : null,
         };
-        int headerBytes = Measure(header);
-        int groupBudget = answer.Rows is null
-            ? ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - headerBytes
-            : GroupBudgetWithRows;
-        int keptGroups = ResultSizeLimit.CountFitting(
-            [.. answer.Groups.Select(group => Measure(group) + 1)],
-            ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - groupBudget);
+        int headerBytes = ResultSize.Measure(header);
+        // Without rows the groups may use everything the header leaves; with rows they get a fixed share, so the rows
+        // keep room too. CountFitting takes the bytes that are not for the groups.
+        int bytesNotForGroups = answer.Rows is null
+            ? headerBytes
+            : ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - GroupBudgetWithRows;
+        List<int> groupSizes = [.. answer.Groups.Select(group => ResultSize.Measure(group) + 1)];
+        int keptGroups = ResultSizeLimit.CountFitting(groupSizes, bytesNotForGroups);
         List<ScryfallOrderedObject> groups = [.. answer.Groups.Take(keptGroups)];
         bool truncated = keptGroups < answer.Groups.Count;
         CardListRowsPage? rows = null;
         if (answer.Rows is { } read)
         {
-            int fixedBytes = headerBytes + groups.Sum(group => Measure(group) + 1);
-            int keptRows = ResultSizeLimit.CountFitting([.. read.Items.Select(item => Measure(item) + 1)], fixedBytes);
+            int fixedBytes = headerBytes + groupSizes.Take(keptGroups).Sum();
+            List<int> rowSizes = [.. read.Items.Select(item => ResultSize.Measure(item) + 1)];
+            int keptRows = ResultSizeLimit.CountFitting(rowSizes, fixedBytes);
             truncated |= keptRows < read.Items.Count;
             int next = position.Offset + keptRows;
             string? nextCursor = next < read.TotalRows
@@ -358,12 +371,33 @@ internal sealed class CardListCoordinator
     }
 
     /// <summary>
+    /// Reports whether a query uses a field that comes from the installed tag and price tables, so the tag and price
+    /// lookups run only when the answer needs them.
+    /// </summary>
+    internal static bool NeedsFacts(
+        IReadOnlyList<CardListFilterInput>? where,
+        IReadOnlyList<string>? groupBy,
+        IReadOnlyList<string>? metrics,
+        CardListRowsInput? rows)
+    {
+        List<string?> names =
+        [
+            .. (where ?? []).Select(filter => filter.Field),
+            .. groupBy ?? [],
+            .. (metrics ?? []).Select(metric => metric[(metric.IndexOf(':', StringComparison.Ordinal) + 1)..]),
+            .. rows?.Fields ?? [],
+            .. (rows?.SortBy ?? []).Select(sort => sort.Field),
+        ];
+        return names.Any(name => name is "tags" or "cheapestPriceUsd");
+    }
+
+    /// <summary>
     /// Counts how many leading cards of a page fit under the size limit next to the rest of the result.
     /// </summary>
     private static int CountFitting(IReadOnlyList<object> views, CardListsCompareResult header)
     {
-        List<int> sizes = [.. views.Select(view => Measure(view) + 1)];
-        return ResultSizeLimit.CountFitting(sizes, Measure(header));
+        List<int> sizes = [.. views.Select(view => ResultSize.Measure(view) + 1)];
+        return ResultSizeLimit.CountFitting(sizes, ResultSize.Measure(header));
     }
 
     /// <summary>
@@ -375,13 +409,5 @@ internal sealed class CardListCoordinator
             .Select(entry => ScryfallCardSets.KeyOf(entry.Card.Card, matchBy))
             .Distinct(StringComparer.Ordinal)
             .Count();
-    }
-
-    /// <summary>
-    /// Measures the serialized size of a value as the server writes it.
-    /// </summary>
-    private static int Measure(object value)
-    {
-        return JsonSerializer.SerializeToUtf8Bytes(value, value.GetType(), ToolCallPolicy.SerializerOptions).Length;
     }
 }

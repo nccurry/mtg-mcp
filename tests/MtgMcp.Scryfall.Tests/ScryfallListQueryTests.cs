@@ -495,6 +495,61 @@ public sealed class ScryfallListQueryTests
     }
 
     /// <summary>
+    /// Verifies a field named twice in groupBy, a metric named twice, or a row field named twice is refused with the
+    /// path of the second one, so no result carries a repeated JSON key.
+    /// </summary>
+    [Fact]
+    public void Run_RepeatedGroupFieldMetricOrRowField_IsInvalid()
+    {
+        List<ScryfallListEntry> deck = [ListTestCards.Entry(ListTestCards.Make("A"))];
+
+        OperationInvalidInput group = Failure(deck, Request(groupBy: ["colors", "colors"]));
+        OperationInvalidInput metric = Failure(deck, Request(metrics: ["quantity", "quantity"]));
+        OperationInvalidInput sum = Failure(deck, Request(metrics: ["sum:manaValue", "sum:manaValue"]));
+        OperationInvalidInput row = Failure(deck, Request(rows: Rows(["name", "name"])));
+
+        Assert.Equal(("invalid-field", "groupBy[1]"), (group.ReasonCode, group.Path));
+        Assert.Equal(("invalid-metric", "metrics[1]"), (metric.ReasonCode, metric.Path));
+        Assert.Equal(("invalid-metric", "metrics[1]"), (sum.ReasonCode, sum.Path));
+        Assert.Equal(("invalid-field", "rows.fields[1]"), (row.ReasonCode, row.Path));
+    }
+
+    /// <summary>
+    /// Verifies a card whose real value is the text none stays apart from the group of cards with no value.
+    /// </summary>
+    [Fact]
+    public void Run_GroupByTags_KeepsARealNoneTagApartFromMissingValues()
+    {
+        List<ScryfallListEntry> deck =
+        [
+            ListTestCards.Entry(ListTestCards.Make("Tagged none"), tags: ["none"]),
+            ListTestCards.Entry(ListTestCards.Make("Untagged")),
+        ];
+
+        ScryfallListQueryResult result = Success(deck, Request(groupBy: ["tags"]));
+
+        Assert.Equal(2, result.Groups.Count);
+        Assert.All(result.Groups, group => Assert.Equal("none", (string)KeyOf(group, "tags")!));
+        Assert.Equal([1L, 1L], result.Groups.Select(group => (long)group.Get("quantity")!));
+    }
+
+    /// <summary>
+    /// Verifies an in filter with a value that is not an array is refused for its shape before its type.
+    /// </summary>
+    [Fact]
+    public void Run_InFilterWithoutAnArray_IsInvalidForItsShape()
+    {
+        List<ScryfallListEntry> deck = [ListTestCards.Entry(ListTestCards.Make("A"))];
+
+        OperationInvalidInput invalid = Failure(
+            deck,
+            Request(where: [new ScryfallListCondition("manaValue", "in", Json("\"three\""))]));
+
+        Assert.Equal(("invalid-value", "where[0].value"), (invalid.ReasonCode, invalid.Path));
+        Assert.Contains("array", invalid.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Builds a request with the given parts, for a list that has no deck fields.
     /// </summary>
     private static ScryfallListQueryRequest Request(

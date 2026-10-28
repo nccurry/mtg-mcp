@@ -241,7 +241,7 @@ public sealed class SpellbookService : IDisposable
             JsonSerializer.Serialize(deck, serializerOptions),
             details,
             identity);
-        return GetOrAcquireAsync(prepared, cancellationToken);
+        return GetOrAcquireAsync(prepared, cancellationToken, SpellbookBracketMapper.Validate);
     }
 
     /// <summary>
@@ -249,7 +249,8 @@ public sealed class SpellbookService : IDisposable
     /// </summary>
     private async Task<SpellbookEvidence> GetOrAcquireAsync(
         SpellbookPreparedRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<JsonElement>? validate = null)
     {
         DateTimeOffset now = timeProvider.GetUtcNow().ToUniversalTime();
         SpellbookCachedResponse? cached = await cache.TryGetAsync(
@@ -289,6 +290,7 @@ public sealed class SpellbookService : IDisposable
                 request.Body,
                 cancellationToken).ConfigureAwait(false);
             JsonElement data = SpellbookContract.ParseResponseObject(response.Json);
+            validate?.Invoke(data);
             await cache.StoreAsync(request.Identity, response, cacheTtl, cancellationToken).ConfigureAwait(false);
             return CreateEvidence(
                 request,

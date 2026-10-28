@@ -68,6 +68,11 @@ public sealed partial class ExactStatisticsCalculator
     public const int MaximumCastabilityWork = 480;
 
     /// <summary>
+    /// Gives the latest turn one castability cost may name.
+    /// </summary>
+    public const int MaximumCastabilityTurn = 99;
+
+    /// <summary>
     /// Gives the number of cards in an opening hand.
     /// </summary>
     private const int OpeningHand = 7;
@@ -133,6 +138,8 @@ public sealed partial class ExactStatisticsCalculator
         }
 
         List<CastabilityRow> rows = [];
+        StatisticsWorkBudget budget = new(workLimit);
+        Dictionary<int, MembershipEnumerationResult> conditions = [];
         foreach (CastabilityCostInput? cost in request.Costs)
         {
             OperationResult<StatisticsCalculation<CastabilityResult>>? failure = EvaluateCost(
@@ -141,7 +148,7 @@ public sealed partial class ExactStatisticsCalculator
                 cost,
                 groups,
                 capabilities,
-                rows,
+                new CostRun(rows, budget, conditions),
                 cancellationToken);
             if (failure is { } rejected)
             {
@@ -179,12 +186,16 @@ public sealed partial class ExactStatisticsCalculator
         CastabilityCostInput? cost,
         string[] groups,
         ManaCapability[] capabilities,
-        List<CastabilityRow> rows,
+        CostRun run,
         CancellationToken cancellationToken)
     {
-        if (cost is null || string.IsNullOrWhiteSpace(cost.Key) || cost.Turn < 1)
+        List<CastabilityRow> rows = run.Rows;
+        StatisticsWorkBudget budget = run.Budget;
+        if (cost is null || string.IsNullOrWhiteSpace(cost.Key) || cost.Turn < 1 ||
+            cost.Turn > MaximumCastabilityTurn)
         {
-            return Invalid<CastabilityResult>("Every cost needs a key and a turn of at least 1.");
+            return Invalid<CastabilityResult>(
+                $"Every cost needs a key and a turn from 1 to {MaximumCastabilityTurn}.");
         }
 
         if (!TryPrepareManaRequirement(cost.Requirement, out PreparedManaRequirement? requirement, out string? error))
@@ -199,7 +210,6 @@ public sealed partial class ExactStatisticsCalculator
                 $"The deck has {population.TotalCount} cards, fewer than the {seen} cards seen by turn {cost.Turn}.");
         }
 
-        StatisticsWorkBudget budget = new(workLimit);
         int turn = cost.Turn;
         MembershipEnumerationResult payable = MembershipBucketEngine.Evaluate(
             population,
@@ -228,13 +238,18 @@ public sealed partial class ExactStatisticsCalculator
             return null;
         }
 
-        MembershipEnumerationResult condition = MembershipBucketEngine.Evaluate(
-            population,
-            seen,
-            groups,
-            budget,
-            state => SourcesSeen(state) >= turn,
-            cancellationToken);
+        if (!run.Conditions.TryGetValue(turn, out MembershipEnumerationResult? condition))
+        {
+            condition = MembershipBucketEngine.Evaluate(
+                population,
+                seen,
+                groups,
+                budget,
+                state => SourcesSeen(state) >= turn,
+                cancellationToken);
+            run.Conditions[turn] = condition;
+        }
+
         if (condition.IsBounded)
         {
             return Bounded<CastabilityResult>(
@@ -253,6 +268,15 @@ public sealed partial class ExactStatisticsCalculator
                 : new ExactFraction(payable.FavorableWeight, condition.FavorableWeight).ToProbability()));
         return null;
     }
+
+    /// <summary>
+    /// Holds what one castability request shares across its costs: the rows so far, the one work budget for the whole
+    /// request, and the condition counts already worked out for each turn.
+    /// </summary>
+    private sealed record CostRun(
+        List<CastabilityRow> Rows,
+        StatisticsWorkBudget Budget,
+        Dictionary<int, MembershipEnumerationResult> Conditions);
 
     /// <summary>
     /// Counts the drawn cards that belong to at least one source group.

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Scryfall;
@@ -193,7 +194,39 @@ internal sealed record ResolvedDeckDocument(DeckDocument Deck, IReadOnlyList<str
 /// Says what the resolver must read: raw provider objects for the <c>full</c> format, and tags and prices for
 /// queries.
 /// </summary>
-internal sealed record CardListReadOptions(bool IncludeRaw, bool IncludeFacts);
+internal sealed record CardListReadOptions(bool IncludeRaw, bool IncludeFacts, CardListBudget? Budget = null);
+
+/// <summary>
+/// Counts the entries one request has read from all of its sources, so a request that names many large sources is
+/// refused instead of read to the end.
+/// </summary>
+internal sealed class CardListBudget(int limit)
+{
+    /// <summary>
+    /// Gets how many more entries the request may read.
+    /// </summary>
+    internal int Remaining { get; private set; } = limit;
+
+    /// <summary>
+    /// Gets the number of entries the request may read in all.
+    /// </summary>
+    internal int Limit { get; } = limit;
+
+    /// <summary>
+    /// Uses up a number of entries and says whether they fit.
+    /// </summary>
+    internal bool TryTake(int count)
+    {
+        if (count > Remaining)
+        {
+            Remaining = 0;
+            return false;
+        }
+
+        Remaining -= count;
+        return true;
+    }
+}
 
 /// <summary>
 /// Reads any card list source into resolved cards. One resolver serves every tool that takes a list, so a new
@@ -261,6 +294,32 @@ internal sealed class CardListResolver
         CardListReadOptions options,
         CancellationToken cancellationToken)
     {
+        OperationResult<ResolvedCardList> result = await ResolveSourceAsync(source, side, options, cancellationToken)
+            .ConfigureAwait(false);
+        if (source is not CompareSourceInput &&
+            options.Budget is { } budget &&
+            result is OperationSuccess<ResolvedCardList> read &&
+            !budget.TryTake(read.Data.Entries.Count))
+        {
+            return new OperationInvalidInput(
+                "list-too-large",
+                $"The sources together hold more than the limit of {budget.Limit} cards. Narrow a source, for " +
+                "example with a more specific search.",
+                side);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reads one source of any kind, without counting it against the request budget.
+    /// </summary>
+    private async Task<OperationResult<ResolvedCardList>> ResolveSourceAsync(
+        CardListSourceInput source,
+        string side,
+        CardListReadOptions options,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(source);
         switch (source)
         {
@@ -318,29 +377,6 @@ internal sealed class CardListResolver
             sources ?? [.. left.Sources.Concat(right.Sources)],
             [.. left.Unmatched.Concat(right.Unmatched)],
             HasDeckFields: false);
-    }
-
-    /// <summary>
-    /// Chooses the exact Scryfall identity of an entry: its printing, then its set and collector number, then its
-    /// Oracle ID. An entry with none has no exact identity.
-    /// </summary>
-    internal static ScryfallCardLookup? LookupFor(
-        Guid? printingId,
-        string? setCode,
-        string? collectorNumber,
-        Guid? oracleId)
-    {
-        if (printingId is Guid printing)
-        {
-            return new ScryfallCardLookup("scryfall-id", printing.ToString("D"));
-        }
-
-        if (!string.IsNullOrWhiteSpace(setCode) && !string.IsNullOrWhiteSpace(collectorNumber))
-        {
-            return new ScryfallCardLookup("printing", null, setCode, collectorNumber);
-        }
-
-        return oracleId is Guid oracle ? new ScryfallCardLookup("oracle-id", oracle.ToString("D")) : null;
     }
 
     /// <summary>
@@ -438,6 +474,7 @@ internal sealed class CardListResolver
                 source.SnapshotId,
                 options.IncludeRaw,
                 options.IncludeFacts,
+                options.Budget?.Remaining ?? ScryfallListQuery.MaximumEntries,
                 cancellationToken)).ConfigureAwait(false);
         if (read is not OperationSuccess<ScryfallSnapshotCards> success)
         {
@@ -684,7 +721,7 @@ internal sealed class CardListResolver
         {
             IReadOnlyList<string> categories = categoryNames.GetValueOrDefault(entry.EntryId) ?? [];
             raw.Add(new RawEntry(
-                LookupFor(entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId),
+                ScryfallEntryLookup.For(entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId),
                 entry.CardName,
                 entry.Quantity,
                 entry.Zone,
@@ -786,7 +823,7 @@ internal sealed class CardListResolver
             }
 
             raw.Add(new RawEntry(
-                LookupFor(entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId),
+                ScryfallEntryLookup.For(entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId),
                 entry.CardName,
                 entry.Quantity,
                 entry.Zone,
@@ -842,7 +879,7 @@ internal sealed class CardListResolver
     /// <summary>
     /// Reads installed cards and turns "card data is not installed" into a not-cached result that names the sync tool.
     /// </summary>
-    private async Task<OperationResult<ScryfallInstalledListCards>> ReadInstalledAsync(
+    internal async Task<OperationResult<ScryfallInstalledListCards>> ReadInstalledAsync(
         IReadOnlyList<ScryfallCardLookup?> lookups,
         CardListReadOptions options,
         CancellationToken cancellationToken)
@@ -870,26 +907,31 @@ internal sealed class CardListResolver
         CardListReadOptions options,
         CancellationToken cancellationToken)
     {
-        OperationResult<ResolvedCardList> left = await ResolveAsync(source.Left, side + ".left", options,
-            cancellationToken)
-            .ConfigureAwait(false);
+        OperationResult<ResolvedCardList> left = await ResolveAsync(
+            source.Left,
+            side + ".left",
+            options,
+            cancellationToken).ConfigureAwait(false);
         if (left is not OperationSuccess<ResolvedCardList> leftList)
         {
             return left;
         }
 
-        OperationResult<ResolvedCardList> right = await ResolveAsync(source.Right, side + ".right", options,
-            cancellationToken)
-            .ConfigureAwait(false);
+        OperationResult<ResolvedCardList> right = await ResolveAsync(
+            source.Right,
+            side + ".right",
+            options,
+            cancellationToken).ConfigureAwait(false);
         if (right is not OperationSuccess<ResolvedCardList> rightList)
         {
             return right;
         }
 
+        // Validate already refused any operation or match name that is not valid, before anything was read.
         if (!ScryfallSetNames.TryParseOperation(source.Operation, out ScryfallSetOperation operation) ||
             !ScryfallSetNames.TryParseMatchBy(source.MatchBy, out ScryfallMatchBy matchBy))
         {
-            return new OperationInvalidInput("invalid-source", "The nested comparison names are invalid.", side);
+            throw new UnreachableException("The nested comparison names were checked before reading.");
         }
 
         return new OperationSuccess<ResolvedCardList>(Combine(leftList.Data, rightList.Data, operation, matchBy));
@@ -898,7 +940,7 @@ internal sealed class CardListResolver
     /// <summary>
     /// Reports whether an entry's zone is one of the chosen zones; no chosen zones means every zone.
     /// </summary>
-    private static bool InZones(string zone, IReadOnlyList<string>? zones)
+    internal static bool InZones(string zone, IReadOnlyList<string>? zones)
     {
         return zones is null || zones.Count == 0 || zones.Contains(zone, StringComparer.OrdinalIgnoreCase);
     }

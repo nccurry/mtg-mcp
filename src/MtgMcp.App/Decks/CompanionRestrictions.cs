@@ -44,7 +44,7 @@ internal static class CompanionRestrictions
         List<RuleEntry> starting)
     {
         List<RuleEntry> cards = [.. starting.Where(entry => entry.Card is not null)];
-        string name = ScryfallCardSets.NormalizeName(CommanderCardText.FrontName(companion));
+        string name = ScryfallCardSets.NormalizeName(ScryfallCardFaces.FrontName(companion));
         return name switch
         {
             "gyruda, doom of depths" => Violations(
@@ -126,8 +126,9 @@ internal static class CompanionRestrictions
             .First();
         List<RuleEntryRef> lacking =
         [
-            .. nonland.Where(entry => !HasType(entry, best)).Select(entry => new RuleEntryRef(entry.Entry.EntryId,
-                entry.Card!.Name)),
+            .. nonland
+                .Where(entry => !HasType(entry, best))
+                .Select(entry => new RuleEntryRef(entry.Entry.EntryId, entry.Card!.Name)),
         ];
         return lacking.Count == 0
             ? ("passed", rule, [])
@@ -155,13 +156,13 @@ internal static class CompanionRestrictions
     private static bool BreaksKaheera(RuleEntry entry)
     {
         ScryfallCard card = entry.Card!;
-        if (!CommanderCardText.FrontTypes(card).Contains("Creature", StringComparer.Ordinal) ||
+        if (!ScryfallCardFaces.FrontTypes(card).Contains("Creature", StringComparer.Ordinal) ||
             CommanderCardText.HasKeyword(card, "Changeling"))
         {
             return false;
         }
 
-        return !CommanderCardText.FrontSubtypes(card).Any(type => KaheeraTypes.Contains(type, StringComparer.Ordinal));
+        return !ScryfallCardFaces.FrontSubtypes(card).Any(type => KaheeraTypes.Contains(type, StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -170,8 +171,7 @@ internal static class CompanionRestrictions
     private static bool RepeatsASymbol(RuleEntry entry)
     {
         ScryfallCard card = entry.Card!;
-        string? cost = string.IsNullOrEmpty(card.ManaCost) && card.Faces.Count > 0 ? card.Faces[0].ManaCost
-            : card.ManaCost;
+        string? cost = ScryfallCardFaces.FrontManaCost(card);
         return CommanderCardText.SymbolCounts(cost).Values.Any(count => count > 1);
     }
 
@@ -204,6 +204,6 @@ internal static class CompanionRestrictions
     /// </summary>
     private static bool HasType(RuleEntry entry, string type)
     {
-        return CommanderCardText.FrontTypes(entry.Card!).Contains(type, StringComparer.Ordinal);
+        return ScryfallCardFaces.FrontTypes(entry.Card!).Contains(type, StringComparer.Ordinal);
     }
 }

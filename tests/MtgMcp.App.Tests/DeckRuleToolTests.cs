@@ -126,7 +126,7 @@ public sealed class DeckRuleToolTests
     }
 
     /// <summary>
-    /// Creates a four-entry deck: a commander, a Forest, two off-identity cards, and an entry with no card.
+    /// Creates a four-entry deck: a commander, two off-identity cards, and an entry with no card.
     /// </summary>
     private static async Task<DeckDocument> CreateDeckAsync(CardDataFixture data)
     {

@@ -213,6 +213,121 @@ public sealed class PlaygroupGameStatsTests
     }
 
     /// <summary>
+    /// Verifies a list holding exactly the limit says the limit was not reached: it reads one more page to look.
+    /// </summary>
+    [Fact]
+    public async Task ReadGames_ExactlyTheLimit_DoesNotClaimThereIsMore()
+    {
+        PlaygroupTestHttpHandler pages = new();
+        pages.AddJson(GamesJson(0, 100));
+        pages.AddJson("[]");
+        using PlaygroupService service = PlaygroupTestFactory.CreateService(pages);
+
+        PlaygroupGameRead read = Success(await service.ReadGamesAsync(7, 100, TestContext.Current.CancellationToken));
+
+        Assert.Equal((100, false, 2), (read.Games.Count, read.LimitReached, read.PagesRead));
+    }
+
+    /// <summary>
+    /// Verifies a failure on a later page returns that failure and not the games read before it.
+    /// </summary>
+    [Fact]
+    public async Task ReadGames_FailureOnTheSecondPage_ReturnsTheFailureNotPartialGames()
+    {
+        PlaygroupTestHttpHandler pages = new();
+        pages.AddJson(GamesJson(0, 100));
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            pages.AddStatus(HttpStatusCode.ServiceUnavailable);
+        }
+
+        using PlaygroupService service = PlaygroupTestFactory.CreateService(pages);
+
+        OperationResult<PlaygroupGameRead> result = await service.ReadGamesAsync(
+            7,
+            500,
+            TestContext.Current.CancellationToken);
+
+        Assert.IsType<OperationUnavailable>(result.Value);
+        Assert.All(
+            pages.Requests.Skip(1),
+            request => Assert.Contains("page=2", request.PathAndQuery, StringComparison.Ordinal));
+        Assert.Contains("page=1", pages.Requests[0].PathAndQuery, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies pages that keep returning the same games or unreadable games stop at the page limit, and a game seen
+    /// twice is counted once.
+    /// </summary>
+    [Fact]
+    public async Task ReadGames_RepeatedAndUnreadablePages_StopAtThePageLimitAndCountGamesOnce()
+    {
+        PlaygroupTestHttpHandler pages = new();
+        for (int page = 0; page < 10; page++)
+        {
+            pages.AddJson(GamesJson(0, 100));
+        }
+
+        using PlaygroupService service = PlaygroupTestFactory.CreateService(pages);
+
+        PlaygroupGameRead read = Success(await service.ReadGamesAsync(7, 100, TestContext.Current.CancellationToken));
+
+        Assert.Equal(100, read.Games.Count);
+        Assert.True(read.LimitReached);
+        Assert.Equal(2, pages.Requests.Count);
+    }
+
+    /// <summary>
+    /// Verifies the date range compares UTC days: a game ended at 23:30 UTC on June 1 is in June 1, and one ended at
+    /// 00:30 UTC on June 2 is not.
+    /// </summary>
+    [Fact]
+    public void Aggregate_DateRange_ComparesUtcDays()
+    {
+        PlaygroupGame late = Game(1, "2026-06-01", 8, winner: 0, players: 2) with
+        {
+            EndedAt = DateTimeOffset.Parse("2026-06-01T23:30:00Z", System.Globalization.CultureInfo.InvariantCulture),
+        };
+        PlaygroupGame early = Game(2, "2026-06-02", 8, winner: 0, players: 2) with
+        {
+            EndedAt = DateTimeOffset.Parse("2026-06-02T00:30:00Z", System.Globalization.CultureInfo.InvariantCulture),
+        };
+
+        PlaygroupGameStatsResult result = PlaygroupGameStats.Aggregate(
+            [late, early],
+            PlaygroupGameGroupBy.Deck,
+            null,
+            new DateOnly(2026, 6, 1));
+
+        Assert.Equal((1, 1), (result.GamesCounted, result.GamesOutsideRange));
+    }
+
+    /// <summary>
+    /// Verifies a deck that holds two seats of one game counts once for that game, as a win when either seat won.
+    /// </summary>
+    [Fact]
+    public void Aggregate_TwoSeatsWithOneDeck_CountTheDeckOncePerGame()
+    {
+        PlaygroupGame game = new(
+            1,
+            8,
+            null,
+            null,
+            [
+                new PlaygroupParticipation(false, 10, "Mirror", 1, "A", 0),
+                new PlaygroupParticipation(true, 10, "Mirror", 2, "B", 0),
+                new PlaygroupParticipation(false, 20, "Other", 3, "C", 0),
+            ]);
+
+        PlaygroupGameStatsResult result = PlaygroupGameStats.Aggregate([game], PlaygroupGameGroupBy.Deck, null, null);
+
+        PlaygroupGameStatsRow mirror = result.Rows.Single(row => row.Key == 10);
+        Assert.Equal((1, 1), (mirror.Games, mirror.Wins));
+        PlaygroupGameStatsRow other = result.Rows.Single(row => row.Key == 20);
+        Assert.Equal((1, 0), (other.Games, other.Wins));
+    }
+
+    /// <summary>
     /// Verifies a bad limit fails before any request and a provider failure is returned as its own kind.
     /// </summary>
     [Fact]
@@ -231,7 +346,7 @@ public sealed class PlaygroupGameStatsTests
 
         Assert.IsType<OperationInvalidInput>(zero.Value);
         Assert.IsType<OperationInvalidInput>(tooMany.Value);
-        Assert.IsNotType<OperationSuccess<PlaygroupGameRead>>(denied.Value);
+        Assert.Equal("provider-unauthorized", Assert.IsType<OperationUnavailable>(denied.Value).ReasonCode);
         Assert.Single(handler.Requests);
     }
 

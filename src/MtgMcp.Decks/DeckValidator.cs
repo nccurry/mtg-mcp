@@ -5,12 +5,12 @@ namespace MtgMcp.Decks;
 /// <summary>
 /// Evaluates only local relational structure without interpreting deck formats.
 /// </summary>
-internal static class DeckValidator
+public static class DeckValidator
 {
     /// <summary>
     /// Produces deterministic local issues without legality, provider, role, or quality inference.
     /// </summary>
-    internal static DeckValidationReport Validate(DeckDocument deck)
+    public static DeckValidationReport Validate(DeckDocument deck)
     {
         ArgumentNullException.ThrowIfNull(deck);
         List<DeckValidationIssue> issues = [];

@@ -41,6 +41,6 @@ internal static class SpellbookToolsetManifest
         SpellbookDeckInputResolver resolver = new(deckStore);
         builder
             .WithRegisteredTools(ToolRegistration.Create(new SpellbookReadTools(service, resolver)))
-            .WithRegisteredTools(ToolRegistration.Create(new SpellbookBracketTools(service, resolver, deckStore)));
+            .WithRegisteredTools(ToolRegistration.Create(new SpellbookBracketTools(service, resolver)));
     }
 }

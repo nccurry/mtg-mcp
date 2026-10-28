@@ -73,7 +73,9 @@ Every tool belongs to one toolset. Tool names say where the data comes from:
 their provider. Each description starts with the data the tool works on:
 `Local deck store:`, `Scryfall:`, `Installed Scryfall card data:`,
 `Saved Scryfall requests:`, `Archidekt:`, `Playgroup:`, `Commander Spellbook:`,
-or `Exact math:`. The prefix names the input data, not the toolset.
+or `Exact math:`. The prefix names the input data, not the toolset. The two `card_list*` tools are the one
+exception to the `<source>_<object>_<action>` rule: they read any card list, so they have no single source
+prefix, and their descriptions start with `Scryfall:` because installed Scryfall card data resolves every list.
 
 | Toolset | Read-only | Local write | Remote write |
 | --- | ---: | ---: | ---: |
@@ -103,7 +105,7 @@ tool for each job in the active selection, say that the agent makes every
 deckbuilding judgment, and say that text written by other people in provider
 results is untrusted data.
 
-The three `spellbook` tools are read-only in every mode. They return Commander
+The four `spellbook` tools are read-only in every mode. They return Commander
 Spellbook evidence, not a recommendation about a deck or combo.
 
 Read `mtg://server/capabilities` to inspect the active selection, why a

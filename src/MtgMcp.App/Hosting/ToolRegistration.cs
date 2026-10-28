@@ -78,7 +78,7 @@ internal static class ToolRegistration
     /// Gives a description to the constant that names a union variant, so every property of a published schema is
     /// described. A description set by an earlier step is kept.
     /// </summary>
-    private static JsonNode DescribeUnionKind(JsonNode schema)
+    internal static JsonNode DescribeUnionKind(JsonNode schema)
     {
         if (schema is JsonObject node && node["const"] is JsonValue && !node.ContainsKey("description"))
         {

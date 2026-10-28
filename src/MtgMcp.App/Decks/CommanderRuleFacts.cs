@@ -38,7 +38,7 @@ internal sealed record OffIdentityEntry(Guid EntryId, string Name, IReadOnlyList
 /// Reports the color identity rule: the commanders' combined identity and the entries outside it.
 /// </summary>
 internal sealed record ColorIdentityFact(
-    bool Passed,
+    bool? Passed,
     IReadOnlyList<string> Identity,
     IReadOnlyList<OffIdentityEntry> OffIdentity);
 
@@ -101,7 +101,7 @@ internal sealed record CompanionFact(
     string? Restriction,
     string Status,
     bool? Passed,
-    bool InCommanderIdentity,
+    bool? InCommanderIdentity,
     bool LegalInCommander,
     string RestrictionStatus,
     string RestrictionReason,
@@ -231,7 +231,7 @@ internal static class CommanderRules
                     ? "Not a legendary creature, Vehicle, or Spacecraft with power and toughness, and its text " +
                         "does not say it can be your commander."
                     : null,
-                CommanderCardText.FrontText(entry.Card)));
+                ScryfallCardFaces.FrontText(entry.Card)));
         }
 
         int count = commanders.Sum(entry => entry.Entry.Quantity);
@@ -249,8 +249,8 @@ internal static class CommanderRules
     /// </summary>
     private static string? EligibleVia(ScryfallCard card, bool pairedWithChooseBackground)
     {
-        IReadOnlyList<string> types = CommanderCardText.FrontTypes(card);
-        IReadOnlyList<string> subtypes = CommanderCardText.FrontSubtypes(card);
+        IReadOnlyList<string> types = ScryfallCardFaces.FrontTypes(card);
+        IReadOnlyList<string> subtypes = ScryfallCardFaces.FrontSubtypes(card);
         bool legendary = types.Contains("Legendary", StringComparer.Ordinal);
         if (legendary && types.Contains("Creature", StringComparer.Ordinal))
         {
@@ -295,6 +295,12 @@ internal static class CommanderRules
         foreach (RuleEntry entry in commanders.Where(entry => entry.Card is not null))
         {
             identity.UnionWith(entry.Card!.ColorIdentity);
+        }
+
+        if (commanders.Any(entry => entry.Card is null))
+        {
+            // A commander with no card data has an unknown identity, so no entry can be called outside it.
+            return new ColorIdentityFact(null, SortColors(identity), []);
         }
 
         List<OffIdentityEntry> off = [];
@@ -343,6 +349,16 @@ internal static class CommanderRules
     }
 
     /// <summary>
+    /// Reports whether Scryfall lists a card as banned or not legal in Commander, and gives that status. A card with
+    /// no Commander entry, or any other status (legal, restricted), is not blocked. Both the legality fact and the
+    /// companion check use this one rule.
+    /// </summary>
+    private static bool BlocksCommander(ScryfallCard card, out string? status)
+    {
+        return card.Legalities.TryGetValue("commander", out status) && status is "banned" or "not_legal";
+    }
+
+    /// <summary>
     /// Lists entries whose Commander legality is banned or not legal.
     /// </summary>
     private static LegalityFact EvaluateLegality(List<RuleEntry> starting)
@@ -350,10 +366,9 @@ internal static class CommanderRules
         List<LegalityIssue> issues = [];
         foreach (RuleEntry entry in starting.Where(entry => entry.Card is not null))
         {
-            if (entry.Card!.Legalities.TryGetValue("commander", out string? status) &&
-                status is "banned" or "not_legal")
+            if (BlocksCommander(entry.Card!, out string? status))
             {
-                issues.Add(new LegalityIssue(entry.Entry.EntryId, entry.Card.Name, status));
+                issues.Add(new LegalityIssue(entry.Entry.EntryId, entry.Card!.Name, status!));
             }
         }
 
@@ -404,8 +419,11 @@ internal static class CommanderRules
 
         if (commanders.Any(entry => entry.Card is null))
         {
-            return new PairingFact("unknown", null, [], "A commander has no Scryfall card, so its abilities are " +
-                "unknown.");
+            return new PairingFact(
+                "unknown",
+                null,
+                [],
+                "A commander has no Scryfall card, so its abilities are unknown.");
         }
 
         return CommanderPairing.Check(commanders[0], commanders[1]);
@@ -418,12 +436,14 @@ internal static class CommanderRules
         List<RuleEntry> starting)
     {
         ScryfallCard card = entry.Card!;
-        bool inIdentity = card.ColorIdentity.All(identity.Identity.Contains);
-        bool legal = !card.Legalities.TryGetValue("commander", out string? status) || status is "legal";
+        bool? inIdentity = identity.Passed is null ? null : card.ColorIdentity.All(identity.Identity.Contains);
+        bool legal = !BlocksCommander(card, out _);
         (string restrictionStatus, string reason, List<RuleEntryRef> entries) = CompanionRestrictions.Check(card,
             starting);
-        bool failed = !inIdentity || !legal || restrictionStatus == "failed";
-        string overall = failed ? "failed" : restrictionStatus == "not-checked" ? "not-checked" : "passed";
+        bool failed = inIdentity == false || !legal || restrictionStatus == "failed";
+        string overall = failed ? "failed"
+            : restrictionStatus == "not-checked" || inIdentity is null ? "not-checked"
+            : "passed";
         return new CompanionFact(
             entry.Entry.EntryId,
             card.Name,

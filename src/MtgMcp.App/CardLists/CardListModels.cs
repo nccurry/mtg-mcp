@@ -18,7 +18,7 @@ internal sealed class ListFieldValuesAttribute()
 /// </summary>
 [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
 internal sealed class ListOperatorValuesAttribute()
-    : AllowedValuesAttribute("eq", "ne", "lt", "lte", "gt", "gte", "in", "contains");
+    : AllowedValuesAttribute([.. ScryfallListQuery.Operators.Cast<object>()]);
 
 /// <summary>
 /// Describes one filter of <c>card_list_query</c>.

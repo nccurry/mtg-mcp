@@ -985,6 +985,7 @@ public sealed class FoundationMcpTests
             expectedNames,
             element.EnumerateObject().Select(property => property.Name).ToArray());
     }
+
     /// <summary>
     /// Verifies the provider toolsets that need credentials turn on only when their credentials are present,
     /// whether the selection is the default or names them, and report why they are off.

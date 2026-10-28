@@ -78,6 +78,13 @@ internal sealed record DeckDuplicatesPreview(
     [JsonPropertyName("narrow")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Narrow { get; init; }
+
+    /// <summary>
+    /// Gets how many unmatched entries the list leaves out to keep the result small, or null when it lists all.
+    /// </summary>
+    [JsonPropertyName("unmatchedOmitted")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? UnmatchedOmitted { get; init; }
 }
 
 /// <summary>

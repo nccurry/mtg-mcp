@@ -232,9 +232,12 @@ public static class PlaygroupGameStats
             }
 
             counted++;
-            foreach (PlaygroupParticipation participation in game.Participations)
+            // A deck or player that holds two seats of one game counts once for that game, as a win if any seat won.
+            foreach (IGrouping<int, PlaygroupParticipation> seats in game.Participations.GroupBy(seat =>
+                (groupBy == PlaygroupGameGroupBy.Deck ? seat.DeckId : seat.UserId)!.Value))
             {
-                int key = (groupBy == PlaygroupGameGroupBy.Deck ? participation.DeckId : participation.UserId)!.Value;
+                int key = seats.Key;
+                PlaygroupParticipation participation = seats.Last();
                 if (!totals.TryGetValue(key, out Totals? row))
                 {
                     row = new Totals();
@@ -243,7 +246,7 @@ public static class PlaygroupGameStats
 
                 row.Add(
                     groupBy == PlaygroupGameGroupBy.Deck ? participation.DeckName : participation.UserName,
-                    participation.Winner,
+                    seats.Any(seat => seat.Winner),
                     game.Participations.Count,
                     game.TotalRounds);
             }

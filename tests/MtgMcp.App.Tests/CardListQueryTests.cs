@@ -331,6 +331,72 @@ public sealed class CardListQueryTests
     }
 
     /// <summary>
+    /// Verifies a cursor past the end of the rows is refused exactly as card_lists_compare refuses it, not answered
+    /// with an empty page.
+    /// </summary>
+    [Fact]
+    public async Task Query_CursorPastTheEnd_IsInvalid()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        DeckDocument deck = await world.CreateDeckAsync();
+        DeckSourceInput source = new(deck.DeckId);
+        CardListRowsInput rows = new(["name"], PageSize: 2);
+        CardListQueryResult first = Success(await Query(world, source, rows: rows));
+        string past = CardListCursors.Encode(first.Fingerprint, 99, [.. first.Sources.Select(item => item.Marker)]);
+
+        OperationInvalidInput beyond = Failure(await Query(world, source, rows: rows, cursor: past));
+
+        Assert.Equal(("invalid-cursor", "cursor"), (beyond.ReasonCode, beyond.Path));
+    }
+
+    /// <summary>
+    /// Verifies the tag and price lookups run only when the query names tags or the cheapest price, in any part of
+    /// the request.
+    /// </summary>
+    [Fact]
+    public void NeedsFacts_OnlyForTagsAndCheapestPrice()
+    {
+        CardListFilterInput byTags = new("tags", "contains", JsonSerializer.SerializeToElement("ramp"));
+        CardListFilterInput byName = new("name", "contains", JsonSerializer.SerializeToElement("a"));
+
+        Assert.False(CardListCoordinator.NeedsFacts(null, null, null, null));
+        Assert.False(CardListCoordinator.NeedsFacts([byName], ["manaValue"], ["sum:priceUsd", "pips"],
+            new CardListRowsInput(["name"], [new CardListSortInput("name", "asc")])));
+        Assert.True(CardListCoordinator.NeedsFacts([byTags], null, null, null));
+        Assert.True(CardListCoordinator.NeedsFacts(null, ["tags"], null, null));
+        Assert.True(CardListCoordinator.NeedsFacts(null, null, ["avg:cheapestPriceUsd"], null));
+        Assert.True(CardListCoordinator.NeedsFacts(null, null, null, new CardListRowsInput(["cheapestPriceUsd"])));
+        Assert.True(CardListCoordinator.NeedsFacts(
+            null,
+            null,
+            null,
+            new CardListRowsInput(["name"], [new CardListSortInput("cheapestPriceUsd", "desc")])));
+    }
+
+    /// <summary>
+    /// Verifies a request is refused when its sources together hold more cards than the request budget, naming the
+    /// source that went over, and that a snapshot larger than the remaining budget is refused before it is read.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_SourcesTogetherOverTheBudget_AreRefusedWithTheSourceNamed()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        CardListResolver resolver = new(world.Data.Scryfall, world.Data.Access());
+        CardListReadOptions options = new(IncludeRaw: false, IncludeFacts: false, new CardListBudget(5));
+        CardsSourceInput three = new([.. world.Cards.Take(3).Select(CardJson.PrintingOf)]);
+
+        OperationResult<ResolvedCardList> left = await resolver.ResolveAsync(
+            three, "left", options, TestContext.Current.CancellationToken);
+        OperationResult<ResolvedCardList> right = await resolver.ResolveAsync(
+            three, "right", options, TestContext.Current.CancellationToken);
+
+        Assert.IsType<OperationSuccess<ResolvedCardList>>(left.Value);
+        OperationInvalidInput over = Assert.IsType<OperationInvalidInput>(right.Value);
+        Assert.Equal(("list-too-large", "right"), (over.ReasonCode, over.Path));
+        Assert.Contains("5", over.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Runs one query with a group, metric, and row choice.
     /// </summary>
     private static Task<OperationResult<CardListQueryResult>> Query(

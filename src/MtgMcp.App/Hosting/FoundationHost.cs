@@ -107,8 +107,7 @@ internal static class FoundationHost
                 mcpBuilder,
                 deckStore,
                 new ExactStatisticsCalculator(FoundationServerIdentity.PackageVersion),
-                scryfallService,
-                listAccess);
+                scryfallService);
         }
 
         if (archidektService is not null && deckStore is not null)

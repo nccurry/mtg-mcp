@@ -119,9 +119,11 @@ public sealed class SpellbookBracketFactsTests
             directory,
             new MutableTimeProvider(new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero)));
 
-        SpellbookBracketFacts first = Success(await service.EstimateBracketFactsAsync(Deck,
+        SpellbookBracketFacts first = Success(await service.EstimateBracketFactsAsync(
+            Deck,
             TestContext.Current.CancellationToken));
-        SpellbookBracketFacts second = Success(await service.EstimateBracketFactsAsync(Deck,
+        SpellbookBracketFacts second = Success(await service.EstimateBracketFactsAsync(
+            Deck,
             TestContext.Current.CancellationToken));
 
         Assert.Equal("network", first.Evidence.CacheStatus);
@@ -163,28 +165,68 @@ public sealed class SpellbookBracketFactsTests
     }
 
     /// <summary>
-    /// Verifies a sparse response maps with defaults instead of failing, so a field the provider adds or drops later
-    /// cannot break the tool.
+    /// Verifies a response that states every flag but leaves out names, quantities, and ids still maps, using empty
+    /// text and a quantity of 1 for those, so a field the provider adds or drops later cannot break the tool.
     /// </summary>
     [Fact]
-    public async Task EstimateBracketFacts_SparseResponse_UsesDefaults()
+    public async Task EstimateBracketFacts_FlagsPresentButNamesMissing_UsesDefaultsForText()
     {
         SpellbookTestHttpHandler handler = new();
         handler.AddJson(
-            "{\"bracketTag\":\"S\",\"cards\":[{\"card\":{\"name\":\"X\"}},{}],\"combos\":[{\"speed\":\"fast\"}]}");
+            "{\"bracketTag\":\"S\",\"cards\":[{\"card\":{\"name\":\"X\"},\"gameChanger\":false," +
+            "\"massLandDenial\":false,\"extraTurn\":false,\"banned\":false},{\"gameChanger\":true," +
+            "\"massLandDenial\":false,\"extraTurn\":false,\"banned\":false}],\"combos\":[{\"speed\":4," +
+            "\"definitelyTwoCard\":false,\"arguablyTwoCard\":true,\"combo\":{\"manaValueNeeded\":3}}]}");
         using TemporarySpellbookDirectory directory = new();
         using SpellbookService service = SpellbookTestFactory.CreateService(
             handler,
             directory,
             new MutableTimeProvider(new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero)));
 
-        SpellbookBracketFacts facts = Success(await service.EstimateBracketFactsAsync(Deck,
+        SpellbookBracketFacts facts = Success(await service.EstimateBracketFactsAsync(
+            Deck,
             TestContext.Current.CancellationToken));
 
         Assert.Equal(["X", string.Empty], facts.Cards.Select(card => card.Name));
         Assert.All(facts.Cards, card => Assert.Equal(1, card.Quantity));
         SpellbookBracketCombo combo = Assert.Single(facts.Combos);
-        Assert.Equal((string.Empty, 0), (combo.VariantId, combo.Speed));
+        Assert.Equal((string.Empty, 4, 3), (combo.VariantId, combo.Speed, combo.ManaValueNeeded));
+    }
+
+    /// <summary>
+    /// Verifies a missing or non-boolean flag, a missing speed, and items that are not objects fail with
+    /// source-invalid-response instead of reading as false or zero, and that such a response is not cached.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"cards\":[{\"card\":{\"name\":\"X\"},\"massLandDenial\":false,\"extraTurn\":false," +
+        "\"banned\":false}],\"combos\":[]}")]
+    [InlineData("{\"cards\":[{\"card\":{\"name\":\"X\"},\"gameChanger\":\"yes\",\"massLandDenial\":false," +
+        "\"extraTurn\":false,\"banned\":false}],\"combos\":[]}")]
+    [InlineData("{\"cards\":[],\"combos\":[{\"definitelyTwoCard\":false,\"arguablyTwoCard\":false," +
+        "\"combo\":{\"manaValueNeeded\":2}}]}")]
+    [InlineData("{\"cards\":[7],\"combos\":[]}")]
+    [InlineData("{\"cards\":[],\"combos\":[\"x\"]}")]
+    public async Task EstimateBracketFacts_MalformedItems_FailAndAreNotCached(string body)
+    {
+        SpellbookTestHttpHandler handler = new();
+        handler.AddJson(body);
+        handler.AddJson(body);
+        using TemporarySpellbookDirectory directory = new();
+        using SpellbookService service = SpellbookTestFactory.CreateService(
+            handler,
+            directory,
+            new MutableTimeProvider(new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero)));
+
+        OperationResult<SpellbookBracketFacts> first = await service.EstimateBracketFactsAsync(
+            Deck,
+            TestContext.Current.CancellationToken);
+        OperationResult<SpellbookBracketFacts> second = await service.EstimateBracketFactsAsync(
+            Deck,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("source-invalid-response", Assert.IsType<OperationUnavailable>(first.Value).ReasonCode);
+        Assert.Equal("source-invalid-response", Assert.IsType<OperationUnavailable>(second.Value).ReasonCode);
+        Assert.Equal(2, handler.Requests.Count);
     }
 
     /// <summary>

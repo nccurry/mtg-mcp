@@ -33,7 +33,7 @@ public sealed class ScryfallOrderedObject
     /// <summary>
     /// Finds the value of one property, or null when it is not there.
     /// </summary>
-    public object? Get(string name)
+    internal object? Get(string name)
     {
         foreach (KeyValuePair<string, object?> field in fields)
         {

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -124,8 +125,9 @@ internal sealed class DeckReadTools
         "commander it also reports Commander rule facts from installed Scryfall card data: deck size, commanders " +
         "and whether each is eligible, color identity and entries outside it, singleton breaks, Commander " +
         "legality of every entry, a Game Changer count and list, the partner pairing of two commanders, and the " +
-        "checks of a companion in a companion zone. Each fact has passed or a status and names the entries " +
-        "involved. It never names a bracket, a power level, or an overall verdict. Example: " +
+        "checks of a companion in a companion zone. Each fact has a passed flag or a status field and names the " +
+        "entries involved. It never names a bracket, a power level, or an overall verdict." +
+        UntrustedTextNotes.CardListEntries + " Example: " +
         "{\"deckId\":\"0193e97a-ef95-7700-8000-000000000001\",\"rules\":\"commander\"}.")]
     internal Task<OperationResult<DeckValidationView>> ValidateAsync(
         [Description("Stable local deck UUID.")] Guid deckId,

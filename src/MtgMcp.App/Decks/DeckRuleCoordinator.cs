@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using MtgMcp.App.CardLists;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
@@ -74,32 +73,27 @@ internal sealed class DeckRuleCoordinator
                 "rules");
         }
 
-        OperationResult<DeckValidationReport> report = await store.ValidateAsync(deckId, cancellationToken)
-            .ConfigureAwait(false);
-        if (report is not OperationSuccess<DeckValidationReport> structural)
-        {
-            return OperationFailure.Forward<DeckValidationReport, DeckValidationView>(report);
-        }
-
-        DeckValidationView view = new(
-            structural.Data.DeckId,
-            structural.Data.Revision,
-            structural.Data.IsStructurallyValid,
-            structural.Data.Issues);
-        if (rules is null)
-        {
-            return new OperationSuccess<DeckValidationView>(view);
-        }
-
+        // One read of the deck serves both the structural report and the rule facts, so they describe one revision.
         OperationResult<DeckDocument> loaded = await store.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (loaded is not OperationSuccess<DeckDocument> deck)
         {
             return OperationFailure.Forward<DeckDocument, DeckValidationView>(loaded);
         }
 
+        DeckValidationReport structural = DeckValidator.Validate(deck.Data);
+        DeckValidationView view = new(
+            structural.DeckId,
+            structural.Revision,
+            structural.IsStructurallyValid,
+            structural.Issues);
+        if (rules is null)
+        {
+            return new OperationSuccess<DeckValidationView>(view);
+        }
+
         OperationResult<ScryfallInstalledListCards> cards = await ScryfallToolExecution.RunAsync(() =>
             scryfall.ReadInstalledListCardsAsync(
-                [.. deck.Data.Entries.Select(entry => CardListResolver.LookupFor(
+                [.. deck.Data.Entries.Select(entry => ScryfallEntryLookup.For(
                     entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId))],
                 includeRaw: false,
                 includeFacts: false,
@@ -124,7 +118,7 @@ internal sealed class DeckRuleCoordinator
             ScryfallCard? card = read.Data.Cards[index]?.Card;
             string? reason = card is not null
                 ? null
-                : CardListResolver.LookupFor(entry.PrintingId, entry.SetCode, entry.CollectorNumber,
+                : ScryfallEntryLookup.For(entry.PrintingId, entry.SetCode, entry.CollectorNumber,
                     entry.OracleId) is null
                     ? "no-scryfall-identity"
                     : "not-in-card-data";

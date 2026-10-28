@@ -244,8 +244,11 @@ public sealed class PlaygroupService : IDisposable
         }
 
         int pageSize = Math.Min(100, maxGames);
+        int pageLimit = ((maxGames + pageSize - 1) / pageSize) + 1;
         List<PlaygroupGame> games = [];
-        for (int page = 1; ; page++)
+        HashSet<int> seen = [];
+        PlaygroupEvidence? last = null;
+        for (int page = 1; page <= pageLimit; page++)
         {
             OperationResult<PlaygroupEvidence> result = await ListPlaygroupGamesAsync(
                 playgroupId,
@@ -258,21 +261,34 @@ public sealed class PlaygroupService : IDisposable
                 return OperationFailure.Forward<PlaygroupEvidence, PlaygroupGameRead>(result);
             }
 
-            IReadOnlyList<PlaygroupGame> parsed = PlaygroupGameParser.Parse(success.Data.Data);
-            int received = success.Data.Data.ValueKind == JsonValueKind.Array
-                ? success.Data.Data.GetArrayLength()
-                : 0;
-            games.AddRange(parsed.Take(maxGames - games.Count));
-            if (received < pageSize)
+            last = success.Data;
+            int received = last.Data.ValueKind == JsonValueKind.Array ? last.Data.GetArrayLength() : 0;
+            bool more = false;
+            foreach (PlaygroupGame game in PlaygroupGameParser.Parse(last.Data))
             {
-                return new OperationSuccess<PlaygroupGameRead>(new PlaygroupGameRead(games, false, page, success.Data));
+                if (!seen.Add(game.Id))
+                {
+                    continue;
+                }
+
+                if (games.Count < maxGames)
+                {
+                    games.Add(game);
+                }
+                else
+                {
+                    more = true;
+                }
             }
 
-            if (games.Count >= maxGames)
+            if (more || received < pageSize)
             {
-                return new OperationSuccess<PlaygroupGameRead>(new PlaygroupGameRead(games, true, page, success.Data));
+                return new OperationSuccess<PlaygroupGameRead>(new PlaygroupGameRead(games, more, page, last));
             }
         }
+
+        // The page limit stopped the read (pages of repeated or unreadable games), so the list may be incomplete.
+        return new OperationSuccess<PlaygroupGameRead>(new PlaygroupGameRead(games, true, pageLimit, last!));
     }
 
     /// <summary>Submits one caller-supplied event batch without automatic retries.</summary>

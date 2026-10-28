@@ -204,6 +204,9 @@ public sealed class CommanderRuleTests
     [InlineData("The Eighth Doctor", "Amy Pond", "passed")]
     [InlineData("Ace, Fearless Rebel", "Gandalf the Grey", "failed")]
     [InlineData("Gandalf the Grey", "Silas Renn, Seeker Adept", "failed")]
+    [InlineData("Halana, Kessig Ranger", "Alena, Kessig Trapper", "passed")]
+    [InlineData("Wilson, Refined Grizzly", "Agent of the Iron Throne", "passed")]
+    [InlineData("Karlach, Raging Tiefling", "Acolyte of Bahamut", "failed")]
     public void Evaluate_Pairing_FollowsTheRulesTable(string first, string second, string status)
     {
         List<RuleEntry> deck =
@@ -282,6 +285,8 @@ public sealed class CommanderRuleTests
     [InlineData("Dawnsire, Sunstar Dreadnought", true, "legendary-spacecraft")]
     [InlineData("Deep Space 9", false, null)]
     [InlineData("Aminatou, the Fateshifter", true, "can-be-your-commander")]
+    [InlineData("Karlach, Raging Tiefling", true, "legendary-creature")]
+    [InlineData("Heart of Kiran", true, "legendary-vehicle")]
     [InlineData("Smuggler's Copter", false, null)]
     [InlineData("Sol Ring", false, null)]
     [InlineData("Delver of Secrets // Insectile Aberration", false, null)]
@@ -353,10 +358,13 @@ public sealed class CommanderRuleTests
     [InlineData("Lurrus of the Dream-Den", "Llanowar Elves", "passed")]
     [InlineData("Jegantha, the Wellspring", "Cultivate", "passed")]
     [InlineData("Jegantha, the Wellspring", "Kitchen Finks", "failed")]
+    [InlineData("Jegantha, the Wellspring", "Counterspell", "failed")]
+    [InlineData("Jegantha, the Wellspring", "Bonecrusher Giant // Stomp", "passed")]
     [InlineData("Gyruda, Doom of Depths", "Cultivate", "failed")]
     [InlineData("Gyruda, Doom of Depths", "Arcane Signet", "passed")]
     [InlineData("Obosh, the Preypiercer", "Arcane Signet", "failed")]
     [InlineData("Obosh, the Preypiercer", "Cultivate", "passed")]
+    [InlineData("Obosh, the Preypiercer", "Mana Crypt", "failed")]
     [InlineData("Keruga, the Macrosage", "Sol Ring", "failed")]
     [InlineData("Keruga, the Macrosage", "Cultivate", "passed")]
     [InlineData("Kaheera, the Orphanguard", "Llanowar Elves", "failed")]
@@ -399,6 +407,7 @@ public sealed class CommanderRuleTests
         Assert.Equal(2, umori.RestrictionEntries.Count);
         Assert.Contains("most common", umori.RestrictionReason, StringComparison.Ordinal);
     }
+
     /// <summary>
     /// Verifies a failed Lurrus names the entry that breaks it, and an unchecked companion reports its restriction
     /// text with a reason (cases R16 and R18).
@@ -471,6 +480,30 @@ public sealed class CommanderRuleTests
         Assert.Equal("no-scryfall-identity", facts.Unresolved[0].Reason);
         Assert.Contains(facts.Commanders.Items, item => !item.Eligible && item.Name == "Mystery commander");
         Assert.NotEmpty(facts.Limits);
+    }
+
+    /// <summary>
+    /// Verifies a commander with no card data makes the color identity fact unknown: no entry is called outside an
+    /// identity nobody could read, and a companion is not-checked rather than failed.
+    /// </summary>
+    [Fact]
+    public void Evaluate_UnresolvedCommander_MakesTheColorIdentityUnknown()
+    {
+        List<RuleEntry> deck =
+        [
+            new RuleEntry(DeckEntry("Mystery commander", 1, "commander"), null, "no-scryfall-identity"),
+            Entry("Forest", 1),
+            Entry("Rhystic Study", 1),
+            Entry("Jegantha, the Wellspring", 1, "companion"),
+        ];
+
+        CommanderRuleFacts facts = CommanderRules.Evaluate(deck);
+
+        Assert.Null(facts.ColorIdentity.Passed);
+        Assert.Empty(facts.ColorIdentity.OffIdentity);
+        CompanionFact companion = Assert.Single(facts.Companions);
+        Assert.Null(companion.InCommanderIdentity);
+        Assert.Equal("not-checked", companion.Status);
     }
 
     /// <summary>

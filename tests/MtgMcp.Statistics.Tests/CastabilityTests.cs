@@ -243,6 +243,156 @@ public sealed class CastabilityTests
     }
 
     /// <summary>
+    /// Verifies the work budget covers the whole request: a limit that is enough for one cost is not enough for many
+    /// costs together, and the answer is the bounded result with no partial numbers.
+    /// </summary>
+    [Fact]
+    public void CalculateCastability_ManyCostsTogether_ShareOneBudget()
+    {
+        StatisticsPopulation population = new(
+            [new StatisticsPopulationBucket(20, GreenGroup), new StatisticsPopulationBucket(40, [])],
+            GreenGroup);
+        ManaSourceInput[] sources = [new ManaSourceInput("lands", ["G"])];
+        static CastabilityCostInput One(int index)
+        {
+            return new CastabilityCostInput($"cost {index}", new ManaRequirementInput(Green: 1), 3);
+        }
+
+        long enoughForOne = new long[] { 10, 30, 100, 300, 1_000, 3_000, 10_000, 30_000, 100_000, 300_000 }
+            .First(limit => new ExactStatisticsCalculator("test", limit).CalculateCastability(new CastabilityRequest(
+                population, sources, [One(0)], true, false)).Value is OperationSuccess<
+                    StatisticsCalculation<CastabilityResult>> { Data.Value: StatisticsExact<CastabilityResult> });
+        List<CastabilityCostInput> many = [.. Enumerable.Range(0, 400).Select(One)];
+
+        OperationResult<StatisticsCalculation<CastabilityResult>> result = new ExactStatisticsCalculator(
+            "test",
+            enoughForOne).CalculateCastability(new CastabilityRequest(population, sources, many, true, false));
+
+        Assert.IsType<StatisticsBoundedUnsupported>(
+            Assert.IsType<OperationSuccess<StatisticsCalculation<CastabilityResult>>>(result.Value).Data.Value);
+    }
+
+    /// <summary>
+    /// Verifies a turn above the latest turn the calculation allows is refused, so a huge turn cannot overflow.
+    /// </summary>
+    [Fact]
+    public void CalculateCastability_TurnAboveTheMaximum_IsInvalid()
+    {
+        ExactStatisticsCalculator calculator = new("test");
+        StatisticsPopulation population = new(
+            [new StatisticsPopulationBucket(20, GreenGroup), new StatisticsPopulationBucket(40, [])],
+            GreenGroup);
+
+        foreach (int turn in new[] { ExactStatisticsCalculator.MaximumCastabilityTurn + 1, int.MaxValue })
+        {
+            Assert.IsType<OperationInvalidInput>(calculator.CalculateCastability(new CastabilityRequest(
+                population,
+                [new ManaSourceInput("lands", ["G"])],
+                [new CastabilityCostInput("g", new ManaRequirementInput(Green: 1), turn)],
+                true,
+                false)).Value);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a source that can make either of two colors equals brute-force enumeration, so a dual source is
+    /// counted once and assigned to the color that needs it (the one-color groups above cannot show this).
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, 3, 1, 1, 1)]
+    [InlineData(false, true, 3, 2, 1, 0)]
+    [InlineData(true, false, 4, 2, 2, 0)]
+    [InlineData(true, true, 2, 1, 1, 0)]
+    [InlineData(false, false, 3, 0, 2, 1)]
+    public void CalculateCastability_DualSources_MatchBruteForceEnumeration(
+        bool onThePlay,
+        bool requireLandDrops,
+        int turn,
+        int green,
+        int black,
+        int generic)
+    {
+        ExactStatisticsCalculator calculator = new("test");
+        StatisticsPopulation population = new(
+            [
+                new StatisticsPopulationBucket(5, GreenGroup),
+                new StatisticsPopulationBucket(3, BlackGroup),
+                new StatisticsPopulationBucket(3, ["duals"]),
+                new StatisticsPopulationBucket(9, []),
+            ],
+            [.. GreenGroup, .. BlackGroup, "duals"]);
+
+        CastabilityResult result = Exact(calculator.CalculateCastability(new CastabilityRequest(
+            population,
+            [
+                new ManaSourceInput("lands", ["G"]),
+                new ManaSourceInput("rocks", ["B"]),
+                new ManaSourceInput("duals", ["B", "G"]),
+            ],
+            [new CastabilityCostInput(
+                "cost",
+                new ManaRequirementInput(Green: green, Black: black, Generic: generic),
+                turn)],
+            onThePlay,
+            requireLandDrops)));
+
+        int seen = 7 + turn - (onThePlay ? 1 : 0);
+        (BigInteger numerator, BigInteger denominator) = BruteForceWithDuals(seen, turn, green, black, generic,
+            requireLandDrops);
+        CastabilityRow row = Assert.Single(result.Rows);
+        Assert.NotNull(row.Probability);
+        Assert.Equal(
+            numerator * BigInteger.Parse(row.Probability.Denominator, CultureInfo.InvariantCulture),
+            BigInteger.Parse(row.Probability.Numerator, CultureInfo.InvariantCulture) * denominator);
+    }
+
+    /// <summary>
+    /// Counts every hand of a 20-card deck (5 green sources, 3 black sources, 3 dual sources that make either color,
+    /// 9 other cards) by brute force. A dual source goes to whichever color needs it.
+    /// </summary>
+    private static (BigInteger Numerator, BigInteger Denominator) BruteForceWithDuals(
+        int seen,
+        int turn,
+        int green,
+        int black,
+        int generic,
+        bool requireLandDrops)
+    {
+        const int cards = 20;
+        BigInteger payable = 0;
+        BigInteger conditioning = 0;
+        BigInteger total = 0;
+        for (int mask = 0; mask < 1 << cards; mask++)
+        {
+            if (BitOperations.PopCount((uint)mask) != seen)
+            {
+                continue;
+            }
+
+            total++;
+            int drawnGreen = BitOperations.PopCount((uint)(mask & 0b11111));
+            int drawnBlack = BitOperations.PopCount((uint)(mask >> 5 & 0b111));
+            int drawnDual = BitOperations.PopCount((uint)(mask >> 8 & 0b111));
+            int sources = drawnGreen + drawnBlack + drawnDual;
+            if (requireLandDrops && sources < turn)
+            {
+                continue;
+            }
+
+            conditioning++;
+            bool pays = green + black + generic <= turn && sources >= green + black + generic &&
+                Enumerable.Range(0, drawnDual + 1).Any(
+                    toGreen => drawnGreen + toGreen >= green && drawnBlack + drawnDual - toGreen >= black);
+            if (pays)
+            {
+                payable++;
+            }
+        }
+
+        return requireLandDrops ? (payable, conditioning) : (payable, total);
+    }
+
+    /// <summary>
     /// Counts every hand of a 20-card deck (6 green sources, 4 black sources, 10 other cards) by brute force. A hand
     /// pays when the cost needs at most as many sources as the turn and the hand holds enough of each color; with
     /// the land drop condition the hand must also hold at least as many sources as the turn.

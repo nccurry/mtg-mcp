@@ -346,15 +346,17 @@ public sealed class ScryfallService : IDisposable
     }
 
     /// <summary>
-    /// Reads every card of one saved search from its immutable snapshot, without network access.
+    /// Reads every card of one saved search from its immutable snapshot, without network access. A snapshot with more
+    /// than the given number of cards is refused before any card is read.
     /// </summary>
     public Task<OperationResult<ScryfallSnapshotCards>> ReadSnapshotCardsAsync(
         Guid snapshotId,
         bool includeRaw,
         bool includeFacts,
+        int maximumCards = ScryfallListQuery.MaximumEntries,
         CancellationToken cancellationToken = default)
     {
-        return listCards.ReadSnapshotAsync(snapshotId, includeRaw, includeFacts, cancellationToken);
+        return listCards.ReadSnapshotAsync(snapshotId, includeRaw, includeFacts, maximumCards, cancellationToken);
     }
 
     /// <summary>

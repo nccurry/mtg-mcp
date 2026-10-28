@@ -36,10 +36,12 @@ internal static class CardListToolExamples
     /// Chains two comparisons: (search union card list) minus a deck.
     /// </summary>
     internal const string CompareNested =
-        "{\"left\":{\"kind\":\"compare\",\"left\":{\"kind\":\"scryfall-snapshot\",\"snapshotId\":\"" +
-        PlaceholderSnapshotId + "\"},\"right\":{\"kind\":\"cards\",\"ids\":[\"" + PlaceholderCardId +
-        "\"]},\"operation\":\"union\"},\"right\":{\"kind\":\"deck\",\"deckId\":\"" +
-        DeckToolExamples.PlaceholderDeckId + "\"},\"operation\":\"difference\"}";
+        "{\"left\":{\"kind\":\"compare\"," +
+        "\"left\":{\"kind\":\"scryfall-snapshot\",\"snapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
+        "\"right\":{\"kind\":\"cards\",\"ids\":[\"" + PlaceholderCardId + "\"]}," +
+        "\"operation\":\"union\"}," +
+        "\"right\":{\"kind\":\"deck\",\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId + "\"}," +
+        "\"operation\":\"difference\"}";
 
     /// <summary>
     /// Uses every option of the comparison.
@@ -69,12 +71,14 @@ internal static class CardListToolExamples
     /// Filters, groups, measures, and returns sorted rows.
     /// </summary>
     internal const string QueryFull =
-        "{\"source\":{\"kind\":\"deck\",\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId +
-        "\",\"expectedRevision\":" + DeckToolExamples.PlaceholderRevision + ",\"zones\":[\"main\"]}," +
+        "{\"source\":{\"kind\":\"deck\",\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId + "\"," +
+        "\"expectedRevision\":" + DeckToolExamples.PlaceholderRevision + ",\"zones\":[\"main\"]}," +
         "\"where\":[{\"field\":\"typeLine\",\"op\":\"contains\",\"value\":\"Creature\"}," +
-        "{\"field\":\"manaValue\",\"op\":\"lte\",\"value\":3}],\"groupBy\":[\"manaValue\"]," +
-        "\"metrics\":[\"quantity\",\"cards\",\"sum:priceUsd\",\"pips\"],\"rows\":{\"fields\":[\"name\"," +
-        "\"manaValue\",\"priceUsd\"],\"sortBy\":[{\"field\":\"priceUsd\",\"direction\":\"desc\"}],\"pageSize\":25}}";
+        "{\"field\":\"manaValue\",\"op\":\"lte\",\"value\":3}]," +
+        "\"groupBy\":[\"manaValue\"]," +
+        "\"metrics\":[\"quantity\",\"cards\",\"sum:priceUsd\",\"pips\"]," +
+        "\"rows\":{\"fields\":[\"name\",\"manaValue\",\"priceUsd\"]," +
+        "\"sortBy\":[{\"field\":\"priceUsd\",\"direction\":\"desc\"}],\"pageSize\":25}}";
 }
 
 /// <summary>
@@ -190,9 +194,11 @@ internal sealed class CardListTools
         "Use it for the mana curve, type mix, counts by oracle tag, color pips and sources, deck price, and the most " +
         "expensive cards. where holds filters that must all match (ops eq, ne, lt, lte, gt, gte, in, contains); " +
         "groupBy takes up to two fields, and a card with several values (colors, tags) counts once in each group. " +
-        "metrics: quantity, cards, sum:/avg:/min:/max: plus a number field, pips (colored mana symbols; hybrid and " +
-        "Phyrexian symbols are counted as stated in limits), and sources (cards whose produced mana includes each " +
-        "color; whether a land enters tapped is not modeled). Sums are exact decimal strings and cards with no " +
+        "metrics: quantity (copies), cards (distinct cards), sum:/avg:/min:/max: plus a number field, pips (colored " +
+        "mana symbols by color; a hybrid symbol counts once for each of its colors and also under hybrid; a " +
+        "Phyrexian symbol counts for its color and also under phyrexian), and sources (cards whose produced mana " +
+        "includes each color; whether a land enters tapped is not modeled). Sums are exact decimal strings and " +
+        "cards with no " +
         "value are counted in missingValues. rows adds a sorted, paged table of cards. Fields: name, manaValue, " +
         "typeLine, cardTypes, subtypes, supertypes, colors, colorIdentity, keywords, tags, rarity, set, power, " +
         "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank, gameChanger, " +
@@ -209,7 +215,8 @@ internal sealed class CardListTools
         [Description("Zero to two field names to group by. Omit for one total.")]
         IReadOnlyList<string>? groupBy = null,
         [Description(
-            "Metrics for each group: quantity, cards, sum:FIELD, avg:FIELD, min:FIELD, max:FIELD (a number field), " +
+            "Metrics for each group: quantity (copies), cards (distinct cards), sum:FIELD, avg:FIELD, min:FIELD, " +
+            "max:FIELD (a number field), " +
             "pips, sources. Default: quantity and cards.")]
         IReadOnlyList<string>? metrics = null,
         [Description("Optional per-card rows with chosen fields, sorting, and paging.")]

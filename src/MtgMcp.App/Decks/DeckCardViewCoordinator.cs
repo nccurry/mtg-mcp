@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using MtgMcp.App.CardLists;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
@@ -105,7 +104,7 @@ internal sealed class DeckCardViewCoordinator
         List<DeckEntry> slice = [.. deck.Entries.Skip(offset.Data).Take(pageSize ?? DefaultPageSize)];
         OperationResult<ScryfallInstalledCardViews> read = await ScryfallToolExecution.RunAsync(() =>
             scryfall.ReadInstalledCardViewsAsync(
-                [.. slice.Select(entry => CardListResolver.LookupFor(
+                [.. slice.Select(entry => ScryfallEntryLookup.For(
                     entry.PrintingId, entry.SetCode, entry.CollectorNumber, entry.OracleId))],
                 fields,
                 include.Contains(IncludeCards, StringComparer.Ordinal),
@@ -339,12 +338,12 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static int EntryBytes(DeckEntryView entry, IReadOnlyList<DeckCategoryAssignment> assignments)
     {
-        int total = Measure(entry) + 1;
+        int total = ResultSize.Measure(entry) + 1;
         foreach (DeckCategoryAssignment assignment in assignments)
         {
             if (assignment.EntryId == entry.EntryId)
             {
-                total += Measure(assignment) + 1;
+                total += ResultSize.Measure(assignment) + 1;
             }
         }
 
@@ -357,15 +356,7 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static int HeaderBytes(DeckDocument deck)
     {
-        return Measure(ToView(deck, [], []));
-    }
-
-    /// <summary>
-    /// Measures a value as the server writes it.
-    /// </summary>
-    private static int Measure<T>(T value)
-    {
-        return JsonSerializer.SerializeToUtf8Bytes(value, ToolCallPolicy.SerializerOptions).Length;
+        return ResultSize.Measure(ToView(deck, [], []));
     }
 
     /// <summary>

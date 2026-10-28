@@ -22,6 +22,14 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
     private readonly ToolArgumentCatalog catalog;
 
     /// <summary>
+    /// Lists the kinds of a card list source.
+    /// </summary>
+    private static readonly string[] SourceKinds =
+    [
+        "scryfall-snapshot", "cards", "deck", "deck-backup", "archidekt-deck", "archidekt-snapshot", "compare",
+    ];
+
+    /// <summary>
     /// Takes the catalog the fixture built, so the policy can look tools up by name.
     /// </summary>
     public ToolCallPolicyTests(ToolCatalogFixture fixture)
@@ -119,6 +127,137 @@ public sealed class ToolCallPolicyTests : IClassFixture<ToolCatalogFixture>
             """);
 
         Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
+    }
+
+    /// <summary>
+    /// Verifies an unknown list source kind is reported at its path with every source kind named.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_CardListSourceUnknownKind_NamesPathAndAllowedKinds()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "left": { "kind": "mystery" },
+              "right": { "kind": "cards", "ids": ["0193e97a-ef95-7700-8000-0000000000b1"] },
+              "operation": "union"
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", arguments);
+
+        Assert.NotNull(failure);
+        Assert.Equal("left", failure.Path);
+        foreach (string kind in SourceKinds)
+        {
+            Assert.Contains(kind, failure.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Verifies an unknown kind inside a nested comparison is reported at its nested path.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_NestedCompareUnknownKind_NamesNestedPath()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "left": {
+                "kind": "compare",
+                "left": { "kind": "cards", "ids": ["0193e97a-ef95-7700-8000-0000000000b1"] },
+                "right": { "kind": "mystery" },
+                "operation": "union"
+              },
+              "right": { "kind": "cards", "ids": ["0193e97a-ef95-7700-8000-0000000000b1"] },
+              "operation": "difference"
+            }
+            """);
+
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", arguments);
+
+        Assert.NotNull(failure);
+        Assert.Equal("left.right", failure.Path);
+    }
+
+    /// <summary>
+    /// Verifies a list source and a nested comparison with the kind after other properties bind without a failure.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_CardListSourceKindLast_Binds()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(
+            """
+            {
+              "left": {
+                "left": { "ids": ["0193e97a-ef95-7700-8000-0000000000b1"], "kind": "cards" },
+                "right": { "deckId": "0193e97a-ef95-7700-8000-000000000001", "kind": "deck" },
+                "operation": "union",
+                "kind": "compare"
+              },
+              "right": { "ids": ["0193e97a-ef95-7700-8000-0000000000b1"], "kind": "cards" },
+              "operation": "difference"
+            }
+            """);
+
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "card_lists_compare", arguments));
+    }
+
+    /// <summary>
+    /// Verifies the select and turn unions of stats_castability bind with the kind last, and an unknown select kind
+    /// is reported at its path.
+    /// </summary>
+    [Fact]
+    public void DiagnoseArguments_CastabilitySelectAndTurn_BindWithTheKindLastAndReportUnknownKinds()
+    {
+        const string template =
+            """
+            {
+              "source": { "deckId": "0193e97a-ef95-7700-8000-000000000001", "kind": "deck" },
+              "sources": [
+                { "id": "lands", "select": SELECT, "produces": { "default": ["G"] } }
+              ],
+              "turn": TURN,
+              "onThePlay": true,
+              "requireLandDrops": false
+            }
+            """;
+        string valid = template
+            .Replace("SELECT", "{ \"ids\": [\"0193e97a-ef95-7700-8000-000000000012\"], \"kind\": \"entry-ids\" }",
+                StringComparison.Ordinal)
+            .Replace("TURN", "{ \"turn\": 3, \"kind\": \"fixed\" }", StringComparison.Ordinal);
+        string unknownSelect = template
+            .Replace("SELECT", "{ \"kind\": \"all-cards\" }", StringComparison.Ordinal)
+            .Replace("TURN", "{ \"kind\": \"mana-value\" }", StringComparison.Ordinal);
+
+        Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "stats_castability", Arguments(valid)));
+        OperationInvalidInput? failure = ToolCallPolicy.DiagnoseArguments(
+            catalog,
+            "stats_castability",
+            Arguments(unknownSelect));
+
+        Assert.NotNull(failure);
+        Assert.Equal("sources[0].select", failure.Path);
+        Assert.Contains("entry-ids", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a union kind constant gets a description, and one that already has a description keeps it.
+    /// </summary>
+    [Fact]
+    public void DescribeUnionKind_AddsADescriptionOnlyWhereThereIsNone()
+    {
+        System.Text.Json.Nodes.JsonObject bare = new() { ["const"] = "deck" };
+        System.Text.Json.Nodes.JsonObject described = new() { ["const"] = "deck", ["description"] = "Mine." };
+        System.Text.Json.Nodes.JsonObject notAConstant = new() { ["type"] = "string" };
+
+        ToolRegistration.DescribeUnionKind(bare);
+        ToolRegistration.DescribeUnionKind(described);
+        ToolRegistration.DescribeUnionKind(notAConstant);
+
+        Assert.False(string.IsNullOrWhiteSpace(bare["description"]?.GetValue<string>()));
+        Assert.Equal("Mine.", described["description"]!.GetValue<string>());
+        Assert.False(notAConstant.ContainsKey("description"));
     }
 
     /// <summary>

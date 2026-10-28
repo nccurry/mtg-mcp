@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -103,9 +104,20 @@ public static class ScryfallListQuery
     public const int MaximumEntries = 20_000;
 
     /// <summary>
-    /// Names the group that holds cards with no value for the group field.
+    /// Names the group that holds cards with no value for the group field, as it is written in the result.
     /// </summary>
     private const string NoneKey = "none";
+
+    /// <summary>
+    /// Stands for a missing group value, so it never merges with a real value that is the text <c>none</c>.
+    /// </summary>
+    private sealed class MissingValue
+    {
+        /// <summary>
+        /// Gets the one instance.
+        /// </summary>
+        internal static MissingValue Instance { get; } = new();
+    }
 
     /// <summary>
     /// Gives the number of decimal places an average is rounded to.
@@ -202,6 +214,14 @@ public static class ScryfallListQuery
                 return OperationFailure.Forward<ScryfallListField, Plan>(field);
             }
 
+            if (groupFields.Any(existing => existing.Name == resolved.Data.Name))
+            {
+                return new OperationInvalidInput(
+                    "invalid-field",
+                    $"groupBy names the field '{resolved.Data.Name}' more than once.",
+                    $"groupBy[{index}]");
+            }
+
             groupFields.Add(resolved.Data);
         }
 
@@ -276,6 +296,12 @@ public static class ScryfallListQuery
                 path + ".op");
         }
 
+        if (condition.Op == "in" && condition.Value.ValueKind != JsonValueKind.Array)
+        {
+            return new OperationInvalidInput("invalid-value", "The operator in needs an array of values.", path
+                + ".value");
+        }
+
         List<object> values = [];
         IEnumerable<JsonElement> items = condition.Op == "in" && condition.Value.ValueKind == JsonValueKind.Array
             ? condition.Value.EnumerateArray().ToArray()
@@ -295,19 +321,51 @@ public static class ScryfallListQuery
             values.Add(value);
         }
 
-        if (condition.Op == "in" && condition.Value.ValueKind != JsonValueKind.Array)
-        {
-            return new OperationInvalidInput("invalid-value", "The operator in needs an array of values.", path
-                + ".value");
-        }
-
         if (values.Count == 0)
         {
             return new OperationInvalidInput("invalid-value", "The operator in needs at least one value.", path
                 + ".value");
         }
 
-        return new OperationSuccess<Check>(new Check(field, condition.Op, values));
+        return new OperationSuccess<Check>(new Check(field, ParseOperator(condition.Op), values));
+    }
+
+    /// <summary>
+    /// Turns an operator name that has been checked against the allowed list into its enum value.
+    /// </summary>
+    private static ListOperator ParseOperator(string name)
+    {
+        return name switch
+        {
+            "eq" => ListOperator.Eq,
+            "ne" => ListOperator.Ne,
+            "lt" => ListOperator.Lt,
+            "lte" => ListOperator.Lte,
+            "gt" => ListOperator.Gt,
+            "gte" => ListOperator.Gte,
+            "in" => ListOperator.In,
+            "contains" => ListOperator.Contains,
+            _ => throw new UnreachableException(),
+        };
+    }
+
+    /// <summary>
+    /// Turns a metric name that has been checked into its enum value.
+    /// </summary>
+    private static MetricFunction ParseFunction(string name)
+    {
+        return name switch
+        {
+            "quantity" => MetricFunction.Quantity,
+            "cards" => MetricFunction.Cards,
+            "pips" => MetricFunction.Pips,
+            "sources" => MetricFunction.Sources,
+            "sum" => MetricFunction.Sum,
+            "avg" => MetricFunction.Avg,
+            "min" => MetricFunction.Min,
+            "max" => MetricFunction.Max,
+            _ => throw new UnreachableException(),
+        };
     }
 
     /// <summary>
@@ -370,9 +428,17 @@ public static class ScryfallListQuery
         for (int index = 0; index < names.Count; index++)
         {
             string name = names[index];
+            if (plans.Any(existing => existing.Name == name))
+            {
+                return new OperationInvalidInput(
+                    "invalid-metric",
+                    $"The metric '{name}' is named more than once.",
+                    $"metrics[{index}]");
+            }
+
             if (name is "quantity" or "cards" or "pips" or "sources")
             {
-                plans.Add(new MetricPlan(name, name, null));
+                plans.Add(new MetricPlan(name, ParseFunction(name), null));
                 continue;
             }
 
@@ -397,7 +463,7 @@ public static class ScryfallListQuery
                     $"metrics[{index}]");
             }
 
-            plans.Add(new MetricPlan(name, function, field));
+            plans.Add(new MetricPlan(name, ParseFunction(function), field));
         }
 
         return new OperationSuccess<List<MetricPlan>>(plans);
@@ -437,6 +503,14 @@ public static class ScryfallListQuery
             if (field is not OperationSuccess<ScryfallListField> resolved)
             {
                 return OperationFailure.Forward<ScryfallListField, RowPlan?>(field);
+            }
+
+            if (fields.Any(existing => existing.Name == resolved.Data.Name))
+            {
+                return new OperationInvalidInput(
+                    "invalid-field",
+                    $"rows.fields names the field '{resolved.Data.Name}' more than once.",
+                    $"rows.fields[{index}]");
             }
 
             fields.Add(resolved.Data);
@@ -514,14 +588,17 @@ public static class ScryfallListQuery
 
         return check.Op switch
         {
-            "in" => check.Values.Any(value => Compare(actual, value) == 0),
-            "contains" => ((string)actual).Contains((string)check.Values[0], StringComparison.OrdinalIgnoreCase),
-            "eq" => Compare(actual, check.Values[0]) == 0,
-            "ne" => Compare(actual, check.Values[0]) != 0,
-            "lt" => Compare(actual, check.Values[0]) < 0,
-            "lte" => Compare(actual, check.Values[0]) <= 0,
-            "gt" => Compare(actual, check.Values[0]) > 0,
-            _ => Compare(actual, check.Values[0]) >= 0,
+            ListOperator.In => check.Values.Any(value => Compare(actual, value) == 0),
+            ListOperator.Contains => ((string)actual).Contains(
+                (string)check.Values[0],
+                StringComparison.OrdinalIgnoreCase),
+            ListOperator.Eq => Compare(actual, check.Values[0]) == 0,
+            ListOperator.Ne => Compare(actual, check.Values[0]) != 0,
+            ListOperator.Lt => Compare(actual, check.Values[0]) < 0,
+            ListOperator.Lte => Compare(actual, check.Values[0]) <= 0,
+            ListOperator.Gt => Compare(actual, check.Values[0]) > 0,
+            ListOperator.Gte => Compare(actual, check.Values[0]) >= 0,
+            _ => throw new UnreachableException(),
         };
     }
 
@@ -608,10 +685,10 @@ public static class ScryfallListQuery
     {
         if (value is IReadOnlyList<string> list)
         {
-            return list.Count == 0 ? [NoneKey] : [.. list.Select(item => (object)item)];
+            return list.Count == 0 ? [MissingValue.Instance] : [.. list.Select(item => (object)item)];
         }
 
-        return [value ?? NoneKey];
+        return [value ?? MissingValue.Instance];
     }
 
     /// <summary>
@@ -624,6 +701,7 @@ public static class ScryfallListQuery
             decimal number => "n" + number.ToString(CultureInfo.InvariantCulture),
             bool flag => flag ? "b1" : "b0",
             string text => "s" + text,
+            MissingValue => "m",
             _ => string.Empty,
         };
     }
@@ -649,11 +727,16 @@ public static class ScryfallListQuery
     }
 
     /// <summary>
-    /// Converts a key part to the value written in the result: whole numbers as integers.
+    /// Converts a key part or a row value to the value written in the result: whole numbers as integers.
     /// </summary>
     private static object? KeyValue(object? part)
     {
-        return part is decimal number && decimal.Truncate(number) == number ? (long)number : part;
+        return part switch
+        {
+            MissingValue => NoneKey,
+            decimal number when decimal.Truncate(number) == number => (long)number,
+            _ => part,
+        };
     }
 
     /// <summary>
@@ -745,21 +828,13 @@ public static class ScryfallListQuery
                 .Add("oracleId", ScryfallConciseFieldTable.EffectiveOracleId(entry.Card));
             foreach (ScryfallListField field in rows.Fields)
             {
-                row.Add(field.Name, RowValue(field.Read(entry)));
+                row.Add(field.Name, KeyValue(field.Read(entry)));
             }
 
             items.Add(row);
         }
 
         return new ScryfallListRows(items, sorted.Count);
-    }
-
-    /// <summary>
-    /// Converts a field value to the value written in a row: whole numbers as integers.
-    /// </summary>
-    private static object? RowValue(object? value)
-    {
-        return value is decimal number && decimal.Truncate(number) == number ? (long)number : value;
     }
 
     /// <summary>
@@ -797,19 +872,19 @@ public static class ScryfallListQuery
     private static List<string> Limits(Plan plan)
     {
         List<string> limits = [];
-        if (plan.Metrics.Any(metric => metric.Function == "sources"))
+        if (plan.Metrics.Any(metric => metric.Function == MetricFunction.Sources))
         {
             limits.Add(
                 "Sources count the colors Scryfall lists as produced mana. Whether a land enters tapped is not " +
                 "modeled, and cards that only fetch or search are counted under noProducedMana.");
         }
 
-        if (plan.Metrics.Any(metric => metric.Function == "avg"))
+        if (plan.Metrics.Any(metric => metric.Function == MetricFunction.Avg))
         {
             limits.Add($"Averages are rounded to {AverageDecimals} decimal places.");
         }
 
-        if (plan.Metrics.Any(metric => metric.Function == "pips"))
+        if (plan.Metrics.Any(metric => metric.Function == MetricFunction.Pips))
         {
             limits.Add("Pips count printed mana symbols only; cost changes and alternate costs are not modeled.");
         }
@@ -841,12 +916,42 @@ public static class ScryfallListQuery
     /// <summary>
     /// Holds one checked filter.
     /// </summary>
-    private sealed record Check(ScryfallListField Field, string Op, IReadOnlyList<object> Values);
+    private sealed record Check(ScryfallListField Field, ListOperator Op, IReadOnlyList<object> Values);
 
     /// <summary>
     /// Holds one checked metric: its published name, its function, and the number field it reads.
     /// </summary>
-    private sealed record MetricPlan(string Name, string Function, ScryfallListField? Field);
+    private sealed record MetricPlan(string Name, MetricFunction Function, ScryfallListField? Field);
+
+    /// <summary>
+    /// Names the operators of a filter, parsed once when the request is checked.
+    /// </summary>
+    private enum ListOperator
+    {
+        Eq,
+        Ne,
+        Lt,
+        Lte,
+        Gt,
+        Gte,
+        In,
+        Contains,
+    }
+
+    /// <summary>
+    /// Names the metrics, parsed once when the request is checked.
+    /// </summary>
+    private enum MetricFunction
+    {
+        Quantity,
+        Cards,
+        Pips,
+        Sources,
+        Sum,
+        Avg,
+        Min,
+        Max,
+    }
 
     /// <summary>
     /// Holds the checked row options.
@@ -869,8 +974,8 @@ public static class ScryfallListQuery
             {
                 object? a = first.Key[index];
                 object? b = second!.Key[index];
-                bool aNone = a is NoneKey;
-                bool bNone = b is NoneKey;
+                bool aNone = a is MissingValue;
+                bool bNone = b is MissingValue;
                 if (aNone || bNone)
                 {
                     if (aNone && bNone)
@@ -946,11 +1051,11 @@ public static class ScryfallListQuery
             {
                 switch (metric.Function)
                 {
-                    case "pips":
+                    case MetricFunction.Pips:
                         pips.AddScaled(ScryfallListFields.CountPips(ScryfallListFields.ManaCostOf(entry.Card)),
                             entry.Quantity);
                         break;
-                    case "sources":
+                    case MetricFunction.Sources:
                         AddSources(entry);
                         break;
                 }
@@ -969,13 +1074,13 @@ public static class ScryfallListQuery
         {
             switch (metric.Function)
             {
-                case "quantity":
+                case MetricFunction.Quantity:
                     return quantity;
-                case "cards":
+                case MetricFunction.Cards:
                     return cards.Count;
-                case "pips":
+                case MetricFunction.Pips:
                     return PipsObject();
-                case "sources":
+                case MetricFunction.Sources:
                     return SourcesObject();
                 default:
                     return totals.TryGetValue(metric.Field!.Name, out Totals? value) ? value.Read(metric.Function)
@@ -1013,13 +1118,12 @@ public static class ScryfallListQuery
                 sources[color] = sources.GetValueOrDefault(color) + entry.Quantity;
             }
 
-            if (ScryfallListFields.ManaColors.Take(5).All(color => produced.Contains(color, StringComparer.Ordinal)))
+            if (ScryfallCardFaces.ManaColors.Take(5).All(color => produced.Contains(color, StringComparer.Ordinal)))
             {
                 sources["anyColor"] = sources.GetValueOrDefault("anyColor") + entry.Quantity;
             }
 
-            bool isLand = entry.Card.TypeLine?.Contains("Land", StringComparison.Ordinal) == true ||
-                entry.Card.Faces.Any(face => face.TypeLine?.Contains("Land", StringComparison.Ordinal) == true);
+            bool isLand = ScryfallCardFaces.IsLand(entry.Card, frontOnly: false);
             if (produced.Count == 0 && isLand)
             {
                 sources["noProducedMana"] = sources.GetValueOrDefault("noProducedMana") + entry.Quantity;
@@ -1032,7 +1136,7 @@ public static class ScryfallListQuery
         private ScryfallOrderedObject PipsObject()
         {
             ScryfallOrderedObject result = new();
-            foreach (string color in ScryfallListFields.ManaColors)
+            foreach (string color in ScryfallCardFaces.ManaColors)
             {
                 if (pips.Get(color) > 0)
                 {
@@ -1110,17 +1214,18 @@ public static class ScryfallListQuery
         /// <summary>
         /// Reads one function of the totals as an exact decimal string.
         /// </summary>
-        internal string? Read(string function)
+        internal string? Read(MetricFunction function)
         {
             return function switch
             {
-                "sum" => sum.ToString(CultureInfo.InvariantCulture),
-                "avg" => copies == 0
+                MetricFunction.Sum => sum.ToString(CultureInfo.InvariantCulture),
+                MetricFunction.Avg => copies == 0
                     ? null
                     : Math.Round(sum / copies, AverageDecimals, MidpointRounding.ToEven)
                         .ToString(CultureInfo.InvariantCulture),
-                "min" => minimum?.ToString(CultureInfo.InvariantCulture),
-                _ => maximum?.ToString(CultureInfo.InvariantCulture),
+                MetricFunction.Min => minimum?.ToString(CultureInfo.InvariantCulture),
+                MetricFunction.Max => maximum?.ToString(CultureInfo.InvariantCulture),
+                _ => throw new UnreachableException(),
             };
         }
     }
