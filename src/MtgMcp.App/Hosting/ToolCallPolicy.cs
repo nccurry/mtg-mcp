@@ -474,6 +474,11 @@ internal static partial class ToolCallPolicy
             AllowOutOfOrderMetadataProperties = true,
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         };
+        foreach (JsonConverter converter in WholeNumberConverters.All)
+        {
+            options.Converters.Insert(0, converter);
+        }
+
         options.MakeReadOnly();
         return options;
     }

@@ -38,6 +38,11 @@
     with the Archidekt state. The preview and the apply must pass the same value. Without it nothing changes.
   - Entry order numbers (`sortOrder`) are no longer compared: Archidekt renumbers them on untouched cards, which showed
     as many remote changes. Category rank was already ignored.
+- Fixed whole numbers written with a fractional part (`328.0`) breaking integer fields. A JSON Schema `integer` allows
+  them, but a field such as `entryDraft.sortOrder` failed with only "An error occurred invoking
+  'local_deck_apply_changes'". Every tool now accepts a whole number in any spelling (`328.0`, `3.28e2`) for its
+  integer fields; a number with a fractional part or outside the field's range returns the bounded `invalid-arguments`
+  failure with the JSON path of the value (for example `changes[0].entryDraft.sortOrder`).
 
 ### Seeded simulation (breaking)
 
