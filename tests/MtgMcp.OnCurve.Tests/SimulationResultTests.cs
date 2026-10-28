@@ -153,21 +153,39 @@ public sealed class SimulationResultTests
             Distinct(20),
             [Colored("g", ["G"], [1, 2], (["U"], [2])), Group("d", 3), Listed("l", 4, 5)],
             [
-                Play("g", SimulationPick.TargetFirst, 1, 1, SimulationManaFrom.SameTurn, "{G}", (SimulationManaFrom.NextTurn, [2])),
+                Play(
+                    "g",
+                    SimulationPick.TargetFirst,
+                    1,
+                    1,
+                    SimulationManaFrom.SameTurn,
+                    "{G}",
+                    (SimulationManaFrom.NextTurn, [2])),
                 Cast("l", 1, SimulationPick.ListedOrder),
                 Draw("d", 0, 1, SimulationDrawEffect.EachTurn),
             ],
             [
-                Condition("all", new SimulationAll([new SimulationManaAtLeast(0, 1), new SimulationDrawnAtLeast("g", 1, 1)])),
-                Condition("any", new SimulationAny([new SimulationOnBattlefieldAtLeast("g", 1, 1), new SimulationCanCast("{G}", null, 2, Id(1))])),
+                Condition(
+                    "all",
+                    new SimulationAll([new SimulationManaAtLeast(0, 1), new SimulationDrawnAtLeast("g", 1, 1)])),
+                Condition(
+                    "any",
+                    new SimulationAny(
+                        [new SimulationOnBattlefieldAtLeast("g", 1, 1), new SimulationCanCast("{G}", null, 2, Id(1))])),
             ],
             mulligan: new SimulationMulligan(1, true, new SimulationCountBetween("g", 0, 7), ["g"]));
 
         string baseline = Report(rich).Fingerprint;
 
-        Assert.NotEqual(baseline, Report(rich with { OpeningHand = rich.OpeningHand with { OnThePlay = false } }).Fingerprint);
-        Assert.NotEqual(baseline, Report(rich with { OpeningHand = rich.OpeningHand with { Mulligan = null } }).Fingerprint);
-        Assert.NotEqual(baseline, Report(rich with { Groups = [Group("g", 1, 2), Group("d", 3), Listed("l", 4, 5)] }).Fingerprint);
+        Assert.NotEqual(
+            baseline,
+            Report(rich with { OpeningHand = rich.OpeningHand with { OnThePlay = false } }).Fingerprint);
+        Assert.NotEqual(
+            baseline,
+            Report(rich with { OpeningHand = rich.OpeningHand with { Mulligan = null } }).Fingerprint);
+        Assert.NotEqual(
+            baseline,
+            Report(rich with { Groups = [Group("g", 1, 2), Group("d", 3), Listed("l", 4, 5)] }).Fingerprint);
         Assert.NotEqual(baseline, Report(rich with { Conditions = [rich.Conditions[0]] }).Fingerprint);
     }
 
@@ -190,7 +208,8 @@ public sealed class SimulationResultTests
             JsonSerializer.Serialize(threeOnly.SampleHands));
         int unspentOnTurnOne = threeOnly.SampleHands.Count(sample =>
             sample.Turns[0].ManaAvailable - sample.Turns[0].ManaSpent >= 1);
-        SimulationReport check = Report(Fixed(3, 0) with { Conditions = [Condition("m", new SimulationManaAtLeast(1, 1))] });
+        SimulationReport check = Report(
+            Fixed(3, 0) with { Conditions = [Condition("m", new SimulationManaAtLeast(1, 1))] });
         Assert.Equal(unspentOnTurnOne, check.Results[0].Hits);
     }
 

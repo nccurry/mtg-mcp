@@ -46,6 +46,7 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
                 "card_list_query",
                 "local_deck_validate",
                 "local_deck_category_rules_preview",
+                "stats_simulate",
             ],
             examples.Select(example => example.Tool));
         foreach ((string tool, string json) in examples)
@@ -81,6 +82,11 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
             4,
             byTool["local_deck_category_rules_preview"].GetProperty("source").GetProperty("ruleSet")
                 .GetProperty("rules").GetArrayLength());
+        Assert.Equal(
+            ["four-mana-turn-4"],
+            byTool["stats_simulate"].GetProperty("conditions").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetString()));
+        Assert.Equal(10_000, byTool["stats_simulate"].GetProperty("samples").GetInt32());
     }
 
     /// <summary>

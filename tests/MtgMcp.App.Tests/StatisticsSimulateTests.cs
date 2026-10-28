@@ -110,7 +110,8 @@ public sealed class StatisticsSimulateTests
 
         string first = Serialize(Success(await setup.RunAsync(samples: 3_000, sampleHands: 3)));
         string second = Serialize(Success(await setup.RunAsync(samples: 3_000, sampleHands: 3)));
-        string other = Serialize(Success(await setup.RunAsync(samples: 3_000, sampleHands: 3, seed: "0000000000000002")));
+        string other = Serialize(
+            Success(await setup.RunAsync(samples: 3_000, sampleHands: 3, seed: "0000000000000002")));
 
         Assert.Equal(first, second);
         Assert.NotEqual(first, other);
@@ -318,7 +319,8 @@ public sealed class StatisticsSimulateTests
 
         OperationInvalidInput entry = Invalid(await setup.RunAsync(groups: [Entries("x", Guid.NewGuid())]));
         OperationInvalidInput category = Invalid(await setup.RunAsync(
-            groups: [new SimulationGroupInput { Id = "x", Select = new CastabilityCategoryIdsSelect([Guid.NewGuid()]) }]));
+            groups: [
+                new SimulationGroupInput { Id = "x", Select = new CastabilityCategoryIdsSelect([Guid.NewGuid()]) }]));
 
         Assert.Equal("unknown-entry-id", entry.ReasonCode);
         Assert.Equal("groups[0].select.ids", entry.Path);
@@ -345,7 +347,15 @@ public sealed class StatisticsSimulateTests
         OperationInvalidInput noRules = Invalid(await setup.Coordinator.SimulateAsync(
             deck, null, null, null, null, null, null, 100, 0, null, TestContext.Current.CancellationToken));
         OperationInvalidInput noTurns = Invalid(await setup.Coordinator.SimulateAsync(
-            deck, [], Hand(), [], null, [Condition("c", new SimulationManaAtLeastInput { Amount = 1, Turn = 1 })], null, 100, 0,
+            deck,
+            [],
+            Hand(),
+            [],
+            null,
+            [Condition("c", new SimulationManaAtLeastInput { Amount = 1, Turn = 1 })],
+            null,
+            100,
+            0,
             null, TestContext.Current.CancellationToken));
         OperationInvalidInput both = Invalid(await setup.Coordinator.SimulateAsync(
             deck, [], null, null, null, null, preset, 100, 0, null, TestContext.Current.CancellationToken));
@@ -393,11 +403,18 @@ public sealed class StatisticsSimulateTests
         OperationInvalidInput nested = Invalid(await setup.RunAsync(
             conditions: [Condition("c", new SimulationAllInput { Checks = [null!] })]));
         OperationInvalidInput ruleGroup = Invalid(await setup.RunAsync(
-            eachTurn: [new SimulationPlayInput { Group = null!, Pick = "random", MaxPerTurn = 1, ManaFrom = "same-turn" }]));
+            eachTurn: [
+                new SimulationPlayInput { Group = null!, Pick = "random", MaxPerTurn = 1, ManaFrom = "same-turn" }]));
 
         OperationInvalidInput[] failures = [group, rule, condition, check, nested, ruleGroup];
         Assert.Equal(
-            ["groups[0]", "eachTurn[0]", "conditions[0]", "conditions[0].check", "conditions[0].check.checks[0]", "eachTurn[0].group"],
+            [
+                "groups[0]",
+                "eachTurn[0]",
+                "conditions[0]",
+                "conditions[0].check",
+                "conditions[0].check.checks[0]",
+                "eachTurn[0].group"],
             failures.Select(item => item.Path));
         Assert.All(failures, item => Assert.Equal("missing-field", item.ReasonCode));
     }
@@ -414,12 +431,27 @@ public sealed class StatisticsSimulateTests
         OperationInvalidInput pick = Invalid(await setup.RunAsync(eachTurn: [Play("lands", "best")]));
         OperationInvalidInput manaFrom = Invalid(await setup.RunAsync(eachTurn: [Play("lands", manaFrom: "later")]));
         OperationInvalidInput effect = Invalid(await setup.RunAsync(
-            eachTurn: [new SimulationDrawCardsInput { Group = "lands", Pick = "random", MaxPerTurn = 1, Cost = 0, Cards = 1, Effect = "forever" }]));
-        OperationInvalidInput rule = Invalid(await setup.RunAsync(openingHand: Hand(mulligan: Mulligan(rule: "vancouver"))));
+            eachTurn: [
+                new SimulationDrawCardsInput {
+                     Group = "lands",
+                    Pick = "random",
+                    MaxPerTurn = 1,
+                    Cost = 0,
+                    Cards = 1,
+                    Effect = "forever" }]));
+        OperationInvalidInput rule = Invalid(
+            await setup.RunAsync(openingHand: Hand(mulligan: Mulligan(rule: "vancouver"))));
         OperationInvalidInput otherwise = Invalid(await setup.RunAsync(
             openingHand: Hand(mulligan: Mulligan(otherwise: "worst"))));
 
-        Assert.Equal(["eachTurn[0].pick", "eachTurn[0].manaFrom", "eachTurn[0].effect", "openingHand.mulligan.rule", "openingHand.mulligan.bottom.otherwise"],
+        Assert.Equal(
+            [
+                "eachTurn[0].pick",
+                "eachTurn[0].manaFrom",
+                "eachTurn[0].effect",
+                "openingHand.mulligan.rule",
+                "openingHand.mulligan.bottom.otherwise",
+            ],
             new[] { pick, manaFrom, effect, rule, otherwise }.Select(item => item.Path));
         Assert.Contains("random or listed-order or target-first", pick.Message, StringComparison.Ordinal);
     }
@@ -471,7 +503,8 @@ public sealed class StatisticsSimulateTests
                     Pick = "random",
                     MaxPerTurn = 2,
                     ManaFrom = "same-turn",
-                    ManaFromByEntry = [new SimulationManaFromOverrideInput { EntryIds = [LandEntryId], ManaFrom = "same-turn" }],
+                    ManaFromByEntry = [
+                        new SimulationManaFromOverrideInput { EntryIds = [LandEntryId], ManaFrom = "same-turn" }],
                 },
             ],
             conditions: [Condition("bg", new SimulationCanCastInput { ManaCost = "{B}{G}", ByTurn = 4 })],
@@ -548,7 +581,9 @@ public sealed class StatisticsSimulateTests
         List<SimulationRuleInput> rules = [];
         for (int index = 0; index < 20; index++)
         {
-            Guid[] ids = [.. Enumerable.Range(index * 7 + 1, 7).Select(number => Guid.Parse($"0193e97a-ef95-7700-8000-{number:D12}"))];
+            Guid[] ids = [
+                .. Enumerable.Range(index * 7 + 1, 7).Select(
+                    number => Guid.Parse($"0193e97a-ef95-7700-8000-{number:D12}"))];
             groups.Add(Entries($"group-number-{index}", ids));
             rules.Add(Play($"group-number-{index}", maxPerTurn: 2));
         }

@@ -86,7 +86,8 @@ rule, sampled-result reporting, and a clear line between source facts and
 modeled choices. The estimate is not an exact probability or a real-game
 prediction.
 
-Broad multiplayer or full-game simulation remains deferred. The planned
+Phase 6 of the focused agent tool surface replaced that estimate with `stats_simulate`,
+whose `on-curve` preset replays the old counts. Broad multiplayer or full-game simulation remains deferred. The planned
 old simulation packets are historical reference material, not instructions to
 add a rules engine or automatic card behavior.
 

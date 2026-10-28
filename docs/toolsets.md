@@ -69,19 +69,19 @@ them.
 
 Every tool belongs to one toolset. Tool names say where the data comes from:
 `local_deck_*` is the local deck store, `scryfall_*` is Scryfall card data,
-`stats_*` is exact math, and `archidekt_*`, `playgroup_*`, and `spellbook_*` name
+`stats_*` is exact math (and seeded sampling for `stats_simulate`), and `archidekt_*`, `playgroup_*`, and `spellbook_*` name
 their provider. Each description starts with the data the tool works on:
 `Local deck store:`, `Scryfall:`, `Installed Scryfall card data:`,
 `Saved Scryfall requests:`, `Archidekt:`, `Playgroup:`, `Commander Spellbook:`,
-or `Exact math:`. The prefix names the input data, not the toolset. The two `card_list*` tools are the one
+`Exact math:`, or `Seeded sampling:` (only `stats_simulate`). The prefix names the input data, not the toolset. The two `card_list*` tools are the one
 exception to the `<source>_<object>_<action>` rule: they read any card list, so they have no single source
 prefix, and their descriptions start with `Scryfall:` because installed Scryfall card data resolves every list.
 
 | Toolset | Read-only | Local write | Remote write |
 | --- | ---: | ---: | ---: |
-| `decks` | 11 | 9 | 0 |
+| `decks` | 10 | 9 | 0 |
 | `scryfall` | 11 | 4 | 0 |
-| `stats` | 9 | 0 | 0 |
+| `stats` | 10 | 0 | 0 |
 | `spellbook` | 4 | 0 | 0 |
 | `archidekt` | 9 | 1 | 11 |
 | `playgroup` | 15 | 0 | 2 |
@@ -92,7 +92,7 @@ prefix, and their descriptions start with `Scryfall:` because installed Scryfall
 | --- | --- |
 | Local deck work | `decks` |
 | Card and tag evidence | `scryfall` |
-| Exact probabilities and summaries | `stats` |
+| Exact probabilities, summaries, and seeded sampling | `stats` |
 | Archidekt synchronization | `decks,scryfall,archidekt` |
 | Playgroup evidence | `playgroup` |
 | Commander Spellbook variants or combo evidence for an existing local deck | `spellbook` |

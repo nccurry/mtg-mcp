@@ -107,7 +107,15 @@ public sealed class SimulationRuleTests
         SimulationRequest request = Request(
             Distinct(10),
             [Group("lands", 1, 2)],
-            [Play("lands", SimulationPick.Random, 2, 1, SimulationManaFrom.SameTurn, null, (SimulationManaFrom.NextTurn, [2]))],
+            [
+                Play(
+                    "lands",
+                    SimulationPick.Random,
+                    2,
+                    1,
+                    SimulationManaFrom.SameTurn,
+                    null,
+                    (SimulationManaFrom.NextTurn, [2]))],
             turns: 2);
 
         SimulationSampleRecord record = RunOrdered(request).Outcome.Record!;
@@ -169,7 +177,15 @@ public sealed class SimulationRuleTests
         SimulationRequest request = Request(
             Distinct(10),
             [Colored("lands", ["G"], [1, 2, 3], (["U"], [2]), (["U", "G"], [3]))],
-            [Play("lands", SimulationPick.TargetFirst, 1, 1, SimulationManaFrom.SameTurn, "{1}{U}{U}", (SimulationManaFrom.NextTurn, [3]))],
+            [
+                Play(
+                    "lands",
+                    SimulationPick.TargetFirst,
+                    1,
+                    1,
+                    SimulationManaFrom.SameTurn,
+                    "{1}{U}{U}",
+                    (SimulationManaFrom.NextTurn, [3]))],
             turns: 1);
 
         SimulationSampleRecord record = RunOrdered(request).Outcome.Record!;
@@ -186,7 +202,15 @@ public sealed class SimulationRuleTests
         SimulationRequest request = Request(
             Distinct(10),
             [Colored("lands", ["U"], [1, 2, 3, 4, 5])],
-            [Play("lands", SimulationPick.TargetFirst, 1, 1, SimulationManaFrom.SameTurn, "{U}{U}", (SimulationManaFrom.NextTurn, [3]))],
+            [
+                Play(
+                    "lands",
+                    SimulationPick.TargetFirst,
+                    1,
+                    1,
+                    SimulationManaFrom.SameTurn,
+                    "{U}{U}",
+                    (SimulationManaFrom.NextTurn, [3]))],
             turns: 5);
 
         SimulationSampleRecord record = RunOrdered(request).Outcome.Record!;
@@ -574,7 +598,9 @@ public sealed class SimulationRuleTests
         SimulationReport report = Report(request);
 
         Assert.False(held);
-        Assert.Contains(report.Limits, limit => limit.Contains("Phyrexian life payment is not modeled", StringComparison.Ordinal));
+        Assert.Contains(
+            report.Limits,
+            limit => limit.Contains("Phyrexian life payment is not modeled", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -583,7 +609,11 @@ public sealed class SimulationRuleTests
     [Theory]
     [InlineData("G", "U", "U", true)]
     [InlineData("U", "U", "U", false)]
-    public void CanCast_WithManaSpentByRules_NeedsOneJointAssignment(string first, string second, string third, bool hit)
+    public void CanCast_WithManaSpentByRules_NeedsOneJointAssignment(
+        string first,
+        string second,
+        string third,
+        bool hit)
     {
         SimulationRequest request = Request(
             Distinct(12),

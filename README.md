@@ -4,7 +4,7 @@
 `mtg-mcp` gives an LLM grounded Magic: The Gathering card, deck, provider, and
 statistical evidence. The LLM makes deckbuilding decisions.
 
-The `0.11.0` tool surface builds on the `0.9.0` stdio server design. Every toolset is
+The `0.12.0` tool surface builds on the `0.9.0` stdio server design. Every toolset is
 on by default. With Archidekt and Playgroup credentials, the server exposes 86
 tools in `remote` mode (the default), 73 in `local` mode, and 59 in `read-only`
 mode. Without credentials it exposes 48, 48, and 35, because the Archidekt and
@@ -20,9 +20,9 @@ the new server.
 
 | Feature | Tools | Default | Storage or writes |
 | --- | ---: | --- | --- |
-| Local decks and interchange | 20 | Yes | Local |
+| Local decks and interchange | 19 | Yes | Local |
 | Scryfall evidence | 15 | Yes | Local cache and card data |
-| Exact statistics | 9 | Yes | No |
+| Exact statistics and seeded sampling | 10 | Yes | No |
 | Archidekt | 21 | When credentials are present | Remote |
 | Playgroup | 17 | When credentials are present | Remote |
 | Commander Spellbook evidence | 4 | Yes | Local cache only |
@@ -173,9 +173,8 @@ The `decks` toolset supports:
 - guarded backup, restore, and delete;
 - native JSON and generic text import and export;
 - manual import and export files for Archidekt and Moxfield;
-- exact Scryfall identity reconciliation;
-- tag-rule grouping with repeatable results; and
-- on-curve estimates based on card data and caller-supplied land rules.
+- exact Scryfall identity reconciliation; and
+- tag-rule grouping with repeatable results.
 
 Every change to an existing deck requires `expectedRevision`. The local store
 is not tied to one import format. Validation checks structure. With `rules: "commander"` it also
@@ -204,16 +203,55 @@ replaced the removed `common-v1` preset.
 
 ### Estimate mana on curve
 
-Use `local_deck_on_curve_estimate` to sample how often one mainboard card can be cast
-by a chosen turn. Supply the saved deck ID and current revision, the target
-entry ID, one rule for each eligible land, a turn limit, and optionally a seed
-and sample count. The result includes the exact installed Scryfall facts used,
-the caller rules, a replay seed, a 95% Wilson interval, miss counts, and up to
-two sample traces.
+`stats_simulate` replaces `local_deck_on_curve_estimate`, which was removed in
+`0.12.0`. It is in the `stats` toolset. Use its `on-curve` preset to sample how
+often one main-zone card can be cast by a chosen turn: give the saved deck, the
+target entry ID, one rule for each eligible single-faced land, a turn limit, and
+play or draw. The preset expands to ordinary rules, which the result echoes in
+`appliedRules`, and it replays the removed tool's success counts for the same
+deck, seed, and inputs. It needs installed card data for the target's cost and
+the lands' colors, and it models only lands as mana, one land a turn.
 
-Version 1 models only simple printed costs and caller-described single-faced
-lands. It does not read card text, infer land behavior, model other mana
-sources, choose plays, rate the deck, or predict real games.
+For anything else, state the rules yourself. `stats_simulate` shuffles the main
+zone of one saved deck and plays seeded games under groups, opening-hand and
+per-turn rules, and conditions that you write as structured data. It applies
+only the fixed engine rules in its description, such as the order of rules each
+turn, the London mulligan with an optional free first mulligan, `draw-cards`
+that draw at once or every turn, group `produces` colors, and `can-cast`
+checks that pay a mana cost together with all mana already spent that turn. It
+chooses no strategy: every pick, limit, and mulligan rule is a field you supply.
+The same request and seed give the same result on every platform. A request is
+limited to samples x turns x deck cards of 50,000,000, and the result states
+the seed, the applied rules, each condition's hits and 95% Wilson interval,
+mulligan keep counts, how many games emptied the library, and up to 10 full
+sample games. This example asks how often a 99-card deck with 40 land cards has
+four mana on turn 4 when it plays one land a turn:
+
+<!-- example: stats_simulate -->
+```json
+{
+  "deck": { "deckId": "0193e97a-ef95-7700-8000-000000000001" },
+  "groups": [
+    { "id": "lands", "select": { "kind": "category-ids", "ids": ["0193e97a-ef95-7700-8000-000000000021"] } }
+  ],
+  "openingHand": { "size": 7, "onThePlay": true },
+  "eachTurn": [
+    { "kind": "play", "group": "lands", "pick": "random", "maxPerTurn": 1, "manaFrom": "same-turn" }
+  ],
+  "turns": 4,
+  "conditions": [
+    { "id": "four-mana-turn-4", "check": { "kind": "mana-at-least", "amount": 4, "turn": 4 } }
+  ],
+  "samples": 10000,
+  "sampleHands": 0,
+  "seed": "0000000000000001"
+}
+```
+
+A real run of this request, against a saved deck with 40 land cards and 59
+other cards, returned `hits` 6365 of 10,000 (`rate` 0.6365, `wilson95` 0.627022
+to 0.645873). Another seed gives a slightly different count. The result does
+not say whether that rate is good enough; that is your judgment.
 
 ## Import and export decks
 
@@ -518,9 +556,9 @@ resolved against installed card data, so run `scryfall_card_data_sync` first.
 Use `scryfall_tags_search` to find other tags, then use their `exactSlug`
 instead of `tagId` if you prefer.
 
-## Calculate exact statistics
+## Calculate exact statistics and sample games
 
-The `stats` toolset provides nine read-only tools for:
+The `stats` toolset provides ten read-only tools for:
 
 - univariate and multivariate hypergeometric probability;
 - probability-by-turn tables;
@@ -528,8 +566,9 @@ The `stats` toolset provides nine read-only tools for:
 - package and combo assembly;
 - explicit mulligan schedules;
 - minimum-copy and minimum-source solving;
-- deterministic deck composition summaries; and
-- exact on-curve castability of each spell in a deck (`stats_castability`).
+- deterministic deck composition summaries;
+- exact on-curve castability of each spell in a deck (`stats_castability`); and
+- seeded sampling of rules you state (`stats_simulate`), which is an estimate and says so.
 
 Every probability returns an exact reduced fraction and a stable decimal. The
 caller supplies the population, groups, turn draws, mana capabilities, and keep
@@ -686,7 +725,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 | `MtgMcp.Playgroup` | Pinned official API evidence |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
-| `MtgMcp.OnCurve` | Pure repeatable sampled cast-by-turn calculation |
+| `MtgMcp.OnCurve` | Pure seeded sampling engine behind `stats_simulate` and its on-curve preset |
 | `MtgMcp.App` | MCP host, configuration, composition, and schemas |
 
 Read [North Star](docs/north-star.md), [Design Goals](docs/design-goals.md), and

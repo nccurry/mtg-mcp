@@ -88,17 +88,23 @@ public sealed class StatisticsSimulatePresetTests
         Assert.Equal(DeckOnCurveSourceFixture.GreenLandPrintingId, forest.PrintingId);
         Assert.Equal(["G"], forest.ProducedMana);
         Assert.Equal("one-mana-same-turn", forest.Rule);
-        Assert.Equal(DeckOnCurveSourceFixture.KnownEmptyLandPrintingId, Assert.Single(facts.KnownEmptyLands).PrintingId);
+        Assert.Equal(
+            DeckOnCurveSourceFixture.KnownEmptyLandPrintingId,
+            Assert.Single(facts.KnownEmptyLands).PrintingId);
         Assert.Equal(DeckOnCurveSourceFixture.MultiFacePrintingId, Assert.Single(facts.MultiFaceCards).PrintingId);
         Assert.Equal("installed-scryfall-card-data", facts.Source);
         SimulationPlayInput play = Assert.IsType<SimulationPlayInput>(Assert.Single(result.AppliedRules.EachTurn));
-        Assert.Equal(("target-first", 1, "same-turn", "{1}{G}"), (play.Pick, play.MaxPerTurn, play.ManaFrom, play.TargetCost));
+        Assert.Equal(
+            ("target-first", 1, "same-turn", "{1}{G}"),
+            (play.Pick, play.MaxPerTurn, play.ManaFrom, play.TargetCost));
         SimulationCanCastInput cast = Assert.IsType<SimulationCanCastInput>(
             Assert.Single(result.AppliedRules.Conditions).Check);
         Assert.Equal((2, "{1}{G}", fixture.TargetEntryId), (cast.ByTurn, cast.ManaCost, cast.InHand));
         Assert.Null(result.AppliedRules.OpeningHand.Mulligan);
         Assert.Equal(7, result.AppliedRules.OpeningHand.Size);
-        Assert.Contains(result.Limits, limit => limit.Contains("on-curve preset plays at most one land", StringComparison.Ordinal));
+        Assert.Contains(
+            result.Limits,
+            limit => limit.Contains("on-curve preset plays at most one land", StringComparison.Ordinal));
         Assert.Equal(100, result.Samples);
         string json = JsonSerializer.Serialize(result, ToolCallPolicy.SerializerOptions);
         Assert.DoesNotContain("\"passed\"", json, StringComparison.Ordinal);
@@ -143,7 +149,8 @@ public sealed class StatisticsSimulatePresetTests
                 new SimulationLandRuleInput { EntryId = fixture.ForestEntryId, Rule = "not-modeled" },
                 new SimulationLandRuleInput { EntryId = fixture.TargetEntryId, Rule = "not-modeled" },
             ])));
-        OperationInvalidInput unknownRule = SimulateSetup.Invalid(await fixture.RunAsync(fixture.Request(rule: "sometimes")));
+        OperationInvalidInput unknownRule = SimulateSetup.Invalid(
+            await fixture.RunAsync(fixture.Request(rule: "sometimes")));
 
         Assert.Equal("invalid-land-rules", missing.ReasonCode);
         Assert.Contains(fixture.ForestEntryId.ToString("D"), missing.Message, StringComparison.Ordinal);
@@ -167,7 +174,9 @@ public sealed class StatisticsSimulatePresetTests
             fixture.Request(target: fixture.ForestEntryId));
 
         Assert.IsType<OperationNotFound>(unknown.Value);
-        Assert.Equal("unsupported-on-curve-multiface-target", Assert.IsType<OperationUnsupported>(multiFace.Value).ReasonCode);
+        Assert.Equal(
+            "unsupported-on-curve-multiface-target",
+            Assert.IsType<OperationUnsupported>(multiFace.Value).ReasonCode);
         OperationInvalidInput cost = Assert.IsType<OperationInvalidInput>(noCost.Value);
         Assert.Equal("unsupported-mana-cost", cost.ReasonCode);
         Assert.Equal("preset.targetEntryId", cost.Path);
@@ -194,13 +203,18 @@ public sealed class StatisticsSimulatePresetTests
     [Fact]
     public async Task Preset_WithUntrustedFacts_IsUnavailable()
     {
-        using PresetFixture nullLand = await PresetFixture.CreateAsync(extraLand: DeckOnCurveSourceFixture.NullLandPrintingId);
-        using PresetFixture missingLand = await PresetFixture.CreateAsync(extraLand: DeckOnCurveSourceFixture.MissingLandPrintingId);
+        using PresetFixture nullLand = await PresetFixture.CreateAsync(
+            extraLand: DeckOnCurveSourceFixture.NullLandPrintingId);
+        using PresetFixture missingLand = await PresetFixture.CreateAsync(
+            extraLand: DeckOnCurveSourceFixture.MissingLandPrintingId);
         using PresetFixture noData = await PresetFixture.CreateAsync(unidentified: true);
 
-        OperationUnavailable nullFact = Assert.IsType<OperationUnavailable>((await nullLand.RunAsync(nullLand.Request())).Value);
-        OperationUnavailable missingFact = Assert.IsType<OperationUnavailable>((await missingLand.RunAsync(missingLand.Request())).Value);
-        OperationUnavailable none = Assert.IsType<OperationUnavailable>((await noData.RunAsync(noData.Request())).Value);
+        OperationUnavailable nullFact = Assert.IsType<OperationUnavailable>(
+            (await nullLand.RunAsync(nullLand.Request())).Value);
+        OperationUnavailable missingFact = Assert.IsType<OperationUnavailable>(
+            (await missingLand.RunAsync(missingLand.Request())).Value);
+        OperationUnavailable none = Assert.IsType<OperationUnavailable>(
+            (await noData.RunAsync(noData.Request())).Value);
 
         Assert.Equal("on-curve-land-produced-mana-unavailable", nullFact.ReasonCode);
         Assert.Equal("on-curve-land-produced-mana-unavailable", missingFact.ReasonCode);
@@ -216,7 +230,8 @@ public sealed class StatisticsSimulatePresetTests
     {
         using PresetFixture fixture = await PresetFixture.CreateAsync(install: false);
 
-        OperationNotCached notCached = Assert.IsType<OperationNotCached>((await fixture.RunAsync(fixture.Request())).Value);
+        OperationNotCached notCached = Assert.IsType<OperationNotCached>(
+            (await fixture.RunAsync(fixture.Request())).Value);
 
         Assert.Equal("card-data-not-installed", notCached.ReasonCode);
         Assert.Contains("scryfall_card_data_sync", notCached.Message, StringComparison.Ordinal);
@@ -233,7 +248,13 @@ public sealed class StatisticsSimulatePresetTests
         string[][] colors = [["G"], ["U"], ["B", "G"], ["W", "U"], ["R"], ["C"]];
         for (int index = 0; index < 149; index++)
         {
-            cards.Add(CardJson.Make($"Land with a longer name {index}", "Land", null, 0m, producedMana: colors[index % colors.Length]));
+            cards.Add(
+                CardJson.Make(
+                    $"Land with a longer name {index}",
+                    "Land",
+                    null,
+                    0m,
+                    producedMana: colors[index % colors.Length]));
         }
 
         using SimulateSetup setup = await SimulateSetup.CreateAsync(cards, install: true);
@@ -270,7 +291,9 @@ public sealed class StatisticsSimulatePresetTests
             "0000000000000007",
             TestContext.Current.CancellationToken));
 
-        Assert.Equal(149, result.Preset!.CandidateLands.Count + result.Preset.CandidateLandsOmitted.GetValueOrDefault());
+        Assert.Equal(
+            149,
+            result.Preset!.CandidateLands.Count + result.Preset.CandidateLandsOmitted.GetValueOrDefault());
         Assert.True(result.Truncated);
         Assert.Contains("candidate lands", result.Narrow, StringComparison.Ordinal);
         int size = ResultSize.Measure(new OperationSuccess<SimulateToolResult>(result));
@@ -295,8 +318,18 @@ public sealed class StatisticsSimulatePresetTests
                 "Examples",
                 Entries:
                 [
-                    new DeckEntryDraft(24, "Forest", PrintingId: CardJson.PrintingOf(forest), Zone: "main", EntryId: forestEntry),
-                    new DeckEntryDraft(2, "Spell", PrintingId: CardJson.PrintingOf(spell), Zone: "main", EntryId: spellEntry),
+                    new DeckEntryDraft(
+                        24,
+                        "Forest",
+                        PrintingId: CardJson.PrintingOf(forest),
+                        Zone: "main",
+                        EntryId: forestEntry),
+                    new DeckEntryDraft(
+                        2,
+                        "Spell",
+                        PrintingId: CardJson.PrintingOf(spell),
+                        Zone: "main",
+                        EntryId: spellEntry),
                     new DeckEntryDraft(34, "Filler", PrintingId: CardJson.PrintingOf(filler), Zone: "main"),
                 ],
                 Categories: [new DeckCategoryDraft("Lands", CategoryId: category)],
@@ -343,7 +376,17 @@ public sealed class StatisticsSimulatePresetTests
 
         Assert.StartsWith("Seeded sampling", description, StringComparison.Ordinal);
         Assert.InRange(description.Length, 1, 4_096);
-        foreach (string word in new[] { "London mulligan", "target-first", "listed-order", "draw-cards", "libraryEmpty", "sampleHands", "50,000,000", "Phyrexian", UntrustedTextNotes.Marker })
+        foreach (
+            string word in new[] {
+                 "London mulligan",
+                "target-first",
+                "listed-order",
+                "draw-cards",
+                "libraryEmpty",
+                "sampleHands",
+                "50,000,000",
+                "Phyrexian",
+                UntrustedTextNotes.Marker })
         {
             Assert.Contains(word, description, StringComparison.Ordinal);
         }
@@ -386,7 +429,13 @@ public sealed class StatisticsSimulatePresetTests
             JsonObject card = entry.Id == item.TargetEntry
                 ? CardJson.Make("Target", "Creature", item.TargetManaCost, 3m, printingId: printing)
                 : entry.Produces is not null
-                    ? CardJson.Make($"Land {entry.Id}", "Land", null, 0m, producedMana: [.. entry.Produces], printingId: printing)
+                    ? CardJson.Make(
+                        $"Land {entry.Id}",
+                        "Land",
+                        null,
+                        0m,
+                        producedMana: [.. entry.Produces],
+                        printingId: printing)
                     : CardJson.Make($"Filler {entry.Id}", "Creature", "{1}", 1m, printingId: printing);
             cards.Add(card);
             entries.Add(new DeckEntryDraft(
@@ -469,8 +518,16 @@ public sealed class StatisticsSimulatePresetTests
             [
                 new(1, "Fixture Growth", PrintingId: DeckOnCurveSourceFixture.TargetPrintingId, Zone: "main"),
                 new(7, "Fixture Forest", PrintingId: DeckOnCurveSourceFixture.GreenLandPrintingId, Zone: "main"),
-                new(1, "Fixture Front // Fixture Back", PrintingId: DeckOnCurveSourceFixture.MultiFacePrintingId, Zone: "main"),
-                new(1, "Fixture Empty Land", PrintingId: DeckOnCurveSourceFixture.KnownEmptyLandPrintingId, Zone: "main"),
+                new(
+                    1,
+                    "Fixture Front // Fixture Back",
+                    PrintingId: DeckOnCurveSourceFixture.MultiFacePrintingId,
+                    Zone: "main"),
+                new(
+                    1,
+                    "Fixture Empty Land",
+                    PrintingId: DeckOnCurveSourceFixture.KnownEmptyLandPrintingId,
+                    Zone: "main"),
             ];
             if (extraLand is Guid land)
             {
@@ -484,7 +541,12 @@ public sealed class StatisticsSimulatePresetTests
 
             if (commander)
             {
-                entries.Add(new DeckEntryDraft(1, "Fixture Commander", PrintingId: DeckOnCurveSourceFixture.TargetPrintingId, Zone: "commander"));
+                entries.Add(
+                    new DeckEntryDraft(
+                        1,
+                        "Fixture Commander",
+                        PrintingId: DeckOnCurveSourceFixture.TargetPrintingId,
+                        Zone: "commander"));
             }
 
             DeckDocument deck = Assert.IsType<OperationSuccess<DeckDocument>>((await fixture.store.CreateAsync(
@@ -493,8 +555,10 @@ public sealed class StatisticsSimulatePresetTests
             fixture.DeckId = deck.DeckId;
             fixture.TargetEntryId = deck.Entries.Single(entry => entry.CardName == "Fixture Growth").EntryId;
             fixture.ForestEntryId = deck.Entries.Single(entry => entry.CardName == "Fixture Forest").EntryId;
-            fixture.MultiFaceEntryId = deck.Entries.Single(entry => entry.CardName.StartsWith("Fixture Front", StringComparison.Ordinal)).EntryId;
-            fixture.CommanderEntryId = deck.Entries.SingleOrDefault(entry => entry.CardName == "Fixture Commander")?.EntryId ?? Guid.Empty;
+            fixture.MultiFaceEntryId = deck.Entries
+                .Single(entry => entry.CardName.StartsWith("Fixture Front", StringComparison.Ordinal)).EntryId;
+            fixture.CommanderEntryId = deck.Entries
+                .SingleOrDefault(entry => entry.CardName == "Fixture Commander")?.EntryId ?? Guid.Empty;
             return fixture;
         }
 

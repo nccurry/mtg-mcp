@@ -853,9 +853,9 @@ a default, so nothing is hidden.
   "mulligans": { "keptByRule": 18950, "keptAtLimit": 1050 },
   "libraryEmpty": 0,
   "sampleHands": [
-    { "sample": 1, "hands": [ { "mulligan": 0, "entryIds": ["..."], "names": ["..."] } ],
+    { "sample": 1, "hands": [ { "mulligan": 0, "entryIds": ["..."] } ],
       "kept": { "entryIds": ["..."], "bottomed": [] },
-      "turns": [ { "turn": 1, "drawn": ["..."], "moved": [ { "rule": 0, "entryId": "..." } ], "mana": 1 } ] }
+      "turns": [ { "turn": 1, "drawn": ["..."], "moved": [ { "rule": 0, "entryId": "..." } ], "manaAvailable": 1, "manaSpent": 0 } ] }
   ],
   "limits": [
     "Groups without produces add generic mana only.",
@@ -952,6 +952,65 @@ evaluator case, and fixtures.
   engine.
 - The existing SplitMix64 generator, fingerprint, and Wilson interval code are
   reused.
+
+### As Built (phase 6)
+
+The phase 6 implementation follows this section with the changes below. Each
+was made while building the tool and is covered by the tests named in the
+phase 6 evidence row of the README.
+
+- **Preset request.** The `on-curve` preset is a `preset` argument of kind
+  `on-curve` (`targetEntryId`, `landRules`, `turnLimit`, `onThePlay`). With a
+  preset, `groups`, `openingHand`, `eachTurn`, `turns`, and `conditions` are not
+  allowed (`field-not-allowed`); without one, `openingHand`, `eachTurn`,
+  `turns`, and `conditions` are required (`missing-field`) and `groups` is
+  optional. `samples` and `sampleHands` are always required. The preset reads
+  installed card data, expands to ordinary groups, one `play` rule, and one
+  `can-cast` condition (the expanded rules appear in `appliedRules`), and adds a
+  `preset` block listing the target, the lands with their colors and rules, and
+  the entries it leaves out. A deck entry with no card data stops the preset
+  (`on-curve-card-fact-unavailable`, naming up to five), as the removed tool did.
+- **Per-entry mana timing.** `play` and `cast-if-able` take an optional
+  `manaFromByEntry` list. The preset needs it: one `play` rule must choose
+  among lands whose mana arrives on the same turn and on the next turn, and
+  `target-first` prefers a card whose own timing is `same-turn` (rule 3).
+- **Rule 5.** The mulligan block is optional; without it the first hand is
+  kept and `mulligans` is absent. `rule` (`london`) and `bottom.otherwise`
+  (`random`) are required text values. Bottomed cards are chosen with the
+  seeded generator, one value per card.
+- **Rule 9.** `any` means one of W, U, B, R, or G, never `C`. A card in no
+  group, or a group with no `produces`, adds generic mana only.
+- **Conditions.** `mana-at-least` counts mana still unspent after the turn's
+  rules, so it matches `can-cast`, which also reads the unspent mana. A
+  `can-cast` with `byTurn` passes if any turn up to it passes. Cards "seen" for
+  `drawn-at-least` are those in the kept opening hand (including cards put on
+  the bottom) and every card drawn later, each counted once.
+- **Result shape.** Sample hands carry `manaAvailable` and `manaSpent` for each
+  turn instead of `mana`, and the card names are in one `sampleCards` list
+  (entry ID and name) instead of a `names` array in each hand, which keeps the
+  result small. `wilson95` is `[lower, upper]`; rates and bounds are rounded to
+  six places so every platform writes the same digits. The result also lists
+  `skipped` entries (a category can hold cards of another zone) and says
+  `truncated`, `sampleHandsOmitted`, `candidateLandsOmitted`, and `narrow` when
+  a cut was needed.
+- **Zones and seed.** Only the `main` zone is shuffled. `deck.expectedRevision`
+  is optional. A missing `seed` is generated and returned.
+- **Bounds.** samples 1 to 100,000; `sampleHands` 0 to 10 and no more than
+  samples; turns 1 to 20; at most 150 deck entries and 500 cards; at most 20
+  groups, rules, and conditions; checks nest at most 4 deep with at most 20 in
+  one condition; at most 150 IDs in one select and 300 in a request; opening
+  hand 1 to 15; mulligans 0 to 10; small counts 0 or 1 to 99. The work limit is
+  50,000,000 (`simulation-too-large`).
+- **Engine boundaries.** The SplitMix64 generator and the Wilson code were
+  reused. The old input fingerprint was replaced by one over the whole request
+  (deck, groups, rules, conditions, versions, and the deck revision), because
+  the old one hashed the removed model's inputs. `MtgMcp.OnCurve` kept its name;
+  the rename to `MtgMcp.Simulation` was not done (see the README evidence row).
+- **Required fields.** The input records use `required` members, so a request
+  that leaves one out is refused with `invalid-arguments` and a `path` that
+  names it, and the schema lists them as required.
+- **Description label.** `stats_simulate` starts with `Seeded sampling:` and
+  not `Exact math:`, so an estimate is not labeled as exact math (NAME-002).
 
 ### On-Curve Migration
 

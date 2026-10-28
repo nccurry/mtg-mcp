@@ -59,7 +59,13 @@ public sealed class StatisticsSimulateBindingTests : IClassFixture<ToolCatalogFi
           ],
           "turns": 5,
           "conditions": [
-            { "id": "a", "check": { "kind": "can-cast", "manaCost": "{2}{B}{G}", "turn": 4, "inHand": "0193e97a-ef95-7700-8000-000000000013" } },
+            {
+                 "id": "a",
+                "check": {
+                     "kind": "can-cast",
+                    "manaCost": "{2}{B}{G}",
+                    "turn": 4,
+                    "inHand": "0193e97a-ef95-7700-8000-000000000013" } },
             { "id": "b", "check": { "kind": "all", "checks": [
                 { "kind": "mana-at-least", "amount": 4, "turn": 4 },
                 { "kind": "any", "checks": [
@@ -341,7 +347,9 @@ public sealed class StatisticsSimulateBindingTests : IClassFixture<ToolCatalogFi
         JsonElement mulligan = schema.GetProperty("properties").GetProperty("openingHand");
         Assert.Contains("freeFirstMulligan", mulligan.GetRawText(), StringComparison.Ordinal);
         Assert.Contains("\"bottom\"", mulligan.GetRawText(), StringComparison.Ordinal);
-        Assert.False(schema.TryGetProperty("additionalProperties", out JsonElement open) && open.ValueKind == JsonValueKind.True);
+        Assert.False(
+            schema.TryGetProperty("additionalProperties", out JsonElement open) &&
+            open.ValueKind == JsonValueKind.True);
     }
 
     /// <summary>

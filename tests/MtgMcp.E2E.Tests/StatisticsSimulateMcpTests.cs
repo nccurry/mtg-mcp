@@ -120,9 +120,18 @@ public sealed class StatisticsSimulateMcpTests
         Dictionary<string, object?> unknownKind = Request(id, id);
         ((Dictionary<string, object?>)((object[])unknownKind["eachTurn"]!)[0])["kind"] = "teleport";
 
-        JsonElement missingBody = AssertFailure(await CallAsync(session, "stats_simulate", missing), "invalid-input", "invalid-arguments");
-        JsonElement fieldBody = AssertFailure(await CallAsync(session, "stats_simulate", unknownField), "invalid-input", "invalid-arguments");
-        JsonElement kindBody = AssertFailure(await CallAsync(session, "stats_simulate", unknownKind), "invalid-input", "invalid-arguments");
+        JsonElement missingBody = AssertFailure(
+            await CallAsync(session, "stats_simulate", missing),
+            "invalid-input",
+            "invalid-arguments");
+        JsonElement fieldBody = AssertFailure(
+            await CallAsync(session, "stats_simulate", unknownField),
+            "invalid-input",
+            "invalid-arguments");
+        JsonElement kindBody = AssertFailure(
+            await CallAsync(session, "stats_simulate", unknownKind),
+            "invalid-input",
+            "invalid-arguments");
 
         Assert.Equal("eachTurn[0].maxPerTurn", missingBody.GetProperty("path").GetString());
         Assert.Contains("surprise", fieldBody.GetProperty("message").GetString(), StringComparison.Ordinal);
@@ -158,7 +167,9 @@ public sealed class StatisticsSimulateMcpTests
                     },
                 },
             }).ConfigureAwait(false);
-        Dictionary<string, object?> arguments = Request(deck.GetProperty("deckId").GetGuid(), FindEntryId(deck, "Land"));
+        Dictionary<string, object?> arguments = Request(
+            deck.GetProperty("deckId").GetGuid(),
+            FindEntryId(deck, "Land"));
         arguments["samples"] = 100_000;
         arguments["turns"] = 20;
 
@@ -239,11 +250,15 @@ public sealed class StatisticsSimulateMcpTests
 
         Assert.Equal("on-curve", result.GetProperty("results")[0].GetProperty("id").GetString());
         Assert.Equal("{1}{G}", result.GetProperty("preset").GetProperty("target").GetProperty("manaCost").GetString());
-        Assert.Equal("On-Curve Target", result.GetProperty("preset").GetProperty("target").GetProperty("name").GetString());
+        Assert.Equal(
+            "On-Curve Target",
+            result.GetProperty("preset").GetProperty("target").GetProperty("name").GetString());
         JsonElement land = Assert.Single(result.GetProperty("preset").GetProperty("candidateLands").EnumerateArray());
         Assert.Equal(SeededForestEntryId, land.GetProperty("entryId").GetGuid());
         Assert.Equal("one-mana-same-turn", land.GetProperty("rule").GetString());
-        Assert.Equal("target-first", result.GetProperty("appliedRules").GetProperty("eachTurn")[0].GetProperty("pick").GetString());
+        Assert.Equal(
+            "target-first",
+            result.GetProperty("appliedRules").GetProperty("eachTurn")[0].GetProperty("pick").GetString());
         JsonElement unchanged = await CallSuccessAsync(
             session,
             "local_deck_get",
@@ -339,8 +354,20 @@ public sealed class StatisticsSimulateMcpTests
                 Format: "custom",
                 Entries:
                 [
-                    new DeckEntryDraft(1, "On-Curve Target", TargetOracleId, TargetPrintingId, Zone: "main", EntryId: SeededTargetEntryId),
-                    new DeckEntryDraft(6, "On-Curve Forest", ForestOracleId, ForestPrintingId, Zone: "main", EntryId: SeededForestEntryId),
+                    new DeckEntryDraft(
+                        1,
+                        "On-Curve Target",
+                        TargetOracleId,
+                        TargetPrintingId,
+                        Zone: "main",
+                        EntryId: SeededTargetEntryId),
+                    new DeckEntryDraft(
+                        6,
+                        "On-Curve Forest",
+                        ForestOracleId,
+                        ForestPrintingId,
+                        Zone: "main",
+                        EntryId: SeededForestEntryId),
                 ],
                 DeckId: SeededDeckId),
             cancellationToken).ConfigureAwait(false);

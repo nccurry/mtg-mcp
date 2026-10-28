@@ -40,12 +40,13 @@ The completed rewrite required exact schema review, preview releases,
 user-facing clean-break documentation, rollback to the prior package/data, and
 history-preserving Git integration. See [rewrite-guide.md](rewrite-guide.md).
 
-### Approved `0.11.0` focused-agent-tool-surface exception
+### Approved `0.11.0` and `0.12.0` focused-agent-tool-surface exception
 
 The approved focused-agent-tool-surface program (see
 `docs/llms/plcs/in-progress/focused-agent-tool-surface/`) renames, merges, and
-removes tools, and changes default selection, in one release without
-deprecation aliases. The owner approved this clean break for that program
+removes tools, and changes default selection, without deprecation aliases:
+`0.11.0` for the surface changes and `0.12.0` for replacing
+`local_deck_on_curve_estimate` with `stats_simulate`. The owner approved this clean break for that program
 only. Old names return an unknown-tool error, and the changelog lists every old
 name beside its replacement. Changes after this program follow the ordinary
 policy.

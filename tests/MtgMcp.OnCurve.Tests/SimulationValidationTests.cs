@@ -125,7 +125,10 @@ public sealed class SimulationValidationTests
     [Fact]
     public void Run_WithBadGroups_IsRefused()
     {
-        AssertRefused(Request(Distinct(12), [Group("a", 1), Group("a", 2)]), "invalid-simulation-group", "groups[1].id");
+        AssertRefused(
+            Request(Distinct(12), [Group("a", 1), Group("a", 2)]),
+            "invalid-simulation-group",
+            "groups[1].id");
         AssertRefused(Request(Distinct(12), [Group(" ", 1)]), "invalid-simulation-group", "groups[0].id");
         AssertRefused(Request(Distinct(12), [Group("a", 99)]), "unknown-entry-id", "groups[0].select");
         AssertRefused(Request(Distinct(12), [Group("a", 1, 1)]), "invalid-simulation-group", "groups[0].select");
@@ -229,7 +232,15 @@ public sealed class SimulationValidationTests
             Request(
                 Distinct(12),
                 [Group("g", 1), Group("h", 2)],
-                [Play("g", SimulationPick.Random, 1, 1, SimulationManaFrom.SameTurn, null, (SimulationManaFrom.NextTurn, [2]))]),
+                [
+                    Play(
+                        "g",
+                        SimulationPick.Random,
+                        1,
+                        1,
+                        SimulationManaFrom.SameTurn,
+                        null,
+                        (SimulationManaFrom.NextTurn, [2]))]),
             "invalid-simulation-group",
             "eachTurn[0].manaFromByEntry[0].entryIds");
     }
@@ -243,7 +254,8 @@ public sealed class SimulationValidationTests
         List<SimulationDeckEntry> deck = Distinct(40);
         List<SimulationGroup> groups = [.. Enumerable.Range(1, 21).Select(index => Group($"g{index}", index))];
         List<SimulationRule> rules = [.. Enumerable.Range(1, 21).Select(_ => Play("g1"))];
-        List<SimulationCondition> conditions = [.. Enumerable.Range(1, 21).Select(index => Condition($"c{index}", new SimulationManaAtLeast(0, 1)))];
+        List<SimulationCondition> conditions = [
+            .. Enumerable.Range(1, 21).Select(index => Condition($"c{index}", new SimulationManaAtLeast(0, 1)))];
 
         AssertRefused(Request(deck, groups), "invalid-simulation-value", "groups");
         AssertRefused(Request(deck, [Group("g1", 1)], rules), "invalid-simulation-value", "eachTurn");
@@ -293,14 +305,35 @@ public sealed class SimulationValidationTests
         List<SimulationDeckEntry> deck = Distinct(12);
         SimulationGroup[] groups = [Group("g", 1)];
 
-        AssertRefused(Request(deck, groups, [Play("g", maxPerTurn: 0)]), "invalid-simulation-value", "eachTurn[0].maxPerTurn");
-        AssertRefused(Request(deck, groups, [Play("g", addsMana: -1)]), "invalid-simulation-value", "eachTurn[0].addsMana");
+        AssertRefused(
+            Request(deck, groups, [Play("g", maxPerTurn: 0)]),
+            "invalid-simulation-value",
+            "eachTurn[0].maxPerTurn");
+        AssertRefused(
+            Request(deck, groups, [Play("g", addsMana: -1)]),
+            "invalid-simulation-value",
+            "eachTurn[0].addsMana");
         AssertRefused(Request(deck, groups, [Cast("g", -1)]), "invalid-simulation-value", "eachTurn[0].cost");
-        AssertRefused(Request(deck, groups, [Draw("g", 1, 0, SimulationDrawEffect.Once)]), "invalid-simulation-value", "eachTurn[0].cards");
-        AssertRefused(Request(deck, groups, [Draw("g", 1, 100, SimulationDrawEffect.Once)]), "invalid-simulation-value", "eachTurn[0].cards");
-        AssertRefused(Request(deck, groups, [Draw("g", 1, 1, (SimulationDrawEffect)9)]), "invalid-simulation-value", "eachTurn[0].effect");
-        AssertRefused(Request(deck, groups, [Play("g", (SimulationPick)9)]), "invalid-simulation-value", "eachTurn[0].pick");
-        AssertRefused(Request(deck, groups, [Play("g", manaFrom: (SimulationManaFrom)9)]), "invalid-simulation-value", "eachTurn[0].manaFrom");
+        AssertRefused(
+            Request(deck, groups, [Draw("g", 1, 0, SimulationDrawEffect.Once)]),
+            "invalid-simulation-value",
+            "eachTurn[0].cards");
+        AssertRefused(
+            Request(deck, groups, [Draw("g", 1, 100, SimulationDrawEffect.Once)]),
+            "invalid-simulation-value",
+            "eachTurn[0].cards");
+        AssertRefused(
+            Request(deck, groups, [Draw("g", 1, 1, (SimulationDrawEffect)9)]),
+            "invalid-simulation-value",
+            "eachTurn[0].effect");
+        AssertRefused(
+            Request(deck, groups, [Play("g", (SimulationPick)9)]),
+            "invalid-simulation-value",
+            "eachTurn[0].pick");
+        AssertRefused(
+            Request(deck, groups, [Play("g", manaFrom: (SimulationManaFrom)9)]),
+            "invalid-simulation-value",
+            "eachTurn[0].manaFrom");
     }
 
     /// <summary>
@@ -313,11 +346,21 @@ public sealed class SimulationValidationTests
         SimulationGroup[] groups = [Group("g", 1)];
         SimulationCheck keep = new SimulationCountBetween("g", 0, 7);
 
-        AssertRefused(Request(deck, groups, mulligan: new SimulationMulligan(-1, true, keep, [])), "invalid-simulation-value", "openingHand.mulligan.maxMulligans");
-        AssertRefused(Request(deck, groups, mulligan: new SimulationMulligan(11, true, keep, [])), "invalid-simulation-value", "openingHand.mulligan.maxMulligans");
-        AssertRefused(Request(deck, groups, handSize: 3, mulligan: new SimulationMulligan(3, false, keep, [])), "invalid-simulation-value", "openingHand.mulligan.maxMulligans");
+        AssertRefused(
+            Request(deck, groups, mulligan: new SimulationMulligan(-1, true, keep, [])),
+            "invalid-simulation-value",
+            "openingHand.mulligan.maxMulligans");
+        AssertRefused(
+            Request(deck, groups, mulligan: new SimulationMulligan(11, true, keep, [])),
+            "invalid-simulation-value",
+            "openingHand.mulligan.maxMulligans");
+        AssertRefused(
+            Request(deck, groups, handSize: 3, mulligan: new SimulationMulligan(3, false, keep, [])),
+            "invalid-simulation-value",
+            "openingHand.mulligan.maxMulligans");
         Assert.IsType<OperationSuccess<SimulationReport>>(
-            SimulationEngine.Run(Request(deck, groups, handSize: 3, mulligan: new SimulationMulligan(3, true, keep, []))).Value);
+            SimulationEngine.Run(
+                Request(deck, groups, handSize: 3, mulligan: new SimulationMulligan(3, true, keep, []))).Value);
     }
 
     /// <summary>
@@ -330,7 +373,10 @@ public sealed class SimulationValidationTests
         SimulationGroup[] groups = [Group("g", 1)];
 
         AssertRefused(
-            Request(Distinct(12), groups, mulligan: new SimulationMulligan(1, true, new SimulationManaAtLeast(1, 1), [])),
+            Request(
+                Distinct(12),
+                groups,
+                mulligan: new SimulationMulligan(1, true, new SimulationManaAtLeast(1, 1), [])),
             "invalid-simulation-check",
             "openingHand.mulligan.keepWhen");
         AssertRefused(
@@ -362,11 +408,15 @@ public sealed class SimulationValidationTests
             deep = new SimulationAll([deep]);
         }
 
-        SimulationCheck wide = new SimulationAny([.. Enumerable.Range(0, 21).Select(_ => (SimulationCheck)new SimulationManaAtLeast(0, 1))]);
+        SimulationCheck wide = new SimulationAny(
+            [.. Enumerable.Range(0, 21).Select(_ => (SimulationCheck)new SimulationManaAtLeast(0, 1))]);
 
         AssertRefused(Request(Distinct(12), conditions: [Condition("deep", deep)]), "invalid-simulation-check", null);
         AssertRefused(Request(Distinct(12), conditions: [Condition("wide", wide)]), "invalid-simulation-check", null);
-        AssertRefused(Request(Distinct(12), conditions: [Condition("empty", new SimulationAll([]))]), "invalid-simulation-check", "conditions[0].check");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition("empty", new SimulationAll([]))]),
+            "invalid-simulation-check",
+            "conditions[0].check");
     }
 
     /// <summary>
@@ -378,7 +428,10 @@ public sealed class SimulationValidationTests
         SimulationCondition one = Condition("same", new SimulationManaAtLeast(0, 1));
 
         AssertRefused(Request(Distinct(12), conditions: [one, one]), "invalid-simulation-check", "conditions[1].id");
-        AssertRefused(Request(Distinct(12), conditions: [Condition(" ", new SimulationManaAtLeast(0, 1))]), "invalid-simulation-check", "conditions[0].id");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition(" ", new SimulationManaAtLeast(0, 1))]),
+            "invalid-simulation-check",
+            "conditions[0].id");
     }
 
     /// <summary>
@@ -389,12 +442,36 @@ public sealed class SimulationValidationTests
     {
         SimulationGroup[] groups = [Group("g", 1)];
 
-        AssertRefused(Request(Distinct(12), groups, conditions: [Condition("a", new SimulationManaAtLeast(-1, 1))]), "invalid-simulation-value", "conditions[0].check.amount");
-        AssertRefused(Request(Distinct(12), groups, conditions: [Condition("a", new SimulationManaAtLeast(1, 4))]), "invalid-simulation-value", "conditions[0].check.turn");
-        AssertRefused(Request(Distinct(12), groups, conditions: [Condition("a", new SimulationDrawnAtLeast("g", 0, 1))]), "invalid-simulation-value", "conditions[0].check.count");
-        AssertRefused(Request(Distinct(12), groups, conditions: [Condition("a", new SimulationDrawnAtLeast("g", 1, 0))]), "invalid-simulation-value", "conditions[0].check.byTurn");
-        AssertRefused(Request(Distinct(12), groups, conditions: [Condition("a", new SimulationOnBattlefieldAtLeast("g", 100, 1))]), "invalid-simulation-value", "conditions[0].check.count");
-        AssertRefused(Request(Distinct(12), groups, mulligan: new SimulationMulligan(1, true, new SimulationCountBetween("g", 3, 2), [])), "invalid-simulation-value", "openingHand.mulligan.keepWhen");
+        AssertRefused(
+            Request(Distinct(12), groups, conditions: [Condition("a", new SimulationManaAtLeast(-1, 1))]),
+            "invalid-simulation-value",
+            "conditions[0].check.amount");
+        AssertRefused(
+            Request(Distinct(12), groups, conditions: [Condition("a", new SimulationManaAtLeast(1, 4))]),
+            "invalid-simulation-value",
+            "conditions[0].check.turn");
+        AssertRefused(
+            Request(Distinct(12), groups, conditions: [Condition("a", new SimulationDrawnAtLeast("g", 0, 1))]),
+            "invalid-simulation-value",
+            "conditions[0].check.count");
+        AssertRefused(
+            Request(Distinct(12), groups, conditions: [Condition("a", new SimulationDrawnAtLeast("g", 1, 0))]),
+            "invalid-simulation-value",
+            "conditions[0].check.byTurn");
+        AssertRefused(
+            Request(
+                Distinct(12),
+                groups,
+                conditions: [Condition("a", new SimulationOnBattlefieldAtLeast("g", 100, 1))]),
+            "invalid-simulation-value",
+            "conditions[0].check.count");
+        AssertRefused(
+            Request(
+                Distinct(12),
+                groups,
+                mulligan: new SimulationMulligan(1, true, new SimulationCountBetween("g", 3, 2), [])),
+            "invalid-simulation-value",
+            "openingHand.mulligan.keepWhen");
     }
 
     /// <summary>
@@ -404,11 +481,26 @@ public sealed class SimulationValidationTests
     [Fact]
     public void Run_WithABadCanCast_IsRefused()
     {
-        AssertRefused(Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", null, null, null))]), "invalid-simulation-check", "conditions[0].check");
-        AssertRefused(Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", 1, 2, null))]), "invalid-simulation-check", "conditions[0].check");
-        AssertRefused(Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", 9, null, null))]), "invalid-simulation-value", "conditions[0].check.turn");
-        AssertRefused(Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{X}{G}", 1, null, null))]), "invalid-simulation-check", "conditions[0].check.manaCost");
-        AssertRefused(Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", 1, null, Id(99)))]), "unknown-entry-id", "conditions[0].check.inHand");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", null, null, null))]),
+            "invalid-simulation-check",
+            "conditions[0].check");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", 1, 2, null))]),
+            "invalid-simulation-check",
+            "conditions[0].check");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", 9, null, null))]),
+            "invalid-simulation-value",
+            "conditions[0].check.turn");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{X}{G}", 1, null, null))]),
+            "invalid-simulation-check",
+            "conditions[0].check.manaCost");
+        AssertRefused(
+            Request(Distinct(12), conditions: [Condition("a", new SimulationCanCast("{G}", 1, null, Id(99)))]),
+            "unknown-entry-id",
+            "conditions[0].check.inHand");
     }
 
     /// <summary>

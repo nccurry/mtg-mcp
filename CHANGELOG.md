@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+## 0.12.0 - 2026-10-28
+
+### Seeded simulation (breaking)
+
+- Breaking: `deck_on_curve_estimate` removed. The tool was named
+  `local_deck_on_curve_estimate` in `0.11.0` and `deck_on_curve_estimate`
+  before that. Use `stats_simulate` with `preset` of kind `on-curve`. For the
+  same deck, seed, and inputs the preset returns the same success counts: it is
+  replayed against 16 captured runs of the old estimator, including colored
+  targets, lands that enter tapped, and decks that run out of cards. The old
+  arguments map as follows:
+
+  | Old argument | New argument |
+  | --- | --- |
+  | `deckId`, `expectedRevision` | `deck.deckId`, `deck.expectedRevision` (the revision is now optional) |
+  | `targetEntryId` | `preset.targetEntryId` |
+  | `landRules` | `preset.landRules` |
+  | `turnLimit` | `preset.turnLimit` (1 to 20, was 1 to 12) |
+  | `onThePlay` | `preset.onThePlay` |
+  | `sampleCount` | `samples` (1 to 100,000, was 100 to 100,000, and now required) |
+  | `seed` | `seed` |
+
+  The result is different. `results[0].hits` and `rate` replace `successCount`
+  and `successRate`, `wilson95` replaces `interval`, `appliedRules` states the
+  rules the preset expanded to, and `preset` lists the target, the lands with
+  their colors and rules, and the entries left out of the land model. The miss
+  reasons and the two traces are gone; `sampleHands` returns up to 10 full
+  sample games instead, and asks for them with the required `sampleHands`
+  argument.
+- Added `stats_simulate` (toolset `stats`, read-only in every mode). It
+  shuffles the main zone of one saved deck and plays seeded games under rules
+  the caller states as structured data: groups of entries chosen by entry or
+  category ID, an opening hand with an optional London mulligan (with a
+  required `freeFirstMulligan` and `bottom`), per-turn rules `play`,
+  `cast-if-able`, and `draw-cards` (each with required `pick` and
+  `maxPerTurn`, and `manaFrom` or `effect` and `cards` where they apply), and
+  conditions `mana-at-least`, `drawn-at-least`, `on-battlefield-at-least`,
+  and `can-cast`, combined with `all` and `any`. Groups may declare the colors
+  of mana their cards add (`produces`, with per-entry overrides), and
+  `can-cast` pays a mana cost with one exact assignment together with all mana
+  the rules spent that turn; hybrid symbols take either color and Phyrexian
+  symbols need their color (life payment is not modeled). The result states the
+  seed, the random generator version (`splitmix64-v1`), the model version, a
+  request fingerprint, the full applied rules, each condition's hits, rate,
+  and 95% Wilson interval, mulligan keep counts, how many games emptied the
+  library, the skipped entries with reasons, the model limits, and the first
+  `sampleHands` games in full. The same request and seed give the same result
+  on every platform. A request is refused above 50,000,000 for samples times
+  turns times deck cards; the message states the limit. The result stays under
+  40,000 bytes: sample hands, and for the preset a long list of lands, are cut
+  with a stated omitted count and a `narrow` hint.
+- Added the `stats_simulate` line to the server instructions, and the
+  description label `Seeded sampling:`, which marks the result as an estimate
+  and not exact math.
+- Counts: unchanged with every toolset on (35 / 48 / 48 with no provider
+  credentials, 44 / 58 / 69 with Archidekt only, and 59 / 73 / 86 with both,
+  in `read-only`, `local`, and `remote`). By toolset, `decks` has 19 tools
+  (10 read-only and 9 local writes) and `stats` has 10 read-only tools.
+- Added a clearer error for a missing required field inside a nested request
+  object: `invalid-input` (reason `invalid-arguments`) with the message
+  "Required field 'x' is missing at 'path'." and a `path` that names the field.
+- The `MtgMcp.OnCurve` project is now the sampling engine behind
+  `stats_simulate`. Its tasks (`task coverage:oncurve`,
+  `task benchmark:oncurve`) keep their names.
+
 ## 0.11.0 - 2026-10-28
 
 ### Tool surface changes (breaking)

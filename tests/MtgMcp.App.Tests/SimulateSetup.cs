@@ -76,7 +76,8 @@ internal sealed class SimulateSetup : IDisposable
     /// </summary>
     internal static async Task<SimulateSetup> CreateAsync(IReadOnlyList<JsonObject>? cards = null, bool install = false)
     {
-        return new SimulateSetup(await CardDataFixture.CreateAsync(cards ?? [CardJson.Make("Placeholder")], install: install));
+        return new SimulateSetup(
+            await CardDataFixture.CreateAsync(cards ?? [CardJson.Make("Placeholder")], install: install));
     }
 
     /// <summary>

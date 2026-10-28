@@ -17,7 +17,7 @@ operations. The client LLM decides how to build the deck.
 | `MtgMcp.Playgroup` | Pinned official Public API contract |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
-| `MtgMcp.OnCurve` | Pure, repeatable sampled cast-by-turn calculation |
+| `MtgMcp.OnCurve` | Pure, seeded sampling engine for `stats_simulate` |
 | `MtgMcp.App` | MCP host, configuration, composition, modes, and schemas |
 
 Core references no adapter or host. Provider adapters do not reference one
@@ -27,9 +27,9 @@ another. App wires the server together.
 
 The server uses stdio and registers static tools for one session. It exposes:
 
-- 20 `local_deck_*` tools;
+- 19 `local_deck_*` tools;
 - 13 `scryfall_*` tools and two `card_list*` tools (`card_list_query`, `card_lists_compare`);
-- 9 `stats_*` tools;
+- 10 `stats_*` tools;
 - 21 `archidekt_*` tools (on when Archidekt credentials are present);
 - 17 `playgroup_*` tools (on when a Playgroup key is present);
 - 4 `spellbook_*` tools;
@@ -73,10 +73,12 @@ Provider facts, community evidence, exact derivations, parser classifications,
 heuristics, and sampled estimates remain distinct. Unknown, unavailable,
 unsupported, and empty results are not interchangeable.
 
-`local_deck_on_curve_estimate` is the only sampled estimate. App reads the saved deck
-and installed Scryfall facts, then passes a resolved request to `MtgMcp.OnCurve`.
-The calculation uses only caller-supplied land rules and returns its seed,
-uncertainty range, and limits. It does not parse card text or make a deck choice.
+`stats_simulate` is the only sampled estimate. App reads the saved deck, resolves the
+caller's groups to main-zone entries, and passes plain counts and rule records to
+`MtgMcp.OnCurve`, which shuffles with a versioned SplitMix64 generator and applies only
+the fixed engine rules and the rules in the request. Its `on-curve` preset reads installed
+Scryfall facts and expands to ordinary rules. The result returns its seed, applied rules,
+uncertainty ranges, and limits. It does not parse card text or make a deck choice.
 
 ## Write flow
 
