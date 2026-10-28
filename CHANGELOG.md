@@ -132,9 +132,9 @@
 - Added a clearer error for a missing required field inside a nested request
   object: `invalid-input` (reason `invalid-arguments`) with the message
   "Required field 'x' is missing at 'path'." and a `path` that names the field.
-- The `MtgMcp.OnCurve` project is now the sampling engine behind
-  `stats_simulate`. Its tasks (`task coverage:oncurve`,
-  `task benchmark:oncurve`) keep their names.
+- The sampling engine behind `stats_simulate` is the `MtgMcp.Simulation` project (it was `MtgMcp.OnCurve` in
+  `0.11.0`). Its tasks are `task coverage:simulation` and `task benchmark:simulation`; the `oncurve` task names are
+  gone and no alias keeps them. The `on-curve` preset keeps its name.
 
 ## 0.11.0 - 2026-10-28
 

@@ -724,7 +724,7 @@ Use Task as the command menu:
 task --list
 task lint
 task test
-task benchmark:oncurve
+task benchmark:simulation
 task surface:report
 task coverage
 task pack
@@ -734,7 +734,7 @@ task release:tool-smoke
 ```
 
 Normal tests are deterministic and offline. Live tests require explicit opt-in.
-`task benchmark:oncurve` runs the separate fixed 99-card Release measurement.
+`task benchmark:simulation` runs the separate fixed 99-card Release measurement.
 Each production assembly must maintain at least 90 percent line coverage.
 
 ## Architecture
@@ -748,7 +748,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 | `MtgMcp.Playgroup` | Pinned official API evidence |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
-| `MtgMcp.OnCurve` | Pure seeded sampling engine behind `stats_simulate` and its on-curve preset |
+| `MtgMcp.Simulation` | Pure seeded sampling engine behind `stats_simulate` and its on-curve preset |
 | `MtgMcp.App` | MCP host, configuration, composition, and schemas |
 
 Read [North Star](docs/north-star.md), [Design Goals](docs/design-goals.md), and

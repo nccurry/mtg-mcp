@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using MtgMcp.App.CardLists;
-using MtgMcp.OnCurve;
+using MtgMcp.Simulation;
 
 namespace MtgMcp.App.Statistics;
 

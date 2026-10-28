@@ -1,4 +1,4 @@
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Reports how one sampled game ended, apart from the conditions, which are read with

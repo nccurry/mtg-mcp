@@ -1,6 +1,6 @@
 using MtgMcp.Core.Results;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Verifies printed mana-cost reading and the one exact source-to-symbol payment matcher.

@@ -1,4 +1,4 @@
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Verifies the 95 percent Wilson interval against hand-checked values.

@@ -34,7 +34,7 @@ function Invoke-VerifyGates {
         "MtgMcp.Archidekt",
         "MtgMcp.Core",
         "MtgMcp.Decks",
-        "MtgMcp.OnCurve",
+        "MtgMcp.Simulation",
         "MtgMcp.Playgroup",
         "MtgMcp.Scryfall",
         "MtgMcp.Spellbook",

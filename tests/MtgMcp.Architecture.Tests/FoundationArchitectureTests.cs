@@ -33,9 +33,9 @@ public sealed class FoundationArchitectureTests
                 "src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj",
                 "src/MtgMcp.Core/MtgMcp.Core.csproj",
                 "src/MtgMcp.Decks/MtgMcp.Decks.csproj",
-                "src/MtgMcp.OnCurve/MtgMcp.OnCurve.csproj",
                 "src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj",
                 "src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj",
+                "src/MtgMcp.Simulation/MtgMcp.Simulation.csproj",
                 "src/MtgMcp.Spellbook/MtgMcp.Spellbook.csproj",
                 "src/MtgMcp.Statistics/MtgMcp.Statistics.csproj",
             ],
@@ -74,7 +74,7 @@ public sealed class FoundationArchitectureTests
             .ToArray();
 
         Assert.Equal(
-            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.OnCurve/MtgMcp.OnCurve.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj", "../MtgMcp.Spellbook/MtgMcp.Spellbook.csproj", "../MtgMcp.Statistics/MtgMcp.Statistics.csproj"],
+            ["../MtgMcp.Core/MtgMcp.Core.csproj", "../MtgMcp.Archidekt/MtgMcp.Archidekt.csproj", "../MtgMcp.Decks/MtgMcp.Decks.csproj", "../MtgMcp.Playgroup/MtgMcp.Playgroup.csproj", "../MtgMcp.Scryfall/MtgMcp.Scryfall.csproj", "../MtgMcp.Simulation/MtgMcp.Simulation.csproj", "../MtgMcp.Spellbook/MtgMcp.Spellbook.csproj", "../MtgMcp.Statistics/MtgMcp.Statistics.csproj"],
             references);
         Assert.Equal(
             [
@@ -202,12 +202,12 @@ public sealed class FoundationArchitectureTests
     }
 
     /// <summary>
-    /// Verifies OnCurve contains only resolved-data calculation work over Core result types.
+    /// Verifies Simulation contains only resolved-data calculation work over Core result types.
     /// </summary>
     [Fact]
-    public void OnCurveProject_ReferencesOnlyCoreAndBcl()
+    public void SimulationProject_ReferencesOnlyCoreAndBcl()
     {
-        XDocument project = LoadProject("src/MtgMcp.OnCurve/MtgMcp.OnCurve.csproj");
+        XDocument project = LoadProject("src/MtgMcp.Simulation/MtgMcp.Simulation.csproj");
         string[] references = project
             .Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
@@ -220,7 +220,7 @@ public sealed class FoundationArchitectureTests
         string source = string.Join(
             Environment.NewLine,
             Directory.GetFiles(
-                    Path.Combine(RepositoryRoot, "src", "MtgMcp.OnCurve"),
+                    Path.Combine(RepositoryRoot, "src", "MtgMcp.Simulation"),
                     "*.cs",
                     SearchOption.AllDirectories)
                 .Where(IsAuthoredSource)
@@ -675,12 +675,12 @@ public sealed class FoundationArchitectureTests
             "MtgMcp.Decks",
             "MtgMcp.Decks.Tests",
             "MtgMcp.E2E.Tests",
-            "MtgMcp.OnCurve",
-            "MtgMcp.OnCurve.Tests",
             "MtgMcp.Playgroup",
             "MtgMcp.Playgroup.Tests",
             "MtgMcp.Scryfall",
             "MtgMcp.Scryfall.Tests",
+            "MtgMcp.Simulation",
+            "MtgMcp.Simulation.Tests",
             "MtgMcp.Spellbook",
             "MtgMcp.Spellbook.Tests",
             "MtgMcp.Statistics",
@@ -741,11 +741,11 @@ public sealed class FoundationArchitectureTests
             File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
             StringComparison.Ordinal);
         Assert.Contains(
-            "MtgMcp.OnCurve.Tests",
+            "MtgMcp.Simulation.Tests",
             File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
             StringComparison.Ordinal);
         Assert.Contains(
-            "coverage:oncurve",
+            "coverage:simulation",
             File.ReadAllText(Path.Combine(RepositoryRoot, "Taskfile.yml")),
             StringComparison.Ordinal);
         Assert.Contains(

@@ -1,6 +1,6 @@
 using MtgMcp.Core.Results;
 
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Checks a resolved request against every fixed limit and engine rule, and compiles it into a plan. Every failure

@@ -198,7 +198,7 @@
       "mtgmcp.core": {
         "type": "Project"
       },
-      "mtgmcp.oncurve": {
+      "mtgmcp.simulation": {
         "type": "Project",
         "dependencies": {
           "MtgMcp.Core": "[1.0.0, )"

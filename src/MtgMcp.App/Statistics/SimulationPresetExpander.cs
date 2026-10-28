@@ -2,7 +2,7 @@ using MtgMcp.App.CardLists;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
-using MtgMcp.OnCurve;
+using MtgMcp.Simulation;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Statistics;

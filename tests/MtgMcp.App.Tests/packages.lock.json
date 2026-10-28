@@ -376,12 +376,6 @@
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
         }
       },
-      "mtgmcp.oncurve": {
-        "type": "Project",
-        "dependencies": {
-          "MtgMcp.Core": "[1.0.0, )"
-        }
-      },
       "mtgmcp.playgroup": {
         "type": "Project",
         "dependencies": {
@@ -394,6 +388,12 @@
           "Microsoft.Data.Sqlite": "[11.0.0-preview.7.26381.103, )",
           "MtgMcp.Core": "[1.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
+        }
+      },
+      "mtgmcp.simulation": {
+        "type": "Project",
+        "dependencies": {
+          "MtgMcp.Core": "[1.0.0, )"
         }
       },
       "mtgmcp.spellbook": {
@@ -421,9 +421,9 @@
           "MtgMcp.Archidekt": "[1.0.0, )",
           "MtgMcp.Core": "[1.0.0, )",
           "MtgMcp.Decks": "[1.0.0, )",
-          "MtgMcp.OnCurve": "[1.0.0, )",
           "MtgMcp.Playgroup": "[1.0.0, )",
           "MtgMcp.Scryfall": "[1.0.0, )",
+          "MtgMcp.Simulation": "[1.0.0, )",
           "MtgMcp.Spellbook": "[1.0.0, )",
           "MtgMcp.Statistics": "[1.0.0, )"
         }

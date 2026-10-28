@@ -1,7 +1,7 @@
 using MtgMcp.Core.Results;
-using static MtgMcp.OnCurve.Tests.OnCurveTestData;
+using static MtgMcp.Simulation.Tests.OnCurveTestData;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Proves every fixed limit and engine rule a request must satisfy, and that each refusal names the JSON path.

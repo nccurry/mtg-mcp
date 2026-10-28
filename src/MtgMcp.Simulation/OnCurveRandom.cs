@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Parses and formats the fixed-width seed text used by repeatable on-curve runs.
