@@ -223,7 +223,8 @@ internal sealed class SimulationPlanner
     /// <summary>
     /// Refuses a request that could mean too much work per game even when samples times turns times deck cards is
     /// small: too many units of mana in play, or too many payment tests per turn. The estimate counts, for each
-    /// turn, a scan of the hand for each rule and a payment test for each <c>can-cast</c> check and for each
+    /// turn, a scan of the hand and of the mana in play for each firing of each rule (up to its per-turn limit or
+    /// the cards of its group), and a payment test for each <c>can-cast</c> check and, at each firing, for each
     /// candidate of a <c>target-first</c> rule, each costing about symbols times units of mana.
     /// </summary>
     private OperationInvalidInput? CheckOperations(SimulationRulePlan[] rules)
@@ -248,7 +249,15 @@ internal sealed class SimulationPlanner
         }
 
         long payment = units + 1;
-        long perTurn = copies * (1 + rules.Length);
+        long perTurn = copies;
+        long[] firings = new long[rules.Length];
+        for (int index = 0; index < rules.Length; index++)
+        {
+            // Each firing scans the hand for the group and, for a rule that costs mana, the producers in play.
+            firings[index] = Math.Min(Math.Min((long)rules[index].MaxPerTurn, GroupCards(rules[index].Group)), copies);
+            perTurn += firings[index] * (copies + payment);
+        }
+
         foreach (SimulationLeafPlan leaf in leaves)
         {
             if (leaf.Kind == SimulationLeafKind.CanCast)
@@ -257,11 +266,13 @@ internal sealed class SimulationPlanner
             }
         }
 
-        foreach (SimulationRulePlan rule in rules)
+        for (int index = 0; index < rules.Length; index++)
         {
+            SimulationRulePlan rule = rules[index];
             if (rule.Pick == SimulationPick.TargetFirst)
             {
-                perTurn += request.Groups[rule.Group].EntryIds.Count *
+                // Every firing runs the candidate loop again.
+                perTurn += firings[index] * request.Groups[rule.Group].EntryIds.Count *
                     (rule.TargetCost!.SpecificSymbolCount + 1) * payment;
             }
         }

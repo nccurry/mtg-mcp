@@ -108,10 +108,11 @@ public sealed class OnCurveManaTests
     [Fact]
     public void WithExtraGeneric_OnAHugeCost_DoesNotWrap()
     {
-        OnCurveManaCost cost = new OnCurveManaCost(int.MaxValue, 0, 0, 0, 0, 0, 0).WithExtraGeneric(5);
+        OnCurveManaCost cost = new(int.MaxValue, 0, 0, 0, 0, 0, 0);
 
-        Assert.Equal(int.MaxValue, cost.Generic);
-        Assert.False(OnCurveManaPayment.Analyze(cost, [Source(OnCurveManaSymbol.Green)]).CoversFullCost(cost));
+        Assert.False(OnCurveManaPayment
+            .Analyze(cost, [Source(OnCurveManaSymbol.Green)], new OnCurveMatchScratch(), 5)
+            .IsComplete);
         Assert.False(OnCurveManaPayment.Analyze(
             new OnCurveManaCost(int.MaxValue, 0, 0, 0, 0, 0, 0),
             [Source(OnCurveManaSymbol.Green)],
@@ -189,7 +190,7 @@ public sealed class OnCurveManaTests
         Assert.Equal(2, result.SpecificSymbolsCovered);
         Assert.Equal(3, result.TotalSymbolsCovered);
         Assert.Equal(cost.SpecificSymbolCount, result.SpecificSymbolsCovered);
-        Assert.True(result.CoversFullCost(cost));
+        Assert.True(result.IsComplete);
     }
 
     /// <summary>
@@ -206,7 +207,7 @@ public sealed class OnCurveManaTests
         Assert.Equal(1, result.SpecificSymbolsCovered);
         Assert.Equal(1, result.TotalSymbolsCovered);
         Assert.NotEqual(cost.SpecificSymbolCount, result.SpecificSymbolsCovered);
-        Assert.False(result.CoversFullCost(cost));
+        Assert.False(result.IsComplete);
     }
 
     /// <summary>
@@ -224,7 +225,7 @@ public sealed class OnCurveManaTests
 
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
 
-        Assert.True(result.CoversFullCost(cost));
+        Assert.True(result.IsComplete);
     }
 
     /// <summary>
@@ -244,7 +245,7 @@ public sealed class OnCurveManaTests
 
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, [Source(symbol)]);
 
-        Assert.Equal(expected, result.CoversFullCost(cost));
+        Assert.Equal(expected, result.IsComplete);
     }
 
     /// <summary>
@@ -253,13 +254,13 @@ public sealed class OnCurveManaTests
     [Fact]
     public void Analyze_WithExtraGeneric_NeedsMoreSources()
     {
-        OnCurveManaCost cost = new OnCurveManaCost(0, 0, 0, 0, 0, 1, 0).WithExtraGeneric(2);
+        OnCurveManaCost cost = new(0, 0, 0, 0, 0, 1, 0);
         IReadOnlyList<OnCurveActiveSource> three =
             [Source(OnCurveManaSymbol.Green), Source(OnCurveManaSymbol.Blue), Source()];
         IReadOnlyList<OnCurveActiveSource> two = [Source(OnCurveManaSymbol.Green), Source(OnCurveManaSymbol.Blue)];
 
-        Assert.True(OnCurveManaPayment.Analyze(cost, three).CoversFullCost(cost));
-        Assert.False(OnCurveManaPayment.Analyze(cost, two).CoversFullCost(cost));
+        Assert.True(OnCurveManaPayment.Analyze(cost, three, new OnCurveMatchScratch(), 2).IsComplete);
+        Assert.False(OnCurveManaPayment.Analyze(cost, two, new OnCurveMatchScratch(), 2).IsComplete);
     }
 
     /// <summary>
@@ -274,7 +275,7 @@ public sealed class OnCurveManaTests
         OnCurvePaymentAnalysis result = OnCurveManaPayment.Analyze(cost, sources);
 
         Assert.Equal(cost.SpecificSymbolCount, result.SpecificSymbolsCovered);
-        Assert.False(result.CoversFullCost(cost));
+        Assert.False(result.IsComplete);
     }
 
     /// <summary>

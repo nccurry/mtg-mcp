@@ -59,8 +59,17 @@ internal static class SimulationPresetExpander
         DeckDocument deck,
         CancellationToken cancellationToken)
     {
-        DeckEntry? target = library.FirstOrDefault(entry => entry.EntryId == preset.TargetEntryId);
-        if (target is null)
+        int targetIndex = -1;
+        for (int index = 0; index < library.Count; index++)
+        {
+            if (library[index].EntryId == preset.TargetEntryId)
+            {
+                targetIndex = index;
+                break;
+            }
+        }
+
+        if (targetIndex < 0)
         {
             return deck.Entries.Any(entry => entry.EntryId == preset.TargetEntryId)
                 ? new OperationInvalidInput(
@@ -70,6 +79,7 @@ internal static class SimulationPresetExpander
                 : new OperationNotFound("deck-entry-not-found", "The target entry was not found in the local deck.");
         }
 
+        DeckEntry target = library[targetIndex];
         List<ScryfallCardLookup?> lookups =
         [
             .. library.Select(entry => ScryfallEntryLookup.For(
@@ -95,7 +105,7 @@ internal static class SimulationPresetExpander
             return missing;
         }
 
-        return Expand(preset, target, library, cards.Data.Cards, library.ToList().IndexOf(target));
+        return Expand(preset, target, library, cards.Data.Cards, targetIndex);
     }
 
     /// <summary>

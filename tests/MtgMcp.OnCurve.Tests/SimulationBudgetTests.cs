@@ -65,6 +65,116 @@ public sealed class SimulationBudgetTests
     }
 
     /// <summary>
+    /// Builds the draw shape: a group of drawing cards that fire 99 times a turn and a random play rule that fires 99
+    /// times a turn, so each turn does thousands of hand scans.
+    /// </summary>
+    private static SimulationRequest FiringShape(int samples)
+    {
+        Guid draw = new(1000, 0, 0, new byte[8]);
+        List<Guid> others = [.. Enumerable.Range(1, 149).Select(id => new Guid(id, 0, 0, new byte[8]))];
+        List<SimulationDeckEntry> deck = [new(draw, 351), .. others.Select(id => new SimulationDeckEntry(id, 1))];
+        List<SimulationGroup> groups =
+        [
+            new("d", [draw], true, null),
+            new("t", others, true, new SimulationProduces(["W"], [])),
+        ];
+        List<SimulationRule> rules =
+        [
+            new(new SimulationDrawCards("d", SimulationPick.Random, 99, 0, 99, SimulationDrawEffect.Once)),
+            new(new SimulationPlay("t", SimulationPick.Random, 99, 0, SimulationManaFrom.SameTurn, [], null)),
+        ];
+        return new SimulationRequest(
+            deck,
+            groups,
+            new SimulationOpeningHand(15, true, null),
+            rules,
+            1,
+            [new("m", new SimulationCheck(new SimulationManaAtLeast(1, 1)))],
+            samples,
+            0,
+            1,
+            "firing");
+    }
+
+    /// <summary>
+    /// Builds the target-first shape: a rule that fires many times a turn and, at each firing, tests every candidate of
+    /// a large group against a cost that can never be paid.
+    /// </summary>
+    private static SimulationRequest TargetFirstShape(int samples)
+    {
+        Guid draw = new(1000, 0, 0, new byte[8]);
+        List<Guid> others = [.. Enumerable.Range(1, 149).Select(id => new Guid(id, 0, 0, new byte[8]))];
+        List<SimulationDeckEntry> deck = [new(draw, 351), .. others.Select(id => new SimulationDeckEntry(id, 1))];
+        string cost = string.Concat(Enumerable.Repeat("{U}", 16));
+        return new SimulationRequest(
+            deck,
+            [
+                new SimulationGroup("d", [draw], true, null),
+                new SimulationGroup("t", others, true, new SimulationProduces(["W"], [])),
+            ],
+            new SimulationOpeningHand(15, true, null),
+            [
+                new SimulationRule(
+                    new SimulationDrawCards("d", SimulationPick.Random, 99, 0, 99, SimulationDrawEffect.Once)),
+                new SimulationRule(
+                    new SimulationPlay("t", SimulationPick.TargetFirst, 99, 10, SimulationManaFrom.SameTurn, [], cost)),
+            ],
+            1,
+            [new("c", new SimulationCheck(new SimulationManaAtLeast(1, 1)))],
+            samples,
+            0,
+            1,
+            "target-first");
+    }
+
+    /// <summary>
+    /// Finds the largest sample count the planner accepts for a shape, runs it, and returns the seconds it took.
+    /// </summary>
+    private static double SecondsAtTheLimit(Func<int, SimulationRequest> shape)
+    {
+        int low = 1;
+        int high = 100_000;
+        while (low < high)
+        {
+            int middle = (low + high + 1) / 2;
+            if (SimulationPlanner.Plan(shape(middle)).Value is OperationSuccess<SimulationPlan>)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        Assert.True(SimulationPlanner.Plan(shape(low)).Value is OperationSuccess<SimulationPlan>);
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        _ = SimulationEngine.Run(shape(low));
+        stopwatch.Stop();
+        return stopwatch.Elapsed.TotalSeconds;
+    }
+
+    /// <summary>
+    /// Verifies a rule that fires 99 times a turn is charged for every firing, so the largest accepted request still
+    /// finishes in seconds (it took 48.8 seconds when firings were not counted).
+    /// </summary>
+    [Fact]
+    public void ManyFiringsPerTurn_AtTheLimit_FinishQuickly()
+    {
+        Assert.InRange(SecondsAtTheLimit(FiringShape), 0, 6);
+    }
+
+    /// <summary>
+    /// Verifies a target-first rule that fires many times is charged for the candidate loop at every firing (it took
+    /// 23.2 seconds when it was charged once).
+    /// </summary>
+    [Fact]
+    public void TargetFirstFiringManyTimes_AtTheLimit_FinishesQuickly()
+    {
+        Assert.InRange(SecondsAtTheLimit(TargetFirstShape), 0, 6);
+    }
+
+    /// <summary>
     /// Verifies a request that would put more than the limit of mana units in play is refused.
     /// </summary>
     [Fact]

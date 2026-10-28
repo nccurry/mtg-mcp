@@ -87,14 +87,6 @@ internal sealed record OnCurveManaCost(
     internal long TotalSymbolCount => (long)Generic + SpecificSymbolCount;
 
     /// <summary>
-    /// Returns a copy that needs more generic mana, such as mana other rules already spent this turn.
-    /// </summary>
-    internal OnCurveManaCost WithExtraGeneric(int extra)
-    {
-        return this with { Generic = (int)Math.Min(int.MaxValue, (long)Generic + extra) };
-    }
-
-    /// <summary>
     /// Builds the bit set of each specific symbol.
     /// </summary>
     private static int[] BuildMasks(
@@ -346,14 +338,6 @@ internal readonly record struct OnCurvePaymentAnalysis(
     /// Reports whether all required symbols, including generic mana and any extra generic mana, are covered.
     /// </summary>
     internal bool IsComplete => TotalSymbolsCovered == SymbolsNeeded;
-
-    /// <summary>
-    /// Reports whether all required symbols, including generic mana, are covered.
-    /// </summary>
-    internal bool CoversFullCost(OnCurveManaCost cost)
-    {
-        return TotalSymbolsCovered == cost.TotalSymbolCount;
-    }
 }
 
 /// <summary>
