@@ -172,6 +172,7 @@ tasks:
     deps: [restore]
     cmds:
       - '{{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
