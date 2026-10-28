@@ -425,6 +425,94 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies the same edit made on both sides is converged: no conflict and no operation, in a push and a pull,
+    /// and applying either advances the baseline.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IdenticalEditsOnBothSides_Converge(bool throughPull)
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string changedRemote = RichRemoteDeck.Replace(
+            "\"deckRelationId\": 101, \"quantity\": 2",
+            "\"deckRelationId\": 101, \"quantity\": 3",
+            StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            handler.SetStanding("api/decks/42/", RichRemoteDeck);
+            handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+
+            using ArchidektService service = CreateService(handler);
+            using SqliteDeckStore store = new(root, "test");
+            ArchidektCoordinator coordinator = new(service, store);
+            ArchidektSyncPreview first = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId: null,
+                TestContext.Current.CancellationToken));
+            Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+                new ArchidektPullApplyRequest("42", null, null, first.RemoteFingerprint, first.PreviewFingerprint),
+                TestContext.Current.CancellationToken)).LocalDeckId);
+            DeckDocument original = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+            DeckEntry bolt = original.Entries.First(value => value.CardName == "Bolt");
+            DeckDocument edited = Success(await store.ApplyChangesAsync(
+                localDeckId,
+                original.Revision,
+                [new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
+                TestContext.Current.CancellationToken));
+            handler.SetStanding("api/decks/42/", changedRemote);
+
+            if (throughPull)
+            {
+                ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                Assert.False(pull.HasConflicts);
+                Assert.Contains(pull.Differences, value => value.State == "converged");
+                ArchidektApplyResult applied = Success(await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest(
+                        "42",
+                        localDeckId,
+                        edited.Revision,
+                        pull.RemoteFingerprint,
+                        pull.PreviewFingerprint),
+                    TestContext.Current.CancellationToken));
+                Assert.Equal("applied", applied.Outcome);
+            }
+            else
+            {
+                ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                Assert.False(push.HasConflicts);
+                Assert.Empty(push.Operations);
+                Assert.Contains(push.Differences, value => value.State == "converged");
+                ArchidektApplyResult applied = Success(await coordinator.ApplyPushAsync(
+                    new ArchidektPushApplyRequest(
+                        localDeckId,
+                        edited.Revision,
+                        push.RemoteFingerprint,
+                        push.PreviewFingerprint),
+                    TestContext.Current.CancellationToken));
+                Assert.Equal("applied", applied.Outcome);
+            }
+
+            ArchidektSyncPreview after = Success(await coordinator.PreviewPullAsync(
+                "42",
+                localDeckId,
+                TestContext.Current.CancellationToken));
+            Assert.False(after.HasConflicts);
+            Assert.Empty(after.Differences);
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]
@@ -987,6 +1075,19 @@ public sealed class ArchidektCoordinatorTests
         internal List<HttpRequestMessage> Requests { get; } = [];
 
         /// <summary>
+        /// Stores GET bodies that answer every request for a path, and can be replaced to change the remote deck.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, string> standing = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Sets the body returned for every GET of a path that has no queued response.
+        /// </summary>
+        internal void SetStanding(string path, string json)
+        {
+            standing[$"GET {path}"] = json;
+        }
+
+        /// <summary>
         /// Queues one exact JSON response.
         /// </summary>
         internal void Add(HttpMethod method, string path, string json, HttpStatusCode status = HttpStatusCode.OK)
@@ -1008,6 +1109,15 @@ public sealed class ArchidektCoordinatorTests
             _ = cancellationToken;
             Requests.Add(request);
             string key = $"{request.Method.Method} {request.RequestUri!.PathAndQuery.TrimStart('/')}";
+            if (standing.TryGetValue(key, out string? body) &&
+                !(responses.TryGetValue(key, out Queue<HttpResponseMessage>? pending) && pending.Count > 0))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                });
+            }
+
             return Task.FromResult(
                 responses.TryGetValue(key, out Queue<HttpResponseMessage>? queue) && queue.Count > 0
                     ? queue.Dequeue()

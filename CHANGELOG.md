@@ -22,6 +22,9 @@
   listed in, and the order at pull time differed from the order the store returns. The fingerprint now sorts by row ID.
   A deck pulled by an older version keeps the old baseline and still shows the difference once; use the pull option
   that takes the remote state (see below) to reset it.
+- Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
+  field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
+  `converged`: no conflict and no operation, and applying either direction advances the baseline.
 
 ### Seeded simulation (breaking)
 

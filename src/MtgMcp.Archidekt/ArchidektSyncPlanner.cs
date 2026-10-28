@@ -41,7 +41,7 @@ public static class ArchidektSyncPlanner
             remoteChanged);
         bool representedLocalChange = differences.Any(value =>
             value.State.StartsWith("local-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+            value.State is "concurrent-changed" or "converged");
         if (localChanged && !representedLocalChange)
         {
             differences.Add(new ArchidektDifference(
@@ -54,7 +54,7 @@ public static class ArchidektSyncPlanner
 
         bool representedRemoteChange = differences.Any(value =>
             value.State.StartsWith("remote-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+            value.State is "concurrent-changed" or "converged");
         if (remoteChanged && !representedRemoteChange)
         {
             differences.Add(new ArchidektDifference(
@@ -193,7 +193,7 @@ public static class ArchidektSyncPlanner
     {
         if (localChanged && remoteChanged)
         {
-            return "concurrent-changed";
+            return string.Equals(local, remote, StringComparison.Ordinal) ? "converged" : "concurrent-changed";
         }
 
         string side = localChanged ? "local" : "remote";
