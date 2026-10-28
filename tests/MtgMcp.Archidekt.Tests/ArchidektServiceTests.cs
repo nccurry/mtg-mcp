@@ -299,6 +299,49 @@ public sealed class ArchidektServiceTests
     }
 
     /// <summary>
+    /// Verifies adapter conflicts about stale provider state carry the provider's current fingerprint.
+    /// </summary>
+    [Fact]
+    public async Task StaleProviderState_ConflictsCarryCurrentFingerprint()
+    {
+        RemoteDeckSnapshot deck = ParseDeck();
+        ArchidektTestHttpHandler deleteHandler = new();
+        AddLogin(deleteHandler);
+        deleteHandler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        using ArchidektService deleteService = CreateService(deleteHandler);
+        OperationConflict changed = Assert.IsType<OperationConflict>((await deleteService.DeleteDeckAsync(
+            new ArchidektDeckDeleteRequest("42", "wrong", "delete 42"),
+            TestContext.Current.CancellationToken)).Value);
+
+        ArchidektTestHttpHandler applyHandler = new();
+        AddLogin(applyHandler);
+        applyHandler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        using ArchidektService applyService = CreateService(applyHandler);
+        OperationConflict preview = Assert.IsType<OperationConflict>((await applyService.ApplyRemoteTargetAsync(
+            deck,
+            deck.RemoteFingerprint,
+            "wrong-plan",
+            TestContext.Current.CancellationToken)).Value);
+
+        RemoteFolderTree tree = ParseTree(ArchidektTestPayloads.FolderTree);
+        ArchidektTestHttpHandler folderHandler = new();
+        AddLogin(folderHandler);
+        QueueTree(folderHandler, ArchidektTestPayloads.FolderTree);
+        folderHandler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", ArchidektTestPayloads.DeckList);
+        using ArchidektService folderService = CreateService(folderHandler);
+        OperationConflict folder = Assert.IsType<OperationConflict>((await folderService.MoveFolderItemsAsync(
+            new ArchidektFolderMoveRequest("wrong", [new ArchidektFolderMoveItem("deck", "42", null)], null),
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("remote-deck-changed", changed.ReasonCode);
+        Assert.Equal(new ConflictState(RemoteFingerprint: deck.RemoteFingerprint), changed.Current);
+        Assert.Equal("push-preview-changed", preview.ReasonCode);
+        Assert.Equal(new ConflictState(RemoteFingerprint: deck.RemoteFingerprint), preview.Current);
+        Assert.Equal("folder-tree-changed", folder.ReasonCode);
+        Assert.Equal(new ConflictState(RemoteFingerprint: tree.TreeFingerprint), folder.Current);
+    }
+
+    /// <summary>
     /// Verifies non-empty and cyclic folders refuse writes before any provider mutation.
     /// </summary>
     [Fact]
