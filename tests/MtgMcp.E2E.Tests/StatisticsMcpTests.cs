@@ -92,9 +92,16 @@ public sealed class StatisticsMcpTests
             Assert.Equal(ToolNames, tools.Select(value => value.Name));
             foreach (McpClientTool tool in tools)
             {
-                string[] expectedInputs = tool.Name == "stats_castability"
-                    ? ["onThePlay", "requireLandDrops", "source", "sources", "turn"]
-                    : ["request"];
+                string[] expectedInputs = tool.Name switch
+                {
+                    "stats_castability" => ["onThePlay", "requireLandDrops", "source", "sources", "turn"],
+                    "stats_simulate" =>
+                    [
+                        "conditions", "deck", "eachTurn", "groups", "openingHand", "preset", "sampleHands", "samples",
+                        "seed", "turns",
+                    ],
+                    _ => ["request"],
+                };
                 Assert.Equal(expectedInputs, tool.ProtocolTool.InputSchema
                     .GetProperty("properties")
                     .EnumerateObject()

@@ -385,15 +385,15 @@ public sealed class FoundationMcpTests
     [InlineData("read-only", "all", "all", 59)]
     [InlineData("local", "all", "all", 73)]
     [InlineData("remote", "all", "all", 86)]
-    [InlineData("read-only", "decks", "explicit", 11)]
-    [InlineData("local", "decks", "explicit", 20)]
-    [InlineData("remote", "decks", "explicit", 20)]
+    [InlineData("read-only", "decks", "explicit", 10)]
+    [InlineData("local", "decks", "explicit", 19)]
+    [InlineData("remote", "decks", "explicit", 19)]
     [InlineData("read-only", "scryfall", "explicit", 11)]
     [InlineData("local", "scryfall", "explicit", 15)]
     [InlineData("remote", "scryfall", "explicit", 15)]
-    [InlineData("read-only", "stats", "explicit", 9)]
-    [InlineData("local", "stats", "explicit", 9)]
-    [InlineData("remote", "stats", "explicit", 9)]
+    [InlineData("read-only", "stats", "explicit", 10)]
+    [InlineData("local", "stats", "explicit", 10)]
+    [InlineData("remote", "stats", "explicit", 10)]
     [InlineData("read-only", "archidekt", "explicit", 9)]
     [InlineData("local", "archidekt", "explicit", 10)]
     [InlineData("remote", "archidekt", "explicit", 21)]
@@ -799,7 +799,7 @@ public sealed class FoundationMcpTests
             descriptors[0],
             "decks",
             decksEnabled,
-            decksEnabled ? (mode == "read-only" ? 11 : 20) : 0,
+            decksEnabled ? (mode == "read-only" ? 10 : 19) : 0,
             null);
         AssertDescriptor(
             descriptors[1],
@@ -807,7 +807,7 @@ public sealed class FoundationMcpTests
             scryfallEnabled,
             scryfallEnabled ? (mode == "read-only" ? 11 : 15) : 0,
             null);
-        AssertDescriptor(descriptors[2], "stats", statsEnabled, statsEnabled ? 9 : 0, null);
+        AssertDescriptor(descriptors[2], "stats", statsEnabled, statsEnabled ? 10 : 0, null);
         AssertDescriptor(
             descriptors[3],
             "archidekt",

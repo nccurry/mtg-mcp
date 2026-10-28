@@ -28,12 +28,21 @@ public sealed class StatisticsSimulatePresetTests
 
         Assert.True(cases.Count >= 16);
         Assert.Contains(cases, item => item.TargetManaCost.Contains('U', StringComparison.Ordinal));
-        foreach (ReplayCase item in cases)
+        List<JsonObject> allCards = [];
+        List<DeckCreateRequest> decks = [];
+        for (int index = 0; index < cases.Count; index++)
         {
-            (JsonObject[] cards, DeckCreateRequest deck) = BuildCase(item);
-            using SimulateSetup setup = await SimulateSetup.CreateAsync(cards, install: true);
+            (JsonObject[] cards, DeckCreateRequest deck) = BuildCase(cases[index], index);
+            allCards.AddRange(cards);
+            decks.Add(deck);
+        }
+
+        using SimulateSetup setup = await SimulateSetup.CreateAsync(allCards, install: true);
+        for (int index = 0; index < cases.Count; index++)
+        {
+            ReplayCase item = cases[index];
             DeckDocument saved = Assert.IsType<OperationSuccess<DeckDocument>>(
-                (await setup.Data.Store.CreateAsync(deck, TestContext.Current.CancellationToken)).Value).Data;
+                (await setup.Data.Store.CreateAsync(decks[index], TestContext.Current.CancellationToken)).Value).Data;
 
             SimulateToolResult result = SimulateSetup.Success(await setup.Coordinator.SimulateAsync(
                 new SimulationDeckInput { DeckId = saved.DeckId },
@@ -44,11 +53,11 @@ public sealed class StatisticsSimulatePresetTests
                 null,
                 new SimulationOnCurvePresetInput
                 {
-                    TargetEntryId = OnCurveReplayFixtures.Id(item.TargetEntry),
+                    TargetEntryId = OnCurveReplayFixtures.Id((index * 100) + item.TargetEntry),
                     LandRules = [.. item.Entries.Where(entry => entry.LandRule is not null).Select(entry =>
                         new SimulationLandRuleInput
                         {
-                            EntryId = OnCurveReplayFixtures.Id(entry.Id),
+                            EntryId = OnCurveReplayFixtures.Id((index * 100) + entry.Id),
                             Rule = RuleName(entry.LandRule!),
                         })],
                     TurnLimit = item.TurnLimit,
@@ -419,24 +428,24 @@ public sealed class StatisticsSimulatePresetTests
     /// Builds the card data and the saved deck of one captured case: a target with its cost, lands with their
     /// colors, and filler, keeping the entry IDs of the capture.
     /// </summary>
-    private static (JsonObject[] Cards, DeckCreateRequest Deck) BuildCase(ReplayCase item)
+    private static (JsonObject[] Cards, DeckCreateRequest Deck) BuildCase(ReplayCase item, int caseIndex)
     {
         List<JsonObject> cards = [];
         List<DeckEntryDraft> entries = [];
         foreach (ReplayEntry entry in item.Entries)
         {
-            Guid printing = Guid.Parse($"00000000-0000-4000-8000-{entry.Id:D12}");
+            Guid printing = Guid.Parse($"00000000-0000-4000-8000-{(caseIndex * 100) + entry.Id:D12}");
             JsonObject card = entry.Id == item.TargetEntry
-                ? CardJson.Make("Target", "Creature", item.TargetManaCost, 3m, printingId: printing)
+                ? CardJson.Make($"Target {caseIndex}", "Creature", item.TargetManaCost, 3m, printingId: printing)
                 : entry.Produces is not null
                     ? CardJson.Make(
-                        $"Land {entry.Id}",
+                        $"Land {caseIndex} {entry.Id}",
                         "Land",
                         null,
                         0m,
                         producedMana: [.. entry.Produces],
                         printingId: printing)
-                    : CardJson.Make($"Filler {entry.Id}", "Creature", "{1}", 1m, printingId: printing);
+                    : CardJson.Make($"Filler {caseIndex} {entry.Id}", "Creature", "{1}", 1m, printingId: printing);
             cards.Add(card);
             entries.Add(new DeckEntryDraft(
                 entry.Quantity,
@@ -444,7 +453,7 @@ public sealed class StatisticsSimulatePresetTests
                 PrintingId: printing,
                 Zone: "main",
                 SortOrder: entries.Count,
-                EntryId: OnCurveReplayFixtures.Id(entry.Id)));
+                EntryId: OnCurveReplayFixtures.Id((caseIndex * 100) + entry.Id)));
         }
 
         return ([.. cards], new DeckCreateRequest(item.Name, Format: "custom", Entries: entries));

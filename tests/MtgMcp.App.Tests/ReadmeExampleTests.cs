@@ -42,11 +42,11 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
 
         Assert.Equal(
             [
+                "stats_simulate",
                 "card_lists_compare",
                 "card_list_query",
                 "local_deck_validate",
                 "local_deck_category_rules_preview",
-                "stats_simulate",
             ],
             examples.Select(example => example.Tool));
         foreach ((string tool, string json) in examples)
