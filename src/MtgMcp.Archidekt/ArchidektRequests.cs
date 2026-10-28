@@ -26,13 +26,15 @@ public sealed record ArchidektDeckDeleteRequest(
 
 /// <summary>
 /// Carries every immutable guard required to apply a pull preview.
+/// DiscardLocalChanges must equal the value the preview was made with; it takes the Archidekt state over local edits.
 /// </summary>
 public sealed record ArchidektPullApplyRequest(
     string RemoteDeckId,
     Guid? LocalDeckId,
     long? ExpectedLocalRevision,
     string ExpectedRemoteFingerprint,
-    string PreviewFingerprint);
+    string PreviewFingerprint,
+    bool DiscardLocalChanges = false);
 
 /// <summary>
 /// Carries every immutable guard required to apply a push preview.

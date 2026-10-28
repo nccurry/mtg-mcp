@@ -37,7 +37,8 @@ internal sealed class ArchidektLocalWriteTools
     [Description(
         "Archidekt: refetches the remote deck, verifies all preview guards, then creates or replaces one local " +
         "deck in a " +
-        "single transaction.")]
+        "single transaction. Set discardLocalChanges to true only with a preview made the same way, to take the " +
+        "Archidekt state over local edits.")]
     internal Task<OperationResult<ArchidektApplyResult>> ApplyPullAsync(
         [Description("Fingerprint-, revision-, and remote-state-guarded pull application request.")]
         ArchidektPullApplyRequest request,

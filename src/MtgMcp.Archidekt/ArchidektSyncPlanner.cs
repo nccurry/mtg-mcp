@@ -24,8 +24,8 @@ public static class ArchidektSyncPlanner
             baseline.LocalFingerprint,
             StringComparison.Ordinal);
         bool remoteChanged = !string.Equals(
-            remote.RemoteFingerprint,
-            baseline.RemoteFingerprint,
+            ArchidektJsonContract.Recompute(remote).Remote,
+            ArchidektJsonContract.Recompute(baseline.RemoteSnapshot).Remote,
             StringComparison.Ordinal);
         RemoteDeckSnapshot effectiveLocal = localChanged
             ? localProjection
@@ -176,9 +176,19 @@ public static class ArchidektSyncPlanner
     /// </summary>
     private static string? SerializeEntity<T>(IReadOnlyDictionary<string, T> values, string key)
     {
-        return values.TryGetValue(key, out T? value)
-            ? System.Text.Json.JsonSerializer.Serialize(value, ArchidektContract.JsonOptions)
-            : null;
+        if (!values.TryGetValue(key, out T? value))
+        {
+            return null;
+        }
+
+        // The entry order number and the category rank are renumbered by Archidekt without a user edit.
+        object? shown = value switch
+        {
+            RemoteDeckEntry entry => entry with { SortOrder = 0 },
+            RemoteDeckCategory category => category with { SortOrder = 0 },
+            _ => value,
+        };
+        return System.Text.Json.JsonSerializer.Serialize(shown, ArchidektContract.JsonOptions);
     }
 
     /// <summary>
@@ -418,6 +428,45 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
+    /// Finds entries the plan adds or moves whose zone says "in the deck" while their primary category is not
+    /// included in the deck. Archidekt derives an entry's zone from its primary category, so such a row would come
+    /// back in another zone and the push could not verify.
+    /// </summary>
+    public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
+        ArchidektRemotePlan plan,
+        RemoteDeckSnapshot target)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(target);
+        Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(target.Categories, value => value.Name);
+        List<ArchidektZoneContradiction> found = [];
+        foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
+        {
+            RemoteDeckEntry? entry = operation.TargetEntry;
+            if (entry is null ||
+                operation.Public.Kind is not ("entry-add" or "entry-update") ||
+                entry.Zone is not ("main" or "commander") ||
+                entry.PrimaryCategoryName is not { Length: > 0 } primary ||
+                !CategoryNames.TryFind(categories, primary, out RemoteDeckCategory? category) ||
+                category.IncludedInDeck != false)
+            {
+                continue;
+            }
+
+            if (operation.CurrentEntry is { } current &&
+                string.Equals(current.Zone, entry.Zone, StringComparison.Ordinal) &&
+                string.Equals(current.PrimaryCategoryName, entry.PrimaryCategoryName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, category.Name));
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// Links each pushed target row to the verified provider row with the same relation ID,
     /// or else the only row with identical content.
     /// </summary>
@@ -425,7 +474,7 @@ public static class ArchidektSyncPlanner
     {
         ArgumentNullException.ThrowIfNull(verified);
         ArgumentNullException.ThrowIfNull(target);
-        IReadOnlyList<RemoteDeckEntry?> matches = MatchEntries(verified, target);
+        IReadOnlyList<RemoteDeckEntry?> matches = LinkByCardIdentity(verified, target, MatchEntries(verified, target));
         List<string?> entryRelationIds = [];
         foreach (RemoteDeckEntry? matched in matches)
         {
@@ -448,6 +497,44 @@ public static class ArchidektSyncPlanner
         }
 
         return new ArchidektRowLinks(entryRelationIds, categoryIds);
+    }
+
+    /// <summary>
+    /// Links rows the exact match left alone when a verification found them different: a target row with no
+    /// provider ID is linked to an unmatched provider row when they are the only pair with the same card identity.
+    /// The difference stays in the next push plan as an update, and the created row is not added again.
+    /// </summary>
+    private static IReadOnlyList<RemoteDeckEntry?> LinkByCardIdentity(
+        RemoteDeckSnapshot verified,
+        RemoteDeckSnapshot target,
+        IReadOnlyList<RemoteDeckEntry?> exact)
+    {
+        HashSet<string> used = new(
+            exact.Where(value => value is not null).Select(value => value!.ProviderRelationId),
+            StringComparer.Ordinal);
+        List<RemoteDeckEntry?> linked = [.. exact];
+        for (int index = 0; index < linked.Count; index++)
+        {
+            RemoteDeckEntry targetEntry = target.Entries[index];
+            if (linked[index] is not null || !string.IsNullOrWhiteSpace(targetEntry.ProviderRelationId))
+            {
+                continue;
+            }
+
+            RemoteDeckEntry[] rows = [.. verified.Entries.Where(value =>
+                !used.Contains(value.ProviderRelationId) && CardIdentityEqual(value, targetEntry))];
+            int rivals = target.Entries.Where((value, other) =>
+                linked[other] is null &&
+                string.IsNullOrWhiteSpace(value.ProviderRelationId) &&
+                CardIdentityEqual(targetEntry, value)).Count();
+            if (rows.Length == 1 && rivals == 1)
+            {
+                linked[index] = rows[0];
+                used.Add(rows[0].ProviderRelationId);
+            }
+        }
+
+        return linked;
     }
 
     /// <summary>
@@ -631,3 +718,8 @@ public sealed record ArchidektPlannedOperation(
     RemoteDeckCategory? CurrentCategory,
     RemoteDeckEntry? TargetEntry,
     RemoteDeckEntry? CurrentEntry);
+
+/// <summary>
+/// Names one entry whose zone contradicts its primary category's inclusion in the deck.
+/// </summary>
+public sealed record ArchidektZoneContradiction(string CardName, string Zone, string CategoryName);

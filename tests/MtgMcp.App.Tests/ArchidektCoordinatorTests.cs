@@ -513,6 +513,248 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Pulls the rich deck and returns the coordinator, store, and local deck ID for push tests.
+    /// </summary>
+    private static async Task<(ArchidektCoordinator Coordinator, SqliteDeckStore Store, Guid LocalDeckId)>
+        PullRichDeckAsync(QueueHandler handler, string root)
+    {
+        handler.SetStanding("api/decks/42/", RichRemoteDeck);
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        ArchidektService service = CreateService(handler);
+        SqliteDeckStore store = new(root, "test");
+        ArchidektCoordinator coordinator = new(service, store);
+        ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+            "42",
+            localDeckId: null,
+            TestContext.Current.CancellationToken));
+        Guid localDeckId = Assert.IsType<Guid>(Success(await coordinator.ApplyPullAsync(
+            new ArchidektPullApplyRequest("42", null, null, pull.RemoteFingerprint, pull.PreviewFingerprint),
+            TestContext.Current.CancellationToken)).LocalDeckId);
+        return (coordinator, store, localDeckId);
+    }
+
+    /// <summary>
+    /// Verifies a push is refused, naming the cards, when a card is put in the deck zone while its primary category is
+    /// not included in the deck; both the preview and the apply refuse, and nothing is sent.
+    /// </summary>
+    [Fact]
+    public async Task Push_WithADeckZoneEntryWhosePrimaryCategoryIsOutsideTheDeck_IsRefusedByPreviewAndApply()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
+                await PullRichDeckAsync(handler, root);
+            using (store)
+            {
+                DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                DeckEntry anger = local.Entries.First(value => value.CardName == "Anger");
+                DeckDocument moved = Success(await store.ApplyChangesAsync(
+                    localDeckId,
+                    local.Revision,
+                    [new UpdateDeckEntryChange(anger with { Zone = "main" })],
+                    TestContext.Current.CancellationToken));
+                int before = handler.Requests.Count(value => value.Method != HttpMethod.Get);
+
+                OperationInvalidInput preview = Assert.IsType<OperationInvalidInput>(
+                    (await coordinator.PreviewPushAsync(localDeckId, TestContext.Current.CancellationToken)).Value);
+                OperationInvalidInput apply = Assert.IsType<OperationInvalidInput>(
+                    (await coordinator.ApplyPushAsync(
+                        new ArchidektPushApplyRequest(localDeckId, moved.Revision, "remote", "preview"),
+                        TestContext.Current.CancellationToken)).Value);
+
+                Assert.Equal("entry-zone-contradicts-category", preview.ReasonCode);
+                Assert.Equal(preview.ReasonCode, apply.ReasonCode);
+                Assert.Contains("'Anger'", preview.Message, StringComparison.Ordinal);
+                Assert.Contains("'Sideboard'", preview.Message, StringComparison.Ordinal);
+                Assert.Equal(before, handler.Requests.Count(value => value.Method != HttpMethod.Get));
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a push whose verification finds a difference still records what was applied: the local deck is
+    /// marked synchronized to the verified state, so a pull no longer reports a local change and a push plans only
+    /// the remaining difference.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WithAVerificationMismatch_RecordsTheAppliedBaseline()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
+                await PullRichDeckAsync(handler, root);
+            using (store)
+            {
+                DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                DeckEntry bolt = local.Entries.First(value => value.CardName == "Bolt");
+                DeckDocument edited = Success(await store.ApplyChangesAsync(
+                    localDeckId,
+                    local.Revision,
+                    [new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview preview = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+
+                ArchidektApplyResult result = Success(await coordinator.ApplyPushAsync(
+                    new ArchidektPushApplyRequest(
+                        localDeckId,
+                        edited.Revision,
+                        preview.RemoteFingerprint,
+                        preview.PreviewFingerprint),
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview pull = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview again = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.Equal("verification-mismatch", result.Outcome);
+                Assert.True(result.LocalRevision > edited.Revision);
+                Assert.False(pull.HasConflicts);
+                Assert.DoesNotContain(again.Operations, value => value.Kind == "entry-add");
+                Assert.Equal(["entry-update:Bolt"], again.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Verifies Archidekt renumbering entry order numbers, without any user edit, is not a remote change, so a local
+    /// edit still pushes without a conflict.
+    /// </summary>
+    [Fact]
+    public async Task Push_AfterArchidektRenumbersEntryOrder_HasNoRemoteChange()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string renumbered = RichRemoteDeck
+            .Replace("\"deckRelationId\": 103,", "\"deckRelationId\": 103, \"order\": 50,", StringComparison.Ordinal)
+            .Replace("\"deckRelationId\": 101,", "\"deckRelationId\": 101, \"order\": 60,", StringComparison.Ordinal)
+            .Replace("\"deckRelationId\": 102,", "\"deckRelationId\": 102, \"order\": 70,", StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
+                await PullRichDeckAsync(handler, root);
+            using (store)
+            {
+                DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                DeckEntry bolt = local.Entries.First(value => value.CardName == "Bolt");
+                _ = Success(await store.ApplyChangesAsync(
+                    localDeckId,
+                    local.Revision,
+                    [new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
+                    TestContext.Current.CancellationToken));
+                handler.SetStanding("api/decks/42/", renumbered);
+
+                ArchidektSyncPreview push = Success(await coordinator.PreviewPushAsync(
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.False(push.HasConflicts);
+                Assert.DoesNotContain(push.Differences, value => value.State.StartsWith("remote-", StringComparison.Ordinal));
+                Assert.Equal(["entry-update:Bolt"], push.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a deck that is stuck as locally changed has a supported way out: a pull preview that discards local
+    /// changes lists them without a conflict, its apply takes the Archidekt state, and a plain apply still refuses.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithDiscardLocalChanges_TakesTheRemoteStateOnlyWhenAskedFor()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
+                await PullRichDeckAsync(handler, root);
+            using (store)
+            {
+                DeckDocument local = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                DeckEntry bolt = local.Entries.First(value => value.CardName == "Bolt");
+                DeckDocument edited = Success(await store.ApplyChangesAsync(
+                    localDeckId,
+                    local.Revision,
+                    [new UpdateDeckEntryChange(bolt with { Quantity = 9 })],
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview plain = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview discard = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId,
+                    discardLocalChanges: true,
+                    TestContext.Current.CancellationToken));
+
+                Assert.True(plain.HasConflicts);
+                Assert.False(discard.HasConflicts);
+                Assert.NotEqual(plain.PreviewFingerprint, discard.PreviewFingerprint);
+                Assert.Contains(discard.Differences, value => value.State.StartsWith("local-", StringComparison.Ordinal));
+                OperationConflict refused = Assert.IsType<OperationConflict>((await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest(
+                        "42",
+                        localDeckId,
+                        edited.Revision,
+                        discard.RemoteFingerprint,
+                        discard.PreviewFingerprint),
+                    TestContext.Current.CancellationToken)).Value);
+                Assert.Equal("pull-conflict", refused.ReasonCode);
+
+                ArchidektApplyResult applied = Success(await coordinator.ApplyPullAsync(
+                    new ArchidektPullApplyRequest(
+                        "42",
+                        localDeckId,
+                        edited.Revision,
+                        discard.RemoteFingerprint,
+                        discard.PreviewFingerprint,
+                        DiscardLocalChanges: true),
+                    TestContext.Current.CancellationToken));
+                DeckDocument after = Success(await store.GetAsync(localDeckId, TestContext.Current.CancellationToken));
+                ArchidektSyncPreview clean = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    localDeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.Equal("applied", applied.Outcome);
+                Assert.Equal(2, after.Entries.First(value => value.CardName == "Bolt").Quantity);
+                Assert.False(clean.HasConflicts);
+                Assert.Empty(clean.Differences);
+                Assert.IsType<OperationInvalidInput>((await coordinator.PreviewPullAsync(
+                    "42",
+                    null,
+                    discardLocalChanges: true,
+                    TestContext.Current.CancellationToken)).Value);
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a row the last push left unlinked does not block the next push, which removes and re-adds it.
     /// </summary>
     [Fact]

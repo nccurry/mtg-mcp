@@ -673,6 +673,57 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies a created row the provider returned with other zone or quantity is still linked to its provider row
+    /// when it is the only row with that card, so the next push does not add it again.
+    /// </summary>
+    [Fact]
+    public void LinkRows_ForACreatedRowReturnedDifferently_LinksByCardIdentity()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckEntry returned = parsed.Entries[0] with { Zone = "sideboard", Quantity = parsed.Entries[0].Quantity + 1 };
+        RemoteDeckSnapshot verified = parsed with { Entries = [returned] };
+        RemoteDeckSnapshot target = parsed with
+        {
+            Entries = [parsed.Entries[0] with { ProviderRelationId = string.Empty }],
+        };
+
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+
+        Assert.Equal([returned.ProviderRelationId], links.EntryRelationIds);
+    }
+
+    /// <summary>
+    /// Verifies a plan that puts a card in the deck zone under a primary category outside the deck is reported, and a
+    /// card whose zone and primary category are unchanged is not.
+    /// </summary>
+    [Fact]
+    public void FindZoneContradictions_ReportsOnlyChangedRows()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckCategory outside = parsed.Categories[0] with { Name = "Out", IncludedInDeck = false };
+        RemoteDeckEntry existing = parsed.Entries[0] with
+        {
+            Zone = "main",
+            CategoryNames = ["Out"],
+            PrimaryCategoryName = "Out",
+        };
+        RemoteDeckSnapshot current = parsed with { Categories = [outside], Entries = [existing] };
+        RemoteDeckSnapshot unchanged = current with { Entries = [existing with { Quantity = existing.Quantity + 1 }] };
+        RemoteDeckSnapshot moved = current with
+        {
+            Entries = [existing with { Zone = "sideboard" }, existing with { ProviderRelationId = string.Empty }],
+        };
+
+        Assert.Empty(ArchidektSyncPlanner.FindZoneContradictions(
+            ArchidektSyncPlanner.PlanRemoteApply(current, unchanged),
+            unchanged));
+        ArchidektZoneContradiction added = Assert.Single(ArchidektSyncPlanner.FindZoneContradictions(
+            ArchidektSyncPlanner.PlanRemoteApply(current, moved),
+            moved));
+        Assert.Equal(("Out", "main"), (added.CategoryName, added.Zone));
+    }
+
+    /// <summary>
     /// Parses the reusable complete deck fixture.
     /// </summary>
     private static RemoteDeckSnapshot ParseDeck()

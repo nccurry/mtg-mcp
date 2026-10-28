@@ -93,9 +93,13 @@ internal sealed class ArchidektReadTools
     internal Task<OperationResult<ArchidektSyncPreview>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
         [Description("Optional stable local deck UUID to compare; omit to preview local creation.")] Guid? localDeckId = null,
+        [Description(
+            "Set true to take the Archidekt state over local edits made since the last synchronization (a deck " +
+            "stuck as locally changed); the preview lists what would be discarded, and archidekt_pull_apply must " +
+            "pass the same value. Needs localDeckId.")] bool discardLocalChanges = false,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.PreviewPullAsync(remoteDeckId, localDeckId, cancellationToken);
+        return coordinator.PreviewPullAsync(remoteDeckId, localDeckId, discardLocalChanges, cancellationToken);
     }
 
     /// <summary>

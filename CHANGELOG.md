@@ -25,6 +25,19 @@
 - Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
   field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
   `converged`: no conflict and no operation, and applying either direction advances the baseline.
+- Fixed `archidekt_push_apply` leaving the local deck unlinked after `verification-mismatch`. Four parts:
+  - The push is refused before it starts (preview and apply, reason `entry-zone-contradicts-category`) when a card it
+    adds or moves is in the deck zone (`main` or `commander`) while its primary category is not included in the deck.
+    Archidekt gives a card the zone of its primary category, so the card would come back in another zone. The message
+    names the cards and the category.
+  - After a `verification-mismatch` the applied work is still recorded: the local deck is synchronized to the verified
+    remote state, and a created card is linked to its Archidekt row when it is the only row with that card, so the next
+    push does not add it again and plans only the remaining difference.
+  - `archidekt_pull_preview` and `archidekt_pull_apply` take `discardLocalChanges` (default false). With it, a pull
+    over a locally changed deck lists the local changes as differences, has no conflict, and replaces the local deck
+    with the Archidekt state. The preview and the apply must pass the same value. Without it nothing changes.
+  - Entry order numbers (`sortOrder`) are no longer compared: Archidekt renumbers them on untouched cards, which showed
+    as many remote changes. Category rank was already ignored.
 
 ### Seeded simulation (breaking)
 
