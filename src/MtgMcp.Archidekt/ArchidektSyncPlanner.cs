@@ -1,3 +1,5 @@
+using MtgMcp.Core.Decks;
+
 namespace MtgMcp.Archidekt;
 
 /// <summary>
@@ -5,6 +7,28 @@ namespace MtgMcp.Archidekt;
 /// </summary>
 public static class ArchidektSyncPlanner
 {
+    /// <summary>
+    /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
+    /// one, the one for fields no row shows, and the one an earlier version recorded.
+    /// </summary>
+    public static ArchidektSyncDiff Diff(
+        DeckDocument local,
+        RemoteDeckSnapshot localProjection,
+        RemoteDeckSnapshot remote,
+        ArchidektSyncBaseline baseline)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        return Diff(
+            local.DeckId,
+            local.Revision,
+            ArchidektLocalMapper.LocalFingerprint(local),
+            localProjection,
+            remote,
+            baseline,
+            ArchidektLocalMapper.LocalInvisibleFingerprint(local),
+            ArchidektLocalMapper.LegacyLocalFingerprint(local));
+    }
+
     /// <summary>
     /// Computes a conservative whole-content three-way comparison without selecting a conflict winner.
     /// </summary>
@@ -14,15 +38,26 @@ public static class ArchidektSyncPlanner
         string localFingerprint,
         RemoteDeckSnapshot localProjection,
         RemoteDeckSnapshot remote,
-        ArchidektSyncBaseline baseline)
+        ArchidektSyncBaseline baseline,
+        string? localInvisibleFingerprint = null,
+        string? legacyLocalFingerprint = null)
     {
         ArgumentNullException.ThrowIfNull(localProjection);
         ArgumentNullException.ThrowIfNull(remote);
         ArgumentNullException.ThrowIfNull(baseline);
+        // A baseline made by an earlier version recorded the rows in the order of the moment, so it is also compared
+        // with that order, and a deck it cannot match is judged by its rows alone.
+        bool legacyBaseline = baseline.SchemaVersion < 2;
         bool localChanged = !string.Equals(
             localFingerprint,
             baseline.LocalFingerprint,
             StringComparison.Ordinal);
+        if (localChanged && legacyBaseline &&
+            string.Equals(legacyLocalFingerprint, baseline.LocalFingerprint, StringComparison.Ordinal))
+        {
+            localChanged = false;
+        }
+
         bool remoteChanged = !string.Equals(
             ArchidektJsonContract.Recompute(remote).Remote,
             ArchidektJsonContract.Recompute(baseline.RemoteSnapshot).Remote,
@@ -42,7 +77,13 @@ public static class ArchidektSyncPlanner
         bool representedLocalChange = differences.Any(value =>
             value.State.StartsWith("local-", StringComparison.Ordinal) ||
             value.State is "concurrent-changed" or "converged");
-        if (localChanged && !representedLocalChange)
+        // Rows explain the change only when no field outside them changed: a field no row shows (category color,
+        // entry order, category rank) must still keep the deck from reading as unchanged.
+        bool hiddenChange = !legacyBaseline &&
+            baseline.LocalInvisibleFingerprint is not null &&
+            localInvisibleFingerprint is not null &&
+            !string.Equals(baseline.LocalInvisibleFingerprint, localInvisibleFingerprint, StringComparison.Ordinal);
+        if (localChanged && ((!representedLocalChange && !legacyBaseline) || hiddenChange))
         {
             differences.Add(new ArchidektDifference(
                 "/localOnly/content",

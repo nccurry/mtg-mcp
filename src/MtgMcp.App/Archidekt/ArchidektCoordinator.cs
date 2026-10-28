@@ -68,9 +68,7 @@ internal sealed class ArchidektSynchronizationContext
         }
 
         return new OperationSuccess<ArchidektSyncDiff>(ArchidektSyncPlanner.Diff(
-            local.Data.DeckId,
-            local.Data.Revision,
-            ArchidektLocalMapper.LocalFingerprint(local.Data),
+            local.Data,
             ArchidektLocalMapper.ToRemoteTarget(
                 local.Data,
                 state.Data.Baseline,
@@ -207,9 +205,7 @@ internal sealed class ArchidektSynchronizationContext
             }
 
             ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
-                local.Data.DeckId,
-                local.Data.Revision,
-                ArchidektLocalMapper.LocalFingerprint(local.Data),
+                local.Data,
                 ArchidektLocalMapper.ToRemoteTarget(
                     local.Data,
                     state.Data.Baseline,
@@ -435,9 +431,7 @@ discardLocalChanges
         }
 
         ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
-            local.Data.DeckId,
-            local.Data.Revision,
-            ArchidektLocalMapper.LocalFingerprint(local.Data),
+            local.Data,
             ArchidektLocalMapper.ToRemoteTarget(
                 local.Data,
                 state.Data.Baseline,
@@ -586,7 +580,11 @@ discardLocalChanges
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
         (string baseline, IReadOnlyList<Guid>? unlinkedLocalIds) =
-            ArchidektLocalMapper.CreatePushBaseline(local.Data, verified.Data, target);
+            ArchidektLocalMapper.CreatePushBaseline(
+                local.Data,
+                verified.Data,
+                target,
+                verificationMismatch: applied.Data.Outcome == "verification-mismatch");
         OperationResult<DeckDocument> baselineUpdate = await deckStore.ApplyChangesAsync(
             local.Data.DeckId,
             local.Data.Revision,

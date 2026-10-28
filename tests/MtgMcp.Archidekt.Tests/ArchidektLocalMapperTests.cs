@@ -861,6 +861,80 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Builds a baseline-matching remote, and the same deck after both sides raised one quantity by the same amount.
+    /// </summary>
+    private static (RemoteDeckSnapshot Before, RemoteDeckSnapshot After) ConvergedPair()
+    {
+        RemoteDeckSnapshot before = ParseDeck();
+        RemoteDeckSnapshot after = before with
+        {
+            Entries = [before.Entries[0] with { Quantity = before.Entries[0].Quantity + 1 }, .. before.Entries.Skip(1)],
+        };
+        return (before, after);
+    }
+
+    /// <summary>
+    /// Verifies a converged row does not hide a local edit to a field no row shows: the deck still reads as changed.
+    /// </summary>
+    [Fact]
+    public void Diff_ConvergedRowBesideAHiddenLocalEdit_KeepsLocalChanged()
+    {
+        (RemoteDeckSnapshot before, RemoteDeckSnapshot after) = ConvergedPair();
+        ArchidektSyncBaseline baseline = Baseline(before, "local-before") with { LocalInvisibleFingerprint = "hidden-before" };
+
+        ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", after, after, baseline, "hidden-after");
+
+        Assert.Contains(diff.Differences, value => value.State == "converged");
+        Assert.Contains(diff.Differences, value => value.Path == "/localOnly/content" && value.State == "local-changed");
+    }
+
+    /// <summary>
+    /// Verifies a converged row with no hidden edit is not a local change, and an edit to a hidden field with no row
+    /// at all is still reported.
+    /// </summary>
+    [Fact]
+    public void Diff_ConvergedRowAlone_IsNotALocalChange_ButAHiddenEditAloneIs()
+    {
+        (RemoteDeckSnapshot before, RemoteDeckSnapshot after) = ConvergedPair();
+        ArchidektSyncBaseline baseline = Baseline(before, "local-before") with { LocalInvisibleFingerprint = "hidden" };
+
+        ArchidektSyncDiff converged = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", after, after, baseline, "hidden");
+        ArchidektSyncDiff hiddenOnly = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "local-after", before, before, baseline, "hidden-after");
+
+        Assert.DoesNotContain(converged.Differences, value => value.Path == "/localOnly/content");
+        Assert.Contains(hiddenOnly.Differences, value => value.Path == "/localOnly/content");
+    }
+
+    /// <summary>
+    /// Verifies a baseline made by an earlier version is read as unchanged when the deck matches the order that
+    /// version recorded, or when its rows show no change, and a visible edit is still reported.
+    /// </summary>
+    [Fact]
+    public void Diff_AnEarlierVersionBaseline_IsNotStuckAsLocalChanged()
+    {
+        RemoteDeckSnapshot remote = ParseDeck();
+        ArchidektSyncBaseline legacy = Baseline(remote, "legacy-local") with { SchemaVersion = 1 };
+        RemoteDeckSnapshot edited = remote with
+        {
+            Entries = [remote.Entries[0] with { Quantity = remote.Entries[0].Quantity + 1 }, .. remote.Entries.Skip(1)],
+        };
+
+        ArchidektSyncDiff sameOrder = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "legacy-local");
+        ArchidektSyncDiff rowsShowNothing = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", remote, remote, legacy, "hidden", "other-order");
+        ArchidektSyncDiff visibleEdit = ArchidektSyncPlanner.Diff(
+            Guid.NewGuid(), 2, "new-order", edited, remote, legacy, "hidden", "other-order");
+
+        Assert.Empty(sameOrder.Differences);
+        Assert.Empty(rowsShowNothing.Differences);
+        Assert.Contains(visibleEdit.Differences, value => value.State == "local-changed");
+    }
+
+    /// <summary>
     /// Parses the reusable complete deck fixture.
     /// </summary>
     private static RemoteDeckSnapshot ParseDeck()
@@ -880,7 +954,7 @@ public sealed class ArchidektLocalMapperTests
     private static ArchidektSyncBaseline Baseline(RemoteDeckSnapshot remote, string localFingerprint)
     {
         return new ArchidektSyncBaseline(
-            1,
+            2,
             remote.RemoteId,
             remote.RemoteFingerprint,
             localFingerprint,

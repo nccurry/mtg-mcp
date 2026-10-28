@@ -126,6 +126,8 @@ public static class ArchidektLocalMapper
     /// <param name="local">The local deck whose content was pushed.</param>
     /// <param name="verified">The provider deck read back after the push.</param>
     /// <param name="target">The pushed target, built from <paramref name="local"/> in entry and category order.</param>
+    /// <param name="verificationMismatch">True when the verification found a difference; the baseline then keeps every
+    /// local difference visible as a local change.</param>
     /// <returns>
     /// The baseline JSON and the local entry IDs the push could not link to a provider row, or null when all linked.
     /// A category with no verified match stores no link, and the next push plans it by name.
@@ -133,7 +135,8 @@ public static class ArchidektLocalMapper
     public static (string Json, IReadOnlyList<Guid>? UnlinkedLocalIds) CreatePushBaseline(
         DeckDocument local,
         RemoteDeckSnapshot verified,
-        RemoteDeckSnapshot target)
+        RemoteDeckSnapshot target,
+        bool verificationMismatch = false)
     {
         ArgumentNullException.ThrowIfNull(local);
         ArgumentNullException.ThrowIfNull(verified);
@@ -184,14 +187,18 @@ public static class ArchidektLocalMapper
             }
         }
 
+        // After a verification mismatch the local deck is not what was synchronized: the baseline keeps the verified
+        // remote state and a local fingerprint no deck can have, so every difference Archidekt did not take stays
+        // visible as a local change until a later push or pull succeeds.
         ArchidektSyncBaseline baseline = new(
-            1,
+            2,
             verified.RemoteId,
             verified.RemoteFingerprint,
-            LocalFingerprint(local),
+            verificationMismatch ? UnsynchronizedFingerprint : LocalFingerprint(local),
             verified,
             entryRelations,
-            categoryRelations);
+            categoryRelations,
+            verificationMismatch ? null : LocalInvisibleFingerprint(local));
         string json = JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
         return (json, unlinked.Count == 0 ? null : unlinked);
     }
@@ -205,7 +212,7 @@ public static class ArchidektLocalMapper
         ArgumentNullException.ThrowIfNull(remote);
         Guid deckId = local.DeckId ?? throw new ArgumentException("The creation draft needs a deck ID.", nameof(local));
         ArchidektSyncBaseline baseline = new(
-            1,
+            2,
             remote.RemoteId,
             remote.RemoteFingerprint,
             FingerprintLocalContent(local),
@@ -215,7 +222,10 @@ public static class ArchidektLocalMapper
                 value => value.ProviderRelationId),
             remote.Categories.ToDictionary(
                 value => ArchidektContract.StableGuid("category", deckId, value.ProviderCategoryId),
-                value => value.ProviderCategoryId));
+                value => value.ProviderCategoryId),
+            InvisibleFingerprint(
+                (local.Entries ?? []).Select(value => (value.EntryId ?? Guid.Empty, value.SortOrder)),
+                (local.Categories ?? []).Select(value => (value.CategoryId ?? Guid.Empty, value.Color, value.SortOrder))));
         return JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
     }
 
@@ -229,7 +239,7 @@ public static class ArchidektLocalMapper
             ArchidektSyncBaseline? baseline = JsonSerializer.Deserialize<ArchidektSyncBaseline>(
                 ArchidektContract.Required(json, nameof(json)),
                 ArchidektContract.JsonOptions);
-            if (baseline is null || baseline.SchemaVersion != 1 || baseline.RemoteSnapshot is null ||
+            if (baseline is null || baseline.SchemaVersion is not (1 or 2) || baseline.RemoteSnapshot is null ||
                 string.IsNullOrWhiteSpace(baseline.RemoteDeckId) ||
                 string.IsNullOrWhiteSpace(baseline.RemoteFingerprint) ||
                 string.IsNullOrWhiteSpace(baseline.LocalFingerprint))
@@ -347,6 +357,50 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
+    /// Holds the local fingerprint a baseline gets after a verification mismatch; no deck has this value, so the
+    /// deck reads as changed until a later synchronization succeeds.
+    /// </summary>
+    public const string UnsynchronizedFingerprint = "unsynchronized";
+
+    /// <summary>
+    /// Computes the fingerprint of the local fields a remote row does not show: entry order numbers, category colors,
+    /// and category ranks. They are not compared as rows, so this keeps an edit to them from being overwritten.
+    /// </summary>
+    public static string LocalInvisibleFingerprint(DeckDocument local)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        return InvisibleFingerprint(
+            local.Entries.Select(value => (value.EntryId, value.SortOrder)),
+            local.Categories.Select(value => (value.CategoryId, value.Color, value.SortOrder)));
+    }
+
+    /// <summary>
+    /// Computes the fingerprint an earlier version used for a stored deck: the rows in the order the store listed
+    /// them. A baseline made by that version is compared with this value.
+    /// </summary>
+    public static string LegacyLocalFingerprint(DeckDocument local)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        return FingerprintLocalContent(local, sorted: false);
+    }
+
+    /// <summary>
+    /// Hashes the fields a remote row does not show, in a fixed order.
+    /// </summary>
+    private static string InvisibleFingerprint(
+        IEnumerable<(Guid Id, int SortOrder)> entries,
+        IEnumerable<(Guid Id, string? Color, int SortOrder)> categories)
+    {
+        return ArchidektContract.Fingerprint(new
+        {
+            entries = entries.OrderBy(value => value.Id).Select(value => new { value.Id, value.SortOrder }),
+            categories = categories
+                .OrderBy(value => value.Id)
+                .Select(value => new { value.Id, value.Color, value.SortOrder }),
+        });
+    }
+
+    /// <summary>
     /// Computes a deterministic local fingerprint over caller-editable content only.
     /// </summary>
     public static string LocalFingerprint(DeckDocument local)
@@ -358,14 +412,14 @@ public static class ArchidektLocalMapper
     /// <summary>
     /// Computes the canonical local content projection used by three-way comparisons.
     /// </summary>
-    private static string FingerprintLocalContent(DeckDocument local)
+    private static string FingerprintLocalContent(DeckDocument local, bool sorted = true)
     {
         return ArchidektContract.Fingerprint(new
         {
             local.Name,
             local.Description,
             local.Format,
-            entries = local.Entries.OrderBy(value => value.EntryId).Select(value => new
+            entries = Ordered(local.Entries, sorted, value => value.EntryId).Select(value => new
             {
                 value.EntryId,
                 value.Quantity,
@@ -379,16 +433,16 @@ public static class ArchidektLocalMapper
                 value.Zone,
                 value.SortOrder,
             }),
-            categories = local.Categories.OrderBy(value => value.CategoryId).Select(value => new
+            categories = Ordered(local.Categories, sorted, value => value.CategoryId).Select(value => new
             {
                 value.CategoryId,
                 value.Name,
                 value.Color,
                 value.SortOrder,
             }),
-            assignments = local.CategoryAssignments
-                .OrderBy(value => value.EntryId)
-                .ThenBy(value => value.CategoryId)
+            assignments = (sorted
+                    ? local.CategoryAssignments.OrderBy(value => value.EntryId).ThenBy(value => value.CategoryId)
+                    : local.CategoryAssignments.AsEnumerable())
                 .Select(value => new
                 {
                     value.EntryId,
@@ -396,6 +450,14 @@ public static class ArchidektLocalMapper
                     value.IsPrimary,
                 }),
         });
+    }
+
+    /// <summary>
+    /// Sorts rows by ID, or keeps the order the store listed them in for the earlier fingerprint.
+    /// </summary>
+    private static IEnumerable<T> Ordered<T>(IEnumerable<T> rows, bool sorted, Func<T, Guid> id)
+    {
+        return sorted ? rows.OrderBy(id) : rows;
     }
 
     /// <summary>
@@ -488,7 +550,8 @@ public sealed record ArchidektSyncBaseline(
     string LocalFingerprint,
     RemoteDeckSnapshot RemoteSnapshot,
     IReadOnlyDictionary<Guid, string> EntryRelations,
-    IReadOnlyDictionary<Guid, string> CategoryRelations)
+    IReadOnlyDictionary<Guid, string> CategoryRelations,
+    string? LocalInvisibleFingerprint = null)
 {
     /// <summary>
     /// Gets an immutable local-entry to provider-relation map.
